@@ -1,0 +1,83 @@
+# Waka POS — Supabase backend
+
+Production-oriented PostgreSQL schema, Row Level Security (RLS), and automation for multi-tenant retail (organization → shops → staff) with Uganda-focused payments and UGX billing.
+
+## Prerequisites
+
+- **Supabase** project (PostgreSQL **15+**)
+- **Supabase Auth** enabled for your app (email/phone as configured)
+
+## Apply migrations
+
+Run files in **`migrations/`** in numerical order (`001` … `010`). Objects depend on earlier files (extensions → tables → functions → RLS → seed → grants).
+
+### Option A — Supabase SQL Editor
+
+1. Open **SQL** → **New query**.
+2. Paste and run each file’s contents in order, or concatenate them in one script if you prefer a single run (same order).
+
+### Option B — Supabase CLI
+
+From the project root (`pos-waka`):
+
+```bash
+supabase link --project-ref <your-project-ref>
+supabase db push
+```
+
+If you manage migrations only as flat SQL (no remote history sync), you can instead run:
+
+```bash
+supabase db execute --file supabase/migrations/001_extensions.sql
+# … repeat for each migration in order
+```
+
+## What gets created
+
+| Area | Contents |
+|------|----------|
+| Identity | `profiles` (1:1 `auth.users`), trigger `on_auth_user_created` → `handle_new_user` |
+| Tenancy | `organizations`, `organization_members`, `shops`, `shop_members` |
+| Catalog / stock | `product_categories`, `products`, `inventory_movements` |
+| Sales | `customers`, `sales`, `sale_line_items`, `sale_payments`, `receipts`, `shop_counters` |
+| Ops | `expenses` |
+| SaaS | `subscription_plans`, `subscriptions` (trial, monthly/year, `admin_discount_percent`) |
+| Security | RLS on all tenant/business tables; helper functions in `007` / policies in `008` |
+| Seed | **009** upserts default UGX plans (Small shop 37k, Wholesale 100k, Supermarket 150k) |
+| Grants | **010** table/sequence privileges for `authenticated` |
+
+## Auth profile bootstrap
+
+On every `auth.users` insert, **`public.handle_new_user`** upserts **`public.profiles`** using optional `raw_user_meta_data` keys:
+
+- `full_name`
+- `business_name`
+- `phone_e164` (must match `+256` + 9 digits when provided)
+
+## Environment (frontend)
+
+Use your Supabase project URL and anon key (see **Project Settings → API**):
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Configure **Authentication → URL Configuration** with your app’s site URL and redirect URLs for email magic links / OAuth.
+
+## Optional demo data
+
+See **`seed/demo_seed.sql`**: template only (commented). Replace the sample UUID with a real `auth.users.id` from **Authentication → Users** before running in a **dev** project.
+
+## Documentation
+
+- **Row Level Security**: [`docs/RLS.md`](./docs/RLS.md)
+
+## Uganda / payments fields
+
+- Phone checks: E.164 **`+256XXXXXXXXX`** on profiles, orgs, shops, customers where applicable.
+- Sales support **cash** (`cash_amount_ugx` on `sales`), **MTN MoMo** (`mtn_momo_reference`), **Airtel Money** (`airtel_money_reference`), and generic `sale_payments` rows.
+
+## Troubleshooting
+
+- **“permission denied for table …”** after migrations: ensure **010_grants.sql** ran after RLS.
+- **First org bootstrap**: `organizations` is readable if `created_by = auth.uid()` before any `organization_members` row exists; `organization_members` select includes **own row** (`user_id = auth.uid()`).
+- **Sale completion / receipt**: completing a sale runs triggers that insert `inventory_movements`, `receipts`, and update `shop_counters`; policies require **cashier-or-above** at that shop.
