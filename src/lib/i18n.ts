@@ -1,0 +1,121 @@
+import type { Language } from "../types";
+
+type Dict = Record<string, string>;
+
+const en: Dict = {
+  appName: "Waka POS",
+  loginTitle: "Sign in to your shop",
+  registerTitle: "Create your shop account",
+  email: "Email",
+  password: "Password",
+  businessName: "Shop / business name",
+  signIn: "Sign in",
+  signOut: "Sign out",
+  createAccount: "Create account",
+  haveAccount: "Already have an account?",
+  forgotPassword: "Forgot password?",
+  forgotTitle: "Reset your password",
+  forgotSubtitle:
+    "We will email you a secure link from Supabase. Open it on this phone to choose a new password.",
+  sendResetLink: "Send reset link",
+  resetEmailSent: "If that email exists, you will receive a reset link shortly. Check inbox and spam.",
+  verifyTitle: "Verify your email",
+  verifySubtitle:
+    "We sent a verification link from Supabase. After you tap the link you can sign in here.",
+  resendVerification: "Resend verification email",
+  verificationResent: "Verification email sent again.",
+  backToLogin: "Back to sign in",
+  chooseNewPassword: "Choose a new password",
+  newPassword: "New password",
+  confirmPassword: "Confirm password",
+  savePassword: "Update password",
+  passwordUpdated: "Password updated.",
+  preparingRecovery: "Checking secure reset token…",
+  passwordMismatch: "Passwords must match.",
+  passwordTooShort: "Use at least 8 characters for your password.",
+  shopNameRequired: "Shop name is required.",
+  supabaseMissing: "Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.",
+  supabaseRegisterHint:
+    "To register with email verification, paste your Supabase keys into `.env`, restart dev server, and try again.",
+
+  dashboard: "Dashboard",
+  inventory: "Inventory",
+  pos: "POS",
+  customers: "Customers",
+  receipts: "Receipts",
+  settings: "Settings",
+  totalSales: "Total Sales",
+  itemsInStock: "Items In Stock",
+  lowStock: "Low Stock",
+  addItem: "Add Item",
+  addCustomer: "Add Customer",
+  checkout: "Checkout",
+
+  accountHeading: "Account",
+  loggedInAs: "Signed in as",
+  shopHeading: "Your shop",
+  sessionHelp: "You stay signed in across restarts on this device.",
+  logoutFromSettings: "Sign out",
+  loadingAuth: "Loading…",
+};
+
+const lg: Dict = {
+  appName: "Waka POS",
+  loginTitle: "Yingira mu dduuka lyo",
+  registerTitle: "Kola akawunti ye dduuka",
+  email: "Email",
+  password: "Password",
+  businessName: "Erinnya ly'edduuka / emirimu",
+  signIn: "Yingira",
+  signOut: "Vvaamu",
+  createAccount: "Kola akawunti",
+  haveAccount: "Olina akawunti?",
+  forgotPassword: "Ewabidde password?",
+  forgotTitle: "Ddamu ku password yo",
+  forgotSubtitle:
+    "Tujja kukuweereza link ku email ya Supabase; gugula ku sisitemu eno osobole okuteekawo password empnya.",
+  sendResetLink: "Weereza link",
+  resetEmailSent: "Singa email eriwo, ojja kufuna akaseera amangu. Kebera inbox ne spam.",
+  verifyTitle: "Kakasa email yo",
+  verifySubtitle:
+    "Tutuwezza link ya Supabase. Bw'enakakka ku link, oyinz'a okweyungiriza ate okuyingira wano.",
+  resendVerification: "Ddemu weereza email ey'okukakasa",
+  verificationResent: "Email ereesezzeddwa.",
+  backToLogin: "Ddamu ku sign in",
+  chooseNewPassword: "Teeko password empnya",
+  newPassword: "Password empnya",
+  confirmPassword: "Kakkasa password",
+  savePassword: "Terekawo password",
+  passwordUpdated: "Password ekyussiiddwa.",
+  preparingRecovery: "Tubuza token ey'okuwanguula…",
+  passwordMismatch: "Teekamu password eri emu.",
+  passwordTooShort: "Kozesa ennyingo 8 ez'obukulu ku password yo.",
+  shopNameRequired: "Eddaala ery'erinnya ly'edduuka.",
+  supabaseMissing: "Supabase terinawo nkola. Yongerako bikki mu `.env`.",
+  supabaseRegisterHint:
+    "Okukola akawunti ako, teekawo bikki ku Supabase mu `.env`, ddamu okutongoza dev server, ddemu-gezaako.",
+
+  dashboard: "Olupapula olukulu",
+  inventory: "Sitoka",
+  pos: "Okutunda",
+  customers: "Bakasitoma",
+  receipts: "Bbiiru",
+  settings: "Entegeka",
+  totalSales: "Ebintu bye bitundiddwa",
+  itemsInStock: "Ebintu mu sitoka",
+  lowStock: "Sitoka ntini",
+  addItem: "Yongera ekintu",
+  addCustomer: "Yongera kasitoma",
+  checkout: "Sasula",
+
+  accountHeading: "Akawunti",
+  loggedInAs: "Ozingiddwa ku",
+  shopHeading: "Edduuka lyo",
+  sessionHelp: "Osiigala nga oyingizza ku kikusobola okuvaayo.",
+  logoutFromSettings: "Vvaamu ku sisitemu eno",
+  loadingAuth: "Tukunga…",
+};
+
+const dictionaries: Record<Language, Dict> = { en, lg };
+
+export const t = (lang: Language, key: string) => dictionaries[lang][key] ?? key;
