@@ -1,0 +1,69 @@
+import { useRef, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import type { Product } from "../../types";
+import { formatProductPriceLabel } from "../../store/usePosStore";
+
+const COLS = 2;
+const ROW_ESTIMATE = 124;
+
+type Props = {
+  products: Product[];
+  onPick: (p: Product) => void;
+};
+
+/** Scrolls long product lists smoothly on low-RAM phones (two columns). */
+function VirtualizedProductGridInner({ products, onPick }: Props) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const rowCount = Math.ceil(products.length / COLS);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_ESTIMATE,
+    overscan: 5,
+  });
+
+  return (
+    <div
+      ref={parentRef}
+      className="max-h-[min(520px,calc(100dvh-300px))] overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+    >
+      <div
+        className="relative w-full"
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+        }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const start = virtualRow.index * COLS;
+          const slice = products.slice(start, start + COLS);
+          return (
+            <div
+              key={virtualRow.key}
+              className="absolute left-0 top-0 grid w-full grid-cols-2 gap-3 px-0.5"
+              style={{
+                transform: `translateY(${virtualRow.start}px)`,
+                height: `${virtualRow.size}px`,
+              }}
+            >
+              {slice.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => onPick(p)}
+                  className="flex min-h-[112px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-emerald-500 motion-reduce:transition-none"
+                  style={{ contentVisibility: "auto" }}
+                >
+                  <span className="text-lg font-black leading-tight text-slate-900 sm:text-xl">{p.name}</span>
+                  <span className="mt-2 text-base font-bold text-emerald-700">{formatProductPriceLabel(p)}</span>
+                </button>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export const VirtualizedProductGrid = memo(VirtualizedProductGridInner);

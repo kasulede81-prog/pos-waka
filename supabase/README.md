@@ -2,6 +2,8 @@
 
 Production-oriented PostgreSQL schema, Row Level Security (RLS), and automation for multi-tenant retail (organization → shops → staff) with Uganda-focused payments and UGX billing.
 
+Hosted app setup (Vercel env, auth redirect URLs, Android): see **[docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md)**.
+
 ## Prerequisites
 
 - **Supabase** project (PostgreSQL **15+**)
@@ -9,7 +11,7 @@ Production-oriented PostgreSQL schema, Row Level Security (RLS), and automation 
 
 ## Apply migrations
 
-Run files in **`migrations/`** in numerical order (`001` … `010`). Objects depend on earlier files (extensions → tables → functions → RLS → seed → grants).
+Run files in **`migrations/`** in numerical order (`001` … `013`). Objects depend on earlier files (extensions → tables → functions → RLS → seed → grants → kiosk extensions → shop business type → audit/roles).
 
 ### Option A — Supabase SQL Editor
 
@@ -45,6 +47,8 @@ supabase db execute --file supabase/migrations/001_extensions.sql
 | Security | RLS on all tenant/business tables; helper functions in `007` / policies in `008` |
 | Seed | **009** upserts default UGX plans (Small shop 37k, Wholesale 100k, Supermarket 150k) |
 | Grants | **010** table/sequence privileges for `authenticated` |
+| Kiosk / duka | **011** product selling modes (`unit` / `weighted` / `portion`), per–base-unit prices, sell-by-money columns on `sale_line_items`, optional receipts (`sales.issue_receipt`), `debt_amount_ugx`, inventory reasons (`damaged`, `personal`, …), updated `rpc_low_stock` / `rpc_inventory_adjust` |
+| Business profile | **012** `shops.business_type` (kiosk, wholesale, restaurant, …) for synced adaptive defaults |
 
 ## Auth profile bootstrap
 

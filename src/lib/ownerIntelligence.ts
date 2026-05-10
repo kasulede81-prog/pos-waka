@@ -1,0 +1,334 @@
+import type { AuditLogEntry, DayCloseSummary, Language, Product, Sale, ShopPreferences } from "../types";
+import { dateKeyKampala, dateKeyDaysAgoKampala } from "./datesUg";
+import { computeOwnerAlerts, type OwnerAlert } from "./ownerAlerts";
+import { t, tTemplate } from "./i18n";
+import { actorDisplayLabel } from "./activityNarrative";
+
+export type BusinessPulse = "strong" | "steady" | "watch";
+
+export type CashierTrustLevel = "good" | "warning" | "risky";
+
+export type CashierTrustRow = {
+  userId: string;
+  displayLabel: string;
+  salesHandled: number;
+  stockEdits: number;
+  debtIssuedUgx: number;
+  refundLikeCount: number;
+  reliabilityScore: number;
+  trustLevel: CashierTrustLevel;
+};
+
+export type DailySummaryInput = {
+  totalSalesUgx: number;
+  estProfitUgx: number;
+  debtTodayUgx: number;
+  saleCount: number;
+  debtSaleCount: number;
+  topProductName: string | null;
+  lowProductName: string | null;
+  cashShortUgx: number | null;
+  yesterdaySalesUgx: number;
+};
+
+function yesterdayKey(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return dateKeyKampala(d);
+}
+
+function sumSalesUgxForDay(sales: Sale[], dateKey: string): number {
+  return sales.filter((s) => dateKeyKampala(s.createdAt) === dateKey).reduce((a, s) => a + s.totalUgx, 0);
+}
+
+/** Units sold per product for a given day key. */
+function unitsSoldByProductOnDay(sales: Sale[], dateKey: string): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const s of sales) {
+    if (dateKeyKampala(s.createdAt) !== dateKey) continue;
+    for (const line of s.lines) {
+      m.set(line.productId, (m.get(line.productId) ?? 0) + line.quantity);
+    }
+  }
+  return m;
+}
+
+/** Average daily units over last `days` calendar days excluding `excludeKey`. */
+function avgDailyUnits(
+  sales: Sale[],
+  productId: string,
+  excludeKey: string,
+  days: number,
+): number {
+  let sum = 0;
+  let n = 0;
+  for (let i = 1; i <= days; i++) {
+    const dk = dateKeyDaysAgoKampala(i);
+    if (dk === excludeKey) continue;
+    const u = unitsSoldByProductOnDay(sales, dk).get(productId) ?? 0;
+    sum += u;
+    n += 1;
+  }
+  return n > 0 ? sum / n : 0;
+}
+
+function trustLevelFromScore(score: number): CashierTrustLevel {
+  if (score >= 72) return "good";
+  if (score >= 45) return "warning";
+  return "risky";
+}
+
+export function computeCashierTrustRows(
+  lang: Language,
+  sales: Sale[],
+  auditLogs: AuditLogEntry[],
+  todayKey: string,
+): CashierTrustRow[] {
+  const todaySales = sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey);
+  const byUser = new Map<
+    string,
+    { sales: number; debt: number; refunds: number; stock: number }
+  >();
+
+  const touch = (uid: string) => {
+    const id = uid || "unknown";
+    byUser.set(id, byUser.get(id) ?? { sales: 0, debt: 0, refunds: 0, stock: 0 });
+    return byUser.get(id)!;
+  };
+
+  for (const s of todaySales) {
+    const uid = s.soldByUserId ?? "unknown";
+    const row = touch(uid);
+    row.sales += 1;
+    row.debt += s.debtUgx;
+    if (s.totalUgx < 0) row.refunds += 1;
+  }
+
+  for (const e of auditLogs) {
+    if (e.action !== "stock_adjust") continue;
+    const at = new Date(e.at).getTime();
+    if (Number.isNaN(at)) continue;
+    if (dateKeyKampala(e.at) !== todayKey) continue;
+    const uid = e.actorUserId || "unknown";
+    touch(uid).stock += 1;
+  }
+
+  const rows: CashierTrustRow[] = [...byUser.entries()].map(([userId, v]) => {
+    let score = 88;
+    score -= Math.min(28, v.stock * 4);
+    score -= Math.min(22, Math.floor(v.debt / 75_000));
+    score -= v.refunds * 18;
+    if (v.sales === 0 && v.stock > 6) score -= 12;
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    const trustLevel = trustLevelFromScore(score);
+    return {
+      userId,
+      displayLabel: actorDisplayLabel(userId, lang),
+      salesHandled: v.sales,
+      stockEdits: v.stock,
+      debtIssuedUgx: v.debt,
+      refundLikeCount: v.refunds,
+      reliabilityScore: score,
+      trustLevel,
+    };
+  });
+
+  return rows.sort((a, b) => b.salesHandled - a.salesHandled || b.debtIssuedUgx - a.debtIssuedUgx);
+}
+
+export function computeBusinessPulse(params: {
+  todaySalesUgx: number;
+  yesterdaySalesUgx: number;
+  alertDangerCount: number;
+  alertWarnCount: number;
+}): BusinessPulse {
+  const { todaySalesUgx, yesterdaySalesUgx, alertDangerCount, alertWarnCount } = params;
+  if (alertDangerCount > 0) return "watch";
+  if (alertWarnCount >= 2) return "watch";
+  if (yesterdaySalesUgx >= 80_000 && todaySalesUgx < yesterdaySalesUgx * 0.55) return "watch";
+  if (todaySalesUgx >= yesterdaySalesUgx * 1.05 || todaySalesUgx >= 150_000) return "strong";
+  return "steady";
+}
+
+export function buildDailyOwnerSummaryLines(lang: Language, input: DailySummaryInput): string[] {
+  const lines: string[] = [];
+  lines.push(
+    tTemplate(lang, "ownerSummarySales", {
+      amount: input.totalSalesUgx.toLocaleString(),
+    }),
+  );
+  lines.push(
+    tTemplate(lang, "ownerSummaryProfit", {
+      amount: input.estProfitUgx.toLocaleString(),
+    }),
+  );
+  if (input.topProductName) {
+    lines.push(tTemplate(lang, "ownerSummaryTopProduct", { name: input.topProductName }));
+  }
+  if (input.lowProductName) {
+    lines.push(tTemplate(lang, "ownerSummaryLowStock", { name: input.lowProductName }));
+  }
+  lines.push(
+    tTemplate(lang, "ownerSummaryDebts", {
+      count: String(input.debtSaleCount),
+      amount: input.debtTodayUgx.toLocaleString(),
+    }),
+  );
+  if (input.cashShortUgx !== null && input.cashShortUgx > 0) {
+    lines.push(
+      tTemplate(lang, "ownerSummaryCashShort", {
+        amount: input.cashShortUgx.toLocaleString(),
+      }),
+    );
+  } else if (input.cashShortUgx === 0) {
+    lines.push(t(lang, "ownerSummaryCashOk"));
+  }
+  return lines;
+}
+
+/** Short line for future WhatsApp / SMS push (keep under ~220 chars). */
+export function buildWhatsAppOwnerSummaryLine(lang: Language, input: DailySummaryInput): string {
+  const parts: string[] = [
+    tTemplate(lang, "waSummaryHead", { app: t(lang, "appName") }),
+    tTemplate(lang, "waSummarySales", { amount: `${Math.round(input.totalSalesUgx / 1000)}k` }),
+    tTemplate(lang, "waSummaryProfit", { amount: `${Math.round(input.estProfitUgx / 1000)}k` }),
+  ];
+  if (input.topProductName) parts.push(tTemplate(lang, "waSummaryTop", { name: input.topProductName }));
+  if (input.lowProductName) parts.push(tTemplate(lang, "waSummaryLow", { name: input.lowProductName }));
+  if (input.cashShortUgx && input.cashShortUgx > 0) {
+    parts.push(tTemplate(lang, "waSummaryShort", { amount: `${Math.round(input.cashShortUgx / 1000)}k` }));
+  }
+  return parts.join(" ").slice(0, 220);
+}
+
+export function computeExtendedOwnerAlerts(params: {
+  products: Product[];
+  dayCloses: DayCloseSummary[];
+  auditLogs: AuditLogEntry[];
+  preferences: ShopPreferences;
+  todayDebtUgx: number;
+  sales: Sale[];
+  todayKey: string;
+}): OwnerAlert[] {
+  const { products, dayCloses, auditLogs, preferences, todayDebtUgx, sales, todayKey } = params;
+  const base = computeOwnerAlerts({
+    products,
+    dayCloses,
+    auditLogs,
+    preferences,
+    todayDebtUgx,
+  });
+
+  const extra: OwnerAlert[] = [];
+  const pct = preferences.cashVarianceThresholdPct ?? 5;
+  const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
+
+  const closeToday = dayCloses.find((d) => d.dateKey === todayKey);
+  if (closeToday && closeToday.differenceUgx < 0) {
+    const short = -closeToday.differenceUgx;
+    const threshold = Math.max((pct / 100) * Math.max(1, closeToday.expectedCashUgx), fixed);
+    if (short >= threshold * 0.5) {
+      extra.push({
+        id: "cash-short-today",
+        tone: "warn",
+        title: "cashShortTodayTitle",
+        detail: "cashShortTodayDetail",
+        detailVars: { amount: short.toLocaleString() },
+      });
+    }
+  }
+
+  const yKey = yesterdayKey();
+  const todayRev = sumSalesUgxForDay(sales, todayKey);
+  const yRev = sumSalesUgxForDay(sales, yKey);
+  if (yRev >= 60_000 && todayRev < yRev * 0.55 && todayRev < yRev - 40_000) {
+    extra.push({
+      id: "sales-soft-today",
+      tone: "info",
+      title: "salesDroppedTitle",
+      detail: "salesDroppedDetail",
+      detailVars: {
+        today: todayRev.toLocaleString(),
+        yesterday: yRev.toLocaleString(),
+      },
+    });
+  }
+
+  const refundsToday = sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey && s.totalUgx < 0).length;
+  if (refundsToday >= 2) {
+    extra.push({
+      id: "refunds-many",
+      tone: "warn",
+      title: "manyRefundsTitle",
+      detail: "manyRefundsDetail",
+      detailVars: { count: String(refundsToday) },
+    });
+  }
+
+  const cutoff = Date.now() - 14 * 86400000;
+  const removesWeek = auditLogs.filter(
+    (e) => e.action === "product_remove" && new Date(e.at).getTime() >= cutoff,
+  ).length;
+  if (removesWeek >= 2) {
+    extra.push({
+      id: "products-removed-review",
+      tone: "warn",
+      title: "productRemovedReviewTitle",
+      detail: "productRemovedReviewDetail",
+      detailVars: { count: String(removesWeek) },
+    });
+  }
+
+  const todayUnits = unitsSoldByProductOnDay(sales, todayKey);
+  for (const [pid, qtyToday] of todayUnits) {
+    if (qtyToday < 4) continue;
+    const avg = avgDailyUnits(sales, pid, todayKey, 7);
+    if (avg >= 0.35 && qtyToday > avg * 2.4) {
+      const name = products.find((p) => p.id === pid)?.name ?? pid;
+      extra.push({
+        id: `fast-burn-${pid}`,
+        tone: "info",
+        title: "fastBurnTitle",
+        detail: "fastBurnDetail",
+        titleVars: { product: name },
+      });
+      break;
+    }
+  }
+
+  const weekMs = Date.now() - 7 * 86400000;
+  const manualStockHits = auditLogs.filter((e) => {
+    if (new Date(e.at).getTime() < weekMs) return false;
+    if (e.action !== "stock_adjust") return false;
+    const pl = e.payload as Record<string, unknown>;
+    const reason = typeof pl.reason === "string" ? pl.reason : "";
+    const d = typeof pl.delta === "number" ? pl.delta : 0;
+    return d < -15 && /damaged|waste|spoiled|broken|theft|missing|adjust|count/i.test(reason);
+  }).length;
+  if (manualStockHits >= 4) {
+    extra.push({
+      id: "manual-stock-review",
+      tone: "warn",
+      title: "manualStockReviewTitle",
+      detail: "manualStockReviewDetail",
+    });
+  }
+
+  const seen = new Set<string>();
+  const merged: OwnerAlert[] = [];
+  for (const a of [...extra, ...base]) {
+    if (seen.has(a.id)) continue;
+    seen.add(a.id);
+    merged.push(a);
+  }
+  return merged;
+}
+
+export function formatVsYesterday(lang: Language, today: number, yesterday: number): string {
+  if (yesterday <= 0) return t(lang, "trendNoYesterday");
+  const pct = Math.round(((today - yesterday) / yesterday) * 100);
+  if (pct > 0) return tTemplate(lang, "trendUpPct", { pct: String(pct) });
+  if (pct < 0) return tTemplate(lang, "trendDownPct", { pct: String(Math.abs(pct)) });
+  return t(lang, "trendFlat");
+}

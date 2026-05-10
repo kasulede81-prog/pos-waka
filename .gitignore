@@ -12,7 +12,13 @@ dist
 dist-ssr
 *.local
 .env
+.env.development.local
+.env.staging.local
+.env.production.local
 !.env.example
+!.env.development.example
+!.env.staging.example
+!.env.production.example
 
 android/local.properties
 

@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authRedirectOrigin, hasSupabaseConfig, supabase } from "../lib/supabase";
+import { reportAuthIssue } from "../lib/monitoring";
 
 type LocalSession = { email: string };
 
@@ -46,7 +47,10 @@ export function useAuth() {
   const signIn = useCallback(async (email: string, password: string) => {
     if (hasSupabaseConfig && supabase) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      if (error) {
+        reportAuthIssue("sign_in_failed", { status: error.status ?? 0 });
+        throw error;
+      }
       return;
     }
     if (!password || password.length < 4) throw new Error("Invalid password.");
@@ -67,7 +71,10 @@ export function useAuth() {
         data: { business_name: businessName.trim() },
       },
     });
-    if (error) throw error;
+    if (error) {
+      reportAuthIssue("sign_up_failed", { status: error.status ?? 0 });
+      throw error;
+    }
     if (data.session) {
       setSession(data.session);
       return { needsEmailVerification: false, session: data.session };
@@ -82,7 +89,10 @@ export function useAuth() {
       email,
       options: { emailRedirectTo: `${authRedirectOrigin()}/auth/callback` },
     });
-    if (error) throw error;
+    if (error) {
+      reportAuthIssue("resend_verification_failed", { status: error.status ?? 0 });
+      throw error;
+    }
   }, []);
 
   const requestPasswordReset = useCallback(async (email: string) => {
@@ -90,13 +100,19 @@ export function useAuth() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${authRedirectOrigin()}/auth/recovery`,
     });
-    if (error) throw error;
+    if (error) {
+      reportAuthIssue("password_reset_request_failed", { status: error.status ?? 0 });
+      throw error;
+    }
   }, []);
 
   const updatePassword = useCallback(async (password: string) => {
     if (!hasSupabaseConfig || !supabase) throw new Error("Supabase is not configured.");
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) throw error;
+    if (error) {
+      reportAuthIssue("password_update_failed", { status: error.status ?? 0 });
+      throw error;
+    }
   }, []);
 
   const signOut = useCallback(async () => {

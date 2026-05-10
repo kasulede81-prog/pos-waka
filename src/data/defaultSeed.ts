@@ -1,0 +1,80 @@
+import type { Product, ShopPreferences } from "../types";
+
+export function createDefaultPreferences(): ShopPreferences {
+  return {
+    businessType: "kiosk_duka",
+    kioskQuickSell: true,
+    onboardingDone: false,
+    schemaVersion: 2,
+    celebratedFirstSale: false,
+    saleSoundOn: true,
+    hapticsOn: true,
+    posUiMode: "cashier",
+    devRoleOverride: null,
+    cashVarianceThresholdPct: 5,
+    cashVarianceThresholdUgxFixed: 10_000,
+    lastAutoBackupDateKey: undefined,
+    activeBranchId: null,
+    branchDisplayName: null,
+  };
+}
+
+export function createDefaultProducts(): Product[] {
+  const now = new Date().toISOString();
+  return [
+    {
+      id: crypto.randomUUID(),
+      name: "Soda (bottle)",
+      sellingMode: "unit",
+      baseUnit: "ea",
+      buyingUnit: "crate",
+      conversionRate: 24,
+      sellingPricePerUnitUgx: 1500,
+      costPricePerUnitUgx: 1100,
+      stockOnHand: 48,
+      minimumStockAlert: 12,
+      category: "Drinks",
+      sku: "SODA",
+      updatedAt: now,
+      version: 1,
+      quickPresetsMoneyUgx: [1500, 3000, 4500],
+      quickPresetsQty: [1, 2, 4],
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Sugar",
+      sellingMode: "weighted",
+      baseUnit: "kg",
+      buyingUnit: "100kg bag",
+      conversionRate: 100,
+      sellingPricePerUnitUgx: 3500,
+      costPricePerUnitUgx: 2800,
+      stockOnHand: 42,
+      minimumStockAlert: 8,
+      category: "Food",
+      sku: "SUG",
+      updatedAt: now,
+      version: 1,
+      quickPresetsQty: [1, 2, 5],
+      quickPresetsMoneyUgx: [3500, 7000, 17500],
+    },
+    {
+      id: crypto.randomUUID(),
+      name: "Cooking oil",
+      sellingMode: "portion",
+      baseUnit: "litre",
+      buyingUnit: "20L jerrican",
+      conversionRate: 20,
+      sellingPricePerUnitUgx: 10000,
+      costPricePerUnitUgx: 7800,
+      stockOnHand: 18,
+      minimumStockAlert: 2,
+      category: "Food",
+      sku: "OIL",
+      updatedAt: now,
+      version: 1,
+      quickPresetsMoneyUgx: [500, 1000, 2000],
+      quickPresetsQty: [0.5, 1, 2],
+    },
+  ];
+}
