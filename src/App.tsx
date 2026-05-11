@@ -28,6 +28,7 @@ import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
 import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
+import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import type { Language } from "./types";
 
@@ -231,6 +232,7 @@ function App() {
             />
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
           </Route>
         </Route>
 

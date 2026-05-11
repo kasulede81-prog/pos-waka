@@ -264,6 +264,28 @@ export type RecentShopRow = {
   created_at: string;
   plan_code: string | null;
   trial_days_left: number | null;
+  /** Display label from profile / email (internal RPC). */
+  owner_label?: string | null;
+};
+
+export type ShopOpsDetail = {
+  shop: {
+    id: string;
+    name: string;
+    district: string | null;
+    city: string | null;
+    is_active: boolean;
+    organization_id: string;
+    last_seen_at: string | null;
+    phone_e164: string | null;
+  };
+  subscription: {
+    id: string;
+    status: string;
+    trial_ends_at: string | null;
+    plan_code: string | null;
+  } | null;
+  deviceCount: number;
 };
 
 export type SupportTicketRow = {
@@ -424,6 +446,26 @@ export async function updateSupportTicketStatus(
 
 export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
   if (!supabase) return [];
+
+  const { data: rpcRows, error: rpcError } = await supabase.rpc("internal_ops_recent_shops", { p_limit: limit });
+  if (!rpcError && rpcRows && Array.isArray(rpcRows) && rpcRows.length > 0) {
+    return (rpcRows as Array<Record<string, unknown>>).map((row) => {
+      const status = (row.subscription_status as string) ?? "";
+      const trialEnds = (row.trial_ends_at as string | null) ?? null;
+      return {
+        id: row.id as string,
+        name: (row.name as string) ?? "—",
+        district: (row.district as string) ?? null,
+        city: (row.city as string) ?? null,
+        is_active: Boolean(row.is_active),
+        created_at: (row.created_at as string) ?? "",
+        plan_code: (row.plan_code as string) ?? null,
+        trial_days_left: trialDaysLeft(trialEnds, status),
+        owner_label: (row.owner_label as string) ?? null,
+      };
+    });
+  }
+
   const { data: shops, error } = await supabase
     .from("shops")
     .select("id, name, district, city, is_active, created_at, organization_id")
@@ -466,8 +508,91 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
       created_at: (s.created_at as string) ?? "",
       plan_code,
       trial_days_left,
+      owner_label: null,
     };
   });
+}
+
+export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail | null> {
+  if (!supabase) return null;
+  const { data: shop, error: shopErr } = await supabase
+    .from("shops")
+    .select("id, name, district, city, is_active, organization_id, last_seen_at, phone_e164")
+    .eq("id", shopId)
+    .maybeSingle();
+  if (shopErr || !shop) return null;
+
+  const orgId = shop.organization_id as string;
+  const { data: subRows } = await supabase
+    .from("subscriptions")
+    .select("id, status, trial_ends_at, plan_id, subscription_plans ( code )")
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  const raw = subRows?.[0] as
+    | {
+        id: string;
+        status: string;
+        trial_ends_at: string | null;
+        subscription_plans: { code: string } | { code: string }[] | null;
+      }
+    | undefined;
+  let subscription: ShopOpsDetail["subscription"] = null;
+  if (raw) {
+    const p = raw.subscription_plans;
+    const plan_code = p ? (Array.isArray(p) ? p[0]?.code : p.code) ?? null : null;
+    subscription = {
+      id: raw.id,
+      status: raw.status,
+      trial_ends_at: raw.trial_ends_at,
+      plan_code,
+    };
+  }
+
+  const { count } = await supabase
+    .from("shop_devices")
+    .select("id", { count: "exact", head: true })
+    .eq("shop_id", shopId)
+    .eq("is_active", true);
+
+  return {
+    shop: {
+      id: shop.id as string,
+      name: (shop.name as string) ?? "—",
+      district: (shop.district as string) ?? null,
+      city: (shop.city as string) ?? null,
+      is_active: Boolean(shop.is_active),
+      organization_id: orgId,
+      last_seen_at: (shop.last_seen_at as string) ?? null,
+      phone_e164: (shop.phone_e164 as string) ?? null,
+    },
+    subscription,
+    deviceCount: count ?? 0,
+  };
+}
+
+export async function adminSetShopActive(shopId: string, active: boolean): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_set_shop_active", {
+    p_shop_id: shopId,
+    p_active: active,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminExtendSubscriptionTrial(
+  subscriptionId: string,
+  extraDays: number,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_extend_subscription_trial", {
+    p_subscription_id: subscriptionId,
+    p_extra_days: extraDays,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 
 export async function fetchDistrictOpsTable(): Promise<DistrictOpsRow[]> {

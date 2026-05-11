@@ -515,10 +515,11 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "internalRecentTitle")}</h2>
             <div className="mt-4 overflow-x-auto rounded-2xl ring-1 ring-stone-100">
-              <table className="min-w-[720px] w-full border-collapse text-left text-sm">
+              <table className="min-w-[820px] w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/80 text-[11px] font-black uppercase tracking-wider text-stone-500">
                     <th className="px-4 py-3">{t(lang, "internalRecentColName")}</th>
+                    <th className="px-4 py-3">{t(lang, "internalRecentColOwner")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColDistrict")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColPlan")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColJoined")}</th>
@@ -530,7 +531,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                   {opsLoading && !recent.length ? (
                     [...Array(5)].map((_, i) => (
                       <tr key={i} className="border-b border-stone-50">
-                        <td colSpan={6} className="px-4 py-3">
+                        <td colSpan={7} className="px-4 py-3">
                           <div className="h-4 animate-pulse rounded bg-stone-100" />
                         </td>
                       </tr>
@@ -538,7 +539,17 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                   ) : (
                     recent.map((row) => (
                       <tr key={row.id} className="border-b border-stone-50 transition hover:bg-orange-50/30">
-                        <td className="px-4 py-3 font-bold text-stone-900">{row.name}</td>
+                        <td className="px-4 py-3 font-bold text-stone-900">
+                          <Link
+                            to={`/internal/waka/shop/${row.id}`}
+                            className="text-orange-900 underline decoration-orange-300 underline-offset-2 hover:text-orange-700"
+                          >
+                            {row.name}
+                          </Link>
+                        </td>
+                        <td className="max-w-[140px] truncate px-4 py-3 text-stone-700" title={row.owner_label ?? undefined}>
+                          {row.owner_label ?? "—"}
+                        </td>
                         <td className="px-4 py-3 text-stone-600">{[row.district, row.city].filter(Boolean).join(" · ") || "—"}</td>
                         <td className="px-4 py-3">
                           <span className="rounded-lg bg-stone-100 px-2 py-1 text-xs font-black uppercase text-stone-700">

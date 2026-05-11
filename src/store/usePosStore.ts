@@ -224,6 +224,8 @@ type PosState = {
       stockQty: number;
       category: string;
       inferName?: string;
+      sellingMode?: SellingMode;
+      baseUnit?: string;
     }>,
   ) => { added: number; skipped: number };
   duplicateProduct: (productId: string, nameSuffix: string) => { ok: boolean; errorKey?: string };
@@ -871,6 +873,8 @@ export const usePosStore = create<PosState>((set, get) => {
         stockQty: row.stockQty,
         category: row.category || cat,
         inferName: row.inferName,
+        sellingMode: row.sellingMode,
+        baseUnit: row.baseUnit,
       });
       if (r.ok) added += 1;
       else skipped += 1;
