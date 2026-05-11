@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
+
+const pkg = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./package.json", import.meta.url)), "utf8"),
+) as { version: string };
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -8,6 +14,9 @@ export default defineConfig(({ mode }) => {
   const shortName = env.VITE_APP_SHORT_NAME?.trim() || "WakaPOS";
 
   return {
+    define: {
+      "import.meta.env.VITE_APP_VERSION": JSON.stringify(env.VITE_APP_VERSION?.trim() || pkg.version),
+    },
     build: {
       target: "es2020",
       chunkSizeWarningLimit: 650,
@@ -32,9 +41,9 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: appName,
           short_name: shortName,
-          description: "Point of sale for shops — works offline, syncs when online.",
-          theme_color: "#047857",
-          background_color: "#ecfdf5",
+          description: "Trusted point of sale for Uganda — offline-first, simple for every shop.",
+          theme_color: "#ea580c",
+          background_color: "#fff7ed",
           display: "standalone",
           start_url: "/",
           scope: "/",

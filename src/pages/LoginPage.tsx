@@ -39,18 +39,21 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
   if (initializing) {
     return (
       <AuthLayout lang={lang} setLang={setLang}>
-        <p className="text-center text-sm text-slate-600">{t(lang, "loadingAuth")}</p>
+        <div className="flex flex-col items-center gap-3 py-8">
+          <div className="h-10 w-40 rounded-xl waka-skeleton-bar" />
+          <p className="text-center text-sm font-medium text-stone-600">{t(lang, "loadingAuth")}</p>
+        </div>
       </AuthLayout>
     );
   }
 
   return (
     <AuthLayout lang={lang} setLang={setLang}>
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">{t(lang, "loginTitle")}</h1>
+      <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
+        <h1 className="text-2xl font-black text-stone-900">{t(lang, "loginTitle")}</h1>
 
         {mode === "local" ? (
-          <p className="mt-3 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-700">{t(lang, "supabaseRegisterHint")}</p>
+          <p className="mt-3 rounded-xl bg-stone-100 px-3 py-2 text-xs font-medium text-stone-700">{t(lang, "supabaseRegisterHint")}</p>
         ) : null}
 
         <form onSubmit={submit} className="mt-6 space-y-4">
@@ -62,7 +65,7 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-emerald-200 focus:ring"
+              className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
             />
           </label>
 
@@ -71,7 +74,7 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
               {t(lang, "password")}
             </label>
             {mode === "supabase" && hasSupabaseConfig ? (
-              <Link to="/forgot-password" className="font-medium text-emerald-700 underline underline-offset-2">
+              <Link to="/forgot-password" className="font-medium text-waka-700 underline underline-offset-2">
                 {t(lang, "forgotPassword")}
               </Link>
             ) : null}
@@ -82,19 +85,26 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
-            className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-emerald-200 focus:ring"
+            className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
           />
 
           {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
 
-          <button disabled={busy} className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white disabled:opacity-50">
+          <button
+            disabled={busy}
+            type="submit"
+            className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm transition-waka active:scale-[0.99] disabled:opacity-50 motion-reduce:active:scale-100"
+          >
             {busy ? "…" : t(lang, "signIn")}
           </button>
         </form>
 
-        <div className="mt-6 rounded-xl bg-slate-50 p-4 text-center">
-          <p className="text-sm text-slate-600">{t(lang, "haveAccount")}</p>
-          <Link to="/register" className="mt-2 inline-block w-full rounded-xl border bg-white px-4 py-3 text-sm font-semibold text-slate-900 shadow-sm">
+        <div className="mt-6 rounded-2xl bg-stone-50 p-4 text-center ring-1 ring-stone-100">
+          <p className="text-sm font-medium text-stone-600">{t(lang, "haveAccount")}</p>
+          <Link
+            to="/register"
+            className="mt-2 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-900 shadow-sm transition-waka active:bg-stone-50"
+          >
             {t(lang, "createAccount")}
           </Link>
         </div>

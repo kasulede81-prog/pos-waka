@@ -243,13 +243,13 @@ export function StockPage({ lang }: { lang: Language }) {
       </div>
 
       {(canRestock || canSuppliers) && products.length > 0 ? (
-        <section className="rounded-3xl border-2 border-emerald-100 bg-white p-5 shadow-sm">
-          <p className="text-sm font-black uppercase tracking-wide text-emerald-900">{t(lang, "stockRestockLinks")}</p>
+        <section className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-sm">
+          <p className="text-sm font-black uppercase tracking-wide text-waka-900">{t(lang, "stockRestockLinks")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {canRestock ? (
               <Link
                 to="/restock"
-                className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm"
+                className="rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm"
               >
                 {t(lang, "stockGoRestock")}
               </Link>
@@ -257,7 +257,7 @@ export function StockPage({ lang }: { lang: Language }) {
             {canSuppliers ? (
               <Link
                 to="/suppliers"
-                className="rounded-2xl border-2 border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm font-black text-emerald-950"
+                className="rounded-2xl border-2 border-waka-200 bg-waka-50/80 px-4 py-3 text-sm font-black text-waka-950"
               >
                 {t(lang, "stockGoSuppliers")}
               </Link>
@@ -277,23 +277,23 @@ export function StockPage({ lang }: { lang: Language }) {
       ) : null}
 
       {products.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-emerald-200 bg-gradient-to-b from-emerald-50 to-white p-6 text-center shadow-sm">
+        <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50 to-white p-6 text-center shadow-sm">
           <p className="text-2xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "stockEmptySub")}</p>
-          <p className="mt-1 text-base font-semibold text-emerald-800">{t(lang, "stockEmptyHint")}</p>
+          <p className="mt-1 text-base font-semibold text-waka-800">{t(lang, "stockEmptyHint")}</p>
           {canAdd ? (
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
                 type="button"
                 onClick={() => setQuickOpen(true)}
-                className="rounded-3xl bg-emerald-600 px-6 py-5 text-xl font-black text-white shadow-lg active:scale-[0.99]"
+                className="rounded-3xl bg-waka-600 px-6 py-5 text-xl font-black text-white shadow-lg active:scale-[0.99]"
               >
                 {t(lang, "quickAddOpen")}
               </button>
               <button
                 type="button"
                 onClick={openStarter}
-                className="rounded-3xl border-2 border-emerald-300 bg-white px-6 py-5 text-xl font-black text-emerald-900"
+                className="rounded-3xl border-2 border-waka-300 bg-white px-6 py-5 text-xl font-black text-waka-900"
               >
                 {t(lang, "starterPackOpen")}
               </button>
@@ -307,7 +307,7 @@ export function StockPage({ lang }: { lang: Language }) {
         <button
           type="button"
           onClick={() => setQuickOpen(true)}
-          className="min-h-[72px] rounded-3xl bg-emerald-600 py-4 text-lg font-black text-white shadow-md active:bg-emerald-700"
+          className="min-h-[72px] rounded-3xl bg-waka-600 py-4 text-lg font-black text-white shadow-md active:bg-waka-700"
         >
           {t(lang, "quickAddOpen")}
         </button>
@@ -486,14 +486,14 @@ export function StockPage({ lang }: { lang: Language }) {
                 <>
                   <button
                     type="button"
-                    className="rounded-2xl bg-emerald-500 px-4 py-3 text-base font-black text-white shadow"
+                    className="rounded-2xl bg-waka-500 px-4 py-3 text-base font-black text-white shadow"
                     onClick={() => adjustStock(p.id, 10, "added")}
                   >
                     {t(lang, "addedStockBig")}
                   </button>
                   <button
                     type="button"
-                    className="rounded-2xl bg-emerald-100 px-4 py-3 text-base font-black text-emerald-900"
+                    className="rounded-2xl bg-waka-100 px-4 py-3 text-base font-black text-waka-900"
                     onClick={() => adjustStock(p.id, 1, "added")}
                   >
                     +1
@@ -555,7 +555,7 @@ export function StockPage({ lang }: { lang: Language }) {
                 </div>
               </div>
             ) : canPresets ? (
-              <button type="button" className="mt-4 text-sm font-bold text-emerald-700 underline" onClick={() => openEditPresets(p)}>
+              <button type="button" className="mt-4 text-sm font-bold text-waka-700 underline" onClick={() => openEditPresets(p)}>
                 {t(lang, "saveTapPrices")}…
               </button>
             ) : null}
@@ -624,7 +624,7 @@ export function StockPage({ lang }: { lang: Language }) {
               />
             </label>
             {guessPreview ? (
-              <p className="mt-2 rounded-2xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">
+              <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
                 {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
               </p>
             ) : null}
@@ -654,7 +654,7 @@ export function StockPage({ lang }: { lang: Language }) {
               <button type="button" className="rounded-2xl border-2 py-4 text-lg font-bold" onClick={() => setQuickOpen(false)}>
                 {t(lang, "cancel")}
               </button>
-              <button type="submit" className="rounded-2xl bg-emerald-600 py-4 text-lg font-black text-white">
+              <button type="submit" className="rounded-2xl bg-waka-600 py-4 text-lg font-black text-white">
                 {t(lang, "quickAddSave")}
               </button>
             </div>
@@ -685,7 +685,7 @@ export function StockPage({ lang }: { lang: Language }) {
                       onChange={() =>
                         setStarterRows((rows) => rows.map((r, j) => (j === i ? { ...r, enabled: !r.enabled } : r)))
                       }
-                      className="h-6 w-6 accent-emerald-600"
+                      className="h-6 w-6 accent-waka-600"
                     />
                     <span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>
                   </label>
@@ -726,7 +726,7 @@ export function StockPage({ lang }: { lang: Language }) {
               <button type="button" className="rounded-2xl border-2 py-4 text-lg font-bold" onClick={() => setStarterOpen(false)}>
                 {t(lang, "cancel")}
               </button>
-              <button type="button" className="rounded-2xl bg-emerald-600 py-4 text-lg font-black text-white" onClick={applyStarter}>
+              <button type="button" className="rounded-2xl bg-waka-600 py-4 text-lg font-black text-white" onClick={applyStarter}>
                 {t(lang, "starterPackApply")}
               </button>
             </div>

@@ -229,7 +229,7 @@ export function PosPage({ lang }: { lang: Language }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900">{t(lang, "sellTitle")}</h2>
-          {quickSell ? <p className="text-sm font-semibold text-emerald-800">{t(lang, "quickSellBadge")}</p> : null}
+          {quickSell ? <p className="text-sm font-semibold text-waka-800">{t(lang, "quickSellBadge")}</p> : null}
         </div>
         {draftLines.length > 0 && (
           <button
@@ -248,7 +248,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <p className="mt-2 text-lg text-slate-600">{t(lang, "posEmptySub")}</p>
           <Link
             to="/stock"
-            className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-emerald-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-emerald-700"
+            className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
           >
             {t(lang, "posEmptyCta")}
           </Link>
@@ -262,19 +262,19 @@ export function PosPage({ lang }: { lang: Language }) {
               key={p.id}
               type="button"
               onClick={() => openProduct(p)}
-              className="flex min-h-[120px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-emerald-500 motion-reduce:active:scale-100"
+              className="flex min-h-[120px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:active:scale-100"
               style={{ contentVisibility: "auto" }}
             >
               <span className="text-xl font-black leading-tight text-slate-900">{p.name}</span>
-              <span className="mt-2 text-base font-bold text-emerald-700">{formatProductPriceLabel(p)}</span>
+              <span className="mt-2 text-base font-bold text-waka-700">{formatProductPriceLabel(p)}</span>
             </button>
           ))}
         </div>
       )}
 
       {draftLines.length > 0 && (
-        <section className="rounded-3xl border-2 border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-          <p className="text-base font-bold text-emerald-950">{t(lang, "thisSale")}</p>
+        <section className="rounded-3xl border-2 border-waka-200 bg-waka-50 p-5 shadow-sm">
+          <p className="text-base font-bold text-waka-950">{t(lang, "thisSale")}</p>
           <ul className="mt-3 space-y-2">
             {draftLines.map((line) => (
               <li key={line.productId} className="flex items-center justify-between gap-2 text-lg text-slate-900">
@@ -300,7 +300,7 @@ export function PosPage({ lang }: { lang: Language }) {
           </ul>
           <p className="mt-4 text-3xl font-black text-slate-900">
             {t(lang, "totalLabel")}{" "}
-            <span className="text-emerald-700">UGX {draftTotal.toLocaleString()}</span>
+            <span className="text-waka-700">UGX {draftTotal.toLocaleString()}</span>
           </p>
 
           {customers.length > 0 && (
@@ -336,7 +336,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={finishSale}
-            className="mt-5 min-h-[56px] w-full rounded-3xl bg-emerald-600 py-5 text-2xl font-black text-white shadow-lg active:bg-emerald-700"
+            className="mt-5 min-h-[56px] w-full rounded-3xl bg-waka-600 py-5 text-2xl font-black text-white shadow-lg active:bg-waka-700"
           >
             {t(lang, "saveSale")}
           </button>
@@ -360,7 +360,7 @@ export function PosPage({ lang }: { lang: Language }) {
                         key={`m-${amt}`}
                         type="button"
                         onClick={() => applyPreset("money", amt)}
-                        className="min-h-[56px] min-w-[104px] rounded-2xl bg-emerald-600 px-4 text-xl font-black text-white shadow-md active:bg-emerald-700"
+                        className="min-h-[56px] min-w-[104px] rounded-2xl bg-waka-600 px-4 text-xl font-black text-white shadow-md active:bg-waka-700"
                       >
                         {amt.toLocaleString()}
                       </button>
@@ -403,7 +403,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     }}
                     className={clsx(
                       "min-h-[52px] rounded-2xl py-4 text-lg font-black",
-                      inputMode === "money" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700",
+                      inputMode === "money" ? "bg-waka-600 text-white" : "bg-slate-100 text-slate-700",
                     )}
                   >
                     {t(lang, "moneyTab")}
@@ -416,7 +416,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     }}
                     className={clsx(
                       "min-h-[52px] rounded-2xl py-4 text-lg font-black",
-                      inputMode === "quantity" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700",
+                      inputMode === "quantity" ? "bg-waka-600 text-white" : "bg-slate-100 text-slate-700",
                     )}
                   >
                     {t(lang, "qtyTab")}
@@ -456,11 +456,11 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {saleSuccessFlash ? (
         <div
-          className="pointer-events-none fixed inset-0 z-[55] flex items-center justify-center bg-emerald-600/10"
+          className="pointer-events-none fixed inset-0 z-[55] flex items-center justify-center bg-waka-600/10"
           aria-hidden
         >
           <div
-            className="flex h-28 w-28 items-center justify-center rounded-full bg-emerald-600 text-white shadow-2xl animate-waka-sale-check"
+            className="flex h-28 w-28 items-center justify-center rounded-full bg-waka-600 text-white shadow-2xl animate-waka-sale-check"
             aria-hidden
           >
             <span className="text-5xl font-black">✓</span>
@@ -485,7 +485,7 @@ export function PosPage({ lang }: { lang: Language }) {
             <div className="mt-8 flex flex-col gap-3">
               <Link
                 to="/"
-                className="block min-h-[52px] w-full rounded-2xl bg-emerald-600 py-4 text-center text-lg font-black text-white active:bg-emerald-700"
+                className="block min-h-[52px] w-full rounded-2xl bg-waka-600 py-4 text-center text-lg font-black text-white active:bg-waka-700"
                 onClick={() => {
                   setPreferences({ celebratedFirstSale: true });
                   setFirstSaleOpen(false);

@@ -23,7 +23,7 @@ function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: str
 }
 
 function pulseStyles(pulse: ReturnType<typeof computeBusinessPulse>): string {
-  if (pulse === "strong") return "from-emerald-600 to-teal-700 text-white";
+  if (pulse === "strong") return "from-waka-600 to-teal-700 text-white";
   if (pulse === "steady") return "from-slate-700 to-slate-900 text-white";
   return "from-amber-500 to-orange-600 text-amber-950";
 }
@@ -35,7 +35,7 @@ function pulseLabel(lang: Language, pulse: ReturnType<typeof computeBusinessPuls
 }
 
 function trustBadgeClass(level: "good" | "warning" | "risky"): string {
-  if (level === "good") return "bg-emerald-500";
+  if (level === "good") return "bg-waka-500";
   if (level === "warning") return "bg-amber-400";
   return "bg-rose-500";
 }
@@ -207,13 +207,13 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
-      <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 p-6 shadow-sm">
+      <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-waka-50/40 p-6 shadow-sm">
         <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-waka-600 text-white shadow-md">
             <Building2 className="h-8 w-8" aria-hidden />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold uppercase tracking-wider text-emerald-800">{t(lang, "ownerControlTitle")}</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-waka-800">{t(lang, "ownerControlTitle")}</p>
             <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">{t(lang, "ownerDashboardTitle")}</h1>
             <p className="mt-1 max-w-prose text-slate-600">{t(lang, "ownerControlSub")}</p>
           </div>
@@ -230,7 +230,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         </Link>
         <Link
           to="/reports"
-          className="inline-flex items-center gap-2 rounded-2xl border-2 border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-950"
+          className="inline-flex items-center gap-2 rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 py-3 text-sm font-bold text-waka-950"
         >
           {t(lang, "reports")}
         </Link>
@@ -268,11 +268,11 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
             {t(lang, "ownerCopyWaSummary")}
           </button>
         </div>
-        {waCopied ? <p className="mt-2 text-sm font-semibold text-emerald-700">{t(lang, "ownerCopiedWa")}</p> : null}
+        {waCopied ? <p className="mt-2 text-sm font-semibold text-waka-700">{t(lang, "ownerCopiedWa")}</p> : null}
         <ul className="mt-4 space-y-2 text-sm font-semibold text-slate-800">
           {summaryLines.map((line) => (
             <li key={line} className="flex gap-2 rounded-xl bg-slate-50 px-3 py-2">
-              <span className="text-emerald-600">●</span>
+              <span className="text-waka-600">●</span>
               <span>{line}</span>
             </li>
           ))}
@@ -289,7 +289,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           </article>
           <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
             <p className="text-xs font-bold text-slate-500">{t(lang, "estimatedProfit")}</p>
-            <p className="mt-1 text-2xl font-black text-emerald-800">UGX {stats.estProfitUgx.toLocaleString()}</p>
+            <p className="mt-1 text-2xl font-black text-waka-800">UGX {stats.estProfitUgx.toLocaleString()}</p>
           </article>
         </div>
       </section>
@@ -356,7 +356,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         <h2 className="text-base font-black text-slate-800">{t(lang, "branchCardTitle")}</h2>
         <p className="mt-2 text-sm text-slate-600">{t(lang, "branchCardSub")}</p>
         {preferences.branchDisplayName ? (
-          <p className="mt-3 text-sm font-bold text-emerald-800">{preferences.branchDisplayName}</p>
+          <p className="mt-3 text-sm font-bold text-waka-800">{preferences.branchDisplayName}</p>
         ) : null}
       </section>
 
@@ -408,7 +408,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
               {fastMovers.map((m) => (
                 <li key={m.name} className="flex justify-between text-sm font-semibold">
                   <span>{m.name}</span>
-                  <span className="text-emerald-700">UGX {m.revenue.toLocaleString()}</span>
+                  <span className="text-waka-700">UGX {m.revenue.toLocaleString()}</span>
                 </li>
               ))}
             </ul>
@@ -420,7 +420,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
             <p className="mt-3 text-slate-500">{t(lang, "noSalesYet")}</p>
           ) : (
             <>
-              <p className="mt-1 text-xs font-bold text-emerald-800">
+              <p className="mt-1 text-xs font-bold text-waka-800">
                 {t(lang, "ownerBestCashier")}: {cashierPerf[0]?.label}
               </p>
               <ul className="mt-3 space-y-2">
@@ -454,7 +454,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           {stats.todayCloseDiff !== null ? (
             <p
               className={`mt-1 text-xs font-bold ${
-                stats.todayCloseDiff === 0 ? "text-emerald-700" : stats.todayCloseDiff > 0 ? "text-amber-800" : "text-rose-700"
+                stats.todayCloseDiff === 0 ? "text-waka-700" : stats.todayCloseDiff > 0 ? "text-amber-800" : "text-rose-700"
               }`}
             >
               {t(lang, "ownerShortOver")}: UGX {stats.todayCloseDiff.toLocaleString()}
@@ -486,7 +486,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
                 {t(lang, "ownerVarianceFlag")} (±{pct}% / UGX {fixed.toLocaleString()})
               </p>
             ) : (
-              <p className="mt-2 text-sm font-semibold text-emerald-800">{t(lang, "ownerVarianceOk")}</p>
+              <p className="mt-2 text-sm font-semibold text-waka-800">{t(lang, "ownerVarianceOk")}</p>
             );
           })()}
         </section>
@@ -500,7 +500,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
             UGX {customers.reduce((a, c) => a + c.debtBalanceUgx, 0).toLocaleString()}
           </span>
         </p>
-        <Link to="/customers" className="mt-3 inline-block text-sm font-bold text-emerald-700 underline">
+        <Link to="/customers" className="mt-3 inline-block text-sm font-bold text-waka-700 underline">
           {t(lang, "customers")} →
         </Link>
       </section>

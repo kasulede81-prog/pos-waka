@@ -16,6 +16,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
+import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { StockPage } from "./pages/StockPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
@@ -94,14 +95,16 @@ function App() {
           <Route
             element={
               <PosDataProvider lang={lang}>
-                <AppShell
-                  lang={lang}
-                  setLang={setLang}
-                  onSignOut={auth.signOut}
-                  user={auth.user}
-                  email={auth.email}
-                  authMode={auth.mode}
-                />
+                <SyncStatusProvider>
+                  <AppShell
+                    lang={lang}
+                    setLang={setLang}
+                    onSignOut={auth.signOut}
+                    user={auth.user}
+                    email={auth.email}
+                    authMode={auth.mode}
+                  />
+                </SyncStatusProvider>
               </PosDataProvider>
             }
           >

@@ -85,6 +85,8 @@ export type WakaExportEnvelope = {
   wakaBackupVersion: typeof WAKA_BACKUP_FILE_VERSION;
   exportedAt: string;
   snapshot: PersistedSnapshot;
+  /** 0 = plain JSON today; future versions may wrap ciphertext here. */
+  encryptionVersion?: 0;
 };
 
 export function buildExportEnvelope(snapshot: PersistedSnapshot): WakaExportEnvelope {
@@ -92,6 +94,7 @@ export function buildExportEnvelope(snapshot: PersistedSnapshot): WakaExportEnve
     wakaBackupVersion: WAKA_BACKUP_FILE_VERSION,
     exportedAt: new Date().toISOString(),
     snapshot,
+    encryptionVersion: 0,
   };
 }
 

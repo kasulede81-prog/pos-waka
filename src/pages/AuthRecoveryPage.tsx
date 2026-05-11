@@ -50,7 +50,7 @@ export function AuthRecoveryPage({ lang, setLang, mode, updatePassword }: Props)
       <AuthLayout lang={lang} setLang={setLang}>
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <p className="font-medium">{t(lang, "passwordUpdated")}</p>
-          <Link to="/login" className="mt-4 inline-block text-sm font-medium text-emerald-700 underline">
+          <Link to="/login" className="mt-4 inline-block text-sm font-medium text-waka-700 underline">
             {t(lang, "backToLogin")}
           </Link>
         </div>

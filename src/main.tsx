@@ -9,6 +9,9 @@ import { reportPwaIssue } from "./lib/monitoring";
 
 registerSW({
   immediate: true,
+  onNeedRefresh() {
+    window.dispatchEvent(new CustomEvent("waka:pwa-update"));
+  },
   onRegisterError(error) {
     reportPwaIssue("sw_register_failed", { detail: error instanceof Error ? error.name : "unknown" });
   },

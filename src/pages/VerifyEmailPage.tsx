@@ -50,7 +50,7 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
         )}
 
         {done ? (
-          <p className="mt-6 text-sm font-medium text-emerald-700">{t(lang, "verificationResent")}</p>
+          <p className="mt-6 text-sm font-medium text-waka-700">{t(lang, "verificationResent")}</p>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
             <label className="block text-sm">
@@ -76,7 +76,7 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
         )}
 
         <p className="mt-6 text-center text-sm">
-          <Link to="/login" className="font-medium text-emerald-700 underline">
+          <Link to="/login" className="font-medium text-waka-700 underline">
             {t(lang, "backToLogin")}
           </Link>
         </p>

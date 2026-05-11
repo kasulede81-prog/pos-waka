@@ -12,15 +12,15 @@ type Props = {
 
 function LoadingSkeleton({ lang }: { lang: Language }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-emerald-50/80 to-slate-50 px-5 pt-[max(2rem,env(safe-area-inset-top))]">
+    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-waka-50/90 via-stone-50 to-stone-100 px-5 pt-[max(2rem,env(safe-area-inset-top))]">
       <div className="mx-auto w-full max-w-md space-y-6">
         <div>
           <div className="h-8 w-40 rounded-xl waka-skeleton-bar" />
           <div className="mt-3 h-4 w-full max-w-xs rounded-lg waka-skeleton-bar opacity-80" />
         </div>
-        <p className="text-center text-lg font-bold text-slate-700">{t(lang, "openingShop")}</p>
-        <p className="text-center text-sm font-medium leading-relaxed text-emerald-900/85">{t(lang, "loadingTrustLine")}</p>
-        <div className="space-y-3 rounded-3xl border border-white/60 bg-white/70 p-5 shadow-sm">
+        <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
+        <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
+        <div className="space-y-3 rounded-3xl border border-stone-100 bg-white/90 p-5 shadow-waka-sm">
           <div className="h-14 w-full rounded-2xl waka-skeleton-bar" />
           <div className="h-14 w-full rounded-2xl waka-skeleton-bar opacity-90" />
           <div className="h-14 w-[72%] rounded-2xl waka-skeleton-bar opacity-75" />
@@ -55,11 +55,11 @@ export function PosDataProvider({ children, lang = "en" }: Props) {
 
   if (error) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
-        <div className="max-w-sm rounded-3xl border-2 border-amber-100 bg-amber-50/90 p-8 shadow-sm">
-          <p className="text-xl font-black text-slate-900">{t(lang, "localDataError")}</p>
-          <p className="mt-3 text-base font-medium leading-relaxed text-slate-700">{t(lang, "localDataErrorHint")}</p>
-          <p className="mt-4 text-sm font-semibold text-emerald-900">{t(lang, "loadingTrustLine")}</p>
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-stone-100 px-6 text-center">
+        <div className="max-w-sm rounded-3xl border-2 border-amber-100 bg-amber-50/90 p-8 shadow-waka-sm">
+          <p className="text-xl font-black text-stone-900">{t(lang, "localDataError")}</p>
+          <p className="mt-3 text-base font-medium leading-relaxed text-stone-700">{t(lang, "localDataErrorHint")}</p>
+          <p className="mt-4 text-sm font-semibold text-waka-900">{t(lang, "loadingTrustLine")}</p>
         </div>
       </div>
     );

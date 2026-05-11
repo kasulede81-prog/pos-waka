@@ -94,23 +94,23 @@ export function CustomersPage({ lang }: { lang: Language }) {
                   setPayOpen(payOpen === c.id ? null : c.id);
                   setPayAmount("");
                 }}
-                className="mt-4 w-full rounded-2xl bg-emerald-600 py-3 text-lg font-black text-white"
+                className="mt-4 w-full rounded-2xl bg-waka-600 py-3 text-lg font-black text-white"
               >
                 {t(lang, "repayDebt")}
               </button>
               {payOpen === c.id && (
-                <div className="mt-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50 p-4">
-                  <label className="block font-bold text-emerald-950">{t(lang, "payDown")}</label>
+                <div className="mt-4 rounded-2xl border-2 border-waka-200 bg-waka-50 p-4">
+                  <label className="block font-bold text-waka-950">{t(lang, "payDown")}</label>
                   <input
                     value={payAmount}
                     onChange={(e) => setPayAmount(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     inputMode="numeric"
-                    className="mt-2 w-full rounded-xl border-2 border-emerald-300 px-3 py-3 text-2xl font-black"
+                    className="mt-2 w-full rounded-xl border-2 border-waka-300 px-3 py-3 text-2xl font-black"
                   />
                   <button
                     type="button"
                     onClick={() => submitPay(c.id)}
-                    className="mt-3 w-full rounded-xl bg-emerald-700 py-3 font-black text-white"
+                    className="mt-3 w-full rounded-xl bg-waka-700 py-3 font-black text-white"
                   >
                     {t(lang, "saveSale")}
                   </button>
@@ -125,7 +125,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                 {paymentsFor(c.id).map((p) => (
                   <li key={p.id} className="flex justify-between text-slate-600">
                     <span>{new Date(p.createdAt).toLocaleString()}</span>
-                    <span className="font-bold text-emerald-800">−UGX {p.amountUgx.toLocaleString()}</span>
+                    <span className="font-bold text-waka-800">−UGX {p.amountUgx.toLocaleString()}</span>
                   </li>
                 ))}
               </ul>

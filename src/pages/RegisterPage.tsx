@@ -65,7 +65,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
                 value={businessName}
                 onChange={(e) => setBusinessName(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-emerald-200 focus:ring"
+                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
               />
             </label>
             <label className="block text-sm font-medium">
@@ -76,7 +76,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-emerald-200 focus:ring"
+                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
               />
             </label>
             <label className="block text-sm font-medium">
@@ -87,7 +87,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-emerald-200 focus:ring"
+                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
               />
             </label>
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
@@ -98,7 +98,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
         )}
 
         <p className="mt-6 text-center text-sm text-slate-600">
-          <Link to="/login" className="font-medium text-emerald-700 underline underline-offset-2">
+          <Link to="/login" className="font-medium text-waka-700 underline underline-offset-2">
             {t(lang, "backToLogin")}
           </Link>
         </p>

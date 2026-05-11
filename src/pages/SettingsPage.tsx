@@ -7,6 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canUseDevRoleSimulator, hasPermission, resolveAuthRole } from "../lib/permissions";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
+import { SyncHealthCard } from "../components/SyncHealthCard";
 
 type Props = {
   lang: Language;
@@ -33,9 +34,17 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
 
   return (
     <div className="space-y-5 pb-8">
-      <h2 className="text-3xl font-black text-slate-900">{t(lang, "settings")}</h2>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h2 className="text-3xl font-black text-stone-900">{t(lang, "settings")}</h2>
+        <p className="text-sm font-semibold text-stone-500">
+          {t(lang, "appVersionLabel")}:{" "}
+          <span className="font-mono text-stone-800">{import.meta.env.VITE_APP_VERSION ?? "—"}</span>
+        </p>
+      </div>
 
-      <article className="rounded-3xl border-2 border-slate-100 bg-white p-5">
+      <SyncHealthCard lang={lang} />
+
+      <article className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-waka-sm">
         <p className="font-black text-slate-900">{t(lang, "accountHeading")}</p>
         <p className="mt-2 text-slate-600">
           <span className="font-bold">{t(lang, "loggedInAs")}:</span> {email ?? "—"}
@@ -59,14 +68,14 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
       </article>
 
       {hasPermission(actor.role, "settings.shop") ? (
-        <article className="rounded-3xl border-2 border-emerald-100 bg-emerald-50/40 p-5">
-          <p className="text-xl font-black text-emerald-950">{t(lang, "businessSettings")}</p>
-          <p className="mt-1 text-sm text-emerald-900">{t(lang, "businessSettingsHelp")}</p>
+        <article className="rounded-3xl border-2 border-waka-100 bg-waka-50/50 p-5 shadow-waka-sm">
+          <p className="text-xl font-black text-waka-950">{t(lang, "businessSettings")}</p>
+          <p className="mt-1 text-sm text-waka-900">{t(lang, "businessSettingsHelp")}</p>
           <label className="mt-4 block font-bold text-slate-900">{t(lang, "businessTypeLabel")}</label>
           <select
             value={preferences.businessType}
             onChange={(e) => updateBusinessType(e.target.value as BusinessType)}
-            className="mt-2 w-full rounded-2xl border-2 border-emerald-200 bg-white px-4 py-4 text-lg font-semibold"
+            className="mt-2 w-full rounded-2xl border-2 border-waka-200 bg-white px-4 py-4 text-lg font-semibold"
           >
             {BUSINESS_TYPE_IDS.map((id) => (
               <option key={id} value={id}>
@@ -143,7 +152,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
             type="checkbox"
             checked={preferences.hapticsOn !== false}
             onChange={(e) => setPreferences({ hapticsOn: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-slate-400 accent-emerald-600"
+            className="h-6 w-6 rounded border-2 border-slate-400 accent-waka-600"
           />
           {t(lang, "hapticsSetting")}
         </label>
@@ -152,7 +161,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
             type="checkbox"
             checked={preferences.saleSoundOn !== false}
             onChange={(e) => setPreferences({ saleSoundOn: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-slate-400 accent-emerald-600"
+            className="h-6 w-6 rounded border-2 border-slate-400 accent-waka-600"
           />
           {t(lang, "saleSoundSetting")}
         </label>

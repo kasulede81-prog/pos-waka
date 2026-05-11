@@ -51,11 +51,11 @@ function VirtualizedProductGridInner({ products, onPick }: Props) {
                   key={p.id}
                   type="button"
                   onClick={() => onPick(p)}
-                  className="flex min-h-[112px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-emerald-500 motion-reduce:transition-none"
+                  className="flex min-h-[112px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:transition-none"
                   style={{ contentVisibility: "auto" }}
                 >
                   <span className="text-lg font-black leading-tight text-slate-900 sm:text-xl">{p.name}</span>
-                  <span className="mt-2 text-base font-bold text-emerald-700">{formatProductPriceLabel(p)}</span>
+                  <span className="mt-2 text-base font-bold text-waka-700">{formatProductPriceLabel(p)}</span>
                 </button>
               ))}
             </div>

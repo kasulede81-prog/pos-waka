@@ -90,7 +90,7 @@ export function RestockPage({ lang }: { lang: Language }) {
   return (
     <div className="space-y-5 pb-12">
       <div className="flex flex-wrap items-center gap-2">
-        <Link to="/stock" className="text-sm font-bold text-emerald-700">
+        <Link to="/stock" className="text-sm font-bold text-waka-700">
           ← {t(lang, "stockTitle")}
         </Link>
         <Link to="/suppliers" className="text-sm font-bold text-slate-600">
@@ -100,7 +100,7 @@ export function RestockPage({ lang }: { lang: Language }) {
       <h1 className="text-3xl font-black text-slate-900">{t(lang, "restockTitle")}</h1>
       <p className="text-slate-600">{t(lang, "restockSub")}</p>
 
-      {msg ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-900">{msg}</p> : null}
+      {msg ? <p className="rounded-2xl bg-waka-50 px-4 py-3 text-sm font-bold text-waka-900">{msg}</p> : null}
 
       <form onSubmit={submit} className="space-y-4">
         <label className="block">
@@ -193,8 +193,8 @@ export function RestockPage({ lang }: { lang: Language }) {
           })}
         </ul>
 
-        <div className="rounded-3xl border-2 border-emerald-100 bg-emerald-50/50 p-4">
-          <p className="text-sm font-bold text-emerald-950">
+        <div className="rounded-3xl border-2 border-waka-100 bg-waka-50/50 p-4">
+          <p className="text-sm font-bold text-waka-950">
             {t(lang, "restockInvoiceTotal")}: UGX {totals.toLocaleString()}
           </p>
           <label className="mt-3 block text-sm font-bold text-slate-800">
@@ -222,7 +222,7 @@ export function RestockPage({ lang }: { lang: Language }) {
         <button
           type="submit"
           disabled={!lines.length || !supplierId}
-          className="w-full rounded-2xl bg-emerald-600 py-4 text-lg font-black text-white disabled:opacity-50"
+          className="w-full rounded-2xl bg-waka-600 py-4 text-lg font-black text-white disabled:opacity-50"
         >
           {t(lang, "restockSave")}
         </button>

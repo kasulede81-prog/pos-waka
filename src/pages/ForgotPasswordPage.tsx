@@ -44,7 +44,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
         {!hasSupabaseConfig ? (
           <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">{t(lang, "supabaseMissing")}</p>
         ) : sent ? (
-          <p className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-950">{t(lang, "resetEmailSent")}</p>
+          <p className="mt-6 rounded-xl border border-waka-200 bg-waka-50 px-3 py-3 text-sm text-waka-950">{t(lang, "resetEmailSent")}</p>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
             <label className="block text-sm font-medium">
@@ -55,7 +55,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-emerald-200 focus:ring"
+                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
               />
             </label>
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
@@ -66,7 +66,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
         )}
 
         <p className="mt-6 text-center text-sm">
-          <Link to="/login" className="font-medium text-emerald-700 underline underline-offset-2">
+          <Link to="/login" className="font-medium text-waka-700 underline underline-offset-2">
             {t(lang, "backToLogin")}
           </Link>
         </p>

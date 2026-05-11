@@ -14,6 +14,8 @@ interface ImportMetaEnv {
   /** PWA display name override */
   readonly VITE_APP_NAME?: string;
   readonly VITE_APP_SHORT_NAME?: string;
+  /** Release label (from package.json or CI override) */
+  readonly VITE_APP_VERSION?: string;
   /** Optional HTTPS endpoint for reportMonitoringEvent JSON POST */
   readonly VITE_MONITORING_INGEST_URL?: string;
 }

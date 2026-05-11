@@ -57,7 +57,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
         {hasPermission(actor.role, "purchases.record") ? (
           <Link
             to="/restock"
-            className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm"
+            className="rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm"
           >
             {t(lang, "navRestock")}
           </Link>
@@ -66,34 +66,34 @@ export function SuppliersPage({ lang }: { lang: Language }) {
       <p className="text-slate-600">{t(lang, "suppliersSub")}</p>
 
       {canManage ? (
-        <form onSubmit={submitAdd} className="space-y-3 rounded-3xl border-2 border-emerald-100 bg-emerald-50/40 p-5">
-          <p className="text-lg font-black text-emerald-950">{t(lang, "supplierAddTitle")}</p>
+        <form onSubmit={submitAdd} className="space-y-3 rounded-3xl border-2 border-waka-100 bg-waka-50/40 p-5">
+          <p className="text-lg font-black text-waka-950">{t(lang, "supplierAddTitle")}</p>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t(lang, "supplierNamePh")}
             required
-            className="w-full rounded-2xl border-2 border-emerald-200 bg-white px-4 py-3 text-lg"
+            className="w-full rounded-2xl border-2 border-waka-200 bg-white px-4 py-3 text-lg"
           />
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder={t(lang, "supplierPhonePh")}
-            className="w-full rounded-2xl border-2 border-emerald-200 bg-white px-4 py-3"
+            className="w-full rounded-2xl border-2 border-waka-200 bg-white px-4 py-3"
           />
           <input
             value={location}
             onChange={(e) => setLocation(e.target.value)}
             placeholder={t(lang, "supplierLocationPh")}
-            className="w-full rounded-2xl border-2 border-emerald-200 bg-white px-4 py-3"
+            className="w-full rounded-2xl border-2 border-waka-200 bg-white px-4 py-3"
           />
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={t(lang, "supplierNotesPh")}
-            className="w-full rounded-2xl border-2 border-emerald-200 bg-white px-4 py-3"
+            className="w-full rounded-2xl border-2 border-waka-200 bg-white px-4 py-3"
           />
-          <button type="submit" className="w-full rounded-2xl bg-emerald-700 py-4 text-lg font-black text-white">
+          <button type="submit" className="w-full rounded-2xl bg-waka-700 py-4 text-lg font-black text-white">
             {t(lang, "supplierSave")}
           </button>
         </form>
@@ -158,7 +158,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
               />
             </label>
             <div className="mt-4 flex gap-2">
-              <button type="submit" className="flex-1 rounded-2xl bg-emerald-600 py-3 font-black text-white">
+              <button type="submit" className="flex-1 rounded-2xl bg-waka-600 py-3 font-black text-white">
                 {t(lang, "supplierPaySave")}
               </button>
               <button type="button" className="rounded-2xl border-2 px-4 py-3 font-bold" onClick={() => setPayId(null)}>

@@ -207,7 +207,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
         {canProfit ? (
           <article className="rounded-3xl border bg-white p-4">
             <p className="text-xs text-slate-500">{t(lang, "estimatedProfit")}</p>
-            <p className="text-2xl font-bold text-emerald-700">UGX {totals.profit.toLocaleString()}</p>
+            <p className="text-2xl font-bold text-waka-700">UGX {totals.profit.toLocaleString()}</p>
             <p className="mt-2 text-xs text-slate-500">{t(lang, "reportsGrossProfitHint")}</p>
           </article>
         ) : null}
@@ -245,9 +245,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
       {canPurchasesView || canSuppliersView || canProfit ? (
         <section className="grid gap-3 sm:grid-cols-2">
           {canPurchasesView ? (
-            <article className="rounded-3xl border border-emerald-100 bg-emerald-50/40 p-4">
-              <p className="text-xs font-semibold text-emerald-900">{t(lang, "reportsPurchasesToday")}</p>
-              <p className="mt-1 text-2xl font-black text-emerald-950">UGX {purchasesTodayUgx.toLocaleString()}</p>
+            <article className="rounded-3xl border border-waka-100 bg-waka-50/40 p-4">
+              <p className="text-xs font-semibold text-waka-900">{t(lang, "reportsPurchasesToday")}</p>
+              <p className="mt-1 text-2xl font-black text-waka-950">UGX {purchasesTodayUgx.toLocaleString()}</p>
             </article>
           ) : null}
           {canSuppliersView ? (
@@ -273,7 +273,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
             {marginLeaders.map((r) => (
               <li key={r.name} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <span className="font-medium">{r.name}</span>
-                <span className="text-emerald-700">
+                <span className="text-waka-700">
                   UGX {r.margin.toLocaleString()}
                   <span className="text-slate-500"> ({Math.round(r.pct * 100)}%)</span>
                 </span>

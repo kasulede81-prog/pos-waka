@@ -116,9 +116,9 @@ export function BackupSettingsCard({ lang }: Props) {
   };
 
   return (
-    <article className="rounded-3xl border-2 border-emerald-100 bg-emerald-50/30 p-5">
-      <p className="text-xl font-black text-emerald-950">{t(lang, "backupTitle")}</p>
-      <p className="mt-1 text-sm text-emerald-900">{t(lang, "backupSub")}</p>
+    <article className="rounded-3xl border-2 border-waka-100 bg-waka-50/30 p-5">
+      <p className="text-xl font-black text-waka-950">{t(lang, "backupTitle")}</p>
+      <p className="mt-1 text-sm text-waka-900">{t(lang, "backupSub")}</p>
       {msg ? <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-800">{msg}</p> : null}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -126,7 +126,7 @@ export function BackupSettingsCard({ lang }: Props) {
           type="button"
           disabled={busy}
           onClick={() => void exportNow()}
-          className="min-h-[52px] rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white shadow-sm disabled:opacity-50"
+          className="min-h-[52px] rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm disabled:opacity-50"
         >
           {t(lang, "backupExportFile")}
         </button>
@@ -134,7 +134,7 @@ export function BackupSettingsCard({ lang }: Props) {
           type="button"
           disabled={busy}
           onClick={() => void saveLocalBackup()}
-          className="min-h-[52px] rounded-2xl border-2 border-emerald-600 bg-white px-4 py-3 text-sm font-black text-emerald-900 disabled:opacity-50"
+          className="min-h-[52px] rounded-2xl border-2 border-waka-600 bg-white px-4 py-3 text-sm font-black text-waka-900 disabled:opacity-50"
         >
           {t(lang, "backupSaveOnPhone")}
         </button>

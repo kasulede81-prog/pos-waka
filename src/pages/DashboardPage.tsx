@@ -73,21 +73,21 @@ export function DashboardPage({ lang }: { lang: Language }) {
       {!preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
 
       {preferences.onboardingDone && (products.length === 0 || sales.length === 0) ? (
-        <section className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/90 p-6 shadow-sm">
-          <h2 className="text-xl font-black text-emerald-950">{t(lang, "setupChecklistTitle")}</h2>
-          <p className="mt-1 text-base text-emerald-900">{t(lang, "setupChecklistSub")}</p>
+        <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-6 shadow-sm">
+          <h2 className="text-xl font-black text-waka-950">{t(lang, "setupChecklistTitle")}</h2>
+          <p className="mt-1 text-base text-waka-900">{t(lang, "setupChecklistSub")}</p>
           <ol className="mt-4 space-y-3 text-lg">
             <li className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
-              <span className={products.length > 0 ? "text-emerald-600" : "text-slate-400"}>{products.length > 0 ? "✓" : "①"}</span>
+              <span className={products.length > 0 ? "text-waka-600" : "text-slate-400"}>{products.length > 0 ? "✓" : "①"}</span>
               {t(lang, "setupStep1")}
               {products.length === 0 ? (
-                <Link to="/stock" className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-black text-white">
+                <Link to="/stock" className="rounded-full bg-waka-600 px-4 py-2 text-sm font-black text-white">
                   {t(lang, "stockTitle")}
                 </Link>
               ) : null}
             </li>
             <li className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
-              <span className={sales.length > 0 ? "text-emerald-600" : "text-slate-400"}>{sales.length > 0 ? "✓" : "②"}</span>
+              <span className={sales.length > 0 ? "text-waka-600" : "text-slate-400"}>{sales.length > 0 ? "✓" : "②"}</span>
               {t(lang, "setupStep2")}
               {sales.length === 0 ? (
                 <Link to="/pos" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-black text-white">
@@ -99,7 +99,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
               <span className="text-slate-400">③</span>
               {t(lang, "setupStep3")}
               {hasPermission(actor.role, "reports.view") ? (
-                <Link to="/reports" className="rounded-full border-2 border-emerald-700 px-4 py-2 text-sm font-black text-emerald-900">
+                <Link to="/reports" className="rounded-full border-2 border-waka-700 px-4 py-2 text-sm font-black text-waka-900">
                   {t(lang, "reports")}
                 </Link>
               ) : null}
@@ -116,7 +116,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
         <div className="flex flex-wrap gap-2">
           <Link
             to="/pos"
-            className="rounded-2xl bg-emerald-600 px-5 py-3 text-lg font-black text-white shadow-md active:bg-emerald-700"
+            className="rounded-2xl bg-waka-600 px-5 py-3 text-lg font-black text-white shadow-md active:bg-waka-700"
           >
             {t(lang, "sellTitle")}
           </Link>
@@ -139,7 +139,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xl font-black text-slate-900">{t(lang, "activityFeedTitle")}</h2>
-            <Link to="/owner/activity" className="text-sm font-bold text-emerald-700">
+            <Link to="/owner/activity" className="text-sm font-bold text-waka-700">
               {t(lang, "seeAll")}
             </Link>
           </div>
@@ -147,7 +147,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
             {activityGroups.map((g) => (
               <li key={g.id} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-800">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-black text-emerald-900">{g.actorLabel}</span>
+                  <span className="font-black text-waka-900">{g.actorLabel}</span>
                   <span className="text-xs font-bold text-slate-500">{g.bucketLabel}</span>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
@@ -172,7 +172,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
           <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {cashToday.toLocaleString()}</p>
         </article>
         {canProfit ? (
-          <article className="rounded-3xl bg-gradient-to-br from-emerald-600 to-emerald-800 p-5 text-white shadow-lg">
+          <article className="rounded-3xl bg-gradient-to-br from-waka-600 to-waka-800 p-5 text-white shadow-lg">
             <p className="text-sm font-bold uppercase tracking-wide text-white/90">{t(lang, "cardProfitToday")}</p>
             <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {profitToday.toLocaleString()}</p>
           </article>
@@ -197,7 +197,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
       <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xl font-black text-slate-900">{t(lang, "recentQuickSales")}</h2>
-          <Link to="/receipts" className="text-sm font-bold text-emerald-700">
+          <Link to="/receipts" className="text-sm font-bold text-waka-700">
             {t(lang, "seeAll")}
           </Link>
         </div>
@@ -224,7 +224,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
             {fastMovers.map((m) => (
               <li key={m.name} className="flex items-center justify-between text-lg">
                 <span className="font-bold text-slate-900">{m.name}</span>
-                <span className="font-black text-emerald-700">UGX {m.revenue.toLocaleString()}</span>
+                <span className="font-black text-waka-700">UGX {m.revenue.toLocaleString()}</span>
               </li>
             ))}
           </ul>

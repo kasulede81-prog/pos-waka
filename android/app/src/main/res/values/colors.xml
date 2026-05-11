@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="colorPrimary">#059669</color>
-    <color name="colorPrimaryDark">#047857</color>
-    <color name="colorAccent">#10b981</color>
-    <color name="splash_background">#ecfdf5</color>
-    <color name="splash_brand">#059669</color>
+    <color name="colorPrimary">#ea580c</color>
+    <color name="colorPrimaryDark">#c2410c</color>
+    <color name="colorAccent">#f97316</color>
+    <color name="splash_background">#fff7ed</color>
+    <color name="splash_brand">#ea580c</color>
 </resources>

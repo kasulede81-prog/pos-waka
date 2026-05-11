@@ -17,7 +17,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
               key={id}
               type="button"
               onClick={() => complete(id)}
-              className="rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-left text-base font-bold text-slate-900 active:border-emerald-500 active:bg-emerald-50"
+              className="rounded-2xl border-2 border-slate-200 bg-slate-50 px-4 py-4 text-left text-base font-bold text-slate-900 active:border-waka-500 active:bg-waka-50"
             >
               {t(lang, `businessType_${id}`)}
             </button>

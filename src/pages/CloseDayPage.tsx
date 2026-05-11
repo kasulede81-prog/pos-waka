@@ -58,7 +58,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   if (!hasPermission(actor.role, "day.close")) {
     return (
       <div className="space-y-4 pb-8">
-        <Link to="/" className="inline-block text-base font-bold text-emerald-700">
+        <Link to="/" className="inline-block text-base font-bold text-waka-700">
           ← {t(lang, "backHome")}
         </Link>
         <p className="text-lg text-slate-700">{t(lang, "noPermission")}</p>
@@ -68,7 +68,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-8">
-      <Link to="/" className="inline-block text-base font-bold text-emerald-700">
+      <Link to="/" className="inline-block text-base font-bold text-waka-700">
         ← {t(lang, "backHome")}
       </Link>
       <h1 className="text-4xl font-black text-slate-900">{t(lang, "closeDay")}</h1>
@@ -86,7 +86,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
           </div>
           <div>
             <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "cardProfitToday")}</p>
-            <p className="text-3xl font-black text-emerald-700">UGX {summary.profit.toLocaleString()}</p>
+            <p className="text-3xl font-black text-waka-700">UGX {summary.profit.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSalesCount")}</p>
@@ -124,16 +124,16 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         </div>
       </section>
 
-      <form onSubmit={submit} className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/50 p-6">
-        <label className="block text-xl font-black text-emerald-950">{t(lang, "closeCountedCash")}</label>
+      <form onSubmit={submit} className="rounded-3xl border-2 border-waka-200 bg-waka-50/50 p-6">
+        <label className="block text-xl font-black text-waka-950">{t(lang, "closeCountedCash")}</label>
         <input
           value={counted}
           onChange={(e) => setCounted(e.target.value.replace(/\D/g, "").slice(0, 12))}
           inputMode="numeric"
-          className="mt-3 w-full rounded-2xl border-2 border-emerald-300 bg-white px-4 py-4 text-3xl font-black"
+          className="mt-3 w-full rounded-2xl border-2 border-waka-300 bg-white px-4 py-4 text-3xl font-black"
           placeholder="0"
         />
-        <button type="submit" className="mt-5 w-full rounded-3xl bg-emerald-600 py-4 text-xl font-black text-white">
+        <button type="submit" className="mt-5 w-full rounded-3xl bg-waka-600 py-4 text-xl font-black text-white">
           {t(lang, "closeConfirm")}
         </button>
       </form>

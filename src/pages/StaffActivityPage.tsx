@@ -38,7 +38,7 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
-      <Link to="/owner" className="inline-block text-sm font-bold text-emerald-700">
+      <Link to="/owner" className="inline-block text-sm font-bold text-waka-700">
         ← {t(lang, "ownerDashboardTitle")}
       </Link>
       <div>
@@ -73,7 +73,7 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
                     <ul className="mt-2 space-y-1.5 text-sm font-medium text-slate-800">
                       {g.lines.map((line, i) => (
                         <li key={i} className="flex gap-2">
-                          <span className="text-emerald-600">·</span>
+                          <span className="text-waka-600">·</span>
                           <span>{line}</span>
                         </li>
                       ))}
