@@ -27,7 +27,8 @@ import type { SessionActor } from "../lib/sessionActor";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences } from "../data/defaultSeed";
 import { inferFromProductName } from "../lib/smartProductGuess";
-import { writeSnapshot, readSnapshotWithFallback } from "../offline/localDb";
+import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
+import { getActiveAccountKey } from "../offline/accountScope";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
 import type { PersistedSnapshot } from "../offline/localDb";
@@ -170,6 +171,15 @@ type PosState = {
   /** Replace local state + disk from a full backup (owner only in UI). */
   applyRestoredSnapshot: (snap: PersistedSnapshot) => void;
 
+  /**
+   * Detach the current session: drop ALL in-memory state and mark the store
+   * unhydrated so that no further disk writes leak the previous account's data.
+   * Persisted data on disk is NOT deleted; the namespaced snapshot for that
+   * account stays intact and will be re-hydrated next time the same account
+   * signs in.
+   */
+  resetForSignOut: () => void;
+
   setSessionActor: (actor: SessionActor | null) => void;
 
   setPreferences: (p: Partial<ShopPreferences>) => void;
@@ -240,34 +250,45 @@ type PosState = {
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let draftPersistTimer: ReturnType<typeof setTimeout> | null = null;
 
+function fireSnapshotWrite(s: PosState): void {
+  void (async () => {
+    await writeSnapshot({
+      products: s.products,
+      customers: s.customers,
+      sales: s.sales,
+      preferences: s.preferences,
+      debtPayments: s.debtPayments,
+      dayCloses: s.dayCloses,
+      auditLogs: s.auditLogs,
+      suppliers: s.suppliers,
+      purchases: s.purchases,
+      supplierPayments: s.supplierPayments,
+      stockMovements: s.stockMovements,
+    });
+    const cur = usePosStore.getState();
+    if (!cur._hydrated) return;
+    const nextKey = await maybeAppendDailyAutoBackup(cur.preferences.lastAutoBackupDateKey);
+    if (nextKey && nextKey !== cur.preferences.lastAutoBackupDateKey) {
+      usePosStore.setState((st) => ({
+        preferences: { ...st.preferences, lastAutoBackupDateKey: nextKey },
+      }));
+    }
+  })();
+}
+
+function fireDraftWrite(s: PosState): void {
+  const input = s.draftInput
+    ? { productId: s.draftInput.product.id, inputMode: s.draftInput.inputMode, value: s.draftInput.value }
+    : null;
+  void writePersistedDraft(s.draftLines, input);
+}
+
 function schedulePersist(get: () => PosState) {
   if (!get()._hydrated) return;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     persistTimer = null;
-    const s = get();
-    void (async () => {
-      await writeSnapshot({
-        products: s.products,
-        customers: s.customers,
-        sales: s.sales,
-        preferences: s.preferences,
-        debtPayments: s.debtPayments,
-        dayCloses: s.dayCloses,
-        auditLogs: s.auditLogs,
-        suppliers: s.suppliers,
-        purchases: s.purchases,
-        supplierPayments: s.supplierPayments,
-        stockMovements: s.stockMovements,
-      });
-      const cur = usePosStore.getState();
-      const nextKey = await maybeAppendDailyAutoBackup(cur.preferences.lastAutoBackupDateKey);
-      if (nextKey && nextKey !== cur.preferences.lastAutoBackupDateKey) {
-        usePosStore.setState((st) => ({
-          preferences: { ...st.preferences, lastAutoBackupDateKey: nextKey },
-        }));
-      }
-    })();
+    fireSnapshotWrite(get());
   }, 180);
 }
 
@@ -276,12 +297,30 @@ function scheduleDraftPersist(get: () => PosState) {
   if (draftPersistTimer) clearTimeout(draftPersistTimer);
   draftPersistTimer = setTimeout(() => {
     draftPersistTimer = null;
-    const s = get();
-    const input = s.draftInput
-      ? { productId: s.draftInput.product.id, inputMode: s.draftInput.inputMode, value: s.draftInput.value }
-      : null;
-    void writePersistedDraft(s.draftLines, input);
+    fireDraftWrite(get());
   }, 400);
+}
+
+/**
+ * Synchronously fire any pending persist timers so the in-flight snapshot is
+ * captured under the CURRENT account key before an account switch swaps the
+ * namespace. The async writes themselves capture the scoped key inside
+ * `writeSnapshot` at call time, so they remain bound to the outgoing account
+ * even after the active key flips to null / the next account.
+ */
+export function flushPendingPersist(): void {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+    const s = usePosStore.getState();
+    if (s._hydrated) fireSnapshotWrite(s);
+  }
+  if (draftPersistTimer) {
+    clearTimeout(draftPersistTimer);
+    draftPersistTimer = null;
+    const s = usePosStore.getState();
+    if (s._hydrated) fireDraftWrite(s);
+  }
 }
 
 async function queueRemote(kind: SyncOperationKind, payload: unknown) {
@@ -446,6 +485,34 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: s.stockMovements,
     });
     void clearPersistedDraft();
+  },
+
+  resetForSignOut: () => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    if (draftPersistTimer) {
+      clearTimeout(draftPersistTimer);
+      draftPersistTimer = null;
+    }
+    set({
+      _hydrated: false,
+      products: [],
+      customers: [],
+      sales: [],
+      preferences: createDefaultPreferences(),
+      debtPayments: [],
+      dayCloses: [],
+      auditLogs: [],
+      suppliers: [],
+      purchases: [],
+      supplierPayments: [],
+      stockMovements: [],
+      sessionActor: null,
+      draftLines: [],
+      draftInput: null,
+    });
   },
 
   setSessionActor: (actor) => set({ sessionActor: actor }),
@@ -1247,9 +1314,21 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
 }
 
 export async function bootstrapPosFromDisk(): Promise<void> {
+  if (!getActiveAccountKey()) {
+    // Signed out / no namespace yet → nothing to hydrate.
+    usePosStore.getState().resetForSignOut();
+    return;
+  }
   let snap = await readSnapshotWithFallback();
-  const legacy = tryMigrateLegacyLocalStorage();
-  if (legacy && (!snap || ((snap.products?.length ?? 0) === 0 && (snap.sales?.length ?? 0) === 0))) {
+  const snapEmpty = !snap || ((snap.products?.length ?? 0) === 0 && (snap.sales?.length ?? 0) === 0);
+  if (snapEmpty) {
+    const legacyIdb = await claimLegacySnapshotForCurrentAccount();
+    if (legacyIdb) snap = legacyIdb;
+  }
+  const legacy = (!snap || ((snap.products?.length ?? 0) === 0 && (snap.sales?.length ?? 0) === 0))
+    ? tryMigrateLegacyLocalStorage()
+    : null;
+  if (legacy) {
     const migrated = {
       products: legacy.products.map(normalizeProduct),
       customers: legacy.customers.map(normalizeCustomer),

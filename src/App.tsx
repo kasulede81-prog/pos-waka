@@ -121,7 +121,7 @@ function App() {
           <Route
             element={
               <SubscriptionProvider user={auth.user} authMode={auth.mode}>
-                <PosDataProvider lang={lang}>
+                <PosDataProvider lang={lang} accountKey={auth.accountKey}>
                   <SyncStatusProvider>
                     <BackOfficeSessionProvider>
                       <AppShell

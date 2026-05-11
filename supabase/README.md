@@ -11,7 +11,7 @@ Hosted app setup (Vercel env, auth redirect URLs, Android): see **[docs/DEPLOYME
 
 ## Apply migrations
 
-Run files in **`migrations/`** in numerical order (`001` … `013`). Objects depend on earlier files (extensions → tables → functions → RLS → seed → grants → kiosk extensions → shop business type → audit/roles).
+Run files in **`migrations/`** in numerical order (`001` … `020`). Objects depend on earlier files (extensions → tables → functions → RLS → seed → grants → kiosk extensions → shop business type → audit/roles → SaaS bootstrap → internal ops).
 
 ### Option A — Supabase SQL Editor
 
@@ -79,6 +79,34 @@ See **`seed/demo_seed.sql`**: template only (commented). Replace the sample UUID
 
 - Phone checks: E.164 **`+256XXXXXXXXX`** on profiles, orgs, shops, customers where applicable.
 - Sales support **cash** (`cash_amount_ugx` on `sales`), **MTN MoMo** (`mtn_momo_reference`), **Airtel Money** (`airtel_money_reference`), and generic `sale_payments` rows.
+
+## Internal Waka staff (`internal_admins`)
+
+Migrations **018–020** add `internal_admins`, `districts`, `field_visits`, `support_requests`, and RPCs such as `waka_internal_me`, `admin_extend_subscription_trial`, `shop_record_last_seen`. The app’s internal dashboard reads live data only when your **auth user** has a matching row in `public.internal_admins` with `active = true`.
+
+### Bootstrap the first super admin (example)
+
+1. In **Authentication → Users**, copy the **UUID** of the staff account (e.g. `kasule.de81@gmail.com` after they sign up once).
+2. In the SQL editor (service role / dashboard SQL is fine), run:
+
+```sql
+insert into public.internal_admins (user_id, email, role, assigned_district_ids, max_shops, active)
+values (
+  '<paste-auth-user-uuid-here>'::uuid,
+  'kasule.de81@gmail.com',
+  'super_admin',
+  '{}'::uuid[],
+  null,
+  true
+)
+on conflict (user_id) do update
+set
+  email = excluded.email,
+  role = excluded.role,
+  active = excluded.active;
+```
+
+3. Re-sign-in if needed. The client calls `waka_internal_me()`; RLS and SECURITY DEFINER RPCs enforce access — **do not rely on env allowlists alone in production.**
 
 ## Troubleshooting
 

@@ -11,6 +11,7 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { useSyncStatus } from "../hooks/useSyncStatus";
+import { supabase } from "../lib/supabase";
 
 export function DashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -25,6 +26,11 @@ export function DashboardPage({ lang }: { lang: Language }) {
       window.history.replaceState({}, document.title);
     }
   }, [location.state]);
+
+  useEffect(() => {
+    if (authMode !== "supabase" || snapshot.kind !== "remote" || !snapshot.row.shop_id || !supabase) return;
+    void supabase.rpc("shop_record_last_seen", { p_shop_id: snapshot.row.shop_id });
+  }, [authMode, snapshot]);
 
   const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);

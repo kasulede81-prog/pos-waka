@@ -4,8 +4,15 @@ import { t } from "../lib/i18n";
 import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 import { usePosStore } from "../store/usePosStore";
 import { saveBusinessProfileToCloud } from "../lib/businessProfile";
+import { getActiveAccountKey } from "../offline/accountScope";
 
-const DRAFT_KEY = "waka.business.onboarding.draft";
+const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
+
+function getDraftKey(): string | null {
+  const acc = getActiveAccountKey();
+  if (!acc) return null;
+  return `${DRAFT_BASE_KEY}::${acc}`;
+}
 
 export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
   const complete = usePosStore((s) => s.completeBusinessOnboarding);
@@ -21,7 +28,9 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(DRAFT_KEY);
+      const key = getDraftKey();
+      if (!key) return;
+      const raw = localStorage.getItem(key);
       if (!raw) return;
       const d = JSON.parse(raw) as {
         shopName?: string;
@@ -42,7 +51,9 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
 
   const persistDraft = (next: { shopName: string; businessType: BusinessType; currency: string; phone: string; address: string }) => {
     try {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+      const key = getDraftKey();
+      if (!key) return;
+      localStorage.setItem(key, JSON.stringify(next));
     } catch {
       /* ignore */
     }
@@ -150,7 +161,8 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                   },
                   true,
                 );
-                localStorage.removeItem(DRAFT_KEY);
+                const key = getDraftKey();
+                if (key) localStorage.removeItem(key);
               } catch {
                 setErr(t(lang, "businessProfileSaveFailed"));
               } finally {

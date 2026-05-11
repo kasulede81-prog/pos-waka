@@ -8,6 +8,12 @@ import type { Language } from "../types";
 type Props = {
   children: ReactNode;
   lang?: Language;
+  /**
+   * Stable per-account namespace key from `useAuth`. Re-bootstraps the
+   * POS store from disk whenever the signed-in account changes so the UI
+   * never carries data across users on the same device.
+   */
+  accountKey: string | null;
 };
 
 function LoadingSkeleton({ lang }: { lang: Language }) {
@@ -30,12 +36,20 @@ function LoadingSkeleton({ lang }: { lang: Language }) {
   );
 }
 
-export function PosDataProvider({ children, lang = "en" }: Props) {
+export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+    setError(null);
+    if (!accountKey) {
+      setReady(true);
+      return () => {
+        cancelled = true;
+      };
+    }
     void bootstrapPosFromDisk()
       .catch(() => {
         if (!cancelled) setError("load");
@@ -51,7 +65,7 @@ export function PosDataProvider({ children, lang = "en" }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [accountKey]);
 
   if (error) {
     return (

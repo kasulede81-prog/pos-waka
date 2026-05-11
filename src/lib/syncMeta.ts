@@ -1,6 +1,14 @@
-/** Local-only sync health hints for owners (no PII). */
+/** Local-only sync health hints for owners (no PII). Account-scoped. */
 
-const KEY = "waka.sync.health.v1";
+import { getActiveAccountKey } from "../offline/accountScope";
+
+const BASE_KEY = "waka.sync.health.v1";
+
+function scopedKey(): string | null {
+  const acc = getActiveAccountKey();
+  if (!acc) return null;
+  return `${BASE_KEY}::${acc}`;
+}
 
 export type SyncHealthMeta = {
   lastAttemptAt: string | null;
@@ -19,7 +27,9 @@ const empty: SyncHealthMeta = {
 
 export function readSyncHealthMeta(): SyncHealthMeta {
   try {
-    const raw = localStorage.getItem(KEY);
+    const k = scopedKey();
+    if (!k) return { ...empty };
+    const raw = localStorage.getItem(k);
     if (!raw) return { ...empty };
     const o = JSON.parse(raw) as Partial<SyncHealthMeta>;
     return {
@@ -36,7 +46,9 @@ export function readSyncHealthMeta(): SyncHealthMeta {
 export function writeSyncHealthMeta(partial: Partial<SyncHealthMeta>): SyncHealthMeta {
   const next = { ...readSyncHealthMeta(), ...partial };
   try {
-    localStorage.setItem(KEY, JSON.stringify(next));
+    const k = scopedKey();
+    if (!k) return next;
+    localStorage.setItem(k, JSON.stringify(next));
   } catch {
     /* ignore quota */
   }

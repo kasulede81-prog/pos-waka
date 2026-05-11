@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../types";
@@ -9,7 +9,8 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { canUseDevRoleSimulator, hasPermission, resolveAuthRole } from "../lib/permissions";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
 import { SyncHealthCard } from "../components/SyncHealthCard";
-import { saveBusinessProfileToCloud } from "../lib/businessProfile";
+import { loadPrimaryShopLocationFromCloud, saveBusinessProfileToCloud } from "../lib/businessProfile";
+import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 
 type Props = {
   lang: Language;
@@ -36,11 +37,39 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
   const [shopPhoneInput, setShopPhoneInput] = useState(preferences.shopPhoneE164 ?? "");
   const [shopAddressInput, setShopAddressInput] = useState(preferences.shopAddressLine ?? "");
   const [shopCurrencyInput, setShopCurrencyInput] = useState(preferences.shopCurrency ?? "UGX");
+  const [districts, setDistricts] = useState<DistrictRow[]>([]);
+  const [districtIdSel, setDistrictIdSel] = useState("");
+  const [shopCityField, setShopCityField] = useState("");
+  const [shopAreaField, setShopAreaField] = useState("");
+  const [shopLat, setShopLat] = useState<number | null>(null);
+  const [shopLng, setShopLng] = useState<number | null>(null);
+  const [gpsHint, setGpsHint] = useState<string | null>(null);
+  const [recordGpsSnapshot, setRecordGpsSnapshot] = useState(false);
 
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
   const authResolved = resolveAuthRole({ mode: authMode, userMetadata: meta });
   const showDevSimulator =
     (!hasSupabaseConfig || Boolean(import.meta.env.DEV)) && canUseDevRoleSimulator(authResolved);
+
+  useEffect(() => {
+    if (authMode !== "supabase" || !hasPermission(actor.role, "settings.shop")) return;
+    let cancelled = false;
+    void (async () => {
+      const d = await fetchDistricts();
+      if (cancelled) return;
+      setDistricts(d);
+      const loc = await loadPrimaryShopLocationFromCloud();
+      if (cancelled || !loc) return;
+      setDistrictIdSel(loc.districtId ?? "");
+      setShopCityField(loc.city ?? "");
+      setShopAreaField(loc.area ?? "");
+      setShopLat(loc.latitude);
+      setShopLng(loc.longitude);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authMode, actor.role]);
 
   return (
     <div className="space-y-5 pb-8">
@@ -123,6 +152,80 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
               onChange={(e) => setShopAddressInput(e.target.value)}
               className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
             />
+
+            {authMode === "supabase" ? (
+              <div className="mt-6 rounded-2xl border-2 border-orange-100 bg-orange-50/40 p-4">
+                <p className="text-base font-black text-orange-950">{t(lang, "shopLocationSectionTitle")}</p>
+                <p className="mt-1 text-sm font-medium text-stone-700">{t(lang, "shopLocationSectionHelp")}</p>
+                <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "shopDistrictLabel")}</label>
+                <select
+                  value={districtIdSel}
+                  onChange={(e) => setDistrictIdSel(e.target.value)}
+                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
+                >
+                  <option value="">—</option>
+                  {districts.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopCityLabel")}</label>
+                <input
+                  value={shopCityField}
+                  onChange={(e) => setShopCityField(e.target.value)}
+                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                />
+                <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopAreaLabel")}</label>
+                <input
+                  value={shopAreaField}
+                  onChange={(e) => setShopAreaField(e.target.value)}
+                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                />
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
+                    onClick={() => {
+                      setGpsHint(null);
+                      setRecordGpsSnapshot(false);
+                      if (!("geolocation" in navigator)) {
+                        setGpsHint(t(lang, "shopGpsNotSupported"));
+                        return;
+                      }
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          setShopLat(pos.coords.latitude);
+                          setShopLng(pos.coords.longitude);
+                          setRecordGpsSnapshot(true);
+                          setGpsHint(t(lang, "shopGpsSaved"));
+                        },
+                        () => {
+                          setGpsHint(t(lang, "shopGpsDenied"));
+                        },
+                        { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 },
+                      );
+                    }}
+                  >
+                    {t(lang, "shopUseGps")}
+                  </button>
+                  <button
+                    type="button"
+                    className="min-h-[48px] flex-1 rounded-2xl border-2 border-stone-300 bg-white py-3 text-base font-black text-stone-800"
+                    onClick={() => {
+                      setShopLat(null);
+                      setShopLng(null);
+                      setRecordGpsSnapshot(false);
+                      setGpsHint(null);
+                    }}
+                  >
+                    {t(lang, "shopSkipGps")}
+                  </button>
+                </div>
+                {gpsHint ? <p className="mt-2 text-sm font-semibold text-stone-700">{gpsHint}</p> : null}
+              </div>
+            ) : null}
+
             <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "businessCurrency")}</label>
             <input
               value={shopCurrencyInput}
@@ -159,9 +262,17 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
                       currency: shopCurrencyInput,
                       phone: shopPhoneInput,
                       address: shopAddressInput,
+                      applyShopLocation: authMode === "supabase",
+                      districtId: districtIdSel || null,
+                      city: shopCityField,
+                      area: shopAreaField,
+                      latitude: shopLat,
+                      longitude: shopLng,
+                      recordGpsInHistory: recordGpsSnapshot && shopLat != null && shopLng != null,
                     },
                     false,
                   );
+                  setRecordGpsSnapshot(false);
                   setProfileFeedback(t(lang, "businessProfileSaved"));
                 } catch {
                   setProfileFeedback(t(lang, "businessProfileSaveFailed"));

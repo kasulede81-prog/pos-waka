@@ -4,10 +4,34 @@ import { authRedirectOrigin, hasSupabaseConfig, supabase } from "../lib/supabase
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
+import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
+import { usePosStore, flushPendingPersist } from "../store/usePosStore";
 
 type LocalSession = { email: string };
 
 const LOCAL_AUTH_KEY = "waka-pos-local-session";
+
+const AUTH_MODE: "supabase" | "local" = hasSupabaseConfig ? "supabase" : "local";
+
+/**
+ * Synchronously switch the offline storage namespace BEFORE React re-renders
+ * with the new session. This guarantees that downstream effects
+ * (e.g. `bootstrapPosFromDisk` in `PosDataProvider`) always observe the
+ * correct account key when they mount or re-run.
+ *
+ * Order matters:
+ *   1. Flush pending writes under the OUTGOING account key so a quick
+ *      sale → sign-out cannot lose data.
+ *   2. Reset Zustand so the previous account's data cannot flash in the UI.
+ *   3. Swap the active account key so subsequent reads/writes use the
+ *      INCOMING namespace.
+ */
+function applyAccountSwitchSync(nextKey: string | null): void {
+  if (getActiveAccountKey() === nextKey) return;
+  flushPendingPersist();
+  usePosStore.getState().resetForSignOut();
+  setActiveAccountKey(nextKey);
+}
 
 export type SignUpResult =
   | { needsEmailVerification: true }
@@ -49,10 +73,15 @@ export function useAuth() {
       const raw = localStorage.getItem(LOCAL_AUTH_KEY);
       if (raw) {
         try {
-          setLocalEmail((JSON.parse(raw) as LocalSession).email ?? null);
+          const email = (JSON.parse(raw) as LocalSession).email ?? null;
+          applyAccountSwitchSync(computeAccountKey({ mode: "local", email }));
+          setLocalEmail(email);
         } catch {
           localStorage.removeItem(LOCAL_AUTH_KEY);
+          applyAccountSwitchSync(null);
         }
+      } else {
+        applyAccountSwitchSync(null);
       }
       setInitializing(false);
       return;
@@ -64,7 +93,11 @@ export function useAuth() {
       } catch {
         /* keep auth session; user-facing flow handles message on register */
       } finally {
-        setSession(data.session ?? null);
+        const next = data.session ?? null;
+        applyAccountSwitchSync(
+          computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
+        );
+        setSession(next);
         setInitializing(false);
       }
     });
@@ -72,6 +105,9 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, next) => {
+      applyAccountSwitchSync(
+        computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
+      );
       void ensureWorkspaceForSession(next).catch(() => {
         /* non-blocking: preserves login while surfacing errors on active flows */
       });
@@ -92,6 +128,7 @@ export function useAuth() {
     }
     if (!password || password.length < 4) throw new Error("Invalid password.");
     localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify({ email }));
+    applyAccountSwitchSync(computeAccountKey({ mode: "local", email }));
     setLocalEmail(email);
   }, []);
 
@@ -163,6 +200,9 @@ export function useAuth() {
     }
     if (data.session) {
       await ensureWorkspaceForSession(data.session);
+      applyAccountSwitchSync(
+        computeAccountKey({ mode: "supabase", userId: data.session.user?.id, email: data.session.user?.email }),
+      );
       setSession(data.session);
       return { needsEmailVerification: false, session: data.session };
     }
@@ -205,10 +245,12 @@ export function useAuth() {
   const signOut = useCallback(async () => {
     if (hasSupabaseConfig && supabase) {
       await supabase.auth.signOut();
+      applyAccountSwitchSync(null);
       setSession(null);
       return;
     }
     localStorage.removeItem(LOCAL_AUTH_KEY);
+    applyAccountSwitchSync(null);
     setLocalEmail(null);
   }, []);
 
@@ -216,6 +258,12 @@ export function useAuth() {
   const user = session?.user ?? null;
   const shopName =
     ((user?.user_metadata as Record<string, string> | undefined)?.business_name as string | undefined)?.trim() || "";
+  const email = user?.email ?? localEmail;
+  const accountKey = computeAccountKey({
+    mode: AUTH_MODE,
+    userId: user?.id ?? null,
+    email,
+  }) ?? getActiveAccountKey();
 
   return useMemo(
     () => ({
@@ -224,8 +272,9 @@ export function useAuth() {
       session,
       user,
       shopName,
-      email: user?.email ?? localEmail,
-      mode: (hasSupabaseConfig ? "supabase" : "local") as "supabase" | "local",
+      email,
+      mode: AUTH_MODE,
+      accountKey,
       signIn,
       signInWithGoogle,
       signUp,
@@ -240,7 +289,8 @@ export function useAuth() {
       session,
       user,
       shopName,
-      localEmail,
+      email,
+      accountKey,
       signIn,
       signInWithGoogle,
       signUp,
