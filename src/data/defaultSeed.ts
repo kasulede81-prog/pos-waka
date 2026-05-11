@@ -17,6 +17,10 @@ export function createDefaultPreferences(): ShopPreferences {
     activeBranchId: null,
     branchDisplayName: null,
     backOfficePin: null,
+    shopDisplayName: null,
+    shopPhoneE164: null,
+    shopAddressLine: null,
+    shopCurrency: "UGX",
   };
 }
 

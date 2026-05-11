@@ -95,6 +95,29 @@ export function useAuth() {
     setLocalEmail(email);
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    if (!hasSupabaseConfig || !supabase) {
+      throw new Error("Supabase is not configured.");
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${authRedirectOrigin()}/auth/callback`,
+      },
+    });
+    if (error) {
+      if (import.meta.env.DEV) {
+        console.error("[waka-auth] google oauth failed", {
+          code: error.code,
+          status: error.status,
+          message: error.message,
+        });
+      }
+      reportAuthIssue("google_oauth_failed", { status: error.status ?? 0 });
+      throw error;
+    }
+  }, []);
+
   const signUp = useCallback(async (email: string, password: string, businessName: string, businessType: BusinessType): Promise<SignUpResult> => {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to create an account.");
@@ -109,7 +132,18 @@ export function useAuth() {
       },
     });
     if (error) {
+      if (import.meta.env.DEV) {
+        console.error("[waka-auth] signUp failed", {
+          code: error.code,
+          status: error.status,
+          name: error.name,
+          message: error.message,
+        });
+      }
       reportAuthIssue("sign_up_failed", { status: error.status ?? 0 });
+      if ((error.message ?? "").toLowerCase().includes("database error saving new user")) {
+        throw new Error("Could not finish creating your shop. Please try again.");
+      }
       throw error;
     }
     if (data.session) {
@@ -178,6 +212,7 @@ export function useAuth() {
       email: user?.email ?? localEmail,
       mode: (hasSupabaseConfig ? "supabase" : "local") as "supabase" | "local",
       signIn,
+      signInWithGoogle,
       signUp,
       signOut,
       requestPasswordReset,
@@ -192,6 +227,7 @@ export function useAuth() {
       shopName,
       localEmail,
       signIn,
+      signInWithGoogle,
       signUp,
       signOut,
       requestPasswordReset,

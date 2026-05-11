@@ -57,12 +57,24 @@ function App() {
               initializing={auth.initializing}
               isAuthenticated={auth.isAuthenticated}
               onLogin={auth.signIn}
+              onGoogleLogin={auth.signInWithGoogle}
               mode={auth.mode}
             />
           }
         />
 
-        <Route path="/register" element={<RegisterPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} signUp={auth.signUp} />} />
+        <Route
+          path="/register"
+          element={
+            <RegisterPage
+              lang={lang}
+              setLang={setLang}
+              isAuthenticated={auth.isAuthenticated}
+              signUp={auth.signUp}
+              onGoogleSignIn={auth.signInWithGoogle}
+            />
+          }
+        />
 
         <Route
           path="/verify-email"

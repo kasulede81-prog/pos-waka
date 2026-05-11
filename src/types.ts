@@ -284,6 +284,11 @@ export type ShopPreferences = {
    * Not bank-grade; deters casual access on shared phones.
    */
   backOfficePin?: string | null;
+  /** Business profile (owner setup) cached locally for offline UX. */
+  shopDisplayName?: string | null;
+  shopPhoneE164?: string | null;
+  shopAddressLine?: string | null;
+  shopCurrency?: string | null;
 };
 
 export type SyncOperationKind =

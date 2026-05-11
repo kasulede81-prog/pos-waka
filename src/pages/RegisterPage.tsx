@@ -13,9 +13,10 @@ type Props = {
   setLang: (lg: Language) => void;
   isAuthenticated: boolean;
   signUp: (email: string, password: string, businessName: string, businessType: BusinessType) => Promise<SignUpResult>;
+  onGoogleSignIn: () => Promise<void>;
 };
 
-export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) {
+export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleSignIn }: Props) {
   const navigate = useNavigate();
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
@@ -23,6 +24,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
   const [businessType, setBusinessType] = useState<BusinessType>("kiosk_duka");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -41,9 +43,29 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
       if (result.needsEmailVerification) navigate("/verify-email", { replace: true, state: { email } });
       else navigate("/", { replace: true });
     } catch (err) {
-      setError((err as Error).message || t(lang, "signupWorkspaceError"));
+      if (import.meta.env.DEV) {
+        console.error("[waka-auth] register submit failed", err);
+      }
+      const msg = (err as Error).message || "";
+      if (msg.toLowerCase().includes("database error saving new user")) {
+        setError(t(lang, "signupWorkspaceError"));
+      } else {
+        setError(msg || t(lang, "signupWorkspaceError"));
+      }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const googleSubmit = async () => {
+    setGoogleBusy(true);
+    setError(null);
+    try {
+      await onGoogleSignIn();
+    } catch (err) {
+      setError((err as Error).message || t(lang, "signupWorkspaceError"));
+    } finally {
+      setGoogleBusy(false);
     }
   };
 
@@ -61,6 +83,14 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
+            <button
+              type="button"
+              onClick={googleSubmit}
+              disabled={googleBusy}
+              className="min-h-[52px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900 shadow-sm"
+            >
+              {googleBusy ? "…" : t(lang, "continueWithGoogle")}
+            </button>
             <label className="block text-sm font-medium">
               {t(lang, "businessName")}
               <input

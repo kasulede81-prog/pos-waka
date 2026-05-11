@@ -1,14 +1,14 @@
 import { useState } from "react";
 import type { User } from "@supabase/supabase-js";
-import type { Language, BusinessType, UserRole } from "../types";
+import type { Language, UserRole } from "../types";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { t } from "../lib/i18n";
-import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canUseDevRoleSimulator, hasPermission, resolveAuthRole } from "../lib/permissions";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
 import { SyncHealthCard } from "../components/SyncHealthCard";
+import { saveBusinessProfileToCloud } from "../lib/businessProfile";
 
 type Props = {
   lang: Language;
@@ -26,10 +26,15 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
   const canBackup = hasPermission(actor.role, "settings.shop");
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const updateBusinessType = usePosStore((s) => s.updateBusinessType);
   const [boPinNew, setBoPinNew] = useState("");
   const [boPinConfirm, setBoPinConfirm] = useState("");
   const [boPinFeedback, setBoPinFeedback] = useState<string | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
+  const [shopNameInput, setShopNameInput] = useState(preferences.shopDisplayName ?? shopName ?? "");
+  const [shopPhoneInput, setShopPhoneInput] = useState(preferences.shopPhoneE164 ?? "");
+  const [shopAddressInput, setShopAddressInput] = useState(preferences.shopAddressLine ?? "");
+  const [shopCurrencyInput, setShopCurrencyInput] = useState(preferences.shopCurrency ?? "UGX");
 
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
   const authResolved = resolveAuthRole({ mode: authMode, userMetadata: meta });
@@ -75,18 +80,77 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
         <article className="rounded-3xl border-2 border-waka-100 bg-waka-50/50 p-5 shadow-waka-sm">
           <p className="text-xl font-black text-waka-950">{t(lang, "businessSettings")}</p>
           <p className="mt-1 text-sm text-waka-900">{t(lang, "businessSettingsHelp")}</p>
-          <label className="mt-4 block font-bold text-slate-900">{t(lang, "businessTypeLabel")}</label>
-          <select
-            value={preferences.businessType}
-            onChange={(e) => updateBusinessType(e.target.value as BusinessType)}
-            className="mt-2 w-full rounded-2xl border-2 border-waka-200 bg-white px-4 py-4 text-lg font-semibold"
-          >
-            {BUSINESS_TYPE_IDS.map((id) => (
-              <option key={id} value={id}>
-                {t(lang, `businessType_${id}`)}
-              </option>
-            ))}
-          </select>
+          <div className="mt-4 rounded-2xl border-2 border-waka-200 bg-white p-4">
+            <p className="text-sm font-black uppercase tracking-wide text-waka-900">{t(lang, "businessProfileTitle")}</p>
+            <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "businessName")}</label>
+            <input
+              value={shopNameInput}
+              onChange={(e) => setShopNameInput(e.target.value)}
+              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            />
+            <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "personPhonePh")}</label>
+            <input
+              value={shopPhoneInput}
+              onChange={(e) => setShopPhoneInput(e.target.value)}
+              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            />
+            <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopAddress")}</label>
+            <input
+              value={shopAddressInput}
+              onChange={(e) => setShopAddressInput(e.target.value)}
+              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            />
+            <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "businessCurrency")}</label>
+            <input
+              value={shopCurrencyInput}
+              onChange={(e) => setShopCurrencyInput(e.target.value.toUpperCase())}
+              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            />
+            <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "businessTypeLabel")}</label>
+            <div className="mt-1 rounded-2xl border-2 border-slate-200 bg-stone-50 px-4 py-3 text-base font-semibold text-stone-700">
+              {t(lang, `businessType_${preferences.businessType}`)}
+            </div>
+            <p className="mt-2 text-xs font-bold text-stone-500">{t(lang, "businessTypeLockedMessage")}</p>
+            {profileFeedback ? <p className="mt-2 text-sm font-bold text-waka-900">{profileFeedback}</p> : null}
+            <button
+              type="button"
+              disabled={profileBusy}
+              onClick={async () => {
+                setProfileFeedback(null);
+                if (!shopNameInput.trim()) {
+                  setProfileFeedback(t(lang, "shopNameRequired"));
+                  return;
+                }
+                setProfileBusy(true);
+                try {
+                  setPreferences({
+                    shopDisplayName: shopNameInput.trim(),
+                    shopPhoneE164: shopPhoneInput.trim() || null,
+                    shopAddressLine: shopAddressInput.trim() || null,
+                    shopCurrency: shopCurrencyInput.trim().toUpperCase() || "UGX",
+                  });
+                  await saveBusinessProfileToCloud(
+                    {
+                      shopName: shopNameInput.trim(),
+                      businessType: preferences.businessType,
+                      currency: shopCurrencyInput,
+                      phone: shopPhoneInput,
+                      address: shopAddressInput,
+                    },
+                    false,
+                  );
+                  setProfileFeedback(t(lang, "businessProfileSaved"));
+                } catch {
+                  setProfileFeedback(t(lang, "businessProfileSaveFailed"));
+                } finally {
+                  setProfileBusy(false);
+                }
+              }}
+              className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
+            >
+              {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
+            </button>
+          </div>
           <label className="mt-6 flex items-center gap-3 text-lg font-bold text-slate-900">
             <input
               type="checkbox"

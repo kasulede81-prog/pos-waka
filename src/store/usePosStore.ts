@@ -985,6 +985,30 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : p.backOfficePin === null || p.backOfficePin === ""
           ? null
           : String(p.backOfficePin).replace(/\D/g, "").slice(0, 6) || null,
+    shopDisplayName:
+      p.shopDisplayName === undefined
+        ? (base.shopDisplayName ?? null)
+        : p.shopDisplayName === null
+          ? null
+          : String(p.shopDisplayName),
+    shopPhoneE164:
+      p.shopPhoneE164 === undefined
+        ? (base.shopPhoneE164 ?? null)
+        : p.shopPhoneE164 === null
+          ? null
+          : String(p.shopPhoneE164),
+    shopAddressLine:
+      p.shopAddressLine === undefined
+        ? (base.shopAddressLine ?? null)
+        : p.shopAddressLine === null
+          ? null
+          : String(p.shopAddressLine),
+    shopCurrency:
+      p.shopCurrency === undefined
+        ? (base.shopCurrency ?? "UGX")
+        : p.shopCurrency === null
+          ? "UGX"
+          : String(p.shopCurrency).trim().toUpperCase() || "UGX",
   };
 }
 

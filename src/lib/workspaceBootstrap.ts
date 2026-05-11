@@ -47,6 +47,8 @@ export async function bootstrapOwnerWorkspace(user: User, args: BootstrapArgs): 
         userId: user.id,
         code: error.code,
         message: error.message,
+        details: error.details,
+        hint: error.hint,
       });
     }
     throw new Error("Could not finish creating your shop. Please try again.");

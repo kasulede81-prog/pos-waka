@@ -12,14 +12,16 @@ type Props = {
   initializing: boolean;
   isAuthenticated: boolean;
   onLogin: (email: string, password: string) => Promise<void>;
+  onGoogleLogin: () => Promise<void>;
   mode: "supabase" | "local";
 };
 
-export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogin, mode }: Props) {
+export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogin, onGoogleLogin, mode }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   if (isAuthenticated) return <Navigate to="/" replace />;
 
@@ -33,6 +35,18 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
       setError((err as Error).message);
     } finally {
       setBusy(false);
+    }
+  };
+
+  const googleSubmit = async () => {
+    setGoogleBusy(true);
+    setError(null);
+    try {
+      await onGoogleLogin();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGoogleBusy(false);
     }
   };
 
@@ -57,6 +71,17 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
         ) : null}
 
         <form onSubmit={submit} className="mt-6 space-y-4">
+          {mode === "supabase" && hasSupabaseConfig ? (
+            <button
+              type="button"
+              onClick={googleSubmit}
+              disabled={googleBusy}
+              className="min-h-[52px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900 shadow-sm"
+            >
+              {googleBusy ? "…" : t(lang, "continueWithGoogle")}
+            </button>
+          ) : null}
+
           <label className="block text-sm font-medium">
             {t(lang, "email")}
             <input
