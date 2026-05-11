@@ -105,6 +105,22 @@ export type SellingMode = "unit" | "weighted" | "portion";
 
 export type LineInputMode = "quantity" | "money";
 
+/** ML Kit capture intent — drives on-device parsing heuristics. */
+export type OcrCaptureMode = "stock_list" | "product_label" | "receipt";
+
+/** Editable row after OCR; never persisted until the user confirms import. */
+export type OcrReviewRow = {
+  id: string;
+  name: string;
+  priceUgx: number;
+  stockQty: number;
+  category: string;
+  selected: boolean;
+  /** 0–1 combined native (when present) + parser match strength */
+  confidence: number;
+  rawLine: string;
+};
+
 export type Product = {
   id: string;
   name: string;

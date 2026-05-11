@@ -527,7 +527,7 @@ export function StockPage({ lang }: { lang: Language }) {
       ) : null}
 
       {canAdd ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <button
             type="button"
             onClick={() => setQuickOpen(true)}
@@ -549,6 +549,12 @@ export function StockPage({ lang }: { lang: Language }) {
           >
             {t(lang, "bulkAddOpen")}
           </button>
+          <Link
+            to="/stock/import-ocr"
+            className="flex min-h-[64px] items-center justify-center rounded-3xl border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 py-4 text-center text-base font-black text-orange-950 shadow-sm active:opacity-90"
+          >
+            {t(lang, "ocrFromStockCta")}
+          </Link>
         </div>
       ) : null}
 

@@ -20,6 +20,7 @@ import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
 import { OfficeHubPage } from "./pages/OfficeHubPage";
 import { StockPage } from "./pages/StockPage";
+import { OcrInventoryImportPage } from "./pages/OcrInventoryImportPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { RestockPage } from "./pages/RestockPage";
@@ -147,6 +148,14 @@ function App() {
               element={
                 <RoleProtectedRoute permission="stock.view">
                   <StockPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="stock/import-ocr"
+              element={
+                <RoleProtectedRoute permission="products.add">
+                  <OcrInventoryImportPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />
