@@ -27,6 +27,14 @@ export type InternalDashboardStats = {
   trialSubscriptions: number;
   paidSubscriptions: number;
   expiredSubscriptions: number;
+  /** Trials past end date but still marked trial/trialing (ops signal). */
+  lapsedTrials: number;
+  /** Trials ending within the next 7 days. */
+  expiringTrialsNext7d: number;
+  /** Active rows in shop_devices. */
+  activeDevices: number;
+  /** Support requests in open or in_progress. */
+  openSupportTickets: number;
   salesTotalUgx: number | null;
   shopsByDistrict: { label: string; count: number }[];
 };
@@ -140,8 +148,43 @@ export async function internalAdminUpdateRoleAndDistricts({
   return { ok: true };
 }
 
+function parseMetricsRpcPayload(raw: unknown): InternalDashboardStats | null {
+  if (!raw || typeof raw !== "object") return null;
+  const j = raw as Record<string, unknown>;
+  const shopsByDistrictRaw = j.shops_by_district;
+  let shopsByDistrict: { label: string; count: number }[] = [];
+  if (Array.isArray(shopsByDistrictRaw)) {
+    shopsByDistrict = shopsByDistrictRaw
+      .map((row) => {
+        const r = row as Record<string, unknown>;
+        return { label: String(r.label ?? "—"), count: Number(r.count ?? 0) };
+      })
+      .filter((x) => x.label.length > 0);
+  }
+  return {
+    totalShops: Number(j.total_shops ?? 0),
+    activeToday: Number(j.active_today ?? 0),
+    trialSubscriptions: Number(j.trial_subscriptions ?? 0),
+    paidSubscriptions: Number(j.paid_subscriptions ?? 0),
+    expiredSubscriptions: Number(j.expired_subscriptions ?? 0),
+    lapsedTrials: Number(j.lapsed_trials ?? 0),
+    expiringTrialsNext7d: Number(j.expiring_trials_7d ?? 0),
+    activeDevices: Number(j.active_devices ?? 0),
+    openSupportTickets: Number(j.open_support ?? 0),
+    salesTotalUgx: j.sales_total_ugx === null || j.sales_total_ugx === undefined ? null : Number(j.sales_total_ugx),
+    shopsByDistrict,
+  };
+}
+
+/** Single round-trip dashboard pulse (counts + district strip + sales total). */
 export async function fetchInternalDashboardStats(): Promise<InternalDashboardStats | null> {
   if (!supabase) return null;
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc("internal_ops_dashboard_metrics");
+  if (!rpcError && rpcData) {
+    const parsed = parseMetricsRpcPayload(rpcData);
+    if (parsed) return parsed;
+  }
 
   const dayStart = kampalaDayStartIso();
 
@@ -153,6 +196,10 @@ export async function fetchInternalDashboardStats(): Promise<InternalDashboardSt
     subsExpired,
     shopsDistrict,
     salesRpc,
+    lapsed,
+    exp7,
+    devCount,
+    supOpen,
   ] = await Promise.all([
     supabase.from("shops").select("id", { count: "exact", head: true }),
     supabase.from("shops").select("id", { count: "exact", head: true }).gte("last_seen_at", dayStart),
@@ -164,6 +211,20 @@ export async function fetchInternalDashboardStats(): Promise<InternalDashboardSt
     supabase.from("subscriptions").select("id", { count: "exact", head: true }).eq("status", "expired"),
     supabase.from("shops").select("district, city"),
     supabase.rpc("internal_ops_sales_total_ugx"),
+    supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["trial", "trialing"])
+      .not("trial_ends_at", "is", null)
+      .lt("trial_ends_at", new Date().toISOString()),
+    supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["trial", "trialing"])
+      .gte("trial_ends_at", new Date().toISOString())
+      .lte("trial_ends_at", new Date(Date.now() + 7 * 86400000).toISOString()),
+    supabase.from("shop_devices").select("id", { count: "exact", head: true }).eq("is_active", true),
+    supabase.from("support_requests").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
   ]);
 
   if (
@@ -190,15 +251,52 @@ export async function fetchInternalDashboardStats(): Promise<InternalDashboardSt
   const salesTotalUgx =
     salesRpc.error || salesRpc.data === null || salesRpc.data === undefined ? null : Number(salesRpc.data);
 
+  const devFallback = devCount.error ? await supabase.from("shops").select("active_device_count") : null;
+  const activeDevices =
+    devCount.error || devCount.count === null
+      ? (devFallback?.data ?? []).reduce((s, r) => s + (Number((r as { active_device_count?: number }).active_device_count) || 0), 0)
+      : (devCount.count ?? 0);
+
   return {
     totalShops: shopsAll.count ?? 0,
     activeToday: shopsActive.count ?? 0,
     trialSubscriptions: subsTrial.count ?? 0,
     paidSubscriptions: subsPaid.count ?? 0,
     expiredSubscriptions: subsExpired.count ?? 0,
+    lapsedTrials: lapsed.error ? 0 : (lapsed.count ?? 0),
+    expiringTrialsNext7d: exp7.error ? 0 : (exp7.count ?? 0),
+    activeDevices,
+    openSupportTickets: supOpen.error ? 0 : (supOpen.count ?? 0),
     salesTotalUgx,
     shopsByDistrict,
   };
+}
+
+/** Last 7 Kampala days: signups, new subscriptions, completed sales UGX (server-side). */
+export async function fetchInternalOpsCharts7d(): Promise<{
+  signups: DayBucket[];
+  subscriptions: DayBucket[];
+  sales: DayBucket[];
+} | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("internal_ops_chart_buckets_7d");
+  if (error || !data || typeof data !== "object") return null;
+  const j = data as Record<string, unknown>;
+  const labels = (Array.isArray(j.labels) ? j.labels : []) as string[];
+  const su = (Array.isArray(j.shop_signups) ? j.shop_signups : []) as number[];
+  const sub = (Array.isArray(j.subscriptions) ? j.subscriptions : []) as number[];
+  const sal = (Array.isArray(j.sales_ugx) ? j.sales_ugx : []) as number[];
+  const n = Math.min(labels.length, su.length, sub.length, sal.length);
+  const signups: DayBucket[] = [];
+  const subscriptions: DayBucket[] = [];
+  const sales: DayBucket[] = [];
+  for (let i = 0; i < n; i++) {
+    const label = labels[i] ?? "";
+    signups.push({ label, count: Number(su[i] ?? 0) });
+    subscriptions.push({ label, count: Number(sub[i] ?? 0) });
+    sales.push({ label, count: Number(sal[i] ?? 0) });
+  }
+  return { signups, subscriptions, sales };
 }
 
 export type FieldVisitRow = {
@@ -278,14 +376,23 @@ export type ShopOpsDetail = {
     organization_id: string;
     last_seen_at: string | null;
     phone_e164: string | null;
+    created_at: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
   };
+  owner_label: string | null;
   subscription: {
     id: string;
     status: string;
     trial_ends_at: string | null;
     plan_code: string | null;
+    payment_status?: string | null;
+    current_period_end?: string | null;
   } | null;
-  deviceCount: number;
+  plan_code: string | null;
+  devices: ShopDeviceRow[];
+  sync_health: SyncHealthRow | null;
+  subscriptionPaymentsRecent: SubscriptionPaymentRow[];
 };
 
 export type SupportTicketRow = {
@@ -296,8 +403,63 @@ export type SupportTicketRow = {
   priority: string;
   channel: string;
   created_at: string;
+  shop_id: string | null;
   shop_name: string | null;
   shop_district: string | null;
+  shop_phone_e164: string | null;
+  contact_phone_e164: string | null;
+  owner_name: string | null;
+  owner_email: string | null;
+  issue_type: string | null;
+  device_fingerprint: string | null;
+  app_version: string | null;
+  sync_health_snapshot: Record<string, unknown> | null;
+  assigned_internal_admin_id: string | null;
+  assigned_admin_email: string | null;
+};
+
+export type FieldMapPin = {
+  shop_id: string;
+  shop_name: string;
+  lat: number;
+  lng: number;
+  district: string | null;
+  city: string | null;
+  is_active: boolean;
+  district_id: string | null;
+};
+
+export type ShopDeviceRow = {
+  id: string;
+  shop_id: string;
+  device_fingerprint: string;
+  label: string | null;
+  platform: string | null;
+  app_version: string | null;
+  last_seen_at: string | null;
+  is_active: boolean;
+  trusted: boolean;
+  suspicious_flag: boolean;
+  created_at: string;
+};
+
+export type SubscriptionPaymentRow = {
+  id: string;
+  amount_ugx: number;
+  currency: string;
+  provider: string | null;
+  status: string;
+  note: string | null;
+  created_at: string;
+};
+
+export type SyncHealthRow = {
+  shop_id: string;
+  last_pull_at: string | null;
+  last_push_ok_at: string | null;
+  pending_outbound: number;
+  last_error: string | null;
+  updated_at: string;
 };
 
 export type DistrictOpsRow = {
@@ -407,31 +569,86 @@ export async function fetchOpenSupportCount(): Promise<number> {
   return count ?? 0;
 }
 
+function mapSupportRpcRow(row: Record<string, unknown>): SupportTicketRow {
+  return {
+    id: row.id as string,
+    subject: (row.subject as string) ?? null,
+    body: (row.body as string) ?? null,
+    status: row.status as string,
+    priority: row.priority as string,
+    channel: row.channel as string,
+    created_at: row.created_at as string,
+    shop_id: (row.shop_id as string) ?? null,
+    shop_name: (row.shop_name as string) ?? null,
+    shop_district: (row.shop_district as string) ?? null,
+    shop_phone_e164: (row.shop_phone_e164 as string) ?? null,
+    contact_phone_e164: (row.contact_phone_e164 as string) ?? null,
+    owner_name: (row.owner_name as string) ?? null,
+    owner_email: (row.owner_email as string) ?? null,
+    issue_type: (row.issue_type as string) ?? null,
+    device_fingerprint: (row.device_fingerprint as string) ?? null,
+    app_version: (row.app_version as string) ?? null,
+    sync_health_snapshot:
+      row.sync_health_snapshot && typeof row.sync_health_snapshot === "object"
+        ? (row.sync_health_snapshot as Record<string, unknown>)
+        : null,
+    assigned_internal_admin_id: (row.assigned_internal_admin_id as string) ?? null,
+    assigned_admin_email: (row.assigned_admin_email as string) ?? null,
+  };
+}
+
 export async function fetchSupportTickets(limit = 25): Promise<SupportTicketRow[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  const { data, error } = await supabase.rpc("internal_ops_support_queue", { p_limit: limit });
+  if (!error && Array.isArray(data)) {
+    return (data as Record<string, unknown>[]).map((row) => mapSupportRpcRow(row));
+  }
+  const { data: fallback, error: fbErr } = await supabase
     .from("support_requests")
-    .select("id, subject, body, status, priority, channel, created_at, shops ( name, district )")
+    .select("id, subject, body, status, priority, channel, created_at, contact_phone_e164, shops ( id, name, district, phone_e164 )")
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error || !data) return [];
-  return (data as Array<Record<string, unknown> & { shops?: { name?: string; district?: string } | { name?: string; district?: string }[] }>).map(
+  if (fbErr || !fallback) return [];
+  return (fallback as Array<Record<string, unknown> & { shops?: { id?: string; name?: string; district?: string; phone_e164?: string }[] }>).map(
     (row) => {
       const sh = row.shops;
       const shop = Array.isArray(sh) ? sh[0] : sh;
-      return {
-        id: row.id as string,
-        subject: (row.subject as string) ?? null,
-        body: (row.body as string) ?? null,
-        status: row.status as string,
-        priority: row.priority as string,
-        channel: row.channel as string,
-        created_at: row.created_at as string,
+      return mapSupportRpcRow({
+        ...row,
+        shop_id: shop?.id ?? null,
         shop_name: shop?.name ?? null,
         shop_district: shop?.district ?? null,
-      };
+        shop_phone_e164: shop?.phone_e164 ?? null,
+        owner_name: null,
+        owner_email: null,
+        issue_type: null,
+        device_fingerprint: null,
+        app_version: null,
+        sync_health_snapshot: {},
+        assigned_internal_admin_id: null,
+        assigned_admin_email: null,
+      });
     },
   );
+}
+
+export async function fetchFieldMapPins(opts?: { districtId?: string | null; limit?: number }): Promise<FieldMapPin[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("internal_ops_field_map_pins", {
+    p_district_id: opts?.districtId ?? null,
+    p_limit: opts?.limit ?? 400,
+  });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    shop_id: r.shop_id as string,
+    shop_name: (r.shop_name as string) ?? "—",
+    lat: Number(r.lat),
+    lng: Number(r.lng),
+    district: (r.district as string) ?? null,
+    city: (r.city as string) ?? null,
+    is_active: Boolean(r.is_active),
+    district_id: (r.district_id as string) ?? null,
+  }));
 }
 
 export async function updateSupportTicketStatus(
@@ -515,9 +732,90 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
 
 export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail | null> {
   if (!supabase) return null;
+  const { data: rpcRaw, error: rpcErr } = await supabase.rpc("internal_ops_shop_detail", { p_shop_id: shopId });
+  if (!rpcErr && rpcRaw && typeof rpcRaw === "object") {
+    const j = rpcRaw as Record<string, unknown>;
+    const shopRaw = j.shop as Record<string, unknown> | undefined;
+    if (!shopRaw?.id) return null;
+    const subRaw = j.subscription as Record<string, unknown> | null | undefined;
+    let subscription: ShopOpsDetail["subscription"] = null;
+    if (subRaw?.id) {
+      const metaPlan = (j.plan_code as string) ?? null;
+      subscription = {
+        id: subRaw.id as string,
+        status: (subRaw.status as string) ?? "",
+        trial_ends_at: (subRaw.trial_ends_at as string) ?? null,
+        plan_code: metaPlan,
+        payment_status: (subRaw.payment_status as string) ?? null,
+        current_period_end: (subRaw.current_period_end as string) ?? null,
+      };
+    }
+    const devicesRaw = j.devices;
+    const devices: ShopDeviceRow[] = Array.isArray(devicesRaw)
+      ? (devicesRaw as Record<string, unknown>[]).map((d) => ({
+          id: d.id as string,
+          shop_id: d.shop_id as string,
+          device_fingerprint: (d.device_fingerprint as string) ?? "",
+          label: (d.label as string) ?? null,
+          platform: (d.platform as string) ?? null,
+          app_version: (d.app_version as string) ?? null,
+          last_seen_at: (d.last_seen_at as string) ?? null,
+          is_active: Boolean(d.is_active),
+          trusted: Boolean(d.trusted),
+          suspicious_flag: Boolean(d.suspicious_flag),
+          created_at: (d.created_at as string) ?? "",
+        }))
+      : [];
+    const syRaw = j.sync_health as Record<string, unknown> | null | undefined;
+    const sync_health: SyncHealthRow | null =
+      syRaw && syRaw.shop_id
+        ? {
+            shop_id: syRaw.shop_id as string,
+            last_pull_at: (syRaw.last_pull_at as string) ?? null,
+            last_push_ok_at: (syRaw.last_push_ok_at as string) ?? null,
+            pending_outbound: Number(syRaw.pending_outbound ?? 0),
+            last_error: (syRaw.last_error as string) ?? null,
+            updated_at: (syRaw.updated_at as string) ?? "",
+          }
+        : null;
+    const payRaw = j.subscription_payments_recent;
+    const subscriptionPaymentsRecent: SubscriptionPaymentRow[] = Array.isArray(payRaw)
+      ? (payRaw as Record<string, unknown>[]).map((p) => ({
+          id: p.id as string,
+          amount_ugx: Number(p.amount_ugx ?? 0),
+          currency: (p.currency as string) ?? "UGX",
+          provider: (p.provider as string) ?? null,
+          status: (p.status as string) ?? "",
+          note: (p.note as string) ?? null,
+          created_at: (p.created_at as string) ?? "",
+        }))
+      : [];
+    return {
+      shop: {
+        id: shopRaw.id as string,
+        name: (shopRaw.name as string) ?? "—",
+        district: (shopRaw.district as string) ?? null,
+        city: (shopRaw.city as string) ?? null,
+        is_active: Boolean(shopRaw.is_active),
+        organization_id: shopRaw.organization_id as string,
+        last_seen_at: (shopRaw.last_seen_at as string) ?? null,
+        phone_e164: (shopRaw.phone_e164 as string) ?? null,
+        created_at: (shopRaw.created_at as string) ?? null,
+        latitude: shopRaw.latitude != null ? Number(shopRaw.latitude) : null,
+        longitude: shopRaw.longitude != null ? Number(shopRaw.longitude) : null,
+      },
+      owner_label: (j.owner_label as string) ?? null,
+      subscription,
+      plan_code: (j.plan_code as string) ?? null,
+      devices,
+      sync_health,
+      subscriptionPaymentsRecent,
+    };
+  }
+
   const { data: shop, error: shopErr } = await supabase
     .from("shops")
-    .select("id, name, district, city, is_active, organization_id, last_seen_at, phone_e164")
+    .select("id, name, district, city, is_active, organization_id, last_seen_at, phone_e164, created_at, latitude, longitude")
     .eq("id", shopId)
     .maybeSingle();
   if (shopErr || !shop) return null;
@@ -525,7 +823,7 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
   const orgId = shop.organization_id as string;
   const { data: subRows } = await supabase
     .from("subscriptions")
-    .select("id, status, trial_ends_at, plan_id, subscription_plans ( code )")
+    .select("id, status, trial_ends_at, payment_status, current_period_end, plan_id, subscription_plans ( code )")
     .eq("organization_id", orgId)
     .order("created_at", { ascending: false })
     .limit(1);
@@ -535,26 +833,34 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
         id: string;
         status: string;
         trial_ends_at: string | null;
+        payment_status: string | null;
+        current_period_end: string | null;
         subscription_plans: { code: string } | { code: string }[] | null;
       }
     | undefined;
   let subscription: ShopOpsDetail["subscription"] = null;
+  let plan_code: string | null = null;
   if (raw) {
     const p = raw.subscription_plans;
-    const plan_code = p ? (Array.isArray(p) ? p[0]?.code : p.code) ?? null : null;
+    plan_code = p ? (Array.isArray(p) ? p[0]?.code : p.code) ?? null : null;
     subscription = {
       id: raw.id,
       status: raw.status,
       trial_ends_at: raw.trial_ends_at,
       plan_code,
+      payment_status: raw.payment_status,
+      current_period_end: raw.current_period_end,
     };
   }
 
-  const { count } = await supabase
+  const { data: devRows } = await supabase
     .from("shop_devices")
-    .select("id", { count: "exact", head: true })
+    .select("id,shop_id,device_fingerprint,label,platform,app_version,last_seen_at,is_active,trusted,suspicious_flag,created_at")
     .eq("shop_id", shopId)
-    .eq("is_active", true);
+    .order("last_seen_at", { ascending: false })
+    .limit(50);
+
+  const devices = (devRows ?? []) as unknown as ShopDeviceRow[];
 
   return {
     shop: {
@@ -566,9 +872,16 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
       organization_id: orgId,
       last_seen_at: (shop.last_seen_at as string) ?? null,
       phone_e164: (shop.phone_e164 as string) ?? null,
+      created_at: (shop.created_at as string) ?? null,
+      latitude: shop.latitude != null ? Number(shop.latitude) : null,
+      longitude: shop.longitude != null ? Number(shop.longitude) : null,
     },
+    owner_label: null,
     subscription,
-    deviceCount: count ?? 0,
+    plan_code,
+    devices,
+    sync_health: null,
+    subscriptionPaymentsRecent: [],
   };
 }
 
@@ -593,6 +906,109 @@ export async function adminExtendSubscriptionTrial(
   });
   if (error) return { ok: false, message: error.message };
   return { ok: true };
+}
+
+export async function adminSubscriptionSetPlan(
+  subscriptionId: string,
+  planCode: "starter" | "business" | "waka_plus",
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_subscription_set_plan", {
+    p_subscription_id: subscriptionId,
+    p_plan_code: planCode,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminSubscriptionSetStatus(
+  subscriptionId: string,
+  status: "trial" | "trialing" | "active" | "expired" | "past_due" | "cancelled" | "paused",
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_subscription_set_status", {
+    p_subscription_id: subscriptionId,
+    p_status: status,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminSubscriptionMarkPayment(
+  subscriptionId: string,
+  amountUgx: number,
+  note?: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_subscription_mark_payment", {
+    p_subscription_id: subscriptionId,
+    p_amount_ugx: Math.max(0, Math.floor(amountUgx)),
+    p_note: note ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminShopResetSync(shopId: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_shop_reset_sync", { p_shop_id: shopId });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminShopForceLogoutDevices(shopId: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_shop_force_logout_devices", { p_shop_id: shopId });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminShopDeviceSetActive(
+  deviceId: string,
+  active: boolean,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_shop_device_set_active", {
+    p_device_id: deviceId,
+    p_active: active,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminShopDeviceSetTrusted(
+  deviceId: string,
+  trusted: boolean,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("admin_shop_device_set_trusted", {
+    p_device_id: deviceId,
+    p_trusted: trusted,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function adminShopOpenSupportMessage(
+  shopId: string,
+  subject: string,
+  body: string,
+): Promise<{ ok: boolean; message?: string; id?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_open_support_message", {
+    p_shop_id: shopId,
+    p_subject: subject,
+    p_body: body,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, id: data as string | undefined };
+}
+
+export function whatsappUrlFromPhone(phone: string | null | undefined): string | null {
+  if (!phone?.trim()) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length < 9) return null;
+  return `https://wa.me/${digits.startsWith("0") ? "256" + digits.slice(1) : digits}`;
 }
 
 export async function fetchDistrictOpsTable(): Promise<DistrictOpsRow[]> {

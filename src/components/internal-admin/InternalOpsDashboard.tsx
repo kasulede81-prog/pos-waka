@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
+  AlertTriangle,
   ArrowUpRight,
   Building2,
   Calendar,
@@ -13,20 +14,18 @@ import {
   Sparkles,
   Store,
   TrendingUp,
-  Users,
   Zap,
 } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
-  fetchActiveDevicesTotal,
   fetchBusinessTypeSlices,
   fetchDistrictOpsTable,
-  fetchExpiringTrialsTotal,
+  fetchFieldMapPins,
   fetchFieldVisitsOpen,
   fetchInternalDashboardStats,
-  fetchOpenSupportCount,
+  fetchInternalOpsCharts7d,
   fetchPlanTierMetrics,
   fetchRecentShops,
   fetchSalesVolumeBuckets7d,
@@ -36,9 +35,11 @@ import {
   googleMapsDirectionsUrl,
   markFieldVisitCompleted,
   updateSupportTicketStatus,
+  whatsappUrlFromPhone,
   type BusinessTypeSlice,
   type DayBucket,
   type DistrictOpsRow,
+  type FieldMapPin,
   type FieldVisitRow,
   type InternalDashboardStats,
   type PlanTierMetrics,
@@ -207,11 +208,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const [signups7, setSignups7] = useState<DayBucket[]>([]);
   const [subs7, setSubs7] = useState<DayBucket[]>([]);
   const [sales7, setSales7] = useState<DayBucket[]>([]);
-  const [expiringSoon, setExpiringSoon] = useState(0);
-  const [devices, setDevices] = useState(0);
-  const [openTickets, setOpenTickets] = useState(0);
   const [visits, setVisits] = useState<FieldVisitRow[]>([]);
   const [districtFilter, setDistrictFilter] = useState("");
+  const [mapPins, setMapPins] = useState<FieldMapPin[]>([]);
+  const [mapDistrictId, setMapDistrictId] = useState<string>("");
   const [visitBusyId, setVisitBusyId] = useState<string | null>(null);
   const [ticketBusyId, setTicketBusyId] = useState<string | null>(null);
   const [visitMsg, setVisitMsg] = useState<string | null>(null);
@@ -221,53 +221,46 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
     setOpsLoading(true);
     setStatsError(false);
     try {
-      const [
-        s,
-        p,
-        r,
-        tk,
-        d,
-        b,
-        su7,
-        sub7,
-        sa7,
-        ex,
-        dev,
-        op,
-        v,
-      ] = await Promise.all([
-        fetchInternalDashboardStats(),
+      const s = await fetchInternalDashboardStats();
+      if (!s) setStatsError(true);
+      setStats(s);
+
+      const charts = await fetchInternalOpsCharts7d();
+      if (charts?.signups?.length) {
+        setSignups7(charts.signups);
+        setSubs7(charts.subscriptions);
+        setSales7(charts.sales);
+      } else {
+        const [su7, sub7, sa7] = await Promise.all([
+          fetchShopSignupBuckets7d(),
+          fetchSubscriptionGrowthBuckets7d(),
+          fetchSalesVolumeBuckets7d(),
+        ]);
+        setSignups7(su7.length ? su7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
+        setSubs7(sub7.length ? sub7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
+        setSales7(sa7.length ? sa7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
+      }
+
+      const [p, r, tk, d, b, v, pins] = await Promise.all([
         fetchPlanTierMetrics(),
         fetchRecentShops(18),
         fetchSupportTickets(18),
         fetchDistrictOpsTable(),
         fetchBusinessTypeSlices(),
-        fetchShopSignupBuckets7d(),
-        fetchSubscriptionGrowthBuckets7d(),
-        fetchSalesVolumeBuckets7d(),
-        fetchExpiringTrialsTotal(),
-        fetchActiveDevicesTotal(),
-        fetchOpenSupportCount(),
         fetchFieldVisitsOpen(),
+        fetchFieldMapPins({ districtId: mapDistrictId || null, limit: 400 }),
       ]);
-      if (!s) setStatsError(true);
-      setStats(s);
       setPlans(p);
       setRecent(r);
       setTickets(tk);
       setDistricts(d);
       setBizTypes(b);
-      setSignups7(su7.length ? su7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
-      setSubs7(sub7.length ? sub7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
-      setSales7(sa7.length ? sa7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
-      setExpiringSoon(ex);
-      setDevices(dev);
-      setOpenTickets(op);
       setVisits(v);
+      setMapPins(pins);
     } finally {
       setOpsLoading(false);
     }
-  }, [adminRow]);
+  }, [adminRow, mapDistrictId]);
 
   useEffect(() => {
     if (previewMode || !adminRow) return;
@@ -287,16 +280,43 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const signupSpark = useMemo(() => signups7.map((b) => b.count), [signups7]);
   const subsSpark = useMemo(() => subs7.map((b) => b.count), [subs7]);
 
+  const mapClusters = useMemo(() => {
+    const m = new Map<string, FieldMapPin[]>();
+    for (const p of mapPins) {
+      const key = `${(Math.round(p.lat * 5) / 5).toFixed(1)} · ${(Math.round(p.lng * 5) / 5).toFixed(1)}`;
+      const arr = m.get(key) ?? [];
+      arr.push(p);
+      m.set(key, arr);
+    }
+    return [...m.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, 14);
+  }, [mapPins]);
+
   const statGrid = useMemo(() => {
     if (!stats) {
-      return { total: "—", active: "—", paid: "—", trial: "—", expired: "—", sales: "—" as string };
+      return {
+        total: "—",
+        active: "—",
+        paid: "—",
+        trial: "—",
+        endedTrials: "—",
+        expiring: "—",
+        devices: "—",
+        support: "—",
+        sales: "—" as string,
+      };
     }
+    const ended = (stats.lapsedTrials ?? 0) + (stats.expiredSubscriptions ?? 0);
     return {
       total: String(stats.totalShops),
       active: String(stats.activeToday),
       paid: String(stats.paidSubscriptions),
       trial: String(stats.trialSubscriptions),
-      expired: String(stats.expiredSubscriptions),
+      endedTrials: String(ended),
+      expiring: String(stats.expiringTrialsNext7d ?? 0),
+      devices: String(stats.activeDevices ?? 0),
+      support: String(stats.openSupportTickets ?? 0),
       sales: fmtUgx(stats.salesTotalUgx),
     };
   }, [stats]);
@@ -379,7 +399,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           <h2 className="text-lg font-black text-stone-900">{t(lang, "internalDashPulseTitle")}</h2>
           {opsLoading ? <span className="text-xs font-bold uppercase tracking-wide text-orange-600">{t(lang, "internalDashSyncing")}</span> : null}
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <StatHeroCard
             icon={Store}
             label={t(lang, "internalStat_totalShops")}
@@ -409,23 +429,30 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             gradient="bg-gradient-to-br from-amber-50/90 to-white"
           />
           <StatHeroCard
-            icon={Users}
+            icon={AlertTriangle}
+            label={t(lang, "internalStat_endedTrials")}
+            value={statGrid.endedTrials}
+            sub={t(lang, "internalDashStatSubEndedTrials")}
+            gradient="bg-gradient-to-br from-rose-50/60 to-white"
+          />
+          <StatHeroCard
+            icon={Calendar}
             label={t(lang, "internalStat_expiringSoon")}
-            value={String(expiringSoon)}
+            value={statGrid.expiring}
             sub={t(lang, "internalDashStatSubExpiring")}
-            gradient="bg-gradient-to-br from-rose-50/50 to-white"
+            gradient="bg-gradient-to-br from-orange-50/50 to-white"
           />
           <StatHeroCard
             icon={Smartphone}
             label={t(lang, "internalStat_devices")}
-            value={String(devices)}
+            value={statGrid.devices}
             sub={t(lang, "internalDashStatSubDevices")}
             gradient="bg-gradient-to-br from-sky-50/60 to-white"
           />
           <StatHeroCard
             icon={Headphones}
             label={t(lang, "internalStat_supportOpen")}
-            value={String(openTickets)}
+            value={statGrid.support}
             sub={t(lang, "internalDashStatSubSupport")}
             gradient="bg-gradient-to-br from-violet-50/70 to-white"
           />
@@ -595,47 +622,92 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                   {t(lang, "internalSupportEmpty")}
                 </li>
               ) : (
-                tickets.map((tk) => (
-                  <li
-                    key={tk.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-stone-100 bg-gradient-to-br from-white to-stone-50/80 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-black text-stone-900">{tk.subject || t(lang, "internalSupportNoSubject")}</p>
-                      <p className="mt-0.5 text-xs font-semibold text-stone-500">
-                        {[tk.shop_name, tk.shop_district].filter(Boolean).join(" · ") || "—"} · {tk.channel} ·{" "}
-                        {new Date(tk.created_at).toLocaleString("en-GB")}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="rounded-md bg-stone-900 px-2 py-0.5 text-[10px] font-black uppercase text-white">{tk.status}</span>
-                        <span
-                          className={clsx(
-                            "rounded-md px-2 py-0.5 text-[10px] font-black uppercase",
-                            tk.priority === "urgent" || tk.priority === "high"
-                              ? "bg-rose-100 text-rose-900"
-                              : "bg-orange-100 text-orange-900",
-                          )}
-                        >
-                          {tk.priority}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      style={!canResolveSupport ? { display: "none" } : undefined}
-                      disabled={!canResolveSupport || tk.status === "resolved" || ticketBusyId === tk.id}
-                      onClick={async () => {
-                        setTicketBusyId(tk.id);
-                        const r = await updateSupportTicketStatus(tk.id, "resolved");
-                        setTicketBusyId(null);
-                        if (r.ok) void loadAll();
-                      }}
-                      className="shrink-0 rounded-xl bg-stone-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-stone-800 disabled:opacity-40"
+                tickets.map((tk) => {
+                  const waUrl = whatsappUrlFromPhone(tk.contact_phone_e164 ?? tk.shop_phone_e164);
+                  return (
+                    <li
+                      key={tk.id}
+                      className="flex flex-col gap-3 rounded-2xl border border-stone-100 bg-gradient-to-br from-white to-stone-50/80 p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
                     >
-                      {ticketBusyId === tk.id ? "…" : t(lang, "internalSupportMarkResolved")}
-                    </button>
-                  </li>
-                ))
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-stone-900">{tk.subject || t(lang, "internalSupportNoSubject")}</p>
+                        <p className="mt-0.5 text-xs font-semibold text-stone-500">
+                          {[tk.shop_name, tk.shop_district].filter(Boolean).join(" · ") || "—"} · {tk.channel} ·{" "}
+                          {new Date(tk.created_at).toLocaleString("en-GB")}
+                        </p>
+                        {tk.owner_name || tk.owner_email ? (
+                          <p className="mt-1 text-xs font-bold text-stone-700">
+                            {t(lang, "internalRecentColOwner")}: {[tk.owner_name, tk.owner_email].filter(Boolean).join(" · ")}
+                          </p>
+                        ) : null}
+                        {tk.issue_type ? (
+                          <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-500">{tk.issue_type}</p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className="rounded-md bg-stone-900 px-2 py-0.5 text-[10px] font-black uppercase text-white">{tk.status}</span>
+                          <span
+                            className={clsx(
+                              "rounded-md px-2 py-0.5 text-[10px] font-black uppercase",
+                              tk.priority === "urgent" || tk.priority === "high"
+                                ? "bg-rose-100 text-rose-900"
+                                : "bg-orange-100 text-orange-900",
+                            )}
+                          >
+                            {tk.priority}
+                          </span>
+                          {tk.shop_id ? (
+                            <Link
+                              to={`/internal/waka/shop/${tk.shop_id}`}
+                              className="rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-black uppercase text-orange-950 underline decoration-orange-400"
+                            >
+                              {t(lang, "internalShopProfileTitle")}
+                            </Link>
+                          ) : null}
+                          {waUrl ? (
+                            <a
+                              href={waUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-black uppercase text-white"
+                            >
+                              {t(lang, "internalSupportWhatsapp")}
+                            </a>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
+                        <button
+                          type="button"
+                          style={!canResolveSupport ? { display: "none" } : undefined}
+                          disabled={!canResolveSupport || tk.status === "in_progress" || ticketBusyId === `${tk.id}-ip`}
+                          onClick={async () => {
+                            setTicketBusyId(`${tk.id}-ip`);
+                            const r = await updateSupportTicketStatus(tk.id, "in_progress");
+                            setTicketBusyId(null);
+                            if (r.ok) void loadAll();
+                          }}
+                          className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 transition hover:bg-stone-50 disabled:opacity-40"
+                        >
+                          {ticketBusyId === `${tk.id}-ip` ? "…" : t(lang, "internalSupportInProgress")}
+                        </button>
+                        <button
+                          type="button"
+                          style={!canResolveSupport ? { display: "none" } : undefined}
+                          disabled={!canResolveSupport || tk.status === "resolved" || ticketBusyId === `${tk.id}-rs`}
+                          onClick={async () => {
+                            setTicketBusyId(`${tk.id}-rs`);
+                            const r = await updateSupportTicketStatus(tk.id, "resolved");
+                            setTicketBusyId(null);
+                            if (r.ok) void loadAll();
+                          }}
+                          className="rounded-xl bg-stone-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-stone-800 disabled:opacity-40"
+                        >
+                          {ticketBusyId === `${tk.id}-rs` ? "…" : t(lang, "internalSupportMarkResolved")}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })
               )}
             </ul>
           </section>
@@ -646,30 +718,68 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           <section className="relative overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-b from-stone-900 to-stone-800 p-5 text-white shadow-xl sm:p-6">
             <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, rgba(251,146,60,0.35), transparent 50%), radial-gradient(circle at 80% 60%, rgba(255,255,255,0.08), transparent 45%)" }} />
             <div className="relative">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-5 w-5 text-orange-300" />
-                <h2 className="text-lg font-black">{t(lang, "internalMapTitle")}</h2>
-              </div>
-              <p className="mt-2 text-sm font-medium text-stone-300">{t(lang, "internalMapSub")}</p>
-              <div className="mt-5 grid grid-cols-3 gap-2">
-                {[35, 62, 48, 55, 40, 70, 52, 44, 58].map((h, i) => (
-                  <div key={i} className="flex flex-col items-center justify-end rounded-lg bg-white/10 px-1 pb-1 pt-3">
-                    <div className="w-full rounded-sm bg-gradient-to-t from-orange-500 to-orange-300" style={{ height: `${h}%`, minHeight: 28 }} />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-5 w-5 text-orange-300" />
+                    <h2 className="text-lg font-black">{t(lang, "internalMapTitle")}</h2>
                   </div>
-                ))}
+                  <p className="mt-2 text-sm font-medium text-stone-300">{t(lang, "internalMapSub")}</p>
+                  <p className="mt-2 text-xs font-bold text-orange-100/90">{t(lang, "internalMapLiveTitle")}</p>
+                </div>
+                <label className="flex min-w-[10rem] flex-col text-[11px] font-black uppercase tracking-wide text-orange-100/90">
+                  {t(lang, "internalMapFilterDistrict")}
+                  <select
+                    value={mapDistrictId}
+                    onChange={(e) => setMapDistrictId(e.target.value)}
+                    className="mt-1 rounded-xl border border-white/20 bg-stone-950/60 px-3 py-2 text-sm font-bold text-white outline-none ring-orange-300/40 focus:ring-2"
+                  >
+                    <option value="">{t(lang, "internalMapFilterAll")}</option>
+                    {districts
+                      .filter((row) => row.districtId)
+                      .map((row) => (
+                        <option key={row.districtId!} value={row.districtId!}>
+                          {row.label}
+                        </option>
+                      ))}
+                  </select>
+                </label>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-white/20">
-                  GPS
-                </span>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-orange-100 ring-1 ring-white/20">
-                  {t(lang, "internalMapPins")}
-                </span>
-              </div>
-              <div className="pointer-events-none absolute inset-x-4 bottom-4 top-1/3 flex items-center justify-center rounded-2xl border border-white/20 bg-stone-950/50 backdrop-blur-sm">
-                <p className="rounded-full bg-orange-500/90 px-4 py-2 text-center text-xs font-black uppercase tracking-wide text-white shadow-lg">
-                  {t(lang, "internalMapSoon")}
-                </p>
+              <p className="mt-4 text-sm font-bold text-orange-50">
+                {t(lang, "internalMapShopCount").replace("{{count}}", String(mapPins.length))}
+              </p>
+              <div className="mt-4 max-h-48 space-y-2 overflow-y-auto pr-1">
+                {mapClusters.length === 0 ? (
+                  <p className="rounded-xl bg-white/10 px-3 py-4 text-center text-sm font-semibold text-stone-200">{t(lang, "internalMapNoPins")}</p>
+                ) : (
+                  mapClusters.map(([key, group]) => (
+                    <div key={key} className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10">
+                      <p className="text-xs font-black uppercase tracking-wide text-orange-100">
+                        {t(lang, "internalMapPins")} · {group.length}{" "}
+                        <span className="font-mono text-[10px] text-stone-300">({key})</span>
+                      </p>
+                      <ul className="mt-2 space-y-1.5">
+                        {group.slice(0, 4).map((pin) => (
+                          <li key={pin.shop_id} className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-white">
+                            <Link to={`/internal/waka/shop/${pin.shop_id}`} className="truncate underline decoration-orange-200/80 hover:text-orange-100">
+                              {pin.shop_name}
+                            </Link>
+                            {!Number.isNaN(pin.lat) && !Number.isNaN(pin.lng) ? (
+                              <a
+                                href={googleMapsDirectionsUrl(pin.lat, pin.lng)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="shrink-0 rounded-lg bg-orange-500 px-2 py-1 text-[11px] font-black text-white hover:bg-orange-400"
+                              >
+                                {t(lang, "internalVisitDirections")}
+                              </a>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </section>
