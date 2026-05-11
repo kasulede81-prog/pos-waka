@@ -978,6 +978,12 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : p.branchDisplayName === null
           ? null
           : String(p.branchDisplayName),
+    backOfficePin:
+      p.backOfficePin === undefined
+        ? (base.backOfficePin ?? null)
+        : p.backOfficePin === null || p.backOfficePin === ""
+          ? null
+          : String(p.backOfficePin).replace(/\D/g, "").slice(0, 6) || null,
   };
 }
 

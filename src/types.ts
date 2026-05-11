@@ -33,7 +33,11 @@ export type Permission =
   /** Record stock-in / purchases (restock) */
   | "purchases.record"
   /** View purchase history in reports and product detail */
-  | "purchases.view";
+  | "purchases.view"
+  /** Stock, suppliers, reports, settings hub — not for cashiers */
+  | "back_office.access"
+  /** View / print receipts (today’s slips) without full reports */
+  | "receipts.view";
 
 export type AuditAction =
   | "sale_completed"
@@ -275,6 +279,11 @@ export type ShopPreferences = {
    */
   activeBranchId?: string | null;
   branchDisplayName?: string | null;
+  /**
+   * Optional 4–6 digit PIN to unlock Back Office on this device (stored in local snapshot).
+   * Not bank-grade; deters casual access on shared phones.
+   */
+  backOfficePin?: string | null;
 };
 
 export type SyncOperationKind =

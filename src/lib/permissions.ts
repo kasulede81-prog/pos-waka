@@ -31,9 +31,14 @@ export function resolveAuthRole(params: {
   return parsed ?? "owner";
 }
 
+/** Bump when the permission matrix changes (clears client cache). */
+const PERM_MATRIX_VERSION = 3;
+
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
     "pos.sell",
+    "back_office.access",
+    "receipts.view",
     "stock.view",
     "stock.adjust",
     "products.add",
@@ -58,6 +63,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   manager: [
     "pos.sell",
+    "back_office.access",
+    "receipts.view",
     "stock.view",
     "stock.adjust",
     "products.add",
@@ -80,18 +87,11 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.record",
     "purchases.view",
   ],
-  cashier: [
-    "pos.sell",
-    "stock.view",
-    "stock.adjust",
-    "products.add",
-    "customers.view",
-    "customers.debt",
-    "day.close",
-    "reports.view",
-    "settings.view",
-  ],
+  /** Sell-first: today’s activity on Home; no stock, reports, settings, or supplier data. */
+  cashier: ["pos.sell", "receipts.view", "customers.view", "customers.debt"],
   stock_keeper: [
+    "back_office.access",
+    "receipts.view",
     "stock.view",
     "stock.adjust",
     "products.add",
@@ -109,7 +109,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 const cache = new Map<string, Set<Permission>>();
 
 function permSet(role: UserRole): Set<Permission> {
-  const key = role;
+  const key = `${PERM_MATRIX_VERSION}:${role}`;
   if (!cache.has(key)) {
     cache.set(key, new Set(ROLE_PERMISSIONS[role]));
   }

@@ -9,7 +9,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const sales = usePosStore((s) => s.sales);
 
-  if (!hasPermission(actor.role, "reports.view")) {
+  if (!hasPermission(actor.role, "receipts.view")) {
     return <Navigate to="/" replace />;
   }
 

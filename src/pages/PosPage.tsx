@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import type { Language, LineInputMode, Product } from "../types";
 import { t } from "../lib/i18n";
@@ -77,6 +77,8 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const location = useLocation();
+  const navigate = useNavigate();
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const preferences = usePosStore((s) => s.preferences);
@@ -104,6 +106,26 @@ export function PosPage({ lang }: { lang: Language }) {
   const [toast, setToast] = useState<string | null>(null);
   const [firstSaleOpen, setFirstSaleOpen] = useState(false);
   const [saleSuccessFlash, setSaleSuccessFlash] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of products) {
+      const c = (p.category ?? "").trim();
+      if (c) set.add(c);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
+      if (categoryFilter && (p.category ?? "").trim() !== categoryFilter) return false;
+      if (!q) return true;
+      return p.name.toLowerCase().includes(q) || (p.category ?? "").toLowerCase().includes(q);
+    });
+  }, [products, searchQuery, categoryFilter]);
 
   const openProduct = useCallback((p: Product) => {
     setSelected(p);
@@ -117,6 +139,15 @@ export function PosPage({ lang }: { lang: Language }) {
     setDraftInput(null);
     setSheetOpen(true);
   }, [setDraftInput]);
+
+  useEffect(() => {
+    const id = (location.state as { preferProductId?: string } | null)?.preferProductId;
+    if (!id || !products.length) return;
+    const p = products.find((x) => x.id === id);
+    if (!p) return;
+    openProduct(p);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.key, location.pathname, products, openProduct, navigate]);
 
   useEffect(() => {
     if (!sheetOpen || !selected) return;
@@ -221,7 +252,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
 
   if (!hasPermission(actor.role, "pos.sell")) {
-    return <Navigate to="/stock" replace />;
+    return <Navigate to="/" replace />;
   }
 
   return (
@@ -242,22 +273,59 @@ export function PosPage({ lang }: { lang: Language }) {
         )}
       </div>
 
+      {products.length > 0 ? (
+        <div className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
+          <label className="block">
+            <span className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellSearchPlaceholder")}</span>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t(lang, "posSellSearchPlaceholder")}
+              className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg font-semibold text-stone-900 outline-none ring-waka-200 focus:ring"
+            />
+          </label>
+          {categoryOptions.length > 0 ? (
+            <label className="block">
+              <span className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryLabel")}</span>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-lg font-semibold text-stone-900"
+              >
+                <option value="">{t(lang, "posSellCategoryAll")}</option>
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
+
       {products.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
           <p className="text-2xl font-black text-slate-900">{t(lang, "posEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "posEmptySub")}</p>
-          <Link
-            to="/stock"
-            className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
-          >
-            {t(lang, "posEmptyCta")}
-          </Link>
+          {hasPermission(actor.role, "back_office.access") ? (
+            <Link
+              to="/office"
+              className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
+            >
+              {t(lang, "posEmptyCtaOffice")}
+            </Link>
+          ) : (
+            <p className="mt-4 text-base font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>
+          )}
         </section>
-      ) : products.length > VIRTUAL_PRODUCT_THRESHOLD ? (
-        <VirtualizedProductGrid products={products} onPick={openProduct} />
+      ) : filteredProducts.length === 0 ? (
+        <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
+      ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
+        <VirtualizedProductGrid products={filteredProducts} onPick={openProduct} />
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {products.map((p) => (
+          {filteredProducts.map((p) => (
             <button
               key={p.id}
               type="button"
@@ -266,6 +334,7 @@ export function PosPage({ lang }: { lang: Language }) {
               style={{ contentVisibility: "auto" }}
             >
               <span className="text-xl font-black leading-tight text-slate-900">{p.name}</span>
+              {p.category ? <span className="text-xs font-bold text-stone-500">{p.category}</span> : null}
               <span className="mt-2 text-base font-bold text-waka-700">{formatProductPriceLabel(p)}</span>
             </button>
           ))}

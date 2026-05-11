@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, BusinessType, UserRole } from "../types";
 import { hasSupabaseConfig } from "../lib/supabase";
@@ -26,6 +27,9 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const updateBusinessType = usePosStore((s) => s.updateBusinessType);
+  const [boPinNew, setBoPinNew] = useState("");
+  const [boPinConfirm, setBoPinConfirm] = useState("");
+  const [boPinFeedback, setBoPinFeedback] = useState<string | null>(null);
 
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
   const authResolved = resolveAuthRole({ mode: authMode, userMetadata: meta });
@@ -92,6 +96,80 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
             />
             {t(lang, "kioskQuickSellLabel")}
           </label>
+
+          <div className="mt-8 rounded-2xl border-2 border-waka-200/80 bg-white/80 p-4">
+            <p className="text-lg font-black text-waka-950">{t(lang, "settingsBackOfficePinTitle")}</p>
+            <p className="mt-1 text-sm text-waka-900/90">{t(lang, "settingsBackOfficePinSub")}</p>
+            {preferences.backOfficePin ? (
+              <p className="mt-3 text-sm font-semibold text-emerald-800">{t(lang, "settingsBackOfficePinActiveShort")}</p>
+            ) : (
+              <p className="mt-3 text-sm font-semibold text-stone-600">{t(lang, "settingsBackOfficePinNone")}</p>
+            )}
+            {boPinFeedback ? <p className="mt-2 text-sm font-bold text-waka-900">{boPinFeedback}</p> : null}
+            <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "settingsBackOfficePinNew")}</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={6}
+              value={boPinNew}
+              onChange={(e) => {
+                setBoPinFeedback(null);
+                setBoPinNew(e.target.value.replace(/\D/g, "").slice(0, 6));
+              }}
+              className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
+            />
+            <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "settingsBackOfficePinConfirm")}</label>
+            <input
+              type="password"
+              inputMode="numeric"
+              autoComplete="new-password"
+              maxLength={6}
+              value={boPinConfirm}
+              onChange={(e) => {
+                setBoPinFeedback(null);
+                setBoPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6));
+              }}
+              className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
+            />
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 py-3 text-base font-black text-white shadow-waka-sm"
+                onClick={() => {
+                  setBoPinFeedback(null);
+                  const a = boPinNew.replace(/\D/g, "");
+                  const b = boPinConfirm.replace(/\D/g, "");
+                  if (a.length < 4 || a.length > 6) {
+                    setBoPinFeedback(t(lang, "settingsBackOfficePinLength"));
+                    return;
+                  }
+                  if (a !== b) {
+                    setBoPinFeedback(t(lang, "settingsBackOfficePinMismatch"));
+                    return;
+                  }
+                  setPreferences({ backOfficePin: a });
+                  setBoPinNew("");
+                  setBoPinConfirm("");
+                  setBoPinFeedback(t(lang, "settingsBackOfficePinSaved"));
+                }}
+              >
+                {t(lang, "settingsBackOfficePinSave")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] flex-1 rounded-2xl border-2 border-slate-200 py-3 text-base font-bold text-slate-800"
+                onClick={() => {
+                  setBoPinNew("");
+                  setBoPinConfirm("");
+                  setPreferences({ backOfficePin: null });
+                  setBoPinFeedback(t(lang, "settingsBackOfficePinCleared"));
+                }}
+              >
+                {t(lang, "settingsBackOfficePinClear")}
+              </button>
+            </div>
+          </div>
         </article>
       ) : null}
 

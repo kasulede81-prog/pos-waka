@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Home, Package, ScanLine, Settings, CalendarCheck, LayoutDashboard } from "lucide-react";
+import { Home, ScanLine, Users, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
@@ -10,8 +10,10 @@ import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
-import { canTogglePosUiMode, hasPermission } from "../../lib/permissions";
+import { hasPermission } from "../../lib/permissions";
 import { WakaMarkIcon } from "../brand/WakaLogo";
+import { isBackOfficePath } from "../../lib/backOfficePaths";
+import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 
 type Props = {
   lang: Language;
@@ -22,21 +24,7 @@ type Props = {
   authMode: "supabase" | "local";
 };
 
-type NavDef = { path: string; labelKey: string; perm?: Permission };
-
-const desktopNavDefs: NavDef[] = [
-  { path: "/", labelKey: "dashboard" },
-  { path: "/stock", labelKey: "stock", perm: "stock.view" },
-  { path: "/restock", labelKey: "navRestock", perm: "purchases.record" },
-  { path: "/suppliers", labelKey: "navSuppliers", perm: "suppliers.view" },
-  { path: "/pos", labelKey: "pos", perm: "pos.sell" },
-  { path: "/close-day", labelKey: "closeDayNav", perm: "day.close" },
-  { path: "/reports", labelKey: "reports", perm: "reports.view" },
-  { path: "/customers", labelKey: "customers", perm: "customers.view" },
-  { path: "/receipts", labelKey: "receipts", perm: "reports.view" },
-  { path: "/owner", labelKey: "officeNav", perm: "nav.office" },
-  { path: "/settings", labelKey: "settings", perm: "settings.view" },
-];
+type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
 
 function syncStripLabel(lang: Language, status: ReturnType<typeof useSyncStatus>, online: boolean): string {
   if (!online) return `${t(lang, "workingOfflineLabel")} · ${t(lang, "savedOffline")}`;
@@ -45,13 +33,19 @@ function syncStripLabel(lang: Language, status: ReturnType<typeof useSyncStatus>
   return t(lang, "allSavedShort");
 }
 
+function navItemActive(path: string, pathname: string): boolean {
+  if (path === "/office") {
+    return pathname === "/office" || isBackOfficePath(pathname);
+  }
+  return pathname === path || pathname.startsWith(`${path}/`);
+}
+
 export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Props) {
   const location = useLocation();
   useAndroidBackButton();
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
-  const setPreferences = usePosStore((s) => s.setPreferences);
   const [pwaUpdate, setPwaUpdate] = useState(false);
 
   useEffect(() => {
@@ -69,45 +63,26 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
     usePosStore.getState().setSessionActor(actor);
   }, [actor]);
 
-  const effectiveUiMode = canTogglePosUiMode(actor.role) ? (preferences.posUiMode ?? "cashier") : "cashier";
-  const isOwnerOffice = effectiveUiMode === "owner_back_office";
-
-  const desktopItems = useMemo(() => {
-    return desktopNavDefs.filter((item) => {
-      if (item.perm && !hasPermission(actor.role, item.perm)) return false;
-      if (item.path === "/owner" && !isOwnerOffice) return false;
-      if (item.path === "/reports" && !hasPermission(actor.role, "reports.profit") && actor.role === "cashier") {
-        return false;
-      }
-      return true;
-    });
-  }, [actor.role, isOwnerOffice]);
-
-  const mobileNav = useMemo(() => {
-    const officeOn = hasPermission(actor.role, "nav.office") && isOwnerOffice;
-    const base: Array<{ path: string; labelKey: string; Icon: typeof Home; perm?: Permission }> = [
-      { path: "/", labelKey: "navHome", Icon: Home },
-      { path: "/stock", labelKey: "navStock", Icon: Package, perm: "stock.view" },
-    ];
+  const navDefs = useMemo((): NavDef[] => {
+    const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
     if (hasPermission(actor.role, "pos.sell")) {
-      base.push({ path: "/pos", labelKey: "navSell", Icon: ScanLine, perm: "pos.sell" });
+      items.push({ path: "/pos", labelKey: "navSell", Icon: ScanLine, perm: "pos.sell" });
     }
-    if (officeOn) {
-      base.push({ path: "/owner", labelKey: "officeNav", Icon: LayoutDashboard, perm: "nav.office" });
-    } else if (hasPermission(actor.role, "day.close")) {
-      base.push({ path: "/close-day", labelKey: "closeDayNav", Icon: CalendarCheck, perm: "day.close" });
+    if (hasPermission(actor.role, "customers.view")) {
+      items.push({ path: "/customers", labelKey: "customers", Icon: Users, perm: "customers.view" });
     }
-    base.push({ path: "/settings", labelKey: "navSettings", Icon: Settings, perm: "settings.view" });
-    return base.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, isOwnerOffice]);
-
-  const showModeToggle = hasPermission(actor.role, "ui.toggle_mode");
-
-  const shellBg = isOwnerOffice ? "bg-gradient-to-b from-waka-50/90 via-stone-50 to-stone-100" : "bg-stone-50";
+    if (hasPermission(actor.role, "receipts.view")) {
+      items.push({ path: "/receipts", labelKey: "receipts", Icon: Receipt, perm: "receipts.view" });
+    }
+    if (hasPermission(actor.role, "back_office.access")) {
+      items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
+    }
+    return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
+  }, [actor.role]);
 
   return (
     <SessionActorProvider value={actor}>
-      <div className={`min-h-dvh text-stone-900 transition-colors duration-300 ${shellBg}`}>
+      <div className="min-h-dvh bg-stone-50 text-stone-900 transition-colors duration-300">
         {pwaUpdate ? (
           <div className="sticky top-0 z-40 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
             <p className="text-sm font-bold text-waka-950">{t(lang, "pwaUpdateTitle")}</p>
@@ -133,28 +108,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-              {showModeToggle ? (
-                <div className="flex rounded-xl border border-stone-200 bg-stone-50 p-0.5 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setPreferences({ posUiMode: "cashier" })}
-                    className={`min-h-[40px] rounded-lg px-3 py-1.5 text-xs font-bold transition-waka ${
-                      effectiveUiMode === "cashier" ? "bg-white text-stone-900 shadow-sm" : "text-stone-600"
-                    }`}
-                  >
-                    {t(lang, "modeCashier")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreferences({ posUiMode: "owner_back_office" })}
-                    className={`min-h-[40px] rounded-lg px-3 py-1.5 text-xs font-bold transition-waka ${
-                      effectiveUiMode === "owner_back_office" ? "bg-white text-stone-900 shadow-sm" : "text-stone-600"
-                    }`}
-                  >
-                    {t(lang, "modeOffice")}
-                  </button>
-                </div>
-              ) : null}
               <button
                 type="button"
                 onClick={() => setLang(lang === "en" ? "lg" : "en")}
@@ -174,17 +127,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
         </header>
         <main className="mx-auto flex w-full max-w-6xl gap-4 px-3 py-4 pb-nav-safe sm:px-4 lg:pb-6">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
+            <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">
-              {desktopItems.map((item) => {
-                const active = location.pathname === item.path || (item.path === "/owner" && location.pathname.startsWith("/owner"));
+              {navDefs.map((item) => {
+                const active = navItemActive(item.path, location.pathname);
                 return (
                   <li key={item.path}>
                     <Link
                       to={item.path}
-                      className={`block min-h-[44px] rounded-xl px-3 py-2.5 text-sm font-semibold leading-snug transition-waka ${
+                      className={`flex min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold leading-snug transition-waka ${
                         active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
                       }`}
                     >
+                      <item.Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
                       {t(lang, item.labelKey)}
                     </Link>
                   </li>
@@ -193,17 +148,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </ul>
           </nav>
           <section className="min-w-0 flex-1 lg:pb-0">
-            <Outlet />
+            <BackOfficeRouteGuard lang={lang}>
+              <Outlet />
+            </BackOfficeRouteGuard>
           </section>
         </main>
         <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden">
           <div
             className="mx-auto grid max-w-lg gap-0.5 px-1 py-2 pb-bottom-nav"
-            style={{ gridTemplateColumns: `repeat(${Math.min(mobileNav.length, 5)}, minmax(0, 1fr))` }}
+            style={{ gridTemplateColumns: `repeat(${Math.min(navDefs.length, 5)}, minmax(0, 1fr))` }}
           >
-            {mobileNav.map(({ path, labelKey, Icon }) => {
-              const active =
-                location.pathname === path || (path === "/owner" && location.pathname.startsWith("/owner"));
+            {navDefs.map(({ path, labelKey, Icon }) => {
+              const active = navItemActive(path, location.pathname);
               return (
                 <Link
                   key={path}

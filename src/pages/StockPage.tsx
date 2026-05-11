@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { buildRestockSuggestions } from "../lib/restockSuggestions";
 import type { Language, Product, SellingMode } from "../types";
 import { t } from "../lib/i18n";
@@ -10,6 +10,7 @@ import { inferFromProductName } from "../lib/smartProductGuess";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { PRODUCT_CATEGORY_PRESET_KEYS } from "../data/productCategoryPresets";
 
 const modes: SellingMode[] = ["unit", "weighted", "portion"];
 
@@ -96,6 +97,8 @@ export function StockPage({ lang }: { lang: Language }) {
   const [costPrice, setCostPrice] = useState("");
   const [stock, setStock] = useState("");
   const [minAlert, setMinAlert] = useState("");
+  const [categoryPreset, setCategoryPreset] = useState("");
+  const [categoryCustom, setCategoryCustom] = useState("");
 
   const [editId, setEditId] = useState<string | null>(null);
   const [moneyStr, setMoneyStr] = useState("");
@@ -107,6 +110,18 @@ export function StockPage({ lang }: { lang: Language }) {
     if (!n) return null;
     return inferFromProductName(n);
   }, [qaName]);
+
+  const resolveFormCategory = () => {
+    if (categoryPreset === "other") return categoryCustom.trim() || t(lang, "generalCategory");
+    if (categoryPreset && (PRODUCT_CATEGORY_PRESET_KEYS as readonly string[]).includes(categoryPreset)) {
+      return t(lang, `productCat_${categoryPreset}`);
+    }
+    return t(lang, "generalCategory");
+  };
+
+  if (!hasPermission(actor.role, "back_office.access")) {
+    return <Navigate to="/" replace />;
+  }
 
   const openStarter = () => {
     const pack = starterPackForBusinessType(preferences.businessType);
@@ -186,10 +201,12 @@ export function StockPage({ lang }: { lang: Language }) {
       costPricePerUnitUgx: Math.max(0, Math.floor(Number(costPrice) || 0)),
       stockOnHand: Math.max(0, Number(stock) || 0),
       minimumStockAlert: Math.max(0, Number(minAlert) || 0),
-      category: t(lang, "generalCategory"),
+      category: resolveFormCategory(),
       sku: `SKU-${Date.now()}`,
     });
     setName("");
+    setCategoryPreset("");
+    setCategoryCustom("");
     setSellingMode("unit");
     setBaseUnit("ea");
     setBuyingUnit("");
@@ -349,6 +366,44 @@ export function StockPage({ lang }: { lang: Language }) {
             required
             className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
           />
+          <div>
+            <p className="text-sm font-semibold text-slate-700">{t(lang, "categorySectionTitle")}</p>
+            <p className="mt-1 text-xs text-slate-500">{t(lang, "categoryPickHint")}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {PRODUCT_CATEGORY_PRESET_KEYS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => {
+                    setCategoryPreset(key);
+                    setCategoryCustom("");
+                  }}
+                  className={`rounded-full border-2 px-3 py-2 text-sm font-bold transition-waka ${
+                    categoryPreset === key ? "border-waka-600 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-800"
+                  }`}
+                >
+                  {t(lang, `productCat_${key}`)}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCategoryPreset("other")}
+                className={`rounded-full border-2 px-3 py-2 text-sm font-bold ${
+                  categoryPreset === "other" ? "border-waka-600 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-800"
+                }`}
+              >
+                {t(lang, "categoryOther")}
+              </button>
+            </div>
+            {categoryPreset === "other" ? (
+              <input
+                value={categoryCustom}
+                onChange={(e) => setCategoryCustom(e.target.value)}
+                placeholder={t(lang, "categoryCustomPlaceholder")}
+                className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              />
+            ) : null}
+          </div>
           <label className="block text-sm font-semibold text-slate-700">
             {t(lang, "howYouSell")}
             <select

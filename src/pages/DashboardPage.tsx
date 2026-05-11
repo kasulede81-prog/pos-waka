@@ -1,18 +1,38 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { isLowStock } from "../lib/sellingEngine";
-import { Link } from "react-router-dom";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
+import { useSyncStatus } from "../hooks/useSyncStatus";
 
 export function DashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const location = useLocation();
+  const sync = useSyncStatus();
+  const [deniedBanner, setDeniedBanner] = useState(false);
+
+  useEffect(() => {
+    if ((location.state as { backOfficeDenied?: boolean } | null)?.backOfficeDenied) {
+      setDeniedBanner(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   const canProfit = hasPermission(actor.role, "reports.profit");
+  const canStock = hasPermission(actor.role, "stock.view");
+  const canBackOffice = hasPermission(actor.role, "back_office.access");
+  const canReports = hasPermission(actor.role, "reports.view");
+  const canDayClose = hasPermission(actor.role, "day.close");
+  const canSell = hasPermission(actor.role, "pos.sell");
+  const canCustomers = hasPermission(actor.role, "customers.view");
+  const canReceipts = hasPermission(actor.role, "receipts.view");
+
   const sales = usePosStore((s) => s.sales);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
@@ -23,7 +43,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const activityGroups = useMemo(
-    () => buildGroupedActivityTimeline(lang, auditLogs, productById, customerById, { maxGroups: 8 }),
+    () => buildGroupedActivityTimeline(lang, auditLogs, productById, customerById, { maxGroups: 6 }),
     [lang, auditLogs, productById, customerById],
   );
 
@@ -40,26 +60,24 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const lowStockProducts = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
 
   const fastMovers = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; revenue: number; profit: number }>();
+    const map = new Map<string, { id: string; name: string; qty: number; revenue: number }>();
     for (const sale of todaySales) {
       for (const line of sale.lines) {
-        const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0, profit: 0 };
-        const p = products.find((x) => x.id === line.productId);
-        const lineProfit = p ? line.lineTotalUgx - line.quantity * p.costPricePerUnitUgx : 0;
+        const cur = map.get(line.productId) ?? { id: line.productId, name: line.name, qty: 0, revenue: 0 };
         map.set(line.productId, {
+          id: line.productId,
           name: line.name,
           qty: cur.qty + line.quantity,
           revenue: cur.revenue + line.lineTotalUgx,
-          profit: cur.profit + lineProfit,
         });
       }
     }
     return [...map.values()]
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-  }, [todaySales, products]);
+      .slice(0, 8);
+  }, [todaySales]);
 
-  const recentSales = useMemo(() => todaySales.slice(0, 6), [todaySales]);
+  const recentSales = useMemo(() => todaySales.slice(0, 8), [todaySales]);
 
   const weekCut = dateKeyDaysAgoKampala(6);
   const weekSales = useMemo(
@@ -68,37 +86,50 @@ export function DashboardPage({ lang }: { lang: Language }) {
   );
   const cashWeek = weekSales.reduce((a, s) => a + s.cashPaidUgx, 0);
 
+  const quickTiles = useMemo(() => products.slice(0, 10), [products]);
+
+  const gridCols = canProfit && canStock ? "lg:grid-cols-4" : canProfit || canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
+
   return (
     <div className="space-y-6 pb-8">
       {!preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
+
+      {deniedBanner ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950">
+          {t(lang, "dashboardDeniedBackOffice")}
+        </div>
+      ) : null}
 
       {preferences.onboardingDone && (products.length === 0 || sales.length === 0) ? (
         <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-6 shadow-sm">
           <h2 className="text-xl font-black text-waka-950">{t(lang, "setupChecklistTitle")}</h2>
           <p className="mt-1 text-base text-waka-900">{t(lang, "setupChecklistSub")}</p>
           <ol className="mt-4 space-y-3 text-lg">
-            <li className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
-              <span className={products.length > 0 ? "text-waka-600" : "text-slate-400"}>{products.length > 0 ? "✓" : "①"}</span>
+            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
+              <span className={products.length > 0 ? "text-waka-600" : "text-stone-400"}>{products.length > 0 ? "✓" : "①"}</span>
               {t(lang, "setupStep1")}
-              {products.length === 0 ? (
-                <Link to="/stock" className="rounded-full bg-waka-600 px-4 py-2 text-sm font-black text-white">
-                  {t(lang, "stockTitle")}
+              {products.length === 0 && canBackOffice ? (
+                <Link to="/office" className="rounded-full bg-waka-600 px-4 py-2 text-sm font-black text-white">
+                  {t(lang, "officeHubNav")}
                 </Link>
               ) : null}
+              {products.length === 0 && !canBackOffice ? (
+                <span className="text-sm font-semibold text-stone-600">{t(lang, "setupAskOwnerProducts")}</span>
+              ) : null}
             </li>
-            <li className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
-              <span className={sales.length > 0 ? "text-waka-600" : "text-slate-400"}>{sales.length > 0 ? "✓" : "②"}</span>
+            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
+              <span className={sales.length > 0 ? "text-waka-600" : "text-stone-400"}>{sales.length > 0 ? "✓" : "②"}</span>
               {t(lang, "setupStep2")}
-              {sales.length === 0 ? (
-                <Link to="/pos" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-black text-white">
+              {sales.length === 0 && canSell ? (
+                <Link to="/pos" className="rounded-full bg-stone-900 px-4 py-2 text-sm font-black text-white">
                   {t(lang, "sellTitle")}
                 </Link>
               ) : null}
             </li>
-            <li className="flex flex-wrap items-center gap-2 font-bold text-slate-900">
-              <span className="text-slate-400">③</span>
+            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
+              <span className="text-stone-400">③</span>
               {t(lang, "setupStep3")}
-              {hasPermission(actor.role, "reports.view") ? (
+              {canReports ? (
                 <Link to="/reports" className="rounded-full border-2 border-waka-700 px-4 py-2 text-sm font-black text-waka-900">
                   {t(lang, "reports")}
                 </Link>
@@ -110,47 +141,107 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-slate-900">{t(lang, "homeHello")}</h1>
-          <p className="mt-1 text-lg text-slate-600">{t(lang, "homeSub")}</p>
+          <h1 className="text-4xl font-black tracking-tight text-stone-900">{t(lang, "homeCashierHello")}</h1>
+          <p className="mt-1 text-lg text-stone-600">{t(lang, "homeCashierSub")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Link
-            to="/pos"
-            className="rounded-2xl bg-waka-600 px-5 py-3 text-lg font-black text-white shadow-md active:bg-waka-700"
-          >
-            {t(lang, "sellTitle")}
-          </Link>
-          <Link
-            to="/stock"
-            className="rounded-2xl border-2 border-slate-200 bg-white px-5 py-3 text-lg font-bold text-slate-800"
-          >
-            {t(lang, "stockTitle")}
-          </Link>
-          <Link
-            to="/close-day"
-            className="rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-3 text-lg font-bold text-amber-950"
-          >
-            {t(lang, "closeDay")}
-          </Link>
+          {canSell ? (
+            <Link
+              to="/pos"
+              className="min-h-[52px] rounded-2xl bg-waka-600 px-6 py-3.5 text-lg font-black text-white shadow-waka-sm active:bg-waka-700"
+            >
+              {t(lang, "sellTitle")}
+            </Link>
+          ) : null}
+          {canReceipts ? (
+            <Link
+              to="/receipts"
+              className="min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white px-5 py-3 text-lg font-bold text-stone-800"
+            >
+              {t(lang, "receipts")}
+            </Link>
+          ) : null}
+          {canCustomers ? (
+            <Link
+              to="/customers"
+              className="min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white px-5 py-3 text-lg font-bold text-stone-800"
+            >
+              {t(lang, "customers")}
+            </Link>
+          ) : null}
+          {canBackOffice ? (
+            <Link
+              to="/office"
+              className="min-h-[52px] rounded-2xl border-2 border-waka-300 bg-waka-50 px-5 py-3 text-lg font-black text-waka-950"
+            >
+              {t(lang, "officeEnterCta")}
+            </Link>
+          ) : null}
+          {canDayClose ? (
+            <Link
+              to="/close-day"
+              className="min-h-[52px] rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-3 text-lg font-bold text-amber-950"
+            >
+              {t(lang, "closeDay")}
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      {showActivityFeed && activityGroups.length > 0 ? (
-        <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xl font-black text-slate-900">{t(lang, "activityFeedTitle")}</h2>
-            <Link to="/owner/activity" className="text-sm font-bold text-waka-700">
-              {t(lang, "seeAll")}
+      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
+        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "dashboardSyncTitle")}</p>
+        <p className="mt-1 text-sm font-semibold text-stone-800">
+          {sync.syncing
+            ? t(lang, "syncingShort")
+            : !sync.isOnline
+              ? t(lang, "workingOfflineLabel")
+              : sync.pendingCount > 0
+                ? `${t(lang, "willSyncLater")} (${sync.pendingCount})`
+                : t(lang, "allSavedShort")}
+        </p>
+      </section>
+
+      {canSell && quickTiles.length > 0 ? (
+        <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-black text-stone-900">{t(lang, "dashboardOpenPosTiles")}</h2>
+            <Link to="/pos" className="text-sm font-bold text-waka-700">
+              {t(lang, "sellTitle")} →
             </Link>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {quickTiles.map((p) => (
+              <Link
+                key={p.id}
+                to="/pos"
+                state={{ preferProductId: p.id }}
+                className="rounded-2xl border border-waka-100 bg-waka-50/80 px-4 py-3 text-sm font-black text-waka-950 active:bg-waka-100"
+              >
+                {p.name}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {showActivityFeed && activityGroups.length > 0 ? (
+        <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-xl font-black text-stone-900">{t(lang, "activityFeedTitle")}</h2>
+            {hasPermission(actor.role, "owner.activity") ? (
+              <Link to="/owner/activity" className="text-sm font-bold text-waka-700">
+                {t(lang, "seeAll")}
+              </Link>
+            ) : null}
           </div>
           <ul className="mt-3 space-y-3">
             {activityGroups.map((g) => (
-              <li key={g.id} className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-800">
+              <li key={g.id} className="rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-800">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="font-black text-waka-900">{g.actorLabel}</span>
-                  <span className="text-xs font-bold text-slate-500">{g.bucketLabel}</span>
+                  <span className="text-xs font-bold text-stone-500">{g.bucketLabel}</span>
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-stone-500">
                   {new Date(g.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </p>
                 <ul className="mt-2 space-y-1">
@@ -166,8 +257,8 @@ export function DashboardPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      <section className={`grid grid-cols-2 gap-4 ${canProfit ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-        <article className="rounded-3xl bg-gradient-to-br from-slate-900 to-slate-700 p-5 text-white shadow-lg">
+      <section className={`grid grid-cols-2 gap-4 ${gridCols}`}>
+        <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-5 text-white shadow-lg">
           <p className="text-sm font-bold uppercase tracking-wide text-white/80">{t(lang, "cardCashToday")}</p>
           <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {cashToday.toLocaleString()}</p>
         </article>
@@ -177,11 +268,13 @@ export function DashboardPage({ lang }: { lang: Language }) {
             <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {profitToday.toLocaleString()}</p>
           </article>
         ) : null}
-        <article className="rounded-3xl border-4 border-rose-200 bg-rose-50 p-5 shadow-inner">
-          <p className="text-sm font-black uppercase tracking-wide text-rose-900">{t(lang, "cardLowStock")}</p>
-          <p className="mt-2 text-4xl font-black text-rose-950">{lowStockProducts.length}</p>
-          <p className="mt-1 text-sm font-semibold text-rose-800">{t(lang, "almostFinishedHint")}</p>
-        </article>
+        {canStock ? (
+          <article className="rounded-3xl border-4 border-rose-200 bg-rose-50 p-5 shadow-inner">
+            <p className="text-sm font-black uppercase tracking-wide text-rose-900">{t(lang, "cardLowStock")}</p>
+            <p className="mt-2 text-4xl font-black text-rose-950">{lowStockProducts.length}</p>
+            <p className="mt-1 text-sm font-semibold text-rose-800">{t(lang, "almostFinishedHint")}</p>
+          </article>
+        ) : null}
         <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-5 text-amber-950 shadow-lg">
           <p className="text-sm font-black uppercase tracking-wide text-amber-950/90">{t(lang, "cardDebtToday")}</p>
           <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {debtToday.toLocaleString()}</p>
@@ -189,59 +282,29 @@ export function DashboardPage({ lang }: { lang: Language }) {
       </section>
 
       {canProfit ? (
-        <p className="text-center text-sm font-medium text-slate-500">
-          {t(lang, "weekCashHint")}: <span className="font-bold text-slate-800">UGX {cashWeek.toLocaleString()}</span>
+        <p className="text-center text-sm font-medium text-stone-500">
+          {t(lang, "weekCashHint")}: <span className="font-bold text-stone-800">UGX {cashWeek.toLocaleString()}</span>
         </p>
       ) : null}
 
-      <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
+      <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-xl font-black text-slate-900">{t(lang, "recentQuickSales")}</h2>
-          <Link to="/receipts" className="text-sm font-bold text-waka-700">
-            {t(lang, "seeAll")}
-          </Link>
+          <h2 className="text-xl font-black text-stone-900">{t(lang, "dashboardTodaySalesTitle")}</h2>
+          {canReceipts ? (
+            <Link to="/receipts" className="text-sm font-bold text-waka-700">
+              {t(lang, "seeAll")}
+            </Link>
+          ) : null}
         </div>
         {recentSales.length === 0 ? (
-          <p className="mt-4 text-lg text-slate-500">{t(lang, "noSalesYet")}</p>
+          <p className="mt-4 text-lg text-stone-500">{t(lang, "noSalesYet")}</p>
         ) : (
           <ul className="mt-4 space-y-3">
             {recentSales.map((s) => (
-              <li key={s.id} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                <span className="font-bold text-slate-800">UGX {s.totalUgx.toLocaleString()}</span>
-                <span className="text-sm text-slate-500">{new Date(s.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">{t(lang, "fastToday")}</h2>
-        {fastMovers.length === 0 ? (
-          <p className="mt-4 text-lg text-slate-500">{t(lang, "noSalesYet")}</p>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {fastMovers.map((m) => (
-              <li key={m.name} className="flex items-center justify-between text-lg">
-                <span className="font-bold text-slate-900">{m.name}</span>
-                <span className="font-black text-waka-700">UGX {m.revenue.toLocaleString()}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="rounded-3xl border-4 border-rose-200 bg-rose-50/80 p-5">
-        <h2 className="text-xl font-black text-rose-950">{t(lang, "lowStockTitleFriendly")}</h2>
-        {lowStockProducts.length === 0 ? (
-          <p className="mt-4 text-lg font-medium text-rose-900/80">{t(lang, "stockOkFriendly")}</p>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {lowStockProducts.map((p) => (
-              <li key={p.id} className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-lg font-bold text-rose-950 shadow-sm">
-                <span>{p.name}</span>
-                <span className="text-rose-800">
-                  {p.stockOnHand.toLocaleString()} {p.baseUnit}
+              <li key={s.id} className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3">
+                <span className="font-bold text-stone-800">UGX {s.totalUgx.toLocaleString()}</span>
+                <span className="text-sm text-stone-500">
+                  {new Date(s.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                 </span>
               </li>
             ))}
@@ -249,9 +312,54 @@ export function DashboardPage({ lang }: { lang: Language }) {
         )}
       </section>
 
-      {hasPermission(actor.role, "reports.view") ? (
+      <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
+        <h2 className="text-xl font-black text-stone-900">{t(lang, "fastToday")}</h2>
+        {fastMovers.length === 0 ? (
+          <p className="mt-4 text-lg text-stone-500">{t(lang, "noSalesYet")}</p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {fastMovers.map((m) => (
+              <li key={m.id} className="flex items-center justify-between text-lg">
+                {canSell ? (
+                  <Link to="/pos" state={{ preferProductId: m.id }} className="font-bold text-waka-800 underline-offset-2 hover:underline">
+                    {m.name}
+                  </Link>
+                ) : (
+                  <span className="font-bold text-stone-900">{m.name}</span>
+                )}
+                <span className="font-black text-waka-700">UGX {m.revenue.toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {canStock ? (
+        <section className="rounded-3xl border-4 border-rose-200 bg-rose-50/80 p-5">
+          <h2 className="text-xl font-black text-rose-950">{t(lang, "lowStockTitleFriendly")}</h2>
+          {lowStockProducts.length === 0 ? (
+            <p className="mt-4 text-lg font-medium text-rose-900/80">{t(lang, "stockOkFriendly")}</p>
+          ) : (
+            <ul className="mt-4 space-y-3">
+              {lowStockProducts.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 text-lg font-bold text-rose-950 shadow-sm"
+                >
+                  <span>{p.name}</span>
+                  <span className="text-rose-800">
+                    {p.stockOnHand.toLocaleString()} {p.baseUnit}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {canReports ? (
         <div className="flex justify-center pb-4">
-          <Link to="/reports" className="text-lg font-bold text-slate-600 underline">
+          <Link to="/reports" className="text-lg font-bold text-stone-600 underline">
             {t(lang, "reports")} →
           </Link>
         </div>

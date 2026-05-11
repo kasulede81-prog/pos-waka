@@ -16,6 +16,7 @@ export function createDefaultPreferences(): ShopPreferences {
     lastAutoBackupDateKey: undefined,
     activeBranchId: null,
     branchDisplayName: null,
+    backOfficePin: null,
   };
 }
 

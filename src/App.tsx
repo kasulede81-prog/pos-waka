@@ -17,6 +17,8 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
+import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
+import { OfficeHubPage } from "./pages/OfficeHubPage";
 import { StockPage } from "./pages/StockPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
@@ -96,19 +98,22 @@ function App() {
             element={
               <PosDataProvider lang={lang}>
                 <SyncStatusProvider>
-                  <AppShell
-                    lang={lang}
-                    setLang={setLang}
-                    onSignOut={auth.signOut}
-                    user={auth.user}
-                    email={auth.email}
-                    authMode={auth.mode}
-                  />
+                  <BackOfficeSessionProvider>
+                    <AppShell
+                      lang={lang}
+                      setLang={setLang}
+                      onSignOut={auth.signOut}
+                      user={auth.user}
+                      email={auth.email}
+                      authMode={auth.mode}
+                    />
+                  </BackOfficeSessionProvider>
                 </SyncStatusProvider>
               </PosDataProvider>
             }
           >
             <Route index element={<DashboardPage lang={lang} />} />
+            <Route path="office" element={<OfficeHubPage lang={lang} />} />
             <Route path="stock" element={<StockPage lang={lang} />} />
             <Route path="suppliers" element={<SuppliersPage lang={lang} />} />
             <Route path="restock" element={<RestockPage lang={lang} />} />
