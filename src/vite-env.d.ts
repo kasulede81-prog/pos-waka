@@ -18,6 +18,8 @@ interface ImportMetaEnv {
   readonly VITE_APP_VERSION?: string;
   /** Optional HTTPS endpoint for reportMonitoringEvent JSON POST */
   readonly VITE_MONITORING_INGEST_URL?: string;
+  /** Mapbox public token for internal ops live map (tiles + geocoder only in-app) */
+  readonly VITE_MAPBOX_ACCESS_TOKEN?: string;
 }
 
 interface ImportMeta {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity,
@@ -47,6 +47,11 @@ import {
   type SupportTicketRow,
   type WakaInternalAdminRow,
 } from "../../lib/wakaInternalAdmin";
+
+const InternalFieldOpsMap = lazy(async () => {
+  const m = await import("./InternalFieldOpsMap");
+  return { default: m.InternalFieldOpsMap };
+});
 
 type Props = {
   lang: Language;
@@ -279,19 +284,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const salesSpark = useMemo(() => sales7.map((b) => b.count), [sales7]);
   const signupSpark = useMemo(() => signups7.map((b) => b.count), [signups7]);
   const subsSpark = useMemo(() => subs7.map((b) => b.count), [subs7]);
-
-  const mapClusters = useMemo(() => {
-    const m = new Map<string, FieldMapPin[]>();
-    for (const p of mapPins) {
-      const key = `${(Math.round(p.lat * 5) / 5).toFixed(1)} · ${(Math.round(p.lng * 5) / 5).toFixed(1)}`;
-      const arr = m.get(key) ?? [];
-      arr.push(p);
-      m.set(key, arr);
-    }
-    return [...m.entries()]
-      .sort((a, b) => b[1].length - a[1].length)
-      .slice(0, 14);
-  }, [mapPins]);
 
   const statGrid = useMemo(() => {
     if (!stats) {
@@ -748,39 +740,17 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
               <p className="mt-4 text-sm font-bold text-orange-50">
                 {t(lang, "internalMapShopCount").replace("{{count}}", String(mapPins.length))}
               </p>
-              <div className="mt-4 max-h-48 space-y-2 overflow-y-auto pr-1">
-                {mapClusters.length === 0 ? (
-                  <p className="rounded-xl bg-white/10 px-3 py-4 text-center text-sm font-semibold text-stone-200">{t(lang, "internalMapNoPins")}</p>
-                ) : (
-                  mapClusters.map(([key, group]) => (
-                    <div key={key} className="rounded-xl bg-white/10 px-3 py-2 ring-1 ring-white/10">
-                      <p className="text-xs font-black uppercase tracking-wide text-orange-100">
-                        {t(lang, "internalMapPins")} · {group.length}{" "}
-                        <span className="font-mono text-[10px] text-stone-300">({key})</span>
-                      </p>
-                      <ul className="mt-2 space-y-1.5">
-                        {group.slice(0, 4).map((pin) => (
-                          <li key={pin.shop_id} className="flex flex-wrap items-center justify-between gap-2 text-sm font-semibold text-white">
-                            <Link to={`/internal/waka/shop/${pin.shop_id}`} className="truncate underline decoration-orange-200/80 hover:text-orange-100">
-                              {pin.shop_name}
-                            </Link>
-                            {!Number.isNaN(pin.lat) && !Number.isNaN(pin.lng) ? (
-                              <a
-                                href={googleMapsDirectionsUrl(pin.lat, pin.lng)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="shrink-0 rounded-lg bg-orange-500 px-2 py-1 text-[11px] font-black text-white hover:bg-orange-400"
-                              >
-                                {t(lang, "internalVisitDirections")}
-                              </a>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))
-                )}
-              </div>
+              <Suspense
+                fallback={
+                  <div className="mt-4 h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-800/80 ring-1 ring-white/10" />
+                }
+              >
+                <InternalFieldOpsMap
+                  lang={lang}
+                  pins={mapPins}
+                  accessToken={import.meta.env.VITE_MAPBOX_ACCESS_TOKEN}
+                />
+              </Suspense>
             </div>
           </section>
 

@@ -758,6 +758,8 @@ const en: Dict = {
   internalMapFilterAll: "All districts",
   internalMapShopCount: "{{count}} shops with GPS",
   internalMapNoPins: "No GPS pins yet — shops appear when owners share location.",
+  internalMapClusterTap: "Tap cluster to zoom in",
+  internalMapOpenShop: "Open shop",
 
   internalInsightsTitle: "Insights",
   internalChartSignups: "New shops (7 days)",
@@ -1727,6 +1729,8 @@ const lg: Dict = {
   internalMapFilterAll: "Massaza gonna",
   internalMapShopCount: "Amaduuka {{count}} alina GPS",
   internalMapNoPins: "Tewali GPS kati — bijja nga bannyini bawa ebifo.",
+  internalMapClusterTap: "Koona ku bibinja okwongera okulongoosa",
+  internalMapOpenShop: "Ggulawo edduka",
 
   internalInsightsTitle: "Okutunuulira",
   internalChartSignups: "Amaduuka mapya (nnaku 7)",

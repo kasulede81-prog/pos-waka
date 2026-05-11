@@ -24,7 +24,8 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
   const [busy, setBusy] = useState(false);
 
   const run = useCallback(async () => {
-    if (!supabase) return;
+    const client = supabase;
+    if (!client) return;
     setBusy(true);
     const out: Probe[] = [];
 
@@ -40,33 +41,33 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
     };
 
     await time("shops count (head)", async () => {
-      const { count, error } = await supabase.from("shops").select("id", { count: "exact", head: true });
+      const { count, error } = await client.from("shops").select("id", { count: "exact", head: true });
       if (error) throw new Error(error.message);
       return `count=${count ?? 0}`;
     });
 
     await time("subscriptions count (head)", async () => {
-      const { count, error } = await supabase.from("subscriptions").select("id", { count: "exact", head: true });
+      const { count, error } = await client.from("subscriptions").select("id", { count: "exact", head: true });
       if (error) throw new Error(error.message);
       return `count=${count ?? 0}`;
     });
 
     await time("internal_ops_dashboard_metrics RPC", async () => {
-      const { data, error } = await supabase.rpc("internal_ops_dashboard_metrics");
+      const { data, error } = await client.rpc("internal_ops_dashboard_metrics");
       if (error) throw new Error(error.message);
       setMetricsJson(JSON.stringify(data ?? null, null, 2));
       return "ok (see panel below)";
     });
 
     await time("internal_ops_recent_shops RPC", async () => {
-      const { data, error } = await supabase.rpc("internal_ops_recent_shops", { p_limit: 5 });
+      const { data, error } = await client.rpc("internal_ops_recent_shops", { p_limit: 5 });
       if (error) throw new Error(error.message);
       setRecentJson(JSON.stringify(data ?? [], null, 2));
       return `rows=${Array.isArray(data) ? data.length : 0}`;
     });
 
     await time("internal_ops_chart_buckets_7d RPC", async () => {
-      const { data, error } = await supabase.rpc("internal_ops_chart_buckets_7d");
+      const { error } = await client.rpc("internal_ops_chart_buckets_7d");
       if (error) throw new Error(error.message);
       const s = await fetchInternalOpsCharts7d();
       return s ? `labels=${s.signups.length}` : "parsed empty";
