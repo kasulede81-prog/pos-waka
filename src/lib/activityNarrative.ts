@@ -11,6 +11,11 @@ export function actorDisplayLabel(actorUserId: string, lang: Language): string {
   return `${actorUserId.slice(0, 6)}…`;
 }
 
+function actorLabelFromParts(actorUserId: string, actorName: string | undefined, lang: Language): string {
+  if (actorName?.trim()) return actorName.trim();
+  return actorDisplayLabel(actorUserId, lang);
+}
+
 function productNameFromPayload(
   lang: Language,
   payload: Record<string, unknown>,
@@ -35,6 +40,7 @@ export function describeAuditLine(
       const total = typeof pl.totalUgx === "number" ? pl.totalUgx : 0;
       const count = typeof pl.lineCount === "number" ? pl.lineCount : 0;
       const debt = typeof pl.debtUgx === "number" ? pl.debtUgx : 0;
+      const firstLineName = typeof pl.firstLineName === "string" ? pl.firstLineName : "";
       if (total < 0) {
         return tTemplate(lang, "narrativeRefundLike", { amount: Math.abs(total).toLocaleString() });
       }
@@ -42,6 +48,12 @@ export function describeAuditLine(
         return tTemplate(lang, "narrativeSaleCredit", {
           amount: total.toLocaleString(),
           credit: debt.toLocaleString(),
+        });
+      }
+      if (firstLineName) {
+        return tTemplate(lang, "narrativeSaleItem", {
+          product: firstLineName,
+          amount: total.toLocaleString(),
         });
       }
       return tTemplate(lang, "narrativeSaleCash", {
@@ -65,6 +77,12 @@ export function describeAuditLine(
       const dk = typeof pl.dateKey === "string" ? pl.dateKey : "";
       return tTemplate(lang, "narrativeDayClosed", { date: dk || "—" });
     }
+    case "back_office_unlock":
+      return t(lang, "narrativeBackOfficeUnlock");
+    case "shift_start":
+      return t(lang, "narrativeShiftStart");
+    case "shift_end":
+      return t(lang, "narrativeShiftEnd");
     case "product_add": {
       const name = typeof pl.name === "string" ? pl.name : productNameFromPayload(lang, pl, productById);
       return tTemplate(lang, "narrativeProductAdded", { product: name });
@@ -157,6 +175,7 @@ export function buildGroupedActivityTimeline(
   type Proto = {
     bucketKey: ActivityTimelineGroup["bucketKey"];
     actorId: string;
+    actorName?: string;
     lines: string[];
     at: string;
   };
@@ -173,7 +192,7 @@ export function buildGroupedActivityTimeline(
       last.lines.push(line);
       if (new Date(e.at) > new Date(last.at)) last.at = e.at;
     } else {
-      protos.push({ bucketKey: bk, actorId: e.actorUserId || "unknown", lines: [line], at: e.at });
+      protos.push({ bucketKey: bk, actorId: e.actorUserId || "unknown", actorName: e.actorName, lines: [line], at: e.at });
     }
     if (protos.length >= maxGroups * 2) break;
   }
@@ -182,7 +201,7 @@ export function buildGroupedActivityTimeline(
     id: `${p.bucketKey}-${p.actorId}-${i}`,
     bucketKey: p.bucketKey,
     bucketLabel: bucketLabel(p.bucketKey, lang),
-    actorLabel: actorDisplayLabel(p.actorId, lang),
+    actorLabel: actorLabelFromParts(p.actorId, p.actorName, lang),
     lines: p.lines,
     at: p.at,
   }));

@@ -14,13 +14,27 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
   const location = useLocation();
   const actor = useSessionActor();
   const pin = usePosStore((s) => s.preferences.backOfficePin);
-  const { isUnlocked, lock } = useBackOfficeSession();
+  const { isUnlocked, lock, touch } = useBackOfficeSession();
 
   const needs = isBackOfficePath(location.pathname);
 
   useEffect(() => {
     if (!needs && isUnlocked) lock();
   }, [needs, isUnlocked, lock, location.pathname]);
+
+  useEffect(() => {
+    if (!needs || !isUnlocked) return;
+    touch();
+    const onAct = () => touch();
+    window.addEventListener("pointerdown", onAct);
+    window.addEventListener("keydown", onAct);
+    window.addEventListener("touchstart", onAct);
+    return () => {
+      window.removeEventListener("pointerdown", onAct);
+      window.removeEventListener("keydown", onAct);
+      window.removeEventListener("touchstart", onAct);
+    };
+  }, [needs, isUnlocked, touch]);
 
   if (!needs) {
     return <>{children}</>;

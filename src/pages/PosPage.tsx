@@ -1,7 +1,7 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import type { Language, LineInputMode, Product } from "../types";
+import type { Language, LineInputMode, Product, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
@@ -12,6 +12,53 @@ import { dateKeyKampala } from "../lib/datesUg";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 16;
 const MAX_RECENT_SEARCHES = 6;
+const MAX_RECENT_PRODUCTS = 14;
+const MAX_FAVORITE_PRODUCTS = 20;
+
+function buildSaleReceiptText(params: {
+  shopName: string;
+  cashier: string;
+  sale: Sale;
+  customerName: string | null;
+  customerBalanceUgx: number | null;
+  labels: {
+    cashier: string;
+    items: string;
+    total: string;
+    paid: string;
+    debtSale: string;
+    balance: string;
+    time: string;
+  };
+}): string {
+  const { shopName, cashier, sale, customerName, customerBalanceUgx, labels } = params;
+  const lines: string[] = [];
+  lines.push(shopName);
+  lines.push("");
+  lines.push(`${labels.cashier}: ${cashier}`);
+  lines.push(`${labels.time}: ${new Date(sale.createdAt).toLocaleString()}`);
+  lines.push("");
+  lines.push(labels.items);
+  for (const ln of sale.lines) {
+    const q =
+      ln.inputMode === "money"
+        ? `${ln.name} (${(ln.moneyAmountUgx ?? ln.lineTotalUgx).toLocaleString()} UGX)`
+        : `${ln.name} × ${ln.quantity}`;
+    lines.push(`· ${q}  →  UGX ${ln.lineTotalUgx.toLocaleString()}`);
+  }
+  lines.push("");
+  lines.push(`${labels.total}: UGX ${sale.totalUgx.toLocaleString()}`);
+  lines.push(`${labels.paid}: UGX ${sale.cashPaidUgx.toLocaleString()}`);
+  if (sale.debtUgx > 0) {
+    lines.push(`${labels.debtSale}: UGX ${sale.debtUgx.toLocaleString()}`);
+    if (customerName) lines.push(`${labels.balance} (${customerName}): UGX ${(customerBalanceUgx ?? 0).toLocaleString()}`);
+    else lines.push(`${labels.balance}: UGX ${(customerBalanceUgx ?? 0).toLocaleString()}`);
+  }
+  lines.push("");
+  lines.push("—");
+  lines.push("Waka POS");
+  return lines.join("\n");
+}
 const SEARCH_ALIASES: Record<string, string[]> = {
   blueband: ["margarine"],
   margarine: ["blueband"],
@@ -121,6 +168,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [firstSaleOpen, setFirstSaleOpen] = useState(false);
+  const pendingReceiptSaleIdRef = useRef<string | null>(null);
+  const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
   const [saleSuccessFlash, setSaleSuccessFlash] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -146,6 +195,69 @@ export function PosPage({ lang }: { lang: Language }) {
     }
     return byProduct;
   }, [sales]);
+
+  const favoriteIds = preferences.favoriteProductIds ?? [];
+  const recentIds = preferences.recentProductIds ?? [];
+
+  const favoriteProducts = useMemo(
+    () => favoriteIds.map((id) => products.find((p) => p.id === id)).filter(Boolean) as Product[],
+    [favoriteIds, products],
+  );
+
+  const recentProducts = useMemo(() => {
+    const out: Product[] = [];
+    for (const id of recentIds) {
+      const p = products.find((x) => x.id === id);
+      if (p) out.push(p);
+    }
+    return out.slice(0, 8);
+  }, [recentIds, products]);
+
+  const bumpRecentProduct = useCallback(
+    (productId: string) => {
+      const cur = usePosStore.getState().preferences.recentProductIds ?? [];
+      const next = [productId, ...cur.filter((x) => x !== productId)].slice(0, MAX_RECENT_PRODUCTS);
+      setPreferences({ recentProductIds: next });
+    },
+    [setPreferences],
+  );
+
+  const toggleFavoriteProduct = useCallback(
+    (productId: string) => {
+      const cur = usePosStore.getState().preferences.favoriteProductIds ?? [];
+      const next = (cur.includes(productId) ? cur.filter((x) => x !== productId) : [...cur, productId]).slice(
+        0,
+        MAX_FAVORITE_PRODUCTS,
+      );
+      setPreferences({ favoriteProductIds: next });
+    },
+    [setPreferences],
+  );
+
+  const receiptSale = useMemo(() => sales.find((s) => s.id === receiptSaleId) ?? null, [sales, receiptSaleId]);
+
+  const receiptPlain = useMemo(() => {
+    if (!receiptSale) return "";
+    const shopName = (preferences.shopDisplayName ?? "").trim() || "Waka POS";
+    const cashier = (actor.displayName ?? actor.userId).trim();
+    const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
+    return buildSaleReceiptText({
+      shopName,
+      cashier,
+      sale: receiptSale,
+      customerName: cust?.name ?? null,
+      customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
+      labels: {
+        cashier: t(lang, "receiptCashier"),
+        items: t(lang, "receiptItemsLabel"),
+        total: t(lang, "receiptTotalLabel"),
+        paid: t(lang, "receiptPaidLabel"),
+        debtSale: t(lang, "receiptDebtLine"),
+        balance: t(lang, "receiptBalanceLine"),
+        time: t(lang, "receiptTimeLabel"),
+      },
+    });
+  }, [receiptSale, preferences.shopDisplayName, actor.displayName, actor.userId, customers, lang]);
 
   const frequentToday = useMemo(
     () =>
@@ -232,11 +344,12 @@ export function PosPage({ lang }: { lang: Language }) {
       window.setTimeout(() => setToast(null), 2200);
       return;
     }
+    if (selected) bumpRecentProduct(selected.id);
     if (hapticsOn) void hapticTap();
     setSheetOpen(false);
     setSelected(null);
     setDisplay("");
-  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, hapticsOn]);
+  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, hapticsOn, bumpRecentProduct]);
 
   const applyPreset = useCallback(
     (mode: LineInputMode, value: number) => {
@@ -248,12 +361,13 @@ export function PosPage({ lang }: { lang: Language }) {
         window.setTimeout(() => setToast(null), 2200);
         return;
       }
+      if (selected) bumpRecentProduct(selected.id);
       if (hapticsOn) void hapticTap();
       setSheetOpen(false);
       setSelected(null);
       setDisplay("");
     },
-    [selected, setDraftInput, addDraftLineFromInput, lang, hapticsOn],
+    [selected, setDraftInput, addDraftLineFromInput, lang, hapticsOn, bumpRecentProduct],
   );
 
   const totalPaidInput = useMemo(() => {
@@ -305,8 +419,16 @@ export function PosPage({ lang }: { lang: Language }) {
     setSaleCustomerName("");
     setSaleCustomerPhone("");
     setPaymentMethod("cash");
+    if (r.saleId) {
+      if (r.firstSale && !preferences.celebratedFirstSale) {
+        pendingReceiptSaleIdRef.current = r.saleId;
+        setFirstSaleOpen(true);
+      } else {
+        setReceiptSaleId(r.saleId);
+      }
+    }
     if (r.firstSale && !preferences.celebratedFirstSale) {
-      setFirstSaleOpen(true);
+      /* receipt opens after celebration */
     } else {
       setSaleSuccessFlash(true);
       window.setTimeout(() => setSaleSuccessFlash(false), 720);
@@ -326,6 +448,18 @@ export function PosPage({ lang }: { lang: Language }) {
     soundOn,
     preferences.celebratedFirstSale,
   ]);
+
+  const dismissFirstSale = useCallback(() => {
+    setPreferences({ celebratedFirstSale: true });
+    setFirstSaleOpen(false);
+    setSaleSuccessFlash(true);
+    window.setTimeout(() => setSaleSuccessFlash(false), 720);
+    setToast(t(lang, "saleSaved"));
+    window.setTimeout(() => setToast(null), 1600);
+    const rid = pendingReceiptSaleIdRef.current;
+    pendingReceiptSaleIdRef.current = null;
+    if (rid) setReceiptSaleId(rid);
+  }, [lang, setPreferences]);
 
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
@@ -435,6 +569,42 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
+          {favoriteProducts.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {favoriteProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => openProduct(p)}
+                    className="min-h-[40px] rounded-full border border-waka-300 bg-waka-50 px-3 py-1.5 text-sm font-bold text-waka-950"
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {recentProducts.filter((p) => !favoriteIds.includes(p.id)).length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {recentProducts
+                  .filter((p) => !favoriteIds.includes(p.id))
+                  .map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => openProduct(p)}
+                      className="min-h-[40px] rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -462,9 +632,20 @@ export function PosPage({ lang }: { lang: Language }) {
           {filteredProducts.map((p) => (
             <article
               key={p.id}
-              className="flex min-h-[148px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm"
+              className="relative flex min-h-[148px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 pt-12 text-left shadow-sm"
               style={{ contentVisibility: "auto" }}
             >
+              <button
+                type="button"
+                className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-lg shadow-sm active:bg-stone-50"
+                aria-label={favoriteIds.includes(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavoriteProduct(p.id);
+                }}
+              >
+                {favoriteIds.includes(p.id) ? "★" : "☆"}
+              </button>
               <button type="button" onClick={() => openProduct(p)} className="text-left">
                 <p className="text-lg font-black leading-tight text-slate-900">{p.name}</p>
                 <p className="mt-1 text-xs font-bold text-stone-500">
@@ -746,6 +927,74 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
+      {receiptSale && receiptPlain ? (
+        <div
+          className="fixed inset-0 z-[58] flex items-end justify-center bg-black/50 p-3 pb-[env(safe-area-inset-bottom)] sm:items-center"
+          role="dialog"
+          aria-modal
+        >
+          <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <p className="text-xl font-black text-slate-900">{t(lang, "receiptTitle")}</p>
+            </div>
+            <pre className="max-h-[42vh] overflow-y-auto whitespace-pre-wrap break-words px-5 py-4 text-sm leading-relaxed text-slate-800 sm:max-h-[50vh]">
+              {receiptPlain}
+            </pre>
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-4 sm:grid-cols-4">
+              <button
+                type="button"
+                className="min-h-[48px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white"
+                onClick={() => {
+                  const w = window.open("", "_blank", "noopener,noreferrer,width=400,height=600");
+                  if (!w) return;
+                  w.document.open();
+                  w.document.write(
+                    `<!doctype html><meta charset="utf-8"/><title>Receipt</title><body style="font-family:system-ui,sans-serif;padding:16px"><pre id="waka-r" style="white-space:pre-wrap;margin:0"></pre></body></html>`,
+                  );
+                  w.document.close();
+                  w.document.getElementById("waka-r")!.textContent = receiptPlain;
+                  w.focus();
+                  w.print();
+                  w.close();
+                }}
+              >
+                {t(lang, "receiptPrint")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white"
+                onClick={() => {
+                  window.open(`https://wa.me/?text=${encodeURIComponent(receiptPlain)}`, "_blank", "noopener,noreferrer");
+                }}
+              >
+                {t(lang, "receiptWhatsApp")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-black text-slate-800"
+                onClick={() => {
+                  const a = document.createElement("a");
+                  const url = URL.createObjectURL(new Blob([receiptPlain], { type: "text/plain;charset=utf-8" }));
+                  a.href = url;
+                  a.download = `receipt-${receiptSale.id}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+              >
+                {t(lang, "receiptDownload")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-bold text-slate-600 sm:col-span-1"
+                onClick={() => setReceiptSaleId(null)}
+              >
+                {t(lang, "receiptClose")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {toast && (
         <div className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
           {toast}
@@ -765,8 +1014,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 to="/"
                 className="block min-h-[52px] w-full rounded-2xl bg-waka-600 py-4 text-center text-lg font-black text-white active:bg-waka-700"
                 onClick={() => {
-                  setPreferences({ celebratedFirstSale: true });
-                  setFirstSaleOpen(false);
+                  dismissFirstSale();
                 }}
               >
                 {t(lang, "firstSaleSeeHome")}
@@ -775,10 +1023,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 type="button"
                 className="min-h-[52px] w-full rounded-2xl border-2 border-slate-300 py-4 text-lg font-bold text-slate-800 active:bg-slate-50"
                 onClick={() => {
-                  setPreferences({ celebratedFirstSale: true });
-                  setFirstSaleOpen(false);
-                  setToast(t(lang, "saleSaved"));
-                  window.setTimeout(() => setToast(null), 1600);
+                  dismissFirstSale();
                 }}
               >
                 {t(lang, "firstSaleContinue")}

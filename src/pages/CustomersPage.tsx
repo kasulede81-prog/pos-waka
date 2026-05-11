@@ -51,6 +51,13 @@ export function CustomersPage({ lang }: { lang: Language }) {
       <h1 className="text-3xl font-black text-slate-900">{t(lang, "debts")}</h1>
       <p className="text-lg text-slate-600">{t(lang, "debtsHelp")}</p>
 
+      {customers.length === 0 ? (
+        <section className="rounded-3xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-6 text-center">
+          <p className="text-xl font-black text-slate-900">{t(lang, "customersEmptyTitle")}</p>
+          <p className="mt-2 text-base text-slate-700">{t(lang, "customersEmptySub")}</p>
+        </section>
+      ) : null}
+
       <form onSubmit={submit} className="space-y-3 rounded-3xl border-2 border-slate-100 bg-white p-5">
         <p className="font-black text-slate-900">{t(lang, "addPersonShort")}</p>
         <input

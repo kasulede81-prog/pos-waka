@@ -53,6 +53,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const [waCopied, setWaCopied] = useState(false);
 
@@ -179,6 +180,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const waLine = useMemo(() => buildWhatsAppOwnerSummaryLine(lang, summaryInput), [lang, summaryInput]);
 
   const trustRows = useMemo(() => computeCashierTrustRows(lang, sales, auditLogs, todayKey), [lang, sales, auditLogs, todayKey]);
+  const activeShift = useMemo(() => shifts.find((s) => !s.endAt) ?? null, [shifts]);
 
   const trendLine = useMemo(
     () => formatVsYesterday(lang, stats.totalSalesUgx, yesterdaySalesUgx),
@@ -466,6 +468,16 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         <article className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
           <p className="text-xs font-bold uppercase text-amber-900">{t(lang, "debtToday")}</p>
           <p className="mt-1 text-xl font-black text-amber-900">UGX {stats.debtTodayUgx.toLocaleString()}</p>
+        </article>
+        <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "activeCashierCard")}</p>
+          <p className="mt-1 text-xl font-black text-slate-900">{activeShift?.actorName ?? "—"}</p>
+        </article>
+        <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "currentShiftCard")}</p>
+          <p className="mt-1 text-xl font-black text-slate-900">
+            {activeShift ? new Date(activeShift.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+          </p>
         </article>
       </section>
 

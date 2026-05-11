@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { Home, ScanLine, HandCoins, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
@@ -48,11 +48,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const preferences = usePosStore((s) => s.preferences);
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
+  const beginShift = usePosStore((s) => s.beginShift);
+  const endActiveShift = usePosStore((s) => s.endActiveShift);
   const [pwaUpdate, setPwaUpdate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [lockStaffId, setLockStaffId] = useState(preferences.activeStaffId ?? "");
   const [lockSecret, setLockSecret] = useState("");
   const [lockError, setLockError] = useState<string | null>(null);
+  const prevActorRef = useRef<string | null>(null);
 
   useEffect(() => {
     const onUp = () => setPwaUpdate(true);
@@ -68,6 +71,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   useLayoutEffect(() => {
     usePosStore.getState().setSessionActor(actor);
   }, [actor]);
+
+  useEffect(() => {
+    const prev = prevActorRef.current;
+    if (prev && prev !== actor.userId) {
+      endActiveShift(prev);
+    }
+    prevActorRef.current = actor.userId;
+    if (!preferences.posLocked) beginShift();
+  }, [actor.userId, preferences.posLocked, beginShift, endActiveShift]);
 
   const navDefs = useMemo((): NavDef[] => {
     const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];

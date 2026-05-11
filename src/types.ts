@@ -41,14 +41,20 @@ export type Permission =
 
 export type AuditAction =
   | "sale_completed"
+  | "sale_refund"
   | "stock_adjust"
+  | "price_change"
   | "debt_payment"
   | "day_close"
+  | "back_office_unlock"
+  | "shift_start"
+  | "shift_end"
   | "product_add"
   | "product_remove"
   | "product_presets"
   | "customer_add"
   | "supplier_add"
+  | "supplier_edit"
   | "purchase_saved"
   | "supplier_payment";
 
@@ -56,6 +62,7 @@ export type AuditLogEntry = {
   id: string;
   at: string;
   actorUserId: string;
+  actorName?: string;
   role: UserRole;
   action: AuditAction;
   /** Short single-line for lists */
@@ -63,6 +70,19 @@ export type AuditLogEntry = {
   /** Structured detail for sync / inspection */
   payload: Record<string, unknown>;
   deviceId?: string;
+};
+
+export type ShiftRecord = {
+  id: string;
+  actorUserId: string;
+  actorName?: string;
+  role: UserRole;
+  startAt: string;
+  endAt?: string | null;
+  salesTotalUgx: number;
+  debtTotalUgx: number;
+  refundsUgx: number;
+  estimatedCashUgx: number;
 };
 
 /** What kind of shop this is — drives simple adaptive UI */
@@ -307,6 +327,11 @@ export type ShopPreferences = {
   activeStaffId?: string | null;
   /** Lock screen state for quick shift switches. */
   posLocked?: boolean;
+  shifts?: ShiftRecord[];
+  /** Product ids starred on Sell screen (fast access) */
+  favoriteProductIds?: string[];
+  /** Recently added-to-cart product ids (newest first); capped in UI logic */
+  recentProductIds?: string[];
 };
 
 export type SyncOperationKind =

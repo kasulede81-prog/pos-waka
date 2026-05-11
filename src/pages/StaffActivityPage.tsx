@@ -11,6 +11,7 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
   const auditLogs = usePosStore((s) => s.auditLogs);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
@@ -50,6 +51,28 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
         <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>
       ) : (
         <div className="space-y-8">
+          {shifts.length > 0 ? (
+            <section>
+              <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "shiftsTodayTitle")}</h2>
+              <ul className="mt-3 space-y-3">
+                {shifts.slice(0, 10).map((s) => (
+                  <li key={s.id} className="rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100/80">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-black text-slate-900">{s.actorName ?? s.actorUserId}</p>
+                      <p className="text-xs font-semibold text-slate-500">{s.endAt ? t(lang, "shiftClosed") : t(lang, "shiftOpen")}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-600">
+                      {new Date(s.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
+                      {s.endAt ? new Date(s.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">
+                      UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           {sections.map((sec) => (
             <section key={sec.key}>
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{sec.label}</h2>

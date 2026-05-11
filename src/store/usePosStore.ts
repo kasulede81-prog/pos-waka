@@ -13,6 +13,7 @@ import type {
   Sale,
   SaleLine,
   SellingMode,
+  ShiftRecord,
   ShopPreferences,
   StaffAccount,
   StockMovement,
@@ -102,6 +103,29 @@ function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
   return out;
 }
 
+function normalizeShifts(raw: unknown): ShiftRecord[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const o = item as Partial<ShiftRecord>;
+      const role = parseStoredUserRole((o as { role?: unknown }).role);
+      if (!o || !role || !o.actorUserId || !o.startAt) return null;
+      return {
+        id: o.id || crypto.randomUUID(),
+        actorUserId: String(o.actorUserId),
+        actorName: o.actorName ? String(o.actorName) : undefined,
+        role,
+        startAt: String(o.startAt),
+        endAt: o.endAt ? String(o.endAt) : null,
+        salesTotalUgx: Number(o.salesTotalUgx ?? 0) || 0,
+        debtTotalUgx: Number(o.debtTotalUgx ?? 0) || 0,
+        refundsUgx: Number(o.refundsUgx ?? 0) || 0,
+        estimatedCashUgx: Number(o.estimatedCashUgx ?? 0) || 0,
+      };
+    })
+    .filter(Boolean) as ShiftRecord[];
+}
+
 type DraftLineInput = {
   product: Product;
   inputMode: LineInputMode;
@@ -154,6 +178,9 @@ type PosState = {
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
   switchStaffAccount: (id: string | null) => void;
   setPosLocked: (locked: boolean) => void;
+  beginShift: () => void;
+  endActiveShift: (actorUserId?: string) => void;
+  logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
   updateBusinessType: (businessType: BusinessType) => void;
 
@@ -164,7 +191,7 @@ type PosState = {
   finalizeDraftSale: (opts: {
     debtUgx: number;
     customerId?: string | null;
-  }) => { ok: boolean; errorKey?: string; firstSale?: boolean };
+  }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
   quickAddProduct: (input: {
@@ -177,6 +204,8 @@ type PosState = {
     baseUnit?: string;
     buyingUnit?: string | null;
     conversionRate?: number | null;
+    /** When set (e.g. from pack cost ÷ pieces), used instead of a guessed cost */
+    costPricePerUnitUgx?: number | null;
   }) => { ok: boolean; errorKey?: string };
   bulkQuickAddProducts: (
     rows: Array<{
@@ -337,6 +366,7 @@ export const usePosStore = create<PosState>((set, get) => {
       at: new Date().toISOString(),
       deviceId: getOrCreateDeviceId(),
       actorUserId: actor?.userId ?? "unknown",
+      actorName: actor?.displayName,
       role: actor?.role ?? "cashier",
       action,
       payloadSummary,
@@ -495,11 +525,72 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   switchStaffAccount: (id) => {
+    const prev = get().preferences.activeStaffId ?? null;
+    if (prev && prev !== id) {
+      get().endActiveShift();
+    }
     set((s) => ({ preferences: { ...s.preferences, activeStaffId: id } }));
+    if (id && prev !== id) {
+      get().beginShift();
+    }
   },
 
   setPosLocked: (locked) => {
     set((s) => ({ preferences: { ...s.preferences, posLocked: locked } }));
+  },
+  logAuditAction: (action, summary, payload) => {
+    pushAudit(action, summary, payload ?? {});
+  },
+
+  beginShift: () => {
+    const s = get();
+    const actor = s.sessionActor;
+    if (!actor) return;
+    const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    if (open) return;
+    const row: ShiftRecord = {
+      id: crypto.randomUUID(),
+      actorUserId: actor.userId,
+      actorName: actor.displayName,
+      role: actor.role,
+      startAt: new Date().toISOString(),
+      endAt: null,
+      salesTotalUgx: 0,
+      debtTotalUgx: 0,
+      refundsUgx: 0,
+      estimatedCashUgx: 0,
+    };
+    set((st) => ({
+      preferences: {
+        ...st.preferences,
+        shifts: [row, ...(st.preferences.shifts ?? [])],
+      },
+    }));
+    pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: actor.userId });
+  },
+
+  endActiveShift: (actorUserId) => {
+    const s = get();
+    const actor = s.sessionActor;
+    const uid = actorUserId ?? actor?.userId;
+    if (!uid) return;
+    const open = (s.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === uid);
+    if (!open) return;
+    const endAt = new Date().toISOString();
+    set((st) => ({
+      preferences: {
+        ...st.preferences,
+        shifts: (st.preferences.shifts ?? []).map((sh) =>
+          sh.id === open.id
+            ? {
+                ...sh,
+                endAt,
+              }
+            : sh,
+        ),
+      },
+    }));
+    pushAudit("shift_end", `Shift end ${actor?.displayName ?? uid}`, { shiftId: open.id, actorUserId: uid });
   },
 
   completeBusinessOnboarding: (businessType) => {
@@ -634,6 +725,25 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: mergeStockMovements(saleMovements, state.stockMovements),
     });
 
+    const actor = state.sessionActor;
+    if (actor) {
+      set((st) => ({
+        preferences: {
+          ...st.preferences,
+          shifts: (st.preferences.shifts ?? []).map((sh) =>
+            !sh.endAt && sh.actorUserId === actor.userId
+              ? {
+                  ...sh,
+                  salesTotalUgx: sh.salesTotalUgx + total,
+                  debtTotalUgx: sh.debtTotalUgx + debt,
+                  estimatedCashUgx: sh.estimatedCashUgx + cashPaidUgx,
+                }
+              : sh,
+          ),
+        },
+      }));
+    }
+
     void queueRemote("sale", { saleId: sale.id });
     void clearPersistedDraft();
     pushAudit("sale_completed", `Sale UGX ${total.toLocaleString()}`, {
@@ -643,8 +753,9 @@ export const usePosStore = create<PosState>((set, get) => {
       customerId: customerId ?? null,
       soldByUserId: actorId,
       lineCount: sale.lines.length,
+      firstLineName: sale.lines[0]?.name ?? null,
     });
-    return { ok: true, firstSale: isFirstSale };
+    return { ok: true, firstSale: isFirstSale, saleId: sale.id };
   },
 
   quickAddProduct: (input) => {
@@ -658,7 +769,10 @@ export const usePosStore = create<PosState>((set, get) => {
     const conversionRate = input.conversionRate !== undefined ? input.conversionRate : guess.conversionRate;
     const price = Math.max(0, Math.floor(input.priceUgx));
     const stock = Math.max(0, Number(input.stockQty) || 0);
-    const cost = Math.min(price, Math.max(0, Math.floor(price * 0.72)));
+    const cost =
+      input.costPricePerUnitUgx !== undefined && input.costPricePerUnitUgx !== null
+        ? Math.max(0, Math.floor(Number(input.costPricePerUnitUgx)))
+        : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
     const minAlert = sellingMode === "portion" ? 1 : sellingMode === "weighted" ? 3 : 5;
     const sameShape = sellingMode === guess.sellingMode && baseUnit === guess.baseUnit;
     get().addProduct({
@@ -1118,6 +1232,7 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           ? null
           : String(p.activeStaffId),
     posLocked: typeof p.posLocked === "boolean" ? p.posLocked : base.posLocked ?? false,
+    shifts: normalizeShifts(p.shifts),
   };
 }
 

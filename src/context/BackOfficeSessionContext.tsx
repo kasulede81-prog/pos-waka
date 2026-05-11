@@ -1,20 +1,29 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePosStore } from "../store/usePosStore";
+const AUTO_LOCK_MS = 3 * 60 * 1000;
 
 type Ctx = {
   isUnlocked: boolean;
   /** Returns false if secret wrong */
   unlockWithPin: (pin: string) => boolean;
   lock: () => void;
+  touch: () => void;
 };
 
 const BackOfficeSessionContext = createContext<Ctx | null>(null);
 
 export function BackOfficeSessionProvider({ children }: { children: ReactNode }) {
-  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [unlockedUntil, setUnlockedUntil] = useState<number | null>(null);
 
   const lock = useCallback(() => {
-    setIsUnlocked(false);
+    setUnlockedUntil(null);
+  }, []);
+
+  const touch = useCallback(() => {
+    setUnlockedUntil((cur) => {
+      if (cur === null) return cur;
+      return Date.now() + AUTO_LOCK_MS;
+    });
   }, []);
 
   const unlockWithPin = useCallback((pin: string) => {
@@ -27,23 +36,38 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
     );
     if (!stored) {
       if (validStaff || staff.length === 0) {
-        setIsUnlocked(true);
+        setUnlockedUntil(Date.now() + AUTO_LOCK_MS);
+        usePosStore.getState().logAuditAction("back_office_unlock", "Back Office unlocked", { via: validStaff ? "staff_secret" : "open_no_pin" });
         return true;
       }
       return false;
     }
     if (digits !== stored && !validStaff) return false;
-    setIsUnlocked(true);
+    setUnlockedUntil(Date.now() + AUTO_LOCK_MS);
+    usePosStore.getState().logAuditAction("back_office_unlock", "Back Office unlocked", {
+      via: validStaff ? "staff_secret" : "pin",
+    });
     return true;
   }, []);
+
+  const isUnlocked = unlockedUntil !== null && unlockedUntil > Date.now();
+
+  useEffect(() => {
+    if (!unlockedUntil) return;
+    const id = window.setInterval(() => {
+      setUnlockedUntil((cur) => (cur && cur > Date.now() ? cur : null));
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [unlockedUntil]);
 
   const value = useMemo(
     () => ({
       isUnlocked,
       unlockWithPin,
       lock,
+      touch,
     }),
-    [isUnlocked, unlockWithPin, lock],
+    [isUnlocked, unlockWithPin, lock, touch],
   );
 
   return <BackOfficeSessionContext.Provider value={value}>{children}</BackOfficeSessionContext.Provider>;

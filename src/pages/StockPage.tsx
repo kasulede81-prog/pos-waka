@@ -10,9 +10,13 @@ import { inferFromProductName } from "../lib/smartProductGuess";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { PRODUCT_CATEGORY_PRESET_KEYS } from "../data/productCategoryPresets";
 
-const modes: SellingMode[] = ["unit", "weighted", "portion"];
+function sellingModeFromSellUnit(unit: string): SellingMode {
+  const s = unit.toLowerCase();
+  if (/\b(kg|kilo|gram|gramme|litre|liter)\b/.test(s) || /^g$|^l$/.test(s)) return "weighted";
+  return "unit";
+}
+
 const UNIT_PRESETS: Record<string, string[]> = {
   kiosk_duka: ["piece", "packet", "bottle", "crate"],
   restaurant: ["plate", "cup", "litre", "tray"],
@@ -76,7 +80,6 @@ export function StockPage({ lang }: { lang: Language }) {
     return m;
   }, [stockMovements]);
 
-  const addProduct = usePosStore((s) => s.addProduct);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
   const bulkQuickAddProducts = usePosStore((s) => s.bulkQuickAddProducts);
   const removeProduct = usePosStore((s) => s.removeProduct);
@@ -86,28 +89,26 @@ export function StockPage({ lang }: { lang: Language }) {
   const [quickOpen, setQuickOpen] = useState(false);
   const [starterOpen, setStarterOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [qaName, setQaName] = useState("");
+  const [qaUnitPreset, setQaUnitPreset] = useState("piece");
+  const [qaUnitCustom, setQaUnitCustom] = useState("");
   const [qaPrice, setQaPrice] = useState("");
   const [qaStock, setQaStock] = useState("");
+
+  const [mainName, setMainName] = useState("");
+  const [mainSellUnitPreset, setMainSellUnitPreset] = useState("piece");
+  const [mainSellUnitCustom, setMainSellUnitCustom] = useState("");
+  const [mainPrice, setMainPrice] = useState("");
+  const [mainStock, setMainStock] = useState("");
+  const [boughtAs, setBoughtAs] = useState("");
+  const [buyPackPrice, setBuyPackPrice] = useState("");
+  const [piecesInside, setPiecesInside] = useState("");
+  const [supplierName, setSupplierName] = useState("");
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
 
   const [bulkRows, setBulkRows] = useState<BulkRow[]>(() => emptyBulkRows(10));
-
-  const [name, setName] = useState("");
-  const [sellingMode, setSellingMode] = useState<SellingMode>("unit");
-  const [baseUnit, setBaseUnit] = useState("piece");
-  const [baseUnitPreset, setBaseUnitPreset] = useState("piece");
-  const [buyingUnit, setBuyingUnit] = useState("");
-  const [conversionRate, setConversionRate] = useState("");
-  const [sellPrice, setSellPrice] = useState("");
-  const [costPrice, setCostPrice] = useState("");
-  const [stock, setStock] = useState("");
-  const [minAlert, setMinAlert] = useState("");
-  const [categoryPreset, setCategoryPreset] = useState("");
-  const [categoryCustom, setCategoryCustom] = useState("");
 
   const [editId, setEditId] = useState<string | null>(null);
   const [moneyStr, setMoneyStr] = useState("");
@@ -120,13 +121,8 @@ export function StockPage({ lang }: { lang: Language }) {
     return inferFromProductName(n);
   }, [qaName]);
 
-  const resolveFormCategory = () => {
-    if (categoryPreset === "other") return categoryCustom.trim() || t(lang, "generalCategory");
-    if (categoryPreset && (PRODUCT_CATEGORY_PRESET_KEYS as readonly string[]).includes(categoryPreset)) {
-      return t(lang, `productCat_${categoryPreset}`);
-    }
-    return t(lang, "generalCategory");
-  };
+  const resolveSellUnit = (preset: string, custom: string) =>
+    (preset === "custom" ? custom : preset).trim() || "piece";
 
   const businessUnitOptions = useMemo(() => {
     const typed = (preferences.businessType ?? "default") as string;
@@ -154,17 +150,61 @@ export function StockPage({ lang }: { lang: Language }) {
     e.preventDefault();
     const price = Math.floor(Number(qaPrice) || 0);
     if (price < 0) return;
+    const sellUnit = resolveSellUnit(qaUnitPreset, qaUnitCustom);
     const r = quickAddProduct({
       name: qaName,
       priceUgx: price,
       stockQty: Number(qaStock) || 0,
       category: t(lang, "generalCategory"),
+      baseUnit: sellUnit,
+      sellingMode: sellingModeFromSellUnit(sellUnit),
     });
     if (!r.ok) return;
     setQaName("");
+    setQaUnitPreset("piece");
+    setQaUnitCustom("");
     setQaPrice("");
     setQaStock("");
     setQuickOpen(false);
+  };
+
+  const submitMainQuick = (e: FormEvent) => {
+    e.preventDefault();
+    const price = Math.floor(Number(mainPrice.replace(/\D/g, "")) || 0);
+    if (price <= 0) return;
+    const sellUnit = resolveSellUnit(mainSellUnitPreset, mainSellUnitCustom);
+    const sellingMode = sellingModeFromSellUnit(sellUnit);
+    const pack = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
+    const pieces = Math.floor(Number(piecesInside.replace(/[^\d.]/g, "")) || 0);
+    const hasTrack = boughtAs.trim().length > 0 && pack > 0 && pieces > 0;
+    const costPerSell = hasTrack ? Math.floor(pack / pieces) : undefined;
+    const buyingUnitLabel = hasTrack
+      ? supplierName.trim()
+        ? `${boughtAs.trim()} · ${supplierName.trim()}`
+        : boughtAs.trim()
+      : undefined;
+
+    const r = quickAddProduct({
+      name: mainName.trim(),
+      priceUgx: price,
+      stockQty: Number(mainStock.replace(/[^\d.]/g, "")) || 0,
+      category: t(lang, "generalCategory"),
+      baseUnit: sellUnit,
+      sellingMode,
+      buyingUnit: hasTrack ? buyingUnitLabel! : undefined,
+      conversionRate: hasTrack ? pieces : undefined,
+      costPricePerUnitUgx: hasTrack ? costPerSell! : undefined,
+    });
+    if (!r.ok) return;
+    setMainName("");
+    setMainSellUnitPreset("piece");
+    setMainSellUnitCustom("");
+    setMainPrice("");
+    setMainStock("");
+    setBoughtAs("");
+    setBuyPackPrice("");
+    setPiecesInside("");
+    setSupplierName("");
   };
 
   const applyStarter = () => {
@@ -202,37 +242,6 @@ export function StockPage({ lang }: { lang: Language }) {
     setBulkOpen(false);
   };
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const conv = conversionRate.trim() ? Number(conversionRate) : null;
-    addProduct({
-      name: name.trim(),
-      sellingMode,
-      baseUnit: (baseUnitPreset === "custom" ? baseUnit : baseUnitPreset).trim() || "piece",
-      buyingUnit: buyingUnit.trim() || null,
-      conversionRate: conv !== null && Number.isFinite(conv) && conv > 0 ? conv : null,
-      sellingPricePerUnitUgx: Math.max(0, Math.floor(Number(sellPrice) || 0)),
-      costPricePerUnitUgx: Math.max(0, Math.floor(Number(costPrice) || 0)),
-      stockOnHand: Math.max(0, Number(stock) || 0),
-      minimumStockAlert: Math.max(0, Number(minAlert) || 0),
-      category: resolveFormCategory(),
-      sku: `SKU-${Date.now()}`,
-    });
-    setName("");
-    setBaseUnitPreset("piece");
-    setBaseUnit("piece");
-    setCategoryPreset("");
-    setCategoryCustom("");
-    setSellingMode("unit");
-    setBaseUnit("ea");
-    setBuyingUnit("");
-    setConversionRate("");
-    setSellPrice("");
-    setCostPrice("");
-    setStock("");
-    setMinAlert("");
-  };
-
   const openEditPresets = (p: Product) => {
     setEditId(p.id);
     setMoneyStr((p.quickPresetsMoneyUgx ?? []).join(","));
@@ -256,10 +265,20 @@ export function StockPage({ lang }: { lang: Language }) {
   };
 
   const openDuplicateToQuick = (p: Product) => {
-    setQaName(p.name);
-    setQaPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
-    setQaStock(String(p.stockOnHand));
-    setQuickOpen(true);
+    setMainName(`${p.name} (2)`);
+    setMainSellUnitPreset(businessUnitOptions.includes(p.baseUnit) ? p.baseUnit : "custom");
+    setMainSellUnitCustom(businessUnitOptions.includes(p.baseUnit) ? "" : p.baseUnit);
+    setMainPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
+    setMainStock(String(p.stockOnHand));
+    setBoughtAs(p.buyingUnit?.replace(/\s·\s.*$/, "") ?? "");
+    setSupplierName(p.buyingUnit && p.buyingUnit.includes(" · ") ? p.buyingUnit.split(" · ").slice(1).join(" · ") : "");
+    setBuyPackPrice(
+      p.conversionRate && p.conversionRate > 0
+        ? String(Math.floor(p.costPricePerUnitUgx * p.conversionRate))
+        : "",
+    );
+    setPiecesInside(p.conversionRate && p.conversionRate > 0 ? String(p.conversionRate) : "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const confirmRemove = (id: string) => {
@@ -309,24 +328,175 @@ export function StockPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
+      {canAdd ? (
+        <form
+          onSubmit={submitMainQuick}
+          className="space-y-4 rounded-[2rem] border-2 border-waka-300 bg-gradient-to-b from-white to-waka-50/60 p-5 shadow-lg sm:p-6"
+        >
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "stockQuickAddHeading")}</p>
+            <p className="mt-1 text-lg font-black text-slate-900">{t(lang, "stockQuickAddTitle")}</p>
+            <p className="mt-1 text-base text-slate-600">{t(lang, "stockQuickAddSub")}</p>
+          </div>
+
+          <label className="block">
+            <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddName")}</span>
+            <input
+              value={mainName}
+              onChange={(e) => setMainName(e.target.value)}
+              placeholder={t(lang, "productNamePh")}
+              required
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
+            />
+          </label>
+
+          <div>
+            <p className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</p>
+            <p className="mt-1 text-xs text-slate-500">{t(lang, "howYouSellUnitHint")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {businessUnitOptions.map((u) => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => {
+                    setMainSellUnitPreset(u);
+                    setMainSellUnitCustom("");
+                  }}
+                  className={`min-h-[44px] rounded-full border-2 px-4 py-2 text-sm font-black transition ${
+                    mainSellUnitPreset === u && mainSellUnitPreset !== "custom"
+                      ? "border-waka-600 bg-waka-600 text-white"
+                      : "border-slate-200 bg-white text-slate-800"
+                  }`}
+                >
+                  {u}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setMainSellUnitPreset("custom")}
+                className={`min-h-[44px] rounded-full border-2 px-4 py-2 text-sm font-black ${
+                  mainSellUnitPreset === "custom"
+                    ? "border-waka-600 bg-waka-600 text-white"
+                    : "border-slate-200 bg-white text-slate-800"
+                }`}
+              >
+                {t(lang, "unitCustomOption")}
+              </button>
+            </div>
+            {mainSellUnitPreset === "custom" ? (
+              <input
+                value={mainSellUnitCustom}
+                onChange={(e) => setMainSellUnitCustom(e.target.value)}
+                placeholder={t(lang, "unitCustomPlaceholder")}
+                className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              />
+            ) : null}
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddPrice")}</span>
+              <input
+                value={mainPrice}
+                onChange={(e) => setMainPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                inputMode="numeric"
+                placeholder="0"
+                required
+                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "stockNowLabel")}</span>
+              <input
+                value={mainStock}
+                onChange={(e) => setMainStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
+                inputMode="decimal"
+                placeholder="0"
+                required
+                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
+              />
+            </label>
+          </div>
+
+          <details className="group rounded-2xl border-2 border-slate-200 bg-white/90 px-4 open:pb-3 open:pt-1">
+            <summary className="cursor-pointer list-none py-4 text-base font-black text-slate-900 marker:hidden [&::-webkit-details-marker]:hidden">
+              <span className="flex items-center justify-between gap-2">
+                {t(lang, "trackBuyingProfit")}
+                <span className="text-xs font-bold text-waka-700">{t(lang, "optional")}</span>
+              </span>
+            </summary>
+            <p className="text-xs text-slate-500">{t(lang, "trackBuyingProfitHint")}</p>
+            <div className="mt-3 space-y-3">
+              <label className="block text-sm font-bold text-slate-800">
+                {t(lang, "howYouBuyPack")}
+                <input
+                  value={boughtAs}
+                  onChange={(e) => setBoughtAs(e.target.value)}
+                  placeholder={t(lang, "howYouBuyPackPh")}
+                  className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                />
+              </label>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "buyingPackPriceLabel")}
+                  <input
+                    value={buyPackPrice}
+                    onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                    inputMode="numeric"
+                    placeholder="0"
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "howManyInsideLabel")}
+                  <input
+                    value={piecesInside}
+                    onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                    inputMode="decimal"
+                    placeholder="20"
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                  />
+                </label>
+              </div>
+              <label className="block text-sm font-bold text-slate-800">
+                {t(lang, "supplierOptionalLabel")}
+                <input
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  placeholder={t(lang, "supplierOptionalPh")}
+                  className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                />
+              </label>
+            </div>
+          </details>
+
+          <button
+            type="submit"
+            className="w-full min-h-[56px] rounded-3xl bg-waka-600 py-4 text-xl font-black text-white shadow-md active:scale-[0.99] active:bg-waka-700"
+          >
+            {t(lang, "saveProduct")}
+          </button>
+        </form>
+      ) : null}
+
       {products.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50 to-white p-6 text-center shadow-sm">
           <p className="text-2xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "stockEmptySub")}</p>
-          <p className="mt-1 text-base font-semibold text-waka-800">{t(lang, "stockEmptyHint")}</p>
+          <p className="mt-2 text-base font-semibold text-waka-900">{t(lang, "stockEmptyUseFormAbove")}</p>
           {canAdd ? (
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
                 type="button"
                 onClick={() => setQuickOpen(true)}
-                className="rounded-3xl bg-waka-600 px-6 py-5 text-xl font-black text-white shadow-lg active:scale-[0.99]"
+                className="rounded-3xl border-2 border-waka-300 bg-white px-6 py-4 text-lg font-black text-waka-900"
               >
                 {t(lang, "quickAddOpen")}
               </button>
               <button
                 type="button"
                 onClick={openStarter}
-                className="rounded-3xl border-2 border-waka-300 bg-white px-6 py-5 text-xl font-black text-waka-900"
+                className="rounded-3xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-lg active:scale-[0.99]"
               >
                 {t(lang, "starterPackOpen")}
               </button>
@@ -335,206 +505,35 @@ export function StockPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      {canAdd && products.length > 0 ? (
-      <div className="grid gap-3 sm:grid-cols-3">
-        <button
-          type="button"
-          onClick={() => setQuickOpen(true)}
-          className="min-h-[72px] rounded-3xl bg-waka-600 py-4 text-lg font-black text-white shadow-md active:bg-waka-700"
-        >
-          {t(lang, "quickAddOpen")}
-        </button>
-        <button
-          type="button"
-          onClick={openStarter}
-          className="min-h-[72px] rounded-3xl border-2 border-slate-200 bg-white py-4 text-lg font-black text-slate-900"
-        >
-          {t(lang, "starterPackOpen")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setBulkOpen(true)}
-          className="min-h-[72px] rounded-3xl border-2 border-violet-200 bg-violet-50 py-4 text-lg font-black text-violet-950"
-        >
-          {t(lang, "bulkAddOpen")}
-        </button>
-      </div>
-      ) : null}
-
       {canAdd ? (
-        <>
-      <button
-        type="button"
-        onClick={() => setShowAdvanced((x) => !x)}
-        className="w-full rounded-2xl border-2 border-slate-200 py-3 text-base font-bold text-slate-700"
-      >
-        {showAdvanced ? t(lang, "hideExtraFields") : t(lang, "showExtraFields")}
-      </button>
-
-      {showAdvanced ? (
-        <form onSubmit={submit} className="space-y-3 rounded-3xl border-2 border-slate-100 bg-white p-5">
-          <p className="text-lg font-black text-slate-900">{t(lang, "addProductShort")}</p>
-          <p className="text-sm text-slate-500">{t(lang, "advancedFormHint")}</p>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t(lang, "productNamePh")}
-            required
-            className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-          />
-          <div>
-            <p className="text-sm font-semibold text-slate-700">{t(lang, "categorySectionTitle")}</p>
-            <p className="mt-1 text-xs text-slate-500">{t(lang, "categoryPickHint")}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {PRODUCT_CATEGORY_PRESET_KEYS.map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setCategoryPreset(key);
-                    setCategoryCustom("");
-                  }}
-                  className={`rounded-full border-2 px-3 py-2 text-sm font-bold transition-waka ${
-                    categoryPreset === key ? "border-waka-600 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-800"
-                  }`}
-                >
-                  {t(lang, `productCat_${key}`)}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setCategoryPreset("other")}
-                className={`rounded-full border-2 px-3 py-2 text-sm font-bold ${
-                  categoryPreset === "other" ? "border-waka-600 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-800"
-                }`}
-              >
-                {t(lang, "categoryOther")}
-              </button>
-            </div>
-            {categoryPreset === "other" ? (
-              <input
-                value={categoryCustom}
-                onChange={(e) => setCategoryCustom(e.target.value)}
-                placeholder={t(lang, "categoryCustomPlaceholder")}
-                className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            ) : null}
-          </div>
-          <label className="block text-sm font-semibold text-slate-700">
-            {t(lang, "howYouSell")}
-            <select
-              value={sellingMode}
-              onChange={(e) => setSellingMode(e.target.value as SellingMode)}
-              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-            >
-              {modes.map((m) => (
-                <option key={m} value={m}>
-                  {t(lang, `mode_${m}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t(lang, "countUnit")}
-              <select
-                value={baseUnitPreset}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setBaseUnitPreset(v);
-                  if (v !== "custom") setBaseUnit(v);
-                }}
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
-              >
-                {businessUnitOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-                <option value="custom">{t(lang, "unitCustomOption")}</option>
-              </select>
-              {baseUnitPreset === "custom" ? (
-                <input
-                  value={baseUnit}
-                  onChange={(e) => setBaseUnit(e.target.value)}
-                  placeholder={t(lang, "unitCustomPlaceholder")}
-                  className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
-                />
-              ) : null}
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              {t(lang, "buyPackOptional")}
-              <input
-                value={buyingUnit}
-                onChange={(e) => setBuyingUnit(e.target.value)}
-                placeholder={t(lang, "buyPackPh")}
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
-              />
-            </label>
-          </div>
-          <label className="block text-sm font-semibold text-slate-700">
-            {t(lang, "conversionOptional")}
-            <input
-              value={conversionRate}
-              onChange={(e) => setConversionRate(e.target.value)}
-              placeholder="20"
-              inputMode="decimal"
-              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
-            />
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t(lang, "sellPricePerUnit")}
-              <input
-                value={sellPrice}
-                onChange={(e) => setSellPrice(e.target.value)}
-                required
-                inputMode="numeric"
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              {t(lang, "costPricePerUnit")}
-              <input
-                value={costPrice}
-                onChange={(e) => setCostPrice(e.target.value)}
-                inputMode="numeric"
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            </label>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm font-semibold text-slate-700">
-              {t(lang, "howMuchStock")}
-              <input
-                value={stock}
-                onChange={(e) => setStock(e.target.value)}
-                required
-                inputMode="decimal"
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            </label>
-            <label className="block text-sm font-semibold text-slate-700">
-              {t(lang, "warnWhenLow")}
-              <input
-                value={minAlert}
-                onChange={(e) => setMinAlert(e.target.value)}
-                inputMode="decimal"
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            </label>
-          </div>
-          <button type="submit" className="w-full rounded-3xl bg-slate-900 py-4 text-xl font-black text-white">
-            {t(lang, "saveProduct")}
+        <div className="grid gap-3 sm:grid-cols-3">
+          <button
+            type="button"
+            onClick={() => setQuickOpen(true)}
+            className="min-h-[64px] rounded-3xl border-2 border-waka-200 bg-white py-4 text-base font-black text-waka-900 shadow-sm active:bg-waka-50"
+          >
+            {t(lang, "quickAddOpen")}
           </button>
-        </form>
-      ) : null}
-        </>
+          <button
+            type="button"
+            onClick={openStarter}
+            className="min-h-[64px] rounded-3xl border-2 border-slate-200 bg-white py-4 text-base font-black text-slate-900 active:bg-slate-50"
+          >
+            {t(lang, "starterPackOpen")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setBulkOpen(true)}
+            className="min-h-[64px] rounded-3xl border-2 border-violet-200 bg-violet-50 py-4 text-base font-black text-violet-950"
+          >
+            {t(lang, "bulkAddOpen")}
+          </button>
+        </div>
       ) : null}
 
       <section className="space-y-4">
         <h2 className="text-2xl font-black text-slate-900">{t(lang, "quickStockFix")}</h2>
-        {products.length === 0 && !showAdvanced ? (
+        {products.length === 0 ? (
           <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-lg text-slate-600">{t(lang, "stockListEmptyHint")}</p>
         ) : null}
         {products.map((p) => (
@@ -712,6 +711,45 @@ export function StockPage({ lang }: { lang: Language }) {
                 autoFocus
               />
             </label>
+            <div className="mt-4">
+              <p className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</p>
+              <div className="mt-2 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
+                {businessUnitOptions.map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => {
+                      setQaUnitPreset(u);
+                      setQaUnitCustom("");
+                    }}
+                    className={`min-h-[40px] rounded-full border-2 px-3 py-1.5 text-xs font-black ${
+                      qaUnitPreset === u && qaUnitPreset !== "custom"
+                        ? "border-waka-600 bg-waka-600 text-white"
+                        : "border-slate-200 bg-white text-slate-800"
+                    }`}
+                  >
+                    {u}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setQaUnitPreset("custom")}
+                  className={`min-h-[40px] rounded-full border-2 px-3 py-1.5 text-xs font-black ${
+                    qaUnitPreset === "custom" ? "border-waka-600 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-800"
+                  }`}
+                >
+                  {t(lang, "unitCustomOption")}
+                </button>
+              </div>
+              {qaUnitPreset === "custom" ? (
+                <input
+                  value={qaUnitCustom}
+                  onChange={(e) => setQaUnitCustom(e.target.value)}
+                  placeholder={t(lang, "unitCustomPlaceholder")}
+                  className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                />
+              ) : null}
+            </div>
             {guessPreview ? (
               <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
                 {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}

@@ -24,6 +24,7 @@ export function createDefaultPreferences(): ShopPreferences {
     staffAccounts: [],
     activeStaffId: null,
     posLocked: false,
+    shifts: [],
   };
 }
 
