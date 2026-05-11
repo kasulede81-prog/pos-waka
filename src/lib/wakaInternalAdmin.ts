@@ -21,12 +21,27 @@ export type InternalAdminRow = {
   created_at: string | null;
 };
 
+export type LatestSignupCard = {
+  shop_id: string;
+  shop_name: string;
+  created_at: string;
+  district: string | null;
+  owner_email: string | null;
+  owner_name: string | null;
+  plan_code: string | null;
+  subscription_status: string | null;
+  trial_ends_at: string | null;
+};
+
 export type InternalDashboardStats = {
   totalShops: number;
   activeToday: number;
   trialSubscriptions: number;
   paidSubscriptions: number;
   expiredSubscriptions: number;
+  suspendedShops: number;
+  pendingAiRequests: number;
+  pendingAnnualRequests: number;
   /** Trials past end date but still marked trial/trialing (ops signal). */
   lapsedTrials: number;
   /** Trials ending within the next 7 days. */
@@ -37,6 +52,7 @@ export type InternalDashboardStats = {
   openSupportTickets: number;
   salesTotalUgx: number | null;
   shopsByDistrict: { label: string; count: number }[];
+  latestSignups: LatestSignupCard[];
 };
 
 function kampalaDayStartIso(): string {
@@ -161,18 +177,40 @@ function parseMetricsRpcPayload(raw: unknown): InternalDashboardStats | null {
       })
       .filter((x) => x.label.length > 0);
   }
+  const latestRaw = j.latest_signups;
+  let latestSignups: LatestSignupCard[] = [];
+  if (Array.isArray(latestRaw)) {
+    latestSignups = latestRaw.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        shop_id: String(r.shop_id ?? ""),
+        shop_name: String(r.shop_name ?? "—"),
+        created_at: String(r.created_at ?? ""),
+        district: (r.district as string) ?? null,
+        owner_email: (r.owner_email as string) ?? null,
+        owner_name: (r.owner_name as string) ?? null,
+        plan_code: (r.plan_code as string) ?? null,
+        subscription_status: (r.subscription_status as string) ?? null,
+        trial_ends_at: (r.trial_ends_at as string) ?? null,
+      };
+    });
+  }
   return {
     totalShops: Number(j.total_shops ?? 0),
     activeToday: Number(j.active_today ?? 0),
     trialSubscriptions: Number(j.trial_subscriptions ?? 0),
     paidSubscriptions: Number(j.paid_subscriptions ?? 0),
     expiredSubscriptions: Number(j.expired_subscriptions ?? 0),
+    suspendedShops: Number(j.suspended_shops ?? 0),
+    pendingAiRequests: Number(j.pending_ai_requests ?? 0),
+    pendingAnnualRequests: Number(j.pending_annual_requests ?? 0),
     lapsedTrials: Number(j.lapsed_trials ?? 0),
     expiringTrialsNext7d: Number(j.expiring_trials_7d ?? 0),
     activeDevices: Number(j.active_devices ?? 0),
     openSupportTickets: Number(j.open_support ?? 0),
     salesTotalUgx: j.sales_total_ugx === null || j.sales_total_ugx === undefined ? null : Number(j.sales_total_ugx),
     shopsByDistrict,
+    latestSignups,
   };
 }
 
@@ -278,12 +316,16 @@ export async function fetchInternalDashboardStats(): Promise<FetchInternalDashbo
       trialSubscriptions: subsTrial.count ?? 0,
       paidSubscriptions: subsPaid.count ?? 0,
       expiredSubscriptions: subsExpired.count ?? 0,
+      suspendedShops: 0,
+      pendingAiRequests: 0,
+      pendingAnnualRequests: 0,
       lapsedTrials: lapsed.error ? 0 : (lapsed.count ?? 0),
       expiringTrialsNext7d: exp7.error ? 0 : (exp7.count ?? 0),
       activeDevices,
       openSupportTickets: supOpen.error ? 0 : (supOpen.count ?? 0),
       salesTotalUgx,
       shopsByDistrict,
+      latestSignups: [],
     },
   };
 }
@@ -352,6 +394,21 @@ export async function markFieldVisitCompleted(visitId: string, notes?: string): 
   });
   if (error) return { ok: false, message: error.message };
   return { ok: true };
+}
+
+export async function internalOpsActivateAiStockAssistant(
+  organizationId: string,
+  trialDays = 14,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("internal_ops_activate_ai_stock_assistant", {
+    p_organization_id: organizationId,
+    p_trial_days: trialDays,
+  });
+  if (error) return { ok: false, message: error.message };
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok) return { ok: true };
+  return { ok: false, message: j.error ?? "Could not activate AI assistant." };
 }
 
 export function googleMapsDirectionsUrl(lat: number, lng: number): string {
@@ -458,6 +515,7 @@ export type SupportTicketRow = {
   priority: string;
   channel: string;
   created_at: string;
+  organization_id?: string | null;
   shop_id: string | null;
   shop_name: string | null;
   shop_district: string | null;
@@ -482,6 +540,10 @@ export type FieldMapPin = {
   city: string | null;
   is_active: boolean;
   district_id: string | null;
+  owner_label?: string | null;
+  plan_code?: string | null;
+  subscription_status?: string | null;
+  last_seen_at?: string | null;
 };
 
 export type ShopDeviceRow = {
@@ -633,6 +695,7 @@ function mapSupportRpcRow(row: Record<string, unknown>): SupportTicketRow {
     priority: row.priority as string,
     channel: row.channel as string,
     created_at: row.created_at as string,
+    organization_id: (row.organization_id as string) ?? null,
     shop_id: (row.shop_id as string) ?? null,
     shop_name: (row.shop_name as string) ?? null,
     shop_district: (row.shop_district as string) ?? null,
@@ -652,11 +715,20 @@ function mapSupportRpcRow(row: Record<string, unknown>): SupportTicketRow {
   };
 }
 
+function normalizeSupportQueueRpcData(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data != null && typeof data === "object" && Array.isArray((data as { rows?: unknown }).rows)) {
+    return (data as { rows: Record<string, unknown>[] }).rows;
+  }
+  return [];
+}
+
 export async function fetchSupportTickets(limit = 25): Promise<SupportTicketRow[]> {
   if (!supabase) return [];
   const { data, error } = await supabase.rpc("internal_ops_support_queue", { p_limit: limit });
-  if (!error && Array.isArray(data)) {
-    return (data as Record<string, unknown>[]).map((row) => mapSupportRpcRow(row));
+  const rows = normalizeSupportQueueRpcData(data);
+  if (!error && rows.length) {
+    return rows.map((row) => mapSupportRpcRow(row));
   }
   const { data: fallback, error: fbErr } = await supabase
     .from("support_requests")
@@ -670,6 +742,7 @@ export async function fetchSupportTickets(limit = 25): Promise<SupportTicketRow[
       const shop = Array.isArray(sh) ? sh[0] : sh;
       return mapSupportRpcRow({
         ...row,
+        organization_id: null,
         shop_id: shop?.id ?? null,
         shop_name: shop?.name ?? null,
         shop_district: shop?.district ?? null,
@@ -703,6 +776,10 @@ export async function fetchFieldMapPins(opts?: { districtId?: string | null; lim
     city: (r.city as string) ?? null,
     is_active: Boolean(r.is_active),
     district_id: (r.district_id as string) ?? null,
+    owner_label: (r.owner_label as string) ?? null,
+    plan_code: (r.plan_code as string) ?? null,
+    subscription_status: (r.subscription_status as string) ?? null,
+    last_seen_at: (r.last_seen_at as string) ?? null,
   }));
 }
 

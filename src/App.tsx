@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
 import { RoleProtectedRoute } from "./components/RoleProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
@@ -38,6 +39,9 @@ const OwnerDashboardPage = lazy(() =>
 );
 const StaffActivityPage = lazy(() =>
   import("./pages/StaffActivityPage").then((m) => ({ default: m.StaffActivityPage })),
+);
+const HardwareSettingsPage = lazy(() =>
+  import("./pages/HardwareSettingsPage").then((m) => ({ default: m.HardwareSettingsPage })),
 );
 
 function LazyWait() {
@@ -120,28 +124,39 @@ function App() {
         />
 
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
-          <Route
-            element={
-              <SubscriptionProvider user={auth.user} authMode={auth.mode}>
-                <PosDataProvider lang={lang} accountKey={auth.accountKey}>
-                  <SyncStatusProvider>
-                    <BackOfficeSessionProvider>
-                      <AppShell
-                        lang={lang}
-                        setLang={setLang}
-                        onSignOut={auth.signOut}
-                        user={auth.user}
-                        email={auth.email}
-                        authMode={auth.mode}
-                      />
-                    </BackOfficeSessionProvider>
-                  </SyncStatusProvider>
-                </PosDataProvider>
-              </SubscriptionProvider>
-            }
-          >
+          <Route element={<BusinessProfileRequiredRoute authMode={auth.mode} />}>
+            <Route
+              element={
+                <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+                  <PosDataProvider lang={lang} accountKey={auth.accountKey}>
+                    <SyncStatusProvider>
+                      <BackOfficeSessionProvider>
+                        <AppShell
+                          lang={lang}
+                          setLang={setLang}
+                          onSignOut={auth.signOut}
+                          user={auth.user}
+                          email={auth.email}
+                          authMode={auth.mode}
+                        />
+                      </BackOfficeSessionProvider>
+                    </SyncStatusProvider>
+                  </PosDataProvider>
+                </SubscriptionProvider>
+              }
+            >
             <Route index element={<DashboardPage lang={lang} />} />
             <Route path="office" element={<OfficeHubPage lang={lang} />} />
+            <Route
+              path="office/hardware"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <HardwareSettingsPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="upgrade" element={<UpgradePage lang={lang} />} />
             <Route
               path="stock"
@@ -242,6 +257,7 @@ function App() {
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
+            </Route>
           </Route>
         </Route>
 

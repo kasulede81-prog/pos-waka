@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { Camera, MediaType } from "@capacitor/camera";
@@ -9,6 +9,7 @@ import { applyLocalOcrCleanup, buildOcrReviewRows, selectedRowsToBulkInput } fro
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { canUseAiStockTools, fetchMyFeatureEntitlements } from "../lib/shopRequests";
 
 type Step = "choose" | "review";
 
@@ -17,8 +18,15 @@ const isAndroidNative = () => Capacitor.isNativePlatform() && Capacitor.getPlatf
 export function OcrInventoryImportPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const bulkQuickAddProducts = usePosStore((s) => s.bulkQuickAddProducts);
+  const [aiGate, setAiGate] = useState<"check" | "ok" | "no">("check");
 
   const canAdd = hasPermission(actor.role, "products.add");
+
+  useEffect(() => {
+    void fetchMyFeatureEntitlements().then((ent) => {
+      setAiGate(canUseAiStockTools(ent) ? "ok" : "no");
+    });
+  }, []);
   const [step, setStep] = useState<Step>("choose");
   const [mode, setMode] = useState<OcrCaptureMode>("stock_list");
   const [category, setCategory] = useState("General");
@@ -112,6 +120,13 @@ export function OcrInventoryImportPage({ lang }: { lang: Language }) {
 
   if (!canAdd) {
     return <Navigate to="/stock" replace />;
+  }
+
+  if (aiGate === "check") {
+    return <div className="flex min-h-[40vh] items-center justify-center text-sm font-semibold text-slate-600">Loading…</div>;
+  }
+  if (aiGate === "no") {
+    return <Navigate to="/office" replace />;
   }
 
   return (

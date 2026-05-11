@@ -1,0 +1,152 @@
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { Sparkles, Headphones, Cpu } from "lucide-react";
+import type { Language } from "../../types";
+import { t } from "../../lib/i18n";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
+import {
+  canUseAiStockTools,
+  fetchMyFeatureEntitlements,
+  requestAiStockAssistant,
+  requestAnnualPlanSupport,
+  requestFreeAiTrial,
+  requestSubscriptionPlanChange,
+  type MyFeatureEntitlements,
+} from "../../lib/shopRequests";
+
+export function OfficePremiumSection({ lang }: { lang: Language }) {
+  const { snapshot, authMode, daysLeftInTrial, refetch } = useSubscription();
+  const [ent, setEnt] = useState<MyFeatureEntitlements | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchMyFeatureEntitlements().then(setEnt);
+  }, []);
+
+  const plan = authMode === "supabase" && snapshot.kind === "remote" ? resolveEffectivePlanTier(snapshot) : "starter";
+  const trialLeft = daysLeftInTrial;
+  const aiActive = canUseAiStockTools(ent);
+
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; message?: string }>) => {
+    setMsg(null);
+    setBusy(key);
+    const r = await fn();
+    setBusy(null);
+    if (!r.ok) setMsg(r.message ?? t(lang, "officePremiumRequestFail"));
+    else setMsg(t(lang, "officePremiumRequestOk"));
+    void refetch();
+    const e = await fetchMyFeatureEntitlements();
+    setEnt(e);
+    window.dispatchEvent(new Event("waka:feature-entitlements-changed"));
+  };
+
+  if (authMode !== "supabase") return null;
+
+  return (
+    <section className="space-y-4 rounded-3xl border-2 border-orange-300 bg-gradient-to-br from-orange-500 via-orange-500 to-amber-600 p-5 text-white shadow-[0_16px_50px_rgba(234,88,12,0.35)] sm:p-7">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-100">
+            <Sparkles className="h-4 w-4" />
+            {t(lang, "officePremiumBadge")}
+          </p>
+          <h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">{t(lang, "officePremiumTitle")}</h2>
+          <p className="mt-2 max-w-xl text-sm font-semibold text-orange-50">{t(lang, "officePremiumSub")}</p>
+        </div>
+        <Link
+          to="/upgrade"
+          className="min-h-[48px] rounded-2xl bg-white px-5 py-3 text-sm font-black text-orange-700 shadow-lg active:scale-[0.99]"
+        >
+          {t(lang, "officePremiumUpgrade")}
+        </Link>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25">
+          <p className="text-xs font-black uppercase tracking-wide text-orange-100">{t(lang, "officePremiumPlanLabel")}</p>
+          <p className="mt-1 font-mono text-xl font-black capitalize">{plan}</p>
+          <p className="mt-1 text-xs font-semibold text-orange-50">
+            {trialLeft != null ? t(lang, "officePremiumTrialDays").replace("{{n}}", String(trialLeft)) : t(lang, "officePremiumNoTrial")}
+          </p>
+        </div>
+        <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25">
+          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-orange-100">
+            <Cpu className="h-4 w-4" />
+            {t(lang, "officePremiumAiStatus")}
+          </p>
+          <p className="mt-1 text-sm font-bold text-white">
+            {aiActive ? t(lang, "officePremiumAiOn") : ent?.ai_stock_assistant === "pending" ? t(lang, "officePremiumAiPending") : t(lang, "officePremiumAiOff")}
+          </p>
+        </div>
+      </div>
+
+      {msg ? <p className="rounded-xl bg-black/20 px-3 py-2 text-sm font-semibold text-white">{msg}</p> : null}
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => void run("trial", () => requestSubscriptionPlanChange("starter"))}
+          className="min-h-[48px] flex-1 rounded-2xl border-2 border-white/40 bg-white/10 px-4 py-3 text-sm font-black text-white backdrop-blur-sm hover:bg-white/20 disabled:opacity-50"
+        >
+          {busy === "trial" ? "…" : t(lang, "officePremiumRequestTrial")}
+        </button>
+        <Link
+          to="/support"
+          className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-white/50 bg-black/20 px-4 py-3 text-sm font-black text-white hover:bg-black/30"
+        >
+          <Headphones className="h-4 w-4" />
+          {t(lang, "officePremiumSupportChat")}
+        </Link>
+      </div>
+
+      <div className="rounded-2xl border border-white/25 bg-black/15 p-4">
+        <p className="text-sm font-black text-white">{t(lang, "officeAnnualTitle")}</p>
+        <p className="mt-1 text-xs font-medium text-orange-50">{t(lang, "officeAnnualBody")}</p>
+        <button
+          type="button"
+          disabled={Boolean(busy)}
+          onClick={() => void run("annual", requestAnnualPlanSupport)}
+          className="mt-3 w-full rounded-xl bg-white py-2.5 text-sm font-black text-orange-800 disabled:opacity-50"
+        >
+          {busy === "annual" ? "…" : t(lang, "officeAnnualRequest")}
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-white/25 bg-black/10 p-4">
+        <p className="text-sm font-black text-white">{t(lang, "officeAiSectionTitle")}</p>
+        <p className="mt-1 text-xs font-medium text-orange-50">{t(lang, "officeAiSectionBody")}</p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => void run("ai", requestAiStockAssistant)}
+            className="min-h-[44px] flex-1 rounded-xl bg-white py-2.5 text-sm font-black text-orange-900 disabled:opacity-50"
+          >
+            {busy === "ai" ? "…" : t(lang, "officeAiRequestCta")}
+          </button>
+          <button
+            type="button"
+            disabled={Boolean(busy)}
+            onClick={() => void run("aitrial", requestFreeAiTrial)}
+            className="min-h-[44px] flex-1 rounded-xl border-2 border-white/50 py-2.5 text-sm font-black text-white disabled:opacity-50"
+          >
+            {busy === "aitrial" ? "…" : t(lang, "officeAiTrialCta")}
+          </button>
+        </div>
+        {aiActive ? (
+          <Link
+            to="/stock/import-ocr"
+            className="mt-3 block text-center text-sm font-black text-white underline decoration-white/60"
+          >
+            {t(lang, "officeAiOpenTools")} →
+          </Link>
+        ) : null}
+      </div>
+
+      <p className="text-center text-xs font-semibold text-orange-100">{t(lang, "officeEnterpriseHint")}</p>
+    </section>
+  );
+}

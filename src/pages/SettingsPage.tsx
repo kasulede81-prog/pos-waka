@@ -1,15 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../types";
-import { hasSupabaseConfig } from "../lib/supabase";
+import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canUseDevRoleSimulator, hasPermission, resolveAuthRole } from "../lib/permissions";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
 import { SyncHealthCard } from "../components/SyncHealthCard";
-import { loadPrimaryShopLocationFromCloud, normalizeUgPhoneE164, saveBusinessProfileToCloud } from "../lib/businessProfile";
+import {
+  loadPrimaryShopLocationFromCloud,
+  normalizeUgPhoneE164,
+  saveBusinessProfileToCloud,
+  saveOwnerBusinessProfileBundleRpc,
+} from "../lib/businessProfile";
+import { useOfflineStatus } from "../hooks/useOfflineStatus";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 
 type Props = {
@@ -24,6 +30,7 @@ type Props = {
 const ROLE_OPTIONS: UserRole[] = ["owner", "manager", "cashier", "stock_keeper"];
 
 export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode }: Props) {
+  const { isOnline } = useOfflineStatus();
   const actor = useSessionActor();
   const canBackup = hasPermission(actor.role, "settings.shop");
   const preferences = usePosStore((s) => s.preferences);
@@ -46,6 +53,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
   const [shopLng, setShopLng] = useState<number | null>(null);
   const [gpsHint, setGpsHint] = useState<string | null>(null);
   const [recordGpsSnapshot, setRecordGpsSnapshot] = useState(false);
+  const wasOfflineRef = useRef(false);
 
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
   const authResolved = resolveAuthRole({ mode: authMode, userMetadata: meta });
@@ -82,27 +90,56 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
         shopAddressLine: shopAddressInput.trim() || null,
         shopCurrency: shopCurrencyInput.trim().toUpperCase() || "UGX",
       });
-      await saveBusinessProfileToCloud(
-        {
+      if (authMode === "supabase") {
+        const ph = normalizeUgPhoneE164(shopPhoneInput);
+        if (!ph || !districtIdSel) throw new Error(t(lang, "registerFieldRequired"));
+        const rpc = await saveOwnerBusinessProfileBundleRpc({
           shopName: shopNameInput.trim(),
           businessType: preferences.businessType,
-          currency: shopCurrencyInput,
-          phone: shopPhoneInput,
+          districtId: districtIdSel,
+          phoneE164: ph,
+          currency: shopCurrencyInput.trim().toUpperCase() || "UGX",
           address: shopAddressInput,
-          ownerName: ownerDisplayName || undefined,
-          applyShopLocation: authMode === "supabase",
-          districtId: districtIdSel || null,
           city: shopCityField,
           area: shopAreaField,
           latitude: shopLat,
           longitude: shopLng,
-          recordGpsInHistory: recordGpsSnapshot && shopLat != null && shopLng != null,
-        },
-        false,
-      );
+        });
+        if (!rpc.ok) throw new Error(rpc.message ?? t(lang, "businessProfileSaveFailed"));
+        if (recordGpsSnapshot && shopLat != null && shopLng != null && supabase && rpc.shopId) {
+          const { error: locErr } = await supabase.from("shop_locations").insert({
+            shop_id: rpc.shopId,
+            latitude: shopLat,
+            longitude: shopLng,
+            source: "device_gps",
+            is_primary: true,
+          });
+          if (locErr) console.error("[waka-settings] shop_locations insert", locErr);
+        }
+      } else {
+        await saveBusinessProfileToCloud(
+          {
+            shopName: shopNameInput.trim(),
+            businessType: preferences.businessType,
+            currency: shopCurrencyInput,
+            phone: shopPhoneInput,
+            address: shopAddressInput,
+            ownerName: ownerDisplayName || undefined,
+            applyShopLocation: false,
+            districtId: districtIdSel || null,
+            city: shopCityField,
+            area: shopAreaField,
+            latitude: shopLat,
+            longitude: shopLng,
+            recordGpsInHistory: recordGpsSnapshot && shopLat != null && shopLng != null,
+          },
+          false,
+        );
+      }
       setRecordGpsSnapshot(false);
       setProfileSaveError(null);
       setProfileFeedback(t(lang, "businessProfileSaved"));
+      window.dispatchEvent(new CustomEvent("waka:onboarding-updated"));
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[waka-settings] business profile save failed", e);
@@ -149,6 +186,22 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
       cancelled = true;
     };
   }, [authMode, actor.role]);
+
+  useEffect(() => {
+    if (!isOnline) wasOfflineRef.current = true;
+  }, [isOnline]);
+
+  useEffect(() => {
+    if (!isOnline || authMode !== "supabase" || profileBusy) return;
+    if (!wasOfflineRef.current) return;
+    if (!profileSaveError) return;
+    const net = /failed to fetch|networkerror|network request failed|load failed|offline|timed out|timeout/i.test(
+      profileSaveError,
+    );
+    if (!net) return;
+    wasOfflineRef.current = false;
+    void saveBusinessProfileClick();
+  }, [isOnline, authMode, profileBusy, profileSaveError, saveBusinessProfileClick]);
 
   return (
     <div className="space-y-5 pb-8">

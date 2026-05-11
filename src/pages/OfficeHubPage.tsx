@@ -13,12 +13,14 @@ import {
   LayoutDashboard,
   ScrollText,
   UserCog,
+  Printer,
 } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
 
 type Card = {
   to: string;
@@ -82,6 +84,12 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       perm: hasEffectivePermission(actor.role, "day.close", snapshot, authMode),
     },
     {
+      to: "/office/hardware",
+      titleKey: "officeCardHardware",
+      Icon: Printer,
+      perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
+    },
+    {
       to: "/settings",
       titleKey: "officeCardSettings",
       Icon: Settings,
@@ -115,6 +123,8 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         <h1 className="text-3xl font-black text-stone-900">{t(lang, "officeHubTitle")}</h1>
         <p className="mt-2 text-base font-medium text-stone-600">{t(lang, "officeHubSub")}</p>
       </div>
+
+      <OfficePremiumSection lang={lang} />
 
       {visible.length === 0 ? (
         <p className="rounded-2xl bg-amber-50 px-4 py-4 text-sm font-bold text-amber-950">{t(lang, "officeHubEmpty")}</p>

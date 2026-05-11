@@ -2,6 +2,43 @@ import type { BusinessType } from "../types";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 
+export type SaveOwnerBundleArgs = {
+  shopName: string;
+  businessType: BusinessType;
+  districtId: string;
+  phoneE164: string;
+  currency: string;
+  address?: string;
+  city?: string;
+  area?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+/** Single transactional save (organizations + shops + profiles + starter trial if missing). */
+export async function saveOwnerBusinessProfileBundleRpc(
+  args: SaveOwnerBundleArgs,
+): Promise<{ ok: boolean; message?: string; shopId?: string; organizationId?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("save_owner_business_profile_bundle", {
+    p_shop_name: args.shopName.trim(),
+    p_business_type: args.businessType,
+    p_district_id: args.districtId,
+    p_phone_e164: args.phoneE164.trim(),
+    p_currency: args.currency.trim().toUpperCase(),
+    p_address: args.address?.trim() || null,
+    p_city: args.city?.trim() || null,
+    p_area: args.area?.trim() || null,
+    p_latitude: args.latitude ?? null,
+    p_longitude: args.longitude ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  const j = (data ?? {}) as { ok?: boolean; error?: string; detail?: string; shop_id?: string; organization_id?: string };
+  if (j.ok) return { ok: true, shopId: j.shop_id, organizationId: j.organization_id };
+  const detail = j.detail ? ` (${j.detail})` : "";
+  return { ok: false, message: `${j.error ?? "save_failed"}${detail}` };
+}
+
 export type BusinessProfileInput = {
   shopName: string;
   businessType: BusinessType;
