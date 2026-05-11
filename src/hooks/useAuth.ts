@@ -123,14 +123,29 @@ export function useAuth() {
       throw new Error("Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to create an account.");
     }
     const redirectTo = `${authRedirectOrigin()}/auth/callback`;
-    const { data, error } = await supabase.auth.signUp({
+    const firstAttempt = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectTo,
-        data: { business_name: businessName.trim(), business_type: businessType, pos_role: "owner", role: "owner" },
+        data: { business_name: businessName.trim(), business_type: businessType, pos_role: "owner" },
       },
     });
+    let data = firstAttempt.data;
+    let error = firstAttempt.error;
+    const maybeDbSignupFailure = (error?.message ?? "").toLowerCase().includes("database error saving new user");
+    if (maybeDbSignupFailure) {
+      if (import.meta.env.DEV) {
+        console.warn("[waka-auth] signUp retry without metadata after DB error");
+      }
+      const retry = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo },
+      });
+      data = retry.data;
+      error = retry.error;
+    }
     if (error) {
       if (import.meta.env.DEV) {
         console.error("[waka-auth] signUp failed", {
