@@ -1,17 +1,18 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import type { Language } from "../types";
+import type { BusinessType, Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpResult } from "../hooks/useAuth";
+import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 
 type Props = {
   lang: Language;
   setLang: (lg: Language) => void;
   isAuthenticated: boolean;
-  signUp: (email: string, password: string, businessName: string) => Promise<SignUpResult>;
+  signUp: (email: string, password: string, businessName: string, businessType: BusinessType) => Promise<SignUpResult>;
 };
 
 export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) {
@@ -19,6 +20,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
   const [businessName, setBusinessName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [businessType, setBusinessType] = useState<BusinessType>("kiosk_duka");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -35,11 +37,11 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
     }
     setBusy(true);
     try {
-      const result = await signUp(email, password, businessName.trim());
+      const result = await signUp(email, password, businessName.trim(), businessType);
       if (result.needsEmailVerification) navigate("/verify-email", { replace: true, state: { email } });
       else navigate("/", { replace: true });
     } catch (err) {
-      setError((err as Error).message);
+      setError((err as Error).message || t(lang, "signupWorkspaceError"));
     } finally {
       setBusy(false);
     }
@@ -68,6 +70,23 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp }: Props) 
                 className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
               />
             </label>
+            <div>
+              <p className="block text-sm font-medium">{t(lang, "registerBusinessTypeLabel")}</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {BUSINESS_TYPE_IDS.map((id) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setBusinessType(id)}
+                    className={`min-h-[44px] rounded-xl border px-3 py-2 text-left text-sm font-semibold ${
+                      businessType === id ? "border-waka-500 bg-waka-50 text-waka-900" : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                  >
+                    {t(lang, `businessType_${id}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
             <label className="block text-sm font-medium">
               {t(lang, "email")}
               <input

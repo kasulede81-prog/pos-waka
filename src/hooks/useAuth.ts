@@ -2,6 +2,8 @@ import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authRedirectOrigin, hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
+import type { BusinessType } from "../types";
+import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 
 type LocalSession = { email: string };
 
@@ -15,6 +17,32 @@ export function useAuth() {
   const [initializing, setInitializing] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [localEmail, setLocalEmail] = useState<string | null>(null);
+
+  const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
+
+  const ensureWorkspaceForSession = useCallback(async (next: Session | null) => {
+    if (!next?.user || !supabase) return;
+    if (bootstrappedUserIds[next.user.id]) return;
+
+    const meta = next.user.user_metadata as Record<string, unknown> | undefined;
+    const businessName =
+      String(meta?.business_name ?? "").trim() ||
+      String(meta?.shop_name ?? "").trim() ||
+      String(next.user.email ?? "").split("@")[0] ||
+      "My Shop";
+    const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
+    const fullName = String(meta?.full_name ?? "").trim();
+    try {
+      await bootstrapOwnerWorkspace(next.user, {
+        businessName,
+        businessType,
+        fullName,
+      });
+      setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+    } catch {
+      throw new Error("Could not finish creating your shop. Please try again.");
+    }
+  }, [bootstrappedUserIds]);
 
   useEffect(() => {
     if (!hasSupabaseConfig || !supabase) {
@@ -30,14 +58,23 @@ export function useAuth() {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session ?? null);
-      setInitializing(false);
+    supabase.auth.getSession().then(async ({ data }) => {
+      try {
+        await ensureWorkspaceForSession(data.session ?? null);
+      } catch {
+        /* keep auth session; user-facing flow handles message on register */
+      } finally {
+        setSession(data.session ?? null);
+        setInitializing(false);
+      }
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, next) => {
+      void ensureWorkspaceForSession(next).catch(() => {
+        /* non-blocking: preserves login while surfacing errors on active flows */
+      });
       setSession(next);
     });
 
@@ -58,7 +95,7 @@ export function useAuth() {
     setLocalEmail(email);
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, businessName: string): Promise<SignUpResult> => {
+  const signUp = useCallback(async (email: string, password: string, businessName: string, businessType: BusinessType): Promise<SignUpResult> => {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to create an account.");
     }
@@ -68,7 +105,7 @@ export function useAuth() {
       password,
       options: {
         emailRedirectTo: redirectTo,
-        data: { business_name: businessName.trim() },
+        data: { business_name: businessName.trim(), business_type: businessType, pos_role: "owner", role: "owner" },
       },
     });
     if (error) {
@@ -76,11 +113,12 @@ export function useAuth() {
       throw error;
     }
     if (data.session) {
+      await ensureWorkspaceForSession(data.session);
       setSession(data.session);
       return { needsEmailVerification: false, session: data.session };
     }
     return { needsEmailVerification: true };
-  }, []);
+  }, [ensureWorkspaceForSession]);
 
   const resendVerificationEmail = useCallback(async (email: string) => {
     if (!hasSupabaseConfig || !supabase) throw new Error("Supabase is not configured.");
