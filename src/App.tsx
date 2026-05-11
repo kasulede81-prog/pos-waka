@@ -24,6 +24,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
+import { StaffAccessPage } from "./pages/StaffAccessPage";
 import type { Language } from "./types";
 
 const OwnerDashboardPage = lazy(() =>
@@ -126,13 +127,56 @@ function App() {
           >
             <Route index element={<DashboardPage lang={lang} />} />
             <Route path="office" element={<OfficeHubPage lang={lang} />} />
-            <Route path="stock" element={<StockPage lang={lang} />} />
-            <Route path="suppliers" element={<SuppliersPage lang={lang} />} />
-            <Route path="restock" element={<RestockPage lang={lang} />} />
+            <Route
+              path="stock"
+              element={
+                <RoleProtectedRoute permission="stock.view">
+                  <StockPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="suppliers"
+              element={
+                <RoleProtectedRoute permission="suppliers.view">
+                  <SuppliersPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="restock"
+              element={
+                <RoleProtectedRoute permission="purchases.record">
+                  <RestockPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="inventory" element={<Navigate to="/stock" replace />} />
             <Route path="pos" element={<PosPage lang={lang} />} />
-            <Route path="reports" element={<ReportsPage lang={lang} />} />
-            <Route path="close-day" element={<CloseDayPage lang={lang} />} />
+            <Route
+              path="reports"
+              element={
+                <RoleProtectedRoute permission="reports.view">
+                  <ReportsPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="close-day"
+              element={
+                <RoleProtectedRoute permission="day.close">
+                  <CloseDayPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="staff-access"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <StaffAccessPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
             <Route
               path="owner"
               element={
@@ -159,14 +203,16 @@ function App() {
             <Route
               path="settings"
               element={
-                <SettingsPage
-                  lang={lang}
-                  email={auth.email}
-                  shopName={auth.shopName}
-                  onSignOut={auth.signOut}
-                  user={auth.user}
-                  authMode={auth.mode}
-                />
+                <RoleProtectedRoute permission="settings.view">
+                  <SettingsPage
+                    lang={lang}
+                    email={auth.email}
+                    shopName={auth.shopName}
+                    onSignOut={auth.signOut}
+                    user={auth.user}
+                    authMode={auth.mode}
+                  />
+                </RoleProtectedRoute>
               }
             />
           </Route>

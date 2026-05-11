@@ -14,6 +14,7 @@ import type {
   SaleLine,
   SellingMode,
   ShopPreferences,
+  StaffAccount,
   StockMovement,
   StockMovementKind,
   Supplier,
@@ -77,6 +78,30 @@ function parseStoredUserRole(v: unknown): UserRole | null {
   return null;
 }
 
+function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
+  if (!Array.isArray(raw)) return [];
+  const out: StaffAccount[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    const role = parseStoredUserRole(obj.role);
+    const name = typeof obj.name === "string" ? obj.name.trim() : "";
+    if (!role || !name) continue;
+    out.push({
+      id: typeof obj.id === "string" && obj.id ? obj.id : crypto.randomUUID(),
+      name,
+      role,
+      pin: typeof obj.pin === "string" ? obj.pin.replace(/\D/g, "").slice(0, 6) || null : null,
+      password: typeof obj.password === "string" ? obj.password || null : null,
+      phone: typeof obj.phone === "string" ? obj.phone || null : null,
+      active: obj.active !== false,
+      createdAt: typeof obj.createdAt === "string" ? obj.createdAt : new Date().toISOString(),
+      updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : new Date().toISOString(),
+    });
+  }
+  return out;
+}
+
 type DraftLineInput = {
   product: Product;
   inputMode: LineInputMode;
@@ -124,6 +149,11 @@ type PosState = {
   setSessionActor: (actor: SessionActor | null) => void;
 
   setPreferences: (p: Partial<ShopPreferences>) => void;
+  addStaffAccount: (input: { name: string; role: UserRole; pin?: string; password?: string; phone?: string }) => { ok: boolean; errorKey?: string; id?: string };
+  updateStaffAccount: (id: string, patch: { name?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
+  resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
+  switchStaffAccount: (id: string | null) => void;
+  setPosLocked: (locked: boolean) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
   updateBusinessType: (businessType: BusinessType) => void;
 
@@ -399,6 +429,77 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       return { preferences: merged };
     });
+  },
+
+  addStaffAccount: (input) => {
+    const name = input.name.trim();
+    if (!name) return { ok: false, errorKey: "personNamePh" };
+    const pin = (input.pin ?? "").replace(/\D/g, "").slice(0, 6) || null;
+    const password = (input.password ?? "").trim() || null;
+    const row: StaffAccount = {
+      id: crypto.randomUUID(),
+      name,
+      role: input.role,
+      pin,
+      password,
+      phone: (input.phone ?? "").trim() || null,
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        staffAccounts: [row, ...(s.preferences.staffAccounts ?? [])],
+      },
+    }));
+    return { ok: true, id: row.id };
+  },
+
+  updateStaffAccount: (id, patch) => {
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        staffAccounts: (s.preferences.staffAccounts ?? []).map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                name: patch.name?.trim() ?? a.name,
+                role: patch.role ?? a.role,
+                phone: patch.phone === undefined ? a.phone : patch.phone.trim() || null,
+                active: patch.active ?? a.active,
+                updatedAt: new Date().toISOString(),
+              }
+            : a,
+        ),
+      },
+    }));
+  },
+
+  resetStaffSecret: (id, patch) => {
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        staffAccounts: (s.preferences.staffAccounts ?? []).map((a) =>
+          a.id === id
+            ? {
+                ...a,
+                pin: patch.pin === undefined ? a.pin : ((patch.pin ?? "").replace(/\D/g, "").slice(0, 6) || null),
+                password: patch.password === undefined ? a.password : (patch.password?.trim() || null),
+                updatedAt: new Date().toISOString(),
+              }
+            : a,
+        ),
+      },
+    }));
+  },
+
+  switchStaffAccount: (id) => {
+    set((s) => ({ preferences: { ...s.preferences, activeStaffId: id } }));
+  },
+
+  setPosLocked: (locked) => {
+    set((s) => ({ preferences: { ...s.preferences, posLocked: locked } }));
   },
 
   completeBusinessOnboarding: (businessType) => {
@@ -1009,6 +1110,14 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : p.shopCurrency === null
           ? "UGX"
           : String(p.shopCurrency).trim().toUpperCase() || "UGX",
+    staffAccounts: normalizeStaffAccounts(p.staffAccounts),
+    activeStaffId:
+      p.activeStaffId === undefined
+        ? (base.activeStaffId ?? null)
+        : p.activeStaffId === null
+          ? null
+          : String(p.activeStaffId),
+    posLocked: typeof p.posLocked === "boolean" ? p.posLocked : base.posLocked ?? false,
   };
 }
 

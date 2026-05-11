@@ -8,6 +8,7 @@ import {
   Settings,
   LayoutDashboard,
   ScrollText,
+  UserCog,
 } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -43,6 +44,12 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       titleKey: "officeCardActivity",
       Icon: ScrollText,
       perm: hasPermission(actor.role, "owner.activity"),
+    },
+    {
+      to: "/staff-access",
+      titleKey: "officeCardStaffAccess",
+      Icon: UserCog,
+      perm: hasPermission(actor.role, "settings.shop"),
     },
   ];
 

@@ -46,7 +46,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
+  const setPosLocked = usePosStore((s) => s.setPosLocked);
+  const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
   const [pwaUpdate, setPwaUpdate] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [lockStaffId, setLockStaffId] = useState(preferences.activeStaffId ?? "");
+  const [lockSecret, setLockSecret] = useState("");
+  const [lockError, setLockError] = useState<string | null>(null);
 
   useEffect(() => {
     const onUp = () => setPwaUpdate(true);
@@ -110,18 +116,49 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
               <button
                 type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-800 shadow-sm active:bg-stone-50 sm:text-sm"
+              >
+                {actor.displayName ?? actor.role}
+              </button>
+              <button
+                type="button"
                 onClick={() => setLang(lang === "en" ? "lg" : "en")}
                 className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-800 shadow-sm active:bg-stone-50 sm:text-sm"
               >
                 {lang === "en" ? "Luganda" : "English"}
               </button>
-              <button
-                type="button"
-                onClick={() => onSignOut()}
-                className="min-h-[44px] rounded-xl bg-stone-900 px-3 py-2 text-xs font-semibold text-white shadow-sm active:bg-stone-800 sm:text-sm"
-              >
-                {t(lang, "signOut")}
-              </button>
+              {menuOpen ? (
+                <div className="w-full rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm sm:w-auto">
+                  <button
+                    type="button"
+                    className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
+                    onClick={() => {
+                      setPosLocked(true);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {t(lang, "lockPos")}
+                  </button>
+                  <button
+                    type="button"
+                    className="mt-1 w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
+                    onClick={() => {
+                      setPosLocked(true);
+                      setMenuOpen(false);
+                    }}
+                  >
+                    {t(lang, "switchUser")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onSignOut()}
+                    className="mt-1 w-full rounded-xl bg-stone-900 px-3 py-2 text-left text-sm font-semibold text-white"
+                  >
+                    {t(lang, "signOut")}
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         </header>
@@ -175,6 +212,62 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             })}
           </div>
         </nav>
+        {preferences.posLocked ? (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-stone-950/85 p-4">
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+              <p className="text-2xl font-black text-stone-900">{t(lang, "lockPosTitle")}</p>
+              <p className="mt-1 text-sm text-stone-600">{t(lang, "lockPosSub")}</p>
+              {(preferences.staffAccounts ?? []).length > 0 ? (
+                <label className="mt-4 block text-sm font-bold text-slate-700">
+                  {t(lang, "switchUser")}
+                  <select
+                    value={lockStaffId}
+                    onChange={(e) => setLockStaffId(e.target.value)}
+                    className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
+                  >
+                    <option value="">{t(lang, "staffPickAccount")}</option>
+                    {(preferences.staffAccounts ?? [])
+                      .filter((s) => s.active)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({t(lang, `role_${s.role}`)})
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              ) : null}
+              <input
+                value={lockSecret}
+                onChange={(e) => setLockSecret(e.target.value)}
+                type="password"
+                placeholder={t(lang, "unlockPinPlaceholder")}
+                className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              />
+              {lockError ? <p className="mt-2 text-sm font-bold text-rose-700">{lockError}</p> : null}
+              <button
+                type="button"
+                className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
+                onClick={() => {
+                  const staff = (preferences.staffAccounts ?? []).find((s) => s.id === lockStaffId && s.active);
+                  const secret = lockSecret.trim();
+                  const validStaff = Boolean(staff && ((staff.pin && staff.pin === secret.replace(/\D/g, "")) || (staff.password && staff.password === secret)));
+                  const validBackOffice = Boolean((preferences.backOfficePin ?? "") && (preferences.backOfficePin ?? "") === secret.replace(/\D/g, ""));
+                  const canUnlock = validStaff || validBackOffice || (!staff && !(preferences.backOfficePin ?? "").length);
+                  if (!canUnlock) {
+                    setLockError(t(lang, "unlockWrongPin"));
+                    return;
+                  }
+                  switchStaffAccount(staff?.id ?? null);
+                  setPosLocked(false);
+                  setLockSecret("");
+                  setLockError(null);
+                }}
+              >
+                {t(lang, "unlockSubmit")}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
     </SessionActorProvider>
   );

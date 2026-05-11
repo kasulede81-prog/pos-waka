@@ -244,6 +244,18 @@ export type DayCloseSummary = {
   createdAt: string;
 };
 
+export type StaffAccount = {
+  id: string;
+  name: string;
+  role: UserRole;
+  pin?: string | null;
+  password?: string | null;
+  phone?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type ShopPreferences = {
   businessType: BusinessType;
   /** Giant one-hand sell screen */
@@ -289,6 +301,12 @@ export type ShopPreferences = {
   shopPhoneE164?: string | null;
   shopAddressLine?: string | null;
   shopCurrency?: string | null;
+  /** Local multi-user profiles for fast shared-device switch. */
+  staffAccounts?: StaffAccount[];
+  /** Active staff profile on this device; null = auth role session. */
+  activeStaffId?: string | null;
+  /** Lock screen state for quick shift switches. */
+  posLocked?: boolean;
 };
 
 export type SyncOperationKind =

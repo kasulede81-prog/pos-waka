@@ -27,13 +27,19 @@ export function resolveSessionActor(params: {
   const authRole = resolveAuthRole({ mode: params.mode, userMetadata: meta });
   const devAllowed = devOverrideAllowed();
   const override = params.preferences.devRoleOverride;
-  const role: UserRole =
+  const simulatedRole: UserRole =
     devAllowed && override && canUseDevRoleSimulator(authRole) ? override : authRole;
+  const activeStaff = (params.preferences.staffAccounts ?? []).find(
+    (s) => s.id === params.preferences.activeStaffId && s.active,
+  );
+  const role: UserRole = activeStaff?.role ?? simulatedRole;
 
-  const userId =
+  const baseUserId =
     params.user?.id ?? (params.email ? `local:${params.email.trim().toLowerCase()}` : "local:anonymous");
+  const userId = activeStaff ? `staff:${activeStaff.id}` : baseUserId;
 
   const displayName =
+    activeStaff?.name ||
     (params.user?.user_metadata as Record<string, string> | undefined)?.full_name?.trim() ||
     params.user?.email ||
     params.email ||

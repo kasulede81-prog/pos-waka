@@ -21,6 +21,9 @@ export function createDefaultPreferences(): ShopPreferences {
     shopPhoneE164: null,
     shopAddressLine: null,
     shopCurrency: "UGX",
+    staffAccounts: [],
+    activeStaffId: null,
+    posLocked: false,
   };
 }
 

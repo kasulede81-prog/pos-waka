@@ -3,7 +3,7 @@ import { usePosStore } from "../store/usePosStore";
 
 type Ctx = {
   isUnlocked: boolean;
-  /** Returns false if PIN wrong */
+  /** Returns false if secret wrong */
   unlockWithPin: (pin: string) => boolean;
   lock: () => void;
 };
@@ -19,12 +19,20 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
 
   const unlockWithPin = useCallback((pin: string) => {
     const stored = usePosStore.getState().preferences.backOfficePin?.trim() ?? "";
+    const staff = usePosStore.getState().preferences.staffAccounts ?? [];
+    const normalized = pin.trim();
+    const digits = normalized.replace(/\D/g, "");
+    const validStaff = staff.some(
+      (s) => s.active && (s.role === "owner" || s.role === "manager") && ((s.pin && s.pin === digits) || (s.password && s.password === normalized)),
+    );
     if (!stored) {
-      setIsUnlocked(true);
-      return true;
+      if (validStaff || staff.length === 0) {
+        setIsUnlocked(true);
+        return true;
+      }
+      return false;
     }
-    const digits = pin.replace(/\D/g, "");
-    if (digits !== stored) return false;
+    if (digits !== stored && !validStaff) return false;
     setIsUnlocked(true);
     return true;
   }, []);
