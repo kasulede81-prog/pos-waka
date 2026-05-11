@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Home, ScanLine, Users, Receipt, Briefcase } from "lucide-react";
+import { Home, ScanLine, HandCoins, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
@@ -69,7 +69,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
       items.push({ path: "/pos", labelKey: "navSell", Icon: ScanLine, perm: "pos.sell" });
     }
     if (hasPermission(actor.role, "customers.view")) {
-      items.push({ path: "/customers", labelKey: "customers", Icon: Users, perm: "customers.view" });
+      items.push({ path: "/debts", labelKey: "debts", Icon: HandCoins, perm: "customers.view" });
     }
     if (hasPermission(actor.role, "receipts.view")) {
       items.push({ path: "/receipts", labelKey: "receipts", Icon: Receipt, perm: "receipts.view" });

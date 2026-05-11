@@ -142,6 +142,7 @@ function App() {
               }
             />
             <Route path="customers" element={<CustomersPage lang={lang} />} />
+            <Route path="debts" element={<CustomersPage lang={lang} />} />
             <Route path="receipts" element={<ReceiptsPage lang={lang} />} />
             <Route
               path="settings"

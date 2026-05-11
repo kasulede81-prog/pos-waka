@@ -8,8 +8,18 @@ import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { dateKeyKampala } from "../lib/datesUg";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 16;
+const MAX_RECENT_SEARCHES = 6;
+const SEARCH_ALIASES: Record<string, string[]> = {
+  blueband: ["margarine"],
+  margarine: ["blueband"],
+  soda: ["coke", "coca cola", "pepsi", "fanta", "sprite", "mirinda", "soft drink"],
+  sugar: ["kakira", "kinyara", "brown sugar", "sack"],
+};
+
+type PaymentMethod = "cash" | "mobile_money" | "mixed" | "credit";
 
 const Numpad = memo(function Numpad({
   onDigit,
@@ -80,6 +90,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const location = useLocation();
   const navigate = useNavigate();
   const products = usePosStore((s) => s.products);
+  const sales = usePosStore((s) => s.sales);
   const customers = usePosStore((s) => s.customers);
   const preferences = usePosStore((s) => s.preferences);
   const draftLines = usePosStore((s) => s.draftLines);
@@ -88,6 +99,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const removeDraftLine = usePosStore((s) => s.removeDraftLine);
   const clearDraft = usePosStore((s) => s.clearDraft);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
+  const addCustomer = usePosStore((s) => s.addCustomer);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
   const quickSell = preferences.kioskQuickSell;
@@ -101,13 +113,18 @@ export function PosPage({ lang }: { lang: Language }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const draftTotal = useMemo(() => draftLines.reduce((a, l) => a + l.lineTotalUgx, 0), [draftLines]);
-  const [debtInput, setDebtInput] = useState("0");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+  const [cashInput, setCashInput] = useState("");
+  const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [saleCustomerId, setSaleCustomerId] = useState<string>("");
+  const [saleCustomerName, setSaleCustomerName] = useState("");
+  const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [firstSaleOpen, setFirstSaleOpen] = useState(false);
   const [saleSuccessFlash, setSaleSuccessFlash] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
@@ -118,12 +135,37 @@ export function PosPage({ lang }: { lang: Language }) {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [products]);
 
+  const soldTodayByProduct = useMemo(() => {
+    const todayKey = dateKeyKampala(new Date());
+    const byProduct = new Map<string, number>();
+    for (const sale of sales) {
+      if (dateKeyKampala(sale.createdAt) !== todayKey) continue;
+      for (const line of sale.lines) {
+        byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + line.quantity);
+      }
+    }
+    return byProduct;
+  }, [sales]);
+
+  const frequentToday = useMemo(
+    () =>
+      products
+        .map((p) => ({ product: p, qty: soldTodayByProduct.get(p.id) ?? 0 }))
+        .filter((r) => r.qty > 0)
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 6),
+    [products, soldTodayByProduct],
+  );
+
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
+    const aliasTerms = q ? SEARCH_ALIASES[q] ?? [] : [];
     return products.filter((p) => {
       if (categoryFilter && (p.category ?? "").trim() !== categoryFilter) return false;
       if (!q) return true;
-      return p.name.toLowerCase().includes(q) || (p.category ?? "").toLowerCase().includes(q);
+      const searchable = [p.name, p.category, p.baseUnit, p.sku].filter(Boolean).join(" ").toLowerCase();
+      if (searchable.includes(q)) return true;
+      return aliasTerms.some((term) => searchable.includes(term));
     });
   }, [products, searchQuery, categoryFilter]);
 
@@ -214,11 +256,40 @@ export function PosPage({ lang }: { lang: Language }) {
     [selected, setDraftInput, addDraftLineFromInput, lang, hapticsOn],
   );
 
+  const totalPaidInput = useMemo(() => {
+    const cash = parseDisplayMoney(cashInput);
+    const mobile = parseDisplayMoney(mobileMoneyInput);
+    if (paymentMethod === "cash") return draftTotal;
+    if (paymentMethod === "mobile_money") return draftTotal;
+    if (paymentMethod === "credit") return cash + mobile;
+    return cash + mobile;
+  }, [paymentMethod, cashInput, mobileMoneyInput, draftTotal]);
+
+  const computedDebt = useMemo(() => {
+    if (paymentMethod === "cash" || paymentMethod === "mobile_money") return 0;
+    return Math.max(0, draftTotal - totalPaidInput);
+  }, [paymentMethod, draftTotal, totalPaidInput]);
+
+  const commitSearch = useCallback((raw: string) => {
+    const q = raw.trim();
+    if (!q) return;
+    setRecentSearches((prev) => [q, ...prev.filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, MAX_RECENT_SEARCHES));
+  }, []);
+
   const finishSale = useCallback(() => {
-    const debt = parseDisplayMoney(debtInput);
+    const debt = paymentMethod === "credit" || paymentMethod === "mixed" ? computedDebt : 0;
+    let customerId = saleCustomerId || null;
+    if (debt > 0 && !customerId && saleCustomerName.trim()) {
+      const created = addCustomer({
+        name: saleCustomerName.trim(),
+        phone: saleCustomerPhone.trim(),
+        location: "Uganda",
+      });
+      customerId = created.id;
+    }
     const r = finalizeDraftSale({
       debtUgx: debt,
-      customerId: saleCustomerId || null,
+      customerId,
     });
     if (!r.ok) {
       setToast(t(lang, r.errorKey ?? "saleError"));
@@ -228,8 +299,12 @@ export function PosPage({ lang }: { lang: Language }) {
     if (hapticsOn) void hapticSaleComplete();
     if (soundOn) playSaleSuccessTone();
 
-    setDebtInput("0");
+    setCashInput("");
+    setMobileMoneyInput("");
     setSaleCustomerId("");
+    setSaleCustomerName("");
+    setSaleCustomerPhone("");
+    setPaymentMethod("cash");
     if (r.firstSale && !preferences.celebratedFirstSale) {
       setFirstSaleOpen(true);
     } else {
@@ -239,8 +314,12 @@ export function PosPage({ lang }: { lang: Language }) {
       window.setTimeout(() => setToast(null), 1600);
     }
   }, [
-    debtInput,
+    paymentMethod,
+    computedDebt,
     saleCustomerId,
+    saleCustomerName,
+    saleCustomerPhone,
+    addCustomer,
     finalizeDraftSale,
     lang,
     hapticsOn,
@@ -280,10 +359,31 @@ export function PosPage({ lang }: { lang: Language }) {
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onBlur={(e) => commitSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitSearch(searchQuery);
+              }}
               placeholder={t(lang, "posSellSearchPlaceholder")}
               className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg font-semibold text-stone-900 outline-none ring-waka-200 focus:ring"
             />
           </label>
+          {recentSearches.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentSearches")}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {recentSearches.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setSearchQuery(item)}
+                    className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-700"
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           {categoryOptions.length > 0 ? (
             <label className="block">
               <span className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryLabel")}</span>
@@ -300,6 +400,40 @@ export function PosPage({ lang }: { lang: Language }) {
                 ))}
               </select>
             </label>
+          ) : null}
+          {categoryOptions.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {categoryOptions.slice(0, 8).map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCategoryFilter((prev) => (prev === c ? "" : c))}
+                  className={clsx(
+                    "rounded-full border px-3 py-1.5 text-xs font-bold",
+                    categoryFilter === c ? "border-waka-400 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700",
+                  )}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {frequentToday.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {frequentToday.map(({ product, qty }) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => openProduct(product)}
+                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900"
+                  >
+                    {product.name} · {qty}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -326,17 +460,32 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {filteredProducts.map((p) => (
-            <button
+            <article
               key={p.id}
-              type="button"
-              onClick={() => openProduct(p)}
-              className="flex min-h-[120px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:active:scale-100"
+              className="flex min-h-[148px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm"
               style={{ contentVisibility: "auto" }}
             >
-              <span className="text-xl font-black leading-tight text-slate-900">{p.name}</span>
-              {p.category ? <span className="text-xs font-bold text-stone-500">{p.category}</span> : null}
-              <span className="mt-2 text-base font-bold text-waka-700">{formatProductPriceLabel(p)}</span>
-            </button>
+              <button type="button" onClick={() => openProduct(p)} className="text-left">
+                <p className="text-lg font-black leading-tight text-slate-900">{p.name}</p>
+                <p className="mt-1 text-xs font-bold text-stone-500">
+                  {p.category || t(lang, "generalCategory")} · {p.baseUnit}
+                </p>
+                <p className="mt-1 text-sm font-semibold text-slate-700">
+                  {t(lang, "stockLabel")}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
+                </p>
+                {p.stockOnHand <= p.minimumStockAlert ? (
+                  <p className="mt-1 text-xs font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
+                ) : null}
+                <p className="mt-2 text-base font-black text-waka-700">{formatProductPriceLabel(p)}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => openProduct(p)}
+                className="mt-3 min-h-[40px] rounded-2xl bg-waka-600 px-3 py-2 text-sm font-black text-white active:bg-waka-700"
+              >
+                {t(lang, "addToSale")}
+              </button>
+            </article>
           ))}
         </div>
       )}
@@ -372,35 +521,95 @@ export function PosPage({ lang }: { lang: Language }) {
             <span className="text-waka-700">UGX {draftTotal.toLocaleString()}</span>
           </p>
 
-          {customers.length > 0 && (
-            <label className="mt-4 block text-base font-semibold text-slate-800">
-              {t(lang, "whoOwes")}
-              <select
-                value={saleCustomerId}
-                onChange={(e) => setSaleCustomerId(e.target.value)}
-                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-lg font-medium"
-              >
-                <option value="">{t(lang, "noPersonCashOnly")}</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.debtBalanceUgx > 0 ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "paymentMethodLabel")}</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {(["cash", "mobile_money", "mixed", "credit"] as const).map((method) => (
+                <button
+                  key={method}
+                  type="button"
+                  onClick={() => setPaymentMethod(method)}
+                  className={clsx(
+                    "min-h-[48px] rounded-2xl border text-sm font-black",
+                    paymentMethod === method ? "border-waka-400 bg-waka-100 text-waka-950" : "border-stone-200 bg-white text-stone-700",
+                  )}
+                >
+                  {t(lang, `paymentMethod_${method}`)}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          <label className="mt-4 block text-base font-semibold text-amber-950">
-            {t(lang, "onCreditAmount")}
-            <input
-              value={debtInput}
-              onChange={(e) => setDebtInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              inputMode="numeric"
-              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-amber-200 bg-white px-4 py-4 text-2xl font-black"
-              placeholder="0"
-            />
-          </label>
+          {(paymentMethod === "mixed" || paymentMethod === "credit") ? (
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="block text-base font-semibold text-slate-800">
+                {t(lang, "paymentCashLabel")}
+                <input
+                  value={cashInput}
+                  onChange={(e) => setCashInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  inputMode="numeric"
+                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
+                  placeholder="0"
+                />
+              </label>
+              <label className="block text-base font-semibold text-slate-800">
+                {t(lang, "paymentMobileMoneyLabel")}
+                <input
+                  value={mobileMoneyInput}
+                  onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  inputMode="numeric"
+                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
+                  placeholder="0"
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {paymentMethod === "credit" || paymentMethod === "mixed" ? (
+            <>
+              <p className="mt-3 rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-900">
+                {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
+              </p>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block text-base font-semibold text-slate-800">
+                  {t(lang, "paymentDebtNameLabel")}
+                  <input
+                    value={saleCustomerName}
+                    onChange={(e) => setSaleCustomerName(e.target.value)}
+                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
+                    placeholder={t(lang, "paymentDebtNamePlaceholder")}
+                  />
+                </label>
+                <label className="block text-base font-semibold text-slate-800">
+                  {t(lang, "paymentDebtPhoneLabel")}
+                  <input
+                    value={saleCustomerPhone}
+                    onChange={(e) => setSaleCustomerPhone(e.target.value)}
+                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
+                    placeholder={t(lang, "personPhonePh")}
+                  />
+                </label>
+              </div>
+              {customers.length > 0 ? (
+                <label className="mt-4 block text-base font-semibold text-slate-800">
+                  {t(lang, "paymentPickExistingDebt")}
+                  <select
+                    value={saleCustomerId}
+                    onChange={(e) => setSaleCustomerId(e.target.value)}
+                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-lg font-medium"
+                  >
+                    <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.debtBalanceUgx > 0 ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </>
+          ) : null}
 
           <button
             type="button"

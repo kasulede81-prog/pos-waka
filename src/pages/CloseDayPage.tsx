@@ -72,35 +72,35 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         ← {t(lang, "backHome")}
       </Link>
       <h1 className="text-4xl font-black text-slate-900">{t(lang, "closeDay")}</h1>
-      <p className="text-lg text-slate-600">{t(lang, "closeDayHelp")}</p>
+      <p className="text-lg text-slate-600">{t(lang, "closeDaySimpleHelp")}</p>
 
       <section className="space-y-4 rounded-3xl border-2 border-slate-100 bg-white p-6 shadow-sm">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeCashExpected")}</p>
+            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleCashSalesToday")}</p>
             <p className="text-3xl font-black text-slate-900">UGX {summary.cash.toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeDebtOut")}</p>
+            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleCreditToday")}</p>
             <p className="text-3xl font-black text-amber-800">UGX {summary.debt.toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "cardProfitToday")}</p>
+            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleEstimatedProfit")}</p>
             <p className="text-3xl font-black text-waka-700">UGX {summary.profit.toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSalesCount")}</p>
-            <p className="text-3xl font-black text-slate-900">{summary.daySales.length}</p>
+            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleItemsSold")}</p>
+            <p className="text-3xl font-black text-slate-900">{summary.daySales.reduce((a, s) => a + s.lines.length, 0)}</p>
           </div>
         </div>
 
         <div>
-          <p className="text-lg font-black text-slate-900">{t(lang, "closeWhatSold")}</p>
+          <p className="text-lg font-black text-slate-900">{t(lang, "closeSimpleTopSelling")}</p>
           <ul className="mt-2 space-y-2">
             {summary.items.length === 0 ? (
               <li className="text-slate-500">{t(lang, "noSalesYet")}</li>
             ) : (
-              summary.items.map(([name, qty]) => (
+              summary.items.slice(0, 5).map(([name, qty]) => (
                 <li key={name} className="flex justify-between text-lg font-semibold text-slate-800">
                   <span>{name}</span>
                   <span>{qty}</span>
@@ -111,7 +111,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         </div>
 
         <div>
-          <p className="text-lg font-black text-slate-900">{t(lang, "closeLowStock")}</p>
+          <p className="text-lg font-black text-slate-900">{t(lang, "closeSimpleLowStock")}</p>
           <ul className="mt-2 space-y-2">
             {products
               .filter((p) => p.minimumStockAlert > 0 && p.stockOnHand <= p.minimumStockAlert)

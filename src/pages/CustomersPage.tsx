@@ -48,8 +48,8 @@ export function CustomersPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-8">
-      <h1 className="text-3xl font-black text-slate-900">{t(lang, "customers")}</h1>
-      <p className="text-lg text-slate-600">{t(lang, "customersHelp")}</p>
+      <h1 className="text-3xl font-black text-slate-900">{t(lang, "debts")}</h1>
+      <p className="text-lg text-slate-600">{t(lang, "debtsHelp")}</p>
 
       <form onSubmit={submit} className="space-y-3 rounded-3xl border-2 border-slate-100 bg-white p-5">
         <p className="font-black text-slate-900">{t(lang, "addPersonShort")}</p>

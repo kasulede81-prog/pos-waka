@@ -163,10 +163,10 @@ export function DashboardPage({ lang }: { lang: Language }) {
           ) : null}
           {canCustomers ? (
             <Link
-              to="/customers"
+              to="/debts"
               className="min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white px-5 py-3 text-lg font-bold text-stone-800"
             >
-              {t(lang, "customers")}
+              {t(lang, "debts")}
             </Link>
           ) : null}
           {canBackOffice ? (

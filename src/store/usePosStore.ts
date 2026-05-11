@@ -164,7 +164,7 @@ type PosState = {
     presets: { quickPresetsMoneyUgx?: number[]; quickPresetsQty?: number[] },
   ) => void;
   adjustStock: (productId: string, delta: number, reason?: string) => void;
-  addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => void;
+  addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
   addDebtPayment: (customerId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
   recordDayClose: (opts: { dateKey: string; countedCashUgx: number }) => void;
 
@@ -706,6 +706,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({ customers: [row, ...s.customers] }));
     void queueRemote("customer", { id: row.id });
     pushAudit("customer_add", row.name, { customerId: row.id, name: row.name });
+    return row;
   },
 
   addDebtPayment: (customerId, amountUgx) => {

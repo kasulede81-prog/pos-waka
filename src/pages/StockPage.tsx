@@ -13,6 +13,14 @@ import { hasPermission } from "../lib/permissions";
 import { PRODUCT_CATEGORY_PRESET_KEYS } from "../data/productCategoryPresets";
 
 const modes: SellingMode[] = ["unit", "weighted", "portion"];
+const UNIT_PRESETS: Record<string, string[]> = {
+  kiosk_duka: ["piece", "packet", "bottle", "crate"],
+  restaurant: ["plate", "cup", "litre", "tray"],
+  hardware: ["meter", "roll", "box"],
+  pharmacy: ["tablet", "strip", "bottle"],
+  boutique: ["pair", "pack", "piece"],
+  default: ["piece", "kg", "gram", "litre", "bottle", "packet", "box", "tray", "crate", "sack", "bale", "roll", "pair", "meter", "carton", "bundle", "dozen", "tin", "plate", "cup"],
+};
 
 type BulkRow = { name: string; price: string; stock: string };
 
@@ -90,7 +98,8 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const [name, setName] = useState("");
   const [sellingMode, setSellingMode] = useState<SellingMode>("unit");
-  const [baseUnit, setBaseUnit] = useState("ea");
+  const [baseUnit, setBaseUnit] = useState("piece");
+  const [baseUnitPreset, setBaseUnitPreset] = useState("piece");
   const [buyingUnit, setBuyingUnit] = useState("");
   const [conversionRate, setConversionRate] = useState("");
   const [sellPrice, setSellPrice] = useState("");
@@ -118,6 +127,11 @@ export function StockPage({ lang }: { lang: Language }) {
     }
     return t(lang, "generalCategory");
   };
+
+  const businessUnitOptions = useMemo(() => {
+    const typed = (preferences.businessType ?? "default") as string;
+    return UNIT_PRESETS[typed] ?? UNIT_PRESETS.default;
+  }, [preferences.businessType]);
 
   if (!hasPermission(actor.role, "back_office.access")) {
     return <Navigate to="/" replace />;
@@ -194,7 +208,7 @@ export function StockPage({ lang }: { lang: Language }) {
     addProduct({
       name: name.trim(),
       sellingMode,
-      baseUnit: baseUnit.trim() || "ea",
+      baseUnit: (baseUnitPreset === "custom" ? baseUnit : baseUnitPreset).trim() || "piece",
       buyingUnit: buyingUnit.trim() || null,
       conversionRate: conv !== null && Number.isFinite(conv) && conv > 0 ? conv : null,
       sellingPricePerUnitUgx: Math.max(0, Math.floor(Number(sellPrice) || 0)),
@@ -205,6 +219,8 @@ export function StockPage({ lang }: { lang: Language }) {
       sku: `SKU-${Date.now()}`,
     });
     setName("");
+    setBaseUnitPreset("piece");
+    setBaseUnit("piece");
     setCategoryPreset("");
     setCategoryCustom("");
     setSellingMode("unit");
@@ -421,12 +437,30 @@ export function StockPage({ lang }: { lang: Language }) {
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm font-semibold text-slate-700">
               {t(lang, "countUnit")}
-              <input
-                value={baseUnit}
-                onChange={(e) => setBaseUnit(e.target.value)}
-                placeholder="kg / litre / ea"
+              <select
+                value={baseUnitPreset}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setBaseUnitPreset(v);
+                  if (v !== "custom") setBaseUnit(v);
+                }}
                 className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
-              />
+              >
+                {businessUnitOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+                <option value="custom">{t(lang, "unitCustomOption")}</option>
+              </select>
+              {baseUnitPreset === "custom" ? (
+                <input
+                  value={baseUnit}
+                  onChange={(e) => setBaseUnit(e.target.value)}
+                  placeholder={t(lang, "unitCustomPlaceholder")}
+                  className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
+                />
+              ) : null}
             </label>
             <label className="block text-sm font-semibold text-slate-700">
               {t(lang, "buyPackOptional")}
