@@ -230,6 +230,7 @@ function App() {
               }
             />
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
           </Route>
         </Route>
 

@@ -189,7 +189,12 @@ function PlanPremiumCard({ lang, plan, tone }: { lang: Language; plan: PlanTierM
 
 export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Props) {
   const { hour, dateStr } = useMemo(() => kampalaNowParts(), []);
-  const displayName = (email ?? "").split("@")[0] || "Team";
+  const displayName =
+    adminRow?.full_name?.trim() ||
+    (adminRow?.email ? adminRow.email.split("@")[0] : (email ?? "").split("@")[0]) ||
+    "Team";
+  const roleNorm = (adminRow?.role ?? "").toLowerCase();
+  const canResolveSupport = roleNorm === "super_admin" || roleNorm === "support_admin" || roleNorm === "finance_admin";
 
   const [opsLoading, setOpsLoading] = useState(!previewMode && Boolean(adminRow));
   const [stats, setStats] = useState<InternalDashboardStats | null>(null);
@@ -322,6 +327,11 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
               ) : previewMode ? (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-amber-400 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-900">
                   {t(lang, "internalDashPreviewBadge")}
+                </span>
+              ) : null}
+              {adminRow ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-wide text-stone-700 ring-1 ring-stone-200/70">
+                  {String(adminRow.assigned_district_ids?.length ?? 0)} {t(lang, "internalDashDistrictsBadge")}
                 </span>
               ) : null}
             </p>
@@ -601,7 +611,8 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                     </div>
                     <button
                       type="button"
-                      disabled={tk.status === "resolved" || ticketBusyId === tk.id}
+                      style={!canResolveSupport ? { display: "none" } : undefined}
+                      disabled={!canResolveSupport || tk.status === "resolved" || ticketBusyId === tk.id}
                       onClick={async () => {
                         setTicketBusyId(tk.id);
                         const r = await updateSupportTicketStatus(tk.id, "resolved");

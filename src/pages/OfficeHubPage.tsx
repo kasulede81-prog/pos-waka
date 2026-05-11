@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { isWakaInternalAdminEmail } from "../lib/internalAdminAllowlist";
+import { supabase } from "../lib/supabase";
+import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
 import {
   Package,
   Truck,
@@ -30,7 +32,23 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const { email } = useAuth();
-  const showInternalAdmin = isWakaInternalAdminEmail(email);
+  const [showInternalAdmin, setShowInternalAdmin] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!supabase) {
+        setShowInternalAdmin(false);
+        return;
+      }
+      const me = await fetchWakaInternalAdminMe();
+      if (cancelled) return;
+      setShowInternalAdmin(Boolean(me));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
 
   const cards: Card[] = [
     {

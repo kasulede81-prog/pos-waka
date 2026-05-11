@@ -2,10 +2,23 @@ import { supabase } from "./supabase";
 
 export type WakaInternalAdminRow = {
   id: string;
+  email: string | null;
+  full_name: string | null;
   role: string;
   assigned_district_ids: string[] | null;
   active: boolean;
   max_shops: number | null;
+};
+
+export type InternalAdminRow = {
+  id: string;
+  user_id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  assigned_district_ids: string[] | null;
+  active: boolean;
+  created_at: string | null;
 };
 
 export type InternalDashboardStats = {
@@ -39,6 +52,8 @@ export async function fetchWakaInternalAdminMe(): Promise<WakaInternalAdminRow |
   if (error || !data?.length) return null;
   const r = data[0] as {
     id: string;
+    email: string | null;
+    full_name: string | null;
     role: string;
     assigned_district_ids: string[] | null;
     active: boolean;
@@ -46,11 +61,83 @@ export async function fetchWakaInternalAdminMe(): Promise<WakaInternalAdminRow |
   };
   return {
     id: r.id,
+    email: r.email,
+    full_name: r.full_name,
     role: r.role,
     assigned_district_ids: r.assigned_district_ids,
     active: r.active,
     max_shops: r.max_shops,
   };
+}
+
+export async function fetchInternalAdmins(): Promise<InternalAdminRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("internal_admins")
+    .select("id,user_id,email,full_name,role,assigned_district_ids,active,created_at")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data as unknown as InternalAdminRow[];
+}
+
+export async function internalAdminCreateByEmail({
+  email,
+  fullName,
+  role,
+  assignedDistrictIds,
+}: {
+  email: string;
+  fullName: string | null;
+  role: string;
+  assignedDistrictIds: string[];
+}): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("internal_admin_create_by_email", {
+    p_email: email,
+    p_full_name: fullName,
+    p_role: role,
+    p_assigned_district_ids: assignedDistrictIds,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true, message: data ? undefined : undefined };
+}
+
+export async function internalAdminSetActive({
+  internalAdminId,
+  active,
+}: {
+  internalAdminId: string;
+  active: boolean;
+}): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("internal_admin_set_active", {
+    p_internal_admin_id: internalAdminId,
+    p_active: active,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function internalAdminUpdateRoleAndDistricts({
+  internalAdminId,
+  role,
+  fullName,
+  assignedDistrictIds,
+}: {
+  internalAdminId: string;
+  role: string;
+  fullName: string | null;
+  assignedDistrictIds: string[];
+}): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.rpc("internal_admin_update_role_and_districts", {
+    p_internal_admin_id: internalAdminId,
+    p_role: role,
+    p_assigned_district_ids: assignedDistrictIds,
+    p_full_name: fullName,
+  });
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
 }
 
 export async function fetchInternalDashboardStats(): Promise<InternalDashboardStats | null> {

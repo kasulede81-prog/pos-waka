@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { isWakaInternalAdminEmail } from "../lib/internalAdminAllowlist";
 import { fetchWakaInternalAdminMe, type WakaInternalAdminRow } from "../lib/wakaInternalAdmin";
 import { InternalOpsDashboard } from "../components/internal-admin/InternalOpsDashboard";
+import { InternalAdminsManagement } from "../components/internal-admin/InternalAdminsManagement";
 
 type Props = {
   lang: Language;
@@ -14,9 +14,9 @@ type Props = {
 export function InternalWakaAdminPage({ lang, email }: Props) {
   const [loading, setLoading] = useState(true);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
-
-  const allowlist = isWakaInternalAdminEmail(email);
-  const canEnterUi = allowlist || Boolean(adminRow);
+  const location = useLocation();
+  const isAdminsRoute = location.pathname === "/internal/waka/admins";
+  const canEnterUi = Boolean(adminRow);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,17 +50,24 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   }
 
   if (!canEnterUi) {
-    return (
-      <div className="space-y-4 pb-10">
-        <p className="rounded-3xl border-2 border-amber-200 bg-amber-50 px-5 py-6 text-center text-base font-bold text-amber-950">
-          {t(lang, "internalAdminDenied")}
-        </p>
-        <Link to="/" className="inline-flex min-h-[48px] items-center font-bold text-waka-800 underline">
-          ← {t(lang, "internalAdminBack")}
-        </Link>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
 
-  return <InternalOpsDashboard lang={lang} email={email} adminRow={adminRow} previewMode={!adminRow && allowlist} />;
+  if (isAdminsRoute) {
+    if (adminRow?.role !== "super_admin") {
+      return (
+        <div className="space-y-4 pb-10">
+          <p className="rounded-3xl border-2 border-rose-200 bg-rose-50 px-5 py-6 text-center text-base font-bold text-rose-900">
+            {t(lang, "internalAdminsSuperOnly")}
+          </p>
+          <Link to="/internal/waka" className="inline-flex min-h-[48px] items-center font-bold text-waka-800 underline">
+            ← {t(lang, "internalAdminBack")}
+          </Link>
+        </div>
+      );
+    }
+    return <InternalAdminsManagement lang={lang} />;
+  }
+
+  return <InternalOpsDashboard lang={lang} email={email} adminRow={adminRow} previewMode={false} />;
 }
