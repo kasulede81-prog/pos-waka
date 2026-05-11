@@ -6,12 +6,15 @@ import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { useSubscription } from "../context/SubscriptionContext";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 
 type Range = "today" | "week" | "month";
 
 export function ReportsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
   const sales = usePosStore((s) => s.sales);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
@@ -24,7 +27,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
     return <Navigate to="/" replace />;
   }
 
-  const canProfit = hasPermission(actor.role, "reports.profit");
+  const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
   const canPurchasesView = hasPermission(actor.role, "purchases.view");
   const canSuppliersView = hasPermission(actor.role, "suppliers.view");
 
@@ -207,8 +210,14 @@ export function ReportsPage({ lang }: { lang: Language }) {
         {canProfit ? (
           <article className="rounded-3xl border bg-white p-4">
             <p className="text-xs text-slate-500">{t(lang, "estimatedProfit")}</p>
-            <p className="text-2xl font-bold text-waka-700">UGX {totals.profit.toLocaleString()}</p>
-            <p className="mt-2 text-xs text-slate-500">{t(lang, "reportsGrossProfitHint")}</p>
+            <p
+              className={`text-2xl font-bold ${totals.profit < 0 ? "text-slate-600" : "text-waka-700"}`}
+            >
+              UGX {totals.profit.toLocaleString()}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">
+              {totals.profit < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "reportsGrossProfitHint")}
+            </p>
           </article>
         ) : null}
         <article className="rounded-3xl border bg-white p-4">

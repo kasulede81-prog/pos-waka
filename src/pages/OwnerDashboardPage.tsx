@@ -291,7 +291,12 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           </article>
           <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
             <p className="text-xs font-bold text-slate-500">{t(lang, "estimatedProfit")}</p>
-            <p className="mt-1 text-2xl font-black text-waka-800">UGX {stats.estProfitUgx.toLocaleString()}</p>
+            <p className={`mt-1 text-2xl font-black ${stats.estProfitUgx < 0 ? "text-slate-600" : "text-waka-800"}`}>
+              UGX {stats.estProfitUgx.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {stats.estProfitUgx < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "estimatedProfitHint")}
+            </p>
           </article>
         </div>
       </section>

@@ -7,12 +7,14 @@ import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { isLowStock } from "../lib/sellingEngine";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+import { useSubscription } from "../context/SubscriptionContext";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 
 export function DashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
   const location = useLocation();
   const sync = useSyncStatus();
   const [deniedBanner, setDeniedBanner] = useState(false);
@@ -24,21 +26,21 @@ export function DashboardPage({ lang }: { lang: Language }) {
     }
   }, [location.state]);
 
-  const canProfit = hasPermission(actor.role, "reports.profit");
-  const canStock = hasPermission(actor.role, "stock.view");
-  const canBackOffice = hasPermission(actor.role, "back_office.access");
-  const canReports = hasPermission(actor.role, "reports.view");
-  const canDayClose = hasPermission(actor.role, "day.close");
-  const canSell = hasPermission(actor.role, "pos.sell");
-  const canCustomers = hasPermission(actor.role, "customers.view");
-  const canReceipts = hasPermission(actor.role, "receipts.view");
+  const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
+  const canBackOffice = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode);
+  const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
+  const canDayClose = hasEffectivePermission(actor.role, "day.close", snapshot, authMode);
+  const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
+  const canCustomers = hasEffectivePermission(actor.role, "customers.view", snapshot, authMode);
+  const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
 
   const sales = usePosStore((s) => s.sales);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const customers = usePosStore((s) => s.customers);
-  const showActivityFeed = hasPermission(actor.role, "owner.activity");
+  const showActivityFeed = hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
@@ -228,7 +230,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-xl font-black text-stone-900">{t(lang, "activityFeedTitle")}</h2>
-            {hasPermission(actor.role, "owner.activity") ? (
+            {hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode) ? (
               <Link to="/owner/activity" className="text-sm font-bold text-waka-700">
                 {t(lang, "seeAll")}
               </Link>
@@ -263,9 +265,18 @@ export function DashboardPage({ lang }: { lang: Language }) {
           <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {cashToday.toLocaleString()}</p>
         </article>
         {canProfit ? (
-          <article className="rounded-3xl bg-gradient-to-br from-waka-600 to-waka-800 p-5 text-white shadow-lg">
+          <article
+            className={`rounded-3xl p-5 text-white shadow-lg ${
+              profitToday < 0
+                ? "bg-gradient-to-br from-slate-600 to-slate-800"
+                : "bg-gradient-to-br from-waka-600 to-waka-800"
+            }`}
+          >
             <p className="text-sm font-bold uppercase tracking-wide text-white/90">{t(lang, "cardProfitToday")}</p>
             <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {profitToday.toLocaleString()}</p>
+            <p className={`mt-2 text-xs font-semibold leading-snug ${profitToday < 0 ? "text-slate-200" : "text-white/85"}`}>
+              {profitToday < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "estimatedProfitHint")}
+            </p>
           </article>
         ) : null}
         {canStock ? (

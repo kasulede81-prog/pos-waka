@@ -13,7 +13,8 @@ import {
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+import { useSubscription } from "../context/SubscriptionContext";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 
 type Card = {
   to: string;
@@ -25,31 +26,62 @@ type Card = {
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
 
   const cards: Card[] = [
-    { to: "/stock", titleKey: "officeCardStock", Icon: Package, perm: hasPermission(actor.role, "stock.view") },
-    { to: "/restock", titleKey: "officeCardRestock", Icon: Truck, perm: hasPermission(actor.role, "purchases.record") },
-    { to: "/suppliers", titleKey: "officeCardSuppliers", Icon: Users, perm: hasPermission(actor.role, "suppliers.view") },
-    { to: "/reports", titleKey: "officeCardReports", Icon: BarChart3, perm: hasPermission(actor.role, "reports.view") },
-    { to: "/close-day", titleKey: "officeCardCloseDay", Icon: CalendarCheck, perm: hasPermission(actor.role, "day.close") },
-    { to: "/settings", titleKey: "officeCardSettings", Icon: Settings, perm: hasPermission(actor.role, "settings.view") },
+    {
+      to: "/stock",
+      titleKey: "officeCardStock",
+      Icon: Package,
+      perm: hasEffectivePermission(actor.role, "stock.view", snapshot, authMode),
+    },
+    {
+      to: "/restock",
+      titleKey: "officeCardRestock",
+      Icon: Truck,
+      perm: hasEffectivePermission(actor.role, "purchases.record", snapshot, authMode),
+    },
+    {
+      to: "/suppliers",
+      titleKey: "officeCardSuppliers",
+      Icon: Users,
+      perm: hasEffectivePermission(actor.role, "suppliers.view", snapshot, authMode),
+    },
+    {
+      to: "/reports",
+      titleKey: "officeCardReports",
+      Icon: BarChart3,
+      perm: hasEffectivePermission(actor.role, "reports.view", snapshot, authMode),
+    },
+    {
+      to: "/close-day",
+      titleKey: "officeCardCloseDay",
+      Icon: CalendarCheck,
+      perm: hasEffectivePermission(actor.role, "day.close", snapshot, authMode),
+    },
+    {
+      to: "/settings",
+      titleKey: "officeCardSettings",
+      Icon: Settings,
+      perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
+    },
     {
       to: "/owner",
       titleKey: "officeCardOwner",
       Icon: LayoutDashboard,
-      perm: hasPermission(actor.role, "owner.dashboard"),
+      perm: hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode),
     },
     {
       to: "/owner/activity",
       titleKey: "officeCardActivity",
       Icon: ScrollText,
-      perm: hasPermission(actor.role, "owner.activity"),
+      perm: hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode),
     },
     {
       to: "/staff-access",
       titleKey: "officeCardStaffAccess",
       Icon: UserCog,
-      perm: hasPermission(actor.role, "settings.shop"),
+      perm: hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode),
     },
   ];
 

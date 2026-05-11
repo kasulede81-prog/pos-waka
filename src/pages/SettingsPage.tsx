@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../types";
 import { hasSupabaseConfig } from "../lib/supabase";
@@ -52,6 +53,17 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
       </div>
 
       <SyncHealthCard lang={lang} />
+
+      {authMode === "supabase" ? (
+        <Link
+          to="/upgrade"
+          className="block rounded-3xl border-2 border-waka-200 bg-gradient-to-r from-waka-50 to-white p-5 shadow-sm active:scale-[0.99]"
+        >
+          <p className="text-lg font-black text-waka-950">{t(lang, "settingsUpgradeTeaserTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-stone-700">{t(lang, "settingsUpgradeTeaserSub")}</p>
+          <p className="mt-3 text-sm font-bold text-waka-800 underline">{t(lang, "upgradeNav")} →</p>
+        </Link>
+      ) : null}
 
       <article className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-waka-sm">
         <p className="font-black text-slate-900">{t(lang, "accountHeading")}</p>

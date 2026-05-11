@@ -25,6 +25,8 @@ import { SuppliersPage } from "./pages/SuppliersPage";
 import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
+import { UpgradePage } from "./pages/UpgradePage";
+import { SubscriptionProvider } from "./context/SubscriptionContext";
 import type { Language } from "./types";
 
 const OwnerDashboardPage = lazy(() =>
@@ -109,24 +111,27 @@ function App() {
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
           <Route
             element={
-              <PosDataProvider lang={lang}>
-                <SyncStatusProvider>
-                  <BackOfficeSessionProvider>
-                    <AppShell
-                      lang={lang}
-                      setLang={setLang}
-                      onSignOut={auth.signOut}
-                      user={auth.user}
-                      email={auth.email}
-                      authMode={auth.mode}
-                    />
-                  </BackOfficeSessionProvider>
-                </SyncStatusProvider>
-              </PosDataProvider>
+              <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+                <PosDataProvider lang={lang}>
+                  <SyncStatusProvider>
+                    <BackOfficeSessionProvider>
+                      <AppShell
+                        lang={lang}
+                        setLang={setLang}
+                        onSignOut={auth.signOut}
+                        user={auth.user}
+                        email={auth.email}
+                        authMode={auth.mode}
+                      />
+                    </BackOfficeSessionProvider>
+                  </SyncStatusProvider>
+                </PosDataProvider>
+              </SubscriptionProvider>
             }
           >
             <Route index element={<DashboardPage lang={lang} />} />
             <Route path="office" element={<OfficeHubPage lang={lang} />} />
+            <Route path="upgrade" element={<UpgradePage lang={lang} />} />
             <Route
               path="stock"
               element={

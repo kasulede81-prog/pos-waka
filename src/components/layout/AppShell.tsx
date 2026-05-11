@@ -3,7 +3,8 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { Home, ScanLine, HandCoins, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
+import { useSubscription } from "../../context/SubscriptionContext";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
@@ -46,6 +47,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
+  const { authMode: subAuthMode, daysLeftInTrial } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
   const beginShift = usePosStore((s) => s.beginShift);
@@ -113,6 +115,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </button>
           </div>
         ) : null}
+        {subAuthMode === "supabase" && daysLeftInTrial !== null && daysLeftInTrial > 0 && daysLeftInTrial <= 14 ? (
+          <div className="sticky top-0 z-[25] border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-950 sm:text-sm">
+            <Link to="/upgrade" className="inline-flex flex-wrap items-center justify-center gap-1 underline decoration-waka-700">
+              <span>{tTemplate(lang, "trialBannerShort", { days: String(daysLeftInTrial) })}</span>
+              <span>{t(lang, "trialBannerCta")}</span>
+            </Link>
+          </div>
+        ) : null}
         <header className="sticky top-0 z-20 border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:px-4">
             <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -162,6 +172,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                   >
                     {t(lang, "switchUser")}
                   </button>
+                  {subAuthMode === "supabase" ? (
+                    <Link
+                      to="/upgrade"
+                      className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-waka-900 hover:bg-waka-50"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {t(lang, "upgradeNav")}
+                    </Link>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => onSignOut()}

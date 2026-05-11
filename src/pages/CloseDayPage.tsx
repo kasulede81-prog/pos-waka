@@ -86,7 +86,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
           </div>
           <div>
             <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleEstimatedProfit")}</p>
-            <p className="text-3xl font-black text-waka-700">UGX {summary.profit.toLocaleString()}</p>
+            <p className={`text-3xl font-black ${summary.profit < 0 ? "text-slate-600" : "text-waka-700"}`}>
+              UGX {summary.profit.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs font-medium text-slate-500">
+              {summary.profit < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "estimatedProfitHint")}
+            </p>
           </div>
           <div>
             <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleItemsSold")}</p>
