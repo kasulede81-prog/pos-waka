@@ -31,7 +31,7 @@ export type PrimaryShopLocationSnapshot = {
   longitude: number | null;
 };
 
-function normalizeUgPhone(raw: string): string | null {
+export function normalizeUgPhoneE164(raw: string): string | null {
   const v = raw.trim();
   if (!v) return null;
   const digits = v.replace(/\D/g, "");
@@ -95,12 +95,28 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
   if (authErr || !authData.user) throw authErr ?? new Error("Not signed in");
   const user = authData.user;
 
+  const safePhone = normalizeUgPhoneE164(input.phone);
+  const safeCurrency = (input.currency || "UGX").trim().toUpperCase();
+
   let primary = await getPrimaryShopForUser(user.id);
   if (!primary?.shop?.id) {
+    const hasGps =
+      input.applyShopLocation &&
+      input.latitude != null &&
+      input.longitude != null &&
+      !Number.isNaN(input.latitude) &&
+      !Number.isNaN(input.longitude);
     await bootstrapOwnerWorkspace(user, {
-      businessName: input.shopName,
+      organizationName: input.shopName.trim(),
+      shopDisplayName: input.shopName.trim(),
       businessType: input.businessType,
       fullName: input.ownerName,
+      districtId: input.districtId?.trim() || undefined,
+      phoneE164: safePhone ?? undefined,
+      address: input.address?.trim() || undefined,
+      gpsMissing: !hasGps,
+      latitude: hasGps ? input.latitude! : undefined,
+      longitude: hasGps ? input.longitude! : undefined,
     });
     primary = await getPrimaryShopForUser(user.id);
     if (!primary?.shop?.id) throw new Error("Workspace not ready");
@@ -110,10 +126,7 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
   const orgId = primary.shop.organization_id;
   const currentType = primary.shop.business_type;
 
-  const safePhone = normalizeUgPhone(input.phone);
-  const safeCurrency = (input.currency || "UGX").trim().toUpperCase();
-
-  const shopPatch: Record<string, string | number | null> = {
+  const shopPatch: Record<string, string | number | boolean | null> = {
     name: input.shopName.trim() || "My Shop",
     phone_e164: safePhone,
     address_line: input.address.trim() || null,
@@ -137,6 +150,12 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
       shopPatch.latitude = null;
       shopPatch.longitude = null;
     }
+    shopPatch.gps_missing = !(
+      shopPatch.latitude != null &&
+      shopPatch.longitude != null &&
+      !Number.isNaN(Number(shopPatch.latitude)) &&
+      !Number.isNaN(Number(shopPatch.longitude))
+    );
   }
 
   if (allowBusinessTypeChange || !currentType) {

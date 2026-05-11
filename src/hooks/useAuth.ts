@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { authRedirectOrigin, hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
+import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { usePosStore, flushPendingPersist } from "../store/usePosStore";
@@ -37,6 +38,24 @@ export type SignUpResult =
   | { needsEmailVerification: true }
   | { needsEmailVerification: false; session: Session | null };
 
+/** Optional profile fields stored on auth.users.raw_user_meta_data for bootstrap. */
+export type SignUpProfileMeta = {
+  fullName: string;
+  /** E.164 +256… or local digits; normalized before signUp. */
+  phone?: string;
+  districtId?: string;
+  /** When true, GPS will be completed later in Settings. */
+  gpsSkipped?: boolean;
+  /** Legal / registered business name (organization). */
+  organizationName?: string;
+  /** Trading outlet name (shop row). */
+  shopDisplayName?: string;
+  /** ISO 4217, applied to organization.default_currency after bootstrap. */
+  defaultCurrency?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
 export function useAuth() {
   const [initializing, setInitializing] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
@@ -49,21 +68,62 @@ export function useAuth() {
     if (bootstrappedUserIds[next.user.id]) return;
 
     const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-    const businessName =
+    const orgFromMeta =
+      String(meta?.organization_name ?? "").trim() ||
       String(meta?.business_name ?? "").trim() ||
       String(meta?.shop_name ?? "").trim() ||
       String(next.user.email ?? "").split("@")[0] ||
       "My Shop";
+    const shopFromMeta =
+      String(meta?.shop_display_name ?? "").trim() ||
+      String(meta?.shop_name ?? "").trim() ||
+      orgFromMeta;
     const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
     const fullName = String(meta?.full_name ?? "").trim();
+    const phoneRaw = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
+    const phoneE164 = normalizeUgPhoneE164(phoneRaw) ?? undefined;
+    const districtId = typeof meta?.district_id === "string" && meta.district_id.length > 0 ? meta.district_id : undefined;
+    const gpsSkipped = meta?.gps_skipped === true;
+    const latRaw = meta?.latitude;
+    const lngRaw = meta?.longitude;
+    const latitude = typeof latRaw === "number" ? latRaw : typeof latRaw === "string" ? Number.parseFloat(latRaw) : undefined;
+    const longitude = typeof lngRaw === "number" ? lngRaw : typeof lngRaw === "string" ? Number.parseFloat(lngRaw) : undefined;
+    const hasGps =
+      latitude != null &&
+      longitude != null &&
+      !Number.isNaN(latitude) &&
+      !Number.isNaN(longitude);
     try {
       await bootstrapOwnerWorkspace(next.user, {
-        businessName,
+        organizationName: orgFromMeta,
+        shopDisplayName: shopFromMeta,
         businessType,
-        fullName,
+        fullName: fullName || undefined,
+        districtId,
+        phoneE164,
+        address: undefined,
+        gpsMissing: gpsSkipped || !hasGps,
+        latitude: hasGps ? latitude : undefined,
+        longitude: hasGps ? longitude : undefined,
       });
+      const cur = String(meta?.default_currency ?? "").trim().toUpperCase();
+      if (supabase && cur.length === 3 && /^[A-Z]{3}$/.test(cur)) {
+        const { data: om } = await supabase
+          .from("organization_members")
+          .select("organization_id")
+          .eq("user_id", next.user.id)
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        const oid = om?.organization_id as string | undefined;
+        if (oid) {
+          const { error: curErr } = await supabase.from("organizations").update({ default_currency: cur }).eq("id", oid);
+          if (curErr) console.error("[waka-auth] default_currency update failed", curErr);
+        }
+      }
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
-    } catch {
+    } catch (e) {
+      console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
       throw new Error("Could not finish creating your shop. Please try again.");
     }
   }, [bootstrappedUserIds]);
@@ -90,8 +150,8 @@ export function useAuth() {
     supabase.auth.getSession().then(async ({ data }) => {
       try {
         await ensureWorkspaceForSession(data.session ?? null);
-      } catch {
-        /* keep auth session; user-facing flow handles message on register */
+      } catch (e) {
+        console.error("[waka-auth] bootstrap on initial session failed", e);
       } finally {
         const next = data.session ?? null;
         applyAccountSwitchSync(
@@ -108,8 +168,8 @@ export function useAuth() {
       applyAccountSwitchSync(
         computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
       );
-      void ensureWorkspaceForSession(next).catch(() => {
-        /* non-blocking: preserves login while surfacing errors on active flows */
+      void ensureWorkspaceForSession(next).catch((e) => {
+        console.error("[waka-auth] bootstrap on auth state change failed", e);
       });
       setSession(next);
     });
@@ -155,17 +215,45 @@ export function useAuth() {
     }
   }, []);
 
-  const signUp = useCallback(async (email: string, password: string, businessName: string, businessType: BusinessType): Promise<SignUpResult> => {
+  const signUp = useCallback(
+    async (
+      email: string,
+      password: string,
+      businessName: string,
+      businessType: BusinessType,
+      profile?: SignUpProfileMeta,
+    ): Promise<SignUpResult> => {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to create an account.");
     }
     const redirectTo = `${authRedirectOrigin()}/auth/callback`;
+    const orgLabel = (profile?.organizationName ?? businessName).trim();
+    const shopLabel = (profile?.shopDisplayName ?? businessName).trim();
+    const meta: Record<string, unknown> = {
+      business_name: orgLabel,
+      organization_name: orgLabel,
+      shop_display_name: shopLabel,
+      business_type: businessType,
+      pos_role: "owner",
+    };
+    if (profile?.fullName?.trim()) meta.full_name = profile.fullName.trim();
+    const normalizedPhone = profile?.phone ? normalizeUgPhoneE164(profile.phone) : null;
+    if (normalizedPhone) meta.phone_e164 = normalizedPhone;
+    if (profile?.districtId?.trim()) meta.district_id = profile.districtId.trim();
+    if (profile?.gpsSkipped) meta.gps_skipped = true;
+    const dc = profile?.defaultCurrency?.trim().toUpperCase();
+    if (dc && dc.length === 3) meta.default_currency = dc;
+    if (profile?.latitude != null && profile?.longitude != null && !Number.isNaN(profile.latitude) && !Number.isNaN(profile.longitude)) {
+      meta.latitude = profile.latitude;
+      meta.longitude = profile.longitude;
+    }
+
     const firstAttempt = await supabase.auth.signUp({
       email,
       password,
       options: {
         emailRedirectTo: redirectTo,
-        data: { business_name: businessName.trim(), business_type: businessType, pos_role: "owner" },
+        data: meta,
       },
     });
     let data = firstAttempt.data;
@@ -178,7 +266,7 @@ export function useAuth() {
       const retry = await supabase.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: redirectTo },
+        options: { emailRedirectTo: redirectTo, data: meta },
       });
       data = retry.data;
       error = retry.error;
@@ -199,7 +287,12 @@ export function useAuth() {
       throw error;
     }
     if (data.session) {
-      await ensureWorkspaceForSession(data.session);
+      try {
+        await ensureWorkspaceForSession(data.session);
+      } catch (e) {
+        console.error("[waka-auth] signUp immediate bootstrap failed", e);
+        throw e;
+      }
       applyAccountSwitchSync(
         computeAccountKey({ mode: "supabase", userId: data.session.user?.id, email: data.session.user?.email }),
       );
@@ -207,7 +300,8 @@ export function useAuth() {
       return { needsEmailVerification: false, session: data.session };
     }
     return { needsEmailVerification: true };
-  }, [ensureWorkspaceForSession]);
+  },
+  [ensureWorkspaceForSession]);
 
   const resendVerificationEmail = useCallback(async (email: string) => {
     if (!hasSupabaseConfig || !supabase) throw new Error("Supabase is not configured.");
@@ -256,8 +350,11 @@ export function useAuth() {
 
   const isAuthenticated = Boolean(session?.user) || Boolean(localEmail);
   const user = session?.user ?? null;
+  const metaStr = user?.user_metadata as Record<string, string> | undefined;
   const shopName =
-    ((user?.user_metadata as Record<string, string> | undefined)?.business_name as string | undefined)?.trim() || "";
+    (metaStr?.shop_display_name as string | undefined)?.trim() ||
+    (metaStr?.business_name as string | undefined)?.trim() ||
+    "";
   const email = user?.email ?? localEmail;
   const accountKey = computeAccountKey({
     mode: AUTH_MODE,

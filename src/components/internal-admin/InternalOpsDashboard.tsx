@@ -26,6 +26,8 @@ import {
   fetchFieldVisitsOpen,
   fetchInternalDashboardStats,
   fetchInternalOpsCharts7d,
+  fetchPendingSubscriptionRequests,
+  internalOpsSetSubscriptionRequestStatus,
   fetchPlanTierMetrics,
   fetchRecentShops,
   fetchSalesVolumeBuckets7d,
@@ -42,6 +44,7 @@ import {
   type FieldMapPin,
   type FieldVisitRow,
   type InternalDashboardStats,
+  type PendingSubscriptionRequestRow,
   type PlanTierMetrics,
   type RecentShopRow,
   type SupportTicketRow,
@@ -201,10 +204,18 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
     "Team";
   const roleNorm = (adminRow?.role ?? "").toLowerCase();
   const canResolveSupport = roleNorm === "super_admin" || roleNorm === "support_admin" || roleNorm === "finance_admin";
+  const canManageTrials =
+    roleNorm === "super_admin" || roleNorm === "subscriptions_admin" || roleNorm === "finance_admin";
+
+  const mapboxAccessToken = useMemo(
+    () => import.meta.env.VITE_MAPBOX_TOKEN || import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
+    [],
+  );
 
   const [opsLoading, setOpsLoading] = useState(!previewMode && Boolean(adminRow));
   const [stats, setStats] = useState<InternalDashboardStats | null>(null);
   const [statsError, setStatsError] = useState(false);
+  const [statsErrorMessage, setStatsErrorMessage] = useState("");
   const [plans, setPlans] = useState<PlanTierMetrics[]>([]);
   const [recent, setRecent] = useState<RecentShopRow[]>([]);
   const [tickets, setTickets] = useState<SupportTicketRow[]>([]);
@@ -220,15 +231,23 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const [visitBusyId, setVisitBusyId] = useState<string | null>(null);
   const [ticketBusyId, setTicketBusyId] = useState<string | null>(null);
   const [visitMsg, setVisitMsg] = useState<string | null>(null);
+  const [pendingTrials, setPendingTrials] = useState<PendingSubscriptionRequestRow[]>([]);
+  const [trialBusyId, setTrialBusyId] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     if (!adminRow) return;
     setOpsLoading(true);
     setStatsError(false);
+    setStatsErrorMessage("");
     try {
-      const s = await fetchInternalDashboardStats();
-      if (!s) setStatsError(true);
-      setStats(s);
+      const dash = await fetchInternalDashboardStats();
+      if (!dash.ok) {
+        setStatsError(true);
+        setStatsErrorMessage(dash.message);
+        setStats(null);
+      } else {
+        setStats(dash.stats);
+      }
 
       const charts = await fetchInternalOpsCharts7d();
       if (charts?.signups?.length) {
@@ -246,7 +265,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         setSales7(sa7.length ? sa7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
       }
 
-      const [p, r, tk, d, b, v, pins] = await Promise.all([
+      const [p, r, tk, d, b, v, pins, pend] = await Promise.all([
         fetchPlanTierMetrics(),
         fetchRecentShops(18),
         fetchSupportTickets(18),
@@ -254,6 +273,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         fetchBusinessTypeSlices(),
         fetchFieldVisitsOpen(),
         fetchFieldMapPins({ districtId: mapDistrictId || null, limit: 400 }),
+        fetchPendingSubscriptionRequests(40),
       ]);
       setPlans(p);
       setRecent(r);
@@ -262,6 +282,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       setBizTypes(b);
       setVisits(v);
       setMapPins(pins);
+      setPendingTrials(pend);
     } finally {
       setOpsLoading(false);
     }
@@ -270,6 +291,12 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   useEffect(() => {
     if (previewMode || !adminRow) return;
     void loadAll();
+  }, [adminRow, previewMode, loadAll]);
+
+  useEffect(() => {
+    if (previewMode || !adminRow) return;
+    const id = window.setInterval(() => void loadAll(), 30_000);
+    return () => window.clearInterval(id);
   }, [adminRow, previewMode, loadAll]);
 
   const filteredDistricts = useMemo(() => {
@@ -382,7 +409,12 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         </p>
       ) : null}
       {!previewMode && statsError ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">{t(lang, "internalStatsError")}</p>
+        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">
+          {t(lang, "internalStatsError")}
+          {statsErrorMessage ? (
+            <span className="mt-1 block font-mono text-xs font-semibold text-rose-800">{statsErrorMessage}</span>
+          ) : null}
+        </p>
       ) : null}
 
       {/* Stats */}
@@ -530,18 +562,93 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </div>
           </section>
 
+          {/* Pending starter / plan trial requests */}
+          <section className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
+            <h2 className="text-lg font-black text-stone-900">{t(lang, "internalPendingTrialsTitle")}</h2>
+            <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalPendingTrialsSub")}</p>
+            <ul className="mt-4 space-y-3">
+              {opsLoading && !pendingTrials.length ? (
+                [...Array(3)].map((_, i) => (
+                  <li key={i} className="h-16 animate-pulse rounded-2xl bg-amber-100/40" />
+                ))
+              ) : pendingTrials.length === 0 ? (
+                <li className="rounded-2xl border border-dashed border-amber-200 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-stone-600">
+                  {t(lang, "internalPendingTrialsEmpty")}
+                </li>
+              ) : (
+                pendingTrials.map((req) => (
+                  <li
+                    key={req.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-amber-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-black text-stone-900">
+                        {t(lang, "internalTrialPlanLabel")}:{" "}
+                        <span className="uppercase text-orange-800">{req.requested_plan}</span>
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-stone-500">
+                        org {req.organization_id.slice(0, 8)}… · {new Date(req.created_at).toLocaleString("en-GB")}
+                      </p>
+                      {req.shop_id ? (
+                        <Link
+                          to={`/internal/waka/shop/${req.shop_id}`}
+                          className="mt-2 inline-block text-xs font-black uppercase text-orange-800 underline decoration-orange-300"
+                        >
+                          {t(lang, "internalMapOpenShop")}
+                        </Link>
+                      ) : null}
+                    </div>
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        style={!canManageTrials ? { display: "none" } : undefined}
+                        disabled={!canManageTrials || trialBusyId === `${req.id}-ok`}
+                        onClick={async () => {
+                          setTrialBusyId(`${req.id}-ok`);
+                          const r = await internalOpsSetSubscriptionRequestStatus(req.id, "approved", null);
+                          setTrialBusyId(null);
+                          if (r.ok) void loadAll();
+                        }}
+                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
+                      >
+                        {trialBusyId === `${req.id}-ok` ? "…" : t(lang, "internalTrialApprove")}
+                      </button>
+                      <button
+                        type="button"
+                        style={!canManageTrials ? { display: "none" } : undefined}
+                        disabled={!canManageTrials || trialBusyId === `${req.id}-no`}
+                        onClick={async () => {
+                          setTrialBusyId(`${req.id}-no`);
+                          const r = await internalOpsSetSubscriptionRequestStatus(req.id, "rejected", "Rejected from dashboard");
+                          setTrialBusyId(null);
+                          if (r.ok) void loadAll();
+                        }}
+                        className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 disabled:opacity-40"
+                      >
+                        {trialBusyId === `${req.id}-no` ? "…" : t(lang, "internalTrialReject")}
+                      </button>
+                    </div>
+                  </li>
+                ))
+              )}
+            </ul>
+          </section>
+
           {/* Recent shops */}
           <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "internalRecentTitle")}</h2>
             <div className="mt-4 overflow-x-auto rounded-2xl ring-1 ring-stone-100">
-              <table className="min-w-[820px] w-full border-collapse text-left text-sm">
+              <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/80 text-[11px] font-black uppercase tracking-wider text-stone-500">
                     <th className="px-4 py-3">{t(lang, "internalRecentColName")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColOwner")}</th>
+                    <th className="px-4 py-3">{t(lang, "internalRecentColEmail")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColDistrict")}</th>
+                    <th className="px-4 py-3">{t(lang, "internalRecentColType")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColPlan")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColJoined")}</th>
+                    <th className="px-4 py-3">{t(lang, "internalRecentColGps")}</th>
                     <th className="px-4 py-3">{t(lang, "internalRecentColStatus")}</th>
                     <th className="px-4 py-3 text-right">{t(lang, "internalRecentColTrial")}</th>
                   </tr>
@@ -550,7 +657,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                   {opsLoading && !recent.length ? (
                     [...Array(5)].map((_, i) => (
                       <tr key={i} className="border-b border-stone-50">
-                        <td colSpan={7} className="px-4 py-3">
+                        <td colSpan={10} className="px-4 py-3">
                           <div className="h-4 animate-pulse rounded bg-stone-100" />
                         </td>
                       </tr>
@@ -566,10 +673,22 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                             {row.name}
                           </Link>
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-stone-700" title={row.owner_label ?? undefined}>
+                        <td className="max-w-[120px] truncate px-4 py-3 text-stone-700" title={row.owner_label ?? undefined}>
                           {row.owner_label ?? "—"}
                         </td>
+                        <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs text-stone-600" title={row.owner_email ?? undefined}>
+                          {row.owner_email ?? "—"}
+                        </td>
                         <td className="px-4 py-3 text-stone-600">{[row.district, row.city].filter(Boolean).join(" · ") || "—"}</td>
+                        <td className="max-w-[100px] truncate px-4 py-3 text-xs font-semibold capitalize text-stone-700" title={row.business_type ?? undefined}>
+                          {row.business_type
+                            ? (() => {
+                                const k = `businessType_${row.business_type}`;
+                                const lbl = t(lang, k);
+                                return lbl === k ? row.business_type.replace(/_/g, " ") : lbl;
+                              })()
+                            : "—"}
+                        </td>
                         <td className="px-4 py-3">
                           <span className="rounded-lg bg-stone-100 px-2 py-1 text-xs font-black uppercase text-stone-700">
                             {row.plan_code ?? "—"}
@@ -577,6 +696,16 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                         </td>
                         <td className="px-4 py-3 font-mono text-xs text-stone-600">
                           {row.created_at ? new Date(row.created_at).toLocaleDateString("en-GB") : "—"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={clsx(
+                              "rounded-full px-2 py-0.5 text-[10px] font-black uppercase",
+                              row.gps_missing === false ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950",
+                            )}
+                          >
+                            {row.gps_missing === false ? t(lang, "internalGpsOk") : t(lang, "internalGpsMissing")}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <span
@@ -745,11 +874,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                   <div className="mt-4 h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-800/80 ring-1 ring-white/10" />
                 }
               >
-                <InternalFieldOpsMap
-                  lang={lang}
-                  pins={mapPins}
-                  accessToken={import.meta.env.VITE_MAPBOX_ACCESS_TOKEN}
-                />
+                <InternalFieldOpsMap lang={lang} pins={mapPins} accessToken={mapboxAccessToken} />
               </Suspense>
             </div>
           </section>

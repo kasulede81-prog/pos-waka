@@ -20,6 +20,8 @@ interface ImportMetaEnv {
   readonly VITE_MONITORING_INGEST_URL?: string;
   /** Mapbox public token for internal ops live map (tiles + geocoder only in-app) */
   readonly VITE_MAPBOX_ACCESS_TOKEN?: string;
+  /** Preferred alias for Mapbox token (either this or VITE_MAPBOX_ACCESS_TOKEN may be set). */
+  readonly VITE_MAPBOX_TOKEN?: string;
 }
 
 interface ImportMeta {

@@ -193,6 +193,14 @@ export function DashboardPage({ lang }: { lang: Language }) {
               {t(lang, "closeDay")}
             </Link>
           ) : null}
+          {authMode === "supabase" ? (
+            <Link
+              to="/upgrade"
+              className="min-h-[52px] rounded-2xl border-2 border-waka-400 bg-gradient-to-r from-waka-100 to-orange-50 px-5 py-3 text-lg font-black text-waka-950 shadow-sm"
+            >
+              {t(lang, "upgradeNav")}
+            </Link>
+          ) : null}
         </div>
       </div>
 

@@ -176,15 +176,20 @@ function parseMetricsRpcPayload(raw: unknown): InternalDashboardStats | null {
   };
 }
 
+export type FetchInternalDashboardStatsResult =
+  | { ok: true; stats: InternalDashboardStats }
+  | { ok: false; stats: null; message: string };
+
 /** Single round-trip dashboard pulse (counts + district strip + sales total). */
-export async function fetchInternalDashboardStats(): Promise<InternalDashboardStats | null> {
-  if (!supabase) return null;
+export async function fetchInternalDashboardStats(): Promise<FetchInternalDashboardStatsResult> {
+  if (!supabase) return { ok: false, stats: null, message: "Supabase client is not configured." };
 
   const { data: rpcData, error: rpcError } = await supabase.rpc("internal_ops_dashboard_metrics");
   if (!rpcError && rpcData) {
     const parsed = parseMetricsRpcPayload(rpcData);
-    if (parsed) return parsed;
+    if (parsed) return { ok: true, stats: parsed };
   }
+  const rpcFailMsg = rpcError?.message?.trim();
 
   const dayStart = kampalaDayStartIso();
 
@@ -235,7 +240,15 @@ export async function fetchInternalDashboardStats(): Promise<InternalDashboardSt
     subsPaid.error ||
     subsExpired.error
   ) {
-    return null;
+    const first =
+      shopsAll.error?.message ||
+      shopsActive.error?.message ||
+      shopsDistrict.error?.message ||
+      subsTrial.error?.message ||
+      subsPaid.error?.message ||
+      subsExpired.error?.message ||
+      rpcFailMsg;
+    return { ok: false, stats: null, message: first ?? "Could not load dashboard metrics." };
   }
 
   const byDistrict = new Map<string, number>();
@@ -258,17 +271,20 @@ export async function fetchInternalDashboardStats(): Promise<InternalDashboardSt
       : (devCount.count ?? 0);
 
   return {
-    totalShops: shopsAll.count ?? 0,
-    activeToday: shopsActive.count ?? 0,
-    trialSubscriptions: subsTrial.count ?? 0,
-    paidSubscriptions: subsPaid.count ?? 0,
-    expiredSubscriptions: subsExpired.count ?? 0,
-    lapsedTrials: lapsed.error ? 0 : (lapsed.count ?? 0),
-    expiringTrialsNext7d: exp7.error ? 0 : (exp7.count ?? 0),
-    activeDevices,
-    openSupportTickets: supOpen.error ? 0 : (supOpen.count ?? 0),
-    salesTotalUgx,
-    shopsByDistrict,
+    ok: true,
+    stats: {
+      totalShops: shopsAll.count ?? 0,
+      activeToday: shopsActive.count ?? 0,
+      trialSubscriptions: subsTrial.count ?? 0,
+      paidSubscriptions: subsPaid.count ?? 0,
+      expiredSubscriptions: subsExpired.count ?? 0,
+      lapsedTrials: lapsed.error ? 0 : (lapsed.count ?? 0),
+      expiringTrialsNext7d: exp7.error ? 0 : (exp7.count ?? 0),
+      activeDevices,
+      openSupportTickets: supOpen.error ? 0 : (supOpen.count ?? 0),
+      salesTotalUgx,
+      shopsByDistrict,
+    },
   };
 }
 
@@ -364,7 +380,46 @@ export type RecentShopRow = {
   trial_days_left: number | null;
   /** Display label from profile / email (internal RPC). */
   owner_label?: string | null;
+  owner_email?: string | null;
+  phone_e164?: string | null;
+  business_type?: string | null;
+  gps_missing?: boolean | null;
 };
+
+export type PendingSubscriptionRequestRow = {
+  id: string;
+  organization_id: string;
+  shop_id: string | null;
+  requested_by: string | null;
+  requested_plan: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
+};
+
+export async function fetchPendingSubscriptionRequests(limit = 50): Promise<PendingSubscriptionRequestRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("internal_ops_subscription_requests_pending", { p_limit: limit });
+  if (error || !Array.isArray(data)) return [];
+  return data as PendingSubscriptionRequestRow[];
+}
+
+export async function internalOpsSetSubscriptionRequestStatus(
+  requestId: string,
+  status: "approved" | "rejected",
+  note?: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("internal_ops_subscription_request_set_status", {
+    p_request_id: requestId,
+    p_status: status,
+    p_note: note ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok === true) return { ok: true };
+  return { ok: false, message: j.error ?? "Request could not be updated." };
+}
 
 export type ShopOpsDetail = {
   shop: {
@@ -679,6 +734,10 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
         plan_code: (row.plan_code as string) ?? null,
         trial_days_left: trialDaysLeft(trialEnds, status),
         owner_label: (row.owner_label as string) ?? null,
+        owner_email: (row.owner_email as string) ?? null,
+        phone_e164: (row.phone_e164 as string) ?? null,
+        business_type: (row.business_type as string) ?? null,
+        gps_missing: row.gps_missing === null || row.gps_missing === undefined ? null : Boolean(row.gps_missing),
       };
     });
   }

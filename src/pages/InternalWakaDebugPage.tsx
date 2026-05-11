@@ -73,10 +73,10 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
       return s ? `labels=${s.signups.length}` : "parsed empty";
     });
 
-    const stats = await fetchInternalDashboardStats();
+    const dash = await fetchInternalDashboardStats();
     await time("fetchInternalDashboardStats()", async () => {
-      if (!stats) throw new Error("returned null");
-      return `shops=${stats.totalShops} trials=${stats.trialSubscriptions}`;
+      if (!dash.ok) throw new Error(dash.message);
+      return `shops=${dash.stats.totalShops} trials=${dash.stats.trialSubscriptions}`;
     });
 
     setProbes(out);

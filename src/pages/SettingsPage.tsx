@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../types";
@@ -9,7 +9,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { canUseDevRoleSimulator, hasPermission, resolveAuthRole } from "../lib/permissions";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
 import { SyncHealthCard } from "../components/SyncHealthCard";
-import { loadPrimaryShopLocationFromCloud, saveBusinessProfileToCloud } from "../lib/businessProfile";
+import { loadPrimaryShopLocationFromCloud, normalizeUgPhoneE164, saveBusinessProfileToCloud } from "../lib/businessProfile";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 
 type Props = {
@@ -33,6 +33,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
   const [boPinFeedback, setBoPinFeedback] = useState<string | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [profileFeedback, setProfileFeedback] = useState<string | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [shopNameInput, setShopNameInput] = useState(preferences.shopDisplayName ?? shopName ?? "");
   const [shopPhoneInput, setShopPhoneInput] = useState(preferences.shopPhoneE164 ?? "");
   const [shopAddressInput, setShopAddressInput] = useState(preferences.shopAddressLine ?? "");
@@ -50,6 +51,84 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
   const authResolved = resolveAuthRole({ mode: authMode, userMetadata: meta });
   const showDevSimulator =
     (!hasSupabaseConfig || Boolean(import.meta.env.DEV)) && canUseDevRoleSimulator(authResolved);
+
+  const ownerDisplayName =
+    String((user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? "").trim() ||
+    (email ? email.split("@")[0] : "");
+
+  const saveBusinessProfileClick = useCallback(async () => {
+    setProfileFeedback(null);
+    setProfileSaveError(null);
+    if (!shopNameInput.trim()) {
+      setProfileFeedback(t(lang, "shopNameRequired"));
+      return;
+    }
+    if (authMode === "supabase") {
+      if (!districtIdSel) {
+        setProfileFeedback(t(lang, "businessProfileDistrictRequired"));
+        return;
+      }
+      const ph = normalizeUgPhoneE164(shopPhoneInput);
+      if (!ph) {
+        setProfileFeedback(t(lang, "registerPhoneInvalid"));
+        return;
+      }
+    }
+    setProfileBusy(true);
+    try {
+      setPreferences({
+        shopDisplayName: shopNameInput.trim(),
+        shopPhoneE164: shopPhoneInput.trim() || null,
+        shopAddressLine: shopAddressInput.trim() || null,
+        shopCurrency: shopCurrencyInput.trim().toUpperCase() || "UGX",
+      });
+      await saveBusinessProfileToCloud(
+        {
+          shopName: shopNameInput.trim(),
+          businessType: preferences.businessType,
+          currency: shopCurrencyInput,
+          phone: shopPhoneInput,
+          address: shopAddressInput,
+          ownerName: ownerDisplayName || undefined,
+          applyShopLocation: authMode === "supabase",
+          districtId: districtIdSel || null,
+          city: shopCityField,
+          area: shopAreaField,
+          latitude: shopLat,
+          longitude: shopLng,
+          recordGpsInHistory: recordGpsSnapshot && shopLat != null && shopLng != null,
+        },
+        false,
+      );
+      setRecordGpsSnapshot(false);
+      setProfileSaveError(null);
+      setProfileFeedback(t(lang, "businessProfileSaved"));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[waka-settings] business profile save failed", e);
+      setProfileSaveError(msg || t(lang, "businessProfileSaveFailed"));
+      setProfileFeedback(t(lang, "businessProfileSaveFailed"));
+    } finally {
+      setProfileBusy(false);
+    }
+  }, [
+    authMode,
+    districtIdSel,
+    email,
+    lang,
+    preferences.businessType,
+    recordGpsSnapshot,
+    setPreferences,
+    shopAddressInput,
+    shopAreaField,
+    shopCityField,
+    shopCurrencyInput,
+    shopLat,
+    shopLng,
+    shopNameInput,
+    shopPhoneInput,
+    user?.user_metadata,
+  ]);
 
   useEffect(() => {
     if (authMode !== "supabase" || !hasPermission(actor.role, "settings.shop")) return;
@@ -238,52 +317,32 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
             </div>
             <p className="mt-2 text-xs font-bold text-stone-500">{t(lang, "businessTypeLockedMessage")}</p>
             {profileFeedback ? <p className="mt-2 text-sm font-bold text-waka-900">{profileFeedback}</p> : null}
-            <button
-              type="button"
-              disabled={profileBusy}
-              onClick={async () => {
-                setProfileFeedback(null);
-                if (!shopNameInput.trim()) {
-                  setProfileFeedback(t(lang, "shopNameRequired"));
-                  return;
-                }
-                setProfileBusy(true);
-                try {
-                  setPreferences({
-                    shopDisplayName: shopNameInput.trim(),
-                    shopPhoneE164: shopPhoneInput.trim() || null,
-                    shopAddressLine: shopAddressInput.trim() || null,
-                    shopCurrency: shopCurrencyInput.trim().toUpperCase() || "UGX",
-                  });
-                  await saveBusinessProfileToCloud(
-                    {
-                      shopName: shopNameInput.trim(),
-                      businessType: preferences.businessType,
-                      currency: shopCurrencyInput,
-                      phone: shopPhoneInput,
-                      address: shopAddressInput,
-                      applyShopLocation: authMode === "supabase",
-                      districtId: districtIdSel || null,
-                      city: shopCityField,
-                      area: shopAreaField,
-                      latitude: shopLat,
-                      longitude: shopLng,
-                      recordGpsInHistory: recordGpsSnapshot && shopLat != null && shopLng != null,
-                    },
-                    false,
-                  );
-                  setRecordGpsSnapshot(false);
-                  setProfileFeedback(t(lang, "businessProfileSaved"));
-                } catch {
-                  setProfileFeedback(t(lang, "businessProfileSaveFailed"));
-                } finally {
-                  setProfileBusy(false);
-                }
-              }}
-              className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
-            >
-              {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
-            </button>
+            {profileSaveError ? (
+              <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-900">
+                <span className="font-black">{t(lang, "businessProfileErrorReason")}: </span>
+                <span className="font-mono">{profileSaveError}</span>
+              </p>
+            ) : null}
+            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                disabled={profileBusy}
+                onClick={() => void saveBusinessProfileClick()}
+                className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
+              >
+                {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
+              </button>
+              {profileSaveError ? (
+                <button
+                  type="button"
+                  disabled={profileBusy}
+                  onClick={() => void saveBusinessProfileClick()}
+                  className="min-h-[48px] flex-1 rounded-2xl border-2 border-stone-300 bg-white py-3 text-base font-black text-stone-900"
+                >
+                  {t(lang, "businessProfileRetrySave")}
+                </button>
+              ) : null}
+            </div>
           </div>
           <label className="mt-6 flex items-center gap-3 text-lg font-bold text-slate-900">
             <input
