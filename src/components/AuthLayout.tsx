@@ -8,14 +8,16 @@ type Props = {
   lang: Language;
   setLang: (lg: Language) => void;
   children: ReactNode;
+  /** Logo link target (default sign-in). */
+  brandHref?: string;
 };
 
-export function AuthLayout({ lang, setLang, children }: Props) {
+export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Props) {
   return (
     <div className="min-h-dvh bg-gradient-to-b from-waka-50 via-stone-50 to-stone-100">
       <div className="mx-auto flex max-w-md flex-col gap-4 px-4 py-8">
         <header className="flex items-center justify-between gap-3">
-          <Link to="/login" className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1">
+          <Link to={brandHref} className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1">
             <WakaMarkIcon className="h-10 w-10 shrink-0 text-waka-600 shadow-waka-sm" />
             <span className="min-w-0">
               <span className="block truncate text-lg font-black text-stone-900">{t(lang, "appName")}</span>

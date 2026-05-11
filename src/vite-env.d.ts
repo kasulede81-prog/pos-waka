@@ -18,6 +18,8 @@ interface ImportMetaEnv {
   readonly VITE_APP_VERSION?: string;
   /** Optional HTTPS endpoint for reportMonitoringEvent JSON POST */
   readonly VITE_MONITORING_INGEST_URL?: string;
+  /** Comma-separated emails allowed to open `/internal/waka` (browser gate only; add server checks for real admin APIs) */
+  readonly VITE_WAKA_INTERNAL_ADMIN_EMAILS?: string;
 }
 
 interface ImportMeta {

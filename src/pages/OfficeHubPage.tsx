@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { isWakaInternalAdminEmail } from "../lib/internalAdminAllowlist";
 import {
   Package,
   Truck,
@@ -27,6 +29,8 @@ type Card = {
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
+  const { email } = useAuth();
+  const showInternalAdmin = isWakaInternalAdminEmail(email);
 
   const cards: Card[] = [
     {
@@ -119,9 +123,22 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         </ul>
       )}
 
-      <Link to="/" className="inline-flex min-h-[48px] items-center rounded-2xl font-bold text-waka-800 underline">
-        ← {t(lang, "officeBackHome")}
-      </Link>
+      <div className="flex flex-col gap-3 border-t border-stone-100 pt-6">
+        <Link to="/support" className="inline-flex min-h-[48px] items-center text-base font-black text-waka-800 underline">
+          {t(lang, "supportOfficeFooter")} →
+        </Link>
+        {showInternalAdmin ? (
+          <Link
+            to="/internal/waka"
+            className="inline-flex min-h-[44px] items-center text-sm font-bold text-stone-500 underline decoration-stone-300"
+          >
+            {t(lang, "internalAdminFooterLink")}
+          </Link>
+        ) : null}
+        <Link to="/" className="inline-flex min-h-[48px] items-center rounded-2xl font-bold text-waka-800 underline">
+          ← {t(lang, "officeBackHome")}
+        </Link>
+      </div>
     </div>
   );
 }

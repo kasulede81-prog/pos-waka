@@ -119,6 +119,7 @@ export function BackupSettingsCard({ lang }: Props) {
     <article className="rounded-3xl border-2 border-waka-100 bg-waka-50/30 p-5">
       <p className="text-xl font-black text-waka-950">{t(lang, "backupTitle")}</p>
       <p className="mt-1 text-sm text-waka-900">{t(lang, "backupSub")}</p>
+      <p className="mt-3 rounded-2xl bg-white/90 px-3 py-2 text-sm font-semibold text-waka-950">{t(lang, "backupTrustLine")}</p>
       {msg ? <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-800">{msg}</p> : null}
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">

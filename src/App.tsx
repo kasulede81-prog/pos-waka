@@ -26,6 +26,8 @@ import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
+import { SupportPage } from "./pages/SupportPage";
+import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import type { Language } from "./types";
 
@@ -106,6 +108,13 @@ function App() {
         <Route
           path="/auth/recovery"
           element={<AuthRecoveryPage lang={lang} setLang={setLang} mode={auth.mode} updatePassword={auth.updatePassword} />}
+        />
+
+        <Route
+          path="/support"
+          element={
+            <SupportPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />
+          }
         />
 
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
@@ -220,6 +229,7 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
+            <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
           </Route>
         </Route>
 

@@ -15,6 +15,7 @@ import { hasPermission } from "../../lib/permissions";
 import { WakaMarkIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
+import { FloatingSupportFab } from "../support/FloatingSupportFab";
 
 type Props = {
   lang: Language;
@@ -181,6 +182,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                       {t(lang, "upgradeNav")}
                     </Link>
                   ) : null}
+                  <Link
+                    to="/support"
+                    className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {t(lang, "supportNav")}
+                  </Link>
                   <button
                     type="button"
                     onClick={() => onSignOut()}
@@ -299,6 +307,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </div>
         ) : null}
+        <FloatingSupportFab lang={lang} />
       </div>
     </SessionActorProvider>
   );

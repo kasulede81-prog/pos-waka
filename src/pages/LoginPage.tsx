@@ -137,6 +137,15 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
         {!hasSupabaseConfig && (
           <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">{t(lang, "supabaseMissing")}</p>
         )}
+
+        <p className="mt-8 text-center">
+          <Link
+            to="/support"
+            className="inline-flex min-h-[48px] items-center justify-center text-base font-bold text-waka-800 underline underline-offset-2"
+          >
+            {t(lang, "supportLoginFooter")}
+          </Link>
+        </p>
       </div>
     </AuthLayout>
   );

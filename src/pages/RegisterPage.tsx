@@ -147,6 +147,10 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
         )}
 
         <p className="mt-6 text-center text-sm text-slate-600">
+          <Link to="/support" className="font-bold text-waka-800 underline underline-offset-2">
+            {t(lang, "supportLoginFooter")}
+          </Link>
+          <span className="mx-2 text-slate-400">·</span>
           <Link to="/login" className="font-medium text-waka-700 underline underline-offset-2">
             {t(lang, "backToLogin")}
           </Link>

@@ -54,6 +54,17 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
 
       <SyncHealthCard lang={lang} />
 
+      <p className="rounded-3xl border border-stone-200 bg-white px-4 py-3 text-sm font-semibold text-stone-700 shadow-waka-sm">
+        {t(lang, "settingsTrustDataLine")}
+      </p>
+
+      <Link
+        to="/support"
+        className="flex min-h-[52px] items-center justify-center rounded-3xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-white px-4 py-3 text-center text-base font-black text-orange-950 shadow-sm active:scale-[0.99]"
+      >
+        {t(lang, "supportNav")} →
+      </Link>
+
       {authMode === "supabase" ? (
         <Link
           to="/upgrade"

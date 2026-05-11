@@ -53,6 +53,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
             <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
           )}
           <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
+          <p className="mt-2 text-sm font-bold text-waka-900">{t(lang, "upgradeCancelAnytime")}</p>
         </section>
       ) : null}
 
@@ -120,6 +121,13 @@ export function UpgradePage({ lang }: { lang: Language }) {
       </section>
 
       <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">{t(lang, "upgradePaymentPrep")}</p>
+
+      <Link
+        to="/support"
+        className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-orange-200 bg-orange-50 px-4 py-3 text-base font-black text-orange-950 shadow-sm"
+      >
+        {t(lang, "supportNav")} →
+      </Link>
 
       <Link to="/" className="inline-flex min-h-[48px] items-center font-bold text-waka-800 underline">
         ← {t(lang, "upgradeBack")}
