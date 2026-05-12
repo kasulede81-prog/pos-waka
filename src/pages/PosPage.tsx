@@ -11,7 +11,7 @@ import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala } from "../lib/datesUg";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 16;
-const MAX_RECENT_SEARCHES = 6;
+const MAX_RECENT_SEARCHES = 4;
 const MAX_RECENT_PRODUCTS = 14;
 const MAX_FAVORITE_PRODUCTS = 20;
 
@@ -154,6 +154,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const soundOn = preferences.saleSoundOn !== false;
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** When true, checkout is a slim bar so the user can scroll the product list again. */
+  const [saleCheckoutMinimized, setSaleCheckoutMinimized] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
   const [inputMode, setInputMode] = useState<LineInputMode>("money");
   const [display, setDisplay] = useState("");
@@ -172,17 +174,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
   const [saleSuccessFlash, setSaleSuccessFlash] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-
-  const categoryOptions = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of products) {
-      const c = (p.category ?? "").trim();
-      if (c) set.add(c);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [products]);
 
   const soldTodayByProduct = useMemo(() => {
     const todayKey = dateKeyKampala(new Date());
@@ -273,13 +265,12 @@ export function PosPage({ lang }: { lang: Language }) {
     const q = searchQuery.trim().toLowerCase();
     const aliasTerms = q ? SEARCH_ALIASES[q] ?? [] : [];
     return products.filter((p) => {
-      if (categoryFilter && (p.category ?? "").trim() !== categoryFilter) return false;
       if (!q) return true;
       const searchable = [p.name, p.category, p.baseUnit, p.sku].filter(Boolean).join(" ").toLowerCase();
       if (searchable.includes(q)) return true;
       return aliasTerms.some((term) => searchable.includes(term));
     });
-  }, [products, searchQuery, categoryFilter]);
+  }, [products, searchQuery]);
 
   const openProduct = useCallback((p: Product) => {
     setSelected(p);
@@ -293,6 +284,10 @@ export function PosPage({ lang }: { lang: Language }) {
     setDraftInput(null);
     setSheetOpen(true);
   }, [setDraftInput]);
+
+  useEffect(() => {
+    if (draftLines.length === 0) setSaleCheckoutMinimized(false);
+  }, [draftLines.length]);
 
   useEffect(() => {
     const id = (location.state as { preferProductId?: string } | null)?.preferProductId;
@@ -349,6 +344,7 @@ export function PosPage({ lang }: { lang: Language }) {
     setSheetOpen(false);
     setSelected(null);
     setDisplay("");
+    setSaleCheckoutMinimized(false);
   }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, hapticsOn, bumpRecentProduct]);
 
   const applyPreset = useCallback(
@@ -366,6 +362,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setSheetOpen(false);
       setSelected(null);
       setDisplay("");
+      setSaleCheckoutMinimized(false);
     },
     [selected, setDraftInput, addDraftLineFromInput, lang, hapticsOn, bumpRecentProduct],
   );
@@ -469,7 +466,14 @@ export function PosPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-4 pb-8">
+    <div
+      className={clsx(
+        "space-y-4",
+        draftLines.length > 0 && saleCheckoutMinimized
+          ? "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]"
+          : "pb-8",
+      )}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-900">{t(lang, "sellTitle")}</h2>
@@ -487,81 +491,46 @@ export function PosPage({ lang }: { lang: Language }) {
       </div>
 
       {products.length > 0 ? (
-        <div className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-          <label className="block">
-            <span className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellSearchPlaceholder")}</span>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onBlur={(e) => commitSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitSearch(searchQuery);
-              }}
-              placeholder={t(lang, "posSellSearchPlaceholder")}
-              className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg font-semibold text-stone-900 outline-none ring-waka-200 focus:ring"
-            />
-          </label>
+        <div className="space-y-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm sm:p-2.5">
+          <input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onBlur={(e) => commitSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitSearch(searchQuery);
+            }}
+            placeholder={t(lang, "posSellSearchPlaceholder")}
+            aria-label={t(lang, "posSellSearchPlaceholder")}
+            className="h-9 w-full rounded-xl border border-stone-200 bg-stone-50/90 px-2.5 text-sm font-medium text-stone-900 outline-none ring-waka-200 focus:border-waka-400 focus:bg-white focus:ring-1"
+          />
           {recentSearches.length > 0 ? (
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentSearches")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {recentSearches.map((item) => (
+            <ul
+              className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
+              aria-label={t(lang, "posRecentSearches")}
+            >
+              {recentSearches.map((item) => (
+                <li key={item} className="shrink-0">
                   <button
-                    key={item}
                     type="button"
                     onClick={() => setSearchQuery(item)}
-                    className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-700"
+                    className="rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-semibold text-stone-700 active:bg-stone-100"
                   >
                     {item}
                   </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-          {categoryOptions.length > 0 ? (
-            <label className="block">
-              <span className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryLabel")}</span>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-lg font-semibold text-stone-900"
-              >
-                <option value="">{t(lang, "posSellCategoryAll")}</option>
-                {categoryOptions.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {categoryOptions.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {categoryOptions.slice(0, 8).map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCategoryFilter((prev) => (prev === c ? "" : c))}
-                  className={clsx(
-                    "rounded-full border px-3 py-1.5 text-xs font-bold",
-                    categoryFilter === c ? "border-waka-400 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700",
-                  )}
-                >
-                  {c}
-                </button>
+                </li>
               ))}
-            </div>
+            </ul>
           ) : null}
           {frequentToday.length > 0 ? (
             <div>
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
                 {frequentToday.map(({ product, qty }) => (
                   <button
                     key={product.id}
                     type="button"
                     onClick={() => openProduct(product)}
-                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-900"
+                    className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-900 active:bg-amber-100"
                   >
                     {product.name} · {qty}
                   </button>
@@ -571,14 +540,14 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : null}
           {favoriteProducts.length > 0 ? (
             <div>
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
                 {favoriteProducts.map((p) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => openProduct(p)}
-                    className="min-h-[40px] rounded-full border border-waka-300 bg-waka-50 px-3 py-1.5 text-sm font-bold text-waka-950"
+                    className="shrink-0 rounded-full border border-waka-300 bg-waka-50 px-2 py-0.5 text-xs font-bold text-waka-950 active:bg-waka-100"
                   >
                     {p.name}
                   </button>
@@ -588,8 +557,8 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : null}
           {recentProducts.filter((p) => !favoriteIds.includes(p.id)).length > 0 ? (
             <div>
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
+              <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
                 {recentProducts
                   .filter((p) => !favoriteIds.includes(p.id))
                   .map((p) => (
@@ -597,7 +566,7 @@ export function PosPage({ lang }: { lang: Language }) {
                       key={p.id}
                       type="button"
                       onClick={() => openProduct(p)}
-                      className="min-h-[40px] rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-sm font-semibold text-stone-800"
+                      className="shrink-0 rounded-full border border-stone-200 bg-stone-50 px-2 py-0.5 text-xs font-semibold text-stone-800 active:bg-stone-100"
                     >
                       {p.name}
                     </button>
@@ -671,146 +640,206 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {draftLines.length > 0 && (
-        <section className="rounded-3xl border-2 border-waka-200 bg-waka-50 p-5 shadow-sm">
-          <p className="text-base font-bold text-waka-950">{t(lang, "thisSale")}</p>
-          <ul className="mt-3 space-y-2">
-            {draftLines.map((line) => (
-              <li key={line.productId} className="flex items-center justify-between gap-2 text-lg text-slate-900">
-                <span className="font-bold">
-                  {line.name}{" "}
-                  <span className="text-xs font-medium text-slate-500">
-                    {line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")}
+      {draftLines.length > 0 && !saleCheckoutMinimized ? (
+        <div
+          className="fixed inset-0 z-[44] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          role="dialog"
+          aria-modal
+          aria-labelledby="pos-checkout-title"
+        >
+          <header className="flex shrink-0 items-center gap-2 border-b border-waka-200 bg-waka-50 px-3 py-3">
+            <button
+              type="button"
+              onClick={() => clearDraft()}
+              className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
+            >
+              {t(lang, "clearSale")}
+            </button>
+            <h2 id="pos-checkout-title" className="min-w-0 flex-1 truncate text-center text-lg font-black text-waka-950">
+              {t(lang, "thisSale")}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setSaleCheckoutMinimized(true)}
+              className="shrink-0 rounded-full border border-waka-300 bg-white px-3 py-2 text-sm font-bold text-waka-900 shadow-sm active:bg-waka-50"
+            >
+              {t(lang, "posAddMoreItems")}
+            </button>
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <ul className="space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
+              {draftLines.map((line) => (
+                <li key={line.productId} className="flex items-center justify-between gap-2 text-lg text-slate-900">
+                  <span className="min-w-0 font-bold">
+                    {line.name}{" "}
+                    <span className="text-xs font-medium text-slate-500">
+                      {line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")}
+                    </span>
                   </span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg font-black">UGX {line.lineTotalUgx.toLocaleString()}</span>
-                  <button
-                    type="button"
-                    className="flex min-h-[44px] min-w-[44px] items-center justify-center text-lg text-red-600 active:bg-red-50"
-                    onClick={() => removeDraftLine(line.productId)}
-                    aria-label={t(lang, "removeLine")}
-                  >
-                    ✕
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-4 text-3xl font-black text-slate-900">
-            {t(lang, "totalLabel")}{" "}
-            <span className="text-waka-700">UGX {draftTotal.toLocaleString()}</span>
-          </p>
-
-          <div className="mt-4">
-            <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "paymentMethodLabel")}</p>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {(["cash", "mobile_money", "mixed", "credit"] as const).map((method) => (
-                <button
-                  key={method}
-                  type="button"
-                  onClick={() => setPaymentMethod(method)}
-                  className={clsx(
-                    "min-h-[48px] rounded-2xl border text-sm font-black",
-                    paymentMethod === method ? "border-waka-400 bg-waka-100 text-waka-950" : "border-stone-200 bg-white text-stone-700",
-                  )}
-                >
-                  {t(lang, `paymentMethod_${method}`)}
-                </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span className="text-lg font-black">UGX {line.lineTotalUgx.toLocaleString()}</span>
+                    <button
+                      type="button"
+                      className="flex min-h-[44px] min-w-[44px] items-center justify-center text-lg text-red-600 active:bg-red-50"
+                      onClick={() => removeDraftLine(line.productId)}
+                      aria-label={t(lang, "removeLine")}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </li>
               ))}
-            </div>
-          </div>
+            </ul>
+            <p className="mt-4 text-3xl font-black text-slate-900">
+              {t(lang, "totalLabel")}{" "}
+              <span className="text-waka-700">UGX {draftTotal.toLocaleString()}</span>
+            </p>
 
-          {(paymentMethod === "mixed" || paymentMethod === "credit") ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <label className="block text-base font-semibold text-slate-800">
-                {t(lang, "paymentCashLabel")}
-                <input
-                  value={cashInput}
-                  onChange={(e) => setCashInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  inputMode="numeric"
-                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
-                  placeholder="0"
-                />
-              </label>
-              <label className="block text-base font-semibold text-slate-800">
-                {t(lang, "paymentMobileMoneyLabel")}
-                <input
-                  value={mobileMoneyInput}
-                  onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  inputMode="numeric"
-                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
-                  placeholder="0"
-                />
-              </label>
+            <div className="mt-4">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "paymentMethodLabel")}</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {(["cash", "mobile_money", "mixed", "credit"] as const).map((method) => (
+                  <button
+                    key={method}
+                    type="button"
+                    onClick={() => setPaymentMethod(method)}
+                    className={clsx(
+                      "min-h-[48px] rounded-2xl border text-sm font-black",
+                      paymentMethod === method ? "border-waka-400 bg-waka-100 text-waka-950" : "border-stone-200 bg-white text-stone-700",
+                    )}
+                  >
+                    {t(lang, `paymentMethod_${method}`)}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : null}
 
-          {paymentMethod === "credit" || paymentMethod === "mixed" ? (
-            <>
-              <p className="mt-3 rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-900">
-                {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
-              </p>
+            {paymentMethod === "mixed" || paymentMethod === "credit" ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="block text-base font-semibold text-slate-800">
-                  {t(lang, "paymentDebtNameLabel")}
+                  {t(lang, "paymentCashLabel")}
                   <input
-                    value={saleCustomerName}
-                    onChange={(e) => setSaleCustomerName(e.target.value)}
-                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
-                    placeholder={t(lang, "paymentDebtNamePlaceholder")}
+                    value={cashInput}
+                    onChange={(e) => setCashInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
+                    placeholder="0"
                   />
                 </label>
                 <label className="block text-base font-semibold text-slate-800">
-                  {t(lang, "paymentDebtPhoneLabel")}
+                  {t(lang, "paymentMobileMoneyLabel")}
                   <input
-                    value={saleCustomerPhone}
-                    onChange={(e) => setSaleCustomerPhone(e.target.value)}
-                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
-                    placeholder={t(lang, "personPhonePh")}
+                    value={mobileMoneyInput}
+                    onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
+                    placeholder="0"
                   />
                 </label>
               </div>
-              {customers.length > 0 ? (
-                <label className="mt-4 block text-base font-semibold text-slate-800">
-                  {t(lang, "paymentPickExistingDebt")}
-                  <select
-                    value={saleCustomerId}
-                    onChange={(e) => setSaleCustomerId(e.target.value)}
-                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-lg font-medium"
-                  >
-                    <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.debtBalanceUgx > 0 ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-            </>
-          ) : null}
+            ) : null}
 
-          <button
-            type="button"
-            onClick={finishSale}
-            className="mt-5 min-h-[56px] w-full rounded-3xl bg-waka-600 py-5 text-2xl font-black text-white shadow-lg active:bg-waka-700"
-          >
-            {t(lang, "saveSale")}
-          </button>
-        </section>
-      )}
+            {paymentMethod === "credit" || paymentMethod === "mixed" ? (
+              <>
+                <p className="mt-3 rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-900">
+                  {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
+                </p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label className="block text-base font-semibold text-slate-800">
+                    {t(lang, "paymentDebtNameLabel")}
+                    <input
+                      value={saleCustomerName}
+                      onChange={(e) => setSaleCustomerName(e.target.value)}
+                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
+                      placeholder={t(lang, "paymentDebtNamePlaceholder")}
+                    />
+                  </label>
+                  <label className="block text-base font-semibold text-slate-800">
+                    {t(lang, "paymentDebtPhoneLabel")}
+                    <input
+                      value={saleCustomerPhone}
+                      onChange={(e) => setSaleCustomerPhone(e.target.value)}
+                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
+                      placeholder={t(lang, "personPhonePh")}
+                    />
+                  </label>
+                </div>
+                {customers.length > 0 ? (
+                  <label className="mt-4 block text-base font-semibold text-slate-800">
+                    {t(lang, "paymentPickExistingDebt")}
+                    <select
+                      value={saleCustomerId}
+                      onChange={(e) => setSaleCustomerId(e.target.value)}
+                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-lg font-medium"
+                    >
+                      <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                          {c.debtBalanceUgx > 0 ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={finishSale}
+              className="mt-5 min-h-[56px] w-full rounded-3xl bg-waka-600 py-5 text-2xl font-black text-white shadow-lg active:bg-waka-700"
+            >
+              {t(lang, "saveSale")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {draftLines.length > 0 && saleCheckoutMinimized ? (
+        <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom\,0px))] left-0 right-0 z-[45] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "totalLabel")}</p>
+              <p className="truncate text-xl font-black text-waka-700">UGX {draftTotal.toLocaleString()}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSaleCheckoutMinimized(false)}
+              className="shrink-0 rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-md active:bg-waka-700"
+            >
+              {t(lang, "posReviewPay")}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {sheetOpen && selected && (
-        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/50 pb-[env(safe-area-inset-bottom)]" role="dialog" aria-modal>
-          <div className="max-h-[94vh] overflow-y-auto rounded-t-[2rem] bg-white p-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] shadow-2xl">
-            <div className="mx-auto mb-3 h-1.5 w-14 rounded-full bg-slate-200" />
-            <p className="text-center text-2xl font-black text-slate-900">{selected.name}</p>
-            <p className="mt-1 text-center text-base text-slate-500">{formatProductPriceLabel(selected)}</p>
-
+        <div
+          className="fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          role="dialog"
+          aria-modal
+          aria-labelledby="pos-add-sheet-title"
+        >
+          <header className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-3 py-3">
+            <button
+              type="button"
+              onClick={() => setSheetOpen(false)}
+              className="min-h-[48px] shrink-0 rounded-2xl border-2 border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 active:bg-slate-50"
+            >
+              {t(lang, "cancel")}
+            </button>
+            <div className="min-w-0 flex-1 text-center">
+              <p id="pos-add-sheet-title" className="truncate text-xl font-black text-slate-900">
+                {selected.name}
+              </p>
+              <p className="truncate text-sm font-semibold text-slate-500">{formatProductPriceLabel(selected)}</p>
+            </div>
+            <span className="min-h-[48px] w-[5.5rem] shrink-0" aria-hidden />
+          </header>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-6">
             {(moneyPresets.length > 0 || qtyPresets.length > 0) && (
-              <div className="mt-5 space-y-3">
+              <div className="space-y-3">
                 <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">{t(lang, "tapQuickAmount")}</p>
                 {moneyPresets.length > 0 && (
                   <div className="flex flex-wrap justify-center gap-2">
@@ -891,22 +920,13 @@ export function PosPage({ lang }: { lang: Language }) {
                   <Numpad allowDecimal={inputMode === "quantity"} onDigit={appendDigit} onClear={() => setDisplay("")} />
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSheetOpen(false)}
-                    className="min-h-[52px] rounded-2xl border-2 border-slate-200 py-4 text-lg font-bold active:bg-slate-50"
-                  >
-                    {t(lang, "cancel")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={applyDraftInput}
-                    className="min-h-[52px] rounded-2xl bg-slate-900 py-4 text-lg font-black text-white active:bg-slate-800"
-                  >
-                    {t(lang, "addToSale")}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={applyDraftInput}
+                  className="mt-5 min-h-[56px] w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white active:bg-slate-800"
+                >
+                  {t(lang, "addToSale")}
+                </button>
               </>
             )}
           </div>
