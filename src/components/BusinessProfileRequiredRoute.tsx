@@ -10,6 +10,9 @@ export function BusinessProfileRequiredRoute({ authMode }: Props) {
   const location = useLocation();
   const [status, setStatus] = useState<{ complete: boolean } | null>(null);
 
+  // Only depend on auth mode — not on every pathname. Including pathname caused
+  // status to reset to null on each navigation so the whole app (including Back Office)
+  // showed "Loading…" and felt frozen while onboarding RPC re-ran.
   useEffect(() => {
     if (authMode !== "supabase") {
       setStatus({ complete: true });
@@ -25,7 +28,7 @@ export function BusinessProfileRequiredRoute({ authMode }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [authMode, location.pathname]);
+  }, [authMode]);
 
   useEffect(() => {
     if (authMode !== "supabase") return;

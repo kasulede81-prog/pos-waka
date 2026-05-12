@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Home, ScanLine, HandCoins, Receipt, Briefcase } from "lucide-react";
+import { Home, ShoppingCart, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -87,10 +87,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const navDefs = useMemo((): NavDef[] => {
     const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
     if (hasPermission(actor.role, "pos.sell")) {
-      items.push({ path: "/pos", labelKey: "navSell", Icon: ScanLine, perm: "pos.sell" });
-    }
-    if (hasPermission(actor.role, "customers.view")) {
-      items.push({ path: "/debts", labelKey: "debts", Icon: HandCoins, perm: "customers.view" });
+      items.push({ path: "/pos", labelKey: "navSell", Icon: ShoppingCart, perm: "pos.sell" });
     }
     if (hasPermission(actor.role, "receipts.view")) {
       items.push({ path: "/receipts", labelKey: "receipts", Icon: Receipt, perm: "receipts.view" });
@@ -215,7 +212,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                         active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
                       }`}
                     >
-                      <item.Icon className="h-5 w-5 shrink-0 opacity-90" strokeWidth={2.25} aria-hidden />
+                      <item.Icon
+                        className={
+                          item.path === "/pos"
+                            ? "h-7 w-7 shrink-0 opacity-95"
+                            : "h-5 w-5 shrink-0 opacity-90"
+                        }
+                        strokeWidth={item.path === "/pos" ? 2.5 : 2.25}
+                        aria-hidden
+                      />
                       {t(lang, item.labelKey)}
                     </Link>
                   </li>
@@ -236,15 +241,20 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
           >
             {navDefs.map(({ path, labelKey, Icon }) => {
               const active = navItemActive(path, location.pathname);
+              const isSell = path === "/pos";
               return (
                 <Link
                   key={path}
                   to={path}
                   className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
                     active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700"
-                  }`}
+                  } ${isSell && !active ? "ring-2 ring-waka-200 ring-offset-1" : ""} ${isSell ? "sm:min-h-[56px]" : ""}`}
                 >
-                  <Icon className="h-6 w-6 shrink-0" strokeWidth={2.25} aria-hidden />
+                  <Icon
+                    className={isSell ? "h-9 w-9 shrink-0 sm:h-10 sm:w-10" : "h-6 w-6 shrink-0"}
+                    strokeWidth={isSell ? 2.6 : 2.25}
+                    aria-hidden
+                  />
                   <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
                 </Link>
               );
