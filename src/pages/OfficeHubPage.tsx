@@ -14,6 +14,7 @@ import {
   ScrollText,
   UserCog,
   Printer,
+  ShieldCheck,
 } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -25,7 +26,9 @@ import { OfficePremiumSection } from "../components/office/OfficePremiumSection"
 type Card = {
   to: string;
   titleKey: string;
+  titleText?: string;
   subKey?: string;
+  subText?: string;
   Icon: typeof Package;
   perm: boolean;
 };
@@ -113,6 +116,14 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       Icon: UserCog,
       perm: hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode),
     },
+    {
+      to: "/internal/waka",
+      titleKey: "internalAdminFooterLink",
+      titleText: "Internal dashboard",
+      subText: "Manage shops, support, plans, and admin tools",
+      Icon: ShieldCheck,
+      perm: showInternalAdmin,
+    },
   ];
 
   const visible = cards.filter((c) => c.perm);
@@ -141,8 +152,11 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-lg font-black text-stone-900">{t(lang, c.titleKey)}</span>
-                  {c.subKey ? (
-                    <span className="mt-0.5 block text-xs font-semibold text-stone-500">{t(lang, c.subKey)}</span>
+                  {c.titleText ? (
+                    <span className="mt-0.5 block text-xs font-semibold text-stone-500">{c.titleText}</span>
+                  ) : null}
+                  {c.subKey || c.subText ? (
+                    <span className="mt-0.5 block text-xs font-semibold text-stone-500">{c.subText ?? t(lang, c.subKey!)}</span>
                   ) : null}
                 </span>
               </Link>

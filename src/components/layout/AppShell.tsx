@@ -12,6 +12,7 @@ import { usePosStore } from "../../store/usePosStore";
 import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
+import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaMarkIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
@@ -59,6 +60,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const [lockStaffId, setLockStaffId] = useState(preferences.activeStaffId ?? "");
   const [lockSecret, setLockSecret] = useState("");
   const [lockError, setLockError] = useState<string | null>(null);
+  const [isInternalAdmin, setIsInternalAdmin] = useState(false);
   const prevActorRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +68,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
     window.addEventListener("waka:pwa-update", onUp);
     return () => window.removeEventListener("waka:pwa-update", onUp);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const row = await fetchWakaInternalAdminMe();
+      if (cancelled) return;
+      setIsInternalAdmin(Boolean(row));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const actor = useMemo(
     () => resolveSessionActor({ mode: authMode, user, email, preferences }),
@@ -197,6 +211,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                   >
                     {t(lang, "supportNav")}
                   </button>
+                  {isInternalAdmin ? (
+                    <button
+                      type="button"
+                      className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-orange-900 hover:bg-orange-50"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/internal/waka", { preventScrollReset: true });
+                      }}
+                    >
+                      Internal dashboard
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => onSignOut()}

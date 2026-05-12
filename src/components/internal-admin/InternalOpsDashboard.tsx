@@ -209,6 +209,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const canResolveSupport = roleNorm === "super_admin" || roleNorm === "support_admin" || roleNorm === "finance_admin";
   const canManageTrials =
     roleNorm === "super_admin" || roleNorm === "subscriptions_admin" || roleNorm === "finance_admin";
+  const canManageAdmins = roleNorm === "super_admin";
 
   const mapboxAccessToken = useMemo(
     () => import.meta.env.VITE_MAPBOX_TOKEN || import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
@@ -425,6 +426,14 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             >
               {t(lang, "internalAdminBack")}
             </Link>
+            {canManageAdmins ? (
+              <Link
+                to="/internal/waka/admins"
+                className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-orange-200 bg-orange-50 px-5 py-2.5 text-sm font-black text-orange-900 hover:bg-orange-100"
+              >
+                {t(lang, "internalAdminsHeaderTitle")}
+              </Link>
+            ) : null}
           </div>
         </div>
       </header>
