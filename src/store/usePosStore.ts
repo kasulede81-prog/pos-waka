@@ -646,6 +646,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const open = (s.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === uid);
     if (!open) return;
     const endAt = new Date().toISOString();
+    const startMs = new Date(open.startAt).getTime();
+    const endMs = new Date(endAt).getTime();
     set((st) => ({
       preferences: {
         ...st.preferences,
@@ -658,6 +660,11 @@ export const usePosStore = create<PosState>((set, get) => {
             : sh,
         ),
       },
+      auditLogs: st.auditLogs.filter((e) => {
+        const t = new Date(e.at).getTime();
+        if (Number.isNaN(t)) return true;
+        return t < startMs || t > endMs;
+      }),
     }));
     pushAudit("shift_end", `Shift end ${actor?.displayName ?? uid}`, { shiftId: open.id, actorUserId: uid });
   },

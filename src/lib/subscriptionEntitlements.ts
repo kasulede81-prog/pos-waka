@@ -40,11 +40,16 @@ const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
 /** Permissions that need Waka Plus (reserved for branch / heavy analytics). */
 const WAKA_PLUS_ONLY: ReadonlySet<Permission> = new Set([] as Permission[]);
 
-function normalizePlanCode(raw: string | undefined | null): SubscriptionPlanCode {
+export function normalizePlanCode(raw: string | undefined | null): SubscriptionPlanCode {
   const c = (raw ?? "starter").trim().toLowerCase();
   if (c === "business") return "business";
   if (c === "waka_plus" || c === "waka plus") return "waka_plus";
   return "starter";
+}
+
+/** WhatsApp manager / priority support — catalog tier only (not effective trial tier). */
+export function planCodeHasWhatsappManager(code: SubscriptionPlanCode): boolean {
+  return code === "business" || code === "waka_plus";
 }
 
 /**

@@ -74,7 +74,7 @@ export function InternalShopOpsPage({ lang, email }: Props) {
 
   const roleNorm = (adminRow?.role ?? "").toLowerCase();
   const canSupport = ["super_admin", "support_admin", "finance_admin"].includes(roleNorm);
-  const canSubs = ["super_admin", "subscriptions_admin", "finance_admin"].includes(roleNorm);
+  const canSubs = ["super_admin", "subscriptions_admin", "finance_admin", "operations_admin"].includes(roleNorm);
 
   const suggestedPaymentUgx = useMemo(() => {
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "business").toLowerCase();

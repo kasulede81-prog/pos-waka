@@ -1,22 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Activity,
-  AlertTriangle,
-  ArrowUpRight,
-  Ban,
   Building2,
   Calendar,
-  CalendarClock,
-  CreditCard,
+  ChevronRight,
   Headphones,
   MapPin,
   RefreshCw,
-  Smartphone,
   Sparkles,
-  Store,
-  TrendingUp,
-  Zap,
 } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -28,7 +19,10 @@ import {
   fetchFieldVisitsOpen,
   fetchInternalDashboardStats,
   fetchInternalOpsCharts7d,
+  fetchOrgBillingOffersForQueue,
   fetchPendingSubscriptionRequests,
+  internalOpsOrgBillingOfferFulfill,
+  internalOpsOrgBillingOfferSend,
   internalOpsSetSubscriptionRequestStatus,
   fetchPlanTierMetrics,
   fetchRecentShops,
@@ -47,6 +41,7 @@ import {
   type FieldMapPin,
   type FieldVisitRow,
   type InternalDashboardStats,
+  type OrgBillingOfferStaffRow,
   type PendingSubscriptionRequestRow,
   type PlanTierMetrics,
   type RecentShopRow,
@@ -124,37 +119,39 @@ function MiniSparkline({ values, stroke }: { values: number[]; stroke: string })
   );
 }
 
-function StatHeroCard({
-  icon: Icon,
+function scrollToOpsSection(id: string) {
+  window.requestAnimationFrame(() => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+}
+
+function PulseMetricChip({
   label,
   value,
-  sub,
-  gradient,
+  onOpen,
 }: {
-  icon: typeof Store;
   label: string;
   value: string;
-  sub?: string;
-  gradient: string;
+  onOpen?: () => void;
 }) {
   return (
-    <div
-      className={clsx(
-        "group relative overflow-hidden rounded-2xl border border-white/60 p-4 shadow-[0_8px_30px_rgb(28_25_23/0.06)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_rgb(251_146_60/0.12)]",
-        gradient,
-      )}
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex flex-col rounded-xl border border-stone-200 bg-stone-50/80 px-3 py-2.5 text-left transition hover:border-orange-300 hover:bg-orange-50/50"
     >
-      <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/25 blur-2xl transition-opacity group-hover:opacity-90" />
-      <div className="relative flex items-start justify-between gap-2">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/80 text-orange-700 shadow-sm">
-          <Icon className="h-5 w-5" strokeWidth={2.25} />
-        </span>
-        <ArrowUpRight className="h-4 w-4 text-stone-400 opacity-0 transition-opacity group-hover:opacity-100" />
-      </div>
-      <p className="relative mt-3 text-[11px] font-bold uppercase tracking-wider text-stone-500">{label}</p>
-      <p className="relative mt-1 font-mono text-2xl font-black tracking-tight text-stone-900 sm:text-3xl">{value}</p>
-      {sub ? <p className="relative mt-1 text-xs font-semibold text-stone-600">{sub}</p> : null}
-    </div>
+      <span className="text-[10px] font-black uppercase tracking-wide text-stone-500">{label}</span>
+      <span className="mt-0.5 font-mono text-lg font-black text-stone-900">{value}</span>
+      <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-bold text-orange-700">
+        {onOpen ? (
+          <>
+            Open <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
+          </>
+        ) : (
+          "—"
+        )}
+      </span>
+    </button>
   );
 }
 
@@ -208,7 +205,21 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const roleNorm = (adminRow?.role ?? "").toLowerCase();
   const canResolveSupport = roleNorm === "super_admin" || roleNorm === "support_admin" || roleNorm === "finance_admin";
   const canManageTrials =
-    roleNorm === "super_admin" || roleNorm === "subscriptions_admin" || roleNorm === "finance_admin";
+    roleNorm === "super_admin" ||
+    roleNorm === "subscriptions_admin" ||
+    roleNorm === "finance_admin" ||
+    roleNorm === "operations_admin";
+  const canManageBillingOffers =
+    roleNorm === "super_admin" ||
+    roleNorm === "subscriptions_admin" ||
+    roleNorm === "finance_admin" ||
+    roleNorm === "operations_admin";
+  const canSendAnnualOffer =
+    roleNorm === "super_admin" ||
+    roleNorm === "subscriptions_admin" ||
+    roleNorm === "finance_admin" ||
+    roleNorm === "operations_admin" ||
+    roleNorm === "support_admin";
   const canManageAdmins = roleNorm === "super_admin";
 
   const mapboxAccessToken = useMemo(
@@ -239,6 +250,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const [trialBusyId, setTrialBusyId] = useState<string | null>(null);
   const [aiActivateBusyOrg, setAiActivateBusyOrg] = useState<string | null>(null);
   const [annualBusyId, setAnnualBusyId] = useState<string | null>(null);
+  const [annualSendBusy, setAnnualSendBusy] = useState<string | null>(null);
+  const [annualAmountByTicket, setAnnualAmountByTicket] = useState<Record<string, string>>({});
+  const [billingOfferRows, setBillingOfferRows] = useState<OrgBillingOfferStaffRow[]>([]);
+  const [billingFulfillBusy, setBillingFulfillBusy] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     if (!adminRow) return;
@@ -271,7 +286,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         setSales7(sa7.length ? sa7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
       }
 
-      const [p, r, tk, d, b, v, pins, pend] = await Promise.all([
+      const [p, r, tk, d, b, v, pins, pend, offers] = await Promise.all([
         fetchPlanTierMetrics(),
         fetchRecentShops(18),
         fetchSupportTickets(80),
@@ -280,6 +295,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         fetchFieldVisitsOpen(),
         fetchFieldMapPins({ districtId: mapDistrictId || null, limit: 400 }),
         fetchPendingSubscriptionRequests(40),
+        fetchOrgBillingOffersForQueue(60),
       ]);
       setPlans(p);
       setRecent(r);
@@ -289,6 +305,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       setVisits(v);
       setMapPins(pins);
       setPendingTrials(pend);
+      setBillingOfferRows(offers);
     } finally {
       setOpsLoading(false);
     }
@@ -452,104 +469,98 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         </p>
       ) : null}
 
-      {/* Stats */}
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-2">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "internalDashPulseTitle")}</h2>
-          {opsLoading ? <span className="text-xs font-bold uppercase tracking-wide text-orange-600">{t(lang, "internalDashSyncing")}</span> : null}
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <StatHeroCard
-            icon={Store}
-            label={t(lang, "internalStat_totalShops")}
-            value={statGrid.total}
-            sub={t(lang, "internalDashStatSubShops")}
-            gradient="bg-gradient-to-br from-white to-stone-50"
-          />
-          <StatHeroCard
-            icon={Activity}
-            label={t(lang, "internalStat_activeToday")}
-            value={statGrid.active}
-            sub={t(lang, "internalDashStatSubActive")}
-            gradient="bg-gradient-to-br from-emerald-50/80 to-white"
-          />
-          <StatHeroCard
-            icon={CreditCard}
-            label={t(lang, "internalStat_paidSubs")}
-            value={statGrid.paid}
-            sub={t(lang, "internalDashStatSubPaid")}
-            gradient="bg-gradient-to-br from-orange-50 to-white"
-          />
-          <StatHeroCard
-            icon={Zap}
-            label={t(lang, "internalStat_trialSubs")}
-            value={statGrid.trial}
-            sub={t(lang, "internalDashStatSubTrial")}
-            gradient="bg-gradient-to-br from-amber-50/90 to-white"
-          />
-          <StatHeroCard
-            icon={AlertTriangle}
-            label={t(lang, "internalStat_endedTrials")}
-            value={statGrid.endedTrials}
-            sub={t(lang, "internalDashStatSubEndedTrials")}
-            gradient="bg-gradient-to-br from-rose-50/60 to-white"
-          />
-          <StatHeroCard
-            icon={Calendar}
-            label={t(lang, "internalStat_expiringSoon")}
-            value={statGrid.expiring}
-            sub={t(lang, "internalDashStatSubExpiring")}
-            gradient="bg-gradient-to-br from-orange-50/50 to-white"
-          />
-          <StatHeroCard
-            icon={Smartphone}
-            label={t(lang, "internalStat_devices")}
-            value={statGrid.devices}
-            sub={t(lang, "internalDashStatSubDevices")}
-            gradient="bg-gradient-to-br from-sky-50/60 to-white"
-          />
-          <StatHeroCard
-            icon={Headphones}
-            label={t(lang, "internalStat_supportOpen")}
-            value={statGrid.support}
-            sub={t(lang, "internalDashStatSubSupport")}
-            gradient="bg-gradient-to-br from-violet-50/70 to-white"
-          />
-          <StatHeroCard
-            icon={TrendingUp}
-            label={t(lang, "internalStat_salesShort")}
-            value={statGrid.sales}
-            sub={t(lang, "internalDashStatSubSales")}
-            gradient="bg-gradient-to-br from-white to-orange-50/50"
-          />
-          <StatHeroCard
-            icon={Ban}
-            label={t(lang, "internalStat_suspendedShops")}
-            value={statGrid.suspended}
-            sub={t(lang, "internalDashStatSubSuspended")}
-            gradient="bg-gradient-to-br from-stone-100 to-rose-50/40"
-          />
-          <StatHeroCard
-            icon={Sparkles}
-            label={t(lang, "internalStat_pendingAi")}
-            value={statGrid.pendingAi}
-            sub={t(lang, "internalDashStatSubPendingAi")}
-            gradient="bg-gradient-to-br from-violet-50 to-white"
-          />
-          <StatHeroCard
-            icon={CalendarClock}
-            label={t(lang, "internalStat_pendingAnnual")}
-            value={statGrid.pendingAnnual}
-            sub={t(lang, "internalDashStatSubPendingAnnual")}
-            gradient="bg-gradient-to-br from-amber-50 to-orange-50/60"
-          />
-        </div>
+      {/* Stats — compact pulse with drill-down */}
+      <section className="rounded-2xl border border-stone-200/90 bg-white shadow-sm">
+        <details open className="group/pulse">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+            <div>
+              <h2 className="text-base font-black text-stone-900">{t(lang, "internalDashPulseTitle")}</h2>
+              <p className="text-xs font-semibold text-stone-500">
+                {statGrid.total} {t(lang, "internalStat_totalShops").toLowerCase()} · {statGrid.active}{" "}
+                {t(lang, "internalStat_activeToday").toLowerCase()}
+                {opsLoading ? <span className="ml-2 text-orange-600">{t(lang, "internalDashSyncing")}</span> : null}
+              </p>
+            </div>
+            <ChevronRight className="h-5 w-5 shrink-0 text-stone-400 transition group-open/pulse:rotate-90" />
+          </summary>
+          <div className="space-y-4 border-t border-stone-100 px-4 pb-4 pt-3">
+            <p className="text-xs font-semibold text-stone-500">{t(lang, "internalPulseTapHint")}</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+              <PulseMetricChip
+                label={t(lang, "internalStat_totalShops")}
+                value={statGrid.total}
+                onOpen={() => scrollToOpsSection("ops-recent-shops")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_activeToday")}
+                value={statGrid.active}
+                onOpen={() => scrollToOpsSection("ops-districts")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_paidSubs")}
+                value={statGrid.paid}
+                onOpen={() => scrollToOpsSection("ops-plans")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_trialSubs")}
+                value={statGrid.trial}
+                onOpen={() => scrollToOpsSection("ops-pending-trials")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_salesShort")}
+                value={statGrid.sales}
+                onOpen={() => scrollToOpsSection("ops-charts")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_supportOpen")}
+                value={statGrid.support}
+                onOpen={() => scrollToOpsSection("ops-support")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_pendingAi")}
+                value={statGrid.pendingAi}
+                onOpen={() => scrollToOpsSection("ops-ai-queue")}
+              />
+              <PulseMetricChip
+                label={t(lang, "internalStat_pendingAnnual")}
+                value={statGrid.pendingAnnual}
+                onOpen={() => scrollToOpsSection("ops-annual-queue")}
+              />
+            </div>
+            <details className="rounded-xl border border-stone-100 bg-stone-50/50 px-3 py-2">
+              <summary className="cursor-pointer text-xs font-black uppercase tracking-wide text-stone-600">
+                {t(lang, "internalPulseMoreMetrics")}
+              </summary>
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
+                <div className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-stone-100">
+                  <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalStat_endedTrials")}</dt>
+                  <dd className="font-mono font-black text-stone-900">{statGrid.endedTrials}</dd>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-stone-100">
+                  <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalStat_expiringSoon")}</dt>
+                  <dd className="font-mono font-black text-stone-900">{statGrid.expiring}</dd>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-stone-100">
+                  <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalStat_devices")}</dt>
+                  <dd className="font-mono font-black text-stone-900">{statGrid.devices}</dd>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-1.5 ring-1 ring-stone-100">
+                  <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalStat_suspendedShops")}</dt>
+                  <dd className="font-mono font-black text-stone-900">{statGrid.suspended}</dd>
+                </div>
+              </dl>
+            </details>
+          </div>
+        </details>
       </section>
 
       {stats?.latestSignups?.length ? (
-        <section>
-          <h2 className="mb-4 text-lg font-black text-stone-900">{t(lang, "internalLatestSignupsTitle")}</h2>
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <details className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/50 to-white px-4 py-3 shadow-sm">
+          <summary className="cursor-pointer text-base font-black text-stone-900 marker:content-none [&::-webkit-details-marker]:hidden">
+            {t(lang, "internalLatestSignupsTitle")}{" "}
+            <span className="ml-2 font-mono text-sm font-bold text-orange-800">({stats.latestSignups.length})</span>
+          </summary>
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {stats.latestSignups.map((s) => (
               <li
                 key={s.shop_id}
@@ -575,11 +586,11 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
 
       {/* Plans */}
-      <section className="space-y-4">
+      <section id="ops-plans" className="space-y-4 scroll-mt-4">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-lg font-black text-stone-900">{t(lang, "internalPlansTitle")}</h2>
           <Building2 className="h-5 w-5 text-orange-400" />
@@ -598,7 +609,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       <div className="grid gap-8 xl:grid-cols-3">
         <div className="space-y-8 xl:col-span-2">
           {/* Districts */}
-          <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
+          <section id="ops-districts" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-black text-stone-900">{t(lang, "internalDistrictTitle")}</h2>
               <input
@@ -650,8 +661,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </div>
           </section>
 
-          {/* Pending starter / plan trial requests */}
-          <section className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
+          <section id="ops-pending-trials" className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "internalPendingTrialsTitle")}</h2>
             <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalPendingTrialsSub")}</p>
             <ul className="mt-4 space-y-3">
@@ -695,7 +705,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                           setTrialBusyId(`${req.id}-ok`);
                           const r = await internalOpsSetSubscriptionRequestStatus(req.id, "approved", null);
                           setTrialBusyId(null);
-                          if (r.ok) void loadAll();
+                          if (r.ok) {
+                            window.dispatchEvent(new Event("waka:subscription-updated"));
+                            void loadAll();
+                          }
                         }}
                         className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
                       >
@@ -722,8 +735,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </ul>
           </section>
 
-          <section className="rounded-3xl border border-violet-200/80 bg-gradient-to-br from-violet-50/40 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "internalAiQueueTitle")}</h2>
+          <section id="ops-ai-queue" className="rounded-3xl border border-violet-200/80 bg-gradient-to-br from-violet-50/40 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalAiQueueSub")}</p>
             <ul className="mt-4 space-y-3">
               {opsLoading && !pendingAiTickets.length ? (
@@ -768,7 +780,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                           setAiActivateBusyOrg(tk.organization_id);
                           const r = await internalOpsActivateAiStockAssistant(tk.organization_id, 14);
                           setAiActivateBusyOrg(null);
-                          if (r.ok) void loadAll();
+                          if (r.ok) {
+                            window.dispatchEvent(new Event("waka:feature-entitlements-changed"));
+                            void loadAll();
+                          }
                         }}
                         className="rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
                       >
@@ -795,7 +810,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </ul>
           </section>
 
-          <section className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/30 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
+          <section id="ops-annual-queue" className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/30 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "internalAnnualQueueTitle")}</h2>
             <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalAnnualQueueSub")}</p>
             <ul className="mt-4 space-y-3">
@@ -814,48 +829,146 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                       <p className="mt-1 text-xs font-semibold text-stone-500">
                         {tk.owner_email ?? "—"} · {tk.shop_phone_e164 ?? tk.contact_phone_e164 ?? "—"}
                       </p>
+                      {tk.organization_id ? (
+                        <p className="mt-1 font-mono text-[10px] text-stone-400">org {tk.organization_id}</p>
+                      ) : (
+                        <p className="mt-1 text-xs font-bold text-rose-700">{t(lang, "internalAnnualMissingOrg")}</p>
+                      )}
                       <p className="mt-1 line-clamp-3 text-xs text-stone-600">{tk.body ?? tk.subject}</p>
                       <p className="mt-1 font-mono text-[11px] text-stone-400">{new Date(tk.created_at).toLocaleString("en-GB")}</p>
                     </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        style={!canResolveSupport ? { display: "none" } : undefined}
-                        disabled={!canResolveSupport || annualBusyId === `${tk.id}-ok`}
-                        onClick={async () => {
-                          setAnnualBusyId(`${tk.id}-ok`);
-                          const r = await updateSupportTicketStatus(tk.id, "in_progress");
-                          setAnnualBusyId(null);
-                          if (r.ok) void loadAll();
-                        }}
-                        className="rounded-xl bg-amber-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
-                      >
-                        {annualBusyId === `${tk.id}-ok` ? "…" : t(lang, "internalAnnualQueueWorking")}
-                      </button>
-                      <button
-                        type="button"
-                        style={!canResolveSupport ? { display: "none" } : undefined}
-                        disabled={!canResolveSupport || annualBusyId === `${tk.id}-cl`}
-                        onClick={async () => {
-                          setAnnualBusyId(`${tk.id}-cl`);
-                          const r = await updateSupportTicketStatus(tk.id, "closed");
-                          setAnnualBusyId(null);
-                          if (r.ok) void loadAll();
-                        }}
-                        className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 disabled:opacity-40"
-                      >
-                        {annualBusyId === `${tk.id}-cl` ? "…" : t(lang, "internalAnnualQueueClose")}
-                      </button>
+                    <div className="flex w-full min-w-[12rem] shrink-0 flex-col gap-2 sm:max-w-xs">
+                      <label className="text-[10px] font-black uppercase text-stone-500">
+                        {t(lang, "internalAnnualAmountUgx")}
+                        <input
+                          type="number"
+                          min={1}
+                          inputMode="numeric"
+                          value={annualAmountByTicket[tk.id] ?? ""}
+                          onChange={(e) =>
+                            setAnnualAmountByTicket((prev) => ({
+                              ...prev,
+                              [tk.id]: e.target.value,
+                            }))
+                          }
+                          placeholder={t(lang, "internalAnnualAmountPlaceholder")}
+                          className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-bold text-stone-900"
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          style={!canSendAnnualOffer ? { display: "none" } : undefined}
+                          disabled={
+                            !canSendAnnualOffer ||
+                            !tk.organization_id ||
+                            annualSendBusy === tk.id ||
+                            !(Number(annualAmountByTicket[tk.id] ?? 0) > 0)
+                          }
+                          onClick={async () => {
+                            if (!tk.organization_id) return;
+                            const amt = Math.floor(Number(annualAmountByTicket[tk.id] ?? 0));
+                            if (!(amt > 0)) return;
+                            setAnnualSendBusy(tk.id);
+                            const r = await internalOpsOrgBillingOfferSend(
+                              tk.organization_id,
+                              amt,
+                              t(lang, "internalAnnualOfferDefaultNote"),
+                              tk.shop_id ?? null,
+                            );
+                            setAnnualSendBusy(null);
+                            if (r.ok) {
+                              window.dispatchEvent(new Event("waka:subscription-updated"));
+                              void loadAll();
+                            }
+                          }}
+                          className="rounded-xl bg-orange-600 px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                        >
+                          {annualSendBusy === tk.id ? "…" : t(lang, "internalAnnualSendOffer")}
+                        </button>
+                        <button
+                          type="button"
+                          style={!canResolveSupport ? { display: "none" } : undefined}
+                          disabled={!canResolveSupport || annualBusyId === `${tk.id}-ok`}
+                          onClick={async () => {
+                            setAnnualBusyId(`${tk.id}-ok`);
+                            const r = await updateSupportTicketStatus(tk.id, "in_progress");
+                            setAnnualBusyId(null);
+                            if (r.ok) void loadAll();
+                          }}
+                          className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                        >
+                          {annualBusyId === `${tk.id}-ok` ? "…" : t(lang, "internalAnnualQueueWorking")}
+                        </button>
+                        <button
+                          type="button"
+                          style={!canResolveSupport ? { display: "none" } : undefined}
+                          disabled={!canResolveSupport || annualBusyId === `${tk.id}-cl`}
+                          onClick={async () => {
+                            setAnnualBusyId(`${tk.id}-cl`);
+                            const r = await updateSupportTicketStatus(tk.id, "closed");
+                            setAnnualBusyId(null);
+                            if (r.ok) void loadAll();
+                          }}
+                          className="rounded-xl border-2 border-stone-300 bg-white px-3 py-2 text-xs font-black text-stone-900 disabled:opacity-40"
+                        >
+                          {annualBusyId === `${tk.id}-cl` ? "…" : t(lang, "internalAnnualQueueClose")}
+                        </button>
+                      </div>
                     </div>
                   </li>
                 ))
               )}
             </ul>
+
+            {billingOfferRows.length > 0 ? (
+              <div className="mt-6 rounded-2xl border border-orange-200/80 bg-white/90 p-4">
+                <h3 className="text-sm font-black text-stone-900">{t(lang, "internalBillingOffersQueueTitle")}</h3>
+                <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalBillingOffersQueueSub")}</p>
+                <ul className="mt-3 space-y-2">
+                  {billingOfferRows.map((o) => (
+                    <li
+                      key={o.id}
+                      className="flex flex-col gap-2 rounded-xl border border-stone-100 bg-stone-50/80 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-mono text-xs text-stone-500">
+                          {o.organization_id.slice(0, 8)}… · {o.status}
+                        </p>
+                        <p className="font-black text-stone-900">
+                          UGX {Number(o.amount_ugx).toLocaleString("en-UG")}{" "}
+                          <span className="text-xs font-semibold text-stone-600">{o.message ? `· ${o.message}` : ""}</span>
+                        </p>
+                        <p className="text-[11px] text-stone-500">{new Date(o.created_at).toLocaleString("en-GB")}</p>
+                      </div>
+                      {o.status === "claimed_paid" && canManageBillingOffers ? (
+                        <button
+                          type="button"
+                          disabled={billingFulfillBusy === o.id}
+                          onClick={async () => {
+                            setBillingFulfillBusy(o.id);
+                            const r = await internalOpsOrgBillingOfferFulfill(o.id, null);
+                            setBillingFulfillBusy(null);
+                            if (r.ok) {
+                              window.dispatchEvent(new Event("waka:subscription-updated"));
+                              void loadAll();
+                            }
+                          }}
+                          className="shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white disabled:opacity-40"
+                        >
+                          {billingFulfillBusy === o.id ? "…" : t(lang, "internalBillingOfferFulfill")}
+                        </button>
+                      ) : o.status === "pending" ? (
+                        <span className="shrink-0 text-xs font-bold text-amber-800">{t(lang, "internalBillingOfferAwaitingOwner")}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
 
-          {/* Recent shops */}
-          <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "internalRecentTitle")}</h2>
+          <section id="ops-recent-shops" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <div className="mt-4 overflow-x-auto rounded-2xl ring-1 ring-stone-100">
               <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
                 <thead>
@@ -946,7 +1059,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           </section>
 
           {/* Support */}
-          <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
+          <section id="ops-support" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-lg font-black text-stone-900">{t(lang, "internalSupportTitle")}</h2>
               <Headphones className="h-5 w-5 text-violet-500" />
@@ -1098,7 +1211,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </div>
           </section>
 
-          <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
+          <section id="ops-charts" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "internalInsightsTitle")}</h2>
             <div className="mt-5 space-y-6">
               <div>

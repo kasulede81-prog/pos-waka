@@ -51,7 +51,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
   const activityGroups = useMemo(
-    () => buildGroupedActivityTimeline(lang, auditLogs, productById, customerById, { maxGroups: 6 }),
+    () => buildGroupedActivityTimeline(lang, auditLogs, productById, customerById, { maxGroups: 3 }),
     [lang, auditLogs, productById, customerById],
   );
 
@@ -241,9 +241,11 @@ export function DashboardPage({ lang }: { lang: Language }) {
       ) : null}
 
       {showActivityFeed && activityGroups.length > 0 ? (
-        <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "activityFeedTitle")}</h2>
+        <details className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
+          <summary className="cursor-pointer text-xl font-black text-stone-900 marker:content-none [&::-webkit-details-marker]:hidden">
+            {t(lang, "activityFeedExpandSummary")}
+          </summary>
+          <div className="mt-3 flex items-center justify-end">
             {hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode) ? (
               <Link to="/owner/activity" className="text-sm font-bold text-waka-700">
                 {t(lang, "seeAll")}
@@ -270,7 +272,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
               </li>
             ))}
           </ul>
-        </section>
+        </details>
       ) : null}
 
       <section className={`grid grid-cols-2 gap-4 ${gridCols}`}>

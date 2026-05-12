@@ -1284,3 +1284,60 @@ export async function fetchSalesVolumeBuckets7d(): Promise<DayBucket[]> {
   }
   return labels.map((label) => ({ label: label.slice(5), count: sums.get(label) ?? 0 }));
 }
+
+export type OrgBillingOfferStaffRow = {
+  id: string;
+  organization_id: string;
+  shop_id: string | null;
+  amount_ugx: number;
+  currency: string;
+  message: string | null;
+  status: string;
+  created_at: string;
+};
+
+export async function fetchOrgBillingOffersForQueue(limit = 80): Promise<OrgBillingOfferStaffRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("org_billing_offers")
+    .select("id, organization_id, shop_id, amount_ugx, currency, message, status, created_at")
+    .in("status", ["pending", "claimed_paid"])
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error || !data) return [];
+  return data as OrgBillingOfferStaffRow[];
+}
+
+export async function internalOpsOrgBillingOfferSend(
+  organizationId: string,
+  amountUgx: number,
+  message?: string | null,
+  shopId?: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("internal_ops_org_billing_offer_send", {
+    p_organization_id: organizationId,
+    p_amount_ugx: amountUgx,
+    p_message: message ?? null,
+    p_shop_id: shopId ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok) return { ok: true };
+  return { ok: false, message: j.error ?? "Could not send offer." };
+}
+
+export async function internalOpsOrgBillingOfferFulfill(
+  offerId: string,
+  note?: string | null,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("internal_ops_org_billing_offer_fulfill", {
+    p_offer_id: offerId,
+    p_note: note ?? null,
+  });
+  if (error) return { ok: false, message: error.message };
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok) return { ok: true };
+  return { ok: false, message: j.error ?? "Could not fulfill offer." };
+}

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -8,6 +9,7 @@ import {
   resolveEffectivePlanTier,
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
+import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
 
 const PLAN_ORDER: SubscriptionPlanCode[] = ["starter", "business", "waka_plus"];
 
@@ -24,9 +26,22 @@ function planPriceKey(plan: SubscriptionPlanCode): string {
 }
 
 export function UpgradePage({ lang }: { lang: Language }) {
-  const { snapshot, authMode, daysLeftInTrial, loading } = useSubscription();
+  const { snapshot, authMode, daysLeftInTrial, loading, refetch } = useSubscription();
   const current = resolveEffectivePlanTier(snapshot);
   const inTrial = daysLeftInTrial !== null && daysLeftInTrial > 0;
+  const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
+
+  useEffect(() => {
+    if (authMode !== "supabase") return;
+    const load = () => void fetchMyOrgBillingOffers().then(setBillingOffers);
+    load();
+    const on = () => {
+      void refetch();
+      load();
+    };
+    window.addEventListener("waka:subscription-updated", on);
+    return () => window.removeEventListener("waka:subscription-updated", on);
+  }, [authMode, refetch]);
 
   return (
     <div className="space-y-6 pb-10">
@@ -54,6 +69,22 @@ export function UpgradePage({ lang }: { lang: Language }) {
           )}
           <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
           <p className="mt-2 text-sm font-bold text-waka-900">{t(lang, "upgradeCancelAnytime")}</p>
+        </section>
+      ) : null}
+
+      {authMode === "supabase" && billingOffers.length > 0 ? (
+        <section className="rounded-3xl border-2 border-orange-300 bg-orange-50/90 p-5 shadow-sm">
+          <p className="text-sm font-black text-orange-950">{t(lang, "officeBillingOfferTitle")}</p>
+          {billingOffers.map((o) => (
+            <p key={o.id} className="mt-2 text-lg font-black text-orange-900">
+              UGX {Number(o.amount_ugx).toLocaleString("en-UG")}{" "}
+              <span className="text-xs font-semibold uppercase text-orange-800">({o.status})</span>
+            </p>
+          ))}
+          <p className="mt-2 text-sm font-semibold text-orange-950">{t(lang, "officeBillingOfferBody")}</p>
+          <Link to="/office" className="mt-4 inline-flex min-h-[44px] items-center rounded-2xl bg-orange-600 px-4 py-2 text-sm font-black text-white">
+            {t(lang, "officeHubNav")} →
+          </Link>
         </section>
       ) : null}
 

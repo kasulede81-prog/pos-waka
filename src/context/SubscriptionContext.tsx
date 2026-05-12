@@ -63,6 +63,14 @@ export function SubscriptionProvider({
     void load();
   }, [load]);
 
+  useEffect(() => {
+    const on = () => {
+      void load();
+    };
+    window.addEventListener("waka:subscription-updated", on);
+    return () => window.removeEventListener("waka:subscription-updated", on);
+  }, [load]);
+
   const daysLeftInTrial = useMemo(() => trialDaysRemaining(snapshot), [snapshot]);
 
   const value = useMemo(

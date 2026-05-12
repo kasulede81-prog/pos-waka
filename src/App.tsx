@@ -119,7 +119,9 @@ function App() {
         <Route
           path="/support"
           element={
-            <SupportPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />
+            <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+              <SupportPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />
+            </SubscriptionProvider>
           }
         />
 
