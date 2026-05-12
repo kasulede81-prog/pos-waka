@@ -19,24 +19,51 @@ export type SaveOwnerBundleArgs = {
 export async function saveOwnerBusinessProfileBundleRpc(
   args: SaveOwnerBundleArgs,
 ): Promise<{ ok: boolean; message?: string; shopId?: string; organizationId?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("save_owner_business_profile_bundle", {
-    p_shop_name: args.shopName.trim(),
-    p_business_type: args.businessType,
-    p_district_id: args.districtId,
-    p_phone_e164: args.phoneE164.trim(),
-    p_currency: args.currency.trim().toUpperCase(),
-    p_address: args.address?.trim() || null,
-    p_city: args.city?.trim() || null,
-    p_area: args.area?.trim() || null,
-    p_latitude: args.latitude ?? null,
-    p_longitude: args.longitude ?? null,
-  });
+  const sb = supabase;
+  if (!sb) return { ok: false, message: "Offline" };
+  const callSaveRpc = async () =>
+    sb.rpc("save_owner_business_profile_bundle", {
+      p_shop_name: args.shopName.trim(),
+      p_business_type: args.businessType,
+      p_district_id: args.districtId,
+      p_phone_e164: args.phoneE164.trim(),
+      p_currency: args.currency.trim().toUpperCase(),
+      p_address: args.address?.trim() || null,
+      p_city: args.city?.trim() || null,
+      p_area: args.area?.trim() || null,
+      p_latitude: args.latitude ?? null,
+      p_longitude: args.longitude ?? null,
+    });
+  let { data, error } = await callSaveRpc();
   if (error) return { ok: false, message: error.message };
   const j = (data ?? {}) as { ok?: boolean; error?: string; detail?: string; shop_id?: string; organization_id?: string };
-  if (j.ok) return { ok: true, shopId: j.shop_id, organizationId: j.organization_id };
-  const detail = j.detail ? ` (${j.detail})` : "";
-  return { ok: false, message: `${j.error ?? "save_failed"}${detail}` };
+  if (!j.ok && j.error === "no_shop") {
+    const { data: authData } = await sb.auth.getUser();
+    if (authData?.user) {
+      const hasGps =
+        args.latitude != null &&
+        args.longitude != null &&
+        !Number.isNaN(args.latitude) &&
+        !Number.isNaN(args.longitude);
+      await bootstrapOwnerWorkspace(authData.user, {
+        organizationName: args.shopName.trim(),
+        shopDisplayName: args.shopName.trim(),
+        businessType: args.businessType,
+        districtId: args.districtId,
+        phoneE164: args.phoneE164.trim(),
+        address: args.address?.trim() || undefined,
+        gpsMissing: !hasGps,
+        latitude: hasGps ? args.latitude : undefined,
+        longitude: hasGps ? args.longitude : undefined,
+      });
+      ({ data, error } = await callSaveRpc());
+      if (error) return { ok: false, message: error.message };
+    }
+  }
+  const jRetry = (data ?? {}) as { ok?: boolean; error?: string; detail?: string; shop_id?: string; organization_id?: string };
+  if (jRetry.ok) return { ok: true, shopId: jRetry.shop_id, organizationId: jRetry.organization_id };
+  const detail = jRetry.detail ? ` (${jRetry.detail})` : "";
+  return { ok: false, message: `${jRetry.error ?? "save_failed"}${detail}` };
 }
 
 export type BusinessProfileInput = {
