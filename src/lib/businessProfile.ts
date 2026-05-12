@@ -40,6 +40,10 @@ export async function saveOwnerBusinessProfileBundleRpc(
   if (!j.ok && j.error === "no_shop") {
     const { data: authData } = await sb.auth.getUser();
     if (authData?.user) {
+      const meta = (authData.user.user_metadata ?? {}) as Record<string, unknown>;
+      const fullName =
+        String(meta.full_name ?? meta.name ?? "")
+          .trim() || authData.user.email?.split("@")[0] || "Owner";
       const hasGps =
         args.latitude != null &&
         args.longitude != null &&
@@ -49,6 +53,7 @@ export async function saveOwnerBusinessProfileBundleRpc(
         organizationName: args.shopName.trim(),
         shopDisplayName: args.shopName.trim(),
         businessType: args.businessType,
+        fullName,
         districtId: args.districtId,
         phoneE164: args.phoneE164.trim(),
         address: args.address?.trim() || undefined,
