@@ -115,9 +115,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
 
   return (
     <SessionActorProvider value={actor}>
-      <div className="min-h-dvh bg-stone-50 text-stone-900 transition-colors duration-300">
+      <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
         {pwaUpdate ? (
-          <div className="sticky top-0 z-40 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
+          <div className="z-40 shrink-0 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
             <p className="text-sm font-bold text-waka-950">{t(lang, "pwaUpdateTitle")}</p>
             <button
               type="button"
@@ -129,7 +129,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
           </div>
         ) : null}
         {subAuthMode === "supabase" && daysLeftInTrial !== null && daysLeftInTrial > 0 && daysLeftInTrial <= 14 ? (
-          <div className="sticky top-0 z-[25] border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-950 sm:text-sm">
+          <div className="z-[25] shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-950 sm:text-sm">
             <button
               type="button"
               className="inline-flex flex-wrap items-center justify-center gap-1 underline decoration-waka-700"
@@ -140,7 +140,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </button>
           </div>
         ) : null}
-        <header className="sticky top-0 z-20 border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
+        <header className="z-20 shrink-0 border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:px-4">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <WakaMarkIcon className="h-10 w-10 shrink-0 text-waka-600 shadow-waka-sm" aria-hidden />
@@ -235,7 +235,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </div>
         </header>
-        <main className="mx-auto flex w-full max-w-6xl gap-4 px-3 py-4 pb-nav-safe sm:px-4 lg:pb-6">
+        <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden px-3 py-4 pb-nav-safe sm:px-4 lg:pb-6">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">
