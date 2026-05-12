@@ -4,6 +4,7 @@ import { MessageCircle, X, LifeBuoy, Mail } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../../config/wakaSupport";
+import { isBackOfficePath } from "../../lib/backOfficePaths";
 
 type Props = { lang: Language };
 
@@ -15,7 +16,11 @@ export function FloatingSupportFab({ lang }: Props) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
 
-  if (location.pathname.startsWith("/pos") || location.pathname.startsWith("/internal/")) {
+  if (
+    location.pathname.startsWith("/pos") ||
+    location.pathname.startsWith("/internal/") ||
+    isBackOfficePath(location.pathname)
+  ) {
     return null;
   }
 

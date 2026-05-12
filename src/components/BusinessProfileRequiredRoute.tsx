@@ -20,13 +20,24 @@ export function BusinessProfileRequiredRoute({ authMode }: Props) {
     }
     let cancelled = false;
     setStatus(null);
-    void (async () => {
-      const s = await fetchOwnerOnboardingStatus();
+    const slow = window.setTimeout(() => {
       if (cancelled) return;
+      setStatus((prev) => {
+        if (prev !== null) return prev;
+        console.warn("[waka] owner_onboarding_status: slow response — unblocking shell (will apply result when ready)");
+        return { complete: true };
+      });
+    }, 14_000);
+
+    void fetchOwnerOnboardingStatus().then((s) => {
+      if (cancelled) return;
+      window.clearTimeout(slow);
       setStatus({ complete: s?.complete ?? true });
-    })();
+    });
+
     return () => {
       cancelled = true;
+      window.clearTimeout(slow);
     };
   }, [authMode]);
 

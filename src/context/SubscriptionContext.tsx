@@ -34,7 +34,8 @@ export function SubscriptionProvider({
   const [snapshot, setSnapshot] = useState<SubscriptionSnapshot>(
     authMode === "local" ? { kind: "local_full" } : { kind: "none" },
   );
-  const [loading, setLoading] = useState(false);
+  /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
+  const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
 
   const load = useCallback(async () => {
     if (authMode === "local") {

@@ -1,6 +1,9 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePosStore } from "../store/usePosStore";
 const AUTO_LOCK_MS = 3 * 60 * 1000;
+/** Extending session on every tap re-rendered the whole app tree; throttle bumps while unlocked. */
+const TOUCH_BUMP_MIN_MS = 25_000;
+const TOUCH_BUMP_ALWAYS_IF_MS_LEFT = 45_000;
 
 type Ctx = {
   isUnlocked: boolean;
@@ -14,15 +17,26 @@ const BackOfficeSessionContext = createContext<Ctx | null>(null);
 
 export function BackOfficeSessionProvider({ children }: { children: ReactNode }) {
   const [unlockedUntil, setUnlockedUntil] = useState<number | null>(null);
+  const lastTouchBumpAtRef = useRef(0);
 
   const lock = useCallback(() => {
     setUnlockedUntil(null);
   }, []);
 
   const touch = useCallback(() => {
+    const now = Date.now();
     setUnlockedUntil((cur) => {
       if (cur === null) return cur;
-      return Date.now() + AUTO_LOCK_MS;
+      const msLeft = cur - now;
+      if (msLeft < TOUCH_BUMP_ALWAYS_IF_MS_LEFT) {
+        lastTouchBumpAtRef.current = now;
+        return now + AUTO_LOCK_MS;
+      }
+      if (now - lastTouchBumpAtRef.current < TOUCH_BUMP_MIN_MS) {
+        return cur;
+      }
+      lastTouchBumpAtRef.current = now;
+      return now + AUTO_LOCK_MS;
     });
   }, []);
 
