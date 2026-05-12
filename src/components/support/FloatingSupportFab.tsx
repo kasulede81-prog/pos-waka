@@ -25,7 +25,7 @@ export function FloatingSupportFab({ lang }: Props) {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-3 z-[45] lg:bottom-8 lg:right-6">
+    <div className="pointer-events-none fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] right-3 z-[35] lg:bottom-8 lg:right-6">
       {open ? (
         <div className="pointer-events-auto mb-3 w-[min(100vw-2rem,20rem)] rounded-3xl border border-orange-100 bg-white p-4 shadow-xl">
           <div className="flex items-center justify-between gap-2">

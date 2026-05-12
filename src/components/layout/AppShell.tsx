@@ -234,7 +234,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </BackOfficeRouteGuard>
           </section>
         </main>
-        <nav className="fixed bottom-0 left-0 right-0 z-30 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden">
+        <nav className="fixed bottom-0 left-0 right-0 z-[45] border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden">
           <div
             className="mx-auto grid max-w-lg gap-0.5 px-1 py-2 pb-bottom-nav"
             style={{ gridTemplateColumns: `repeat(${Math.min(navDefs.length, 5)}, minmax(0, 1fr))` }}
@@ -246,7 +246,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                 <Link
                   key={path}
                   to={path}
-                  className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
+                  className={`touch-manipulation flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
                     active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700"
                   } ${isSell && !active ? "ring-2 ring-waka-200 ring-offset-1" : ""} ${isSell ? "sm:min-h-[56px]" : ""}`}
                 >
