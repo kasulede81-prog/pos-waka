@@ -235,7 +235,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </div>
         </header>
-        <main className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden px-3 py-4 pb-nav-safe sm:px-4 lg:pb-6">
+        <main className="scroll-main-chrome mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden py-4 pb-nav-safe pl-3 pr-16 sm:pl-4 sm:pr-16 lg:pl-4 lg:pr-6 lg:pb-10">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">

@@ -50,6 +50,14 @@ import { canTogglePosUiMode } from "../lib/permissions";
 const MAX_AUDIT_LOGS = 5000;
 const MAX_STOCK_MOVEMENTS = 4000;
 
+/**
+ * Local Past-sales / snapshot retention: completed sale rows older than this
+ * (rolling wall-clock, not Kampala calendar) are dropped from memory + the next
+ * IndexedDB write. Does not remove server-side history if sync already uploaded;
+ * stock movements stay for inventory audit.
+ */
+const LOCAL_SALE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
 function mergeAuditLogs(existing: AuditLogEntry[], incoming: AuditLogEntry[]): AuditLogEntry[] {
   const byId = new Map<string, AuditLogEntry>();
   for (const e of existing) byId.set(e.id, e);
@@ -247,6 +255,9 @@ type PosState = {
     amountPaidUgx: number;
     notes?: string;
   }) => { ok: boolean; errorKey?: string };
+
+  /** Trim `sales` to the last 30 days (local device only); triggers persist via subscribe. */
+  pruneExpiredSales: () => void;
 };
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1189,6 +1200,18 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
+  pruneExpiredSales: () => {
+    const cutoff = Date.now() - LOCAL_SALE_RETENTION_MS;
+    set((s) => {
+      const next = s.sales.filter((sale) => {
+        const ts = new Date(sale.createdAt).getTime();
+        return !Number.isNaN(ts) && ts >= cutoff;
+      });
+      if (next.length === s.sales.length) return s;
+      return { sales: next };
+    });
+  },
+
   recordDayClose: ({ dateKey, countedCashUgx }) => {
     const state = get();
     const daySales = state.sales.filter((s) => dateKeyKampala(s.createdAt) === dateKey);
@@ -1387,6 +1410,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       stockMovements: [],
     });
     await restoreDraftSaleFromDisk();
+    usePosStore.getState().pruneExpiredSales();
     return;
   }
 
@@ -1405,6 +1429,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
   });
   await restoreDraftSaleFromDisk();
+  usePosStore.getState().pruneExpiredSales();
 }
 
 export function formatProductPriceLabel(product: Product): string {

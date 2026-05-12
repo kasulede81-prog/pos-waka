@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Headphones, Cpu } from "lucide-react";
+import { ChevronDown, Cpu, Headphones, Sparkles } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSubscription } from "../../context/SubscriptionContext";
@@ -74,23 +74,34 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
   if (authMode !== "supabase") return null;
 
   return (
-    <section className="space-y-4 rounded-3xl border-2 border-orange-300 bg-gradient-to-br from-orange-500 via-orange-500 to-amber-600 p-5 text-white shadow-[0_16px_50px_rgba(234,88,12,0.35)] sm:p-7">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-100">
-            <Sparkles className="h-4 w-4" />
-            {t(lang, "officePremiumBadge")}
-          </p>
-          <h2 className="mt-1 text-2xl font-black tracking-tight sm:text-3xl">{t(lang, "officePremiumTitle")}</h2>
-          <p className="mt-2 max-w-xl text-sm font-semibold text-orange-50">{t(lang, "officePremiumSub")}</p>
-        </div>
-        <Link
-          to="/upgrade"
-          className="min-h-[48px] rounded-2xl bg-white px-5 py-3 text-sm font-black text-orange-700 shadow-lg active:scale-[0.99]"
-        >
-          {t(lang, "officePremiumUpgrade")}
-        </Link>
-      </div>
+    <section className="rounded-3xl border-2 border-orange-300 bg-gradient-to-br from-orange-500 via-orange-500 to-amber-600 text-white shadow-[0_16px_50px_rgba(234,88,12,0.35)]">
+      <details className="group/premium px-5 pb-5 pt-5 sm:px-7 sm:pb-7 sm:pt-7">
+        <summary className="flex cursor-pointer list-none items-start justify-between gap-3 marker:content-none [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0 flex-1">
+            <p className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-100">
+              <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+              {t(lang, "officePremiumBadge")}
+            </p>
+            <h2 className="mt-1 text-xl font-black tracking-tight sm:text-2xl">{t(lang, "officePremiumTitle")}</h2>
+            <p className="mt-1.5 text-sm font-semibold leading-snug text-orange-50/95">{t(lang, "officePremiumPanelHint")}</p>
+          </div>
+          <ChevronDown
+            className="mt-1 h-6 w-6 shrink-0 text-orange-100 transition-transform duration-200 group-open/premium:rotate-180"
+            strokeWidth={2.5}
+            aria-hidden
+          />
+        </summary>
+
+        <div className="mt-5 space-y-4 border-t border-white/25 pt-5">
+          <p className="text-sm font-semibold leading-relaxed text-orange-50">{t(lang, "officePremiumSub")}</p>
+          <div className="flex flex-wrap justify-end">
+            <Link
+              to="/upgrade"
+              className="min-h-[48px] rounded-2xl bg-white px-5 py-3 text-sm font-black text-orange-700 shadow-lg active:scale-[0.99]"
+            >
+              {t(lang, "officePremiumUpgrade")}
+            </Link>
+          </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25">
@@ -220,6 +231,8 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
       </div>
 
       <p className="text-center text-xs font-semibold text-orange-100">{t(lang, "officeEnterpriseHint")}</p>
+        </div>
+      </details>
     </section>
   );
 }

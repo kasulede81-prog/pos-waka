@@ -36,11 +36,20 @@ body {
 }
 
 @layer utilities {
+  /**
+   * Space for fixed bottom tab bar + floating help FAB + home indicator.
+   * Generous so last lines of long pages are not covered when scrolled to the end.
+   */
   .pb-nav-safe {
-    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
   }
   .pb-bottom-nav {
     padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  /** Applied to AppShell <main> — keeps scroll-end / focus-scroll clear of fixed chrome */
+  .scroll-main-chrome {
+    scroll-padding-top: 0.75rem;
+    scroll-padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
   }
 }
 
