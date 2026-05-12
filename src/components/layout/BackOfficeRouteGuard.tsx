@@ -22,16 +22,22 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
     if (!needs && isUnlocked) lock();
   }, [needs, isUnlocked, lock, location.pathname]);
 
-  // Do not attach global pointer/touch listeners: on iOS Safari they can interfere with
-  // taps on Links and make the UI feel “frozen” or like every tap “refreshes” the view.
-  // Extend the unlocked session with a light interval while the user stays in Back Office.
+  // Extend session on route changes inside Back Office (no timers / no global pointer hooks).
   useEffect(() => {
     if (!needs || !isUnlocked) return;
     touch();
-    const id = window.setInterval(() => {
-      touch();
-    }, 90_000);
-    return () => window.clearInterval(id);
+  }, [location.pathname, needs, isUnlocked, touch]);
+
+  // After taps complete, bump session — defer so iOS delivers button/link clicks first.
+  useEffect(() => {
+    if (!needs || !isUnlocked) return;
+    const onUp = () => {
+      window.setTimeout(() => {
+        touch();
+      }, 0);
+    };
+    document.addEventListener("pointerup", onUp, { passive: true });
+    return () => document.removeEventListener("pointerup", onUp);
   }, [needs, isUnlocked, touch]);
 
   if (!needs) {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../types";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
@@ -30,6 +30,7 @@ type Props = {
 const ROLE_OPTIONS: UserRole[] = ["owner", "manager", "cashier", "stock_keeper"];
 
 export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode }: Props) {
+  const navigate = useNavigate();
   const { isOnline } = useOfflineStatus();
   const actor = useSessionActor();
   const canBackup = hasPermission(actor.role, "settings.shop");
@@ -219,22 +220,24 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
         {t(lang, "settingsTrustDataLine")}
       </p>
 
-      <Link
-        to="/support"
-        className="flex min-h-[52px] items-center justify-center rounded-3xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-white px-4 py-3 text-center text-base font-black text-orange-950 shadow-sm active:scale-[0.99]"
+      <button
+        type="button"
+        onClick={() => navigate("/support", { preventScrollReset: true })}
+        className="flex min-h-[52px] w-full items-center justify-center rounded-3xl border-2 border-orange-200 bg-gradient-to-r from-orange-50 to-white px-4 py-3 text-center text-base font-black text-orange-950 shadow-sm active:scale-[0.99]"
       >
         {t(lang, "supportNav")} →
-      </Link>
+      </button>
 
       {authMode === "supabase" ? (
-        <Link
-          to="/upgrade"
-          className="block rounded-3xl border-2 border-waka-200 bg-gradient-to-r from-waka-50 to-white p-5 shadow-sm active:scale-[0.99]"
+        <button
+          type="button"
+          onClick={() => navigate("/upgrade", { preventScrollReset: true })}
+          className="block w-full rounded-3xl border-2 border-waka-200 bg-gradient-to-r from-waka-50 to-white p-5 text-left shadow-sm active:scale-[0.99]"
         >
           <p className="text-lg font-black text-waka-950">{t(lang, "settingsUpgradeTeaserTitle")}</p>
           <p className="mt-1 text-sm font-medium text-stone-700">{t(lang, "settingsUpgradeTeaserSub")}</p>
           <p className="mt-3 text-sm font-bold text-waka-800 underline">{t(lang, "upgradeNav")} →</p>
-        </Link>
+        </button>
       ) : null}
 
       <article className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-waka-sm">

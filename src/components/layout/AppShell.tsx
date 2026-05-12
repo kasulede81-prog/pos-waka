@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, ShoppingCart, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
@@ -44,6 +44,7 @@ function navItemActive(path: string, pathname: string): boolean {
 
 export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Props) {
   const location = useLocation();
+  const navigate = useNavigate();
   useAndroidBackButton();
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
@@ -115,10 +116,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
         ) : null}
         {subAuthMode === "supabase" && daysLeftInTrial !== null && daysLeftInTrial > 0 && daysLeftInTrial <= 14 ? (
           <div className="sticky top-0 z-[25] border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-950 sm:text-sm">
-            <Link to="/upgrade" className="inline-flex flex-wrap items-center justify-center gap-1 underline decoration-waka-700">
+            <button
+              type="button"
+              className="inline-flex flex-wrap items-center justify-center gap-1 underline decoration-waka-700"
+              onClick={() => navigate("/upgrade", { preventScrollReset: true })}
+            >
               <span>{tTemplate(lang, "trialBannerShort", { days: String(daysLeftInTrial) })}</span>
               <span>{t(lang, "trialBannerCta")}</span>
-            </Link>
+            </button>
           </div>
         ) : null}
         <header className="sticky top-0 z-20 border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
@@ -171,21 +176,27 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                     {t(lang, "switchUser")}
                   </button>
                   {subAuthMode === "supabase" ? (
-                    <Link
-                      to="/upgrade"
+                    <button
+                      type="button"
                       className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-waka-900 hover:bg-waka-50"
-                      onClick={() => setMenuOpen(false)}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/upgrade", { preventScrollReset: true });
+                      }}
                     >
                       {t(lang, "upgradeNav")}
-                    </Link>
+                    </button>
                   ) : null}
-                  <Link
-                    to="/support"
+                  <button
+                    type="button"
                     className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
-                    onClick={() => setMenuOpen(false)}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      navigate("/support", { preventScrollReset: true });
+                    }}
                   >
                     {t(lang, "supportNav")}
-                  </Link>
+                  </button>
                   <button
                     type="button"
                     onClick={() => onSignOut()}
@@ -206,9 +217,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                 const active = navItemActive(item.path, location.pathname);
                 return (
                   <li key={item.path}>
-                    <Link
-                      to={item.path}
-                      className={`flex min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold leading-snug transition-waka ${
+                    <button
+                      type="button"
+                      onClick={() => navigate(item.path, { preventScrollReset: true })}
+                      className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
                         active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
                       }`}
                     >
@@ -222,7 +234,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                         aria-hidden
                       />
                       {t(lang, item.labelKey)}
-                    </Link>
+                    </button>
                   </li>
                 );
               })}
@@ -243,9 +255,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               const active = navItemActive(path, location.pathname);
               const isSell = path === "/pos";
               return (
-                <Link
+                <button
                   key={path}
-                  to={path}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  onClick={() => navigate(path, { preventScrollReset: true })}
                   className={`touch-manipulation flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
                     active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700"
                   } ${isSell && !active ? "ring-2 ring-waka-200 ring-offset-1" : ""} ${isSell ? "sm:min-h-[56px]" : ""}`}
@@ -256,7 +270,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                     aria-hidden
                   />
                   <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
-                </Link>
+                </button>
               );
             })}
           </div>
