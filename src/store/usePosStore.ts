@@ -242,6 +242,28 @@ type PosState = {
     productId: string,
     presets: { quickPresetsMoneyUgx?: number[]; quickPresetsQty?: number[] },
   ) => void;
+  /** Full product edit (name, prices, stock count, pack/cost, presets). Stock count changes log a count adjustment. */
+  updateProduct: (
+    productId: string,
+    patch: Partial<
+      Pick<
+        Product,
+        | "name"
+        | "sellingMode"
+        | "baseUnit"
+        | "buyingUnit"
+        | "conversionRate"
+        | "sellingPricePerUnitUgx"
+        | "costPricePerUnitUgx"
+        | "stockOnHand"
+        | "minimumStockAlert"
+        | "category"
+        | "sku"
+        | "quickPresetsMoneyUgx"
+        | "quickPresetsQty"
+      >
+    >,
+  ) => { ok: boolean; errorKey?: string };
   adjustStock: (productId: string, delta: number, reason?: string) => void;
   addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
   addDebtPayment: (customerId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
@@ -963,6 +985,97 @@ export const usePosStore = create<PosState>((set, get) => {
     pushAudit("product_presets", `Presets ${pn}`, { productId });
   },
 
+  updateProduct: (productId, patch) => {
+    const prev = get().products.find((p) => p.id === productId);
+    if (!prev) return { ok: false, errorKey: "missingProduct" };
+
+    const merged: Product = { ...prev };
+
+    if (patch.name !== undefined) {
+      const n = patch.name.trim();
+      if (!n) return { ok: false, errorKey: "invalid" };
+      merged.name = n;
+    }
+    if (patch.sellingMode !== undefined) merged.sellingMode = patch.sellingMode;
+    if (patch.baseUnit !== undefined) {
+      const u = patch.baseUnit.trim();
+      if (!u) return { ok: false, errorKey: "invalid" };
+      merged.baseUnit = u;
+    }
+    if (patch.buyingUnit !== undefined) {
+      const b = patch.buyingUnit;
+      merged.buyingUnit = b === null || b === "" ? null : String(b).trim() || null;
+    }
+    if (patch.conversionRate !== undefined) {
+      if (patch.conversionRate === null || patch.conversionRate <= 0 || Number.isNaN(patch.conversionRate)) {
+        merged.conversionRate = null;
+      } else {
+        merged.conversionRate = patch.conversionRate;
+      }
+    }
+    if (patch.sellingPricePerUnitUgx !== undefined) {
+      const v = Math.max(0, Math.floor(Number(patch.sellingPricePerUnitUgx)));
+      if (v <= 0) return { ok: false, errorKey: "invalid" };
+      merged.sellingPricePerUnitUgx = v;
+    }
+    if (patch.costPricePerUnitUgx !== undefined) {
+      merged.costPricePerUnitUgx = Math.max(0, Math.floor(Number(patch.costPricePerUnitUgx)));
+    }
+    if (patch.stockOnHand !== undefined) {
+      merged.stockOnHand = Math.max(0, Number(patch.stockOnHand) || 0);
+    }
+    if (patch.minimumStockAlert !== undefined) {
+      merged.minimumStockAlert = Math.max(0, Math.floor(Number(patch.minimumStockAlert)));
+    }
+    if (patch.category !== undefined) {
+      merged.category = String(patch.category ?? "").trim();
+    }
+    if (patch.sku !== undefined) {
+      const sk = String(patch.sku ?? "").trim();
+      merged.sku = sk.length > 0 ? sk : prev.sku;
+    }
+    if (patch.quickPresetsMoneyUgx !== undefined) {
+      merged.quickPresetsMoneyUgx = patch.quickPresetsMoneyUgx;
+    }
+    if (patch.quickPresetsQty !== undefined) {
+      merged.quickPresetsQty = patch.quickPresetsQty;
+    }
+
+    const prevStock = prev.stockOnHand;
+    const nextStock = merged.stockOnHand;
+    const stockDelta = nextStock - prevStock;
+
+    const at = new Date().toISOString();
+    const movement: StockMovement | null =
+      Math.abs(stockDelta) > 1e-6
+        ? {
+            id: crypto.randomUUID(),
+            at,
+            productId,
+            productName: merged.name,
+            deltaBaseUnits: stockDelta,
+            kind: "adjust_count",
+            summary: `Count → ${nextStock}`,
+            supplierId: null,
+          }
+        : null;
+
+    const normalized = normalizeProduct({
+      ...merged,
+      version: prev.version + 1,
+      updatedAt: at,
+    });
+
+    set((s) => ({
+      products: s.products.map((p) => (p.id === productId ? normalized : p)),
+      stockMovements: movement ? mergeStockMovements([movement], s.stockMovements) : s.stockMovements,
+    }));
+
+    void queueRemote("product", { id: productId });
+    pushAudit("product_update", merged.name, { productId, name: merged.name });
+    return { ok: true };
+  },
+
   adjustStock: (productId, delta, reason) => {
     const prev = get().products.find((p) => p.id === productId);
     const at = new Date().toISOString();
@@ -1334,6 +1447,16 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           : String(p.activeStaffId),
     posLocked: typeof p.posLocked === "boolean" ? p.posLocked : base.posLocked ?? false,
     shifts: normalizeShifts(p.shifts),
+    favoriteProductIds: Array.isArray(p.favoriteProductIds)
+      ? (p.favoriteProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 40)
+      : base.favoriteProductIds,
+    recentProductIds: Array.isArray(p.recentProductIds)
+      ? (p.recentProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 60)
+      : base.recentProductIds,
+    posSellCategoryFilter:
+      p.posSellCategoryFilter === undefined || p.posSellCategoryFilter === null || String(p.posSellCategoryFilter).trim() === ""
+        ? undefined
+        : String(p.posSellCategoryFilter).trim().slice(0, 120),
   };
 }
 

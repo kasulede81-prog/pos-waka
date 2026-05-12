@@ -95,6 +95,10 @@ export function describeAuditLine(
       const name = productNameFromPayload(lang, pl, productById);
       return tTemplate(lang, "narrativePresets", { product: name });
     }
+    case "product_update": {
+      const name = productNameFromPayload(lang, pl, productById);
+      return tTemplate(lang, "narrativeProductUpdated", { product: name });
+    }
     case "customer_add": {
       const cid = typeof pl.customerId === "string" ? pl.customerId : "";
       const name =

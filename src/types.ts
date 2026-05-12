@@ -52,6 +52,7 @@ export type AuditAction =
   | "product_add"
   | "product_remove"
   | "product_presets"
+  | "product_update"
   | "customer_add"
   | "supplier_add"
   | "supplier_edit"
@@ -348,6 +349,8 @@ export type ShopPreferences = {
   favoriteProductIds?: string[];
   /** Recently added-to-cart product ids (newest first); capped in UI logic */
   recentProductIds?: string[];
+  /** Sell screen category chip: real category name, or `__waka_uncategorized__`; omit / null = All */
+  posSellCategoryFilter?: string | null;
 };
 
 export type SyncOperationKind =

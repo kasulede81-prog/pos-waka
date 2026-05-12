@@ -1,16 +1,24 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { buildRestockSuggestions } from "../lib/restockSuggestions";
 import type { Language, Product, SellingMode } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { formatProductPriceLabel } from "../store/usePosStore";
-import { formatStockLabel } from "../lib/sellingEngine";
+import { formatStockLabel, isLowStock } from "../lib/sellingEngine";
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { canUseAiStockTools, fetchMyFeatureEntitlements } from "../lib/shopRequests";
+import { StockProductEditModal } from "../components/StockProductEditModal";
+import {
+  CATEGORY_FILTER_ALL,
+  UNCATEGORIZED_SENTINEL,
+  distinctTrimmedCategories,
+  normalizedCategoryKey,
+  productMatchesCategoryFilter,
+} from "../lib/productCategories";
 
 function sellingModeFromSellUnit(unit: string): SellingMode {
   const s = unit.toLowerCase();
@@ -50,6 +58,8 @@ function emptyBulkRows(
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
 export function StockPage({ lang }: { lang: Language }) {
+  const stockQuickCategoryListId = useId();
+  const stockModalCategoryListId = useId();
   const actor = useSessionActor();
   const canRemove = hasPermission(actor.role, "products.remove");
   const canAdjust = hasPermission(actor.role, "stock.adjust");
@@ -117,7 +127,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const bulkQuickAddProducts = usePosStore((s) => s.bulkQuickAddProducts);
   const removeProduct = usePosStore((s) => s.removeProduct);
   const adjustStock = usePosStore((s) => s.adjustStock);
-  const updateProductQuickPresets = usePosStore((s) => s.updateProductQuickPresets);
+  const updateProduct = usePosStore((s) => s.updateProduct);
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [starterOpen, setStarterOpen] = useState(false);
@@ -128,8 +138,10 @@ export function StockPage({ lang }: { lang: Language }) {
   const [qaUnitCustom, setQaUnitCustom] = useState("");
   const [qaPrice, setQaPrice] = useState("");
   const [qaStock, setQaStock] = useState("");
+  const [qaCategory, setQaCategory] = useState("");
 
   const [mainName, setMainName] = useState("");
+  const [mainCategory, setMainCategory] = useState("");
   const [mainSellUnitPreset, setMainSellUnitPreset] = useState("piece");
   const [mainSellUnitCustom, setMainSellUnitCustom] = useState("");
   const [mainPrice, setMainPrice] = useState("");
@@ -143,10 +155,16 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const [bulkRows, setBulkRows] = useState<BulkRow[]>(() => emptyBulkRows(10));
 
-  const [editId, setEditId] = useState<string | null>(null);
-  const [moneyStr, setMoneyStr] = useState("");
-  const [qtyStr, setQtyStr] = useState("");
+  const navigate = useNavigate();
+  const [listQuery, setListQuery] = useState("");
+  const [listSort, setListSort] = useState<"name_az" | "name_za" | "stock_low" | "updated">("name_az");
+  const [listFilter, setListFilter] = useState<"all" | "low">("all");
+  const [actionTick, setActionTick] = useState(0);
+  const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
+  const [addProductFormOpen, setAddProductFormOpen] = useState(() => products.length === 0);
+  const [stockCategoryFilter, setStockCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
+  const [stockGroupByCategoryOverride, setStockGroupByCategoryOverride] = useState<boolean | null>(null);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -161,6 +179,57 @@ export function StockPage({ lang }: { lang: Language }) {
     const typed = (preferences.businessType ?? "default") as string;
     return UNIT_PRESETS[typed] ?? UNIT_PRESETS.default;
   }, [preferences.businessType]);
+
+  const defaultGroupByCategory = products.length > 12;
+  const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
+
+  const stockCategoryPicklist = useMemo(() => distinctTrimmedCategories(products), [products]);
+  const stockHasUncategorized = useMemo(() => products.some((p) => !normalizedCategoryKey(p)), [products]);
+
+  const listableProducts = useMemo(() => {
+    let list = [...products];
+    const q = listQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((p) => {
+        const haystack = [p.name, p.category, p.baseUnit, p.sku].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+    if (listFilter === "low") list = list.filter((p) => isLowStock(p));
+    list = list.filter((p) => productMatchesCategoryFilter(p, stockCategoryFilter));
+    return [...list].sort((a, b) => {
+      if (listSort === "name_az") return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (listSort === "name_za") return b.name.localeCompare(a.name, undefined, { sensitivity: "base" });
+      if (listSort === "stock_low") {
+        const d = a.stockOnHand - b.stockOnHand;
+        return d !== 0 ? d : a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      }
+      const ta = new Date(a.updatedAt).getTime();
+      const tb = new Date(b.updatedAt).getTime();
+      return tb - ta || a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    });
+  }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
+
+  useEffect(() => {
+    if (products.length > 0) setAddProductFormOpen(false);
+  }, [products.length]);
+
+  const categoryGroups = useMemo(() => {
+    if (!groupByCategory) return null;
+    const m = new Map<string, Product[]>();
+    for (const p of listableProducts) {
+      const g = normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL;
+      const arr = m.get(g) ?? [];
+      arr.push(p);
+      m.set(g, arr);
+    }
+    const keys = [...m.keys()].sort((a, b) => {
+      if (a === UNCATEGORIZED_SENTINEL) return 1;
+      if (b === UNCATEGORIZED_SENTINEL) return -1;
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
+    });
+    return { keys, map: m };
+  }, [listableProducts, groupByCategory]);
 
   if (!hasPermission(actor.role, "back_office.access")) {
     return <Navigate to="/" replace />;
@@ -188,7 +257,7 @@ export function StockPage({ lang }: { lang: Language }) {
       name: qaName,
       priceUgx: price,
       stockQty: Number(qaStock) || 0,
-      category: t(lang, "generalCategory"),
+      category: qaCategory.trim() || t(lang, "generalCategory"),
       baseUnit: sellUnit,
       sellingMode: sellingModeFromSellUnit(sellUnit),
     });
@@ -198,6 +267,7 @@ export function StockPage({ lang }: { lang: Language }) {
     setQaUnitCustom("");
     setQaPrice("");
     setQaStock("");
+    setQaCategory("");
     setQuickOpen(false);
   };
 
@@ -221,7 +291,7 @@ export function StockPage({ lang }: { lang: Language }) {
       name: mainName.trim(),
       priceUgx: price,
       stockQty: Number(mainStock.replace(/[^\d.]/g, "")) || 0,
-      category: t(lang, "generalCategory"),
+      category: mainCategory.trim() || t(lang, "generalCategory"),
       baseUnit: sellUnit,
       sellingMode,
       buyingUnit: hasTrack ? buyingUnitLabel! : undefined,
@@ -230,6 +300,7 @@ export function StockPage({ lang }: { lang: Language }) {
     });
     if (!r.ok) return;
     setMainName("");
+    setMainCategory("");
     setMainSellUnitPreset("piece");
     setMainSellUnitCustom("");
     setMainPrice("");
@@ -282,30 +353,10 @@ export function StockPage({ lang }: { lang: Language }) {
     setBulkOpen(false);
   };
 
-  const openEditPresets = (p: Product) => {
-    setEditId(p.id);
-    setMoneyStr((p.quickPresetsMoneyUgx ?? []).join(","));
-    setQtyStr((p.quickPresetsQty ?? []).join(","));
-  };
-
-  const savePresets = (productId: string) => {
-    const money = moneyStr
-      .split(",")
-      .map((x) => Math.floor(Number(x.trim()) || 0))
-      .filter((x) => x > 0);
-    const qty = qtyStr
-      .split(",")
-      .map((x) => Number(x.trim()) || 0)
-      .filter((x) => x > 0);
-    updateProductQuickPresets(productId, {
-      quickPresetsMoneyUgx: money,
-      quickPresetsQty: qty,
-    });
-    setEditId(null);
-  };
-
   const openDuplicateToQuick = (p: Product) => {
+    setAddProductFormOpen(true);
     setMainName(`${p.name} (2)`);
+    setMainCategory((p.category ?? "").trim());
     setMainSellUnitPreset(businessUnitOptions.includes(p.baseUnit) ? p.baseUnit : "custom");
     setMainSellUnitCustom(businessUnitOptions.includes(p.baseUnit) ? "" : p.baseUnit);
     setMainPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
@@ -326,6 +377,77 @@ export function StockPage({ lang }: { lang: Language }) {
     removeProduct(id);
     setRemoveId(null);
   };
+
+  const handleRowAction = (p: Product, action: string) => {
+    setActionTick((x) => x + 1);
+    switch (action) {
+      case "edit":
+        if (canAdd) setEditProduct(p);
+        break;
+      case "add10":
+        if (canAdjust) adjustStock(p.id, 10, "added");
+        break;
+      case "add1":
+        if (canAdjust) adjustStock(p.id, 1, "added");
+        break;
+      case "sold1":
+        if (canAdjust) adjustStock(p.id, -1, "sold");
+        break;
+      case "damaged1":
+        if (canAdjust) adjustStock(p.id, -1, "damaged");
+        break;
+      case "home1":
+        if (canAdjust) adjustStock(p.id, -1, "home");
+        break;
+      case "duplicate":
+        if (canAdd) openDuplicateToQuick(p);
+        break;
+      case "remove":
+        if (canRemove) setRemoveId(p.id);
+        break;
+      case "sell":
+        if (canSell) navigate("/pos");
+        break;
+      default:
+        break;
+    }
+  };
+
+  const renderStockRow = (p: Product) => (
+    <li key={p.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-black text-slate-900">{p.name}</p>
+        <p className="truncate text-xs text-slate-500">
+          {normalizedCategoryKey(p) ? p.category.trim() : t(lang, "uncategorized")} · {t(lang, `mode_${p.sellingMode}`)} ·{" "}
+          {formatProductPriceLabel(p)}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
+        <p className="text-right text-sm font-black text-slate-800">{formatStockLabel(p)}</p>
+        <select
+          key={`${p.id}-${actionTick}`}
+          defaultValue=""
+          aria-label={t(lang, "stockRowActionLabel")}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v) handleRowAction(p, v);
+          }}
+          className="min-h-[44px] min-w-[10.5rem] rounded-xl border-2 border-slate-200 bg-white px-2 py-2 text-xs font-black text-slate-900 sm:min-w-[11rem] sm:text-sm"
+        >
+          <option value="">{t(lang, "stockRowActionPlaceholder")}</option>
+          {canAdd ? <option value="edit">{t(lang, "stockActionEditDetails")}</option> : null}
+          {canAdjust ? <option value="add10">{t(lang, "stockActionAdd10")}</option> : null}
+          {canAdjust ? <option value="add1">{t(lang, "stockActionAdd1")}</option> : null}
+          {canAdjust ? <option value="sold1">{t(lang, "stockActionSold1")}</option> : null}
+          {canAdjust ? <option value="damaged1">{t(lang, "stockActionDamaged1")}</option> : null}
+          {canAdjust ? <option value="home1">{t(lang, "stockActionHome1")}</option> : null}
+          {canAdd ? <option value="duplicate">{t(lang, "stockActionDuplicate")}</option> : null}
+          {canRemove ? <option value="remove">{t(lang, "stockActionRemove")}</option> : null}
+          {canSell ? <option value="sell">{t(lang, "stockActionOpenSell")}</option> : null}
+        </select>
+      </div>
+    </li>
+  );
 
   return (
     <div className="space-y-6 pb-8">
@@ -369,154 +491,176 @@ export function StockPage({ lang }: { lang: Language }) {
       ) : null}
 
       {canAdd ? (
-        <form
-          onSubmit={submitMainQuick}
-          className="space-y-4 rounded-[2rem] border-2 border-waka-300 bg-gradient-to-b from-white to-waka-50/60 p-5 shadow-lg sm:p-6"
+        <details
+          className="rounded-[2rem] border-2 border-waka-300 bg-gradient-to-b from-white to-waka-50/60 shadow-lg open:shadow-md"
+          open={addProductFormOpen}
+          onToggle={(e) => setAddProductFormOpen((e.target as HTMLDetailsElement).open)}
         >
-          <div>
-            <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "stockQuickAddHeading")}</p>
-            <p className="mt-1 text-lg font-black text-slate-900">{t(lang, "stockQuickAddTitle")}</p>
-            <p className="mt-1 text-base text-slate-600">{t(lang, "stockQuickAddSub")}</p>
-          </div>
-
-          <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddName")}</span>
-            <input
-              value={mainName}
-              onChange={(e) => setMainName(e.target.value)}
-              placeholder={t(lang, "productNamePh")}
-              required
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
-            />
-          </label>
-
-          <div>
-            <p className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</p>
-            <p className="mt-1 text-xs text-slate-500">{t(lang, "howYouSellUnitHint")}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {businessUnitOptions.map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => {
-                    setMainSellUnitPreset(u);
-                    setMainSellUnitCustom("");
-                  }}
-                  className={`min-h-[44px] rounded-full border-2 px-4 py-2 text-sm font-black transition ${
-                    mainSellUnitPreset === u && mainSellUnitPreset !== "custom"
-                      ? "border-waka-600 bg-waka-600 text-white"
-                      : "border-slate-200 bg-white text-slate-800"
-                  }`}
-                >
-                  {u}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setMainSellUnitPreset("custom")}
-                className={`min-h-[44px] rounded-full border-2 px-4 py-2 text-sm font-black ${
-                  mainSellUnitPreset === "custom"
-                    ? "border-waka-600 bg-waka-600 text-white"
-                    : "border-slate-200 bg-white text-slate-800"
-                }`}
-              >
-                {t(lang, "unitCustomOption")}
-              </button>
+          <summary className="cursor-pointer list-none px-5 py-4 marker:hidden sm:px-6 sm:py-5 [&::-webkit-details-marker]:hidden">
+            <span className="flex items-center justify-between gap-2 text-lg font-black text-waka-900">
+              {t(lang, "stockAddProductToggle")}
+              <span className="text-xs font-bold uppercase tracking-wide text-waka-700">{t(lang, "stockQuickAddHeading")}</span>
+            </span>
+          </summary>
+          <form
+            onSubmit={submitMainQuick}
+            className="space-y-4 border-t border-waka-100/80 px-5 pb-5 pt-4 sm:px-6 sm:pb-6"
+          >
+            <div>
+              <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "stockQuickAddHeading")}</p>
+              <p className="mt-1 text-lg font-black text-slate-900">{t(lang, "stockQuickAddTitle")}</p>
+              <p className="mt-1 text-base text-slate-600">{t(lang, "stockQuickAddSub")}</p>
             </div>
+
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddName")}</span>
+              <input
+                value={mainName}
+                onChange={(e) => setMainName(e.target.value)}
+                placeholder={t(lang, "productNamePh")}
+                required
+                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "posCategoryLabel")}</span>
+              <input
+                value={mainCategory}
+                onChange={(e) => setMainCategory(e.target.value)}
+                list={stockCategoryPicklist.length > 0 ? stockQuickCategoryListId : undefined}
+                placeholder={t(lang, "categoryNewPlaceholder")}
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
+              />
+              {stockCategoryPicklist.length > 0 ? (
+                <datalist id={stockQuickCategoryListId}>
+                  {stockCategoryPicklist.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              ) : null}
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</span>
+              <p className="mt-0.5 text-xs text-slate-500">{t(lang, "stockSellUnitSelectHint")}</p>
+              <select
+                value={mainSellUnitPreset === "custom" ? "custom" : mainSellUnitPreset}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "custom") setMainSellUnitPreset("custom");
+                  else {
+                    setMainSellUnitPreset(v);
+                    setMainSellUnitCustom("");
+                  }
+                }}
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none ring-waka-200 focus:ring"
+              >
+                {businessUnitOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+                <option value="custom">{t(lang, "unitCustomOption")}</option>
+              </select>
+            </label>
             {mainSellUnitPreset === "custom" ? (
-              <input
-                value={mainSellUnitCustom}
-                onChange={(e) => setMainSellUnitCustom(e.target.value)}
-                placeholder={t(lang, "unitCustomPlaceholder")}
-                className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            ) : null}
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddPrice")}</span>
-              <input
-                value={mainPrice}
-                onChange={(e) => setMainPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                inputMode="numeric"
-                placeholder="0"
-                required
-                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "stockNowLabel")}</span>
-              <input
-                value={mainStock}
-                onChange={(e) => setMainStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
-                inputMode="decimal"
-                placeholder="0"
-                required
-                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
-              />
-            </label>
-          </div>
-
-          <details className="group rounded-2xl border-2 border-slate-200 bg-white/90 px-4 open:pb-3 open:pt-1">
-            <summary className="cursor-pointer list-none py-4 text-base font-black text-slate-900 marker:hidden [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center justify-between gap-2">
-                {t(lang, "trackBuyingProfit")}
-                <span className="text-xs font-bold text-waka-700">{t(lang, "optional")}</span>
-              </span>
-            </summary>
-            <p className="text-xs text-slate-500">{t(lang, "trackBuyingProfitHint")}</p>
-            <div className="mt-3 space-y-3">
-              <label className="block text-sm font-bold text-slate-800">
-                {t(lang, "howYouBuyPack")}
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">{t(lang, "unitCustomPlaceholder")}</span>
                 <input
-                  value={boughtAs}
-                  onChange={(e) => setBoughtAs(e.target.value)}
-                  placeholder={t(lang, "howYouBuyPackPh")}
-                  className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                  value={mainSellUnitCustom}
+                  onChange={(e) => setMainSellUnitCustom(e.target.value)}
+                  placeholder={t(lang, "unitCustomPlaceholder")}
+                  className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
                 />
               </label>
-              <div className="grid gap-3 sm:grid-cols-2">
+            ) : null}
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddPrice")}</span>
+                <input
+                  value={mainPrice}
+                  onChange={(e) => setMainPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  inputMode="numeric"
+                  placeholder="0"
+                  required
+                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">{t(lang, "stockNowLabel")}</span>
+                <input
+                  value={mainStock}
+                  onChange={(e) => setMainStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
+                  inputMode="decimal"
+                  placeholder="0"
+                  required
+                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
+                />
+              </label>
+            </div>
+
+            <details className="group rounded-2xl border-2 border-slate-200 bg-white/90 px-4 open:pb-3 open:pt-1">
+              <summary className="cursor-pointer list-none py-4 text-base font-black text-slate-900 marker:hidden [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center justify-between gap-2">
+                  {t(lang, "trackBuyingProfit")}
+                  <span className="text-xs font-bold text-waka-700">{t(lang, "optional")}</span>
+                </span>
+              </summary>
+              <p className="text-xs text-slate-500">{t(lang, "trackBuyingProfitHint")}</p>
+              <div className="mt-3 space-y-3">
                 <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "buyingPackPriceLabel")}
+                  {t(lang, "howYouBuyPack")}
                   <input
-                    value={buyPackPrice}
-                    onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                    inputMode="numeric"
-                    placeholder="0"
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                    value={boughtAs}
+                    onChange={(e) => setBoughtAs(e.target.value)}
+                    placeholder={t(lang, "howYouBuyPackPh")}
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
                   />
                 </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm font-bold text-slate-800">
+                    {t(lang, "buyingPackPriceLabel")}
+                    <input
+                      value={buyPackPrice}
+                      onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                    />
+                  </label>
+                  <label className="block text-sm font-bold text-slate-800">
+                    {t(lang, "howManyInsideLabel")}
+                    <input
+                      value={piecesInside}
+                      onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                      inputMode="decimal"
+                      placeholder="20"
+                      className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                    />
+                  </label>
+                </div>
                 <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "howManyInsideLabel")}
+                  {t(lang, "supplierOptionalLabel")}
                   <input
-                    value={piecesInside}
-                    onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                    inputMode="decimal"
-                    placeholder="20"
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                    value={supplierName}
+                    onChange={(e) => setSupplierName(e.target.value)}
+                    placeholder={t(lang, "supplierOptionalPh")}
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
                   />
                 </label>
               </div>
-              <label className="block text-sm font-bold text-slate-800">
-                {t(lang, "supplierOptionalLabel")}
-                <input
-                  value={supplierName}
-                  onChange={(e) => setSupplierName(e.target.value)}
-                  placeholder={t(lang, "supplierOptionalPh")}
-                  className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-                />
-              </label>
-            </div>
-          </details>
+            </details>
 
-          <button
-            type="submit"
-            className="w-full min-h-[56px] rounded-3xl bg-waka-600 py-4 text-xl font-black text-white shadow-md active:scale-[0.99] active:bg-waka-700"
-          >
-            {t(lang, "saveProduct")}
-          </button>
-        </form>
+            <button
+              type="submit"
+              className="w-full min-h-[56px] rounded-3xl bg-waka-600 py-4 text-xl font-black text-white shadow-md active:scale-[0.99] active:bg-waka-700"
+            >
+              {t(lang, "saveProduct")}
+            </button>
+          </form>
+        </details>
       ) : null}
 
       {products.length === 0 ? (
@@ -580,159 +724,100 @@ export function StockPage({ lang }: { lang: Language }) {
       ) : null}
 
       <section className="space-y-4">
-        <h2 className="text-2xl font-black text-slate-900">{t(lang, "quickStockFix")}</h2>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <h2 className="text-2xl font-black text-slate-900">{t(lang, "quickStockFix")}</h2>
+          {products.length > 0 ? (
+            <p className="text-sm font-semibold text-slate-500">
+              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(products.length) })}
+            </p>
+          ) : null}
+        </div>
+
         {products.length === 0 ? (
           <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-lg text-slate-600">{t(lang, "stockListEmptyHint")}</p>
-        ) : null}
-        {products.map((p) => (
-          <article key={p.id} className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-2xl font-black text-slate-900">{p.name}</p>
-                <p className="text-sm text-slate-500">
-                  {t(lang, `mode_${p.sellingMode}`)} · {formatProductPriceLabel(p)}
-                </p>
-                <p className="mt-2 text-lg font-bold text-slate-800">
-                  {t(lang, "stockLabel")}: {formatStockLabel(p)}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {canAdd ? (
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-800"
-                    onClick={() => openDuplicateToQuick(p)}
-                  >
-                    {t(lang, "duplicateProduct")}
-                  </button>
-                ) : null}
-                {canRemove ? (
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-800"
-                    onClick={() => setRemoveId(p.id)}
-                  >
-                    {t(lang, "removeProduct")}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {canAdjust ? (
-                <>
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-waka-500 px-4 py-3 text-base font-black text-white shadow"
-                    onClick={() => adjustStock(p.id, 10, "added")}
-                  >
-                    {t(lang, "addedStockBig")}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-waka-100 px-4 py-3 text-base font-black text-waka-900"
-                    onClick={() => adjustStock(p.id, 1, "added")}
-                  >
-                    +1
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-slate-200 px-4 py-3 text-base font-black text-slate-800"
-                    onClick={() => adjustStock(p.id, -1, "sold")}
-                  >
-                    {t(lang, "soldMinusOne")}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-amber-100 px-4 py-3 text-sm font-black text-amber-950"
-                    onClick={() => adjustStock(p.id, -1, "damaged")}
-                  >
-                    {t(lang, "damaged")}
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-2xl bg-violet-100 px-4 py-3 text-sm font-black text-violet-950"
-                    onClick={() => adjustStock(p.id, -1, "home")}
-                  >
-                    {t(lang, "tookHome")}
-                  </button>
-                </>
-              ) : null}
-              {canSell ? (
-                <Link
-                  to="/pos"
-                  className="inline-flex items-center rounded-2xl bg-amber-200 px-4 py-3 text-sm font-black text-amber-950"
+        ) : (
+          <div className="space-y-3 rounded-2xl border-2 border-slate-100 bg-white p-4 shadow-sm sm:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <label className="block min-w-0 flex-1 sm:min-w-[12rem]">
+                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockListSearchPh")}</span>
+                <input
+                  value={listQuery}
+                  onChange={(e) => setListQuery(e.target.value)}
+                  placeholder={t(lang, "stockListSearchPh")}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-base font-semibold text-slate-900 outline-none ring-waka-200 focus:ring"
+                />
+              </label>
+              <label className="block sm:w-44">
+                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockListSortLabel")}</span>
+                <select
+                  value={listSort}
+                  onChange={(e) => setListSort(e.target.value as "name_az" | "name_za" | "stock_low" | "updated")}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
                 >
-                  {t(lang, "givenOnDebt")}
-                </Link>
-              ) : null}
+                  <option value="name_az">{t(lang, "stockSortNameAz")}</option>
+                  <option value="name_za">{t(lang, "stockSortNameZa")}</option>
+                  <option value="stock_low">{t(lang, "stockSortStockLow")}</option>
+                  <option value="updated">{t(lang, "stockSortUpdatedNew")}</option>
+                </select>
+              </label>
+              <label className="block sm:w-44">
+                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockFilterLabel")}</span>
+                <select
+                  value={listFilter}
+                  onChange={(e) => setListFilter(e.target.value as "all" | "low")}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                >
+                  <option value="all">{t(lang, "stockFilterAll")}</option>
+                  <option value="low">{t(lang, "stockFilterLow")}</option>
+                </select>
+              </label>
+              <label className="block sm:w-48">
+                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockFilterCategoryLabel")}</span>
+                <select
+                  value={stockCategoryFilter}
+                  onChange={(e) => setStockCategoryFilter(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                >
+                  <option value={CATEGORY_FILTER_ALL}>{t(lang, "posCategoryAll")}</option>
+                  {stockHasUncategorized ? (
+                    <option value={UNCATEGORIZED_SENTINEL}>{t(lang, "uncategorized")}</option>
+                  ) : null}
+                  {stockCategoryPicklist.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 self-center pt-1 sm:pt-6">
+                <input
+                  type="checkbox"
+                  className="h-5 w-5 accent-waka-600"
+                  checked={groupByCategory}
+                  onChange={(e) => setStockGroupByCategoryOverride(e.target.checked)}
+                />
+                <span className="text-sm font-bold text-slate-800">{t(lang, "stockGroupByCategory")}</span>
+              </label>
             </div>
 
-            {canPresets && editId === p.id ? (
-              <div className="mt-4 space-y-3 rounded-2xl border-2 border-dashed border-slate-300 p-4">
-                <label className="block text-sm font-bold text-slate-700">{t(lang, "tapPricesNote")}</label>
-                <input
-                  value={moneyStr}
-                  onChange={(e) => setMoneyStr(e.target.value)}
-                  className="w-full rounded-xl border-2 px-3 py-2 text-lg"
-                />
-                <label className="block text-sm font-bold text-slate-700">{t(lang, "tapQtyNote")}</label>
-                <input
-                  value={qtyStr}
-                  onChange={(e) => setQtyStr(e.target.value)}
-                  className="w-full rounded-xl border-2 px-3 py-2 text-lg"
-                />
-                <div className="flex gap-2">
-                  <button type="button" className="flex-1 rounded-xl bg-slate-900 py-3 font-black text-white" onClick={() => savePresets(p.id)}>
-                    {t(lang, "saveTapPrices")}
-                  </button>
-                  <button type="button" className="rounded-xl border-2 px-4 py-3 font-bold" onClick={() => setEditId(null)}>
-                    {t(lang, "cancel")}
-                  </button>
-                </div>
+            {listableProducts.length === 0 ? (
+              <p className="py-8 text-center text-base font-semibold text-slate-500">{t(lang, "stockNoListMatch")}</p>
+            ) : groupByCategory && categoryGroups ? (
+              <div className="divide-y divide-slate-100">
+                {categoryGroups.keys.map((gk) => (
+                  <div key={gk} className="py-3 first:pt-1">
+                    <h3 className="px-1 pb-2 text-xs font-black uppercase tracking-wide text-waka-800">
+                      {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
+                    </h3>
+                    <ul className="divide-y divide-slate-100">{(categoryGroups.map.get(gk) ?? []).map((p) => renderStockRow(p))}</ul>
+                  </div>
+                ))}
               </div>
-            ) : canPresets ? (
-              <button type="button" className="mt-4 text-sm font-bold text-waka-700 underline" onClick={() => openEditPresets(p)}>
-                {t(lang, "saveTapPrices")}…
-              </button>
-            ) : null}
-
-            {canPurchaseHistory ? (
-              <details className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-                <summary className="cursor-pointer text-sm font-black text-slate-800">{t(lang, "stockInHistoryTitle")}</summary>
-                <div className="mt-2 space-y-3 text-xs">
-                  <div>
-                    <p className="font-bold text-slate-600">{t(lang, "productPurchaseHistory")}</p>
-                    <ul className="mt-1 space-y-1 text-slate-700">
-                      {(purchaseLinesByProduct.get(p.id) ?? []).map((row, i) => (
-                        <li key={i}>
-                          {new Date(row.at).toLocaleDateString()} · {row.supplier} · {row.qty} pack @ UGX {row.cost.toLocaleString()}
-                        </li>
-                      ))}
-                      {(purchaseLinesByProduct.get(p.id) ?? []).length === 0 ? (
-                        <li className="text-slate-500">{t(lang, "noPurchaseLinesYet")}</li>
-                      ) : null}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-600">{t(lang, "stockMovementTitle")}</p>
-                    <ul className="mt-1 space-y-1 text-slate-700">
-                      {(movementsByProduct.get(p.id) ?? []).map((mv) => (
-                        <li key={mv.id}>
-                          {new Date(mv.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}{" "}
-                          · {mv.summary} ({mv.deltaBaseUnits >= 0 ? "+" : ""}
-                          {mv.deltaBaseUnits})
-                        </li>
-                      ))}
-                      {(movementsByProduct.get(p.id) ?? []).length === 0 ? (
-                        <li className="text-slate-500">{t(lang, "noStockMovementsYet")}</li>
-                      ) : null}
-                    </ul>
-                  </div>
-                </div>
-              </details>
-            ) : null}
-          </article>
-        ))}
+            ) : (
+              <ul className="divide-y divide-slate-100">{listableProducts.map((p) => renderStockRow(p))}</ul>
+            )}
+          </div>
+        )}
       </section>
 
       {quickOpen ? (
@@ -759,45 +844,54 @@ export function StockPage({ lang }: { lang: Language }) {
                 autoFocus
               />
             </label>
-            <div className="mt-4">
-              <p className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</p>
-              <div className="mt-2 flex max-h-32 flex-wrap gap-2 overflow-y-auto">
-                {businessUnitOptions.map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => {
-                      setQaUnitPreset(u);
-                      setQaUnitCustom("");
-                    }}
-                    className={`min-h-[40px] rounded-full border-2 px-3 py-1.5 text-xs font-black ${
-                      qaUnitPreset === u && qaUnitPreset !== "custom"
-                        ? "border-waka-600 bg-waka-600 text-white"
-                        : "border-slate-200 bg-white text-slate-800"
-                    }`}
-                  >
-                    {u}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setQaUnitPreset("custom")}
-                  className={`min-h-[40px] rounded-full border-2 px-3 py-1.5 text-xs font-black ${
-                    qaUnitPreset === "custom" ? "border-waka-600 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-800"
-                  }`}
-                >
-                  {t(lang, "unitCustomOption")}
-                </button>
-              </div>
-              {qaUnitPreset === "custom" ? (
-                <input
-                  value={qaUnitCustom}
-                  onChange={(e) => setQaUnitCustom(e.target.value)}
-                  placeholder={t(lang, "unitCustomPlaceholder")}
-                  className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-                />
+            <label className="mt-4 block text-base font-bold text-slate-800">
+              {t(lang, "posCategoryLabel")}
+              <input
+                value={qaCategory}
+                onChange={(e) => setQaCategory(e.target.value)}
+                list={stockCategoryPicklist.length > 0 ? stockModalCategoryListId : undefined}
+                placeholder={t(lang, "categoryNewPlaceholder")}
+                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold"
+              />
+              {stockCategoryPicklist.length > 0 ? (
+                <datalist id={stockModalCategoryListId}>
+                  {stockCategoryPicklist.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
               ) : null}
-            </div>
+            </label>
+            <label className="mt-4 block text-base font-bold text-slate-800">
+              {t(lang, "howYouSellUnit")}
+              <p className="mt-0.5 text-xs font-normal text-slate-500">{t(lang, "stockSellUnitSelectHint")}</p>
+              <select
+                value={qaUnitPreset === "custom" ? "custom" : qaUnitPreset}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "custom") setQaUnitPreset("custom");
+                  else {
+                    setQaUnitPreset(v);
+                    setQaUnitCustom("");
+                  }
+                }}
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900"
+              >
+                {businessUnitOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+                <option value="custom">{t(lang, "unitCustomOption")}</option>
+              </select>
+            </label>
+            {qaUnitPreset === "custom" ? (
+              <input
+                value={qaUnitCustom}
+                onChange={(e) => setQaUnitCustom(e.target.value)}
+                placeholder={t(lang, "unitCustomPlaceholder")}
+                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              />
+            ) : null}
             {guessPreview ? (
               <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
                 {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
@@ -945,44 +1039,25 @@ export function StockPage({ lang }: { lang: Language }) {
                   />
                   <div className="sm:col-span-4">
                     <p className="mb-1.5 text-[11px] font-bold uppercase text-slate-500 sm:hidden">{t(lang, "bulkAddUnitCol")}</p>
-                    <div className="-mx-0.5 flex gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-thin">
-                      {BULK_QUICK_UNITS.map((u) => {
-                        const active = row.unitPreset === u;
-                        return (
-                          <button
-                            key={u}
-                            type="button"
-                            onClick={() =>
-                              setBulkRows((rows) =>
-                                rows.map((r, j) => (j === i ? { ...r, unitPreset: u, unitCustom: "" } : r)),
-                              )
-                            }
-                            className={`shrink-0 rounded-full border-2 px-3 py-2 text-sm font-black capitalize transition ${
-                              active
-                                ? "border-orange-300 bg-orange-100 text-orange-950 ring-2 ring-orange-200"
-                                : "border-slate-200 bg-white text-slate-800"
-                            }`}
-                          >
-                            {u}
-                          </button>
+                    <select
+                      value={row.unitPreset}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setBulkRows((rows) =>
+                          rows.map((r, j) =>
+                            j === i ? { ...r, unitPreset: v, unitCustom: v === BULK_UNIT_CUSTOM ? r.unitCustom : "" } : r,
+                          ),
                         );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setBulkRows((rows) =>
-                            rows.map((r, j) => (j === i ? { ...r, unitPreset: BULK_UNIT_CUSTOM } : r)),
-                          )
-                        }
-                        className={`shrink-0 rounded-full border-2 px-3 py-2 text-sm font-black transition ${
-                          row.unitPreset === BULK_UNIT_CUSTOM
-                            ? "border-orange-300 bg-orange-100 text-orange-950 ring-2 ring-orange-200"
-                            : "border-slate-200 bg-white text-slate-800"
-                        }`}
-                      >
-                        {t(lang, "bulkAddUnitCustom")}
-                      </button>
-                    </div>
+                      }}
+                      className="w-full rounded-xl border-2 border-slate-200 bg-white px-2 py-2.5 text-sm font-black text-slate-900"
+                    >
+                      {BULK_QUICK_UNITS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                      <option value={BULK_UNIT_CUSTOM}>{t(lang, "bulkAddUnitCustom")}</option>
+                    </select>
                     {row.unitPreset === BULK_UNIT_CUSTOM ? (
                       <input
                         value={row.unitCustom}
@@ -1048,6 +1123,20 @@ export function StockPage({ lang }: { lang: Language }) {
           </div>
         </div>
       ) : null}
+
+      <StockProductEditModal
+        lang={lang}
+        product={editProduct}
+        open={editProduct !== null}
+        onClose={() => setEditProduct(null)}
+        businessUnitOptions={businessUnitOptions}
+        canPresets={canPresets}
+        canPurchaseHistory={canPurchaseHistory}
+        purchaseLines={editProduct ? (purchaseLinesByProduct.get(editProduct.id) ?? []) : []}
+        movements={editProduct ? (movementsByProduct.get(editProduct.id) ?? []) : []}
+        updateProduct={updateProduct}
+        categorySuggestions={stockCategoryPicklist}
+      />
 
       {removeId ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>

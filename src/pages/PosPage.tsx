@@ -9,6 +9,12 @@ import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativ
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala } from "../lib/datesUg";
+import {
+  CATEGORY_FILTER_ALL,
+  UNCATEGORIZED_SENTINEL,
+  distinctTrimmedCategories,
+  productMatchesCategoryFilter,
+} from "../lib/productCategories";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 16;
 const MAX_RECENT_SEARCHES = 4;
@@ -176,6 +182,11 @@ export function PosPage({ lang }: { lang: Language }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
+  const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
+
+  const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(products), [products]);
+  const sellHasUncategorized = useMemo(() => products.some((p) => !(p.category ?? "").trim()), [products]);
+
   const soldTodayByProduct = useMemo(() => {
     const todayKey = dateKeyKampala(new Date());
     const byProduct = new Map<string, number>();
@@ -192,18 +203,21 @@ export function PosPage({ lang }: { lang: Language }) {
   const recentIds = preferences.recentProductIds ?? [];
 
   const favoriteProducts = useMemo(
-    () => favoriteIds.map((id) => products.find((p) => p.id === id)).filter(Boolean) as Product[],
-    [favoriteIds, products],
+    () =>
+      favoriteIds
+        .map((id) => products.find((p) => p.id === id))
+        .filter((p): p is Product => p != null && productMatchesCategoryFilter(p, sellCategoryKey)),
+    [favoriteIds, products, sellCategoryKey],
   );
 
   const recentProducts = useMemo(() => {
     const out: Product[] = [];
     for (const id of recentIds) {
       const p = products.find((x) => x.id === id);
-      if (p) out.push(p);
+      if (p && productMatchesCategoryFilter(p, sellCategoryKey)) out.push(p);
     }
     return out.slice(0, 8);
-  }, [recentIds, products]);
+  }, [recentIds, products, sellCategoryKey]);
 
   const bumpRecentProduct = useCallback(
     (productId: string) => {
@@ -254,23 +268,35 @@ export function PosPage({ lang }: { lang: Language }) {
   const frequentToday = useMemo(
     () =>
       products
+        .filter((p) => productMatchesCategoryFilter(p, sellCategoryKey))
         .map((p) => ({ product: p, qty: soldTodayByProduct.get(p.id) ?? 0 }))
         .filter((r) => r.qty > 0)
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 6),
-    [products, soldTodayByProduct],
+    [products, soldTodayByProduct, sellCategoryKey],
+  );
+
+  const setSellCategoryFilter = useCallback(
+    (next: string) => {
+      setPreferences({
+        posSellCategoryFilter:
+          next === CATEGORY_FILTER_ALL || next === "" ? undefined : next === UNCATEGORIZED_SENTINEL ? UNCATEGORIZED_SENTINEL : next,
+      });
+    },
+    [setPreferences],
   );
 
   const filteredProducts = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const aliasTerms = q ? SEARCH_ALIASES[q] ?? [] : [];
     return products.filter((p) => {
+      if (!productMatchesCategoryFilter(p, sellCategoryKey)) return false;
       if (!q) return true;
       const searchable = [p.name, p.category, p.baseUnit, p.sku].filter(Boolean).join(" ").toLowerCase();
       if (searchable.includes(q)) return true;
       return aliasTerms.some((term) => searchable.includes(term));
     });
-  }, [products, searchQuery]);
+  }, [products, searchQuery, sellCategoryKey]);
 
   const openProduct = useCallback((p: Product) => {
     setSelected(p);
@@ -492,6 +518,62 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {products.length > 0 ? (
         <div className="space-y-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm sm:p-2.5">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryHeading")}</p>
+            <div
+              className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5"
+              role="tablist"
+              aria-label={t(lang, "posSellCategoryHeading")}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={sellCategoryKey === CATEGORY_FILTER_ALL}
+                onClick={() => setSellCategoryFilter(CATEGORY_FILTER_ALL)}
+                className={clsx(
+                  "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black transition",
+                  sellCategoryKey === CATEGORY_FILTER_ALL
+                    ? "border-waka-500 bg-waka-100 text-waka-950"
+                    : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
+                )}
+              >
+                {t(lang, "posCategoryAll")}
+              </button>
+              {sellHasUncategorized ? (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={sellCategoryKey === UNCATEGORIZED_SENTINEL}
+                  onClick={() => setSellCategoryFilter(UNCATEGORIZED_SENTINEL)}
+                  className={clsx(
+                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black transition",
+                    sellCategoryKey === UNCATEGORIZED_SENTINEL
+                      ? "border-waka-500 bg-waka-100 text-waka-950"
+                      : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
+                  )}
+                >
+                  {t(lang, "uncategorized")}
+                </button>
+              ) : null}
+              {sellCategoryOptions.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  role="tab"
+                  aria-selected={sellCategoryKey === cat}
+                  onClick={() => setSellCategoryFilter(cat)}
+                  className={clsx(
+                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black transition",
+                    sellCategoryKey === cat
+                      ? "border-waka-500 bg-waka-100 text-waka-950"
+                      : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
+                  )}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -618,7 +700,7 @@ export function PosPage({ lang }: { lang: Language }) {
               <button type="button" onClick={() => openProduct(p)} className="text-left">
                 <p className="text-lg font-black leading-tight text-slate-900">{p.name}</p>
                 <p className="mt-1 text-xs font-bold text-stone-500">
-                  {p.category || t(lang, "generalCategory")} · {p.baseUnit}
+                  {(p.category ?? "").trim() ? p.category.trim() : t(lang, "uncategorized")} · {p.baseUnit}
                 </p>
                 <p className="mt-1 text-sm font-semibold text-slate-700">
                   {t(lang, "stockLabel")}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
