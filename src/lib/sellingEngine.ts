@@ -71,6 +71,7 @@ export function buildSaleLine(
   };
 }
 
+/** Gross margin for one line: line total minus quantity × `costPricePerUnitUgx` (your buying cost per base unit). */
 export function estimatedProfitForLine(product: Product, line: SaleLine): number {
   const cost = costPerBaseUnitUgx(product);
   const profit = line.lineTotalUgx - line.quantity * cost;

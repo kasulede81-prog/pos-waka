@@ -318,7 +318,7 @@ const en: Dict = {
   activityBucketEarlier: "Before today",
 
   ownerSummarySales: "Sales about UGX {amount}",
-  ownerSummaryProfit: "Estimated profit about UGX {amount}",
+  ownerSummaryProfit: "Rough profit after your stock costs, about UGX {amount}",
   ownerSummaryTopProduct: "Top seller: {name}",
   ownerSummaryLowStock: "Running low: {name}",
   ownerSummaryDebts: "{count} sales on credit (UGX {amount})",
@@ -407,8 +407,10 @@ const en: Dict = {
   todaySection: "Today",
   cashInHand: "Cash sales",
   estimatedProfit: "Estimated profit",
-  estimatedProfitHint: "After stock cost",
-  estimatedProfitNegativeHint: "Stock cost is currently higher than sales.",
+  estimatedProfitHint:
+    "Each saved sale: money taken in minus (how much you sold × your buying cost per unit from Stock). Small UGX here usually means a thin markup or not many sales yet today. It does not include rent, transport, or wages.",
+  estimatedProfitNegativeHint:
+    "The buying costs saved on your products add up to more than today's selling total — check cost prices in Stock or partial sales.",
   salesCount: "Sales",
   debtToday: "Credit given",
   weekCashHint: "Last 7 days cash",
@@ -516,7 +518,7 @@ const en: Dict = {
   homeHello: "Today",
   homeSub: "Big numbers. Few taps.",
   cardCashToday: "CASH SALES TODAY",
-  cardProfitToday: "ESTIMATED PROFIT",
+  cardProfitToday: "PROFIT TODAY (AFTER YOUR COST)",
   cardLowStock: "LOW STOCK ITEMS",
   cardDebtToday: "CREDIT GIVEN",
   almostFinishedHint: "Things to refill soon",
@@ -1428,7 +1430,7 @@ const lg: Dict = {
   activityBucketEarlier: "Oluvannyuma lw'olunaku olw'edda",
 
   ownerSummarySales: "Utunda nga UGX {amount}",
-  ownerSummaryProfit: "Magoba agasuubirwa nga UGX {amount}",
+  ownerSummaryProfit: "Magoba mu bufuzi oluvannyuma lw'ebbeeyi y'ebintu, nga UGX {amount}",
   ownerSummaryTopProduct: "Ekisinga: {name}",
   ownerSummaryLowStock: "Kimala: {name}",
   ownerSummaryDebts: "Utunda {count} ku kalana (UGX {amount})",
@@ -1517,8 +1519,10 @@ const lg: Dict = {
   todaySection: "Leero",
   cashInHand: "Ssente eziva mu kutunda",
   estimatedProfit: "Magoba agasuubirwa",
-  estimatedProfitHint: "Oluvannyuma lw'ebbeeyi y'ebintu",
-  estimatedProfitNegativeHint: "Ebbeeyi y'ebintu kati esinga eby'otunda.",
+  estimatedProfitHint:
+    "Ku buli kutunda ekikomekkerevu: ssente ez'omuguzi nga bw'oggyeko (omuwendo gw'otundidde × ebbeyi yo ey'okugula ku ddala mu Sitoka). UGX butono wano kitegeeza magoba matono oba okutunda okutono leero. Tekwata ku rent, ssente z'okutwala ebintu, oba musaala.",
+  estimatedProfitNegativeHint:
+    "Ebbeeyi z'okugula ez'eteekeddwa ku bintu zikuba okusinga eby'otundidde leero — kebera ebbeyi mu Sitoka oba obutundibwa obutono.",
   salesCount: "Okutunda",
   debtToday: "Akalana ewaaweereddwa",
   weekCashHint: "Ssente ennaku 7 ez'eddako",
@@ -1627,7 +1631,7 @@ const lg: Dict = {
   homeHello: "Leero",
   homeSub: "Namba nene. Okukuba buto.",
   cardCashToday: "SSENTE EZITUNDIDDWA LEERO",
-  cardProfitToday: "MAGOBA AGASUUBIRWA",
+  cardProfitToday: "MAGOBA LEERO (OLUVANNYUMA LW'EBBEYI YO)",
   cardLowStock: "EBINTU EBIRI WANSI MU SITOKA",
   cardDebtToday: "AKALANA EWAABAWEERWEDDWA",
   almostFinishedHint: "Ebintu ebirina okuddamu",
