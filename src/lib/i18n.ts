@@ -495,6 +495,9 @@ const en: Dict = {
 
   onboardTitle: "What kind of shop is this?",
   onboardSubtitle: "We keep the screen simple for your work.",
+  onboardingUrlGateTitle: "Finish your business profile first",
+  onboardingUrlGateBody:
+    "This screen opened because your shop profile is not complete in the cloud yet. You can still use Home and Sell from the bottom bar. After you save the Business profile section below (name, district, phone, currency), all menus including Back Office and Hardware will unlock.",
   homeHello: "Today",
   homeSub: "Big numbers. Few taps.",
   cardCashToday: "CASH SALES TODAY",
@@ -1573,6 +1576,9 @@ const lg: Dict = {
 
   onboardTitle: "Omulimu gwa dduuka ki?",
   onboardSubtitle: "Tukutereeza olutimbe olwangu ku mirimu gyo.",
+  onboardingUrlGateTitle: "Sooka maliriza ebifa ku bizinensi",
+  onboardingUrlGateBody:
+    "Olupapula luno lwagguddwa kubanga ebifa ku dduuka tebinnateekeddwa ku server. Osobola okukozesa Home ne Sell wansi. Bw'omaliriza ekitundu ky'obizinensi wammanga (erinnya, ssaza, essimu, ssente), ebirala nga Back Office ne Hardware bijja okuggulawo.",
   homeHello: "Leero",
   homeSub: "Namba nene. Okukuba buto.",
   cardCashToday: "SSENTE EZITUNDIDDWA LEERO",

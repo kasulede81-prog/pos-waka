@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
 import type { Language, UserRole } from "../types";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
@@ -31,6 +31,8 @@ const ROLE_OPTIONS: UserRole[] = ["owner", "manager", "cashier", "stock_keeper"]
 
 export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const showOnboardGate = searchParams.get("onboard") === "1";
   const { isOnline } = useOfflineStatus();
   const actor = useSessionActor();
   const canBackup = hasPermission(actor.role, "settings.shop");
@@ -141,6 +143,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
       setProfileSaveError(null);
       setProfileFeedback(t(lang, "businessProfileSaved"));
       window.dispatchEvent(new CustomEvent("waka:onboarding-updated"));
+      navigate("/settings", { replace: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[waka-settings] business profile save failed", e);
@@ -166,6 +169,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
     shopNameInput,
     shopPhoneInput,
     user?.user_metadata,
+    navigate,
   ]);
 
   useEffect(() => {
@@ -213,6 +217,13 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
           <span className="font-mono text-stone-800">{import.meta.env.VITE_APP_VERSION ?? "—"}</span>
         </p>
       </div>
+
+      {showOnboardGate ? (
+        <div className="rounded-3xl border-2 border-orange-300 bg-orange-50 px-4 py-4 shadow-sm">
+          <p className="text-lg font-black text-orange-950">{t(lang, "onboardingUrlGateTitle")}</p>
+          <p className="mt-2 text-sm font-semibold leading-relaxed text-orange-950/90">{t(lang, "onboardingUrlGateBody")}</p>
+        </div>
+      ) : null}
 
       <SyncHealthCard lang={lang} />
 

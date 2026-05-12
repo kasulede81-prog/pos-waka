@@ -6,6 +6,20 @@ type Props = {
   authMode: "supabase" | "local";
 };
 
+/** While Supabase says business profile is incomplete, still allow core POS routes so the app is not trapped on Settings. */
+function pathAllowedBeforeBusinessProfileComplete(pathname: string): boolean {
+  const p = pathname || "/";
+  if (p === "/" || p === "") return true;
+  if (p.startsWith("/settings")) return true;
+  if (p.startsWith("/internal/")) return true;
+  if (p === "/pos" || p.startsWith("/pos/")) return true;
+  if (p === "/receipts" || p.startsWith("/receipts/")) return true;
+  if (p === "/upgrade" || p.startsWith("/upgrade/")) return true;
+  if (p === "/customers" || p.startsWith("/customers/")) return true;
+  if (p === "/debts" || p.startsWith("/debts/")) return true;
+  return false;
+}
+
 export function BusinessProfileRequiredRoute({ authMode }: Props) {
   const location = useLocation();
   const [status, setStatus] = useState<{ complete: boolean } | null>(null);
@@ -61,7 +75,7 @@ export function BusinessProfileRequiredRoute({ authMode }: Props) {
   }
 
   if (!status.complete) {
-    if (location.pathname.startsWith("/settings") || location.pathname.startsWith("/internal/")) {
+    if (pathAllowedBeforeBusinessProfileComplete(location.pathname)) {
       return <Outlet />;
     }
     return <Navigate to="/settings?onboard=1" replace />;
