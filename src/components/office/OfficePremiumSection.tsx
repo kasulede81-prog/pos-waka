@@ -220,14 +220,6 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
             {busy === "aitrial" ? "…" : t(lang, "officeAiTrialCta")}
           </button>
         </div>
-        {aiActive ? (
-          <Link
-            to="/stock/import-ocr"
-            className="mt-3 block text-center text-sm font-black text-white underline decoration-white/60"
-          >
-            {t(lang, "officeAiOpenTools")} →
-          </Link>
-        ) : null}
       </div>
 
       <p className="text-center text-xs font-semibold text-orange-100">{t(lang, "officeEnterpriseHint")}</p>

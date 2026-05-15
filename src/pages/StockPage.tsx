@@ -10,7 +10,6 @@ import { inferFromProductName } from "../lib/smartProductGuess";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { canUseAiStockTools, fetchMyFeatureEntitlements } from "../lib/shopRequests";
 import { StockProductEditModal } from "../components/StockProductEditModal";
 import {
   CATEGORY_FILTER_ALL,
@@ -75,24 +74,6 @@ export function StockPage({ lang }: { lang: Language }) {
   const purchases = usePosStore((s) => s.purchases);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const preferences = usePosStore((s) => s.preferences);
-  const [aiOcrEnabled, setAiOcrEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const ent = await fetchMyFeatureEntitlements();
-      if (cancelled) return;
-      setAiOcrEnabled(canUseAiStockTools(ent));
-    })();
-    const onFeat = () => {
-      void fetchMyFeatureEntitlements().then((ent) => setAiOcrEnabled(canUseAiStockTools(ent)));
-    };
-    window.addEventListener("waka:feature-entitlements-changed", onFeat);
-    return () => {
-      cancelled = true;
-      window.removeEventListener("waka:feature-entitlements-changed", onFeat);
-    };
-  }, []);
 
   const purchaseLinesByProduct = useMemo(() => {
     const m = new Map<string, Array<{ at: string; supplier: string; qty: number; cost: number }>>();
@@ -690,7 +671,7 @@ export function StockPage({ lang }: { lang: Language }) {
       ) : null}
 
       {canAdd ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <button
             type="button"
             onClick={() => setQuickOpen(true)}
@@ -712,14 +693,6 @@ export function StockPage({ lang }: { lang: Language }) {
           >
             {t(lang, "bulkAddOpen")}
           </button>
-          {aiOcrEnabled ? (
-            <Link
-              to="/stock/import-ocr"
-              className="flex min-h-[64px] items-center justify-center rounded-3xl border-2 border-orange-200 bg-gradient-to-br from-orange-50 to-amber-50 py-4 text-center text-base font-black text-orange-950 shadow-sm active:opacity-90"
-            >
-              {t(lang, "ocrFromStockCta")}
-            </Link>
-          ) : null}
         </div>
       ) : null}
 

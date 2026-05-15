@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import type { Language } from "../types";
+import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
@@ -12,6 +12,18 @@ import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { supabase } from "../lib/supabase";
+
+function formatDashboardSaleItems(sale: Sale, maxNames = 4): string {
+  const names = sale.lines.map((l) => {
+    const qty = l.quantity;
+    const shown = Number.isInteger(qty) ? String(qty) : qty.toFixed(2).replace(/\.?0+$/, "");
+    return `${l.name} ×${shown}`;
+  });
+  if (names.length === 0) return "—";
+  const head = names.slice(0, maxNames).join(", ");
+  const extra = names.length - maxNames;
+  return extra > 0 ? `${head} +${extra}` : head;
+}
 
 export function DashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -328,11 +340,23 @@ export function DashboardPage({ lang }: { lang: Language }) {
         ) : (
           <ul className="mt-4 space-y-3">
             {recentSales.map((s) => (
-              <li key={s.id} className="flex items-center justify-between rounded-2xl bg-stone-50 px-4 py-3">
-                <span className="font-bold text-stone-800">UGX {s.totalUgx.toLocaleString()}</span>
-                <span className="text-sm text-stone-500">
-                  {new Date(s.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                </span>
+              <li key={s.id} className="rounded-2xl bg-stone-50 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+                      {new Date(s.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                    <p className="mt-1 text-xs font-medium leading-snug text-stone-600">{formatDashboardSaleItems(s, 6)}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-black text-stone-900">UGX {s.totalUgx.toLocaleString()}</p>
+                    {s.debtUgx > 0 ? (
+                      <p className="mt-0.5 text-[10px] font-semibold text-amber-800">
+                        {t(lang, "creditLabel")} UGX {s.debtUgx.toLocaleString()}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               </li>
             ))}
           </ul>

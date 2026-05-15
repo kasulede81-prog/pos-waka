@@ -14,6 +14,7 @@ import {
   UNCATEGORIZED_SENTINEL,
   distinctTrimmedCategories,
   productMatchesCategoryFilter,
+  productMatchesSellSearch,
 } from "../lib/productCategories";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 16;
@@ -286,17 +287,50 @@ export function PosPage({ lang }: { lang: Language }) {
     [setPreferences],
   );
 
+  const sellSearchContext = useMemo(() => {
+    const q = searchQuery.trim();
+    const qLower = q.toLowerCase();
+    const aliasSet = new Set<string>();
+    if (qLower && SEARCH_ALIASES[qLower]) {
+      for (const a of SEARCH_ALIASES[qLower]) aliasSet.add(a);
+    }
+    for (const tok of qLower.split(/\s+/).filter(Boolean)) {
+      const al = SEARCH_ALIASES[tok];
+      if (al) for (const x of al) aliasSet.add(x);
+    }
+    return { q, aliasTerms: [...aliasSet] };
+  }, [searchQuery]);
+
+  const sellRowMatchesSearch = useMemo(() => {
+    const { q, aliasTerms } = sellSearchContext;
+    if (!q) return () => true;
+    return (p: Product) => productMatchesSellSearch(p, q, aliasTerms);
+  }, [sellSearchContext]);
+
+  const frequentTodayVisible = useMemo(
+    () => frequentToday.filter(({ product }) => sellRowMatchesSearch(product)),
+    [frequentToday, sellRowMatchesSearch],
+  );
+
+  const favoriteProductsVisible = useMemo(
+    () => favoriteProducts.filter((p) => sellRowMatchesSearch(p)),
+    [favoriteProducts, sellRowMatchesSearch],
+  );
+
+  const recentProductsVisible = useMemo(() => {
+    const fav = favoriteIds;
+    return recentProducts.filter((p) => sellRowMatchesSearch(p) && !fav.includes(p.id));
+  }, [recentProducts, favoriteIds, sellRowMatchesSearch]);
+
   const filteredProducts = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    const aliasTerms = q ? SEARCH_ALIASES[q] ?? [] : [];
+    const { q, aliasTerms } = sellSearchContext;
     return products.filter((p) => {
-      if (!productMatchesCategoryFilter(p, sellCategoryKey)) return false;
-      if (!q) return true;
-      const searchable = [p.name, p.category, p.baseUnit, p.sku].filter(Boolean).join(" ").toLowerCase();
-      if (searchable.includes(q)) return true;
-      return aliasTerms.some((term) => searchable.includes(term));
+      if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
+      if (!productMatchesSellSearch(p, q, aliasTerms)) return false;
+      if (sellCategoryKey === CATEGORY_FILTER_ALL) return true;
+      return productMatchesCategoryFilter(p, sellCategoryKey);
     });
-  }, [products, searchQuery, sellCategoryKey]);
+  }, [products, sellSearchContext, sellCategoryKey]);
 
   const openProduct = useCallback((p: Product) => {
     setSelected(p);
@@ -603,11 +637,11 @@ export function PosPage({ lang }: { lang: Language }) {
               ))}
             </ul>
           ) : null}
-          {frequentToday.length > 0 ? (
+          {frequentTodayVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-                {frequentToday.map(({ product, qty }) => (
+                {frequentTodayVisible.map(({ product, qty }) => (
                   <button
                     key={product.id}
                     type="button"
@@ -620,11 +654,11 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
-          {favoriteProducts.length > 0 ? (
+          {favoriteProductsVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-                {favoriteProducts.map((p) => (
+                {favoriteProductsVisible.map((p) => (
                   <button
                     key={p.id}
                     type="button"
@@ -637,13 +671,11 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
-          {recentProducts.filter((p) => !favoriteIds.includes(p.id)).length > 0 ? (
+          {recentProductsVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
-                {recentProducts
-                  .filter((p) => !favoriteIds.includes(p.id))
-                  .map((p) => (
+                {recentProductsVisible.map((p) => (
                     <button
                       key={p.id}
                       type="button"
@@ -652,7 +684,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     >
                       {p.name}
                     </button>
-                  ))}
+                ))}
               </div>
             </div>
           ) : null}
