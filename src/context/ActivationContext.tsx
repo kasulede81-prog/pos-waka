@@ -12,12 +12,30 @@ type ActivationContextValue = {
 };
 
 const Ctx = createContext<ActivationContextValue>({
-  loading: true,
+  loading: false,
   gate: null,
   bypass: true,
   unlocked: true,
   refresh: async () => {},
 });
+
+const ACTIVATION_GATE_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: T): Promise<T> {
+  return new Promise((resolve) => {
+    const t = window.setTimeout(() => resolve(onTimeout), ms);
+    void promise.then(
+      (v) => {
+        window.clearTimeout(t);
+        resolve(v);
+      },
+      () => {
+        window.clearTimeout(t);
+        resolve(onTimeout);
+      },
+    );
+  });
+}
 
 const LOCKED_ALLOWED_EXACT = new Set([
   "/activate",
@@ -30,9 +48,11 @@ const LOCKED_ALLOWED_EXACT = new Set([
   "/register",
   "/forgot-password",
   "/home",
+  "/settings",
+  "/upgrade",
 ]);
 
-const LOCKED_ALLOWED_PREFIX = ["/demo/"];
+const LOCKED_ALLOWED_PREFIX = ["/demo/", "/settings/"];
 
 export function pathAllowedWhenActivationLocked(pathname: string): boolean {
   const p = pathname.split("?")[0] || "/";
@@ -63,9 +83,11 @@ export function ActivationProvider({
     }
     setLoading(true);
     try {
-      const [adm, g] = await Promise.all([fetchWakaInternalAdminMe(), fetchMyActivationGate()]);
-      setInternalBypass(Boolean(adm?.active));
+      const g = await withTimeout(fetchMyActivationGate(), ACTIVATION_GATE_TIMEOUT_MS, null);
       setGate(g);
+      void withTimeout(fetchWakaInternalAdminMe(), ACTIVATION_GATE_TIMEOUT_MS, null).then((adm) => {
+        if (adm?.active) setInternalBypass(true);
+      });
     } catch {
       setGate(null);
       setInternalBypass(false);

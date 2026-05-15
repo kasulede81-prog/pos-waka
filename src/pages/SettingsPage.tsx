@@ -143,7 +143,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
       setProfileSaveError(null);
       setProfileFeedback(t(lang, "businessProfileSaved"));
       window.dispatchEvent(new CustomEvent("waka:onboarding-updated"));
-      navigate("/settings", { replace: true });
+      navigate(showOnboardGate ? "/activate" : "/settings", { replace: true });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[waka-settings] business profile save failed", e);
@@ -170,6 +170,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
     shopPhoneInput,
     user?.user_metadata,
     navigate,
+    showOnboardGate,
   ]);
 
   useEffect(() => {
