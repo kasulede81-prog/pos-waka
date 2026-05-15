@@ -17,7 +17,9 @@ export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    const p = location.pathname.split("?")[0] || "/";
+    const to = p === "/" || p === "" ? "/home" : "/login";
+    return <Navigate to={to} replace state={{ from: location.pathname }} />;
   }
 
   return <Outlet />;

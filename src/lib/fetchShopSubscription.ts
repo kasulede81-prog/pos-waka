@@ -1,10 +1,10 @@
 import { supabase } from "./supabase";
 import type { RemoteSubscriptionRow } from "./subscriptionEntitlements";
 
-/**
- * Loads the org subscription for the signed-in user (via primary shop membership).
- */
-export async function fetchRemoteSubscriptionForUser(userId: string): Promise<RemoteSubscriptionRow | null> {
+export async function resolvePrimaryOrganizationForUser(userId: string): Promise<{
+  organizationId: string;
+  shopId: string;
+} | null> {
   if (!supabase) return null;
 
   const { data: member, error: mErr } = await supabase
@@ -22,10 +22,22 @@ export async function fetchRemoteSubscriptionForUser(userId: string): Promise<Re
     .maybeSingle();
   if (sErr || !shop?.organization_id) return null;
 
+  return { organizationId: shop.organization_id, shopId: member.shop_id };
+}
+
+/**
+ * Loads the org subscription for the signed-in user (via primary shop membership).
+ */
+export async function fetchRemoteSubscriptionForUser(userId: string): Promise<RemoteSubscriptionRow | null> {
+  if (!supabase) return null;
+
+  const orgShop = await resolvePrimaryOrganizationForUser(userId);
+  if (!orgShop) return null;
+
   const { data: sub, error: subErr } = await supabase
     .from("subscriptions")
     .select("id, organization_id, shop_id, status, trial_ends_at, current_period_start, current_period_end, plan_id, created_at")
-    .eq("organization_id", shop.organization_id)
+    .eq("organization_id", orgShop.organizationId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

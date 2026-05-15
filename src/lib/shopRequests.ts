@@ -1,40 +1,31 @@
 import { supabase } from "./supabase";
+import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
 
-export type AiEntitlementState = "none" | "pending" | "trial" | "active" | "rejected";
+export async function fetchStarterTrialRequestGateForUser(userId: string): Promise<{
+  starterRequestConsumed: boolean;
+  pendingStarterRequestCreatedAt: string | null;
+}> {
+  if (!supabase) return { starterRequestConsumed: false, pendingStarterRequestCreatedAt: null };
+  const org = await resolvePrimaryOrganizationForUser(userId);
+  if (!org) return { starterRequestConsumed: false, pendingStarterRequestCreatedAt: null };
 
-export type MyFeatureEntitlements = {
-  ai_stock_assistant: AiEntitlementState;
-  ai_trial_ends_at: string | null;
-};
+  const { data, error } = await supabase
+    .from("subscription_requests")
+    .select("status, created_at, requested_plan")
+    .eq("organization_id", org.organizationId)
+    .eq("requested_plan", "starter")
+    .order("created_at", { ascending: false });
 
-export async function fetchMyFeatureEntitlements(): Promise<MyFeatureEntitlements | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase.rpc("my_feature_entitlements");
-  if (error || data == null || typeof data !== "object") return null;
-  const j = data as Record<string, unknown>;
-  const st = String(j.ai_stock_assistant ?? "none") as AiEntitlementState;
-  return {
-    ai_stock_assistant: ["none", "pending", "trial", "active", "rejected"].includes(st) ? st : "none",
-    ai_trial_ends_at: (j.ai_trial_ends_at as string) ?? null,
-  };
-}
+  if (error || !data?.length) return { starterRequestConsumed: false, pendingStarterRequestCreatedAt: null };
 
-export async function requestAiStockAssistant(): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("request_ai_stock_assistant");
-  if (error) return { ok: false, message: error.message };
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok) return { ok: true };
-  return { ok: false, message: j.error ?? "Could not submit request." };
-}
-
-export async function requestFreeAiTrial(): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("request_free_ai_trial");
-  if (error) return { ok: false, message: error.message };
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok) return { ok: true };
-  return { ok: false, message: j.error ?? "Could not submit request." };
+  let starterRequestConsumed = false;
+  let pendingStarterRequestCreatedAt: string | null = null;
+  for (const r of data) {
+    const st = String(r.status ?? "").toLowerCase();
+    if (st === "pending") pendingStarterRequestCreatedAt = pendingStarterRequestCreatedAt ?? (r.created_at as string);
+    if (["approved", "rejected", "extended"].includes(st)) starterRequestConsumed = true;
+  }
+  return { starterRequestConsumed, pendingStarterRequestCreatedAt };
 }
 
 export async function requestSubscriptionPlanChange(
@@ -55,14 +46,4 @@ export async function requestAnnualPlanSupport(): Promise<{ ok: boolean; message
   const j = (data ?? {}) as { ok?: boolean; error?: string };
   if (j.ok) return { ok: true };
   return { ok: false, message: j.error ?? "Could not submit request." };
-}
-
-export function canUseAiStockTools(ent: MyFeatureEntitlements | null): boolean {
-  if (!ent) return false;
-  if (ent.ai_stock_assistant === "active") return true;
-  if (ent.ai_stock_assistant === "trial") {
-    if (!ent.ai_trial_ends_at) return true;
-    return new Date(ent.ai_trial_ends_at).getTime() > Date.now();
-  }
-  return false;
 }

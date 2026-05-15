@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { fetchWakaInternalAdminMe, type WakaInternalAdminRow } from "../lib/wakaInternalAdmin";
 import { InternalOpsDashboard } from "../components/internal-admin/InternalOpsDashboard";
 import { InternalAdminsManagement } from "../components/internal-admin/InternalAdminsManagement";
+import { InternalActivationOpsPage } from "./InternalActivationOpsPage";
 
 type Props = {
   lang: Language;
@@ -16,6 +17,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const location = useLocation();
   const isAdminsRoute = location.pathname === "/internal/waka/admins";
+  const isActivationsRoute = location.pathname === "/internal/waka/activations";
   const canEnterUi = Boolean(adminRow);
 
   useEffect(() => {
@@ -51,6 +53,10 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
 
   if (!canEnterUi) {
     return <Navigate to="/" replace />;
+  }
+
+  if (isActivationsRoute) {
+    return <InternalActivationOpsPage lang={lang} />;
   }
 
   if (isAdminsRoute) {

@@ -396,21 +396,6 @@ export async function markFieldVisitCompleted(visitId: string, notes?: string): 
   return { ok: true };
 }
 
-export async function internalOpsActivateAiStockAssistant(
-  organizationId: string,
-  trialDays = 14,
-): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Offline" };
-  const { data, error } = await supabase.rpc("internal_ops_activate_ai_stock_assistant", {
-    p_organization_id: organizationId,
-    p_trial_days: trialDays,
-  });
-  if (error) return { ok: false, message: error.message };
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok) return { ok: true };
-  return { ok: false, message: j.error ?? "Could not activate AI assistant." };
-}
-
 export function googleMapsDirectionsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`;
 }

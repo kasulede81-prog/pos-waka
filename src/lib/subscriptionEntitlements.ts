@@ -79,15 +79,83 @@ export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): Subscr
   return normalizePlanCode(row.plan_code);
 }
 
-export function trialDaysRemaining(snapshot: SubscriptionSnapshot): number | null {
+export function trialDaysRemaining(snapshot: SubscriptionSnapshot, nowMs: number = Date.now()): number | null {
   if (snapshot.kind !== "remote") return null;
   const row = snapshot.row;
   const trialLike = row.status === "trial" || row.status === "trialing";
   if (!trialLike || !row.trial_ends_at) return null;
   const end = new Date(row.trial_ends_at).getTime();
-  const ms = end - Date.now();
+  const ms = end - nowMs;
   if (ms <= 0) return 0;
   return Math.ceil(ms / (24 * 60 * 60 * 1000));
+}
+
+const MS_DAY = 86400000;
+const MS_HOUR = 3600000;
+
+/** Paid Business / VIP — starter “active” is not treated as a paid commercial plan here. */
+export function hasActivePaidSubscription(row: RemoteSubscriptionRow, _nowMs: number = Date.now()): boolean {
+  const st = (row.status ?? "").trim().toLowerCase();
+  if (st !== "active") return false;
+  const tier = normalizePlanCode(row.plan_code);
+  return tier === "business" || tier === "waka_plus";
+}
+
+export function isLiveBusinessTrial(row: RemoteSubscriptionRow, nowMs: number = Date.now()): boolean {
+  const trialLike = row.status === "trial" || row.status === "trialing";
+  if (!trialLike || !row.trial_ends_at) return false;
+  return new Date(row.trial_ends_at).getTime() > nowMs;
+}
+
+/** Business trial window ended (including last day at 0 days left). */
+export function hasBusinessTrialEnded(row: RemoteSubscriptionRow, nowMs: number = Date.now()): boolean {
+  const trialLike = row.status === "trial" || row.status === "trialing";
+  if (!trialLike || !row.trial_ends_at) return false;
+  return new Date(row.trial_ends_at).getTime() <= nowMs;
+}
+
+export function shouldHideStarterTrialRequestCta(params: {
+  snapshot: SubscriptionSnapshot;
+  nowMs: number;
+  starterRequestConsumed: boolean;
+  pendingStarterRequestCreatedAt: string | null;
+}): boolean {
+  const { snapshot, nowMs, starterRequestConsumed, pendingStarterRequestCreatedAt } = params;
+  if (snapshot.kind === "local_full") return true;
+  if (starterRequestConsumed) return true;
+  if (pendingStarterRequestCreatedAt) return true;
+  if (snapshot.kind === "none") return false;
+
+  const row = snapshot.row;
+  if (hasActivePaidSubscription(row, nowMs)) return true;
+  if (isLiveBusinessTrial(row, nowMs)) return true;
+  if (hasBusinessTrialEnded(row, nowMs)) return true;
+  return false;
+}
+
+/**
+ * Countdown to `current_period_end` for paid subscriptions.
+ * VIP (Waka Plus) and other paid tiers use this for renewals.
+ */
+export function getPaidPlanRenewalCountdown(
+  snapshot: SubscriptionSnapshot,
+  nowMs: number = Date.now(),
+): { plan: SubscriptionPlanCode; days: number; hours: number; totalMs: number } | null {
+  if (snapshot.kind !== "remote") return null;
+  const row = snapshot.row;
+  const st = (row.status ?? "").trim().toLowerCase();
+  if (st !== "active") return null;
+  const plan = normalizePlanCode(row.plan_code);
+  if (plan === "starter") return null;
+  if (!row.current_period_end) return null;
+  const end = new Date(row.current_period_end).getTime();
+  const totalMs = end - nowMs;
+  if (totalMs <= 0) {
+    return { plan, days: 0, hours: 0, totalMs };
+  }
+  const days = Math.floor(totalMs / MS_DAY);
+  const hours = Math.floor((totalMs % MS_DAY) / MS_HOUR);
+  return { plan, days, hours, totalMs };
 }
 
 export function maxStaffAccountsForTier(tier: SubscriptionPlanCode): number {

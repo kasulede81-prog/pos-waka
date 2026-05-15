@@ -98,6 +98,7 @@ function isSnapshotShape(v: unknown): v is PersistedSnapshot {
 function scopedKey(name: string): string | null {
   const acc = getActiveAccountKey();
   if (!acc) return null;
+  if (acc.startsWith("demo:")) return null;
   return `${acc}::${name}`;
 }
 

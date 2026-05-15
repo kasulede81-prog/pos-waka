@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
-import { bootstrapPosFromDisk } from "../store/usePosStore";
+import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
+import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { t } from "../lib/i18n";
 import type { Language } from "../types";
 
@@ -49,6 +50,11 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
       return () => {
         cancelled = true;
       };
+    }
+    if (getActiveAccountKey() !== accountKey) {
+      flushPendingPersist();
+      usePosStore.getState().resetForSignOut();
+      setActiveAccountKey(accountKey);
     }
     void bootstrapPosFromDisk()
       .catch(() => {

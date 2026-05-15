@@ -31,7 +31,6 @@ import {
   fetchSubscriptionGrowthBuckets7d,
   fetchSupportTickets,
   googleMapsDirectionsUrl,
-  internalOpsActivateAiStockAssistant,
   markFieldVisitCompleted,
   updateSupportTicketStatus,
   whatsappUrlFromPhone,
@@ -248,7 +247,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const [visitMsg, setVisitMsg] = useState<string | null>(null);
   const [pendingTrials, setPendingTrials] = useState<PendingSubscriptionRequestRow[]>([]);
   const [trialBusyId, setTrialBusyId] = useState<string | null>(null);
-  const [aiActivateBusyOrg, setAiActivateBusyOrg] = useState<string | null>(null);
   const [annualBusyId, setAnnualBusyId] = useState<string | null>(null);
   const [annualSendBusy, setAnnualSendBusy] = useState<string | null>(null);
   const [annualAmountByTicket, setAnnualAmountByTicket] = useState<Record<string, string>>({});
@@ -328,16 +326,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
     return districts.filter((d) => d.label.toLowerCase().includes(q));
   }, [districts, districtFilter]);
 
-  const pendingAiTickets = useMemo(
-    () =>
-      tickets.filter(
-        (tk) =>
-          tk.status === "pending" &&
-          (tk.issue_type === "ai_stock_setup" || tk.issue_type === "ai_stock_trial_request"),
-      ),
-    [tickets],
-  );
-
   const pendingAnnualTickets = useMemo(
     () => tickets.filter((tk) => tk.status === "pending" && tk.issue_type === "annual_plan_request"),
     [tickets],
@@ -363,7 +351,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         support: "—",
         sales: "—" as string,
         suspended: "—",
-        pendingAi: "—",
         pendingAnnual: "—",
       };
     }
@@ -379,7 +366,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       support: String(stats.openSupportTickets ?? 0),
       sales: fmtUgx(stats.salesTotalUgx),
       suspended: String(stats.suspendedShops ?? 0),
-      pendingAi: String(stats.pendingAiRequests ?? 0),
       pendingAnnual: String(stats.pendingAnnualRequests ?? 0),
     };
   }, [stats]);
@@ -442,6 +428,12 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
               className="inline-flex min-h-[48px] items-center rounded-2xl border border-stone-200 bg-white px-5 py-2.5 text-sm font-bold text-stone-800 hover:bg-stone-50"
             >
               {t(lang, "internalAdminBack")}
+            </Link>
+            <Link
+              to="/internal/waka/activations"
+              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-200 bg-white px-5 py-2.5 text-sm font-black text-stone-900 hover:bg-orange-50"
+            >
+              {t(lang, "internalActivationsTitle")}
             </Link>
             {canManageAdmins ? (
               <Link
@@ -515,11 +507,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                 label={t(lang, "internalStat_supportOpen")}
                 value={statGrid.support}
                 onOpen={() => scrollToOpsSection("ops-support")}
-              />
-              <PulseMetricChip
-                label={t(lang, "internalStat_pendingAi")}
-                value={statGrid.pendingAi}
-                onOpen={() => scrollToOpsSection("ops-ai-queue")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_pendingAnnual")}
@@ -727,81 +714,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                         className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 disabled:opacity-40"
                       >
                         {trialBusyId === `${req.id}-no` ? "…" : t(lang, "internalTrialReject")}
-                      </button>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-          </section>
-
-          <section id="ops-ai-queue" className="rounded-3xl border border-violet-200/80 bg-gradient-to-br from-violet-50/40 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalAiQueueSub")}</p>
-            <ul className="mt-4 space-y-3">
-              {opsLoading && !pendingAiTickets.length ? (
-                [...Array(2)].map((_, i) => (
-                  <li key={i} className="h-20 animate-pulse rounded-2xl bg-violet-100/30" />
-                ))
-              ) : pendingAiTickets.length === 0 ? (
-                <li className="rounded-2xl border border-dashed border-violet-200 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-stone-600">
-                  {t(lang, "internalAiQueueEmpty")}
-                </li>
-              ) : (
-                pendingAiTickets.map((tk) => (
-                  <li
-                    key={tk.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-violet-100 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-black text-stone-900">{tk.shop_name ?? tk.subject ?? "—"}</p>
-                      <p className="mt-1 text-xs font-semibold text-stone-500">
-                        {tk.owner_email ?? "—"} · {tk.shop_phone_e164 ?? tk.contact_phone_e164 ?? "—"}
-                      </p>
-                      <p className="mt-1 text-[11px] font-bold uppercase text-violet-800">{tk.issue_type}</p>
-                      <p className="mt-0.5 font-mono text-[11px] text-stone-400">
-                        {new Date(tk.created_at).toLocaleString("en-GB")}
-                      </p>
-                      {tk.shop_id ? (
-                        <Link
-                          to={`/internal/waka/shop/${tk.shop_id}`}
-                          className="mt-2 inline-block text-xs font-black text-orange-800 underline"
-                        >
-                          {t(lang, "internalMapOpenShop")}
-                        </Link>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        style={!canResolveSupport ? { display: "none" } : undefined}
-                        disabled={!canResolveSupport || !tk.organization_id || aiActivateBusyOrg === tk.organization_id}
-                        onClick={async () => {
-                          if (!tk.organization_id) return;
-                          setAiActivateBusyOrg(tk.organization_id);
-                          const r = await internalOpsActivateAiStockAssistant(tk.organization_id, 14);
-                          setAiActivateBusyOrg(null);
-                          if (r.ok) {
-                            window.dispatchEvent(new Event("waka:feature-entitlements-changed"));
-                            void loadAll();
-                          }
-                        }}
-                        className="rounded-xl bg-violet-700 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
-                      >
-                        {aiActivateBusyOrg === tk.organization_id ? "…" : t(lang, "internalAiQueueActivate")}
-                      </button>
-                      <button
-                        type="button"
-                        style={!canResolveSupport ? { display: "none" } : undefined}
-                        disabled={!canResolveSupport || ticketBusyId === `${tk.id}-ai-rej`}
-                        onClick={async () => {
-                          setTicketBusyId(`${tk.id}-ai-rej`);
-                          const r = await updateSupportTicketStatus(tk.id, "closed");
-                          setTicketBusyId(null);
-                          if (r.ok) void loadAll();
-                        }}
-                        className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 disabled:opacity-40"
-                      >
-                        {ticketBusyId === `${tk.id}-ai-rej` ? "…" : t(lang, "internalAiQueueReject")}
                       </button>
                     </div>
                   </li>

@@ -4,6 +4,8 @@ import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
 import { RoleProtectedRoute } from "./components/RoleProtectedRoute";
+import { ActivationGateOutlet } from "./components/ActivationGateOutlet";
+import { ActivationProvider } from "./context/ActivationContext";
 import { useAuth } from "./hooks/useAuth";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
@@ -16,6 +18,9 @@ import { ReceiptsPage } from "./pages/ReceiptsPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
+import { MarketingHomePage } from "./pages/MarketingHomePage";
+import { DemoExperiencePage } from "./pages/DemoExperiencePage";
+import { BusinessActivationPage } from "./pages/BusinessActivationPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
@@ -124,28 +129,39 @@ function App() {
           }
         />
 
+        <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route path="/demo" element={<DemoExperiencePage lang={lang} isAuthenticated={auth.isAuthenticated} />} />
+
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
           <Route element={<BusinessProfileRequiredRoute authMode={auth.mode} />}>
             <Route
               element={
-                <SubscriptionProvider user={auth.user} authMode={auth.mode}>
-                  <PosDataProvider lang={lang} accountKey={auth.accountKey}>
-                    <SyncStatusProvider>
-                      <BackOfficeSessionProvider>
-                        <AppShell
-                          lang={lang}
-                          setLang={setLang}
-                          onSignOut={auth.signOut}
-                          user={auth.user}
-                          email={auth.email}
-                          authMode={auth.mode}
-                        />
-                      </BackOfficeSessionProvider>
-                    </SyncStatusProvider>
-                  </PosDataProvider>
-                </SubscriptionProvider>
+                <ActivationProvider authMode={auth.mode} user={auth.user}>
+                  <ActivationGateOutlet />
+                </ActivationProvider>
               }
             >
+              <Route path="activate" element={<BusinessActivationPage lang={lang} />} />
+              <Route
+                element={
+                  <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+                    <PosDataProvider lang={lang} accountKey={auth.accountKey}>
+                      <SyncStatusProvider>
+                        <BackOfficeSessionProvider>
+                          <AppShell
+                            lang={lang}
+                            setLang={setLang}
+                            onSignOut={auth.signOut}
+                            user={auth.user}
+                            email={auth.email}
+                            authMode={auth.mode}
+                          />
+                        </BackOfficeSessionProvider>
+                      </SyncStatusProvider>
+                    </PosDataProvider>
+                  </SubscriptionProvider>
+                }
+              >
             <Route index element={<DashboardPage lang={lang} />} />
             <Route path="office" element={<OfficeHubPage lang={lang} />} />
             <Route
@@ -249,12 +265,14 @@ function App() {
             />
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
+              </Route>
             </Route>
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : "/login"} replace />} />
+        <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : "/home"} replace />} />
       </Routes>
     </BrowserRouter>
   );

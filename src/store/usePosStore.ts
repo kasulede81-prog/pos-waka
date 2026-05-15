@@ -25,7 +25,7 @@ import type {
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
 import { getOrCreateDeviceId } from "../lib/deviceId";
-import { createDefaultPreferences } from "../data/defaultSeed";
+import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
 import { getActiveAccountKey } from "../offline/accountScope";
@@ -359,6 +359,7 @@ export function flushPendingPersist(): void {
 }
 
 async function queueRemote(kind: SyncOperationKind, payload: unknown) {
+  if (getActiveAccountKey()?.startsWith("demo:")) return;
   await enqueueSync({
     id: crypto.randomUUID(),
     kind,
@@ -1471,9 +1472,37 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
 }
 
 export async function bootstrapPosFromDisk(): Promise<void> {
-  if (!getActiveAccountKey()) {
+  const key = getActiveAccountKey();
+  if (!key) {
     // Signed out / no namespace yet → nothing to hydrate.
     usePosStore.getState().resetForSignOut();
+    return;
+  }
+  if (key.startsWith("demo:")) {
+    usePosStore.getState().resetForSignOut();
+    const prefs = createDefaultPreferences();
+    prefs.onboardingDone = true;
+    prefs.shopDisplayName = "Demo shop";
+    prefs.kioskQuickSell = true;
+    const products = createDefaultProducts();
+    usePosStore.getState().hydrate(
+      {
+        products,
+        customers: [],
+        sales: [],
+        preferences: prefs,
+        debtPayments: [],
+        dayCloses: [],
+        auditLogs: [],
+        suppliers: [],
+        purchases: [],
+        supplierPayments: [],
+        stockMovements: [],
+      },
+      { replaceAudit: true },
+    );
+    await restoreDraftSaleFromDisk();
+    usePosStore.getState().pruneExpiredSales();
     return;
   }
   let snap = await readSnapshotWithFallback();

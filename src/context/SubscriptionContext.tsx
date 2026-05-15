@@ -36,6 +36,8 @@ export function SubscriptionProvider({
   );
   /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
   const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
+  /** Bumps on an interval so trial/renewal countdowns refresh without waiting on network. */
+  const [displayClock, setDisplayClock] = useState(0);
 
   const load = useCallback(async () => {
     if (authMode === "local") {
@@ -71,7 +73,13 @@ export function SubscriptionProvider({
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [load]);
 
-  const daysLeftInTrial = useMemo(() => trialDaysRemaining(snapshot), [snapshot]);
+  useEffect(() => {
+    if (authMode !== "supabase" || !user?.id) return;
+    const id = window.setInterval(() => setDisplayClock((c) => c + 1), 15_000);
+    return () => window.clearInterval(id);
+  }, [authMode, user?.id]);
+
+  const daysLeftInTrial = useMemo(() => trialDaysRemaining(snapshot, Date.now()), [snapshot, displayClock]);
 
   const value = useMemo(
     () => ({
