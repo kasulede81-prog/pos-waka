@@ -176,7 +176,7 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
     if (authMode !== "supabase" || !hasPermission(actor.role, "settings.shop")) return;
     let cancelled = false;
     void (async () => {
-      const d = await fetchDistricts();
+      const { districts: d } = await fetchDistricts();
       if (cancelled) return;
       setDistricts(d);
       const loc = await loadPrimaryShopLocationFromCloud();

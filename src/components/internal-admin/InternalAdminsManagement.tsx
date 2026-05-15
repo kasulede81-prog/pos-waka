@@ -109,9 +109,10 @@ export function InternalAdminsManagement({ lang }: Props) {
     setDistrictLoadErr(false);
     void (async () => {
       try {
-        const [d, list] = await Promise.all([fetchDistricts(), fetchInternalAdmins()]);
+        const [dr, list] = await Promise.all([fetchDistricts(), fetchInternalAdmins()]);
         if (cancelled) return;
-        setDistricts(d);
+        setDistricts(dr.districts);
+        if (dr.error) setDistrictLoadErr(true);
         setAdmins(list);
       } catch {
         if (!cancelled) setDistrictLoadErr(true);

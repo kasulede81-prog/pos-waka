@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import type { BusinessType, Language } from "../types";
@@ -36,6 +36,8 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
   const [latitude, setLatitude] = useState<number | undefined>(undefined);
   const [longitude, setLongitude] = useState<number | undefined>(undefined);
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
+  const [districtsError, setDistrictsError] = useState<string | null>(null);
+  const [districtsLoading, setDistrictsLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessType, setBusinessType] = useState<BusinessType>("kiosk_duka");
@@ -43,16 +45,20 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const d = await fetchDistricts();
-      if (!cancelled) setDistricts(d);
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const loadDistricts = useCallback(async () => {
+    setDistrictsLoading(true);
+    setDistrictsError(null);
+    const { districts: d, error } = await fetchDistricts();
+    setDistricts(d);
+    setDistrictsError(error);
+    setDistrictsLoading(false);
+    if (!d.length) setDistrictId("");
+    else setDistrictId((cur) => (cur && d.some((x) => x.id === cur) ? cur : ""));
   }, []);
+
+  useEffect(() => {
+    void loadDistricts();
+  }, [loadDistricts]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -63,6 +69,10 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
     }
     if (!ownerFullName.trim()) {
       setError(t(lang, "registerFieldRequired"));
+      return;
+    }
+    if (!districts.length) {
+      setError(t(lang, "registerDistrictsEmptyHint"));
       return;
     }
     if (!districtId) {
@@ -221,13 +231,34 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
             </label>
             <label className="block text-sm font-medium">
               {t(lang, "registerDistrictLabel")}
+              {districtsLoading ? (
+                <p className="mt-1 text-xs font-semibold text-stone-500">{t(lang, "registerDistrictsLoading")}</p>
+              ) : null}
+              {districtsError ? (
+                <div className="mt-2 space-y-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">
+                  <p>
+                    <span className="font-bold">{t(lang, "registerDistrictsLoadFailed")}</span> {districtsError}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void loadDistricts()}
+                    className="rounded-lg bg-red-900 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-800"
+                  >
+                    {t(lang, "registerDistrictsRetry")}
+                  </button>
+                </div>
+              ) : null}
+              {!districtsLoading && !districtsError && districts.length === 0 ? (
+                <p className="mt-1 text-xs font-semibold text-amber-800">{t(lang, "registerDistrictsEmptyHint")}</p>
+              ) : null}
               <select
                 value={districtId}
                 onChange={(e) => setDistrictId(e.target.value)}
-                required
-                className="mt-1 w-full rounded-xl border bg-white px-3 py-2 font-semibold outline-none ring-waka-200 focus:ring"
+                required={districts.length > 0}
+                disabled={districtsLoading || districts.length === 0}
+                className="mt-1 w-full rounded-xl border bg-white px-3 py-2 font-semibold outline-none ring-waka-200 focus:ring disabled:cursor-not-allowed disabled:bg-stone-100"
               >
-                <option value="">—</option>
+                <option value="">{districtsLoading ? "…" : "—"}</option>
                 {districts.map((d) => (
                   <option key={d.id} value={d.id}>
                     {d.name}
