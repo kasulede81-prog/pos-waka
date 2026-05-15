@@ -10,48 +10,67 @@ export function BusinessActivationPage({ lang }: { lang: Language }) {
   const { gate, refresh, unlocked, bypass } = useActivation();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  /** Optimistic success immediately after POST, before gate refetch settles. */
+  const [justSubmitted, setJustSubmitted] = useState(false);
+  const [submittedCode, setSubmittedCode] = useState<string | null>(null);
 
   const lifecycle = gate?.lifecycle ?? "inactive";
   const pending = lifecycle === "pending_review";
   const active = unlocked || lifecycle === "active";
+  const showSuccess = pending || justSubmitted;
+  const displayRef = gate?.reference_code ?? submittedCode;
 
   const trySubmit = async (e: FormEvent) => {
     e.preventDefault();
-    setMsg(null);
+    setSubmitError(null);
     setBusy(true);
     const r = await submitActivationRequest(name);
     setBusy(false);
-    if (!r.ok) setMsg(r.message ?? "Could not submit.");
-    else {
-      setMsg(`${t(lang, "activationRequestSubmitted")}: ${r.code}`);
-      setName("");
-      window.dispatchEvent(new Event("waka:activation-updated"));
-      await refresh();
+    if (!r.ok) {
+      setSubmitError(r.message ?? t(lang, "activationErrorGeneric"));
+      return;
     }
+    setSubmittedCode(r.code);
+    setJustSubmitted(true);
+    setName("");
+    window.dispatchEvent(new Event("waka:activation-updated"));
+    await refresh();
   };
 
   if (bypass) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16">
-        <p className="text-lg font-semibold text-stone-700">{t(lang, "activationStaffBypass")}</p>
-        <Link className="mt-6 inline-flex rounded-2xl bg-orange-600 px-6 py-3 font-black text-white" to="/">
-          {t(lang, "activationContinueApp")}
-        </Link>
+      <div className="min-h-dvh bg-[#faf9f7] px-6 py-16">
+        <div className="mx-auto max-w-md pt-8">
+          <p className="text-base font-medium leading-relaxed text-stone-700">{t(lang, "activationStaffBypass")}</p>
+          <Link
+            className="mt-8 inline-flex min-h-[52px] items-center justify-center rounded-xl bg-orange-600 px-8 text-base font-semibold text-white transition hover:bg-orange-700"
+            to="/"
+          >
+            {t(lang, "activationContinueApp")}
+          </Link>
+        </div>
       </div>
     );
   }
 
   if (active) {
     return (
-      <div className="mx-auto max-w-lg px-4 py-16">
-        <div className="rounded-3xl border border-emerald-200 bg-emerald-50 p-8 text-center shadow-inner">
-          <p className="text-xs font-black uppercase tracking-widest text-emerald-800">{t(lang, "activationStatusChip")}</p>
-          <p className="mt-3 text-2xl font-black text-emerald-950">{t(lang, "activationActiveTitle")}</p>
+      <div className="min-h-dvh bg-[#faf9f7] px-6 py-16">
+        <div className="mx-auto max-w-md space-y-6 pt-8 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2} aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-stone-900">{t(lang, "activationActiveTitle")}</h1>
           {gate?.active_license_key ? (
-            <p className="mt-4 font-mono text-sm font-bold text-emerald-900">{gate.active_license_key}</p>
+            <p className="font-mono text-sm text-stone-500">{gate.active_license_key}</p>
           ) : null}
-          <Link className="mt-8 inline-flex rounded-2xl bg-orange-600 px-8 py-4 text-lg font-black text-white shadow-lg" to="/">
+          <Link
+            className="inline-flex min-h-[52px] w-full items-center justify-center rounded-xl bg-orange-600 text-base font-semibold text-white transition hover:bg-orange-700 sm:w-auto sm:px-10"
+            to="/"
+          >
             {t(lang, "activationContinueApp")}
           </Link>
         </div>
@@ -60,73 +79,79 @@ export function BusinessActivationPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-lg flex-col gap-8 px-4 py-[max(2rem,env(safe-area-inset-top))] pb-16">
-      <header className="space-y-2 text-center">
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-700 text-3xl font-black text-white shadow-lg">
-          W
-        </div>
-        <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-700">{t(lang, "brandShortTag")}</p>
-        <h1 className="text-3xl font-black text-stone-950">{t(lang, "activationPageTitle")}</h1>
-        <p className="text-base font-medium text-stone-600">{t(lang, "activationPageSubtitle")}</p>
-      </header>
+    <div className="min-h-dvh bg-[#faf9f7]">
+      <div className="mx-auto flex max-w-md flex-col px-6 pb-12 pt-[max(3rem,env(safe-area-inset-top))]">
+        <header className="text-center">
+          <div className="mx-auto flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 text-2xl font-bold text-white shadow-sm">
+            W
+          </div>
+          <p className="mt-6 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-500">
+            {t(lang, "activationHeroKicker")}
+          </p>
+          <h1 className="mt-4 text-[1.75rem] font-semibold leading-tight tracking-tight text-stone-900 sm:text-4xl">
+            {t(lang, "activationPageTitle")}
+          </h1>
+          <p className="mt-4 text-lg leading-relaxed text-stone-600">{t(lang, "activationPageSubtitle")}</p>
+        </header>
 
-      <div className="rounded-3xl border-2 border-stone-100 bg-white p-6 shadow-waka-sm">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "activationStatusChip")}</p>
-        <p className="mt-2 text-xl font-black text-stone-900">
-          {pending ? t(lang, "activationPendingHeadline") : t(lang, "activationNeedsRequestHeadline")}
-        </p>
-        <p className="mt-2 text-sm font-medium leading-relaxed text-stone-600">
-          {pending ? t(lang, "activationPendingBody") : t(lang, "activationNeedsRequestBody")}
-        </p>
-        {pending && gate?.reference_code ? (
-          <p className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 font-mono text-lg font-black text-orange-950">{gate.reference_code}</p>
-        ) : null}
-      </div>
+        {showSuccess ? (
+          <section className="mt-12 space-y-5 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-orange-100 text-orange-700">
+              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-semibold tracking-tight text-stone-900">{t(lang, "activationSuccessTitle")}</h2>
+            <p className="text-base leading-relaxed text-stone-600">{t(lang, "activationSuccessBody")}</p>
+            {displayRef ? (
+              <p className="pt-2 font-mono text-xs text-stone-400">
+                {t(lang, "activationRefHint").replace("{{code}}", displayRef)}
+              </p>
+            ) : null}
+          </section>
+        ) : (
+          <form onSubmit={trySubmit} className="mt-12 space-y-6">
+            <div>
+              <label htmlFor="activation-business-name" className="block text-sm font-medium text-stone-800">
+                {t(lang, "activationBusinessLabel")}
+              </label>
+              <input
+                id="activation-business-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t(lang, "activationBusinessPlaceholder")}
+                autoComplete="organization"
+                className="mt-2 min-h-[3.25rem] w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-base text-stone-900 shadow-sm outline-none transition placeholder:text-stone-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                required
+                minLength={2}
+              />
+            </div>
+            {submitError ? <p className="text-sm font-medium text-red-600">{submitError}</p> : null}
+            <button
+              type="submit"
+              disabled={busy}
+              className="flex min-h-[3.25rem] w-full items-center justify-center rounded-xl bg-orange-600 text-base font-semibold text-white shadow-sm transition hover:bg-orange-700 disabled:opacity-50"
+            >
+              {busy ? "…" : t(lang, "activationRequestBtn")}
+            </button>
+          </form>
+        )}
 
-      {!pending ? (
-        <form onSubmit={trySubmit} className="space-y-4 rounded-3xl border-2 border-orange-100 bg-gradient-to-b from-orange-50/70 to-white p-6 shadow-inner">
-          <label className="block">
-            <span className="text-sm font-bold text-stone-800">{t(lang, "activationBusinessLabel")}</span>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t(lang, "activationBusinessPlaceholder")}
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg font-semibold outline-none ring-orange-200 focus:ring"
-              required
-              minLength={2}
-            />
-          </label>
-          {msg ? <p className="rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900">{msg}</p> : null}
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full min-h-[54px] rounded-2xl bg-orange-600 py-3 text-lg font-black text-white shadow-md disabled:opacity-60"
+        <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Link
+            to="/demo"
+            className="flex min-h-[3rem] items-center justify-center rounded-xl border border-stone-200 bg-white text-center text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-300 hover:bg-stone-50"
           >
-            {busy ? "…" : t(lang, "activationGenerateCode")}
-          </button>
-        </form>
-      ) : (
-        <>
-          {msg ? <p className="rounded-xl bg-emerald-50 px-4 py-3 text-center text-sm font-semibold text-emerald-900">{msg}</p> : null}
-        </>
-      )}
-
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Link
-          to="/demo"
-          className="flex flex-1 items-center justify-center rounded-2xl border-2 border-orange-200 bg-white px-4 py-4 text-center text-sm font-black text-orange-950"
-        >
-          {t(lang, "activationTryDemo")}
-        </Link>
-        <Link
-          to="/support"
-          className="flex flex-1 items-center justify-center rounded-2xl bg-stone-900 px-4 py-4 text-center text-sm font-black text-white"
-        >
-          {t(lang, "activationContactSupport")}
-        </Link>
+            {t(lang, "activationTryDemo")}
+          </Link>
+          <Link
+            to="/support"
+            className="flex min-h-[3rem] items-center justify-center rounded-xl bg-stone-900 text-center text-sm font-semibold text-white transition hover:bg-stone-800"
+          >
+            {t(lang, "activationContactSupport")}
+          </Link>
+        </div>
       </div>
-
-      <p className="text-center text-xs font-medium text-stone-500">{t(lang, "activationFinePrint")}</p>
     </div>
   );
 }
