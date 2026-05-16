@@ -2,14 +2,12 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import type { User } from "@supabase/supabase-js";
 import { fetchRemoteSubscriptionForUser } from "../lib/fetchShopSubscription";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
-import { trialDaysRemaining } from "../lib/subscriptionEntitlements";
 
 export type SubscriptionContextValue = {
   authMode: "supabase" | "local";
   snapshot: SubscriptionSnapshot;
   loading: boolean;
   refetch: () => Promise<void>;
-  daysLeftInTrial: number | null;
 };
 
 const defaultValue: SubscriptionContextValue = {
@@ -17,7 +15,6 @@ const defaultValue: SubscriptionContextValue = {
   snapshot: { kind: "local_full" },
   loading: false,
   refetch: async () => {},
-  daysLeftInTrial: null,
 };
 
 const SubscriptionContext = createContext<SubscriptionContextValue>(defaultValue);
@@ -36,8 +33,6 @@ export function SubscriptionProvider({
   );
   /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
   const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
-  /** Bumps on an interval so trial/renewal countdowns refresh without waiting on network. */
-  const [displayClock, setDisplayClock] = useState(0);
 
   const load = useCallback(async () => {
     if (authMode === "local") {
@@ -73,23 +68,14 @@ export function SubscriptionProvider({
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [load]);
 
-  useEffect(() => {
-    if (authMode !== "supabase" || !user?.id) return;
-    const id = window.setInterval(() => setDisplayClock((c) => c + 1), 15_000);
-    return () => window.clearInterval(id);
-  }, [authMode, user?.id]);
-
-  const daysLeftInTrial = useMemo(() => trialDaysRemaining(snapshot, Date.now()), [snapshot, displayClock]);
-
   const value = useMemo(
     () => ({
       authMode,
       snapshot,
       loading,
       refetch: load,
-      daysLeftInTrial,
     }),
-    [authMode, snapshot, loading, load, daysLeftInTrial],
+    [authMode, snapshot, loading, load],
   );
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;

@@ -34,9 +34,8 @@ function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | 
 }
 
 export function UpgradePage({ lang }: { lang: Language }) {
-  const { snapshot, authMode, daysLeftInTrial, loading, refetch } = useSubscription();
+  const { snapshot, authMode, loading, refetch } = useSubscription();
   const current = resolveEffectivePlanTier(snapshot);
-  const inTrial = daysLeftInTrial !== null && daysLeftInTrial > 0;
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
 
   useEffect(() => {
@@ -69,13 +68,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border border-waka-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "upgradeCurrentLabel")}</p>
           <p className="mt-1 text-2xl font-black text-slate-900">{t(lang, planLabelKey(current))}</p>
-          {inTrial ? (
-            <p className="mt-2 text-base font-bold text-waka-900">
-              {tTemplate(lang, "upgradeTrialDays", { days: String(daysLeftInTrial) })}
-            </p>
-          ) : (
-            <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
-          )}
+          <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
           <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
         </section>
       ) : null}

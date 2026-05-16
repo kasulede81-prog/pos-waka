@@ -3,7 +3,7 @@ import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, ShoppingCart, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
-import { t, tTemplate } from "../../lib/i18n";
+import { t } from "../../lib/i18n";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
@@ -50,7 +50,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
-  const { authMode: subAuthMode, daysLeftInTrial } = useSubscription();
+  const { authMode: subAuthMode } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
   const beginShift = usePosStore((s) => s.beginShift);
@@ -125,18 +125,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               onClick={() => window.location.reload()}
             >
               {t(lang, "pwaUpdateCta")}
-            </button>
-          </div>
-        ) : null}
-        {subAuthMode === "supabase" && daysLeftInTrial !== null && daysLeftInTrial > 0 && daysLeftInTrial <= 14 ? (
-          <div className="z-[25] shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-bold text-amber-950 sm:text-sm">
-            <button
-              type="button"
-              className="inline-flex flex-wrap items-center justify-center gap-1 underline decoration-waka-700"
-              onClick={() => navigate("/upgrade", { preventScrollReset: true })}
-            >
-              <span>{tTemplate(lang, "trialBannerShort", { days: String(daysLeftInTrial) })}</span>
-              <span>{t(lang, "trialBannerCta")}</span>
             </button>
           </div>
         ) : null}

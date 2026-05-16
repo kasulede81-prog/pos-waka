@@ -4,36 +4,14 @@ import { ChevronDown, Clock, Headphones, Sparkles } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { useAuth } from "../../hooks/useAuth";
 import {
   getPaidPlanRenewalCountdown,
   normalizePlanCode,
   resolveEffectivePlanTier,
-  shouldHideStarterTrialRequestCta,
-  trialDaysRemaining,
   type SubscriptionSnapshot,
 } from "../../lib/subscriptionEntitlements";
-import { fetchStarterTrialRequestGateForUser, requestAnnualPlanSupport, requestSubscriptionPlanChange } from "../../lib/shopRequests";
+import { requestAnnualPlanSupport } from "../../lib/shopRequests";
 import { fetchMyOrgBillingOffers, ownerClaimOrgBillingOfferPaid, type OrgBillingOfferRow } from "../../lib/orgBillingOffers";
-
-const MS_HOUR = 3600000;
-const MS_MIN = 60000;
-const PENDING_SLA_MS = 14 * 86400000;
-
-function formatTrialStatusLine(lang: Language, snapshot: SubscriptionSnapshot, nowMs: number): string {
-  const days = trialDaysRemaining(snapshot, nowMs);
-  if (days == null) return t(lang, "officePremiumNoTrial");
-  if (snapshot.kind !== "remote" || !snapshot.row.trial_ends_at) return t(lang, "officePremiumNoTrial");
-  const end = new Date(snapshot.row.trial_ends_at).getTime();
-  const ms = end - nowMs;
-  if (ms <= 0) return t(lang, "officePremiumTrialEnded");
-  if (ms < 48 * MS_HOUR) {
-    const h = Math.floor(ms / MS_HOUR);
-    const m = Math.floor((ms % MS_HOUR) / MS_MIN);
-    return t(lang, "officePremiumTrialHmLeft").replace("{{h}}", String(h)).replace("{{m}}", String(m));
-  }
-  return t(lang, "officePremiumTrialDays").replace("{{n}}", String(days));
-}
 
 function formatRenewalLine(lang: Language, snapshot: SubscriptionSnapshot, nowMs: number): string | null {
   const r = getPaidPlanRenewalCountdown(snapshot, nowMs);
@@ -54,16 +32,11 @@ function planName(lang: Language, plan: string): string {
 }
 
 export function OfficePremiumSection({ lang }: { lang: Language }) {
-  const { user } = useAuth();
   const { snapshot, authMode, refetch } = useSubscription();
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [starterGate, setStarterGate] = useState<{
-    starterRequestConsumed: boolean;
-    pendingStarterRequestCreatedAt: string | null;
-  }>({ starterRequestConsumed: false, pendingStarterRequestCreatedAt: null });
 
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 15000);
@@ -71,22 +44,15 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
   }, []);
 
   useEffect(() => {
-    if (authMode !== "supabase" || !user?.id) return;
-    void fetchStarterTrialRequestGateForUser(user.id).then(setStarterGate);
-  }, [authMode, user?.id, snapshot]);
-
-  useEffect(() => {
     if (authMode !== "supabase") return;
     const refresh = () => {
       void refetch();
       void fetchMyOrgBillingOffers().then(setBillingOffers);
-      if (user?.id) void fetchStarterTrialRequestGateForUser(user.id).then(setStarterGate);
     };
     const id = window.setInterval(refresh, 20_000);
     const onSub = () => {
       void refetch();
       void fetchMyOrgBillingOffers().then(setBillingOffers);
-      if (user?.id) void fetchStarterTrialRequestGateForUser(user.id).then(setStarterGate);
     };
     window.addEventListener("waka:subscription-updated", onSub);
     void fetchMyOrgBillingOffers().then(setBillingOffers);
@@ -94,35 +60,14 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
       window.clearInterval(id);
       window.removeEventListener("waka:subscription-updated", onSub);
     };
-  }, [authMode, refetch, user?.id]);
+  }, [authMode, refetch]);
 
-  const hasLiveBusinessTrial =
-    authMode === "supabase" &&
-    snapshot.kind === "remote" &&
-    ["trial", "trialing"].includes((snapshot.row.status ?? "").toLowerCase()) &&
-    normalizePlanCode(snapshot.row.plan_code) === "business" &&
-    Boolean(snapshot.row.trial_ends_at) &&
-    new Date(snapshot.row.trial_ends_at!).getTime() > nowMs;
   const plan = authMode === "supabase" && snapshot.kind === "remote" ? resolveEffectivePlanTier(snapshot) : "starter";
-  const planLabel = hasLiveBusinessTrial ? t(lang, "officePremiumBusinessTrialPlan") : planName(lang, plan);
+  const planLabel = planName(lang, plan);
   const cloudSubLabel =
     authMode === "supabase" && snapshot.kind === "remote" ? `${snapshot.row.status} · ${snapshot.row.plan_code}` : null;
 
-  const hideStarterTrialCta =
-    authMode !== "supabase" ||
-    shouldHideStarterTrialRequestCta({
-      snapshot,
-      nowMs,
-      starterRequestConsumed: starterGate.starterRequestConsumed,
-      pendingStarterRequestCreatedAt: starterGate.pendingStarterRequestCreatedAt,
-    });
-
   const renewalLine = authMode === "supabase" ? formatRenewalLine(lang, snapshot, nowMs) : null;
-  const trialLine = authMode === "supabase" ? formatTrialStatusLine(lang, snapshot, nowMs) : t(lang, "officePremiumNoTrial");
-
-  const pendingCreated = starterGate.pendingStarterRequestCreatedAt;
-  const pendingSlaDaysLeft =
-    pendingCreated != null ? Math.max(0, Math.ceil((new Date(pendingCreated).getTime() + PENDING_SLA_MS - nowMs) / 86400000)) : null;
 
   const run = async (key: string, fn: () => Promise<{ ok: boolean; message?: string }>) => {
     setMsg(null);
@@ -133,7 +78,6 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
     else setMsg(t(lang, "officePremiumRequestOk"));
     void refetch();
     setBillingOffers(await fetchMyOrgBillingOffers());
-    if (user?.id) setStarterGate(await fetchStarterTrialRequestGateForUser(user.id));
     window.dispatchEvent(new Event("waka:subscription-updated"));
   };
 
@@ -173,11 +117,7 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
             <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25">
               <p className="text-xs font-black uppercase tracking-wide text-orange-100">{t(lang, "officePremiumPlanLabel")}</p>
               <p className="mt-1 font-mono text-xl font-black capitalize">{planLabel}</p>
-              {hasLiveBusinessTrial ? (
-                <p className="mt-1 text-xs font-semibold text-orange-50">{t(lang, "officePremiumBusinessTrialActive")}</p>
-              ) : (
-                <p className="mt-1 text-xs font-semibold text-orange-50">{t(lang, "officePremiumFreeModeHint")}</p>
-              )}
+              <p className="mt-1 text-xs font-semibold text-orange-50">{t(lang, "officePremiumFreeModeHint")}</p>
               {renewalLine ? (
                 <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-white">
                   <Clock className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
@@ -203,36 +143,6 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
               </p>
             </div>
           </div>
-
-          {(hasLiveBusinessTrial || pendingCreated || !hideStarterTrialCta) ? (
-            <div className="rounded-2xl border border-white/25 bg-white/15 p-4 ring-1 ring-white/15">
-              <p className="text-sm font-black text-white">{t(lang, "officePremiumBusinessTrialTitle")}</p>
-              {hasLiveBusinessTrial ? (
-                <p className="mt-1 text-sm font-bold text-orange-50">{trialLine}</p>
-              ) : pendingCreated ? (
-                <p className="mt-1 text-sm font-bold text-orange-50">
-                  {t(lang, "officePremiumStarterTrialPending")}
-                  {pendingSlaDaysLeft !== null ? (
-                    <span className="mt-1 block text-xs text-white/90">
-                      {t(lang, "officePremiumStarterTrialResponseWindow").replace("{{n}}", String(pendingSlaDaysLeft))}
-                    </span>
-                  ) : null}
-                </p>
-              ) : (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <p className="flex-1 text-sm font-semibold text-orange-50">{t(lang, "officePremiumBusinessTrialBody")}</p>
-                  <button
-                    type="button"
-                    disabled={Boolean(busy)}
-                    onClick={() => void run("trial", () => requestSubscriptionPlanChange("business"))}
-                    className="min-h-[40px] rounded-xl bg-white px-4 py-2 text-xs font-black text-orange-800 shadow-md disabled:opacity-50"
-                  >
-                    {busy === "trial" ? "…" : t(lang, "officePremiumRequestTrial")}
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : null}
 
           {billingOffers.length > 0 ? (
             <div className="space-y-3 rounded-2xl border border-white/30 bg-black/25 p-4 ring-1 ring-white/15">

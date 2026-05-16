@@ -79,6 +79,11 @@ export function StockPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const currentTier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(currentTier);
+  const unlockedProducts = useMemo(
+    () => (productLimit === null ? products : products.slice(0, productLimit)),
+    [products, productLimit],
+  );
+  const lockedProductCount = Math.max(0, products.length - unlockedProducts.length);
   const freeProductLimitReached = productLimit !== null && products.length >= productLimit;
   const productSlotsLeft = productLimit === null ? null : Math.max(0, productLimit - products.length);
 
@@ -168,14 +173,14 @@ export function StockPage({ lang }: { lang: Language }) {
     return UNIT_PRESETS[typed] ?? UNIT_PRESETS.default;
   }, [preferences.businessType]);
 
-  const defaultGroupByCategory = products.length > 12;
+  const defaultGroupByCategory = unlockedProducts.length > 12;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
 
-  const stockCategoryPicklist = useMemo(() => distinctTrimmedCategories(products), [products]);
-  const stockHasUncategorized = useMemo(() => products.some((p) => !normalizedCategoryKey(p)), [products]);
+  const stockCategoryPicklist = useMemo(() => distinctTrimmedCategories(unlockedProducts), [unlockedProducts]);
+  const stockHasUncategorized = useMemo(() => unlockedProducts.some((p) => !normalizedCategoryKey(p)), [unlockedProducts]);
 
   const listableProducts = useMemo(() => {
-    let list = [...products];
+    let list = [...unlockedProducts];
     const q = listQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((p) => {
@@ -196,7 +201,7 @@ export function StockPage({ lang }: { lang: Language }) {
       const tb = new Date(b.updatedAt).getTime();
       return tb - ta || a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
     });
-  }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
+  }, [unlockedProducts, listQuery, listFilter, listSort, stockCategoryFilter]);
 
   useEffect(() => {
     if (products.length > 0) setAddProductFormOpen(false);
@@ -457,6 +462,13 @@ export function StockPage({ lang }: { lang: Language }) {
           <p className="mt-1 text-sm font-semibold text-orange-950/80">
             {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 10) })}
           </p>
+          {lockedProductCount > 0 ? (
+            <p className="mt-2 text-sm font-bold text-orange-950">
+              {t(lang, "freePlanLockedProductsNotice")
+                .replace("{{locked}}", String(lockedProductCount))
+                .replace("{{limit}}", String(productLimit ?? 10))}
+            </p>
+          ) : null}
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Link to="/upgrade" className="rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-black text-white">
               {t(lang, "freeLimitUpgrade")}
@@ -496,7 +508,7 @@ export function StockPage({ lang }: { lang: Language }) {
             <>
               <p className="mt-4 text-sm font-black text-slate-800">{t(lang, "restockIdeasTitle")}</p>
               <ul className="mt-2 space-y-1 text-sm font-semibold text-slate-700">
-                {buildRestockSuggestions(lang, products, sales, purchases).map((s, i) => (
+                {buildRestockSuggestions(lang, unlockedProducts, sales, purchases).map((s, i) => (
                   <li key={i}>· {s}</li>
                 ))}
               </ul>
@@ -679,7 +691,7 @@ export function StockPage({ lang }: { lang: Language }) {
         </details>
       ) : null}
 
-      {products.length === 0 ? (
+      {unlockedProducts.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50 to-white p-6 text-center shadow-sm">
           <p className="text-2xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "stockEmptySub")}</p>
@@ -739,14 +751,14 @@ export function StockPage({ lang }: { lang: Language }) {
       <section className="space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <h2 className="text-2xl font-black text-slate-900">{t(lang, "quickStockFix")}</h2>
-          {products.length > 0 ? (
+          {unlockedProducts.length > 0 ? (
             <p className="text-sm font-semibold text-slate-500">
-              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(products.length) })}
+              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(unlockedProducts.length) })}
             </p>
           ) : null}
         </div>
 
-        {products.length === 0 ? (
+        {unlockedProducts.length === 0 ? (
           <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-lg text-slate-600">{t(lang, "stockListEmptyHint")}</p>
         ) : (
           <div className="space-y-3 rounded-2xl border-2 border-slate-100 bg-white p-4 shadow-sm sm:p-5">

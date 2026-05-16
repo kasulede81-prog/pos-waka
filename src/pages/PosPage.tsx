@@ -8,6 +8,8 @@ import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { useSubscription } from "../context/SubscriptionContext";
+import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { dateKeyKampala } from "../lib/datesUg";
 import {
   CATEGORY_FILTER_ALL,
@@ -141,6 +143,7 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const { snapshot } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
   const products = usePosStore((s) => s.products);
@@ -157,6 +160,13 @@ export function PosPage({ lang }: { lang: Language }) {
   const setPreferences = usePosStore((s) => s.setPreferences);
 
   const quickSell = preferences.kioskQuickSell;
+  const currentTier = resolveEffectivePlanTier(snapshot);
+  const productLimit = maxProductsForTier(currentTier);
+  const sellableProducts = useMemo(
+    () => (productLimit === null ? products : products.slice(0, productLimit)),
+    [products, productLimit],
+  );
+  const lockedProductCount = Math.max(0, products.length - sellableProducts.length);
   const hapticsOn = preferences.hapticsOn !== false;
   const soundOn = preferences.saleSoundOn !== false;
 
@@ -185,8 +195,8 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
 
-  const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(products), [products]);
-  const sellHasUncategorized = useMemo(() => products.some((p) => !(p.category ?? "").trim()), [products]);
+  const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(sellableProducts), [sellableProducts]);
+  const sellHasUncategorized = useMemo(() => sellableProducts.some((p) => !(p.category ?? "").trim()), [sellableProducts]);
 
   const soldTodayByProduct = useMemo(() => {
     const todayKey = dateKeyKampala(new Date());
@@ -202,23 +212,30 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const favoriteIds = preferences.favoriteProductIds ?? [];
   const recentIds = preferences.recentProductIds ?? [];
+  const sellableProductIds = useMemo(() => new Set(sellableProducts.map((p) => p.id)), [sellableProducts]);
+
+  useEffect(() => {
+    for (const line of draftLines) {
+      if (!sellableProductIds.has(line.productId)) removeDraftLine(line.productId);
+    }
+  }, [draftLines, removeDraftLine, sellableProductIds]);
 
   const favoriteProducts = useMemo(
     () =>
       favoriteIds
-        .map((id) => products.find((p) => p.id === id))
+        .map((id) => sellableProducts.find((p) => p.id === id))
         .filter((p): p is Product => p != null && productMatchesCategoryFilter(p, sellCategoryKey)),
-    [favoriteIds, products, sellCategoryKey],
+    [favoriteIds, sellableProducts, sellCategoryKey],
   );
 
   const recentProducts = useMemo(() => {
     const out: Product[] = [];
     for (const id of recentIds) {
-      const p = products.find((x) => x.id === id);
+      const p = sellableProducts.find((x) => x.id === id);
       if (p && productMatchesCategoryFilter(p, sellCategoryKey)) out.push(p);
     }
     return out.slice(0, 8);
-  }, [recentIds, products, sellCategoryKey]);
+  }, [recentIds, sellableProducts, sellCategoryKey]);
 
   const bumpRecentProduct = useCallback(
     (productId: string) => {
@@ -268,13 +285,13 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const frequentToday = useMemo(
     () =>
-      products
+      sellableProducts
         .filter((p) => productMatchesCategoryFilter(p, sellCategoryKey))
         .map((p) => ({ product: p, qty: soldTodayByProduct.get(p.id) ?? 0 }))
         .filter((r) => r.qty > 0)
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 6),
-    [products, soldTodayByProduct, sellCategoryKey],
+    [sellableProducts, soldTodayByProduct, sellCategoryKey],
   );
 
   const setSellCategoryFilter = useCallback(
@@ -324,13 +341,13 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
-    return products.filter((p) => {
+    return sellableProducts.filter((p) => {
       if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
       if (!productMatchesSellSearch(p, q, aliasTerms)) return false;
       if (sellCategoryKey === CATEGORY_FILTER_ALL) return true;
       return productMatchesCategoryFilter(p, sellCategoryKey);
     });
-  }, [products, sellSearchContext, sellCategoryKey]);
+  }, [sellableProducts, sellSearchContext, sellCategoryKey]);
 
   const openProduct = useCallback((p: Product) => {
     setSelected(p);
@@ -351,12 +368,12 @@ export function PosPage({ lang }: { lang: Language }) {
 
   useEffect(() => {
     const id = (location.state as { preferProductId?: string } | null)?.preferProductId;
-    if (!id || !products.length) return;
-    const p = products.find((x) => x.id === id);
+    if (!id || !sellableProducts.length) return;
+    const p = sellableProducts.find((x) => x.id === id);
     if (!p) return;
     openProduct(p);
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.key, location.pathname, products, openProduct, navigate]);
+  }, [location.key, location.pathname, sellableProducts, openProduct, navigate]);
 
   useEffect(() => {
     if (!sheetOpen || !selected) return;
@@ -430,11 +447,16 @@ export function PosPage({ lang }: { lang: Language }) {
   const totalPaidInput = useMemo(() => {
     const cash = parseDisplayMoney(cashInput);
     const mobile = parseDisplayMoney(mobileMoneyInput);
-    if (paymentMethod === "cash") return draftTotal;
+    if (paymentMethod === "cash") return cash > 0 ? cash : draftTotal;
     if (paymentMethod === "mobile_money") return draftTotal;
     if (paymentMethod === "credit") return cash + mobile;
     return cash + mobile;
   }, [paymentMethod, cashInput, mobileMoneyInput, draftTotal]);
+
+  const changeDue = useMemo(() => {
+    if (paymentMethod === "mobile_money") return 0;
+    return Math.max(0, totalPaidInput - draftTotal);
+  }, [paymentMethod, totalPaidInput, draftTotal]);
 
   const computedDebt = useMemo(() => {
     if (paymentMethod === "cash" || paymentMethod === "mobile_money") return 0;
@@ -448,6 +470,11 @@ export function PosPage({ lang }: { lang: Language }) {
   }, []);
 
   const finishSale = useCallback(() => {
+    if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftTotal) {
+      setToast(t(lang, "paymentCashTooLow"));
+      window.setTimeout(() => setToast(null), 2200);
+      return;
+    }
     const debt = paymentMethod === "credit" || paymentMethod === "mixed" ? computedDebt : 0;
     let customerId = saleCustomerId || null;
     if (debt > 0 && !customerId && saleCustomerName.trim()) {
@@ -494,6 +521,8 @@ export function PosPage({ lang }: { lang: Language }) {
     }
   }, [
     paymentMethod,
+    cashInput,
+    draftTotal,
     computedDebt,
     saleCustomerId,
     saleCustomerName,
@@ -550,7 +579,15 @@ export function PosPage({ lang }: { lang: Language }) {
         )}
       </div>
 
-      {products.length > 0 ? (
+      {lockedProductCount > 0 ? (
+        <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950">
+          {t(lang, "freePlanLockedProductsNotice")
+            .replace("{{locked}}", String(lockedProductCount))
+            .replace("{{limit}}", String(productLimit ?? 10))}
+        </div>
+      ) : null}
+
+      {sellableProducts.length > 0 ? (
         <div className="space-y-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm sm:p-2.5">
           <div>
             <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryHeading")}</p>
@@ -691,7 +728,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {products.length === 0 ? (
+      {sellableProducts.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
           <p className="text-2xl font-black text-slate-900">{t(lang, "posEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "posEmptySub")}</p>
@@ -828,10 +865,10 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
 
-            {paymentMethod === "mixed" || paymentMethod === "credit" ? (
+            {paymentMethod === "cash" || paymentMethod === "mixed" || paymentMethod === "credit" ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="block text-base font-semibold text-slate-800">
-                  {t(lang, "paymentCashLabel")}
+                  {paymentMethod === "cash" ? t(lang, "paymentCashReceivedLabel") : t(lang, "paymentCashLabel")}
                   <input
                     value={cashInput}
                     onChange={(e) => setCashInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
@@ -840,17 +877,25 @@ export function PosPage({ lang }: { lang: Language }) {
                     placeholder="0"
                   />
                 </label>
-                <label className="block text-base font-semibold text-slate-800">
-                  {t(lang, "paymentMobileMoneyLabel")}
-                  <input
-                    value={mobileMoneyInput}
-                    onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    inputMode="numeric"
-                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
-                    placeholder="0"
-                  />
-                </label>
+                {paymentMethod === "mixed" || paymentMethod === "credit" ? (
+                  <label className="block text-base font-semibold text-slate-800">
+                    {t(lang, "paymentMobileMoneyLabel")}
+                    <input
+                      value={mobileMoneyInput}
+                      onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      inputMode="numeric"
+                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
+                      placeholder="0"
+                    />
+                  </label>
+                ) : null}
               </div>
+            ) : null}
+
+            {(paymentMethod === "cash" || paymentMethod === "mixed" || paymentMethod === "credit") && (cashInput || changeDue > 0) ? (
+              <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base font-black text-emerald-900">
+                {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
+              </p>
             ) : null}
 
             {paymentMethod === "credit" || paymentMethod === "mixed" ? (
