@@ -41,7 +41,7 @@ export function DemoExperiencePage({ lang, isAuthenticated = false }: Props) {
     };
   }, [demoKey]);
 
-  const exitTo = isAuthenticated ? "/activate" : "/home";
+  const exitTo = isAuthenticated ? "/" : "/home";
   const exitLabel = t(lang, "activationDemoExit");
 
   const wrap = (children: ReactNode) => (

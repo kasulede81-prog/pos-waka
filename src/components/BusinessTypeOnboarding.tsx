@@ -8,6 +8,15 @@ import { getActiveAccountKey } from "../offline/accountScope";
 
 const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
 
+function featureKeyForBusinessType(type: BusinessType): string {
+  if (type === "boutique") return "businessTypeFeatures_boutique";
+  if (type === "restaurant") return "businessTypeFeatures_restaurant";
+  if (type === "pharmacy") return "businessTypeFeatures_pharmacy";
+  if (type === "hardware") return "businessTypeFeatures_hardware";
+  if (type === "electronics") return "businessTypeFeatures_electronics";
+  return "businessTypeFeatures_kiosk_duka";
+}
+
 function getDraftKey(): string | null {
   const acc = getActiveAccountKey();
   if (!acc) return null;
@@ -61,9 +70,10 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
-      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl">
-        <p className="text-center text-2xl font-black leading-tight text-slate-900">{t(lang, "onboardTitle")}</p>
-        <p className="mt-2 text-center text-base text-slate-600">{t(lang, "onboardSubtitle")}</p>
+      <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl sm:rounded-[2rem] sm:p-6">
+        <p className="text-center text-xs font-black uppercase tracking-[0.24em] text-waka-700">{t(lang, "wakaSlogan")}</p>
+        <p className="mt-3 text-center text-3xl font-black leading-tight text-slate-900">{t(lang, "onboardTitle")}</p>
+        <p className="mt-2 text-center text-base font-medium text-slate-600">{t(lang, "onboardSubtitle")}</p>
         <div className="mt-6 space-y-4">
           <label className="block text-sm font-bold text-slate-700">
             {t(lang, "businessName")}
@@ -96,42 +106,59 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
               </button>
             ))}
           </div>
-          <label className="block text-sm font-bold text-slate-700">
-            {t(lang, "businessCurrency")}
-            <input
-              value={currency}
-              onChange={(e) => {
-                const v = e.target.value.toUpperCase();
-                setCurrency(v);
-                persistDraft({ shopName, businessType, currency: v, phone, address });
-              }}
-              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-            />
-          </label>
-          <label className="block text-sm font-bold text-slate-700">
-            {t(lang, "personPhonePh")}
-            <input
-              value={phone}
-              onChange={(e) => {
-                const v = e.target.value;
-                setPhone(v);
-                persistDraft({ shopName, businessType, currency, phone: v, address });
-              }}
-              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-            />
-          </label>
-          <label className="block text-sm font-bold text-slate-700">
-            {t(lang, "shopAddress")}
-            <input
-              value={address}
-              onChange={(e) => {
-                const v = e.target.value;
-                setAddress(v);
-                persistDraft({ shopName, businessType, currency, phone, address: v });
-              }}
-              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-            />
-          </label>
+          <div className="rounded-3xl border border-waka-100 bg-waka-50/70 p-4">
+            <p className="text-sm font-black text-waka-950">{t(lang, "businessTypeFeaturesTitle")}</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {t(lang, featureKeyForBusinessType(businessType))
+                .split("|")
+                .map((feature) => (
+                  <span key={feature} className="rounded-full bg-white px-3 py-2 text-xs font-black text-waka-900 shadow-sm">
+                    {feature}
+                  </span>
+                ))}
+            </div>
+          </div>
+          <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <summary className="cursor-pointer text-sm font-black text-slate-800">{t(lang, "onboardOptionalDetails")}</summary>
+            <div className="mt-4 space-y-4">
+              <label className="block text-sm font-bold text-slate-700">
+                {t(lang, "businessCurrency")}
+                <input
+                  value={currency}
+                  onChange={(e) => {
+                    const v = e.target.value.toUpperCase();
+                    setCurrency(v);
+                    persistDraft({ shopName, businessType, currency: v, phone, address });
+                  }}
+                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
+                />
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                {t(lang, "personPhonePh")}
+                <input
+                  value={phone}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPhone(v);
+                    persistDraft({ shopName, businessType, currency, phone: v, address });
+                  }}
+                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
+                />
+              </label>
+              <label className="block text-sm font-bold text-slate-700">
+                {t(lang, "shopAddress")}
+                <input
+                  value={address}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAddress(v);
+                    persistDraft({ shopName, businessType, currency, phone, address: v });
+                  }}
+                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
+                />
+              </label>
+            </div>
+          </details>
           {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
           <button
             type="button"

@@ -34,6 +34,23 @@ function applyAccountSwitchSync(nextKey: string | null): void {
   setActiveAccountKey(nextKey);
 }
 
+function applySignupProfileToLocalStore(next: Session | null): void {
+  if (!next?.user) return;
+  const meta = next.user.user_metadata as Record<string, unknown> | undefined;
+  const shopName =
+    String(meta?.shop_display_name ?? "").trim() ||
+    String(meta?.business_name ?? meta?.organization_name ?? meta?.shop_name ?? "").trim();
+  const businessType = String(meta?.business_type ?? "").trim() as BusinessType;
+  if (!shopName || !businessType) return;
+  const store = usePosStore.getState();
+  store.completeBusinessOnboarding(businessType);
+  store.setPreferences({
+    shopDisplayName: shopName,
+    shopPhoneE164: String(meta?.phone_e164 ?? "").trim() || null,
+    shopCurrency: String(meta?.default_currency ?? "UGX").trim().toUpperCase() || "UGX",
+  });
+}
+
 export type SignUpResult =
   | { needsEmailVerification: true }
   | { needsEmailVerification: false; session: Session | null };
@@ -157,6 +174,7 @@ export function useAuth() {
         applyAccountSwitchSync(
           computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
         );
+        applySignupProfileToLocalStore(next);
         setSession(next);
         setInitializing(false);
       }
@@ -168,6 +186,7 @@ export function useAuth() {
       applyAccountSwitchSync(
         computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
       );
+      applySignupProfileToLocalStore(next);
       void ensureWorkspaceForSession(next).catch((e) => {
         console.error("[waka-auth] bootstrap on auth state change failed", e);
       });
@@ -296,6 +315,7 @@ export function useAuth() {
       applyAccountSwitchSync(
         computeAccountKey({ mode: "supabase", userId: data.session.user?.id, email: data.session.user?.email }),
       );
+      applySignupProfileToLocalStore(data.session);
       setSession(data.session);
       return { needsEmailVerification: false, session: data.session };
     }

@@ -1,7 +1,7 @@
 import type { Permission, UserRole } from "../types";
 import { hasPermission } from "./permissions";
 
-export type SubscriptionPlanCode = "starter" | "business" | "waka_plus";
+export type SubscriptionPlanCode = "free" | "starter" | "business" | "waka_plus";
 
 /** Row shape returned from Supabase (plan joined separately). */
 export type RemoteSubscriptionRow = {
@@ -23,9 +23,10 @@ export type SubscriptionSnapshot =
   | { kind: "remote"; row: RemoteSubscriptionRow };
 
 const TIER_RANK: Record<SubscriptionPlanCode, number> = {
-  starter: 0,
-  business: 1,
-  waka_plus: 2,
+  free: 0,
+  starter: 1,
+  business: 2,
+  waka_plus: 3,
 };
 
 /** Permissions that need at least Business (or active Business trial). */
@@ -41,7 +42,9 @@ const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
 const WAKA_PLUS_ONLY: ReadonlySet<Permission> = new Set([] as Permission[]);
 
 export function normalizePlanCode(raw: string | undefined | null): SubscriptionPlanCode {
-  const c = (raw ?? "starter").trim().toLowerCase();
+  const c = (raw ?? "free").trim().toLowerCase();
+  if (c === "free" || c === "free_mode") return "free";
+  if (c === "starter") return "starter";
   if (c === "business") return "business";
   if (c === "waka_plus" || c === "waka plus") return "waka_plus";
   return "starter";
@@ -54,26 +57,19 @@ export function planCodeHasWhatsappManager(code: SubscriptionPlanCode): boolean 
 
 /**
  * Effective SaaS tier for feature gates.
- * - New users: Business trial for 30 days (full Business features).
- * - After trial without payment: treat as Starter (sell/stock/debt stay on).
+ * - New users: Free Mode immediately, no admin approval required.
+ * - Paid rows unlock Starter, Business, or Waka Plus.
  */
 export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): SubscriptionPlanCode {
   if (snapshot.kind === "local_full") return "waka_plus";
-  if (snapshot.kind === "none") return "starter";
+  if (snapshot.kind === "none") return "free";
 
   const row = snapshot.row;
-  const now = Date.now();
-  const trialEndMs = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : 0;
   const trialLike = row.status === "trial" || row.status === "trialing";
-  const inBusinessTrial = trialLike && trialEndMs > now;
-  if (inBusinessTrial) return "business";
-
-  if (trialLike && trialEndMs > 0 && trialEndMs <= now) {
-    return "starter";
-  }
+  if (trialLike) return "free";
 
   if (row.status === "expired") {
-    return "starter";
+    return "free";
   }
 
   return normalizePlanCode(row.plan_code);
@@ -146,7 +142,7 @@ export function getPaidPlanRenewalCountdown(
   const st = (row.status ?? "").trim().toLowerCase();
   if (st !== "active") return null;
   const plan = normalizePlanCode(row.plan_code);
-  if (plan === "starter") return null;
+  if (plan === "free" || plan === "starter") return null;
   if (!row.current_period_end) return null;
   const end = new Date(row.current_period_end).getTime();
   const totalMs = end - nowMs;
@@ -159,15 +155,21 @@ export function getPaidPlanRenewalCountdown(
 }
 
 export function maxStaffAccountsForTier(tier: SubscriptionPlanCode): number {
+  if (tier === "free") return 0;
   if (tier === "starter") return 0;
   if (tier === "business") return 5;
-  return 999;
+  return 10;
 }
 
 export function maxDevicesHintForTier(tier: SubscriptionPlanCode): number {
+  if (tier === "free") return 1;
   if (tier === "starter") return 1;
   if (tier === "business") return 3;
-  return 999;
+  return 8;
+}
+
+export function maxProductsForTier(tier: SubscriptionPlanCode): number | null {
+  return tier === "free" ? 30 : null;
 }
 
 function minTierForPermission(permission: Permission): SubscriptionPlanCode | null {

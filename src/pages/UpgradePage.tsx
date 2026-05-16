@@ -5,24 +5,32 @@ import { t, tTemplate } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
 import {
   maxDevicesHintForTier,
+  maxProductsForTier,
   maxStaffAccountsForTier,
   resolveEffectivePlanTier,
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
 
-const PLAN_ORDER: SubscriptionPlanCode[] = ["starter", "business", "waka_plus"];
+const PLAN_ORDER: SubscriptionPlanCode[] = ["free", "starter", "business", "waka_plus"];
 
 function planLabelKey(plan: SubscriptionPlanCode): string {
+  if (plan === "free") return "planFreeName";
   if (plan === "starter") return "planStarterName";
   if (plan === "business") return "planBusinessName";
   return "planWakaPlusName";
 }
 
 function planPriceKey(plan: SubscriptionPlanCode): string {
+  if (plan === "free") return "planFreePrice";
   if (plan === "starter") return "planStarterPrice";
   if (plan === "business") return "planBusinessPrice";
   return "planWakaPlusPrice";
+}
+
+function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | "goodFor" | "note" | "cta"): string {
+  const prefix = plan === "waka_plus" ? "wakaPlus" : plan;
+  return `${prefix}_${suffix}`;
 }
 
 export function UpgradePage({ lang }: { lang: Language }) {
@@ -45,9 +53,10 @@ export function UpgradePage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-10">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900">{t(lang, "upgradeTitle")}</h1>
-        <p className="mt-2 text-lg text-slate-600">{t(lang, "upgradeSub")}</p>
+      <div className="rounded-[2rem] bg-gradient-to-br from-waka-600 to-orange-500 px-5 py-7 text-white shadow-sm sm:px-7">
+        <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-100">{t(lang, "wakaSlogan")}</p>
+        <h1 className="mt-3 text-3xl font-black tracking-tight">{t(lang, "upgradeTitle")}</h1>
+        <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-orange-50">{t(lang, "upgradeSub")}</p>
       </div>
 
       {authMode === "local" ? (
@@ -57,7 +66,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
       ) : null}
 
       {!loading && authMode === "supabase" ? (
-        <section className="rounded-3xl border-2 border-waka-200 bg-gradient-to-br from-waka-50 to-white p-5 shadow-sm">
+        <section className="rounded-3xl border border-waka-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "upgradeCurrentLabel")}</p>
           <p className="mt-1 text-2xl font-black text-slate-900">{t(lang, planLabelKey(current))}</p>
           {inTrial ? (
@@ -68,7 +77,6 @@ export function UpgradePage({ lang }: { lang: Language }) {
             <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
           )}
           <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
-          <p className="mt-2 text-sm font-bold text-waka-900">{t(lang, "upgradeCancelAnytime")}</p>
         </section>
       ) : null}
 
@@ -90,13 +98,15 @@ export function UpgradePage({ lang }: { lang: Language }) {
 
       <section className="space-y-4">
         <p className="text-lg font-black text-slate-900">{t(lang, "upgradePickTitle")}</p>
-        <ul className="space-y-4">
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {PLAN_ORDER.map((plan) => {
             const isCurrent = plan === current;
+            const productLimit = maxProductsForTier(plan);
+            const isPaid = plan !== "free";
             return (
               <li
                 key={plan}
-                className={`rounded-3xl border-2 p-5 shadow-sm ${
+                className={`flex flex-col rounded-[1.75rem] border p-5 shadow-sm ${
                   isCurrent ? "border-waka-500 bg-waka-50/80" : "border-slate-200 bg-white"
                 }`}
               >
@@ -104,13 +114,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
                   <div>
                     <p className="text-xl font-black text-slate-900">{t(lang, planLabelKey(plan))}</p>
                     <p className="mt-1 text-2xl font-black text-waka-700">{t(lang, planPriceKey(plan))}</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-600">
-                      {plan === "starter"
-                        ? t(lang, "starter_blurb")
-                        : plan === "business"
-                          ? t(lang, "business_blurb")
-                          : t(lang, "waka_plus_blurb")}
-                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, planTextKey(plan, "blurb"))}</p>
                   </div>
                   {isCurrent ? (
                     <span className="rounded-full bg-waka-600 px-3 py-1 text-xs font-black text-white">
@@ -118,40 +122,51 @@ export function UpgradePage({ lang }: { lang: Language }) {
                     </span>
                   ) : null}
                 </div>
-                <ul className="mt-3 space-y-1 text-sm font-medium text-slate-700">
-                  {(plan === "starter"
-                    ? t(lang, "starter_bullets")
-                    : plan === "business"
-                      ? t(lang, "business_bullets")
-                      : t(lang, "waka_plus_bullets")
-                  )
+                <ul className="mt-4 space-y-2 text-sm font-semibold text-slate-700">
+                  {t(lang, planTextKey(plan, "features"))
                     .split("|")
                     .map((line) => (
-                      <li key={line}>· {line}</li>
+                      <li key={line} className="flex gap-2">
+                        <span className="text-waka-600">✓</span>
+                        <span>{line}</span>
+                      </li>
                     ))}
                 </ul>
-                <p className="mt-3 text-xs text-slate-500">
-                  {tTemplate(lang, "upgradeLimitsHint", {
-                    staff: String(maxStaffAccountsForTier(plan)),
-                    devices: String(maxDevicesHintForTier(plan)),
-                  })}
-                </p>
-                {!isCurrent ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="mt-4 w-full min-h-[48px] rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 py-3 text-sm font-bold text-slate-500"
+                <div className="mt-4 rounded-2xl bg-stone-50 px-4 py-3 text-sm text-stone-700">
+                  <p className="font-black text-stone-900">{t(lang, "upgradeGoodForLabel")}</p>
+                  <p className="mt-1 font-semibold">{t(lang, planTextKey(plan, "goodFor"))}</p>
+                  <p className="mt-2 text-xs font-bold text-stone-500">{t(lang, planTextKey(plan, "note"))}</p>
+                  {productLimit ? (
+                    <p className="mt-1 text-xs font-bold text-stone-500">
+                      {tTemplate(lang, "upgradeFreeProductLimit", { count: String(productLimit) })}
+                    </p>
+                  ) : null}
+                  {isPaid ? (
+                    <p className="mt-1 text-xs font-bold text-stone-500">
+                      {tTemplate(lang, "upgradePlanSimpleLimit", {
+                        devices: String(maxDevicesHintForTier(plan)),
+                        staff: String(maxStaffAccountsForTier(plan)),
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+                {isPaid && !isCurrent ? (
+                  <Link
+                    to="/support"
+                    className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-sm font-black text-white"
                   >
-                    {t(lang, "upgradePaySoon")}
-                  </button>
-                ) : null}
+                    {t(lang, planTextKey(plan, "cta"))}
+                  </Link>
+                ) : (
+                  <div className="mt-4 min-h-[48px]" />
+                )}
               </li>
             );
           })}
         </ul>
       </section>
 
-      <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">{t(lang, "upgradePaymentPrep")}</p>
+      <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-950">{t(lang, "upgradePaymentPrep")}</p>
 
       <Link
         to="/support"

@@ -81,6 +81,6 @@ export async function opsResolveActivationRequest(params: {
 }
 
 export function isPosUnlocked(gate: ActivationGatePayload | null): boolean {
-  if (!gate) return false;
-  return gate.lifecycle === "active";
+  if (!gate) return true;
+  return gate.lifecycle !== "suspended";
 }

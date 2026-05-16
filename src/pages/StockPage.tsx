@@ -10,6 +10,8 @@ import { inferFromProductName } from "../lib/smartProductGuess";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { useSubscription } from "../context/SubscriptionContext";
+import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { StockProductEditModal } from "../components/StockProductEditModal";
 import {
   CATEGORY_FILTER_ALL,
@@ -60,6 +62,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const stockQuickCategoryListId = useId();
   const stockModalCategoryListId = useId();
   const actor = useSessionActor();
+  const { snapshot } = useSubscription();
   const canRemove = hasPermission(actor.role, "products.remove");
   const canAdjust = hasPermission(actor.role, "stock.adjust");
   const canAdd = hasPermission(actor.role, "products.add");
@@ -74,6 +77,10 @@ export function StockPage({ lang }: { lang: Language }) {
   const purchases = usePosStore((s) => s.purchases);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const preferences = usePosStore((s) => s.preferences);
+  const currentTier = resolveEffectivePlanTier(snapshot);
+  const productLimit = maxProductsForTier(currentTier);
+  const freeProductLimitReached = productLimit !== null && products.length >= productLimit;
+  const productSlotsLeft = productLimit === null ? null : Math.max(0, productLimit - products.length);
 
   const purchaseLinesByProduct = useMemo(() => {
     const m = new Map<string, Array<{ at: string; supplier: string; qty: number; cost: number }>>();
@@ -217,6 +224,7 @@ export function StockPage({ lang }: { lang: Language }) {
   }
 
   const openStarter = () => {
+    if (freeProductLimitReached) return;
     const pack = starterPackForBusinessType(preferences.businessType);
     setStarterRows(
       pack.map((line) => ({
@@ -231,6 +239,7 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const submitQuick = (e: FormEvent) => {
     e.preventDefault();
+    if (freeProductLimitReached) return;
     const price = Math.floor(Number(qaPrice) || 0);
     if (price < 0) return;
     const sellUnit = resolveSellUnit(qaUnitPreset, qaUnitCustom);
@@ -254,6 +263,7 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const submitMainQuick = (e: FormEvent) => {
     e.preventDefault();
+    if (freeProductLimitReached) return;
     const price = Math.floor(Number(mainPrice.replace(/\D/g, "")) || 0);
     if (price <= 0) return;
     const sellUnit = resolveSellUnit(mainSellUnitPreset, mainSellUnitCustom);
@@ -294,7 +304,9 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const applyStarter = () => {
     const cat = t(lang, "generalCategory");
+    let left = productSlotsLeft ?? Number.POSITIVE_INFINITY;
     for (const row of starterRows) {
+      if (left <= 0) break;
       if (!row.enabled) continue;
       const price = Math.max(0, Math.floor(Number(row.priceStr) || 0));
       const st = Math.max(0, Number(row.stockStr) || 0);
@@ -308,6 +320,7 @@ export function StockPage({ lang }: { lang: Language }) {
         sellingMode: row.sellingMode,
         baseUnit: row.baseUnit,
       });
+      left -= 1;
     }
     setStarterOpen(false);
   };
@@ -329,12 +342,13 @@ export function StockPage({ lang }: { lang: Language }) {
         };
       })
       .filter((r) => r.name.length > 0 && r.priceUgx > 0);
-    bulkQuickAddProducts(rows);
+    bulkQuickAddProducts(productSlotsLeft === null ? rows : rows.slice(0, productSlotsLeft));
     setBulkRows(emptyBulkRows(10));
     setBulkOpen(false);
   };
 
   const openDuplicateToQuick = (p: Product) => {
+    if (freeProductLimitReached) return;
     setAddProductFormOpen(true);
     setMainName(`${p.name} (2)`);
     setMainCategory((p.category ?? "").trim());
@@ -436,6 +450,26 @@ export function StockPage({ lang }: { lang: Language }) {
         <h1 className="text-3xl font-black text-slate-900">{t(lang, "stockTitle")}</h1>
         <p className="mt-1 text-lg text-slate-600">{t(lang, "stockChangeTitle")}</p>
       </div>
+
+      {freeProductLimitReached ? (
+        <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
+          <p className="text-lg font-black text-orange-950">{t(lang, "freeLimitProductsTitle")}</p>
+          <p className="mt-1 text-sm font-semibold text-orange-950/80">
+            {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 30) })}
+          </p>
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <Link to="/upgrade" className="rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-black text-white">
+              {t(lang, "freeLimitUpgrade")}
+            </Link>
+            <Link
+              to="/support"
+              className="rounded-2xl border-2 border-orange-300 bg-white px-4 py-3 text-center text-sm font-black text-orange-950"
+            >
+              {t(lang, "freeLimitSupport")}
+            </Link>
+          </div>
+        </section>
+      ) : null}
 
       {(canRestock || canSuppliers) && products.length > 0 ? (
         <section className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-sm">
@@ -636,6 +670,7 @@ export function StockPage({ lang }: { lang: Language }) {
 
             <button
               type="submit"
+              disabled={freeProductLimitReached}
               className="w-full min-h-[56px] rounded-3xl bg-waka-600 py-4 text-xl font-black text-white shadow-md active:scale-[0.99] active:bg-waka-700"
             >
               {t(lang, "saveProduct")}
@@ -653,6 +688,7 @@ export function StockPage({ lang }: { lang: Language }) {
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <button
                 type="button"
+                disabled={freeProductLimitReached}
                 onClick={() => setQuickOpen(true)}
                 className="rounded-3xl border-2 border-waka-300 bg-white px-6 py-4 text-lg font-black text-waka-900"
               >
@@ -660,6 +696,7 @@ export function StockPage({ lang }: { lang: Language }) {
               </button>
               <button
                 type="button"
+                disabled={freeProductLimitReached}
                 onClick={openStarter}
                 className="rounded-3xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-lg active:scale-[0.99]"
               >
@@ -674,6 +711,7 @@ export function StockPage({ lang }: { lang: Language }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <button
             type="button"
+            disabled={freeProductLimitReached}
             onClick={() => setQuickOpen(true)}
             className="min-h-[64px] rounded-3xl border-2 border-waka-200 bg-white py-4 text-base font-black text-waka-900 shadow-sm active:bg-waka-50"
           >
@@ -681,6 +719,7 @@ export function StockPage({ lang }: { lang: Language }) {
           </button>
           <button
             type="button"
+            disabled={freeProductLimitReached}
             onClick={openStarter}
             className="min-h-[64px] rounded-3xl border-2 border-slate-200 bg-white py-4 text-base font-black text-slate-900 active:bg-slate-50"
           >
@@ -688,6 +727,7 @@ export function StockPage({ lang }: { lang: Language }) {
           </button>
           <button
             type="button"
+            disabled={freeProductLimitReached}
             onClick={() => setBulkOpen(true)}
             className="min-h-[64px] rounded-3xl border-2 border-violet-200 bg-violet-50 py-4 text-base font-black text-violet-950"
           >
