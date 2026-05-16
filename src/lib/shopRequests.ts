@@ -13,7 +13,7 @@ export async function fetchStarterTrialRequestGateForUser(userId: string): Promi
     .from("subscription_requests")
     .select("status, created_at, requested_plan")
     .eq("organization_id", org.organizationId)
-    .eq("requested_plan", "starter")
+    .eq("requested_plan", "business")
     .order("created_at", { ascending: false });
 
   if (error || !data?.length) return { starterRequestConsumed: false, pendingStarterRequestCreatedAt: null };

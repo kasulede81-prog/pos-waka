@@ -5,8 +5,6 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../../config/wakaSupport";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
-import { useSubscription } from "../../context/SubscriptionContext";
-import { normalizePlanCode, planCodeHasWhatsappManager } from "../../lib/subscriptionEntitlements";
 
 type Props = { lang: Language };
 
@@ -17,12 +15,6 @@ type Props = { lang: Language };
 export function FloatingSupportFab({ lang }: Props) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const { snapshot, authMode, loading } = useSubscription();
-  const showWhatsAppManager =
-    authMode === "local" ||
-    loading ||
-    snapshot.kind !== "remote" ||
-    planCodeHasWhatsappManager(normalizePlanCode(snapshot.row.plan_code));
 
   if (
     location.pathname.startsWith("/pos") ||
@@ -47,22 +39,16 @@ export function FloatingSupportFab({ lang }: Props) {
               <X className="h-5 w-5" strokeWidth={2.25} />
             </button>
           </div>
-          {showWhatsAppManager ? (
-            <a
-              href={wakaSupportWhatsAppUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-base font-black text-white shadow-md"
-              onClick={() => setOpen(false)}
-            >
-              <MessageCircle className="h-5 w-5" strokeWidth={2.25} />
-              {t(lang, "supportWhatsAppCta")}
-            </a>
-          ) : (
-            <p className="mt-3 rounded-2xl bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700 ring-1 ring-stone-100">
-              {t(lang, "supportWhatsAppStarterHint")}
-            </p>
-          )}
+          <a
+            href={wakaSupportWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-3 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl bg-[#25D366] px-4 py-3 text-base font-black text-white shadow-md"
+            onClick={() => setOpen(false)}
+          >
+            <MessageCircle className="h-5 w-5" strokeWidth={2.25} />
+            {t(lang, "supportWhatsAppCta")}
+          </a>
           <a
             href={wakaSupportMailtoUrl()}
             className="mt-2 flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900"

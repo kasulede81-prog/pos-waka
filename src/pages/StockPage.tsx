@@ -455,7 +455,7 @@ export function StockPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
           <p className="text-lg font-black text-orange-950">{t(lang, "freeLimitProductsTitle")}</p>
           <p className="mt-1 text-sm font-semibold text-orange-950/80">
-            {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 30) })}
+            {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 10) })}
           </p>
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <Link to="/upgrade" className="rounded-2xl bg-stone-950 px-4 py-3 text-center text-sm font-black text-white">

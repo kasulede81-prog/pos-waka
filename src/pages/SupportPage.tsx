@@ -4,8 +4,6 @@ import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
 import { WAKA_SUPPORT_EMAIL, wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
-import { useSubscription } from "../context/SubscriptionContext";
-import { normalizePlanCode, planCodeHasWhatsappManager } from "../lib/subscriptionEntitlements";
 
 const TOPIC_KEYS = [
   "supportTopic_setup",
@@ -26,12 +24,6 @@ type Props = {
 
 export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
   const brandHref = isAuthenticated ? "/" : "/login";
-  const { snapshot, authMode, loading } = useSubscription();
-  const showWhatsAppManager =
-    authMode === "local" ||
-    loading ||
-    snapshot.kind !== "remote" ||
-    planCodeHasWhatsappManager(normalizePlanCode(snapshot.row.plan_code));
 
   return (
     <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
@@ -39,29 +31,16 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
         <h1 className="text-2xl font-black text-stone-900">{t(lang, "supportPageTitle")}</h1>
         <p className="mt-2 text-base font-medium text-stone-600">{t(lang, "supportPageSub")}</p>
 
-        {isAuthenticated && authMode === "supabase" && !loading && snapshot.kind === "remote" ? (
-          <p className="mt-4 rounded-2xl bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-800 ring-1 ring-stone-100">
-            {t(lang, "supportWhatsAppTierNote")}
-          </p>
-        ) : null}
-
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          {showWhatsAppManager ? (
-            <a
-              href={wakaSupportWhatsAppUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl bg-[#25D366] px-4 py-4 text-center text-lg font-black text-white shadow-md active:scale-[0.99]"
-            >
-              <MessageCircle className="h-7 w-7" strokeWidth={2.25} aria-hidden />
-              {t(lang, "supportWhatsAppCta")}
-            </a>
-          ) : (
-            <div className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50 px-4 py-4 text-center">
-              <MessageCircle className="h-7 w-7 text-stone-400" strokeWidth={2.25} aria-hidden />
-              <p className="text-sm font-black text-stone-700">{t(lang, "supportWhatsAppStarterHint")}</p>
-            </div>
-          )}
+          <a
+            href={wakaSupportWhatsAppUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl bg-[#25D366] px-4 py-4 text-center text-lg font-black text-white shadow-md active:scale-[0.99]"
+          >
+            <MessageCircle className="h-7 w-7" strokeWidth={2.25} aria-hidden />
+            {t(lang, "supportWhatsAppCta")}
+          </a>
           <a
             href={wakaSupportMailtoUrl()}
             className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl border-2 border-orange-200 bg-orange-50 px-4 py-4 text-center text-lg font-black text-orange-950 shadow-sm active:scale-[0.99]"

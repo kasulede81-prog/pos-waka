@@ -58,6 +58,7 @@ export function planCodeHasWhatsappManager(code: SubscriptionPlanCode): boolean 
 /**
  * Effective SaaS tier for feature gates.
  * - New users: Free Mode immediately, no admin approval required.
+ * - A requested/approved Business trial unlocks Business until it expires.
  * - Paid rows unlock Starter, Business, or Waka Plus.
  */
 export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): SubscriptionPlanCode {
@@ -66,6 +67,9 @@ export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): Subscr
 
   const row = snapshot.row;
   const trialLike = row.status === "trial" || row.status === "trialing";
+  const trialEndMs = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : 0;
+  const trialPlan = normalizePlanCode(row.plan_code);
+  if (trialLike && trialPlan === "business" && trialEndMs > Date.now()) return "business";
   if (trialLike) return "free";
 
   if (row.status === "expired") {
@@ -169,7 +173,7 @@ export function maxDevicesHintForTier(tier: SubscriptionPlanCode): number {
 }
 
 export function maxProductsForTier(tier: SubscriptionPlanCode): number | null {
-  return tier === "free" ? 30 : null;
+  return tier === "free" ? 10 : null;
 }
 
 function minTierForPermission(permission: Permission): SubscriptionPlanCode | null {

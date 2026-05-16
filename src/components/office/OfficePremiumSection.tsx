@@ -45,6 +45,14 @@ function formatRenewalLine(lang: Language, snapshot: SubscriptionSnapshot, nowMs
   return t(lang, "officePremiumRenewalBusiness").replace("{{d}}", String(r.days)).replace("{{h}}", String(r.hours));
 }
 
+function planName(lang: Language, plan: string): string {
+  if (plan === "free") return t(lang, "planFreeName");
+  if (plan === "starter") return t(lang, "planStarterName");
+  if (plan === "business") return t(lang, "planBusinessName");
+  if (plan === "waka_plus") return t(lang, "planWakaPlusName");
+  return plan;
+}
+
 export function OfficePremiumSection({ lang }: { lang: Language }) {
   const { user } = useAuth();
   const { snapshot, authMode, refetch } = useSubscription();
@@ -88,7 +96,15 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
     };
   }, [authMode, refetch, user?.id]);
 
+  const hasLiveBusinessTrial =
+    authMode === "supabase" &&
+    snapshot.kind === "remote" &&
+    ["trial", "trialing"].includes((snapshot.row.status ?? "").toLowerCase()) &&
+    normalizePlanCode(snapshot.row.plan_code) === "business" &&
+    Boolean(snapshot.row.trial_ends_at) &&
+    new Date(snapshot.row.trial_ends_at!).getTime() > nowMs;
   const plan = authMode === "supabase" && snapshot.kind === "remote" ? resolveEffectivePlanTier(snapshot) : "starter";
+  const planLabel = hasLiveBusinessTrial ? t(lang, "officePremiumBusinessTrialPlan") : planName(lang, plan);
   const cloudSubLabel =
     authMode === "supabase" && snapshot.kind === "remote" ? `${snapshot.row.status} · ${snapshot.row.plan_code}` : null;
 
@@ -156,24 +172,16 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-2xl bg-white/15 px-4 py-3 ring-1 ring-white/25">
               <p className="text-xs font-black uppercase tracking-wide text-orange-100">{t(lang, "officePremiumPlanLabel")}</p>
-              <p className="mt-1 font-mono text-xl font-black capitalize">{plan}</p>
-              <p className="mt-1 text-xs font-semibold text-orange-50">{trialLine}</p>
+              <p className="mt-1 font-mono text-xl font-black capitalize">{planLabel}</p>
+              {hasLiveBusinessTrial ? (
+                <p className="mt-1 text-xs font-semibold text-orange-50">{t(lang, "officePremiumBusinessTrialActive")}</p>
+              ) : (
+                <p className="mt-1 text-xs font-semibold text-orange-50">{t(lang, "officePremiumFreeModeHint")}</p>
+              )}
               {renewalLine ? (
                 <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-white">
                   <Clock className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
                   {renewalLine}
-                </p>
-              ) : null}
-              {pendingCreated ? (
-                <p className="mt-2 text-[11px] font-bold leading-snug text-orange-50">
-                  {t(lang, "officePremiumStarterTrialPending")}
-                  {" · "}
-                  {new Date(pendingCreated).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
-                  {pendingSlaDaysLeft !== null ? (
-                    <span className="mt-1 block text-white/90">
-                      {t(lang, "officePremiumStarterTrialResponseWindow").replace("{{n}}", String(pendingSlaDaysLeft))}
-                    </span>
-                  ) : null}
                 </p>
               ) : null}
               {cloudSubLabel ? (
@@ -195,6 +203,36 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
               </p>
             </div>
           </div>
+
+          {(hasLiveBusinessTrial || pendingCreated || !hideStarterTrialCta) ? (
+            <div className="rounded-2xl border border-white/25 bg-white/15 p-4 ring-1 ring-white/15">
+              <p className="text-sm font-black text-white">{t(lang, "officePremiumBusinessTrialTitle")}</p>
+              {hasLiveBusinessTrial ? (
+                <p className="mt-1 text-sm font-bold text-orange-50">{trialLine}</p>
+              ) : pendingCreated ? (
+                <p className="mt-1 text-sm font-bold text-orange-50">
+                  {t(lang, "officePremiumStarterTrialPending")}
+                  {pendingSlaDaysLeft !== null ? (
+                    <span className="mt-1 block text-xs text-white/90">
+                      {t(lang, "officePremiumStarterTrialResponseWindow").replace("{{n}}", String(pendingSlaDaysLeft))}
+                    </span>
+                  ) : null}
+                </p>
+              ) : (
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <p className="flex-1 text-sm font-semibold text-orange-50">{t(lang, "officePremiumBusinessTrialBody")}</p>
+                  <button
+                    type="button"
+                    disabled={Boolean(busy)}
+                    onClick={() => void run("trial", () => requestSubscriptionPlanChange("business"))}
+                    className="min-h-[40px] rounded-xl bg-white px-4 py-2 text-xs font-black text-orange-800 shadow-md disabled:opacity-50"
+                  >
+                    {busy === "trial" ? "…" : t(lang, "officePremiumRequestTrial")}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           {billingOffers.length > 0 ? (
             <div className="space-y-3 rounded-2xl border border-white/30 bg-black/25 p-4 ring-1 ring-white/15">
@@ -238,16 +276,6 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
           {msg ? <p className="rounded-xl bg-black/20 px-3 py-2 text-sm font-semibold text-white">{msg}</p> : null}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {!hideStarterTrialCta ? (
-              <button
-                type="button"
-                disabled={Boolean(busy)}
-                onClick={() => void run("trial", () => requestSubscriptionPlanChange("starter"))}
-                className="min-h-[48px] flex-1 rounded-2xl border-2 border-white/40 bg-white/10 px-4 py-3 text-sm font-black text-white backdrop-blur-sm hover:bg-white/20 disabled:opacity-50"
-              >
-                {busy === "trial" ? "…" : t(lang, "officePremiumRequestTrial")}
-              </button>
-            ) : null}
             <Link
               to="/support"
               className="inline-flex min-h-[48px] flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-white/50 bg-black/20 px-4 py-3 text-sm font-black text-white hover:bg-black/30"
