@@ -103,6 +103,7 @@ export function BusinessActivationPage({ lang }: { lang: Language }) {
             </div>
             <h2 className="text-2xl font-semibold tracking-tight text-stone-900">{t(lang, "activationSuccessTitle")}</h2>
             <p className="text-base leading-relaxed text-stone-600">{t(lang, "activationSuccessBody")}</p>
+            <p className="mx-auto max-w-sm pt-2 text-sm leading-relaxed text-stone-500">{t(lang, "activationSuccessHint")}</p>
             {displayRef ? (
               <p className="pt-2 font-mono text-xs text-stone-400">
                 {t(lang, "activationRefHint").replace("{{code}}", displayRef)}

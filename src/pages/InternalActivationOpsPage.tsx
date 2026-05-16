@@ -67,8 +67,11 @@ export function InternalActivationOpsPage({ lang }: Props) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-stone-900">{t(lang, "internalActivationsTitle")}</h1>
-          <p className="mt-2 max-w-xl text-sm font-medium text-stone-600">
-            Issue licenses with plan, expiry, and device caps. Shops refetch activation on next navigation or refresh.
+          <p className="mt-2 max-w-3xl text-sm font-medium leading-relaxed text-stone-600">
+            {t(lang, "internalActivationsSub")}
+          </p>
+          <p className="mt-2 text-xs font-semibold text-stone-500">
+            Menu: <span className="font-mono text-stone-700">/internal/waka/activations</span>
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

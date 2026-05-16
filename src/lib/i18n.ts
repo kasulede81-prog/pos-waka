@@ -24,7 +24,9 @@ const en: Dict = {
   activationRequestBtn: "Request Activation",
   activationSuccessTitle: "Activation Request Sent",
   activationSuccessBody:
-    "Your request has been received. Our team will contact you with your activation key.",
+    "Your request is in our queue. You do not enter an activation key in this app — when Waka approves your shop, the POS unlocks automatically on this device.",
+  activationSuccessHint:
+    "We may WhatsApp or call only if we need more details. If your app stays locked after you’ve been told you’re approved, use Contact Support.",
   activationRefHint: "Request no. {{code}}",
   activationErrorGeneric: "Something went wrong. Please try again or contact support.",
   activationTryDemo: "Try Demo",
@@ -35,6 +37,8 @@ const en: Dict = {
   activationDemoBanner: "Demo session — sample data only, not saved permanently.",
   activationDemoExit: "Leave demo",
   internalActivationsTitle: "Activation requests",
+  internalActivationsSub:
+    "Shop requests you see here match what owners submit on Activate Waka POS. Approve to attach a license and unlock their POS (no key typed in the app). Match rows using the request code (e.g. WAKA-…).",
   internalActivationsApprove: "Approve & issue license",
   internalActivationsReject: "Reject",
   internalActivationsEmpty: "No pending requests.",
@@ -1206,7 +1210,9 @@ const lg: Dict = {
   activationRequestBtn: "Saba okutandika",
   activationSuccessTitle: "Okusaba kuweereddwa",
   activationSuccessBody:
-    "Timu yaffe enoonyerezza. Bajja kukutuukirira ne nkola yo ey'okutandika.",
+    "Okusaba kwo kulindirira. Tewetaaga kuwandiika nkola y'okutandika mu app eno — Waka bw'ekkirizza edduuka lyo, POS eggulwawo ku ssimu eno.",
+  activationSuccessHint:
+    "Tuyinza okukwoleza WhatsApp oba essimu bw'oyetaaga ebimu. Singa app esigaliddwa nga emaze okkirizibwa, tuukirira Support.",
   activationRefHint: "Akabonero k'okusaba: {{code}}",
   activationErrorGeneric: "Waliwo ekintu ekyamala. Gezaako eddako oba tuukirira ab'obuyambi.",
   activationTryDemo: "Gezaako Demo",
@@ -1217,6 +1223,8 @@ const lg: Dict = {
   activationDemoBanner: "Demo — ebintu ebifaananyi bisigalira ku ssimu ennannyini.",
   activationDemoExit: "Va ku demo",
   internalActivationsTitle: "Okusaba kw'okutandika",
+  internalActivationsSub:
+    "Ebweru wano bifuluma ku bakopi abeeteekako Activate Waka POS. Kiriziza okuteekawo layisinsi n'okuggulawo POS ku bwereere (tewandiika nkola mu app). Kwata ku kabonero WAKA-…",
   internalActivationsApprove: "Kiriziza era oweebwe layisinsi",
   internalActivationsReject: "Gaana",
   internalActivationsEmpty: "Tewali kusaba ekirindirira.",
