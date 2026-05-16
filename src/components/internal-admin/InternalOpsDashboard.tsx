@@ -137,11 +137,11 @@ function PulseMetricChip({
     <button
       type="button"
       onClick={onOpen}
-      className="flex flex-col rounded-xl border border-stone-200 bg-stone-50/80 px-3 py-2.5 text-left transition hover:border-orange-300 hover:bg-orange-50/50"
+      className="flex flex-col rounded-xl border border-border bg-card px-3 py-2.5 text-left transition hover:border-primary/40 hover:bg-background"
     >
-      <span className="text-[10px] font-black uppercase tracking-wide text-stone-500">{label}</span>
-      <span className="mt-0.5 font-mono text-lg font-black text-stone-900">{value}</span>
-      <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-bold text-orange-700">
+      <span className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{label}</span>
+      <span className="mt-0.5 font-mono text-lg font-black text-foreground">{value}</span>
+      <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] font-bold text-primary">
         {onOpen ? (
           <>
             Open <ChevronRight className="h-3 w-3" strokeWidth={2.5} />
@@ -157,38 +157,33 @@ function PulseMetricChip({
 function PlanPremiumCard({ lang, plan, tone }: { lang: Language; plan: PlanTierMetrics; tone: "slate" | "orange" | "gold" }) {
   const nameKey =
     plan.code === "starter" ? "planStarterName" : plan.code === "business" ? "planBusinessName" : "planWakaPlusName";
-  const toneCls =
-    tone === "slate"
-      ? "from-slate-50 to-white border-slate-200/80"
-      : tone === "orange"
-        ? "from-orange-50/90 to-white border-orange-200/90"
-        : "from-amber-50 to-orange-50/40 border-amber-200/80";
+  const toneCls = tone === "slate" ? "bg-card" : tone === "orange" ? "bg-primary/5" : "bg-secondary/5";
   return (
     <div
       className={clsx(
-        "relative overflow-hidden rounded-3xl border bg-gradient-to-br p-5 shadow-[0_10px_40px_rgb(28_25_23/0.06)] transition-transform duration-300 hover:-translate-y-0.5",
+        "relative overflow-hidden rounded-xl border border-border p-4 transition-transform duration-300 hover:-translate-y-0.5",
         toneCls,
       )}
     >
-      <div className="absolute right-0 top-0 h-32 w-32 -translate-y-1/2 translate-x-1/2 rounded-full bg-gradient-to-br from-orange-200/40 to-transparent blur-2xl" />
-      <p className="text-xs font-black uppercase tracking-widest text-orange-800/80">{t(lang, "internalPlanLabel")}</p>
-      <h3 className="mt-1 text-xl font-black text-stone-900">{t(lang, nameKey)}</h3>
+      <div className="absolute right-0 top-0 h-24 w-24 -translate-y-1/2 translate-x-1/2 rounded-full bg-primary/10 blur-2xl" />
+      <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(lang, "internalPlanLabel")}</p>
+      <h3 className="mt-1 text-sm font-semibold text-foreground">{t(lang, nameKey)}</h3>
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-stone-100">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalPlanActiveShops")}</dt>
-          <dd className="font-mono text-lg font-black text-stone-900">{plan.activeCount}</dd>
+        <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "internalPlanActiveShops")}</dt>
+          <dd className="font-mono text-lg font-black text-foreground">{plan.activeCount}</dd>
         </div>
-        <div className="rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-stone-100">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalPlanTrials")}</dt>
-          <dd className="font-mono text-lg font-black text-stone-900">{plan.trialCount}</dd>
+        <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "internalPlanTrials")}</dt>
+          <dd className="font-mono text-lg font-black text-foreground">{plan.trialCount}</dd>
         </div>
-        <div className="rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-stone-100">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalPlanExpiring")}</dt>
-          <dd className="font-mono text-lg font-black text-amber-900">{plan.expiringSoonCount}</dd>
+        <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "internalPlanExpiring")}</dt>
+          <dd className="font-mono text-lg font-black text-primary">{plan.expiringSoonCount}</dd>
         </div>
-        <div className="rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-stone-100">
-          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "internalPlanMrrEst")}</dt>
-          <dd className="font-mono text-lg font-black text-waka-800">UGX {plan.estimatedMonthlyRevenueUgx.toLocaleString("en-UG")}</dd>
+        <div className="rounded-xl bg-card px-3 py-2 ring-1 ring-border">
+          <dt className="text-[10px] font-bold uppercase text-muted-foreground">{t(lang, "internalPlanMrrEst")}</dt>
+          <dd className="font-mono text-lg font-black text-secondary">UGX {plan.estimatedMonthlyRevenueUgx.toLocaleString("en-UG")}</dd>
         </div>
       </dl>
     </div>
@@ -371,74 +366,74 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   }, [stats]);
 
   return (
-    <div className="space-y-8 pb-12 pt-1">
+    <div className="space-y-4 pb-6">
       {/* Hero */}
-      <header className="relative overflow-hidden rounded-3xl border border-orange-100/80 bg-gradient-to-br from-white via-orange-50/40 to-white p-6 shadow-[0_20px_60px_rgb(251_146_60/0.12)] sm:p-8">
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-gradient-to-br from-orange-200/50 to-transparent blur-3xl" />
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+      <header className="relative overflow-hidden rounded-xl border border-border bg-card p-4">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-orange-900 ring-1 ring-orange-200/60">
-              <Sparkles className="h-3.5 w-3.5 text-orange-600" />
+            <div className="inline-flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+              <Sparkles className="h-3.5 w-3.5 text-primary" />
               {t(lang, "internalDashOpsCenter")}
             </div>
-            <h1 className="text-2xl font-black tracking-tight text-stone-900 sm:text-3xl">
+            <h1 className="text-lg font-black tracking-tight text-foreground sm:text-xl">
               {t(lang, greetingKey(hour))}, {displayName}
             </h1>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-stone-600">
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-muted-foreground">
               <span className="inline-flex items-center gap-1.5">
-                <Calendar className="h-4 w-4 text-orange-600" />
+                <Calendar className="h-3.5 w-3.5 text-primary" />
                 {dateStr}
               </span>
               {adminRow ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-stone-900 px-3 py-1 text-xs font-black uppercase tracking-wide text-white">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-primary-foreground">
                   {adminRow.role.replace(/_/g, " ")}
                 </span>
               ) : previewMode ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-amber-400 bg-amber-50 px-3 py-1 text-xs font-black uppercase tracking-wide text-amber-900">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-primary bg-muted px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-primary">
                   {t(lang, "internalDashPreviewBadge")}
                 </span>
               ) : null}
               {adminRow ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/80 px-3 py-1 text-xs font-black uppercase tracking-wide text-stone-700 ring-1 ring-stone-200/70">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-foreground">
                   {String(adminRow.assigned_district_ids?.length ?? 0)} {t(lang, "internalDashDistrictsBadge")}
                 </span>
               ) : null}
             </p>
-            <p className="max-w-xl text-sm leading-relaxed text-stone-600">{t(lang, "internalDashHeroSub")}</p>
+            <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">{t(lang, "internalDashHeroSub")}</p>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex shrink-0 gap-2 overflow-x-auto">
             <button
               type="button"
               disabled={!adminRow || opsLoading}
               onClick={() => void loadAll()}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-2xl bg-stone-900 px-5 py-2.5 text-sm font-black text-white shadow-lg transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg bg-secondary px-3 text-xs font-black text-secondary-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <RefreshCw className={clsx("h-4 w-4", opsLoading && "animate-spin")} />
+              <RefreshCw className={clsx("h-3.5 w-3.5", opsLoading && "animate-spin")} />
               {t(lang, "internalDashQuickRefresh")}
             </button>
             <Link
               to="/support"
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-2xl border-2 border-orange-200 bg-white px-5 py-2.5 text-sm font-black text-orange-950 shadow-sm transition hover:bg-orange-50"
+              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
             >
-              <Headphones className="h-4 w-4" />
+              <Headphones className="h-3.5 w-3.5" />
               {t(lang, "internalDashQuickSupport")}
             </Link>
             <Link
               to="/"
-              className="inline-flex min-h-[48px] items-center rounded-2xl border border-stone-200 bg-white px-5 py-2.5 text-sm font-bold text-stone-800 hover:bg-stone-50"
+              className="inline-flex h-7 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
             >
               {t(lang, "internalAdminBack")}
             </Link>
             <Link
               to="/internal/waka/activations"
-              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-200 bg-white px-5 py-2.5 text-sm font-black text-stone-900 hover:bg-orange-50"
+              className="inline-flex h-7 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
             >
               {t(lang, "internalActivationsTitle")}
             </Link>
             {canManageAdmins ? (
               <Link
                 to="/internal/waka/admins"
-                className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-orange-200 bg-orange-50 px-5 py-2.5 text-sm font-black text-orange-900 hover:bg-orange-100"
+                className="inline-flex h-7 shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-black text-primary-foreground"
               >
                 {t(lang, "internalAdminsHeaderTitle")}
               </Link>
@@ -448,35 +443,35 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       </header>
 
       {previewMode ? (
-        <p className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white px-4 py-3 text-sm font-semibold text-amber-950 shadow-sm">
+        <p className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-semibold text-foreground">
           {t(lang, "internalAdminDbGateHint")}
         </p>
       ) : null}
       {!previewMode && statsError ? (
-        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900">
+        <p className="rounded-xl border border-destructive/25 bg-card px-4 py-3 text-xs font-bold text-destructive">
           {t(lang, "internalStatsError")}
           {statsErrorMessage ? (
-            <span className="mt-1 block font-mono text-xs font-semibold text-rose-800">{statsErrorMessage}</span>
+            <span className="mt-1 block font-mono text-[11px] font-semibold text-destructive">{statsErrorMessage}</span>
           ) : null}
         </p>
       ) : null}
 
       {/* Stats — compact pulse with drill-down */}
-      <section className="rounded-2xl border border-stone-200/90 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         <details open className="group/pulse">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
             <div>
-              <h2 className="text-base font-black text-stone-900">{t(lang, "internalDashPulseTitle")}</h2>
-              <p className="text-xs font-semibold text-stone-500">
+              <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalDashPulseTitle")}</h2>
+              <p className="text-[11px] font-medium text-muted-foreground">
                 {statGrid.total} {t(lang, "internalStat_totalShops").toLowerCase()} · {statGrid.active}{" "}
                 {t(lang, "internalStat_activeToday").toLowerCase()}
-                {opsLoading ? <span className="ml-2 text-orange-600">{t(lang, "internalDashSyncing")}</span> : null}
+                {opsLoading ? <span className="ml-2 text-primary">{t(lang, "internalDashSyncing")}</span> : null}
               </p>
             </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-stone-400 transition group-open/pulse:rotate-90" />
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-open/pulse:rotate-90" />
           </summary>
-          <div className="space-y-4 border-t border-stone-100 px-4 pb-4 pt-3">
-            <p className="text-xs font-semibold text-stone-500">{t(lang, "internalPulseTapHint")}</p>
+          <div className="space-y-3 border-t border-border bg-muted/20 px-3 pb-3 pt-3">
+            <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "internalPulseTapHint")}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               <PulseMetricChip
                 label={t(lang, "internalStat_totalShops")}
@@ -577,15 +572,15 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       ) : null}
 
       {/* Plans */}
-      <section id="ops-plans" className="space-y-4 scroll-mt-4">
+      <section id="ops-plans" className="space-y-3 scroll-mt-4">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "internalPlansTitle")}</h2>
-          <Building2 className="h-5 w-5 text-orange-400" />
+          <h2 className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(lang, "internalPlansTitle")}</h2>
+          <Building2 className="h-4 w-4 text-primary" />
         </div>
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-3 lg:grid-cols-3">
           {opsLoading && !plans.length
             ? [0, 1, 2].map((i) => (
-                <div key={i} className="h-52 animate-pulse rounded-3xl bg-stone-200/60" />
+                <div key={i} className="h-44 animate-pulse rounded-xl border border-border bg-card" />
               ))
             : (plans.length ? plans : [{ code: "starter" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 }, { code: "business" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 }, { code: "waka_plus" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 }]).map((plan, idx) => (
                 <PlanPremiumCard key={plan.code} lang={lang} plan={plan} tone={idx === 0 ? "slate" : idx === 1 ? "orange" : "gold"} />
@@ -593,23 +588,26 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         </div>
       </section>
 
-      <div className="grid gap-8 xl:grid-cols-3">
-        <div className="space-y-8 xl:col-span-2">
+      <div className="grid gap-4 xl:grid-cols-3">
+        <div className="space-y-4 xl:col-span-2">
           {/* Districts */}
-          <section id="ops-districts" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-lg font-black text-stone-900">{t(lang, "internalDistrictTitle")}</h2>
-              <input
-                value={districtFilter}
-                onChange={(e) => setDistrictFilter(e.target.value)}
-                placeholder={t(lang, "internalDistrictSearch")}
-                className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-900 outline-none ring-orange-200/50 focus:ring-2 sm:max-w-xs"
-              />
+          <section id="ops-districts" className="rounded-xl border border-border bg-card p-4 scroll-mt-4">
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalDistrictTitle")}</h2>
+              <div className="relative">
+                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={districtFilter}
+                  onChange={(e) => setDistrictFilter(e.target.value)}
+                  placeholder={t(lang, "internalDistrictSearch")}
+                  className="w-full rounded-xl border border-input bg-background py-2 pl-9 pr-3 text-sm font-semibold text-foreground outline-none ring-primary/20 focus:ring-2"
+                />
+              </div>
             </div>
-            <div className="mt-4 overflow-x-auto rounded-2xl ring-1 ring-stone-100">
+            <div className="mt-4 overflow-x-auto rounded-xl ring-1 ring-border">
               <table className="min-w-[640px] w-full border-collapse text-left text-sm">
                 <thead>
-                  <tr className="border-b border-stone-100 bg-stone-50/80 text-[11px] font-black uppercase tracking-wider text-stone-500">
+                  <tr className="border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
                     <th className="px-4 py-3">{t(lang, "internalDistrictColDistrict")}</th>
                     <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColShops")}</th>
                     <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColActive")}</th>
@@ -648,23 +646,23 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </div>
           </section>
 
-          <section id="ops-pending-trials" className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/50 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "internalPendingTrialsTitle")}</h2>
-            <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalPendingTrialsSub")}</p>
+          <section id="ops-pending-trials" className="rounded-xl border border-border bg-card p-4 scroll-mt-4">
+            <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalPendingTrialsTitle")}</h2>
+            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{t(lang, "internalPendingTrialsSub")}</p>
             <ul className="mt-4 space-y-3">
               {opsLoading && !pendingTrials.length ? (
                 [...Array(3)].map((_, i) => (
-                  <li key={i} className="h-16 animate-pulse rounded-2xl bg-amber-100/40" />
+                  <li key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
                 ))
               ) : pendingTrials.length === 0 ? (
-                <li className="rounded-2xl border border-dashed border-amber-200 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-stone-600">
+                <li className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
                   {t(lang, "internalPendingTrialsEmpty")}
                 </li>
               ) : (
                 pendingTrials.map((req) => (
                   <li
                     key={req.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-amber-100 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                    className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
                       <p className="font-black text-stone-900">
@@ -697,7 +695,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                             void loadAll();
                           }
                         }}
-                        className="rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
+                        className="h-7 rounded-lg bg-secondary px-3 text-xs font-black text-secondary-foreground disabled:opacity-40"
                       >
                         {trialBusyId === `${req.id}-ok` ? "…" : t(lang, "internalTrialApprove")}
                       </button>
@@ -711,7 +709,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                           setTrialBusyId(null);
                           if (r.ok) void loadAll();
                         }}
-                        className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 disabled:opacity-40"
+                        className="h-7 rounded-lg bg-destructive px-3 text-xs font-black text-destructive-foreground disabled:opacity-40"
                       >
                         {trialBusyId === `${req.id}-no` ? "…" : t(lang, "internalTrialReject")}
                       </button>

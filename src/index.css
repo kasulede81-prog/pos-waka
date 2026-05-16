@@ -1,8 +1,28 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap");
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --background: 30 15% 96%;
+  --foreground: 20 15% 12%;
+  --card: 30 20% 99%;
+  --card-foreground: 20 15% 12%;
+  --primary: 21 84% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 150 30% 38%;
+  --secondary-foreground: 0 0% 100%;
+  --muted: 30 12% 91%;
+  --muted-foreground: 20 8% 48%;
+  --border: 30 12% 87%;
+  --input: 30 12% 87%;
+  --ring: 21 84% 55%;
+  --destructive: 0 74% 52%;
+  --destructive-foreground: 0 0% 100%;
+  --radius: 0.875rem;
+}
 
 html {
   overscroll-behavior-y: none;

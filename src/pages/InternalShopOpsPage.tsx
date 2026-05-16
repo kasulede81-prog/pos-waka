@@ -3,19 +3,21 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
+  ADMIN_PLAN_CODES,
   adminExtendSubscriptionTrial,
   adminSetShopActive,
+  adminShopSetSubscriptionPlan,
   adminShopDeviceSetActive,
   adminShopDeviceSetTrusted,
   adminShopForceLogoutDevices,
   adminShopOpenSupportMessage,
   adminShopResetSync,
   adminSubscriptionMarkPayment,
-  adminSubscriptionSetPlan,
   adminSubscriptionSetStatus,
   fetchShopOpsDetail,
   fetchWakaInternalAdminMe,
   googleMapsDirectionsUrl,
+  type AdminPlanCode,
   type ShopOpsDetail,
   type WakaInternalAdminRow,
 } from "../lib/wakaInternalAdmin";
@@ -46,6 +48,8 @@ export function InternalShopOpsPage({ lang, email }: Props) {
   const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [supportSubject, setSupportSubject] = useState("");
   const [supportBody, setSupportBody] = useState("");
+  const [planControlCode, setPlanControlCode] = useState<AdminPlanCode>("business");
+  const [planControlDays, setPlanControlDays] = useState(30);
 
   const loadShop = useCallback(async () => {
     if (!shopId) return;
@@ -72,6 +76,11 @@ export function InternalShopOpsPage({ lang, email }: Props) {
     void loadShop();
   }, [loadShop]);
 
+  useEffect(() => {
+    const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "free").toLowerCase();
+    if (ADMIN_PLAN_CODES.includes(code as AdminPlanCode)) setPlanControlCode(code as AdminPlanCode);
+  }, [detail?.plan_code, detail?.subscription?.plan_code]);
+
   const roleNorm = (adminRow?.role ?? "").toLowerCase();
   const canSupport = ["super_admin", "support_admin", "finance_admin"].includes(roleNorm);
   const canSubs = ["super_admin", "subscriptions_admin", "finance_admin", "operations_admin"].includes(roleNorm);
@@ -92,6 +101,18 @@ export function InternalShopOpsPage({ lang, email }: Props) {
     } else {
       setToast({ kind: "err", text: r.message ?? t(lang, "internalShopProfileError") });
     }
+  };
+
+  const setAdminPlan = async (planCode: AdminPlanCode) => {
+    if (!detail) return;
+    await run(() =>
+      adminShopSetSubscriptionPlan({
+        shopId: detail.shop.id,
+        planCode,
+        days: planControlDays,
+      }),
+    );
+    window.dispatchEvent(new Event("waka:subscription-updated"));
   };
 
   if (loadingAdmin) {
@@ -293,6 +314,77 @@ export function InternalShopOpsPage({ lang, email }: Props) {
             </p>
           ) : null}
 
+          <div className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-orange-700">
+                  {t(lang, "internalShopProfilePlanControlTitle")}
+                </p>
+                <h2 className="mt-1 text-lg font-black text-stone-900">{t(lang, "internalShopProfilePlanControlSub")}</h2>
+              </div>
+              <span className="rounded-full bg-stone-100 px-3 py-1 text-[10px] font-black uppercase text-stone-700">
+                {detail.plan_code ?? detail.subscription?.plan_code ?? "free"}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_9rem]">
+              <label className="block text-xs font-bold uppercase tracking-wide text-stone-500">
+                {t(lang, "internalShopProfilePlanSelect")}
+                <select
+                  value={planControlCode}
+                  onChange={(e) => setPlanControlCode(e.target.value as AdminPlanCode)}
+                  disabled={!canSubs || busy}
+                  className="mt-1 min-h-[44px] w-full rounded-2xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200 disabled:opacity-50"
+                >
+                  <option value="free">{t(lang, "planFreeName")}</option>
+                  <option value="starter">{t(lang, "planStarterName")}</option>
+                  <option value="business">{t(lang, "planBusinessName")}</option>
+                  <option value="waka_plus">{t(lang, "planWakaPlusName")}</option>
+                </select>
+              </label>
+              <label className="block text-xs font-bold uppercase tracking-wide text-stone-500">
+                {t(lang, "internalShopProfilePlanDays")}
+                <input
+                  type="number"
+                  min={1}
+                  max={3650}
+                  value={planControlDays}
+                  onChange={(e) => setPlanControlDays(Math.max(1, Number(e.target.value) || 30))}
+                  disabled={!canSubs || busy || planControlCode === "free"}
+                  className="mt-1 min-h-[44px] w-full rounded-2xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200 disabled:opacity-50"
+                />
+              </label>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy || !canSubs}
+                className="rounded-xl bg-orange-600 px-4 py-2.5 text-xs font-black text-white disabled:opacity-40"
+                onClick={() => void setAdminPlan(planControlCode)}
+              >
+                {t(lang, "internalShopProfileApplyPlan")}
+              </button>
+              {ADMIN_PLAN_CODES.map((code) => (
+                <button
+                  key={code}
+                  type="button"
+                  disabled={busy || !canSubs}
+                  className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-black uppercase text-stone-800 disabled:opacity-40"
+                  onClick={() => void setAdminPlan(code)}
+                >
+                  {code.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+
+            {!canSubs ? (
+              <p className="mt-3 rounded-xl bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-500">
+                {t(lang, "internalShopProfilePlanNoPermission")}
+              </p>
+            ) : null}
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             {detail.shop.is_active ? (
               <button
@@ -341,30 +433,6 @@ export function InternalShopOpsPage({ lang, email }: Props) {
             ) : null}
             {subId && canSubs ? (
               <>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="rounded-2xl bg-stone-900 py-4 text-base font-black text-white disabled:opacity-40"
-                  onClick={() => void run(() => adminSubscriptionSetPlan(subId, "business"))}
-                >
-                  {t(lang, "internalShopProfileUpgradeBusiness")}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="rounded-2xl bg-amber-500 py-4 text-base font-black text-stone-900 disabled:opacity-40"
-                  onClick={() => void run(() => adminSubscriptionSetPlan(subId, "waka_plus"))}
-                >
-                  {t(lang, "internalShopProfileUpgradePlus")}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="rounded-2xl border-2 border-stone-200 py-4 text-base font-black text-stone-800"
-                  onClick={() => void run(() => adminSubscriptionSetPlan(subId, "starter"))}
-                >
-                  {t(lang, "internalShopProfileDowngradeStarter")}
-                </button>
                 <button
                   type="button"
                   disabled={busy}

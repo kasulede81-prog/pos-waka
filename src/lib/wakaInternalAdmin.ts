@@ -400,6 +400,9 @@ export function googleMapsDirectionsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`;
 }
 
+export const ADMIN_PLAN_CODES = ["free", "starter", "business", "waka_plus"] as const;
+export type AdminPlanCode = (typeof ADMIN_PLAN_CODES)[number];
+
 const PLAN_CODES = ["starter", "business", "waka_plus"] as const;
 
 export type PlanTierMetrics = {
@@ -1031,7 +1034,7 @@ export async function adminExtendSubscriptionTrial(
 
 export async function adminSubscriptionSetPlan(
   subscriptionId: string,
-  planCode: "starter" | "business" | "waka_plus",
+  planCode: AdminPlanCode,
 ): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
   const { error } = await supabase.rpc("admin_subscription_set_plan", {
@@ -1040,6 +1043,27 @@ export async function adminSubscriptionSetPlan(
   });
   if (error) return { ok: false, message: error.message };
   return { ok: true };
+}
+
+export async function adminShopSetSubscriptionPlan({
+  shopId,
+  planCode,
+  days,
+}: {
+  shopId: string;
+  planCode: AdminPlanCode;
+  days: number;
+}): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_set_subscription_plan", {
+    p_shop_id: shopId,
+    p_plan_code: planCode,
+    p_days: Math.max(1, Math.floor(days || 30)),
+  });
+  if (error) return { ok: false, message: error.message };
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok === true) return { ok: true };
+  return { ok: false, message: j.error ?? "Plan could not be changed." };
 }
 
 export async function adminSubscriptionSetStatus(
