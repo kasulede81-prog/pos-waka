@@ -52,6 +52,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   const [loading, setLoading] = useState(true);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const location = useLocation();
+  const activeHash = location.hash;
   const isAdminsRoute = location.pathname === "/internal/waka/admins";
   const isActivationsRoute = location.pathname === "/internal/waka/activations";
   const canEnterUi = Boolean(adminRow);
@@ -128,7 +129,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   }
 
   return (
-    <InternalAdminShell lang={lang} email={email} adminRow={adminRow} active="overview">
+    <InternalAdminShell lang={lang} email={email} adminRow={adminRow} active="overview" activeHash={activeHash}>
       <InternalOpsDashboard lang={lang} email={email} adminRow={adminRow} previewMode={false} />
     </InternalAdminShell>
   );
@@ -139,19 +140,23 @@ function InternalAdminShell({
   email,
   adminRow,
   active,
+  activeHash = "",
   children,
 }: {
   lang: Language;
   email: string | null | undefined;
   adminRow: WakaInternalAdminRow | null;
   active: "overview" | "activations" | "admins";
+  activeHash?: string;
   children: React.ReactNode;
 }) {
   const canManageAdmins = adminRow?.role === "super_admin";
+  const routeTabActive = (route: typeof active) => active === route && (route !== "overview" || !activeHash);
+  const hashTabActive = (hash: string) => active === "overview" && activeHash === hash;
 
   return (
-    <div className="fixed inset-0 z-[80] flex h-[100dvh] flex-col overflow-hidden bg-muted/50 font-admin text-foreground">
-      <header className="flex shrink-0 items-center gap-3 bg-primary px-4 py-3 text-primary-foreground">
+    <div className="fixed inset-0 z-[80] flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-muted/50 font-admin text-foreground">
+      <header className="flex shrink-0 items-center gap-2 bg-primary px-3 py-2.5 text-primary-foreground sm:gap-3 sm:px-4 sm:py-3">
         <Link
           to="/"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 text-primary-foreground transition hover:bg-white/25"
@@ -159,7 +164,7 @@ function InternalAdminShell({
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15">
+        <div className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 min-[380px]:flex">
           <ShieldCheck className="h-4 w-4" />
         </div>
         <div className="min-w-0 flex-1">
@@ -168,13 +173,13 @@ function InternalAdminShell({
             {adminRow?.full_name || email || adminRow?.email || "Internal team"}
           </p>
         </div>
-        <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide">
+        <span className="max-w-[34vw] shrink-0 truncate rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide sm:max-w-none">
           {adminRow?.role?.replace(/_/g, " ") ?? "admin"}
         </span>
       </header>
 
       <div className="shrink-0 border-b border-border bg-card">
-        <div className="flex items-center gap-2 overflow-x-auto px-3 py-2">
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <span className="shrink-0 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Quick tools:</span>
           <AdminQuickTool href="/internal/waka#ops-support" Icon={Headphones}>
             Support
@@ -192,22 +197,22 @@ function InternalAdminShell({
       </div>
 
       <nav className="shrink-0 border-b border-border bg-card" aria-label="Admin sections">
-        <div className="flex overflow-x-auto">
-          <AdminSectionTab href="/internal/waka" active={active === "overview"}>
+        <div className="flex max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <AdminSectionTab href="/internal/waka" active={routeTabActive("overview")}>
             Overview
           </AdminSectionTab>
-          <AdminSectionTab href="/internal/waka/activations" active={active === "activations"}>
+          <AdminSectionTab href="/internal/waka/activations" active={routeTabActive("activations")}>
             Activations
           </AdminSectionTab>
           {canManageAdmins ? (
-            <AdminSectionTab href="/internal/waka/admins" active={active === "admins"}>
+            <AdminSectionTab href="/internal/waka/admins" active={routeTabActive("admins")}>
               Admins
             </AdminSectionTab>
           ) : null}
-          <AdminSectionTab href="/internal/waka#ops-plans">Plans</AdminSectionTab>
-          <AdminSectionTab href="/internal/waka#ops-districts">Districts</AdminSectionTab>
-          <AdminSectionTab href="/internal/waka#ops-support">Support</AdminSectionTab>
-          <AdminSectionTab href="/internal/waka#ops-visits">Visits</AdminSectionTab>
+          <AdminSectionTab href="/internal/waka#ops-plans" active={hashTabActive("#ops-plans")}>Plans</AdminSectionTab>
+          <AdminSectionTab href="/internal/waka#ops-districts" active={hashTabActive("#ops-districts")}>Districts</AdminSectionTab>
+          <AdminSectionTab href="/internal/waka#ops-support" active={hashTabActive("#ops-support")}>Support</AdminSectionTab>
+          <AdminSectionTab href="/internal/waka#ops-visits" active={hashTabActive("#ops-visits")}>Visits</AdminSectionTab>
         </div>
       </nav>
 

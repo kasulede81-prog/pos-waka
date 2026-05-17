@@ -33,6 +33,7 @@ import { CloseDayPage } from "./pages/CloseDayPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
+import { LegalPolicyPage } from "./pages/LegalPolicyPage";
 import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
@@ -127,6 +128,16 @@ function App() {
               <SupportPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />
             </SubscriptionProvider>
           }
+        />
+        <Route path="/terms" element={<LegalPolicyPage kind="terms" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route path="/privacy" element={<LegalPolicyPage kind="privacy" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route
+          path="/refund-policy"
+          element={<LegalPolicyPage kind="refund" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
+        />
+        <Route
+          path="/acceptable-use"
+          element={<LegalPolicyPage kind="acceptable-use" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
         />
 
         <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />

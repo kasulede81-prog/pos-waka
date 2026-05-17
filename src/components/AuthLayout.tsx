@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { WakaMarkIcon } from "./brand/WakaLogo";
+import { WAKA_COMPANY_TAGLINE, WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
 type Props = {
   lang: Language;
@@ -35,6 +36,16 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
           </button>
         </header>
         {children}
+        <footer className="pb-4 text-center text-[11px] font-semibold text-stone-500">
+          <p>© 2026 {WAKA_LEGAL_COMPANY_NAME}</p>
+          <p>{WAKA_COMPANY_TAGLINE}</p>
+          <nav className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-orange-800">
+            <Link to="/terms">Terms</Link>
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/refund-policy">Refund Policy</Link>
+            <Link to="/support">Contact Support</Link>
+          </nav>
+        </footer>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import {
   MapPin,
   RefreshCw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -21,6 +22,8 @@ import {
   fetchInternalOpsCharts7d,
   fetchOrgBillingOffersForQueue,
   fetchPendingSubscriptionRequests,
+  deleteSubscriptionRequest,
+  deleteSupportTicket,
   internalOpsOrgBillingOfferFulfill,
   internalOpsOrgBillingOfferSend,
   internalOpsSetSubscriptionRequestStatus,
@@ -242,6 +245,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   const [trialBusyId, setTrialBusyId] = useState<string | null>(null);
   const [annualBusyId, setAnnualBusyId] = useState<string | null>(null);
   const [annualSendBusy, setAnnualSendBusy] = useState<string | null>(null);
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [annualAmountByTicket, setAnnualAmountByTicket] = useState<Record<string, string>>({});
   const [billingOfferRows, setBillingOfferRows] = useState<OrgBillingOfferStaffRow[]>([]);
   const [billingFulfillBusy, setBillingFulfillBusy] = useState<string | null>(null);
@@ -424,6 +428,11 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           {statsErrorMessage ? (
             <span className="mt-1 block font-mono text-[11px] font-semibold text-destructive">{statsErrorMessage}</span>
           ) : null}
+        </p>
+      ) : null}
+      {deleteMsg ? (
+        <p className="rounded-xl border border-destructive/25 bg-card px-4 py-3 text-xs font-bold text-destructive">
+          {deleteMsg}
         </p>
       ) : null}
 
@@ -617,10 +626,18 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
             </div>
           </section>
 
-          <section id="ops-pending-trials" className="rounded-xl border border-border bg-card p-4 scroll-mt-4">
-            <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalPendingTrialsTitle")}</h2>
-            <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{t(lang, "internalPendingTrialsSub")}</p>
-            <ul className="mt-4 space-y-3">
+          <section id="ops-pending-trials" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
+            <details open={pendingTrials.length > 0} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalPendingTrialsTitle")}</h2>
+                  <p className="mt-1 truncate text-[11px] font-semibold text-muted-foreground">{t(lang, "internalPendingTrialsSub")}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-black text-muted-foreground">
+                  {pendingTrials.length}
+                </span>
+              </summary>
+            <ul className="space-y-3 border-t border-border bg-muted/10 p-3">
               {opsLoading && !pendingTrials.length ? (
                 [...Array(3)].map((_, i) => (
                   <li key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
@@ -684,17 +701,44 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                       >
                         {trialBusyId === `${req.id}-no` ? "…" : t(lang, "internalTrialReject")}
                       </button>
+                      <button
+                        type="button"
+                        style={!canManageTrials ? { display: "none" } : undefined}
+                        disabled={!canManageTrials || trialBusyId === `${req.id}-del`}
+                        onClick={async () => {
+                          if (!window.confirm("Delete this request?")) return;
+                          setTrialBusyId(`${req.id}-del`);
+                          setDeleteMsg(null);
+                          const r = await deleteSubscriptionRequest(req.id);
+                          setTrialBusyId(null);
+                          if (r.ok) void loadAll();
+                          else setDeleteMsg(r.message ?? "Delete failed.");
+                        }}
+                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-destructive/30 bg-card px-3 text-xs font-black text-destructive disabled:opacity-40"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {trialBusyId === `${req.id}-del` ? "…" : "Delete"}
+                      </button>
                     </div>
                   </li>
                 ))
               )}
             </ul>
+            </details>
           </section>
 
-          <section id="ops-annual-queue" className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50/30 to-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "internalAnnualQueueTitle")}</h2>
-            <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalAnnualQueueSub")}</p>
-            <ul className="mt-4 space-y-3">
+          <section id="ops-annual-queue" className="overflow-hidden rounded-3xl border border-amber-200/80 bg-white shadow-[0_12px_40px_rgb(28_25_23/0.04)] scroll-mt-4">
+            <details open={pendingAnnualTickets.length > 0} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-gradient-to-br from-amber-50/50 to-white px-4 py-3 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-stone-900 sm:text-base">{t(lang, "internalAnnualQueueTitle")}</h2>
+                  <p className="mt-1 truncate text-xs font-semibold text-stone-600">{t(lang, "internalAnnualQueueSub")}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-900">
+                  {pendingAnnualTickets.length}
+                </span>
+              </summary>
+            <ul className="space-y-3 border-t border-amber-100 bg-amber-50/20 p-3 sm:p-4">
               {pendingAnnualTickets.length === 0 ? (
                 <li className="rounded-2xl border border-dashed border-amber-200 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-stone-600">
                   {t(lang, "internalAnnualQueueEmpty")}
@@ -795,6 +839,24 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                         >
                           {annualBusyId === `${tk.id}-cl` ? "…" : t(lang, "internalAnnualQueueClose")}
                         </button>
+                        <button
+                          type="button"
+                          style={!canResolveSupport ? { display: "none" } : undefined}
+                          disabled={!canResolveSupport || annualBusyId === `${tk.id}-del`}
+                          onClick={async () => {
+                            if (!window.confirm("Delete this request?")) return;
+                            setAnnualBusyId(`${tk.id}-del`);
+                            setDeleteMsg(null);
+                            const r = await deleteSupportTicket(tk.id);
+                            setAnnualBusyId(null);
+                            if (r.ok) void loadAll();
+                            else setDeleteMsg(r.message ?? "Delete failed.");
+                          }}
+                          className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {annualBusyId === `${tk.id}-del` ? "…" : "Delete"}
+                        </button>
                       </div>
                     </div>
                   </li>
@@ -847,10 +909,21 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                 </ul>
               </div>
             ) : null}
+            </details>
           </section>
 
-          <section id="ops-recent-shops" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <div className="mt-4 overflow-x-auto rounded-2xl ring-1 ring-stone-100">
+          <section id="ops-recent-shops" className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-[0_12px_40px_rgb(28_25_23/0.04)] scroll-mt-4">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-black text-stone-900 sm:text-base">{t(lang, "internalRecentTitle")}</h2>
+                  <p className="mt-1 truncate text-xs font-semibold text-stone-500">Latest shops and plan status</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
+                  {recent.length}
+                </span>
+              </summary>
+            <div className="overflow-x-auto border-t border-stone-100 bg-stone-50/40 p-3">
               <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-stone-100 bg-stone-50/80 text-[11px] font-black uppercase tracking-wider text-stone-500">
@@ -937,16 +1010,25 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                 </tbody>
               </table>
             </div>
+            </details>
           </section>
 
           {/* Support */}
-          <section id="ops-support" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-lg font-black text-stone-900">{t(lang, "internalSupportTitle")}</h2>
-              <Headphones className="h-5 w-5 text-violet-500" />
-            </div>
-            <p className="mt-1 text-xs font-semibold text-stone-500">{t(lang, "internalSupportSub")}</p>
-            <ul className="mt-4 space-y-3">
+          <section id="ops-support" className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-[0_12px_40px_rgb(28_25_23/0.04)] scroll-mt-4">
+            <details open={tickets.length > 0} className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-black text-stone-900 sm:text-base">{t(lang, "internalSupportTitle")}</h2>
+                    <Headphones className="h-4 w-4 text-violet-500" />
+                  </div>
+                  <p className="mt-1 truncate text-xs font-semibold text-stone-500">{t(lang, "internalSupportSub")}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
+                  {tickets.length}
+                </span>
+              </summary>
+            <ul className="space-y-3 border-t border-stone-100 bg-stone-50/50 p-3 sm:p-4">
               {opsLoading && !tickets.length ? (
                 [...Array(4)].map((_, i) => (
                   <li key={i} className="h-20 animate-pulse rounded-2xl bg-stone-100" />
@@ -1038,12 +1120,31 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                         >
                           {ticketBusyId === `${tk.id}-rs` ? "…" : t(lang, "internalSupportMarkResolved")}
                         </button>
+                        <button
+                          type="button"
+                          style={!canResolveSupport ? { display: "none" } : undefined}
+                          disabled={!canResolveSupport || ticketBusyId === `${tk.id}-del`}
+                          onClick={async () => {
+                            if (!window.confirm("Delete this support request?")) return;
+                            setTicketBusyId(`${tk.id}-del`);
+                            setDeleteMsg(null);
+                            const r = await deleteSupportTicket(tk.id);
+                            setTicketBusyId(null);
+                            if (r.ok) void loadAll();
+                            else setDeleteMsg(r.message ?? "Delete failed.");
+                          }}
+                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:opacity-40"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          {ticketBusyId === `${tk.id}-del` ? "…" : "Delete"}
+                        </button>
                       </div>
                     </li>
                   );
                 })
               )}
             </ul>
+            </details>
           </section>
         </div>
 

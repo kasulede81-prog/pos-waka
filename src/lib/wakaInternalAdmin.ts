@@ -781,6 +781,20 @@ export async function updateSupportTicketStatus(
   return { ok: true };
 }
 
+export async function deleteSupportTicket(id: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.from("support_requests").delete().eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
+export async function deleteSubscriptionRequest(id: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { error } = await supabase.from("subscription_requests").delete().eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  return { ok: true };
+}
+
 export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
   if (!supabase) return [];
 

@@ -2,8 +2,9 @@ import { Link } from "react-router-dom";
 import { MessageCircle, Mail } from "lucide-react";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
+import { WakaSupportCard } from "../components/support/WakaSupportCard";
 import { t } from "../lib/i18n";
-import { WAKA_SUPPORT_EMAIL, wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
+import { WAKA_SUPPORT_EMAILS, wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
 
 const TOPIC_KEYS = [
   "supportTopic_setup",
@@ -50,7 +51,7 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
           </a>
         </div>
 
-        <p className="mt-2 text-center text-xs font-semibold text-stone-500">{WAKA_SUPPORT_EMAIL}</p>
+        <p className="mt-2 text-center text-xs font-semibold text-stone-500">{WAKA_SUPPORT_EMAILS.join(" · ")}</p>
 
         <p className="mt-6 rounded-2xl bg-stone-50 px-4 py-3 text-sm font-medium text-stone-700">{t(lang, "supportHoursNote")}</p>
 
@@ -67,6 +68,10 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
             ))}
           </ul>
           <p className="mt-4 text-sm text-stone-600">{t(lang, "supportTopicHint")}</p>
+        </div>
+
+        <div className="mt-8">
+          <WakaSupportCard />
         </div>
 
         <div className="mt-8 flex flex-col gap-2 border-t border-stone-100 pt-6">

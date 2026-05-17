@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import clsx from "clsx";
+import { WAKA_COMPANY_TAGLINE, WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
 type Props = {
   lang: Language;
@@ -128,8 +129,16 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
           </ul>
         </section>
 
-        <footer className="border-t border-stone-200 pt-8 text-center text-xs font-semibold text-stone-500">
-          {t(lang, "marketingFooterNote")}
+        <footer className="space-y-3 border-t border-stone-200 pt-8 text-center text-xs font-semibold text-stone-500">
+          <p>© 2026 {WAKA_LEGAL_COMPANY_NAME}</p>
+          <p>{WAKA_COMPANY_TAGLINE}</p>
+          <nav className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-orange-800">
+            <Link to="/terms">Terms</Link>
+            <Link to="/privacy">Privacy</Link>
+            <Link to="/refund-policy">Refund Policy</Link>
+            <Link to="/support">Contact Support</Link>
+          </nav>
+          <p>{t(lang, "marketingFooterNote")}</p>
         </footer>
       </main>
     </div>
