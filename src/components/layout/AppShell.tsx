@@ -129,29 +129,29 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
           </div>
         ) : null}
         <header className="z-20 shrink-0 border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top,0px))] sm:px-4">
-            <div className="flex min-w-0 flex-1 items-center gap-3">
-              <WakaMarkIcon className="h-10 w-10 shrink-0 text-waka-600 shadow-waka-sm" aria-hidden />
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <WakaMarkIcon className="h-8 w-8 shrink-0 text-waka-600 shadow-waka-sm" aria-hidden />
               <div className="min-w-0">
-                <h1 className="truncate text-lg font-black tracking-tight text-stone-900">{t(lang, "appName")}</h1>
-                <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+                <h1 className="truncate text-base font-black tracking-tight text-stone-900">{t(lang, "appName")}</h1>
+                <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-stone-500">
                   {t(lang, "brandTagline")}
                 </p>
-                <p className="truncate text-xs font-medium text-waka-800/90">{syncStripLabel(lang, sync, isOnline)}</p>
+                <p className="truncate text-[11px] font-medium text-waka-800/90">{syncStripLabel(lang, sync, isOnline)}</p>
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
               <button
                 type="button"
                 onClick={() => setMenuOpen((v) => !v)}
-                className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-800 shadow-sm active:bg-stone-50 sm:text-sm"
+                className="min-h-[38px] rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50"
               >
                 {actor.displayName ?? actor.role}
               </button>
               <button
                 type="button"
                 onClick={() => setLang(lang === "en" ? "lg" : "en")}
-                className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-800 shadow-sm active:bg-stone-50 sm:text-sm"
+                className="min-h-[38px] rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50"
               >
                 {lang === "en" ? "Luganda" : "English"}
               </button>
@@ -223,7 +223,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </div>
         </header>
-        <main className="scroll-main-chrome mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden py-4 pb-nav-safe pl-3 pr-16 sm:pl-4 sm:pr-16 lg:pl-4 lg:pr-6 lg:pb-10">
+        <main className="scroll-main-chrome mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden py-3 pb-nav-safe pl-3 pr-16 sm:pl-4 sm:pr-16 lg:pl-4 lg:pr-6 lg:pb-10">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">

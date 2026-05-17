@@ -4,7 +4,7 @@ import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
 
 const COLS = 2;
-const ROW_ESTIMATE = 124;
+const ROW_ESTIMATE = 112;
 
 type Props = {
   products: Product[];
@@ -26,7 +26,7 @@ function VirtualizedProductGridInner({ products, onPick }: Props) {
   return (
     <div
       ref={parentRef}
-      className="max-h-[min(520px,calc(100dvh-300px))] overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
+      className="max-h-[min(540px,calc(100dvh-270px))] overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
     >
       <div
         className="relative w-full"
@@ -40,7 +40,7 @@ function VirtualizedProductGridInner({ products, onPick }: Props) {
           return (
             <div
               key={virtualRow.key}
-              className="absolute left-0 top-0 grid w-full grid-cols-2 gap-3 px-0.5"
+              className="absolute left-0 top-0 grid w-full grid-cols-2 gap-2.5 px-0.5"
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 height: `${virtualRow.size}px`,
@@ -51,11 +51,11 @@ function VirtualizedProductGridInner({ products, onPick }: Props) {
                   key={p.id}
                   type="button"
                   onClick={() => onPick(p)}
-                  className="flex min-h-[112px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:transition-none"
+                  className="flex min-h-[100px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:transition-none"
                   style={{ contentVisibility: "auto" }}
                 >
-                  <span className="text-lg font-black leading-tight text-slate-900 sm:text-xl">{p.name}</span>
-                  <span className="mt-2 text-base font-bold text-waka-700">{formatProductPriceLabel(p)}</span>
+                  <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">{p.name}</span>
+                  <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>
                 </button>
               ))}
             </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { Navigate } from "react-router-dom";
-import { ChevronDown, FileDown } from "lucide-react";
+import { CalendarDays, ChevronDown, FileDown } from "lucide-react";
 import type { Language, Sale } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -79,40 +79,58 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-4 pb-8 md:pb-4">
-      <div className="space-y-2">
-        <h2 className="text-xl font-semibold">{t(lang, "receipts")}</h2>
-        <p className="text-sm text-slate-600">{t(lang, "receiptsHint")}</p>
-        <p className="text-xs leading-relaxed text-slate-500">{t(lang, "receiptsRetentionNotice")}</p>
-      </div>
-
-      {sales.length > 0 ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">{t(lang, "receiptsGroupedLabel")}</p>
+    <div className="space-y-3 pb-8 md:pb-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-2xl font-black tracking-tight text-slate-950">{t(lang, "receipts")}</h2>
+          <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "receiptsHint")}</p>
+        </div>
+        {sales.length > 0 ? (
           <button
             type="button"
             onClick={onDownloadAll}
-            className="inline-flex min-h-[44px] items-center justify-center gap-2 rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 py-2.5 text-sm font-bold text-waka-900 shadow-sm transition-waka hover:bg-waka-100 active:scale-[0.99] motion-reduce:active:scale-100"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-waka-200 bg-white px-3 text-xs font-black text-waka-800 shadow-sm transition-waka active:bg-waka-50"
           >
-            <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+            <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t(lang, "receiptsDownloadPdf")}
           </button>
+        ) : null}
+      </div>
+
+      {sales.length > 0 ? (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {(["receiptsFilterToday", "receiptsFilterWeek", "receiptsFilterMonth"] as const).map((key, idx) => (
+            <button
+              key={key}
+              type="button"
+              className={`h-8 shrink-0 rounded-full border px-3 text-xs font-black ${
+                idx === 0 ? "border-waka-300 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-600"
+              }`}
+            >
+              {t(lang, key)}
+            </button>
+          ))}
         </div>
       ) : null}
 
-      {sales.length === 0 ? <p className="text-sm text-slate-500">{t(lang, "noSalesYet")}</p> : null}
+      {sales.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
+          <CalendarDays className="mx-auto h-7 w-7 text-stone-300" />
+          <p className="mt-2 text-sm font-bold text-slate-500">{t(lang, "noSalesYet")}</p>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         {byDay.map((group) => (
           <details
             key={group.dateKey}
-            className="group overflow-hidden rounded-2xl border border-stone-200/90 bg-white shadow-waka-sm open:ring-1 open:ring-waka-100"
+            className="group overflow-hidden rounded-[1.35rem] border border-stone-200/90 bg-white shadow-waka-sm open:ring-1 open:ring-waka-100"
           >
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
-              <ChevronDown className="h-5 w-5 shrink-0 text-stone-400 transition-transform group-open:rotate-180" aria-hidden />
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 marker:content-none [&::-webkit-details-marker]:hidden">
+              <ChevronDown className="h-4 w-4 shrink-0 text-stone-400 transition-transform group-open:rotate-180" aria-hidden />
               <div className="min-w-0 flex-1">
-                <p className="font-bold text-stone-900">{formatReceiptsDayHeading(group.dateKey)}</p>
-                <p className="text-xs text-slate-600">
+                <p className="truncate text-base font-black text-stone-950">{formatReceiptsDayHeading(group.dateKey)}</p>
+                <p className="mt-0.5 text-sm font-medium text-slate-500">
                   {tTemplate(lang, "receiptsDayGroupMeta", {
                     count: group.sales.length,
                     amount: group.dayTotalUgx.toLocaleString(),
@@ -120,25 +138,25 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                 </p>
               </div>
             </summary>
-            <div className="space-y-3 border-t border-stone-100 px-3 py-3 sm:px-4">
+            <div className="space-y-2 border-t border-stone-100 bg-stone-50/50 px-3 py-3 sm:px-4">
               <div className="flex justify-end">
                 <button
                   type="button"
                   onClick={() => onDownloadDay(group.sales, group.dateKey)}
-                  className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-waka-700 underline-offset-2 hover:underline"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-black text-waka-700 ring-1 ring-stone-200"
                 >
-                  <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+                  <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
                   {t(lang, "receiptsDownloadDayPdf")}
                 </button>
               </div>
               {group.sales.map((sale) => (
-                <article key={sale.id} className="rounded-2xl border border-stone-100 bg-stone-50/60 p-4">
+                <article key={sale.id} className="rounded-2xl border border-stone-100 bg-white p-3">
                   <div className="flex justify-between gap-2">
-                    <p className="font-medium">#{sale.id.slice(0, 8)}</p>
-                    <p className="text-sm text-slate-500">{new Date(sale.createdAt).toLocaleString()}</p>
+                    <p className="font-mono text-xs font-bold text-slate-500">#{sale.id.slice(0, 8)}</p>
+                    <p className="text-xs font-medium text-slate-500">{new Date(sale.createdAt).toLocaleString()}</p>
                   </div>
-                  <p className="mt-2 text-lg font-semibold">UGX {sale.totalUgx.toLocaleString()}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="mt-1 text-lg font-black text-slate-950">UGX {sale.totalUgx.toLocaleString()}</p>
+                  <p className="text-xs font-medium text-slate-500">
                     {t(lang, "cashLabel")}: UGX {sale.cashPaidUgx.toLocaleString()}
                     {sale.debtUgx > 0 ? (
                       <>

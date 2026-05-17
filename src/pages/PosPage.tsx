@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
+import { ScanLine, Search } from "lucide-react";
 import type { Language, LineInputMode, Product, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
@@ -349,18 +350,40 @@ export function PosPage({ lang }: { lang: Language }) {
     });
   }, [sellableProducts, sellSearchContext, sellCategoryKey]);
 
-  const openProduct = useCallback((p: Product) => {
-    setSelected(p);
-    setInputMode("money");
-    setDisplay("");
-    const hasPresets =
-      (p.quickPresetsMoneyUgx?.filter((x) => x > 0).length ?? 0) > 0 ||
-      ((p.quickPresetsQty?.filter((x) => x > 0).length ?? 0) > 0);
-    const pref = usePosStore.getState().preferences;
-    setShowAdvanced(!pref.kioskQuickSell || !hasPresets);
-    setDraftInput(null);
-    setSheetOpen(true);
-  }, [setDraftInput]);
+  const openProduct = useCallback(
+    (p: Product) => {
+      const moneyPresetsForProduct = p.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
+      const qtyPresetsForProduct = p.quickPresetsQty?.filter((x) => x > 0) ?? [];
+      const pref = usePosStore.getState().preferences;
+      const singleQuickPreset =
+        pref.kioskQuickSell && moneyPresetsForProduct.length + qtyPresetsForProduct.length === 1;
+
+      if (singleQuickPreset) {
+        const mode: LineInputMode = moneyPresetsForProduct.length === 1 ? "money" : "quantity";
+        const value = moneyPresetsForProduct[0] ?? qtyPresetsForProduct[0] ?? 0;
+        setDraftInput({ product: p, inputMode: mode, value });
+        const res = addDraftLineFromInput();
+        if (!res.ok) {
+          setToast(t(lang, res.errorKey ?? "saleError"));
+          window.setTimeout(() => setToast(null), 2200);
+          return;
+        }
+        bumpRecentProduct(p.id);
+        if (hapticsOn) void hapticTap();
+        setSaleCheckoutMinimized(false);
+        return;
+      }
+
+      setSelected(p);
+      setInputMode("money");
+      setDisplay("");
+      const hasPresets = moneyPresetsForProduct.length > 0 || qtyPresetsForProduct.length > 0;
+      setShowAdvanced(!pref.kioskQuickSell || !hasPresets);
+      setDraftInput(null);
+      setSheetOpen(true);
+    },
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, setDraftInput],
+  );
 
   useEffect(() => {
     if (draftLines.length === 0) setSaleCheckoutMinimized(false);
@@ -557,7 +580,7 @@ export function PosPage({ lang }: { lang: Language }) {
   return (
     <div
       className={clsx(
-        "space-y-4",
+        "space-y-3",
         draftLines.length > 0 && saleCheckoutMinimized
           ? "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]"
           : "pb-8",
@@ -565,8 +588,8 @@ export function PosPage({ lang }: { lang: Language }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-3xl font-black tracking-tight text-slate-900">{t(lang, "sellTitle")}</h2>
-          {quickSell ? <p className="text-sm font-semibold text-waka-800">{t(lang, "quickSellBadge")}</p> : null}
+          <h2 className="text-3xl font-black tracking-tight text-slate-950">{t(lang, "sellTitle")}</h2>
+          {quickSell ? <p className="text-sm font-black text-waka-800">{t(lang, "quickSellBadge")}</p> : null}
         </div>
         {draftLines.length > 0 && (
           <button
@@ -588,7 +611,7 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {sellableProducts.length > 0 ? (
-        <div className="space-y-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm sm:p-2.5">
+        <div className="space-y-2 rounded-[1.35rem] border border-stone-200 bg-white p-2.5 shadow-waka-sm">
           <div>
             <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryHeading")}</p>
             <div
@@ -602,7 +625,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 aria-selected={sellCategoryKey === CATEGORY_FILTER_ALL}
                 onClick={() => setSellCategoryFilter(CATEGORY_FILTER_ALL)}
                 className={clsx(
-                  "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black transition",
+                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition",
                   sellCategoryKey === CATEGORY_FILTER_ALL
                     ? "border-waka-500 bg-waka-100 text-waka-950"
                     : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
@@ -617,7 +640,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   aria-selected={sellCategoryKey === UNCATEGORIZED_SENTINEL}
                   onClick={() => setSellCategoryFilter(UNCATEGORIZED_SENTINEL)}
                   className={clsx(
-                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black transition",
+                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition",
                     sellCategoryKey === UNCATEGORIZED_SENTINEL
                       ? "border-waka-500 bg-waka-100 text-waka-950"
                       : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
@@ -634,7 +657,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   aria-selected={sellCategoryKey === cat}
                   onClick={() => setSellCategoryFilter(cat)}
                   className={clsx(
-                    "shrink-0 rounded-full border px-2.5 py-1 text-xs font-black transition",
+                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition",
                     sellCategoryKey === cat
                       ? "border-waka-500 bg-waka-100 text-waka-950"
                       : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
@@ -645,17 +668,27 @@ export function PosPage({ lang }: { lang: Language }) {
               ))}
             </div>
           </div>
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onBlur={(e) => commitSearch(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commitSearch(searchQuery);
-            }}
-            placeholder={t(lang, "posSellSearchPlaceholder")}
-            aria-label={t(lang, "posSellSearchPlaceholder")}
-            className="h-9 w-full rounded-xl border border-stone-200 bg-stone-50/90 px-2.5 text-sm font-medium text-stone-900 outline-none ring-waka-200 focus:border-waka-400 focus:bg-white focus:ring-1"
-          />
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onBlur={(e) => commitSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitSearch(searchQuery);
+              }}
+              placeholder={t(lang, "posSellSearchPlaceholder")}
+              aria-label={t(lang, "posSellSearchPlaceholder")}
+              className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/90 pl-9 pr-10 text-base font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 focus:border-waka-400 focus:bg-white focus:ring-1"
+            />
+            <button
+              type="button"
+              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-stone-400 active:bg-stone-100"
+              aria-label={t(lang, "posBarcodeSoon")}
+            >
+              <ScanLine className="h-4 w-4" />
+            </button>
+          </div>
           {recentSearches.length > 0 ? (
             <ul
               className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
@@ -683,7 +716,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     key={product.id}
                     type="button"
                     onClick={() => openProduct(product)}
-                    className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-900 active:bg-amber-100"
+                    className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-900 active:bg-amber-100"
                   >
                     {product.name} · {qty}
                   </button>
@@ -748,16 +781,16 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
         <VirtualizedProductGrid products={filteredProducts} onPick={openProduct} />
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
           {filteredProducts.map((p) => (
             <article
               key={p.id}
-              className="relative flex min-h-[148px] flex-col justify-between rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-white to-slate-50 p-4 pt-12 text-left shadow-sm"
+              className="relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 pt-10 text-left shadow-sm active:border-waka-400"
               style={{ contentVisibility: "auto" }}
             >
               <button
                 type="button"
-                className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white text-lg shadow-sm active:bg-stone-50"
+                className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
                 aria-label={favoriteIds.includes(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -767,22 +800,22 @@ export function PosPage({ lang }: { lang: Language }) {
                 {favoriteIds.includes(p.id) ? "★" : "☆"}
               </button>
               <button type="button" onClick={() => openProduct(p)} className="text-left">
-                <p className="text-lg font-black leading-tight text-slate-900">{p.name}</p>
-                <p className="mt-1 text-xs font-bold text-stone-500">
+                <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-slate-950">{p.name}</p>
+                <p className="mt-0.5 truncate text-[11px] font-bold text-stone-500">
                   {(p.category ?? "").trim() ? p.category.trim() : t(lang, "uncategorized")} · {p.baseUnit}
                 </p>
-                <p className="mt-1 text-sm font-semibold text-slate-700">
+                <p className="mt-0.5 truncate text-xs font-bold text-slate-600">
                   {t(lang, "stockLabel")}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
                 </p>
                 {p.stockOnHand <= p.minimumStockAlert ? (
-                  <p className="mt-1 text-xs font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
+                  <p className="mt-0.5 text-[11px] font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
                 ) : null}
-                <p className="mt-2 text-base font-black text-waka-700">{formatProductPriceLabel(p)}</p>
+                <p className="mt-1.5 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</p>
               </button>
               <button
                 type="button"
                 onClick={() => openProduct(p)}
-                className="mt-3 min-h-[40px] rounded-2xl bg-waka-600 px-3 py-2 text-sm font-black text-white active:bg-waka-700"
+                className="mt-2 min-h-[38px] rounded-2xl bg-waka-600 px-3 py-2 text-base font-black text-white active:bg-waka-700"
               >
                 {t(lang, "addToSale")}
               </button>
