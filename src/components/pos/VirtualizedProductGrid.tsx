@@ -2,17 +2,20 @@ import { useRef, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
+import { shelfIconFor } from "../../lib/productCategories";
 
 const COLS = 2;
-const ROW_ESTIMATE = 112;
+const ROW_ESTIMATE = 132;
 
 type Props = {
   products: Product[];
   onPick: (p: Product) => void;
+  stockLabel: string;
+  noShelfLabel: string;
 };
 
 /** Scrolls long product lists smoothly on low-RAM phones (two columns). */
-function VirtualizedProductGridInner({ products, onPick }: Props) {
+function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabel }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const rowCount = Math.ceil(products.length / COLS);
 
@@ -51,10 +54,19 @@ function VirtualizedProductGridInner({ products, onPick }: Props) {
                   key={p.id}
                   type="button"
                   onClick={() => onPick(p)}
-                  className="flex min-h-[100px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:transition-none"
+                  className="flex min-h-[122px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:transition-none"
                   style={{ contentVisibility: "auto" }}
                 >
-                  <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">{p.name}</span>
+                  <span>
+                    <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">{p.name}</span>
+                    <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-500">
+                      {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
+                      {(p.category ?? "").trim() || noShelfLabel}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs font-bold text-slate-600">
+                      {stockLabel}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
+                    </span>
+                  </span>
                   <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>
                 </button>
               ))}

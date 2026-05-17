@@ -26,6 +26,18 @@ export function productMatchesCategoryFilter(p: Product, filter: string): boolea
   return normalizedCategoryKey(p) === filter;
 }
 
+export function shelfIconFor(label: string): string | null {
+  const key = label.toLowerCase();
+  if (key.includes("rice")) return "🌾";
+  if (key.includes("sugar")) return "🍚";
+  if (key.includes("oil")) return "🛢";
+  if (key.includes("drink") || key.includes("soda") || key.includes("water")) return "🥤";
+  if (key.includes("soap")) return "🧼";
+  if (key.includes("snack") || key.includes("biscuit")) return "🍪";
+  if (key.includes("salt")) return "🧂";
+  return null;
+}
+
 function normalizeSpacing(s: string): string {
   return s.toLowerCase().trim().replace(/\s+/g, " ");
 }
