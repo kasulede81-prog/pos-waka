@@ -221,8 +221,13 @@ export type SaleLine = {
   inputMode: LineInputMode;
   /** Quantity in product base units */
   quantity: number;
+  /** Selling price per base unit at the time of sale */
   unitPriceUgx: number;
+  /** Buying cost per base unit at the time of sale */
+  unitCostUgx: number;
   lineTotalUgx: number;
+  /** Simple estimate: line total minus buying cost x quantity */
+  estimatedProfitUgx: number;
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
 };
@@ -263,6 +268,26 @@ export type DayCloseSummary = {
   totalDebtUgx: number;
   profitEstimateUgx: number;
   createdAt: string;
+};
+
+export const EXPENSE_CATEGORIES = [
+  "transport",
+  "rent",
+  "salaries",
+  "electricity",
+  "airtime",
+  "miscellaneous",
+] as const;
+
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export type Expense = {
+  id: string;
+  category: ExpenseCategory;
+  amountUgx: number;
+  note: string;
+  paidAt: string;
+  pendingSync: boolean;
 };
 
 export type StaffAccount = {

@@ -400,8 +400,31 @@ function normalizeCustomer(c: Customer): Customer {
   return { ...c, debtBalanceUgx: typeof c.debtBalanceUgx === "number" ? c.debtBalanceUgx : 0 };
 }
 
+function normalizeSaleLine(line: SaleLine): SaleLine {
+  const unitPriceUgx = Math.max(0, Math.floor(Number(line.unitPriceUgx) || 0));
+  const unitCostUgx = Math.max(0, Math.floor(Number(line.unitCostUgx) || 0));
+  const lineTotalUgx = Math.max(0, Math.floor(Number(line.lineTotalUgx) || 0));
+  const quantity = Math.max(0, Number(line.quantity) || 0);
+  const estimatedProfitUgx = Number.isFinite(line.estimatedProfitUgx)
+    ? Math.round(line.estimatedProfitUgx)
+    : Math.round(lineTotalUgx - quantity * unitCostUgx);
+  return {
+    ...line,
+    quantity,
+    unitPriceUgx,
+    unitCostUgx,
+    lineTotalUgx,
+    estimatedProfitUgx,
+    moneyAmountUgx: line.moneyAmountUgx ?? null,
+  };
+}
+
 function normalizeSale(s: Sale): Sale {
-  return { ...s, customerId: s.customerId ?? null, soldByUserId: s.soldByUserId ?? null };
+  const lines = (s.lines ?? []).map(normalizeSaleLine);
+  const estimatedProfitUgx = Number.isFinite(s.estimatedProfitUgx)
+    ? Math.round(s.estimatedProfitUgx)
+    : lines.reduce((sum, line) => sum + line.estimatedProfitUgx, 0);
+  return { ...s, lines, estimatedProfitUgx, customerId: s.customerId ?? null, soldByUserId: s.soldByUserId ?? null };
 }
 
 function normalizeSupplier(s: Supplier): Supplier {
@@ -783,16 +806,16 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
 
-    let estimatedProfitUgx = 0;
-    for (const line of state.draftLines) {
+    const saleLines = state.draftLines.map((line) => normalizeSaleLine(line));
+    const estimatedProfitUgx = saleLines.reduce((sum, line) => {
       const p = products.find((x) => x.id === line.productId)!;
-      estimatedProfitUgx += estimatedProfitForLine(p, line);
-    }
+      return sum + estimatedProfitForLine(p, line);
+    }, 0);
 
     const actorId = state.sessionActor?.userId ?? null;
     const sale: Sale = {
       id: crypto.randomUUID(),
-      lines: state.draftLines.map((l) => ({ ...l })),
+      lines: saleLines,
       subtotalUgx: subtotal,
       totalUgx: total,
       cashPaidUgx,

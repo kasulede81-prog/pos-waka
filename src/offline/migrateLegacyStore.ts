@@ -63,13 +63,17 @@ function mapProduct(i: LegacyItem): Product {
 }
 
 function mapLine(l: LegacyLine): SaleLine {
+  const unitCostUgx = 0;
+  const estimatedProfitUgx = l.lineTotal - l.qty * unitCostUgx;
   return {
     productId: l.itemId,
     name: l.name,
     inputMode: "quantity",
     quantity: l.qty,
     unitPriceUgx: l.unitPrice,
+    unitCostUgx,
     lineTotalUgx: l.lineTotal,
+    estimatedProfitUgx,
     moneyAmountUgx: null,
   };
 }
@@ -85,9 +89,7 @@ function mapSale(s: LegacySale): Sale {
     totalUgx: total,
     cashPaidUgx: total,
     debtUgx: 0,
-    estimatedProfitUgx: lines.reduce((acc, line) => {
-      return acc + (line.lineTotalUgx - line.quantity * 0);
-    }, 0),
+    estimatedProfitUgx: lines.reduce((acc, line) => acc + line.estimatedProfitUgx, 0),
     createdAt: s.createdAt,
     pendingSync: false,
     lastSyncError: null,

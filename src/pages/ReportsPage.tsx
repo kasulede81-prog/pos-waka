@@ -117,17 +117,17 @@ export function ReportsPage({ lang }: { lang: Language }) {
   );
 
   const marginLeaders = useMemo(() => {
-    const prodCost = new Map(products.map((p) => [p.id, p.costPricePerUnitUgx]));
-    const map = new Map<string, { name: string; revenue: number; cogs: number }>();
+    const map = new Map<string, { name: string; revenue: number; profit: number }>();
     for (const sale of filtered) {
       for (const line of sale.lines) {
-        const cost = prodCost.get(line.productId) ?? 0;
-        const cogs = line.quantity * cost;
-        const cur = map.get(line.productId) ?? { name: line.name, revenue: 0, cogs: 0 };
+        const lineProfit = Number.isFinite(line.estimatedProfitUgx)
+          ? line.estimatedProfitUgx
+          : line.lineTotalUgx - line.quantity * (line.unitCostUgx ?? 0);
+        const cur = map.get(line.productId) ?? { name: line.name, revenue: 0, profit: 0 };
         map.set(line.productId, {
           name: line.name,
           revenue: cur.revenue + line.lineTotalUgx,
-          cogs: cur.cogs + cogs,
+          profit: cur.profit + lineProfit,
         });
       }
     }
@@ -135,13 +135,13 @@ export function ReportsPage({ lang }: { lang: Language }) {
       .map((v) => ({
         name: v.name,
         revenue: v.revenue,
-        margin: v.revenue - v.cogs,
-        pct: v.revenue > 0 ? (v.revenue - v.cogs) / v.revenue : 0,
+        profit: v.profit,
+        pct: v.revenue > 0 ? v.profit / v.revenue : 0,
       }))
       .filter((r) => r.revenue > 0)
-      .sort((a, b) => b.margin - a.margin)
+      .sort((a, b) => b.profit - a.profit)
       .slice(0, 8);
-  }, [filtered, products]);
+  }, [filtered]);
 
   return (
     <div className="space-y-5 pb-8">
@@ -215,9 +215,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
             >
               UGX {totals.profit.toLocaleString()}
             </p>
-            <p className="mt-2 text-xs text-slate-500">
-              {totals.profit < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "reportsGrossProfitHint")}
-            </p>
+            <p className="mt-2 text-xs text-slate-500">{t(lang, "estimatedProfitHint")}</p>
           </article>
         ) : null}
         <article className="rounded-3xl border bg-white p-4">
@@ -283,12 +281,19 @@ export function ReportsPage({ lang }: { lang: Language }) {
               <li key={r.name} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
                 <span className="font-medium">{r.name}</span>
                 <span className="text-waka-700">
-                  UGX {r.margin.toLocaleString()}
+                  UGX {r.profit.toLocaleString()}
                   <span className="text-slate-500"> ({Math.round(r.pct * 100)}%)</span>
                 </span>
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {canProfit ? (
+        <section className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-4">
+          <p className="text-sm font-semibold text-slate-800">{t(lang, "expensesFutureTitle")}</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">{t(lang, "expensesFutureHint")}</p>
         </section>
       ) : null}
 

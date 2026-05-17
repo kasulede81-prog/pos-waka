@@ -34,6 +34,7 @@ export function buildSaleLine(
   rawValue: number,
 ): { line: SaleLine | null; error?: string } {
   const price = pricePerBaseUnitUgx(product);
+  const cost = costPerBaseUnitUgx(product);
   if (price <= 0) {
     return { line: null, error: "noPrice" };
   }
@@ -43,6 +44,7 @@ export function buildSaleLine(
     if (money <= 0) return { line: null, error: "invalidMoney" };
     const qty = quantityFromMoneyUgx(product, money);
     if (qty <= 0) return { line: null, error: "qtyZero" };
+    const estimatedProfitUgx = Math.round(money - qty * cost);
     return {
       line: {
         productId: product.id,
@@ -50,7 +52,9 @@ export function buildSaleLine(
         inputMode: "money",
         quantity: qty,
         unitPriceUgx: price,
+        unitCostUgx: cost,
         lineTotalUgx: money,
+        estimatedProfitUgx,
         moneyAmountUgx: money,
       },
     };
@@ -58,6 +62,7 @@ export function buildSaleLine(
 
   const qty = Math.round(rawValue * 10 ** MONEY_ROUND) / 10 ** MONEY_ROUND;
   if (qty <= 0) return { line: null, error: "invalidQty" };
+  const lineTotalUgx = lineTotalFromQuantity(product, qty);
   return {
     line: {
       productId: product.id,
@@ -65,17 +70,19 @@ export function buildSaleLine(
       inputMode: "quantity",
       quantity: qty,
       unitPriceUgx: price,
-      lineTotalUgx: lineTotalFromQuantity(product, qty),
+      unitCostUgx: cost,
+      lineTotalUgx,
+      estimatedProfitUgx: Math.round(lineTotalUgx - qty * cost),
       moneyAmountUgx: null,
     },
   };
 }
 
-/** Gross margin for one line: line total minus quantity × `costPricePerUnitUgx` (your buying cost per base unit). */
+/** Simple line profit: sale amount minus the buying-cost snapshot for the quantity sold. */
 export function estimatedProfitForLine(product: Product, line: SaleLine): number {
-  const cost = costPerBaseUnitUgx(product);
-  const profit = line.lineTotalUgx - line.quantity * cost;
-  return Math.round(profit);
+  if (Number.isFinite(line.estimatedProfitUgx)) return Math.round(line.estimatedProfitUgx);
+  const cost = Number.isFinite(line.unitCostUgx) ? line.unitCostUgx : costPerBaseUnitUgx(product);
+  return Math.round(line.lineTotalUgx - line.quantity * cost);
 }
 
 export function lowStockThreshold(product: Product): number {
