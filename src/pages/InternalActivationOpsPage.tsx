@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { ChevronDown, ChevronUp, Loader2, RefreshCw, Store, WalletCards } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../types";
@@ -103,9 +102,6 @@ export function InternalActivationOpsPage({ lang }: Props) {
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
           </button>
-          <Link to="/internal/waka" className="inline-flex h-7 shrink-0 items-center rounded-lg bg-secondary px-3 text-xs font-black text-secondary-foreground">
-            ← {t(lang, "internalAdminBack")}
-          </Link>
         </div>
       </div>
 
