@@ -11,7 +11,6 @@ import { hasPermission } from "../lib/permissions";
 export function CloseDayPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const sales = usePosStore((s) => s.sales);
-  const products = usePosStore((s) => s.products);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const recordDayClose = usePosStore((s) => s.recordDayClose);
@@ -24,15 +23,8 @@ export function CloseDayPage({ lang }: { lang: Language }) {
     const daySales = sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey);
     const cash = daySales.reduce((a, s) => a + s.cashPaidUgx, 0);
     const debt = daySales.reduce((a, s) => a + s.debtUgx, 0);
-    const profit = daySales.reduce((a, s) => a + s.estimatedProfitUgx, 0);
     const total = daySales.reduce((a, s) => a + s.totalUgx, 0);
-    const items = new Map<string, number>();
-    for (const s of daySales) {
-      for (const l of s.lines) {
-        items.set(l.name, (items.get(l.name) ?? 0) + l.quantity);
-      }
-    }
-    return { daySales, cash, debt, profit, total, items: [...items.entries()] };
+    return { daySales, cash, debt, total };
   }, [sales, todayKey]);
 
   const submit = (e: FormEvent) => {
@@ -67,75 +59,45 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-4 pb-8">
       <Link to="/" className="inline-block text-base font-bold text-waka-700">
         ← {t(lang, "backHome")}
       </Link>
-      <h1 className="text-4xl font-black text-slate-900">{t(lang, "closeDay")}</h1>
-      <p className="text-lg text-slate-600">{t(lang, "closeDaySimpleHelp")}</p>
+      <div>
+        <h1 className="text-3xl font-black text-slate-950">{t(lang, "closeDay")}</h1>
+        <p className="mt-1 text-base font-medium text-slate-500">{t(lang, "closeDaySimpleHelp")}</p>
+      </div>
 
-      <section className="space-y-4 rounded-3xl border-2 border-slate-100 bg-white p-6 shadow-sm">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleCashSalesToday")}</p>
-            <p className="text-3xl font-black text-slate-900">UGX {summary.cash.toLocaleString()}</p>
+      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-waka-sm">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-stone-50 px-3 py-3">
+            <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "totalSales")}</p>
+            <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.total.toLocaleString()}</p>
           </div>
           <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleCreditToday")}</p>
-            <p className="text-3xl font-black text-amber-800">UGX {summary.debt.toLocaleString()}</p>
+            <div className="rounded-2xl bg-stone-50 px-3 py-3">
+              <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "closeSimpleCashSalesToday")}</p>
+              <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.cash.toLocaleString()}</p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleEstimatedProfit")}</p>
-            <p className={`text-3xl font-black ${summary.profit < 0 ? "text-slate-600" : "text-waka-700"}`}>
-              UGX {summary.profit.toLocaleString()}
-            </p>
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              {summary.profit < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "estimatedProfitHint")}
-            </p>
+          <div className="rounded-2xl bg-amber-50 px-3 py-3">
+            <p className="text-[11px] font-black uppercase text-amber-700">{t(lang, "closeSimpleCreditToday")}</p>
+            <p className="mt-1 text-xl font-black text-amber-900">UGX {summary.debt.toLocaleString()}</p>
           </div>
-          <div>
-            <p className="text-sm font-bold uppercase text-slate-500">{t(lang, "closeSimpleItemsSold")}</p>
-            <p className="text-3xl font-black text-slate-900">{summary.daySales.reduce((a, s) => a + s.lines.length, 0)}</p>
+          <div className="rounded-2xl bg-waka-50 px-3 py-3">
+            <p className="text-[11px] font-black uppercase text-waka-800">{t(lang, "closeSalesCount")}</p>
+            <p className="mt-1 text-xl font-black text-waka-950">{summary.daySales.length}</p>
           </div>
-        </div>
-
-        <div>
-          <p className="text-lg font-black text-slate-900">{t(lang, "closeSimpleTopSelling")}</p>
-          <ul className="mt-2 space-y-2">
-            {summary.items.length === 0 ? (
-              <li className="text-slate-500">{t(lang, "noSalesYet")}</li>
-            ) : (
-              summary.items.slice(0, 5).map(([name, qty]) => (
-                <li key={name} className="flex justify-between text-lg font-semibold text-slate-800">
-                  <span>{name}</span>
-                  <span>{qty}</span>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
-
-        <div>
-          <p className="text-lg font-black text-slate-900">{t(lang, "closeSimpleLowStock")}</p>
-          <ul className="mt-2 space-y-2">
-            {products
-              .filter((p) => p.minimumStockAlert > 0 && p.stockOnHand <= p.minimumStockAlert)
-              .map((p) => (
-                <li key={p.id} className="text-lg font-bold text-rose-800">
-                  {p.name} — {p.stockOnHand} {p.baseUnit}
-                </li>
-              ))}
-          </ul>
         </div>
       </section>
 
-      <form onSubmit={submit} className="rounded-3xl border-2 border-waka-200 bg-waka-50/50 p-6">
-        <label className="block text-xl font-black text-waka-950">{t(lang, "closeCountedCash")}</label>
+      <form onSubmit={submit} className="rounded-3xl border border-waka-200 bg-waka-50/70 p-4">
+        <label className="block text-base font-black text-waka-950">{t(lang, "closeCountedCash")}</label>
         <input
           value={counted}
           onChange={(e) => setCounted(e.target.value.replace(/\D/g, "").slice(0, 12))}
           inputMode="numeric"
-          className="mt-3 w-full rounded-2xl border-2 border-waka-300 bg-white px-4 py-4 text-3xl font-black"
+          className="mt-2 w-full rounded-2xl border-2 border-waka-300 bg-white px-4 py-4 text-3xl font-black"
           placeholder="0"
         />
         <button type="submit" className="mt-5 w-full rounded-3xl bg-waka-600 py-4 text-xl font-black text-white">

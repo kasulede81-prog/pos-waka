@@ -50,7 +50,6 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
   const canDayClose = hasEffectivePermission(actor.role, "day.close", snapshot, authMode);
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
-  const canCustomers = hasEffectivePermission(actor.role, "customers.view", snapshot, authMode);
   const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
 
   const sales = usePosStore((s) => s.sales);
@@ -111,7 +110,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const gridCols = canProfit && canStock ? "lg:grid-cols-4" : canProfit || canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-4 pb-8">
       {!preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
 
       {deniedBanner ? (
@@ -161,14 +160,14 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-stone-900">{t(lang, "homeCashierHello")}</h1>
-          <p className="mt-1 text-lg text-stone-600">{t(lang, "homeCashierSub")}</p>
+          <h1 className="text-3xl font-black tracking-tight text-stone-950">{t(lang, "homeCashierHello")}</h1>
+          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "homeCashierSub")}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {canSell ? (
             <Link
               to="/pos"
-              className="min-h-[52px] rounded-2xl bg-waka-600 px-6 py-3.5 text-lg font-black text-white shadow-waka-sm active:bg-waka-700"
+              className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl bg-waka-600 px-5 py-3 text-base font-black text-white shadow-waka-sm active:bg-waka-700"
             >
               {t(lang, "sellTitle")}
             </Link>
@@ -176,47 +175,23 @@ export function DashboardPage({ lang }: { lang: Language }) {
           {canReceipts ? (
             <Link
               to="/receipts"
-              className="min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white px-5 py-3 text-lg font-bold text-stone-800"
+              className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-800 shadow-sm"
             >
               {t(lang, "receipts")}
-            </Link>
-          ) : null}
-          {canCustomers ? (
-            <Link
-              to="/debts"
-              className="min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white px-5 py-3 text-lg font-bold text-stone-800"
-            >
-              {t(lang, "debts")}
-            </Link>
-          ) : null}
-          {canBackOffice ? (
-            <Link
-              to="/office"
-              className="min-h-[52px] rounded-2xl border-2 border-waka-300 bg-waka-50 px-5 py-3 text-lg font-black text-waka-950"
-            >
-              {t(lang, "officeEnterCta")}
             </Link>
           ) : null}
           {canDayClose ? (
             <Link
               to="/close-day"
-              className="min-h-[52px] rounded-2xl border-2 border-amber-200 bg-amber-50 px-5 py-3 text-lg font-bold text-amber-950"
+              className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-base font-black text-amber-950 shadow-sm"
             >
               {t(lang, "closeDay")}
-            </Link>
-          ) : null}
-          {authMode === "supabase" ? (
-            <Link
-              to="/upgrade"
-              className="min-h-[52px] rounded-2xl border-2 border-waka-400 bg-gradient-to-r from-waka-100 to-orange-50 px-5 py-3 text-lg font-black text-waka-950 shadow-sm"
-            >
-              {t(lang, "upgradeNav")}
             </Link>
           ) : null}
         </div>
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
+      <section className="rounded-3xl border border-stone-200 bg-white p-3.5 shadow-waka-sm">
         <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "dashboardSyncTitle")}</p>
         <p className="mt-1 text-sm font-semibold text-stone-800">
           {sync.syncing
@@ -230,20 +205,20 @@ export function DashboardPage({ lang }: { lang: Language }) {
       </section>
 
       {canSell && quickTiles.length > 0 ? (
-        <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "dashboardOpenPosTiles")}</h2>
             <Link to="/pos" className="text-sm font-bold text-waka-700">
               {t(lang, "sellTitle")} →
             </Link>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {quickTiles.map((p) => (
               <Link
                 key={p.id}
                 to="/pos"
                 state={{ preferProductId: p.id }}
-                className="rounded-2xl border border-waka-100 bg-waka-50/80 px-4 py-3 text-sm font-black text-waka-950 active:bg-waka-100"
+                className="rounded-full border border-waka-100 bg-waka-50/80 px-3 py-1.5 text-xs font-black text-waka-950 active:bg-waka-100"
               >
                 {p.name}
               </Link>
@@ -287,36 +262,42 @@ export function DashboardPage({ lang }: { lang: Language }) {
         </details>
       ) : null}
 
-      <section className={`grid grid-cols-2 gap-4 ${gridCols}`}>
-        <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-5 text-white shadow-lg">
-          <p className="text-sm font-bold uppercase tracking-wide text-white/80">{t(lang, "cardCashToday")}</p>
-          <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {cashToday.toLocaleString()}</p>
+      <section className={`grid grid-cols-2 gap-3 ${gridCols}`}>
+        <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
+          <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "todaySection")}</p>
+          <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {cashToday.toLocaleString()}</p>
+          <p className="mt-1 text-xs font-semibold text-white/80">
+            {t(lang, "dashboardSalesMeta")
+              .replace("{{count}}", String(todaySales.length))
+              .replace("{{amount}}", cashToday.toLocaleString())}
+          </p>
         </article>
         {canProfit ? (
           <article
-            className={`rounded-3xl p-5 text-white shadow-lg ${
+            className={`rounded-3xl p-4 text-white shadow-waka-sm ${
               profitToday < 0
                 ? "bg-gradient-to-br from-slate-600 to-slate-800"
                 : "bg-gradient-to-br from-waka-600 to-waka-800"
             }`}
           >
-            <p className="text-sm font-bold uppercase tracking-wide text-white/90">{t(lang, "cardProfitToday")}</p>
-            <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {profitToday.toLocaleString()}</p>
-            <p className={`mt-2 text-xs font-semibold leading-snug ${profitToday < 0 ? "text-slate-200" : "text-white/85"}`}>
-              {profitToday < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "estimatedProfitHint")}
+            <p className="text-xs font-black uppercase tracking-wide text-white/90">{t(lang, "cardProfitToday")}</p>
+            <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {profitToday.toLocaleString()}</p>
+            <p className={`mt-1 text-xs font-semibold ${profitToday < 0 ? "text-slate-200" : "text-white/85"}`}>
+              {t(lang, "dashboardProfitShortNote")}
             </p>
           </article>
         ) : null}
         {canStock ? (
-          <article className="rounded-3xl border-4 border-rose-200 bg-rose-50 p-5 shadow-inner">
-            <p className="text-sm font-black uppercase tracking-wide text-rose-900">{t(lang, "cardLowStock")}</p>
-            <p className="mt-2 text-4xl font-black text-rose-950">{lowStockProducts.length}</p>
-            <p className="mt-1 text-sm font-semibold text-rose-800">{t(lang, "almostFinishedHint")}</p>
+          <article className="rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-waka-sm">
+            <p className="text-xs font-black uppercase tracking-wide text-rose-900">{t(lang, "cardLowStock")}</p>
+            <p className="mt-1 text-3xl font-black text-rose-950">{lowStockProducts.length}</p>
+            <p className="mt-1 text-xs font-semibold text-rose-800">{t(lang, "almostFinishedHint")}</p>
           </article>
         ) : null}
-        <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-5 text-amber-950 shadow-lg">
-          <p className="text-sm font-black uppercase tracking-wide text-amber-950/90">{t(lang, "cardDebtToday")}</p>
-          <p className="mt-2 text-3xl font-black sm:text-4xl">UGX {debtToday.toLocaleString()}</p>
+        <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
+          <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">{t(lang, "cardDebtToday")}</p>
+          <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
+          <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtShortNote")}</p>
         </article>
       </section>
 

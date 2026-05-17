@@ -13,8 +13,8 @@ import {
   LayoutDashboard,
   ScrollText,
   UserCog,
-  Printer,
   ShieldCheck,
+  Cloud,
 } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -59,60 +59,70 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     {
       to: "/stock",
       titleKey: "officeCardStock",
+      subKey: "officeCardStockSub",
       Icon: Package,
       perm: hasEffectivePermission(actor.role, "stock.view", snapshot, authMode),
     },
     {
       to: "/restock",
       titleKey: "officeCardRestock",
+      subKey: "officeCardRestockSub",
       Icon: Truck,
       perm: hasEffectivePermission(actor.role, "purchases.record", snapshot, authMode),
     },
     {
       to: "/suppliers",
       titleKey: "officeCardSuppliers",
+      subKey: "officeCardSuppliersSub",
       Icon: Users,
       perm: hasEffectivePermission(actor.role, "suppliers.view", snapshot, authMode),
     },
     {
       to: "/reports",
       titleKey: "officeCardReports",
+      subKey: "officeCardReportsSub",
       Icon: BarChart3,
       perm: hasEffectivePermission(actor.role, "reports.view", snapshot, authMode),
     },
     {
       to: "/close-day",
       titleKey: "officeCardCloseDay",
+      subKey: "officeCardCloseDaySub",
       Icon: CalendarCheck,
       perm: hasEffectivePermission(actor.role, "day.close", snapshot, authMode),
     },
     {
-      to: "/office/hardware",
-      titleKey: "officeCardHardware",
-      Icon: Printer,
+      to: "/settings",
+      titleKey: "officeCardSettings",
+      subKey: "officeCardSettingsSub",
+      Icon: Settings,
       perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
     },
     {
       to: "/settings",
-      titleKey: "officeCardSettings",
-      Icon: Settings,
+      titleKey: "officeCardBackup",
+      subKey: "officeCardBackupSub",
+      Icon: Cloud,
       perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
     },
     {
       to: "/owner",
       titleKey: "officeCardOwner",
+      subKey: "officeCardOwnerSub",
       Icon: LayoutDashboard,
       perm: hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode),
     },
     {
       to: "/owner/activity",
       titleKey: "officeCardActivity",
+      subKey: "officeCardActivitySub",
       Icon: ScrollText,
       perm: hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode),
     },
     {
       to: "/staff-access",
       titleKey: "officeCardStaffAccess",
+      subKey: "officeCardStaffAccessSub",
       Icon: UserCog,
       perm: hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode),
     },
@@ -129,10 +139,10 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const visible = cards.filter((c) => c.perm);
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-5 pb-10">
       <div>
-        <h1 className="text-3xl font-black text-stone-900">{t(lang, "officeHubTitle")}</h1>
-        <p className="mt-2 text-base font-medium text-stone-600">{t(lang, "officeHubSub")}</p>
+        <h1 className="text-3xl font-black text-stone-950">{t(lang, "officeHubTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
       </div>
 
       <OfficePremiumSection lang={lang} />
@@ -145,13 +155,13 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
             <li key={c.to}>
               <Link
                 to={c.to}
-                className="flex min-h-[88px] items-center gap-4 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-waka active:scale-[0.99] motion-reduce:active:scale-100"
+                className="flex min-h-[84px] items-center gap-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-waka active:scale-[0.99] motion-reduce:active:scale-100"
               >
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-waka-50 text-waka-700">
-                  <c.Icon className="h-7 w-7" strokeWidth={2.25} aria-hidden />
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-waka-50 text-waka-700">
+                  <c.Icon className="h-6 w-6" strokeWidth={2.25} aria-hidden />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-lg font-black text-stone-900">{t(lang, c.titleKey)}</span>
+                  <span className="block text-base font-black text-stone-950">{t(lang, c.titleKey)}</span>
                   {c.titleText ? (
                     <span className="mt-0.5 block text-xs font-semibold text-stone-500">{c.titleText}</span>
                   ) : null}
