@@ -214,8 +214,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
     roleNorm === "finance_admin" ||
     roleNorm === "operations_admin" ||
     roleNorm === "support_admin";
-  const canManageAdmins = roleNorm === "super_admin";
-
   const mapboxAccessToken = useMemo(
     () => import.meta.env.VITE_MAPBOX_TOKEN || import.meta.env.VITE_MAPBOX_ACCESS_TOKEN,
     [],
@@ -411,33 +409,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
               <RefreshCw className={clsx("h-3.5 w-3.5", opsLoading && "animate-spin")} />
               {t(lang, "internalDashQuickRefresh")}
             </button>
-            <Link
-              to="/support"
-              className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
-            >
-              <Headphones className="h-3.5 w-3.5" />
-              {t(lang, "internalDashQuickSupport")}
-            </Link>
-            <Link
-              to="/"
-              className="inline-flex h-7 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
-            >
-              {t(lang, "internalAdminBack")}
-            </Link>
-            <Link
-              to="/internal/waka/activations"
-              className="inline-flex h-7 shrink-0 items-center rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
-            >
-              {t(lang, "internalActivationsTitle")}
-            </Link>
-            {canManageAdmins ? (
-              <Link
-                to="/internal/waka/admins"
-                className="inline-flex h-7 shrink-0 items-center rounded-lg bg-primary px-3 text-xs font-black text-primary-foreground"
-              >
-                {t(lang, "internalAdminsHeaderTitle")}
-              </Link>
-            ) : null}
           </div>
         </div>
       </header>
@@ -457,7 +428,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       ) : null}
 
       {/* Stats — compact pulse with drill-down */}
-      <section className="overflow-hidden rounded-xl border border-border bg-card">
+      <section id="ops-pulse" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
         <details open className="group/pulse">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
             <div>
@@ -1078,7 +1049,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
 
         {/* Sidebar: map + insights */}
         <div className="space-y-8">
-          <section className="relative overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-b from-stone-900 to-stone-800 p-5 text-white shadow-xl sm:p-6">
+          <section id="ops-map" className="relative overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-b from-stone-900 to-stone-800 p-5 text-white shadow-xl sm:p-6 scroll-mt-4">
             <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, rgba(251,146,60,0.35), transparent 50%), radial-gradient(circle at 80% 60%, rgba(255,255,255,0.08), transparent 45%)" }} />
             <div className="relative">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1169,7 +1140,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
       </div>
 
       {/* Top districts strip + visits */}
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div id="ops-visits" className="grid gap-8 scroll-mt-4 lg:grid-cols-2">
         <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
           <h2 className="text-lg font-black text-stone-900">{t(lang, "internalStat_topDistricts")}</h2>
           <ul className="mt-4 space-y-2">

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
-import { ArrowLeft, Loader2, ShieldCheck, Users, WalletCards } from "lucide-react";
+import { ArrowLeft, BarChart3, ChevronDown, Headphones, Loader2, MapPin, ShieldCheck, Store, Users, WalletCards } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -17,24 +17,85 @@ type Props = {
 function AdminTab({
   to,
   active,
+  Icon,
   children,
 }: {
   to: string;
   active: boolean;
+  Icon: typeof ShieldCheck;
   children: React.ReactNode;
 }) {
   return (
     <Link
       to={to}
       className={clsx(
-        "flex-1 whitespace-nowrap border-b-2 px-3 py-3 text-center text-xs font-black transition",
+        "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 text-xs font-black transition",
         active
-          ? "border-primary text-primary"
-          : "border-transparent text-muted-foreground hover:bg-muted/40 hover:text-foreground",
+          ? "bg-white text-primary shadow-sm"
+          : "bg-white/10 text-primary-foreground hover:bg-white/20",
       )}
     >
+      <Icon className="h-3.5 w-3.5" />
       {children}
     </Link>
+  );
+}
+
+function AdminHeaderDropdown() {
+  const groups = [
+    {
+      title: "Overview",
+      items: [
+        { href: "/internal/waka#ops-pulse", label: "Live pulse", Icon: BarChart3 },
+        { href: "/internal/waka#ops-plans", label: "Plans", Icon: WalletCards },
+        { href: "/internal/waka#ops-districts", label: "Districts", Icon: MapPin },
+        { href: "/internal/waka#ops-recent-shops", label: "Shops", Icon: Store },
+      ],
+    },
+    {
+      title: "Queues",
+      items: [
+        { href: "/internal/waka#ops-pending-trials", label: "Trial requests", Icon: WalletCards },
+        { href: "/internal/waka#ops-annual-queue", label: "Annual payments", Icon: WalletCards },
+        { href: "/internal/waka#ops-support", label: "Support", Icon: Headphones },
+      ],
+    },
+    {
+      title: "Field",
+      items: [
+        { href: "/internal/waka#ops-map", label: "Map", Icon: MapPin },
+        { href: "/internal/waka#ops-charts", label: "Insights", Icon: BarChart3 },
+        { href: "/internal/waka#ops-visits", label: "Visits", Icon: MapPin },
+      ],
+    },
+  ];
+
+  return (
+    <details className="group relative shrink-0">
+      <summary className="inline-flex h-9 cursor-pointer list-none items-center gap-1.5 rounded-xl bg-white/10 px-3 text-xs font-black text-primary-foreground transition hover:bg-white/20 marker:content-none [&::-webkit-details-marker]:hidden">
+        Sections
+        <ChevronDown className="h-3.5 w-3.5 transition group-open:rotate-180" />
+      </summary>
+      <div className="absolute right-0 top-11 z-[90] w-[min(21rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-2xl">
+        {groups.map((group) => (
+          <div key={group.title} className="border-b border-border p-2 last:border-b-0">
+            <p className="px-2 pb-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground">{group.title}</p>
+            <div className="grid grid-cols-2 gap-1">
+              {group.items.map(({ href, label, Icon }) => (
+                <a
+                  key={href}
+                  href={href}
+                  className="inline-flex min-h-[40px] items-center gap-2 rounded-xl px-2 text-xs font-black text-foreground hover:bg-muted"
+                >
+                  <Icon className="h-3.5 w-3.5 text-primary" />
+                  {label}
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -139,7 +200,7 @@ function InternalAdminShell({
 }) {
   return (
     <div className="fixed inset-0 z-[80] flex h-[100dvh] flex-col overflow-hidden bg-muted/50 font-admin text-foreground">
-      <header className="flex items-center gap-3 bg-primary px-4 py-3 text-primary-foreground">
+      <header className="flex flex-wrap items-center gap-3 bg-primary px-4 py-3 text-primary-foreground">
         <Link
           to="/"
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/15 text-primary-foreground transition hover:bg-white/25"
@@ -159,32 +220,21 @@ function InternalAdminShell({
         <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide">
           {adminRow?.role?.replace(/_/g, " ") ?? "admin"}
         </span>
-      </header>
-
-      <nav className="w-full shrink-0 overflow-x-auto rounded-none border-b border-border bg-card">
-        <div className="flex min-w-max">
-          <AdminTab to="/internal/waka" active={active === "overview"}>
-            <span className="inline-flex items-center justify-center gap-1.5">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Overview
-            </span>
+        <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+          <AdminTab to="/internal/waka" active={active === "overview"} Icon={ShieldCheck}>
+            Overview
           </AdminTab>
-          <AdminTab to="/internal/waka/activations" active={active === "activations"}>
-            <span className="inline-flex items-center justify-center gap-1.5">
-              <WalletCards className="h-3.5 w-3.5" />
-              Activations
-            </span>
+          <AdminTab to="/internal/waka/activations" active={active === "activations"} Icon={WalletCards}>
+            Activation
           </AdminTab>
           {adminRow?.role === "super_admin" ? (
-            <AdminTab to="/internal/waka/admins" active={active === "admins"}>
-              <span className="inline-flex items-center justify-center gap-1.5">
-                <Users className="h-3.5 w-3.5" />
-                Admins
-              </span>
+            <AdminTab to="/internal/waka/admins" active={active === "admins"} Icon={Users}>
+              Admins
             </AdminTab>
           ) : null}
+          <AdminHeaderDropdown />
         </div>
-      </nav>
+      </header>
 
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-7xl p-4">{children}</div>

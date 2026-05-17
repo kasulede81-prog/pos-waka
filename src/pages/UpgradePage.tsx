@@ -11,6 +11,7 @@ import {
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
+import { requestAnnualPlanSupport } from "../lib/shopRequests";
 
 const PLAN_ORDER: SubscriptionPlanCode[] = ["free", "starter", "business", "waka_plus"];
 
@@ -37,6 +38,8 @@ export function UpgradePage({ lang }: { lang: Language }) {
   const { snapshot, authMode, loading, refetch } = useSubscription();
   const current = resolveEffectivePlanTier(snapshot);
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
+  const [annualRequestBusy, setAnnualRequestBusy] = useState(false);
+  const [annualRequestMsg, setAnnualRequestMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (authMode !== "supabase") return;
@@ -49,6 +52,16 @@ export function UpgradePage({ lang }: { lang: Language }) {
     window.addEventListener("waka:subscription-updated", on);
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [authMode, refetch]);
+
+  const requestAnnual = async () => {
+    if (authMode !== "supabase") return;
+    setAnnualRequestBusy(true);
+    setAnnualRequestMsg(null);
+    const r = await requestAnnualPlanSupport();
+    setAnnualRequestBusy(false);
+    setAnnualRequestMsg(r.ok ? t(lang, "officePremiumRequestOk") : r.message || t(lang, "officePremiumRequestFail"));
+    if (r.ok) window.dispatchEvent(new Event("waka:subscription-updated"));
+  };
 
   return (
     <div className="space-y-6 pb-10">
@@ -91,7 +104,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
 
       <section className="space-y-4">
         <p className="text-lg font-black text-slate-900">{t(lang, "upgradePickTitle")}</p>
-        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           {PLAN_ORDER.map((plan) => {
             const isCurrent = plan === current;
             const productLimit = maxProductsForTier(plan);
@@ -156,6 +169,50 @@ export function UpgradePage({ lang }: { lang: Language }) {
               </li>
             );
           })}
+          <li className="flex flex-col rounded-[1.75rem] border-2 border-dashed border-orange-300 bg-orange-50/80 p-5 shadow-sm">
+            <div>
+              <p className="text-xl font-black text-orange-950">{t(lang, "officeAnnualTitle")}</p>
+              <p className="mt-1 text-2xl font-black text-waka-700">{t(lang, "upgradeAnnualPrice")}</p>
+              <p className="mt-2 text-sm font-semibold text-orange-950">{t(lang, "officeAnnualBody")}</p>
+            </div>
+            <ul className="mt-4 space-y-2 text-sm font-semibold text-orange-950">
+              <li className="flex gap-2">
+                <span className="text-waka-700">✓</span>
+                <span>{t(lang, "upgradeAnnualFeatureInvoice")}</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-waka-700">✓</span>
+                <span>{t(lang, "upgradeAnnualFeatureTeamPrice")}</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-waka-700">✓</span>
+                <span>{t(lang, "upgradeAnnualFeatureAdminQueue")}</span>
+              </li>
+            </ul>
+            <div className="mt-4 rounded-2xl bg-white/80 px-4 py-3 text-sm font-semibold text-orange-950">
+              {t(lang, "officeEnterpriseHint")}
+            </div>
+            {authMode === "supabase" ? (
+              <button
+                type="button"
+                disabled={annualRequestBusy}
+                onClick={() => void requestAnnual()}
+                className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+              >
+                {annualRequestBusy ? "..." : t(lang, "officeAnnualRequest")}
+              </button>
+            ) : (
+              <Link
+                to="/support"
+                className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-4 py-3 text-sm font-black text-white"
+              >
+                {t(lang, "officeAnnualRequest")}
+              </Link>
+            )}
+            {annualRequestMsg ? (
+              <p className="mt-3 rounded-xl bg-white/90 px-3 py-2 text-xs font-black text-orange-950">{annualRequestMsg}</p>
+            ) : null}
+          </li>
         </ul>
       </section>
 

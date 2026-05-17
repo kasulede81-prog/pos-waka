@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ScanLine, Search } from "lucide-react";
+import { ArrowLeft, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, Product, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
@@ -306,6 +306,11 @@ export function PosPage({ lang }: { lang: Language }) {
     [setPreferences],
   );
 
+  const clearSellView = useCallback(() => {
+    setSellCategoryFilter(CATEGORY_FILTER_ALL);
+    setSearchQuery("");
+  }, [setSellCategoryFilter]);
+
   const sellSearchContext = useMemo(() => {
     const q = searchQuery.trim();
     const qLower = q.toLowerCase();
@@ -378,6 +383,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const showShelfBoxes =
     sellableProducts.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
+  const hasSellViewFilter = sellCategoryKey !== CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0;
 
   const selectedShelfLabel =
     sellCategoryKey === UNCATEGORIZED_SENTINEL
@@ -663,10 +669,13 @@ export function PosPage({ lang }: { lang: Language }) {
             />
             <button
               type="button"
-              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-stone-400 active:bg-stone-100"
-              aria-label={t(lang, "posBarcodeSoon")}
+              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 active:bg-stone-100"
+              onClick={() => {
+                if (searchQuery.trim()) setSearchQuery("");
+              }}
+              aria-label={searchQuery.trim() ? t(lang, "posClearSearch") : t(lang, "posBarcodeSoon")}
             >
-              <ScanLine className="h-4 w-4" />
+              {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
             </button>
           </div>
           {recentSearches.length > 0 ? (
@@ -795,18 +804,33 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         </section>
       ) : filteredProducts.length === 0 ? (
-        <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
-      ) : (
         <section className="space-y-2">
-          <div className="flex items-center justify-between gap-2 rounded-[1.35rem] border border-stone-200 bg-white px-3 py-2 shadow-sm">
+          {hasSellViewFilter ? (
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
+              <button
+                type="button"
+                onClick={clearSellView}
+                className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white shadow-sm active:bg-waka-700"
+              >
+                <ArrowLeft className="h-5 w-5" aria-hidden />
+                {t(lang, "posBackToShelves")}
+              </button>
+              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900">
+                {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
+              </p>
+            </div>
+          ) : null}
+          <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
+        </section>
+      ) : (
+        <section className="space-y-2 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
             <button
               type="button"
-              onClick={() => {
-                setSellCategoryFilter(CATEGORY_FILTER_ALL);
-                setSearchQuery("");
-              }}
-              className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-black text-stone-700 active:bg-stone-100"
+              onClick={clearSellView}
+              className="inline-flex min-h-[48px] shrink-0 items-center gap-2 rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white shadow-sm active:bg-waka-700"
             >
+              <ArrowLeft className="h-5 w-5" aria-hidden />
               {t(lang, "posBackToShelves")}
             </button>
             <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900">

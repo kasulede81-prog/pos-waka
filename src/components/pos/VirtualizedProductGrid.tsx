@@ -6,6 +6,7 @@ import { shelfIconFor } from "../../lib/productCategories";
 
 const COLS = 2;
 const ROW_ESTIMATE = 132;
+const BOTTOM_SCROLL_GUTTER = 112;
 
 type Props = {
   products: Product[];
@@ -34,7 +35,7 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
       <div
         className="relative w-full"
         style={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
+          height: `${rowVirtualizer.getTotalSize() + BOTTOM_SCROLL_GUTTER}px`,
         }}
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
