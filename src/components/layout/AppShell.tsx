@@ -115,7 +115,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
 
   return (
     <SessionActorProvider value={actor}>
-      <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
+      <div className="flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
         {pwaUpdate ? (
           <div className="z-40 shrink-0 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
             <p className="text-sm font-bold text-waka-950">{t(lang, "pwaUpdateTitle")}</p>
@@ -223,7 +223,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </div>
         </header>
-        <main className="scroll-main-chrome mx-auto flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden py-3 pb-nav-safe pl-3 pr-16 sm:pl-4 sm:pr-16 lg:pl-4 lg:pr-6 lg:pb-10">
+        <main className="scroll-main-chrome mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden px-3 py-3 pb-nav-safe sm:px-4 lg:px-4 lg:pb-10">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">
@@ -254,7 +254,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               })}
             </ul>
           </nav>
-          <section className="min-w-0 flex-1 lg:pb-0">
+          <section className="min-w-0 max-w-full flex-1 lg:pb-0">
             <BackOfficeRouteGuard lang={lang}>
               <Outlet />
             </BackOfficeRouteGuard>
