@@ -357,6 +357,35 @@ export function PosPage({ lang }: { lang: Language }) {
     });
   }, [sellableProducts, sellSearchContext, sellCategoryKey, favoriteIds]);
 
+  const shelfCards = useMemo(() => {
+    const countFor = (filter: string) => sellableProducts.filter((p) => productMatchesCategoryFilter(p, filter)).length;
+    const cards = sellCategoryOptions.map((cat) => ({
+      key: cat,
+      label: cat,
+      count: countFor(cat),
+      icon: shelfIconFor(cat),
+    }));
+    if (sellHasUncategorized) {
+      cards.push({
+        key: UNCATEGORIZED_SENTINEL,
+        label: t(lang, "posNoShelf"),
+        count: countFor(UNCATEGORIZED_SENTINEL),
+        icon: null,
+      });
+    }
+    return cards;
+  }, [sellableProducts, sellCategoryOptions, sellHasUncategorized, lang]);
+
+  const showShelfBoxes =
+    sellableProducts.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
+
+  const selectedShelfLabel =
+    sellCategoryKey === UNCATEGORIZED_SENTINEL
+      ? t(lang, "posNoShelf")
+      : sellCategoryKey === CATEGORY_FILTER_ALL
+        ? t(lang, "posCategoryAll")
+        : sellCategoryKey;
+
   const openProduct = useCallback(
     (p: Product) => {
       const moneyPresetsForProduct = p.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
@@ -619,66 +648,6 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {sellableProducts.length > 0 ? (
         <div className="space-y-2 rounded-[1.35rem] border border-stone-200 bg-white p-2.5 shadow-waka-sm">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posSellCategoryHeading")}</p>
-            <div
-              className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5"
-              role="tablist"
-              aria-label={t(lang, "posSellCategoryHeading")}
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={sellCategoryKey === CATEGORY_FILTER_ALL}
-                onClick={() => setSellCategoryFilter(CATEGORY_FILTER_ALL)}
-                className={clsx(
-                  "shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition",
-                  sellCategoryKey === CATEGORY_FILTER_ALL
-                    ? "border-waka-500 bg-waka-100 text-waka-950"
-                    : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
-                )}
-              >
-                {t(lang, "posCategoryAll")}
-              </button>
-              {sellHasUncategorized ? (
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={sellCategoryKey === UNCATEGORIZED_SENTINEL}
-                  onClick={() => setSellCategoryFilter(UNCATEGORIZED_SENTINEL)}
-                  className={clsx(
-                    "shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition",
-                    sellCategoryKey === UNCATEGORIZED_SENTINEL
-                      ? "border-waka-500 bg-waka-100 text-waka-950"
-                      : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
-                  )}
-                >
-                  {t(lang, "posNoShelf")}
-                </button>
-              ) : null}
-              {sellCategoryOptions.map((cat) => {
-                const icon = shelfIconFor(cat);
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    role="tab"
-                    aria-selected={sellCategoryKey === cat}
-                    onClick={() => setSellCategoryFilter(cat)}
-                    className={clsx(
-                      "shrink-0 rounded-full border px-3 py-1.5 text-xs font-black transition",
-                      sellCategoryKey === cat
-                        ? "border-waka-500 bg-waka-100 text-waka-950"
-                        : "border-stone-200 bg-stone-50 text-stone-700 active:bg-stone-100",
-                    )}
-                  >
-                    {icon ? <span className="mr-1" aria-hidden>{icon}</span> : null}
-                    {cat}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
@@ -787,58 +756,120 @@ export function PosPage({ lang }: { lang: Language }) {
             <p className="mt-4 text-base font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>
           )}
         </section>
+      ) : showShelfBoxes ? (
+        <section className="space-y-3">
+          <div className="flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+                {t(lang, "posSellCategoryHeading")}
+              </p>
+              <p className="text-sm font-bold text-stone-600">{t(lang, "posShelvesHint")}</p>
+            </div>
+            <p className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
+              {sellableProducts.length}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            {shelfCards.map((shelf) => (
+              <button
+                key={shelf.key}
+                type="button"
+                onClick={() => setSellCategoryFilter(shelf.key)}
+                className="min-h-[116px] rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
+              >
+                <span className="flex h-full flex-col justify-between">
+                  <span>
+                    <span className="text-2xl" aria-hidden>
+                      {shelf.icon ?? "▣"}
+                    </span>
+                    <span className="mt-2 line-clamp-2 block text-lg font-black leading-tight text-slate-950">
+                      {shelf.label}
+                    </span>
+                  </span>
+                  <span className="text-xs font-bold text-stone-500">
+                    {t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
       ) : filteredProducts.length === 0 ? (
         <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
-      ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
-        <VirtualizedProductGrid
-          products={filteredProducts}
-          onPick={openProduct}
-          stockLabel={t(lang, "stockLabel")}
-          noShelfLabel={t(lang, "posNoShelf")}
-        />
       ) : (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-          {filteredProducts.map((p) => (
-            <article
-              key={p.id}
-              className="relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 pt-10 text-left shadow-sm active:border-waka-400"
-              style={{ contentVisibility: "auto" }}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2 rounded-[1.35rem] border border-stone-200 bg-white px-3 py-2 shadow-sm">
+            <button
+              type="button"
+              onClick={() => {
+                setSellCategoryFilter(CATEGORY_FILTER_ALL);
+                setSearchQuery("");
+              }}
+              className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-black text-stone-700 active:bg-stone-100"
             >
-              <button
-                type="button"
-                className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
-                aria-label={favoriteIds.includes(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavoriteProduct(p.id);
-                }}
-              >
-                {favoriteIds.includes(p.id) ? "★" : "☆"}
-              </button>
-              <button type="button" onClick={() => openProduct(p)} className="text-left">
-                <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-slate-950">{p.name}</p>
-                <p className="mt-0.5 truncate text-[11px] font-bold text-stone-500">
-                  {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
-                  {(p.category ?? "").trim() ? p.category.trim() : t(lang, "posNoShelf")}
-                </p>
-                <p className="mt-0.5 truncate text-xs font-bold text-slate-600">
-                  {t(lang, "stockLabel")}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
-                </p>
-                {p.stockOnHand <= p.minimumStockAlert ? (
-                  <p className="mt-0.5 text-[11px] font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
-                ) : null}
-                <p className="mt-1.5 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => openProduct(p)}
-                className="mt-2 min-h-[38px] rounded-2xl bg-waka-600 px-3 py-2 text-base font-black text-white active:bg-waka-700"
-              >
-                {t(lang, "addToSale")}
-              </button>
-            </article>
-          ))}
-        </div>
+              {t(lang, "posBackToShelves")}
+            </button>
+            <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900">
+              {sellCategoryKey !== CATEGORY_FILTER_ALL && shelfIconFor(selectedShelfLabel) ? (
+                <span className="mr-1" aria-hidden>
+                  {shelfIconFor(selectedShelfLabel)}
+                </span>
+              ) : null}
+              {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
+            </p>
+          </div>
+          {filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
+            <VirtualizedProductGrid
+              products={filteredProducts}
+              onPick={openProduct}
+              stockLabel={t(lang, "stockLabel")}
+              noShelfLabel={t(lang, "posNoShelf")}
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              {filteredProducts.map((p) => (
+                <article
+                  key={p.id}
+                  className="relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 pt-10 text-left shadow-sm active:border-waka-400"
+                  style={{ contentVisibility: "auto" }}
+                >
+                  <button
+                    type="button"
+                    className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
+                    aria-label={favoriteIds.includes(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavoriteProduct(p.id);
+                    }}
+                  >
+                    {favoriteIds.includes(p.id) ? "★" : "☆"}
+                  </button>
+                  <button type="button" onClick={() => openProduct(p)} className="text-left">
+                    <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-slate-950">{p.name}</p>
+                    <p className="mt-0.5 truncate text-[11px] font-bold text-stone-500">
+                      {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
+                      {(p.category ?? "").trim() ? p.category.trim() : t(lang, "posNoShelf")}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs font-bold text-slate-600">
+                      {t(lang, "stockLabel")}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
+                    </p>
+                    {p.stockOnHand <= p.minimumStockAlert ? (
+                      <p className="mt-0.5 text-[11px] font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
+                    ) : null}
+                    <p className="mt-1.5 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openProduct(p)}
+                    className="mt-2 min-h-[38px] rounded-2xl bg-waka-600 px-3 py-2 text-base font-black text-white active:bg-waka-700"
+                  >
+                    {t(lang, "addToSale")}
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
       )}
 
       {draftLines.length > 0 && !saleCheckoutMinimized ? (
