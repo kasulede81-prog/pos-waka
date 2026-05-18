@@ -367,6 +367,13 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
     };
   }, [stats]);
 
+  const workAreas = [
+    { href: "#ops-support", label: "Support", count: tickets.length, Icon: Headphones, tone: "bg-violet-50 text-violet-900" },
+    { href: "#ops-recent-shops", label: "Shops", count: recent.length, Icon: Building2, tone: "bg-orange-50 text-orange-950" },
+    { href: "#ops-annual-queue", label: "Payments", count: pendingAnnualTickets.length, Icon: Calendar, tone: "bg-amber-50 text-amber-950" },
+    { href: "#ops-districts", label: "Districts", count: districts.length, Icon: MapPin, tone: "bg-emerald-50 text-emerald-950" },
+  ];
+
   return (
     <div className="space-y-4 pb-6">
       {/* Hero */}
@@ -435,6 +442,23 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           {deleteMsg}
         </p>
       ) : null}
+
+      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {workAreas.map(({ href, label, count, Icon, tone }) => (
+          <a
+            key={href}
+            href={href}
+            className={clsx("rounded-2xl border border-border bg-card p-3 shadow-sm active:scale-[0.99]", tone)}
+          >
+            <span className="flex items-center justify-between gap-2">
+              <Icon className="h-4 w-4" />
+              <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-black">{count}</span>
+            </span>
+            <span className="mt-3 block text-sm font-black">{label}</span>
+            <span className="mt-0.5 block text-[11px] font-bold opacity-70">Open section</span>
+          </a>
+        ))}
+      </section>
 
       {/* Stats — compact pulse with drill-down */}
       <section id="ops-pulse" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
@@ -923,92 +947,66 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
                   {recent.length}
                 </span>
               </summary>
-            <div className="overflow-x-auto border-t border-stone-100 bg-stone-50/40 p-3">
-              <table className="min-w-[1100px] w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-stone-100 bg-stone-50/80 text-[11px] font-black uppercase tracking-wider text-stone-500">
-                    <th className="px-4 py-3">{t(lang, "internalRecentColName")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColOwner")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColEmail")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColDistrict")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColType")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColPlan")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColJoined")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColGps")}</th>
-                    <th className="px-4 py-3">{t(lang, "internalRecentColStatus")}</th>
-                    <th className="px-4 py-3 text-right">{t(lang, "internalRecentColTrial")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {opsLoading && !recent.length ? (
-                    [...Array(5)].map((_, i) => (
-                      <tr key={i} className="border-b border-stone-50">
-                        <td colSpan={10} className="px-4 py-3">
-                          <div className="h-4 animate-pulse rounded bg-stone-100" />
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    recent.map((row) => (
-                      <tr key={row.id} className="border-b border-stone-50 transition hover:bg-orange-50/30">
-                        <td className="px-4 py-3 font-bold text-stone-900">
-                          <Link
-                            to={`/internal/waka/shop/${row.id}`}
-                            className="text-orange-900 underline decoration-orange-300 underline-offset-2 hover:text-orange-700"
-                          >
-                            {row.name}
-                          </Link>
-                        </td>
-                        <td className="max-w-[120px] truncate px-4 py-3 text-stone-700" title={row.owner_label ?? undefined}>
-                          {row.owner_label ?? "—"}
-                        </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs text-stone-600" title={row.owner_email ?? undefined}>
-                          {row.owner_email ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-stone-600">{[row.district, row.city].filter(Boolean).join(" · ") || "—"}</td>
-                        <td className="max-w-[100px] truncate px-4 py-3 text-xs font-semibold capitalize text-stone-700" title={row.business_type ?? undefined}>
-                          {row.business_type
-                            ? (() => {
-                                const k = `businessType_${row.business_type}`;
-                                const lbl = t(lang, k);
-                                return lbl === k ? row.business_type.replace(/_/g, " ") : lbl;
-                              })()
-                            : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-lg bg-stone-100 px-2 py-1 text-xs font-black uppercase text-stone-700">
-                            {row.plan_code ?? "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 font-mono text-xs text-stone-600">
+            <div className="border-t border-stone-100 bg-stone-50/40 p-3">
+              {opsLoading && !recent.length ? (
+                <div className="space-y-2">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="h-24 animate-pulse rounded-2xl bg-stone-100" />
+                  ))}
+                </div>
+              ) : recent.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-600">
+                  No shops found
+                </p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {recent.map((row) => (
+                    <article key={row.id} className="rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-black text-stone-950">{row.name}</h3>
+                          <p className="mt-0.5 truncate text-xs font-semibold text-stone-500">
+                            {[row.district, row.city].filter(Boolean).join(" · ") || "No location"}
+                          </p>
+                          <p className="mt-1 truncate text-xs font-bold text-stone-700">
+                            {row.owner_label ?? row.owner_email ?? "No owner shown"}
+                          </p>
+                        </div>
+                        <span
+                          className={clsx(
+                            "shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase",
+                            row.is_active ? "bg-emerald-100 text-emerald-900" : "bg-stone-200 text-stone-700",
+                          )}
+                        >
+                          {row.is_active ? t(lang, "internalStatusActive") : t(lang, "internalStatusInactive")}
+                        </span>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <span className="rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-black uppercase text-stone-700">
+                          {row.plan_code ?? "no plan"}
+                        </span>
+                        <span
+                          className={clsx(
+                            "rounded-lg px-2 py-1 text-[10px] font-black uppercase",
+                            row.gps_missing === false ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900",
+                          )}
+                        >
+                          {row.gps_missing === false ? t(lang, "internalGpsOk") : t(lang, "internalGpsMissing")}
+                        </span>
+                        <span className="rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-bold text-stone-600">
                           {row.created_at ? new Date(row.created_at).toLocaleDateString("en-GB") : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={clsx(
-                              "rounded-full px-2 py-0.5 text-[10px] font-black uppercase",
-                              row.gps_missing === false ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950",
-                            )}
-                          >
-                            {row.gps_missing === false ? t(lang, "internalGpsOk") : t(lang, "internalGpsMissing")}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={clsx(
-                              "rounded-full px-2.5 py-1 text-xs font-black",
-                              row.is_active ? "bg-emerald-100 text-emerald-900" : "bg-stone-200 text-stone-700",
-                            )}
-                          >
-                            {row.is_active ? t(lang, "internalStatusActive") : t(lang, "internalStatusInactive")}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono text-stone-800">{row.trial_days_left ?? "—"}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                        </span>
+                      </div>
+                      <Link
+                        to={`/internal/waka/shop/${row.id}`}
+                        className="mt-3 inline-flex h-9 w-full items-center justify-center rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground shadow-sm active:bg-primary/90"
+                      >
+                        Open / edit shop
+                      </Link>
+                    </article>
+                  ))}
+                </div>
+              )}
             </div>
             </details>
           </section>

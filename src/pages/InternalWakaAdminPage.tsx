@@ -211,6 +211,7 @@ function InternalAdminShell({
           ) : null}
           <AdminSectionTab href="/internal/waka#ops-plans" active={hashTabActive("#ops-plans")}>Plans</AdminSectionTab>
           <AdminSectionTab href="/internal/waka#ops-districts" active={hashTabActive("#ops-districts")}>Districts</AdminSectionTab>
+          <AdminSectionTab href="/internal/waka#ops-recent-shops" active={hashTabActive("#ops-recent-shops")}>Shops</AdminSectionTab>
           <AdminSectionTab href="/internal/waka#ops-support" active={hashTabActive("#ops-support")}>Support</AdminSectionTab>
           <AdminSectionTab href="/internal/waka#ops-visits" active={hashTabActive("#ops-visits")}>Visits</AdminSectionTab>
         </div>

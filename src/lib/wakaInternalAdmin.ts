@@ -783,16 +783,18 @@ export async function updateSupportTicketStatus(
 
 export async function deleteSupportTicket(id: string): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
-  const { error } = await supabase.from("support_requests").delete().eq("id", id);
+  const { data, error } = await supabase.rpc("internal_ops_delete_support_request", { p_request_id: id });
   if (error) return { ok: false, message: error.message };
-  return { ok: true };
+  const payload = data as { ok?: boolean; message?: string } | null;
+  return { ok: Boolean(payload?.ok), message: payload?.message };
 }
 
 export async function deleteSubscriptionRequest(id: string): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
-  const { error } = await supabase.from("subscription_requests").delete().eq("id", id);
+  const { data, error } = await supabase.rpc("internal_ops_delete_subscription_request", { p_request_id: id });
   if (error) return { ok: false, message: error.message };
-  return { ok: true };
+  const payload = data as { ok?: boolean; message?: string } | null;
+  return { ok: Boolean(payload?.ok), message: payload?.message };
 }
 
 export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
