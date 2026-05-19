@@ -4,6 +4,8 @@ import { Link, Navigate, useNavigate } from "react-router-dom";
 import type { BusinessType, Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
+import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
+import { formatAuthError } from "../lib/authConfig";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpProfileMeta, SignUpResult } from "../hooks/useAuth";
 import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
@@ -133,7 +135,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
     try {
       await onGoogleSignIn();
     } catch (err) {
-      setError((err as Error).message || t(lang, "signupWorkspaceError"));
+      setError(formatAuthError(err));
     } finally {
       setGoogleBusy(false);
     }
@@ -179,15 +181,9 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <button
-              type="button"
-              onClick={googleSubmit}
-              disabled={googleBusy}
-              className="min-h-[52px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900 shadow-sm"
-            >
-              {googleBusy ? "…" : t(lang, "continueWithGoogle")}
-            </button>
+            <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
             <p className="text-xs font-semibold text-stone-500">{t(lang, "registerGoogleNote")}</p>
+            <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
 
             <label className="block text-sm font-medium">
               {t(lang, "registerOrgNameLabel")}

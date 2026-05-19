@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { authRedirectOrigin, hasSupabaseConfig, supabase } from "../lib/supabase";
+import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl } from "../lib/authConfig";
+import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
@@ -215,22 +216,27 @@ export function useAuth() {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Supabase is not configured.");
     }
+    const redirectTo = getAuthCallbackUrl();
+    authDevLog("log", "Starting Google OAuth", { redirectTo });
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${authRedirectOrigin()}/auth/callback`,
+        redirectTo,
+        queryParams: {
+          access_type: "online",
+          prompt: "select_account",
+        },
       },
     });
     if (error) {
-      if (import.meta.env.DEV) {
-        console.error("[waka-auth] google oauth failed", {
-          code: error.code,
-          status: error.status,
-          message: error.message,
-        });
-      }
+      authDevLog("error", "Google OAuth failed", {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      });
       reportAuthIssue("google_oauth_failed", { status: error.status ?? 0 });
-      throw error;
+      throw new Error(formatAuthError(error));
     }
   }, []);
 
@@ -245,7 +251,7 @@ export function useAuth() {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to create an account.");
     }
-    const redirectTo = `${authRedirectOrigin()}/auth/callback`;
+    const redirectTo = getAuthCallbackUrl();
     const orgLabel = (profile?.organizationName ?? businessName).trim();
     const shopLabel = (profile?.shopDisplayName ?? businessName).trim();
     const meta: Record<string, unknown> = {
@@ -328,7 +334,7 @@ export function useAuth() {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: `${authRedirectOrigin()}/auth/callback` },
+      options: { emailRedirectTo: getAuthCallbackUrl() },
     });
     if (error) {
       reportAuthIssue("resend_verification_failed", { status: error.status ?? 0 });
@@ -339,7 +345,7 @@ export function useAuth() {
   const requestPasswordReset = useCallback(async (email: string) => {
     if (!hasSupabaseConfig || !supabase) throw new Error("Supabase is not configured.");
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${authRedirectOrigin()}/auth/recovery`,
+      redirectTo: getAuthRecoveryUrl(),
     });
     if (error) {
       reportAuthIssue("password_reset_request_failed", { status: error.status ?? 0 });

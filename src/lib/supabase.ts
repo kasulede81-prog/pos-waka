@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { authDevLog, getAuthCallbackUrl } from "./authConfig";
 
 /**
  * Browser client uses the **anon** key only. Row Level Security (RLS) must enforce access.
@@ -21,9 +22,9 @@ export const supabase = hasSupabaseConfig
     })
   : null;
 
-export function authRedirectOrigin() {
-  const fromEnv = import.meta.env.VITE_APP_URL?.replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
-  if (typeof window !== "undefined") return window.location.origin;
-  return "";
+/** @deprecated use authRedirectOrigin from ./authConfig */
+export { authRedirectOrigin, getAuthCallbackUrl, getAuthRecoveryUrl } from "./authConfig";
+
+if (import.meta.env.DEV && hasSupabaseConfig) {
+  authDevLog("log", "Supabase auth redirect callback", getAuthCallbackUrl());
 }

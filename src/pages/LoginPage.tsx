@@ -4,6 +4,8 @@ import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
+import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
+import { formatAuthError } from "../lib/authConfig";
 import { hasSupabaseConfig } from "../lib/supabase";
 
 type Props = {
@@ -32,7 +34,7 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
     try {
       await onLogin(email, password);
     } catch (err) {
-      setError((err as Error).message);
+      setError(formatAuthError(err));
     } finally {
       setBusy(false);
     }
@@ -44,7 +46,7 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
     try {
       await onGoogleLogin();
     } catch (err) {
-      setError((err as Error).message);
+      setError(formatAuthError(err));
     } finally {
       setGoogleBusy(false);
     }
@@ -72,14 +74,10 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
 
         <form onSubmit={submit} className="mt-6 space-y-4">
           {mode === "supabase" && hasSupabaseConfig ? (
-            <button
-              type="button"
-              onClick={googleSubmit}
-              disabled={googleBusy}
-              className="min-h-[52px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-900 shadow-sm"
-            >
-              {googleBusy ? "…" : t(lang, "continueWithGoogle")}
-            </button>
+            <>
+              <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
+              <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
+            </>
           ) : null}
 
           <label className="block text-sm font-medium">
