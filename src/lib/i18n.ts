@@ -68,7 +68,7 @@ const en: Dict = {
   googleSignInLoading: "Opening Google…",
   googleOAuthBrandingNote: "Sign in with your Google account. You’ll see Waka POS on Google’s secure screen — we never ask for your Google password on our site.",
   googleClientIdMissing:
-    "Google sign-in is not configured on this build. Set VITE_GOOGLE_OAUTH_CLIENT_ID in production (Google Cloud Web client ID).",
+    "Google sign-in is not configured on this build. In Vercel → Environment Variables (Production), add VITE_GOOGLE_OAUTH_CLIENT_ID = your Google Web Client ID (copy from Supabase → Auth → Google), then redeploy.",
   registerBusinessTypeLabel: "What type of business do you run?",
   signupWorkspaceError: "Could not finish creating your shop. Please try again.",
   switchUser: "Switch user",
