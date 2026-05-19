@@ -8,7 +8,7 @@ const en: Dict = {
   brandShortTag: "100% Local · Affordable POS",
   marketingHomeTitle: "Modern POS built for Uganda",
   marketingHomeSub:
-    "Inventory, sales, receipts, and reports — designed for shops that grow with you.",
+    "Uganda's local POS for shops, supermarkets, pharmacies, salons, and restaurants — sales, stock, receipts, reports, and staff.",
   marketingCtaDemo: "Try Demo",
   marketingCtaSignup: "Create account",
   marketingCtaLogin: "Sign in",

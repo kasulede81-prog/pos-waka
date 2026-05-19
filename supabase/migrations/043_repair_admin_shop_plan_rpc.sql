@@ -1,5 +1,5 @@
--- Waka POS — internal admin VIP / plan control
--- Lets authorized internal admins move a shop between Free, Starter, Business, and Waka Plus.
+-- Repair migration for admin VIP plan control.
+-- Some deployed databases missed 041 or kept an old PostgREST schema cache.
 
 insert into public.subscription_plans (
   code,
@@ -115,7 +115,6 @@ begin
     else now () + (v_days::text || ' days')::interval
   end;
 
-  -- Keep the org-scoped partial unique index happy if an older active row exists.
   if v_sub_id is not null then
     update public.subscriptions s
     set status = 'cancelled', updated_at = now ()
@@ -257,3 +256,5 @@ $$;
 
 revoke all on function public.admin_subscription_set_plan (uuid, text) from public;
 grant execute on function public.admin_subscription_set_plan (uuid, text) to authenticated;
+
+notify pgrst, 'reload schema';

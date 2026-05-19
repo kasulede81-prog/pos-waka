@@ -1,27 +1,22 @@
-/** Waka POS customer support — Uganda team contacts */
+/** Re-exports for app support — canonical source: company.ts */
+export {
+  WAKA_LEGAL_COMPANY_NAME,
+  WAKA_COMPANY_TYPE,
+  WAKA_COMPANY_COUNTRY,
+  WAKA_COMPANY_POSTAL_ADDRESS,
+  WAKA_COMPANY_TAGLINE,
+  WAKA_MAIN_PRODUCT,
+  WAKA_SUPPORT_EMAILS,
+  WAKA_SUPPORT_EMAIL,
+  WAKA_SUPPORT_WHATSAPP_WA_ME,
+  wakaSupportWhatsAppUrl,
+  wakaSupportMailtoUrl,
+} from "./company";
 
-export const WAKA_LEGAL_COMPANY_NAME = "WAKA MARKETPLACE LIMITED";
-export const WAKA_COMPANY_TYPE = "Private Limited By Shares";
-export const WAKA_COMPANY_COUNTRY = "Uganda";
-export const WAKA_COMPANY_LOCATION = "Namasuba Central, Masajja Ward, Wakiso District, Central Region, Uganda";
-export const WAKA_COMPANY_POSTAL_ADDRESS = "P.O Box 4010, Kampala, Uganda";
-export const WAKA_COMPANY_TAGLINE = "Uganda-based business software company";
-export const WAKA_MAIN_PRODUCT = "Waka POS";
-export const WAKA_SUPPORT_EMAILS = ["info@waka.ug", "wakamarketplace@gmail.com"] as const;
+import { WAKA_OFFICE_STREET, WAKA_OFFICE_CITY, WAKA_OFFICE_REGION, WAKA_OFFICE_COUNTRY } from "./company";
+
+/** Full registered office line for legal/support copy */
+export const WAKA_COMPANY_LOCATION = `${WAKA_OFFICE_STREET}, ${WAKA_OFFICE_CITY}, ${WAKA_OFFICE_REGION}, ${WAKA_OFFICE_COUNTRY}`;
+
+/** @deprecated use WAKA_SUPPORT_WHATSAPP_WA_ME from company */
 export const WAKA_SUPPORT_WHATSAPP_E164 = "256792521711";
-
-/** wa.me expects country code + number without + */
-export const WAKA_SUPPORT_WHATSAPP_WA_ME = "256792521711";
-
-export const WAKA_SUPPORT_EMAIL = WAKA_SUPPORT_EMAILS[0];
-
-export function wakaSupportWhatsAppUrl(): string {
-  const text = encodeURIComponent("Hello Waka POS team, I need help.");
-  return `https://wa.me/${WAKA_SUPPORT_WHATSAPP_WA_ME}?text=${text}`;
-}
-
-export function wakaSupportMailtoUrl(): string {
-  const subject = encodeURIComponent("Waka POS help");
-  const body = encodeURIComponent("Hello Waka POS team,\n\nI need help with:\n\n");
-  return `mailto:${WAKA_SUPPORT_EMAILS.join(",")}?subject=${subject}&body=${body}`;
-}

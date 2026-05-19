@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
+import { MarketingLayout } from "../components/marketing/MarketingLayout";
+import { SeoHead } from "../components/marketing/SeoHead";
 import { WakaSupportCard } from "../components/support/WakaSupportCard";
+import { FOUNDER_NAME } from "../config/company";
 import {
   WAKA_COMPANY_COUNTRY,
   WAKA_COMPANY_LOCATION,
@@ -30,7 +33,7 @@ type Section = {
 const policyContent: Record<LegalKind, { title: string; intro: string; sections: Section[] }> = {
   terms: {
     title: "Terms & Conditions",
-    intro: `${WAKA_MAIN_PRODUCT} is operated by ${WAKA_LEGAL_COMPANY_NAME}, a Ugandan registered company. These terms explain the fair rules for using Waka POS and related Waka business services.`,
+    intro: `${WAKA_MAIN_PRODUCT} is operated by ${WAKA_LEGAL_COMPANY_NAME}, a Ugandan registered company founded by ${FOUNDER_NAME}. These terms explain the fair rules for using Waka POS and related Waka business services.`,
     sections: [
       {
         title: "Company identity",
@@ -177,12 +180,19 @@ const policyContent: Record<LegalKind, { title: string; intro: string; sections:
   },
 };
 
+const SEO_PATH: Record<LegalKind, string> = {
+  terms: "/terms",
+  privacy: "/privacy",
+  refund: "/refund-policy",
+  "acceptable-use": "/acceptable-use",
+};
+
 export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props) {
   const content = policyContent[kind];
   const brandHref = isAuthenticated ? "/" : "/home";
-
-  return (
-    <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
+  const body = (
+    <>
+      <SeoHead title={content.title} description={content.intro} path={SEO_PATH[kind]} structuredData="legal" />
       <main className="space-y-5">
         <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-waka-sm">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">{WAKA_COMPANY_TAGLINE}</p>
@@ -212,9 +222,26 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
           <Link to="/privacy">Privacy</Link>
           <Link to="/refund-policy">Refund Policy</Link>
           <Link to="/acceptable-use">Acceptable Use</Link>
+          <Link to="/about">About</Link>
+          <Link to="/company">Company</Link>
+          <Link to="/founder">Founder</Link>
           <Link to="/support">Contact Support</Link>
         </div>
       </main>
-    </AuthLayout>
+    </>
+  );
+
+  if (isAuthenticated) {
+    return (
+      <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
+        {body}
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={false}>
+      {body}
+    </MarketingLayout>
   );
 }

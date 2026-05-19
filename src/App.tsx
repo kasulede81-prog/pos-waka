@@ -19,6 +19,10 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MarketingHomePage } from "./pages/MarketingHomePage";
+import { AboutPage } from "./pages/public/AboutPage";
+import { ContactPage } from "./pages/public/ContactPage";
+import { FounderPage } from "./pages/public/FounderPage";
+import { CompanyPage } from "./pages/public/CompanyPage";
 import { DemoExperiencePage } from "./pages/DemoExperiencePage";
 import { BusinessActivationPage } from "./pages/BusinessActivationPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
@@ -141,6 +145,11 @@ function App() {
         />
 
         <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route path="/about" element={<AboutPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route path="/contact" element={<ContactPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route path="/founder" element={<FounderPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route path="/about/founder" element={<Navigate to="/founder" replace />} />
+        <Route path="/company" element={<CompanyPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
         <Route path="/demo" element={<DemoExperiencePage lang={lang} isAuthenticated={auth.isAuthenticated} />} />
 
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>

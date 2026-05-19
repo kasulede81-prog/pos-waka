@@ -1076,7 +1076,15 @@ export async function adminShopSetSubscriptionPlan({
     p_plan_code: planCode,
     p_days: Math.max(1, Math.floor(days || 30)),
   });
-  if (error) return { ok: false, message: error.message };
+  if (error) {
+    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
+    return {
+      ok: false,
+      message: missingFn
+        ? "Admin VIP function is missing on Supabase. Apply migration 043_repair_admin_shop_plan_rpc.sql, then reload the app."
+        : error.message,
+    };
+  }
   const j = (data ?? {}) as { ok?: boolean; error?: string };
   if (j.ok === true) return { ok: true };
   return { ok: false, message: j.error ?? "Plan could not be changed." };

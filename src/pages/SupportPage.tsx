@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import { MessageCircle, Mail } from "lucide-react";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
+import { MarketingLayout } from "../components/marketing/MarketingLayout";
+import { SeoHead } from "../components/marketing/SeoHead";
 import { WakaSupportCard } from "../components/support/WakaSupportCard";
 import { t } from "../lib/i18n";
 import { WAKA_SUPPORT_EMAILS, wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
@@ -24,10 +26,16 @@ type Props = {
 };
 
 export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
-  const brandHref = isAuthenticated ? "/" : "/login";
+  const brandHref = isAuthenticated ? "/" : "/home";
 
-  return (
-    <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
+  const content = (
+    <>
+      <SeoHead
+        title="Support — Waka POS Uganda"
+        description="Get help with Waka POS setup, subscriptions, backup, staff accounts, and device issues. WhatsApp and email support in Kampala, Uganda."
+        path="/support"
+        structuredData="contact"
+      />
       <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
         <h1 className="text-2xl font-black text-stone-900">{t(lang, "supportPageTitle")}</h1>
         <p className="mt-2 text-base font-medium text-stone-600">{t(lang, "supportPageSub")}</p>
@@ -80,12 +88,26 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
               ← {t(lang, "upgradeBack")}
             </Link>
           ) : (
-            <Link to="/login" className="text-center text-sm font-bold text-waka-800 underline">
-              ← {t(lang, "backToLogin")}
+            <Link to="/home" className="text-center text-sm font-bold text-waka-800 underline">
+              ← Home
             </Link>
           )}
         </div>
       </div>
-    </AuthLayout>
+    </>
+  );
+
+  if (isAuthenticated) {
+    return (
+      <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
+        {content}
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={false}>
+      {content}
+    </MarketingLayout>
   );
 }
