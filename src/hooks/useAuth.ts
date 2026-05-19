@@ -1,6 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl } from "../lib/authConfig";
+import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
@@ -216,21 +217,17 @@ export function useAuth() {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Supabase is not configured.");
     }
-    const redirectTo = getAuthCallbackUrl();
-    authDevLog("log", "Starting Google OAuth", { redirectTo });
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const googleClientId = requireGoogleOAuthClientId();
+    authDevLog("log", "Google Sign-In: GIS popup → signInWithIdToken (no Supabase OAuth redirect)");
+
+    const idToken = await requestGoogleIdToken(googleClientId);
+    const { error } = await supabase.auth.signInWithIdToken({
       provider: "google",
-      options: {
-        redirectTo,
-        queryParams: {
-          access_type: "online",
-          prompt: "select_account",
-        },
-      },
+      token: idToken,
     });
     if (error) {
-      authDevLog("error", "Google OAuth failed", {
+      authDevLog("error", "signInWithIdToken failed", {
         code: error.code,
         status: error.status,
         message: error.message,

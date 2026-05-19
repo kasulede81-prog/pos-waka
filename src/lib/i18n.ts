@@ -66,7 +66,9 @@ const en: Dict = {
   createAccount: "Create account",
   continueWithGoogle: "Continue with Google",
   googleSignInLoading: "Opening Google…",
-  googleOAuthBrandingNote: "You may briefly see Google’s secure sign-in screen. Waka POS uses encrypted cloud auth — your account returns to waka-ug.com when finished.",
+  googleOAuthBrandingNote: "Sign in with your Google account. You’ll see Waka POS on Google’s secure screen — we never ask for your Google password on our site.",
+  googleClientIdMissing:
+    "Google sign-in is not configured on this build. Set VITE_GOOGLE_OAUTH_CLIENT_ID in production (Google Cloud Web client ID).",
   registerBusinessTypeLabel: "What type of business do you run?",
   signupWorkspaceError: "Could not finish creating your shop. Please try again.",
   switchUser: "Switch user",
@@ -1330,7 +1332,9 @@ const lg: Dict = {
   createAccount: "Kola akawunti",
   continueWithGoogle: "Weyongereyo ne Google",
   googleSignInLoading: "Google egulawo…",
-  googleOAuthBrandingNote: "Ojja kulaba ekifaananyi kya Google. Oluvannyuma ojja kuddizibwa ku waka-ug.com.",
+  googleOAuthBrandingNote: "Yingira ne Google. Ojja kulaba Waka POS ku skuliini ya Google — tetukusaba password ya Google ku site yaffe.",
+  googleClientIdMissing:
+    "Google sign-in teri configured. Teekamu VITE_GOOGLE_OAUTH_CLIENT_ID mu production.",
   registerBusinessTypeLabel: "Bizinensi yo ya kika ki?",
   signupWorkspaceError: "Tetusobodde kumaliriza kukolawo dduuka lyo. Gezaako nate.",
   switchUser: "Kyusa omukozesa",

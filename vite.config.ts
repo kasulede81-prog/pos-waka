@@ -12,6 +12,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const appName = env.VITE_APP_NAME?.trim() || "Waka POS";
   const shortName = env.VITE_APP_SHORT_NAME?.trim() || "WakaPOS";
+  const googleClientId = env.VITE_GOOGLE_OAUTH_CLIENT_ID?.trim() ?? "";
+
+  if (mode === "production" && !googleClientId) {
+    console.warn(
+      "[waka] VITE_GOOGLE_OAUTH_CLIENT_ID is missing — Google Sign-In will not work. " +
+        "Use GIS popup + signInWithIdToken only (no supabase.co redirect).",
+    );
+  }
 
   return {
     define: {

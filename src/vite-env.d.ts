@@ -18,6 +18,11 @@ interface ImportMetaEnv {
   readonly VITE_APP_VERSION?: string;
   /** Optional HTTPS endpoint for reportMonitoringEvent JSON POST */
   readonly VITE_MONITORING_INGEST_URL?: string;
+  /**
+   * Google OAuth Web client ID (public). Used for branded Sign in with Google (GIS → Supabase signInWithIdToken).
+   * Same Client ID must be listed in Supabase Auth → Google → Authorized Client IDs.
+   */
+  readonly VITE_GOOGLE_OAUTH_CLIENT_ID?: string;
   /** Mapbox public token for internal ops live map (tiles + geocoder only in-app) */
   readonly VITE_MAPBOX_ACCESS_TOKEN?: string;
   /** Preferred alias for Mapbox token (either this or VITE_MAPBOX_ACCESS_TOKEN may be set). */

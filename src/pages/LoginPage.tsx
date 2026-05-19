@@ -6,6 +6,7 @@ import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { formatAuthError } from "../lib/authConfig";
+import { getGoogleOAuthClientId } from "../lib/googleIdentity";
 import { hasSupabaseConfig } from "../lib/supabase";
 
 type Props = {
@@ -74,10 +75,16 @@ export function LoginPage({ lang, setLang, initializing, isAuthenticated, onLogi
 
         <form onSubmit={submit} className="mt-6 space-y-4">
           {mode === "supabase" && hasSupabaseConfig ? (
-            <>
-              <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
-              <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
-            </>
+            getGoogleOAuthClientId() ? (
+              <>
+                <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
+                <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
+              </>
+            ) : (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
+                {t(lang, "googleClientIdMissing")}
+              </p>
+            )
           ) : null}
 
           <label className="block text-sm font-medium">

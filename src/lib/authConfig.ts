@@ -99,23 +99,12 @@ export function getSupabaseProjectRef(): string | null {
   }
 }
 
-export function getSupabaseOAuthCallbackUrl(): string | null {
-  const ref = getSupabaseProjectRef();
-  if (!ref) return null;
-  return `https://${ref}.supabase.co/auth/v1/callback`;
-}
-
-/** Google Cloud → Authorized redirect URI (required for Supabase Google provider). */
-export function getGoogleOAuthRedirectUris(): string[] {
-  const supabaseCb = getSupabaseOAuthCallbackUrl();
-  return supabaseCb ? [supabaseCb] : [];
-}
-
-/** Google Cloud → Authorized JavaScript origins. */
+/**
+ * Google Cloud → Authorized JavaScript origins (GIS popup / signInWithIdToken).
+ * Do NOT add *.supabase.co to redirect URIs for Google login — not used by this app.
+ */
 export function getGoogleOAuthJavaScriptOrigins(): string[] {
   const origins = new Set<string>([CANONICAL_APP_URL]);
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim().replace(/\/$/, "");
-  if (supabaseUrl) origins.add(supabaseUrl);
   if (import.meta.env.DEV) {
     origins.add("http://localhost:5173");
   }

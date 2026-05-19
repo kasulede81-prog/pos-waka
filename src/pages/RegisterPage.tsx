@@ -6,6 +6,7 @@ import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { formatAuthError } from "../lib/authConfig";
+import { getGoogleOAuthClientId } from "../lib/googleIdentity";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpProfileMeta, SignUpResult } from "../hooks/useAuth";
 import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
@@ -181,9 +182,17 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
-            <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
-            <p className="text-xs font-semibold text-stone-500">{t(lang, "registerGoogleNote")}</p>
-            <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
+            {getGoogleOAuthClientId() ? (
+              <>
+                <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
+                <p className="text-xs font-semibold text-stone-500">{t(lang, "registerGoogleNote")}</p>
+                <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
+              </>
+            ) : (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
+                {t(lang, "googleClientIdMissing")}
+              </p>
+            )}
 
             <label className="block text-sm font-medium">
               {t(lang, "registerOrgNameLabel")}
