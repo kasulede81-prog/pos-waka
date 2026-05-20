@@ -1,6 +1,7 @@
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
+import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
 
 export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attempts?: number }): Promise<void> {
@@ -22,14 +23,10 @@ async function processOne(op: SyncOperation): Promise<boolean> {
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) return false;
 
-  switch (op.kind) {
-    case "sale":
-    case "product":
-    case "customer":
-    case "stock_move":
-    case "audit_log":
-    default:
-      return true;
+  try {
+    return await processCloudSyncOperation(op);
+  } catch {
+    return false;
   }
 }
 

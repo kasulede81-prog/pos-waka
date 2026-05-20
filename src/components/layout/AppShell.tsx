@@ -62,6 +62,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   const [lockError, setLockError] = useState<string | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
   const prevActorRef = useRef<string | null>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onUp = () => setPwaUpdate(true);
@@ -99,6 +100,27 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
     if (!preferences.posLocked) beginShift();
   }, [actor.userId, preferences.posLocked, beginShift, endActiveShift]);
 
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (userMenuRef.current?.contains(e.target as Node)) return;
+      setMenuOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menuOpen]);
+
   const navDefs = useMemo((): NavDef[] => {
     const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
     if (hasPermission(actor.role, "pos.sell")) {
@@ -115,7 +137,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
 
   return (
     <SessionActorProvider value={actor}>
-      <div className="flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
+      <div className="app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
         {pwaUpdate ? (
           <div className="z-40 shrink-0 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
             <p className="text-sm font-bold text-waka-950">{t(lang, "pwaUpdateTitle")}</p>
@@ -128,7 +150,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </button>
           </div>
         ) : null}
-        <header className="z-20 shrink-0 border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
+        <header className="relative z-20 shrink-0 overflow-visible border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4">
             <div className="flex min-w-0 flex-1 items-center gap-2.5">
               <WakaMarkIcon className="h-8 w-8 shrink-0 text-waka-600 shadow-waka-sm" aria-hidden />
@@ -140,14 +162,96 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                 <p className="truncate text-[11px] font-medium text-waka-800/90">{syncStripLabel(lang, sync, isOnline)}</p>
               </div>
             </div>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-              <button
-                type="button"
-                onClick={() => setMenuOpen((v) => !v)}
-                className="min-h-[38px] rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50"
-              >
-                {actor.displayName ?? actor.role}
-              </button>
+            <div className="flex shrink-0 items-center justify-end gap-1.5">
+              <div ref={userMenuRef} className="relative">
+                <button
+                  type="button"
+                  aria-expanded={menuOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  className="min-h-[38px] max-w-[10rem] truncate rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50 sm:max-w-[12rem]"
+                >
+                  {actor.displayName ?? actor.role}
+                </button>
+                {menuOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-[calc(100%+0.35rem)] z-50 w-52 origin-top-right rounded-xl border border-stone-200 bg-white py-1 shadow-lg ring-1 ring-stone-900/5"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      onClick={() => {
+                        setPosLocked(true);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {t(lang, "lockPos")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      onClick={() => {
+                        setPosLocked(true);
+                        setMenuOpen(false);
+                      }}
+                    >
+                      {t(lang, "switchUser")}
+                    </button>
+                    {subAuthMode === "supabase" ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-sm font-semibold text-waka-900 hover:bg-waka-50"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate("/upgrade", { preventScrollReset: true });
+                        }}
+                      >
+                        {t(lang, "upgradeNav")}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/support", { preventScrollReset: true });
+                      }}
+                    >
+                      {t(lang, "supportNav")}
+                    </button>
+                    {isInternalAdmin ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-sm font-semibold text-orange-900 hover:bg-orange-50"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate("/internal/waka", { preventScrollReset: true });
+                        }}
+                      >
+                        Internal dashboard
+                      </button>
+                    ) : null}
+                    <div className="my-1 border-t border-stone-100" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        void onSignOut();
+                      }}
+                      className="mx-2 mb-1 block w-[calc(100%-1rem)] rounded-lg bg-stone-900 px-3 py-2 text-center text-sm font-semibold text-white hover:bg-stone-800"
+                    >
+                      {t(lang, "signOut")}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
               <button
                 type="button"
                 onClick={() => setLang(lang === "en" ? "lg" : "en")}
@@ -155,75 +259,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               >
                 {lang === "en" ? "Luganda" : "English"}
               </button>
-              {menuOpen ? (
-                <div className="w-full rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm sm:w-auto">
-                  <button
-                    type="button"
-                    className="w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
-                    onClick={() => {
-                      setPosLocked(true);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    {t(lang, "lockPos")}
-                  </button>
-                  <button
-                    type="button"
-                    className="mt-1 w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
-                    onClick={() => {
-                      setPosLocked(true);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    {t(lang, "switchUser")}
-                  </button>
-                  {subAuthMode === "supabase" ? (
-                    <button
-                      type="button"
-                      className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-waka-900 hover:bg-waka-50"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/upgrade", { preventScrollReset: true });
-                      }}
-                    >
-                      {t(lang, "upgradeNav")}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-stone-800 hover:bg-stone-50"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      navigate("/support", { preventScrollReset: true });
-                    }}
-                  >
-                    {t(lang, "supportNav")}
-                  </button>
-                  {isInternalAdmin ? (
-                    <button
-                      type="button"
-                      className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-bold text-orange-900 hover:bg-orange-50"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        navigate("/internal/waka", { preventScrollReset: true });
-                      }}
-                    >
-                      Internal dashboard
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => onSignOut()}
-                    className="mt-1 w-full rounded-xl bg-stone-900 px-3 py-2 text-left text-sm font-semibold text-white"
-                  >
-                    {t(lang, "signOut")}
-                  </button>
-                </div>
-              ) : null}
             </div>
           </div>
         </header>
-        <main className="scroll-main-chrome mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-y-auto overflow-x-hidden px-3 py-3 pb-nav-safe sm:px-4 lg:px-4 lg:pb-10">
+        <main className="scroll-main-chrome mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3 max-lg:pb-nav-safe sm:px-4 lg:px-6 lg:pb-8">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">

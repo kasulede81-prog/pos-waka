@@ -32,6 +32,7 @@ export function SyncHealthCard({ lang }: Props) {
     <article className="rounded-3xl border border-stone-200/90 bg-white p-5 shadow-waka-sm">
       <p className="text-xl font-black text-stone-900">{t(lang, "syncDiagnosticsTitle")}</p>
       <p className="mt-1 text-sm text-stone-600">{t(lang, "syncDiagnosticsSub")}</p>
+      <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-950">{t(lang, "syncMultiDeviceHint")}</p>
 
       {needsAttention ? (
         <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">

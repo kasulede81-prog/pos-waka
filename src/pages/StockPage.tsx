@@ -13,6 +13,8 @@ import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { StockProductEditModal } from "../components/StockProductEditModal";
+import { ProductLockedModal } from "../components/ProductLockedModal";
+import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard } from "../components/stock/SimpleAddProductWizard";
 import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
 import {
@@ -65,7 +67,9 @@ export function StockPage({ lang }: { lang: Language }) {
     () => (productLimit === null ? products : products.slice(0, productLimit)),
     [products, productLimit],
   );
-  const lockedProductCount = Math.max(0, products.length - unlockedProducts.length);
+  const lockedIds = useMemo(() => lockedProductIds(products, productLimit), [products, productLimit]);
+  const lockedProductCount = lockedIds.size;
+  const [productLockedOpen, setProductLockedOpen] = useState(false);
   const freeProductLimitReached = productLimit !== null && products.length >= productLimit;
   const productSlotsLeft = productLimit === null ? null : Math.max(0, productLimit - products.length);
 
@@ -153,14 +157,14 @@ export function StockPage({ lang }: { lang: Language }) {
     return UNIT_PRESETS[typed] ?? UNIT_PRESETS.default;
   }, [preferences.businessType]);
 
-  const defaultGroupByCategory = unlockedProducts.length > 12;
+  const defaultGroupByCategory = products.length > 12;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
 
-  const stockCategoryPicklist = useMemo(() => distinctTrimmedCategories(unlockedProducts), [unlockedProducts]);
-  const stockHasUncategorized = useMemo(() => unlockedProducts.some((p) => !normalizedCategoryKey(p)), [unlockedProducts]);
+  const stockCategoryPicklist = useMemo(() => distinctTrimmedCategories(products), [products]);
+  const stockHasUncategorized = useMemo(() => products.some((p) => !normalizedCategoryKey(p)), [products]);
 
   const listableProducts = useMemo(() => {
-    let list = [...unlockedProducts];
+    let list = [...products];
     const q = listQuery.trim().toLowerCase();
     if (q) {
       list = list.filter((p) => {
@@ -181,7 +185,7 @@ export function StockPage({ lang }: { lang: Language }) {
       const tb = new Date(b.updatedAt).getTime();
       return tb - ta || a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
     });
-  }, [unlockedProducts, listQuery, listFilter, listSort, stockCategoryFilter]);
+  }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
 
   useEffect(() => {
     if (products.length > 0) setAddProductFormOpen(false);
@@ -357,6 +361,10 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const handleRowAction = (p: Product, action: string) => {
     setActionTick((x) => x + 1);
+    if (isProductPlanLocked(p.id, lockedIds)) {
+      setProductLockedOpen(true);
+      return;
+    }
     switch (action) {
       case "edit":
         if (canAdd) setEditProduct(p);
@@ -383,17 +391,29 @@ export function StockPage({ lang }: { lang: Language }) {
         if (canRemove) setRemoveId(p.id);
         break;
       case "sell":
-        if (canSell) navigate("/pos");
+        if (canSell) navigate("/pos", { state: { preferProductId: p.id } });
         break;
       default:
         break;
     }
   };
 
-  const renderStockRow = (p: Product) => (
-    <li key={p.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5">
+  const renderStockRow = (p: Product) => {
+    const locked = isProductPlanLocked(p.id, lockedIds);
+    return (
+    <li
+      key={p.id}
+      className={`flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5 ${locked ? "opacity-50" : ""}`}
+    >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-black text-slate-900">{p.name}</p>
+        <p className="truncate text-base font-black text-slate-900">
+          {p.name}
+          {locked ? (
+            <span className="ml-2 rounded-full bg-stone-800 px-2 py-0.5 text-[10px] font-black uppercase text-white">
+              {t(lang, "productLockedBadge")}
+            </span>
+          ) : null}
+        </p>
         <p className="truncate text-xs text-slate-500">
           {normalizedCategoryKey(p) ? p.category.trim() : t(lang, "uncategorized")} · {t(lang, `mode_${p.sellingMode}`)} ·{" "}
           {formatProductPriceLabel(p)}
@@ -424,7 +444,8 @@ export function StockPage({ lang }: { lang: Language }) {
         </select>
       </div>
     </li>
-  );
+    );
+  };
 
   return (
     <div className="space-y-6 pb-8">
@@ -730,7 +751,7 @@ export function StockPage({ lang }: { lang: Language }) {
           <h2 className="text-2xl font-black text-slate-900">{t(lang, "quickStockFix")}</h2>
           {unlockedProducts.length > 0 ? (
             <p className="text-sm font-semibold text-slate-500">
-              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(unlockedProducts.length) })}
+              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(products.length) })}
             </p>
           ) : null}
         </div>
@@ -1028,6 +1049,8 @@ export function StockPage({ lang }: { lang: Language }) {
         updateProduct={updateProduct}
         categorySuggestions={stockCategoryPicklist}
       />
+
+      <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 
       {removeId ? (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { CalendarDays, ChevronDown, FileDown } from "lucide-react";
 import type { Language, Sale } from "../types";
@@ -6,7 +6,7 @@ import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { dateKeyKampala } from "../lib/datesUg";
+import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "../lib/datesUg";
 
 function formatReceiptsDayHeading(dateKey: string): string {
   const parts = dateKey.split("-").map(Number);
@@ -40,11 +40,18 @@ function groupSalesByKampalaDay(sales: Sale[]): { dateKey: string; sales: Sale[]
   });
 }
 
+const RECEIPT_FILTERS: { key: ReceiptDateRange; labelKey: "receiptsFilterToday" | "receiptsFilterWeek" | "receiptsFilterMonth" }[] = [
+  { key: "today", labelKey: "receiptsFilterToday" },
+  { key: "week", labelKey: "receiptsFilterWeek" },
+  { key: "month", labelKey: "receiptsFilterMonth" },
+];
+
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const sales = usePosStore((s) => s.sales);
   const preferences = usePosStore((s) => s.preferences);
   const pruneExpiredSales = usePosStore((s) => s.pruneExpiredSales);
+  const [range, setRange] = useState<ReceiptDateRange>("today");
 
   useEffect(() => {
     pruneExpiredSales();
@@ -52,7 +59,12 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
 
-  const byDay = useMemo(() => groupSalesByKampalaDay(sales), [sales]);
+  const filteredSales = useMemo(
+    () => sales.filter((s) => saleMatchesReceiptRange(s.createdAt, range)),
+    [sales, range],
+  );
+
+  const byDay = useMemo(() => groupSalesByKampalaDay(filteredSales), [filteredSales]);
 
   if (!hasPermission(actor.role, "receipts.view")) {
     return <Navigate to="/" replace />;
@@ -61,7 +73,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const onDownloadAll = async () => {
     const { saveSalesListPdf } = await import("../lib/receiptsPdf");
     saveSalesListPdf({
-      sales,
+      sales: filteredSales,
       title: t(lang, "receiptsPdfAllTitle"),
       subtitle: shopLabel,
       fileStem: `waka-past-sales-all-${dateKeyKampala(new Date())}`,
@@ -85,7 +97,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           <h2 className="text-2xl font-black tracking-tight text-slate-950">{t(lang, "receipts")}</h2>
           <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "receiptsHint")}</p>
         </div>
-        {sales.length > 0 ? (
+        {filteredSales.length > 0 ? (
           <button
             type="button"
             onClick={onDownloadAll}
@@ -99,18 +111,27 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
       {sales.length > 0 ? (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {(["receiptsFilterToday", "receiptsFilterWeek", "receiptsFilterMonth"] as const).map((key, idx) => (
+          {RECEIPT_FILTERS.map(({ key, labelKey }) => (
             <button
               key={key}
               type="button"
-              className={`h-8 shrink-0 rounded-full border px-3 text-xs font-black ${
-                idx === 0 ? "border-waka-300 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-600"
+              onClick={() => setRange(key)}
+              className={`h-9 shrink-0 cursor-pointer rounded-full border px-3.5 text-xs font-black transition-colors active:scale-[0.98] ${
+                range === key
+                  ? "border-waka-400 bg-waka-600 text-white shadow-sm"
+                  : "border-stone-200 bg-white text-stone-700 hover:border-waka-200 hover:bg-waka-50"
               }`}
             >
-              {t(lang, key)}
+              {t(lang, labelKey)}
             </button>
           ))}
         </div>
+      ) : null}
+
+      {sales.length > 0 && filteredSales.length === 0 ? (
+        <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-bold text-stone-600">
+          {t(lang, "receiptsNoSalesInRange")}
+        </p>
       ) : null}
 
       {sales.length === 0 ? (

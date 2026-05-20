@@ -35,6 +35,20 @@ body,
   height: 100%;
 }
 
+/** Logged-in app shell: one scroll surface (main), no document scrollbar or white tail. */
+html:has(.app-shell-root),
+body:has(.app-shell-root) {
+  overflow: hidden;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+body:has(.app-shell-root) #root {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
 body {
   margin: 0;
   font-family: "DM Sans", Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
@@ -74,6 +88,12 @@ body {
   .scroll-main-chrome {
     scroll-padding-top: 0.75rem;
     scroll-padding-bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 1024px) {
+    .scroll-main-chrome {
+      scroll-padding-bottom: 2rem;
+    }
   }
 }
 

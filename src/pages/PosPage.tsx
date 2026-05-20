@@ -6,6 +6,8 @@ import type { Language, LineInputMode, Product, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
+import { ProductLockedModal } from "../components/ProductLockedModal";
+import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
@@ -164,11 +166,13 @@ export function PosPage({ lang }: { lang: Language }) {
   const quickSell = preferences.kioskQuickSell;
   const currentTier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(currentTier);
-  const sellableProducts = useMemo(
+  const lockedIds = useMemo(() => lockedProductIds(products, productLimit), [products, productLimit]);
+  const unlockedProducts = useMemo(
     () => (productLimit === null ? products : products.slice(0, productLimit)),
     [products, productLimit],
   );
-  const lockedProductCount = Math.max(0, products.length - sellableProducts.length);
+  const lockedProductCount = lockedIds.size;
+  const [productLockedOpen, setProductLockedOpen] = useState(false);
   const hapticsOn = preferences.hapticsOn !== false;
   const soundOn = preferences.saleSoundOn !== false;
 
@@ -197,8 +201,8 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
 
-  const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(sellableProducts), [sellableProducts]);
-  const sellHasUncategorized = useMemo(() => sellableProducts.some((p) => !(p.category ?? "").trim()), [sellableProducts]);
+  const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(products), [products]);
+  const sellHasUncategorized = useMemo(() => products.some((p) => !(p.category ?? "").trim()), [products]);
 
   const soldTodayByProduct = useMemo(() => {
     const todayKey = dateKeyKampala(new Date());
@@ -214,30 +218,30 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const favoriteIds = preferences.favoriteProductIds ?? [];
   const recentIds = preferences.recentProductIds ?? [];
-  const sellableProductIds = useMemo(() => new Set(sellableProducts.map((p) => p.id)), [sellableProducts]);
+  const unlockedProductIds = useMemo(() => new Set(unlockedProducts.map((p) => p.id)), [unlockedProducts]);
 
   useEffect(() => {
     for (const line of draftLines) {
-      if (!sellableProductIds.has(line.productId)) removeDraftLine(line.productId);
+      if (!unlockedProductIds.has(line.productId)) removeDraftLine(line.productId);
     }
-  }, [draftLines, removeDraftLine, sellableProductIds]);
+  }, [draftLines, removeDraftLine, unlockedProductIds]);
 
   const favoriteProducts = useMemo(
     () =>
       favoriteIds
-        .map((id) => sellableProducts.find((p) => p.id === id))
+        .map((id) => products.find((p) => p.id === id))
         .filter((p): p is Product => p != null && productMatchesCategoryFilter(p, sellCategoryKey)),
-    [favoriteIds, sellableProducts, sellCategoryKey],
+    [favoriteIds, products, sellCategoryKey],
   );
 
   const recentProducts = useMemo(() => {
     const out: Product[] = [];
     for (const id of recentIds) {
-      const p = sellableProducts.find((x) => x.id === id);
+      const p = products.find((x) => x.id === id);
       if (p && productMatchesCategoryFilter(p, sellCategoryKey)) out.push(p);
     }
     return out.slice(0, 8);
-  }, [recentIds, sellableProducts, sellCategoryKey]);
+  }, [recentIds, products, sellCategoryKey]);
 
   const bumpRecentProduct = useCallback(
     (productId: string) => {
@@ -287,13 +291,13 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const frequentToday = useMemo(
     () =>
-      sellableProducts
+      products
         .filter((p) => productMatchesCategoryFilter(p, sellCategoryKey))
         .map((p) => ({ product: p, qty: soldTodayByProduct.get(p.id) ?? 0 }))
         .filter((r) => r.qty > 0)
         .sort((a, b) => b.qty - a.qty)
         .slice(0, 6),
-    [sellableProducts, soldTodayByProduct, sellCategoryKey],
+    [products, soldTodayByProduct, sellCategoryKey],
   );
 
   const setSellCategoryFilter = useCallback(
@@ -349,7 +353,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
     const favorites = new Set(favoriteIds);
-    return sellableProducts.filter((p) => {
+    return products.filter((p) => {
       if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
       if (!productMatchesSellSearch(p, q, aliasTerms)) return false;
       if (sellCategoryKey === CATEGORY_FILTER_ALL) return true;
@@ -360,10 +364,10 @@ export function PosPage({ lang }: { lang: Language }) {
       if (favA !== favB) return favA - favB;
       return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
     });
-  }, [sellableProducts, sellSearchContext, sellCategoryKey, favoriteIds]);
+  }, [products, sellSearchContext, sellCategoryKey, favoriteIds]);
 
   const shelfCards = useMemo(() => {
-    const countFor = (filter: string) => sellableProducts.filter((p) => productMatchesCategoryFilter(p, filter)).length;
+    const countFor = (filter: string) => products.filter((p) => productMatchesCategoryFilter(p, filter)).length;
     const cards = sellCategoryOptions.map((cat) => ({
       key: cat,
       label: cat,
@@ -379,10 +383,10 @@ export function PosPage({ lang }: { lang: Language }) {
       });
     }
     return cards;
-  }, [sellableProducts, sellCategoryOptions, sellHasUncategorized, lang]);
+  }, [products, sellCategoryOptions, sellHasUncategorized, lang]);
 
   const showShelfBoxes =
-    sellableProducts.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
+    products.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
   const hasSellViewFilter = sellCategoryKey !== CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0;
 
   const selectedShelfLabel =
@@ -394,6 +398,10 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const openProduct = useCallback(
     (p: Product) => {
+      if (isProductPlanLocked(p.id, lockedIds)) {
+        setProductLockedOpen(true);
+        return;
+      }
       const moneyPresetsForProduct = p.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
       const qtyPresetsForProduct = p.quickPresetsQty?.filter((x) => x > 0) ?? [];
       const pref = usePosStore.getState().preferences;
@@ -424,7 +432,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setDraftInput(null);
       setSheetOpen(true);
     },
-    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, setDraftInput],
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, lockedIds, setDraftInput],
   );
 
   useEffect(() => {
@@ -433,12 +441,12 @@ export function PosPage({ lang }: { lang: Language }) {
 
   useEffect(() => {
     const id = (location.state as { preferProductId?: string } | null)?.preferProductId;
-    if (!id || !sellableProducts.length) return;
-    const p = sellableProducts.find((x) => x.id === id);
+    if (!id || !products.length) return;
+    const p = products.find((x) => x.id === id);
     if (!p) return;
     openProduct(p);
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.key, location.pathname, sellableProducts, openProduct, navigate]);
+  }, [location.key, location.pathname, products, openProduct, navigate]);
 
   useEffect(() => {
     if (!sheetOpen || !selected) return;
@@ -652,7 +660,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {sellableProducts.length > 0 ? (
+      {products.length > 0 ? (
         <div className="space-y-2 rounded-[1.35rem] border border-stone-200 bg-white p-2.5 shadow-waka-sm">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
@@ -750,7 +758,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {sellableProducts.length === 0 ? (
+      {products.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
           <p className="text-2xl font-black text-slate-900">{t(lang, "posEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "posEmptySub")}</p>
@@ -775,7 +783,7 @@ export function PosPage({ lang }: { lang: Language }) {
               <p className="text-sm font-bold text-stone-600">{t(lang, "posShelvesHint")}</p>
             </div>
             <p className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
-              {sellableProducts.length}
+              {products.length}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
@@ -848,15 +856,29 @@ export function PosPage({ lang }: { lang: Language }) {
               onPick={openProduct}
               stockLabel={t(lang, "stockLabel")}
               noShelfLabel={t(lang, "posNoShelf")}
+              isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
+              lockedBadge={t(lang, "productLockedBadge")}
             />
           ) : (
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-              {filteredProducts.map((p) => (
+              {filteredProducts.map((p) => {
+                const locked = isProductPlanLocked(p.id, lockedIds);
+                return (
                 <article
                   key={p.id}
-                  className="relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 pt-10 text-left shadow-sm active:border-waka-400"
+                  className={clsx(
+                    "relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border p-3 pt-10 text-left shadow-sm",
+                    locked
+                      ? "border-stone-200/80 bg-stone-50/90 opacity-55"
+                      : "border-slate-200 bg-white active:border-waka-400",
+                  )}
                   style={{ contentVisibility: "auto" }}
                 >
+                  {locked ? (
+                    <span className="absolute left-2.5 top-2.5 rounded-full bg-stone-800/90 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                      {t(lang, "productLockedBadge")}
+                    </span>
+                  ) : null}
                   <button
                     type="button"
                     className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
@@ -885,12 +907,18 @@ export function PosPage({ lang }: { lang: Language }) {
                   <button
                     type="button"
                     onClick={() => openProduct(p)}
-                    className="mt-2 min-h-[38px] rounded-2xl bg-waka-600 px-3 py-2 text-base font-black text-white active:bg-waka-700"
+                    className={clsx(
+                      "mt-2 min-h-[38px] rounded-2xl px-3 py-2 text-base font-black",
+                      locked
+                        ? "border-2 border-stone-300 bg-stone-200 text-stone-600"
+                        : "bg-waka-600 text-white active:bg-waka-700",
+                    )}
                   >
-                    {t(lang, "addToSale")}
+                    {locked ? t(lang, "productLockedTitle") : t(lang, "addToSale")}
                   </button>
                 </article>
-              ))}
+              );
+              })}
             </div>
           )}
         </section>
@@ -1278,6 +1306,8 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         </div>
       ) : null}
+
+      <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 
       {toast && (
         <div className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">

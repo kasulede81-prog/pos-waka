@@ -1,5 +1,6 @@
 import { useRef, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import clsx from "clsx";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
 import { shelfIconFor } from "../../lib/productCategories";
@@ -13,10 +14,12 @@ type Props = {
   onPick: (p: Product) => void;
   stockLabel: string;
   noShelfLabel: string;
+  isLocked?: (p: Product) => boolean;
+  lockedBadge?: string;
 };
 
 /** Scrolls long product lists smoothly on low-RAM phones (two columns). */
-function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabel }: Props) {
+function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabel, isLocked, lockedBadge }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const rowCount = Math.ceil(products.length / COLS);
 
@@ -50,14 +53,26 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
                 height: `${virtualRow.size}px`,
               }}
             >
-              {slice.map((p) => (
+              {slice.map((p) => {
+                const locked = isLocked?.(p) ?? false;
+                return (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => onPick(p)}
-                  className="flex min-h-[122px] flex-col justify-between rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:scale-[0.98] active:border-waka-500 motion-reduce:transition-none"
+                  className={clsx(
+                    "relative flex min-h-[122px] flex-col justify-between rounded-[1.35rem] border p-3 text-left shadow-sm motion-reduce:transition-none",
+                    locked
+                      ? "border-stone-200/80 bg-stone-50/90 opacity-55"
+                      : "border-slate-200 bg-white active:scale-[0.98] active:border-waka-500",
+                  )}
                   style={{ contentVisibility: "auto" }}
                 >
+                  {locked && lockedBadge ? (
+                    <span className="absolute right-2 top-2 rounded-full bg-stone-800/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
+                      {lockedBadge}
+                    </span>
+                  ) : null}
                   <span>
                     <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">{p.name}</span>
                     <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-500">
@@ -70,7 +85,8 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
                   </span>
                   <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>
                 </button>
-              ))}
+              );
+              })}
             </div>
           );
         })}

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { readSyncQueue } from "../offline/localDb";
+import { pullCloudAndMergeIntoStore } from "../offline/cloudSync";
 import { flushSyncQueue } from "../offline/syncEngine";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
@@ -39,6 +40,7 @@ function useSyncStatusEngine(): SyncStatusApi {
     writeSyncHealthMeta({ lastAttemptAt: attemptAt });
     setHealth(readSyncHealthMeta());
     try {
+      await pullCloudAndMergeIntoStore();
       const { failed } = await flushSyncQueue();
       if (failed === 0) {
         writeSyncHealthMeta({

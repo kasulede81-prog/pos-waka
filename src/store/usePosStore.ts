@@ -27,6 +27,7 @@ import type { SessionActor } from "../lib/sessionActor";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { inferFromProductName } from "../lib/smartProductGuess";
+import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
@@ -1613,6 +1614,16 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   });
   await restoreDraftSaleFromDisk();
   usePosStore.getState().pruneExpiredSales();
+
+  if (hasSupabaseConfig && key.startsWith("sb:")) {
+    const { pullCloudAndMergeIntoStore, pushAllPendingToCloud } = await import("../offline/cloudSync");
+    await pullCloudAndMergeIntoStore();
+    if (typeof navigator !== "undefined" && navigator.onLine) {
+      await pushAllPendingToCloud();
+      const { flushSyncQueue } = await import("../offline/syncEngine");
+      await flushSyncQueue();
+    }
+  }
 }
 
 export function formatProductPriceLabel(product: Product): string {
