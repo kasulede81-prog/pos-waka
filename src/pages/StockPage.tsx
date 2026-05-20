@@ -13,6 +13,8 @@ import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { StockProductEditModal } from "../components/StockProductEditModal";
+import { SimpleAddProductWizard } from "../components/stock/SimpleAddProductWizard";
+import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
@@ -35,26 +37,6 @@ const UNIT_PRESETS: Record<string, string[]> = {
   boutique: ["pair", "pack", "piece"],
   default: ["piece", "kg", "gram", "litre", "bottle", "packet", "box", "tray", "crate", "sack", "bale", "roll", "pair", "meter", "carton", "bundle", "dozen", "tin", "plate", "cup"],
 };
-
-const BULK_QUICK_UNITS = ["piece", "packet", "bottle", "crate", "kg"] as const;
-const BULK_UNIT_CUSTOM = "custom";
-
-type BulkRow = { name: string; price: string; stock: string; unitPreset: string; unitCustom: string };
-
-function emptyBulkRows(
-  n: number,
-  defaults?: { unitPreset?: string; unitCustom?: string },
-): BulkRow[] {
-  const unitPreset = defaults?.unitPreset ?? "piece";
-  const unitCustom = defaults?.unitCustom ?? "";
-  return Array.from({ length: n }, () => ({
-    name: "",
-    price: "",
-    stock: "",
-    unitPreset,
-    unitCustom,
-  }));
-}
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
@@ -117,7 +99,6 @@ export function StockPage({ lang }: { lang: Language }) {
   }, [stockMovements]);
 
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
-  const bulkQuickAddProducts = usePosStore((s) => s.bulkQuickAddProducts);
   const removeProduct = usePosStore((s) => s.removeProduct);
   const adjustStock = usePosStore((s) => s.adjustStock);
   const updateProduct = usePosStore((s) => s.updateProduct);
@@ -146,7 +127,6 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
 
-  const [bulkRows, setBulkRows] = useState<BulkRow[]>(() => emptyBulkRows(10));
 
   const navigate = useNavigate();
   const [listQuery, setListQuery] = useState("");
@@ -330,26 +310,23 @@ export function StockPage({ lang }: { lang: Language }) {
     setStarterOpen(false);
   };
 
-  const submitBulk = () => {
-    const cat = t(lang, "generalCategory");
-    const rows = bulkRows
-      .map((r) => {
-        const rawUnit = (r.unitPreset === BULK_UNIT_CUSTOM ? r.unitCustom : r.unitPreset).trim() || "piece";
-        const baseUnit = rawUnit.toLowerCase();
-        const sellingMode = sellingModeFromSellUnit(baseUnit);
-        return {
-          name: r.name.trim(),
-          priceUgx: Math.floor(Number(r.price) || 0),
-          stockQty: Number(r.stock) || 0,
-          category: cat,
-          baseUnit,
-          sellingMode,
-        };
-      })
-      .filter((r) => r.name.length > 0 && r.priceUgx > 0);
-    bulkQuickAddProducts(productSlotsLeft === null ? rows : rows.slice(0, productSlotsLeft));
-    setBulkRows(emptyBulkRows(10));
-    setBulkOpen(false);
+  const saveFromSimpleWizard = (built: BuiltWizardProduct | null): boolean => {
+    if (!built || freeProductLimitReached) return false;
+    const r = quickAddProduct({
+      name: built.name,
+      priceUgx: built.priceUgx,
+      stockQty: built.stockQty,
+      category: built.category || t(lang, "generalCategory"),
+      sellingMode: built.sellingMode,
+      baseUnit: built.baseUnit,
+      buyingUnit: built.buyingUnit ?? null,
+      conversionRate: built.conversionRate ?? null,
+      costPricePerUnitUgx: built.costPricePerUnitUgx ?? null,
+      quickPresetsMoneyUgx: built.quickPresetsMoneyUgx,
+      quickPresetsQty: built.quickPresetsQty,
+      inferName: built.inferName,
+    });
+    return r.ok;
   };
 
   const openDuplicateToQuick = (p: Product) => {
@@ -741,7 +718,7 @@ export function StockPage({ lang }: { lang: Language }) {
             type="button"
             disabled={freeProductLimitReached}
             onClick={() => setBulkOpen(true)}
-            className="min-h-[64px] rounded-3xl border-2 border-violet-200 bg-violet-50 py-4 text-base font-black text-violet-950"
+            className="min-h-[64px] rounded-3xl border-2 border-waka-400 bg-waka-600 py-4 text-base font-black text-white shadow-md active:bg-waka-700"
           >
             {t(lang, "bulkAddOpen")}
           </button>
@@ -1028,126 +1005,15 @@ export function StockPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {bulkOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
-          role="dialog"
-          aria-modal
-          onClick={() => setBulkOpen(false)}
-        >
-          <div
-            className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl sm:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <p className="text-center text-2xl font-black text-slate-900">{t(lang, "bulkAddTitle")}</p>
-            <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "bulkAddSub")}</p>
-            <p className="mt-3 text-center text-sm font-bold leading-snug text-slate-800">{t(lang, "bulkAddSellHowHint")}</p>
-            <div className="mt-4 space-y-3">
-              <div className="hidden text-xs font-bold uppercase text-slate-500 sm:grid sm:grid-cols-12 sm:gap-2">
-                <span className="col-span-4">{t(lang, "quickAddName")}</span>
-                <span className="col-span-4">{t(lang, "bulkAddUnitCol")}</span>
-                <span className="col-span-2 text-right">{t(lang, "quickAddPrice")}</span>
-                <span className="col-span-2 text-right">{t(lang, "quickAddStock")}</span>
-              </div>
-              {bulkRows.map((row, i) => (
-                <div
-                  key={i}
-                  className="space-y-2 rounded-2xl border border-slate-100 bg-slate-50/40 p-3 sm:grid sm:grid-cols-12 sm:items-start sm:gap-2 sm:border-0 sm:bg-transparent sm:p-0"
-                >
-                  <input
-                    value={row.name}
-                    onChange={(e) =>
-                      setBulkRows((rows) => rows.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))
-                    }
-                    className="w-full rounded-xl border-2 px-2 py-3 text-base sm:col-span-4"
-                    placeholder="…"
-                  />
-                  <div className="sm:col-span-4">
-                    <p className="mb-1.5 text-[11px] font-bold uppercase text-slate-500 sm:hidden">{t(lang, "bulkAddUnitCol")}</p>
-                    <select
-                      value={row.unitPreset}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setBulkRows((rows) =>
-                          rows.map((r, j) =>
-                            j === i ? { ...r, unitPreset: v, unitCustom: v === BULK_UNIT_CUSTOM ? r.unitCustom : "" } : r,
-                          ),
-                        );
-                      }}
-                      className="w-full rounded-xl border-2 border-slate-200 bg-white px-2 py-2.5 text-sm font-black text-slate-900"
-                    >
-                      {BULK_QUICK_UNITS.map((u) => (
-                        <option key={u} value={u}>
-                          {u}
-                        </option>
-                      ))}
-                      <option value={BULK_UNIT_CUSTOM}>{t(lang, "bulkAddUnitCustom")}</option>
-                    </select>
-                    {row.unitPreset === BULK_UNIT_CUSTOM ? (
-                      <input
-                        value={row.unitCustom}
-                        onChange={(e) =>
-                          setBulkRows((rows) =>
-                            rows.map((r, j) =>
-                              j === i ? { ...r, unitCustom: e.target.value.replace(/[^a-zA-Z0-9\s./\-]/g, "").slice(0, 24) } : r,
-                            ),
-                          )
-                        }
-                        className="mt-2 w-full rounded-xl border-2 border-dashed border-orange-200 px-2 py-2 text-sm font-semibold text-slate-900 placeholder:text-slate-400"
-                        placeholder={t(lang, "bulkAddUnitCustomPlaceholder")}
-                      />
-                    ) : null}
-                  </div>
-                  <input
-                    value={row.price}
-                    onChange={(e) =>
-                      setBulkRows((rows) => rows.map((r, j) => (j === i ? { ...r, price: e.target.value.replace(/\D/g, "") } : r)))
-                    }
-                    inputMode="numeric"
-                    className="w-full rounded-xl border-2 px-2 py-3 text-base font-bold sm:col-span-2"
-                    placeholder="UGX"
-                  />
-                  <input
-                    value={row.stock}
-                    onChange={(e) =>
-                      setBulkRows((rows) =>
-                        rows.map((r, j) => (j === i ? { ...r, stock: e.target.value.replace(/[^\d.]/g, "") } : r)),
-                      )
-                    }
-                    inputMode="decimal"
-                    className="w-full rounded-xl border-2 px-2 py-3 text-base font-bold sm:col-span-2"
-                    placeholder="0"
-                  />
-                </div>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="mt-3 w-full rounded-2xl border-2 py-3 text-sm font-bold text-slate-700"
-              onClick={() =>
-                setBulkRows((r) => {
-                  const last = r[r.length - 1];
-                  const nextDefaults =
-                    last && last.unitPreset === BULK_UNIT_CUSTOM
-                      ? { unitPreset: BULK_UNIT_CUSTOM, unitCustom: last.unitCustom }
-                      : { unitPreset: last?.unitPreset ?? "piece", unitCustom: "" };
-                  return [...r, ...emptyBulkRows(5, nextDefaults)];
-                })
-              }
-            >
-              {t(lang, "bulkAddMoreRows")}
-            </button>
-            <div className="mt-4 grid grid-cols-2 gap-3">
-              <button type="button" className="rounded-2xl border-2 py-4 text-lg font-bold" onClick={() => setBulkOpen(false)}>
-                {t(lang, "cancel")}
-              </button>
-              <button type="button" className="rounded-2xl bg-violet-600 py-4 text-lg font-black text-white" onClick={submitBulk}>
-                {t(lang, "bulkAddSave")}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <SimpleAddProductWizard
+        lang={lang}
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        shelves={stockCategoryPicklist}
+        generalCategoryLabel={t(lang, "generalCategory")}
+        disabled={freeProductLimitReached}
+        onSave={saveFromSimpleWizard}
+      />
 
       <StockProductEditModal
         lang={lang}

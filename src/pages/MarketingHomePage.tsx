@@ -4,7 +4,7 @@ import { t } from "../lib/i18n";
 import { MarketingLayout } from "../components/marketing/MarketingLayout";
 import { SeoHead } from "../components/marketing/SeoHead";
 import { FounderSection } from "../components/marketing/FounderSection";
-import { FOUNDER_JOURNEY_SUMMARY, FOUNDER_NAME, WAKA_PRODUCT_DESCRIPTION } from "../config/company";
+import { FOUNDER_HOME_LINE, WAKA_PRODUCT_DESCRIPTION } from "../config/company";
 
 type Props = {
   lang: Language;
@@ -37,11 +37,7 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
             <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-700">{t(lang, "brandTagline")}</p>
             <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">{t(lang, "marketingHomeTitle")}</h1>
             <p className="text-lg font-medium leading-relaxed text-stone-600">{t(lang, "marketingHomeSub")}</p>
-            <p className="text-sm font-medium text-stone-500">
-              Founded by {FOUNDER_NAME}, Ugandan technology entrepreneur. Uganda POS for supermarkets, pharmacies,
-              salons, restaurants, and market vendors.
-            </p>
-            <p className="text-xs font-medium leading-relaxed text-stone-400">{FOUNDER_JOURNEY_SUMMARY}</p>
+            <p className="text-sm font-medium text-stone-500">{FOUNDER_HOME_LINE}</p>
             <div className="flex flex-wrap gap-3">
               <Link
                 to="/demo"

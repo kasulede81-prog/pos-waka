@@ -35,35 +35,48 @@ export const FOUNDER_PHOTO_SRC = "/founder-kasule-denis.jpg";
 export const FOUNDER_PHOTO_ALT =
   "Kasule Denis, Ugandan technology entrepreneur and Founder & CEO of Waka Marketplace Limited, the company behind Waka POS";
 
+/** Short line for homepage and compact founder cards */
 export const FOUNDER_BIO_SHORT =
-  "Ugandan technology entrepreneur and African startup founder building Waka POS — simple, affordable business software for Uganda and Africa.";
+  "Ugandan technology entrepreneur and founder of Waka POS. Building simple business software for shops and SMEs across Uganda.";
 
-export const FOUNDER_JOURNEY_SUMMARY =
-  "Before Waka Marketplace Limited, Kasule Denis worked in Qatar as a barista in 2021. He later sold DK Computer Arena and Hospel Medical Center to fully focus on building Waka POS and practical technology for African businesses.";
+/** One sentence for homepage hero area */
+export const FOUNDER_HOME_LINE =
+  "Founded by Kasule Denis, a Ugandan software founder who built Waka POS from real shop experience.";
 
-export const FOUNDER_JOURNEY_EARLY = `Before building Waka Marketplace Limited, Kasule Denis worked in Qatar as a barista in 2021. It was honest work far from home — and a season that shaped his discipline, patience, and respect for everyday business life.`;
+export const FOUNDER_VISION =
+  "We want to build technology that genuinely helps African businesses grow. Simple systems that work well, save time, and make daily business easier for ordinary people.";
 
-export const FOUNDER_JOURNEY_BUSINESS = `Driven by a long-term vision to build practical technology for African businesses, he later sold previous ventures — DK Computer Arena and Hospel Medical Center — to commit fully to the technology company and Waka POS. That was not an exit for show; it was a choice to concentrate time, energy, and resources on software that local businesses can actually use.`;
-
-export const FOUNDER_JOURNEY_VISION = `His mission is to create simple, affordable, and locally relevant digital business tools for businesses across Uganda and Africa — POS, inventory, reports, and systems that work on real shop floors, not only in presentations.`;
-
-export const FOUNDER_WHY_WAKA = `Waka POS exists because many Ugandan shops still run on notebooks, memory, and guesswork. Kasule Denis founded it under Waka Marketplace Limited to give everyday businesses — shops, pharmacies, salons, supermarkets, and market vendors — a calm, mobile-first way to manage sales, stock, debts, and staff without enterprise complexity.`;
-
-export const FOUNDER_BIO_LONG = `Kasule Denis is a Ugandan technology entrepreneur, African startup founder, and the founder of Waka Marketplace Limited, the company behind Waka POS. Born on 3 June 2002, he builds from Uganda and Italy with a focus on software that respects how real businesses operate.
-
-${FOUNDER_JOURNEY_EARLY}
-
-${FOUNDER_JOURNEY_BUSINESS}
-
-${FOUNDER_JOURNEY_VISION}
-
-${FOUNDER_WHY_WAKA}`;
-
-export const FOUNDER_QUOTE =
-  "Our goal is simple — help African businesses grow using simple technology that works in the real world.";
+export const FOUNDER_QUOTE = FOUNDER_VISION;
 
 export const FOUNDER_QUOTE_SECOND =
-  "Waka POS is built for everyday businesses: shops, pharmacies, salons, supermarkets, restaurants, and market vendors.";
+  "Waka POS is for everyday businesses: shops, pharmacies, salons, supermarkets, restaurants, and market vendors.";
+
+/** SEO / meta snippets */
+export const FOUNDER_JOURNEY_SUMMARY =
+  "Kasule Denis founded Waka Marketplace Limited after running businesses in Uganda, working in Qatar in 2021, and later focusing on technology from Italy to build Waka POS for African SMEs.";
+
+export const FOUNDER_JOURNEY_BUSINESS = `Before Waka POS, he owned and operated businesses including DK Computer Arena and Hospel Medical Center. As his interest in technology grew, he sold those businesses to focus fully on building software and digital systems for African businesses.`;
+
+export const FOUNDER_JOURNEY_QATAR = `In 2021, he worked in Qatar. That experience helped shape his discipline, independence, and understanding of how everyday people work hard to build better lives and businesses.`;
+
+export const FOUNDER_JOURNEY_ITALY = `Moving to Italy became another important step in his journey. It gave him time to learn more, experience different systems, focus deeply on technology, and raise more capital to invest into Waka POS and future projects for Uganda and Africa.`;
+
+export const FOUNDER_WHY_WAKA = `Waka POS was created from real business experience and real market challenges. Many small businesses in Uganda still manage stock, sales, and records manually. The goal is to give shops, supermarkets, pharmacies, salons, restaurants, and market vendors a modern system that is simple, practical, and easy to use.`;
+
+export const FOUNDER_JOURNEY_TODAY = `Today, Kasule Denis continues building business technology focused on African SMEs, with an emphasis on mobile-first systems, simplicity, and tools that work in real business environments.`;
+
+/** Full founder page narrative (paragraphs) */
+export const FOUNDER_BIO_PARAGRAPHS: readonly string[] = [
+  "Kasule Denis is a Ugandan technology entrepreneur and the founder of Waka Marketplace Limited, the company behind Waka POS.",
+  FOUNDER_JOURNEY_BUSINESS,
+  FOUNDER_JOURNEY_QATAR,
+  FOUNDER_JOURNEY_ITALY,
+  FOUNDER_WHY_WAKA,
+  FOUNDER_JOURNEY_TODAY,
+];
+
+/** @deprecated use FOUNDER_BIO_PARAGRAPHS */
+export const FOUNDER_BIO_LONG = FOUNDER_BIO_PARAGRAPHS.join("\n\n");
 
 export const DEFAULT_OG_IMAGE = `${WAKA_SITE_URL}/og-waka-pos.png`;
 

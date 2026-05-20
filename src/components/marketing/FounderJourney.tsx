@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import {
   FOUNDER_JOURNEY_BUSINESS,
-  FOUNDER_JOURNEY_EARLY,
-  FOUNDER_JOURNEY_VISION,
+  FOUNDER_JOURNEY_QATAR,
+  FOUNDER_VISION,
   FOUNDER_WHY_WAKA,
 } from "../../config/company";
 
@@ -12,39 +12,50 @@ type JourneyBlock = {
 };
 
 const FULL_JOURNEY: JourneyBlock[] = [
-  { title: "Early journey", body: FOUNDER_JOURNEY_EARLY },
-  { title: "Business background", body: FOUNDER_JOURNEY_BUSINESS },
-  { title: "Vision for African businesses", body: FOUNDER_JOURNEY_VISION },
-  { title: "Why Waka POS was created", body: FOUNDER_WHY_WAKA },
+  { title: "Earlier businesses", body: FOUNDER_JOURNEY_BUSINESS },
+  { title: "Qatar, 2021", body: FOUNDER_JOURNEY_QATAR },
+  { title: "Why Waka POS", body: FOUNDER_WHY_WAKA },
+];
+
+const CONDENSED_JOURNEY: JourneyBlock[] = [
+  { title: "Background", body: FOUNDER_JOURNEY_BUSINESS },
+  { title: "Why we built Waka POS", body: FOUNDER_WHY_WAKA },
 ];
 
 type Props = {
   /** Shorter version for About page */
   condensed?: boolean;
+  /** Show vision quote block (founder page) */
+  showVision?: boolean;
 };
 
-export function FounderJourney({ condensed = false }: Props) {
-  const blocks = condensed ? FULL_JOURNEY.slice(0, 2) : FULL_JOURNEY;
+export function FounderJourney({ condensed = false, showVision = false }: Props) {
+  const blocks = condensed ? CONDENSED_JOURNEY : FULL_JOURNEY;
 
   return (
     <section className="space-y-4" aria-labelledby="founder-journey-heading">
       <h2 id="founder-journey-heading" className="text-xl font-black text-stone-950">
-        {condensed ? "Founder journey" : "The journey behind Waka"}
+        {condensed ? "Founder journey" : "The story behind Waka"}
       </h2>
-      <p className="text-sm font-medium text-stone-600">
-        A real path — work abroad, prior businesses, and a deliberate focus on building Ugandan business software.
-      </p>
+      {!condensed ? (
+        <p className="text-sm font-medium text-stone-600">
+          Real businesses, work abroad, and a clear focus on software for Ugandan shops.
+        </p>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-2">
         {blocks.map((block) => (
-          <article
-            key={block.title}
-            className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm"
-          >
+          <article key={block.title} className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm">
             <h3 className="text-sm font-black text-orange-800">{block.title}</h3>
             <p className="mt-2 text-sm font-medium leading-relaxed text-stone-700">{block.body}</p>
           </article>
         ))}
       </div>
+      {showVision ? (
+        <blockquote className="rounded-2xl border border-orange-100 bg-orange-50/80 p-5">
+          <p className="text-xs font-black uppercase tracking-wide text-orange-800">Vision</p>
+          <p className="mt-2 text-sm font-medium leading-relaxed text-stone-800">{FOUNDER_VISION}</p>
+        </blockquote>
+      ) : null}
       {condensed ? (
         <p className="text-sm font-medium text-stone-600">
           Read the full story on the{" "}

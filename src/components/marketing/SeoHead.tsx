@@ -99,7 +99,7 @@ function personSchema() {
     "@type": "Person",
     name: FOUNDER_NAME,
     jobTitle: "Founder & CEO",
-    description: `${FOUNDER_NAME} is a Ugandan technology entrepreneur and African startup founder. ${FOUNDER_JOURNEY_SUMMARY}`,
+    description: `${FOUNDER_NAME} is a Ugandan technology entrepreneur and founder of Waka POS. ${FOUNDER_JOURNEY_SUMMARY}`,
     image: absoluteUrl(FOUNDER_PHOTO_SRC),
     worksFor: { "@type": "Organization", name: WAKA_LEGAL_COMPANY_NAME },
     nationality: { "@type": "Country", name: "Uganda" },

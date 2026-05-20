@@ -4,8 +4,10 @@ import { MarketingLayout } from "../../components/marketing/MarketingLayout";
 import { SeoHead } from "../../components/marketing/SeoHead";
 import { FounderSection } from "../../components/marketing/FounderSection";
 import { FounderJourney } from "../../components/marketing/FounderJourney";
-import { FOUNDER_JOURNEY_SUMMARY, FOUNDER_NAME } from "../../config/company";
 import {
+  FOUNDER_JOURNEY_SUMMARY,
+  FOUNDER_NAME,
+  FOUNDER_VISION,
   WAKA_LEGAL_COMPANY_NAME,
   WAKA_MAIN_PRODUCT,
   WAKA_PRODUCT_DESCRIPTION,
@@ -46,7 +48,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
           </p>
           <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">
             {WAKA_LEGAL_COMPANY_NAME} focuses on local support, practical features, and software that keeps working
-            when the network is slow — including offline mode and cloud backup when you are ready.
+            when the network is slow, including offline mode and cloud backup when you are ready.
           </p>
         </section>
 
@@ -54,7 +56,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
           {[
             {
               title: "Simple by design",
-              body: "Clear screens, fast checkout, and everyday language — not enterprise jargon.",
+              body: "Clear screens, fast checkout, and everyday language, not enterprise jargon.",
             },
             {
               title: "Offline-friendly",
@@ -73,12 +75,8 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
         </section>
 
         <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm">
-          <h2 className="text-xl font-black text-stone-950">Mission</h2>
-          <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">
-            To build affordable, easy-to-use business technology for African businesses — starting in Uganda. We want
-            every shop, pharmacy, salon, restaurant, and market vendor to manage sales and stock with confidence, not
-            complexity.
-          </p>
+          <h2 className="text-xl font-black text-stone-950">Vision</h2>
+          <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">{FOUNDER_VISION}</p>
         </section>
 
         <section className="rounded-3xl border border-orange-50 bg-gradient-to-br from-white to-orange-50/60 p-6 shadow-waka-sm sm:p-8">

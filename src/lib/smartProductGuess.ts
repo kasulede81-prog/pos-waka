@@ -87,6 +87,26 @@ export function inferFromProductName(raw: string): SmartGuess {
       quickPresetsQty: [1, 2, 4],
     };
   }
+  if (/\begg/.test(n)) {
+    return {
+      sellingMode: "unit",
+      baseUnit: "egg",
+      buyingUnit: "tray",
+      conversionRate: 30,
+      quickPresetsMoneyUgx: [500, 1000, 15000],
+      quickPresetsQty: [1, 3, 30],
+    };
+  }
+  if (/\b(soda|fanta|sprite|coke|cola|stoney|novida)\b/.test(n)) {
+    return {
+      sellingMode: "unit",
+      baseUnit: "bottle",
+      buyingUnit: "crate",
+      conversionRate: 24,
+      quickPresetsMoneyUgx: [1000, 1800, 22000],
+      quickPresetsQty: [1, 2, 24],
+    };
+  }
 
   return {
     sellingMode: "unit",

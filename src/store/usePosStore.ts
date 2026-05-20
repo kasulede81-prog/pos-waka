@@ -224,6 +224,8 @@ type PosState = {
     conversionRate?: number | null;
     /** When set (e.g. from pack cost ÷ pieces), used instead of a guessed cost */
     costPricePerUnitUgx?: number | null;
+    quickPresetsMoneyUgx?: number[];
+    quickPresetsQty?: number[];
   }) => { ok: boolean; errorKey?: string };
   bulkQuickAddProducts: (
     rows: Array<{
@@ -907,7 +909,13 @@ export const usePosStore = create<PosState>((set, get) => {
         ? Math.max(0, Math.floor(Number(input.costPricePerUnitUgx)))
         : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
     const minAlert = sellingMode === "portion" ? 1 : sellingMode === "weighted" ? 3 : 5;
-    const sameShape = sellingMode === guess.sellingMode && baseUnit === guess.baseUnit;
+    const presetMoney = input.quickPresetsMoneyUgx?.filter((x) => x > 0);
+    const presetQty = input.quickPresetsQty?.filter((x) => x > 0);
+    const sameShape =
+      sellingMode === guess.sellingMode &&
+      baseUnit === guess.baseUnit &&
+      !presetMoney?.length &&
+      !presetQty?.length;
     get().addProduct({
       name: trimmed,
       sellingMode,
@@ -920,8 +928,8 @@ export const usePosStore = create<PosState>((set, get) => {
       minimumStockAlert: minAlert,
       category: input.category,
       sku: `SKU-${Date.now()}`,
-      quickPresetsMoneyUgx: sameShape ? guess.quickPresetsMoneyUgx : undefined,
-      quickPresetsQty: sameShape ? guess.quickPresetsQty : undefined,
+      quickPresetsMoneyUgx: presetMoney?.length ? presetMoney : sameShape ? guess.quickPresetsMoneyUgx : undefined,
+      quickPresetsQty: presetQty?.length ? presetQty : sameShape ? guess.quickPresetsQty : undefined,
     });
     return { ok: true };
   },
