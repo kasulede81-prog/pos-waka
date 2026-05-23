@@ -7,8 +7,10 @@ import {
   WAKA_COMPANY_COUNTRY,
   WAKA_COMPANY_POSTAL_ADDRESS,
   WAKA_COMPANY_TYPE,
+  WAKA_BRAND_NAME,
   WAKA_LEGAL_COMPANY_NAME,
   WAKA_MAIN_PRODUCT,
+  WAKA_SLOGAN,
   WAKA_OFFICE_STREET,
   WAKA_SITE_URL,
   WAKA_SUPPORT_EMAILS,
@@ -26,7 +28,7 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
         title="Company & legal information"
-        description={`${WAKA_LEGAL_COMPANY_NAME} operates ${WAKA_MAIN_PRODUCT} in ${WAKA_COMPANY_COUNTRY}. Registered office, contact, and legal details.`}
+        description={`${WAKA_BRAND_NAME} (${WAKA_LEGAL_COMPANY_NAME}) operates ${WAKA_MAIN_PRODUCT} in ${WAKA_COMPANY_COUNTRY}. Registered office and legal details.`}
         path="/company"
       />
 
@@ -35,10 +37,11 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
           <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">Legal</p>
           <h1 className="text-4xl font-black text-stone-950">Company information</h1>
           <p className="text-base font-medium text-stone-600">
-            Official details for {WAKA_LEGAL_COMPANY_NAME}, the company behind {WAKA_MAIN_PRODUCT}.
+            Public brand: {WAKA_BRAND_NAME} · {WAKA_SLOGAN}. Legal registration below.
           </p>
         </header>
 
+        <InfoBlock title="Public brand">{WAKA_BRAND_NAME}</InfoBlock>
         <InfoBlock title="Legal name">{WAKA_LEGAL_COMPANY_NAME}</InfoBlock>
         <InfoBlock title="Company type">{WAKA_COMPANY_TYPE}</InfoBlock>
         <InfoBlock title="Country of registration">{WAKA_COMPANY_COUNTRY}</InfoBlock>

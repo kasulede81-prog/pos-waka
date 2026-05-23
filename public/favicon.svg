@@ -1,12 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
-  <rect width="48" height="48" rx="12" fill="#ea580c"/>
-  <path fill="#fff" d="M14 8h20v6H14V8zm2 1.5h2.2v3H16v-3zm3.4 0h2.2v3h-2.2v-3zm3.4 0h2.2v3h-2.2v-3zm3.3 0h2.2v3h-2.2v-3zm3.4 0h2.2v3h-2.2v-3zm3.4 0H34v3h-2.2v-3z"/>
-  <rect x="11" y="16" width="26" height="22" rx="3" fill="#fff"/>
-  <path fill="#ea580c" fill-opacity="0.22" d="M16 34V22h3l2.2 7.5L23.5 22h1L28 29.5 30 22h3v12h-2.8v-8.2L26.5 34h-1.8l-3.6-8.3V34H16z"/>
-  <g fill="#ea580c" fill-opacity="0.55">
-    <rect x="15" y="36" width="3.5" height="3.5" rx="0.7"/>
-    <rect x="20.5" y="36" width="3.5" height="3.5" rx="0.7"/>
-    <rect x="26" y="36" width="3.5" height="3.5" rx="0.7"/>
-    <rect x="31.5" y="36" width="3.5" height="3.5" rx="0.7"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Waka Technologies">
+  <rect width="64" height="64" rx="14" fill="#ffffff"/>
+  <path fill="#ea580c" d="M10 44V18h7.2l5.2 14.5L27.6 18H33l5.4 14.5L43.6 18H51v26h-8.4V30.8L35.2 44h-4.4l-8.8-13.5V44H10z"/>
+  <path fill="#ea580c" d="M38 44h13v3H38v-3z"/>
+  <circle fill="#ea580c" cx="42" cy="50" r="2.8"/>
+  <circle fill="#ea580c" cx="48" cy="50" r="2.8"/>
 </svg>

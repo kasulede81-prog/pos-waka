@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { WAKA_COMPANY_TAGLINE, WAKA_LEGAL_COMPANY_NAME, WAKA_MAIN_PRODUCT } from "../../config/company";
+import { WAKA_BRAND_NAME, WAKA_LEGAL_COMPANY_NAME, WAKA_SLOGAN } from "../../config/company";
+import { WakaBrandWordmark } from "../brand/WakaLogo";
 
 type Props = {
   lang: Language;
@@ -13,14 +14,15 @@ type Props = {
 };
 
 const FOOTER_LINKS = [
-  { to: "/about", label: "About" },
-  { to: "/founder", label: "Founder" },
-  { to: "/contact", label: "Contact" },
-  { to: "/support", label: "Support" },
-  { to: "/company", label: "Company" },
   { to: "/privacy", label: "Privacy" },
   { to: "/terms", label: "Terms" },
-  { to: "/refund-policy", label: "Refunds" },
+  { to: "/contact", label: "Contact" },
+] as const;
+
+const NAV_LINKS = [
+  { to: "/about", label: "About" },
+  { to: "/contact", label: "Contact" },
+  { to: "/support", label: "Support" },
 ] as const;
 
 export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Props) {
@@ -28,26 +30,16 @@ export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Pr
     <div className="min-h-dvh bg-gradient-to-b from-white via-orange-50/30 to-stone-50">
       <header className="sticky top-0 z-40 border-b border-orange-100/80 bg-white/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
-          <Link to="/home" className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 to-orange-700 text-lg font-black text-white shadow-md">
-              W
-            </div>
-            <div>
-              <p className="text-base font-black text-orange-700">{t(lang, "appName")}</p>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-stone-500">{WAKA_MAIN_PRODUCT}</p>
-            </div>
+          <Link to="/home" className="min-w-0 shrink">
+            <WakaBrandWordmark />
           </Link>
 
           <nav className="hidden items-center gap-1 text-sm font-bold text-stone-700 sm:flex">
-            <Link to="/about" className="rounded-full px-3 py-2 hover:bg-orange-50 hover:text-orange-800">
-              About
-            </Link>
-            <Link to="/contact" className="rounded-full px-3 py-2 hover:bg-orange-50 hover:text-orange-800">
-              Contact
-            </Link>
-            <Link to="/support" className="rounded-full px-3 py-2 hover:bg-orange-50 hover:text-orange-800">
-              Support
-            </Link>
+            {NAV_LINKS.map((link) => (
+              <Link key={link.to} to={link.to} className="rounded-full px-3 py-2 hover:bg-orange-50 hover:text-orange-800">
+                {link.label}
+              </Link>
+            ))}
           </nav>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -91,14 +83,16 @@ export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Pr
       <main className="mx-auto max-w-5xl px-4 py-10">{children}</main>
 
       <footer className="border-t border-stone-200 bg-stone-950 px-4 py-10 text-stone-300">
-        <div className="mx-auto max-w-5xl space-y-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mx-auto max-w-5xl space-y-4 text-center sm:text-left">
+          <div className="sm:flex sm:items-start sm:justify-between sm:text-left">
             <div>
-              <p className="text-lg font-black text-white">{WAKA_MAIN_PRODUCT}</p>
-              <p className="mt-1 text-sm font-medium text-stone-400">{WAKA_COMPANY_TAGLINE}</p>
-              <p className="mt-2 text-xs text-stone-500">Powered by {WAKA_LEGAL_COMPANY_NAME}</p>
+              <p className="text-lg font-black text-white">{WAKA_BRAND_NAME}</p>
+              <p className="mt-1 text-sm font-semibold text-orange-300">{WAKA_SLOGAN}</p>
+              <p className="mt-3 text-xs text-stone-500">
+                {t(lang, "appName")} · {t(lang, "marketingFooterLegalNote")}
+              </p>
             </div>
-            <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm font-bold text-orange-300">
+            <nav className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold text-orange-300 sm:mt-0 sm:justify-end">
               {FOOTER_LINKS.map((link) => (
                 <Link key={link.to} to={link.to} className="hover:text-white">
                   {link.label}
@@ -106,12 +100,11 @@ export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Pr
               ))}
             </nav>
           </div>
-          <p className="text-center text-xs text-stone-500">
-            © {new Date().getFullYear()} {WAKA_LEGAL_COMPANY_NAME}. All rights reserved.
+          <p className="text-center text-xs text-stone-600 sm:text-left">
+            © {new Date().getFullYear()} {WAKA_LEGAL_COMPANY_NAME}
           </p>
         </div>
       </footer>
     </div>
   );
 }
-

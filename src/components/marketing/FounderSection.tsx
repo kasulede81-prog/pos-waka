@@ -7,7 +7,7 @@ import {
   FOUNDER_PHOTO_SRC,
   FOUNDER_QUOTE,
   FOUNDER_ROLE,
-  WAKA_LEGAL_COMPANY_NAME,
+  WAKA_BRAND_NAME,
 } from "../../config/company";
 
 type Props = {
@@ -23,7 +23,7 @@ export function FounderSection({ compact = false }: Props) {
           <p className="text-xs font-black uppercase tracking-[0.2em] text-orange-300">From the founder</p>
           <h2 className="text-2xl font-black sm:text-3xl">{FOUNDER_NAME}</h2>
           <p className="text-sm font-bold text-orange-200">
-            {FOUNDER_ROLE}, {WAKA_LEGAL_COMPANY_NAME}
+            {FOUNDER_ROLE}, {WAKA_BRAND_NAME}
           </p>
           <p className="text-sm font-medium leading-relaxed text-stone-300">{FOUNDER_BIO_SHORT}</p>
           {!compact ? (

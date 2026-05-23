@@ -5,10 +5,9 @@ import { SeoHead } from "../../components/marketing/SeoHead";
 import { FounderSection } from "../../components/marketing/FounderSection";
 import { FounderJourney } from "../../components/marketing/FounderJourney";
 import {
-  FOUNDER_JOURNEY_SUMMARY,
   FOUNDER_NAME,
   FOUNDER_VISION,
-  WAKA_LEGAL_COMPANY_NAME,
+  WAKA_BRAND_NAME,
   WAKA_MAIN_PRODUCT,
   WAKA_PRODUCT_DESCRIPTION,
 } from "../../config/company";
@@ -23,8 +22,8 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="About Waka POS — Uganda business software"
-        description={`Founded by ${FOUNDER_NAME}, Ugandan software founder behind Waka POS. ${FOUNDER_JOURNEY_SUMMARY} ${WAKA_PRODUCT_DESCRIPTION}`}
+        title="About Waka POS and Waka Technologies"
+        description={`${WAKA_BRAND_NAME} builds ${WAKA_MAIN_PRODUCT} for Ugandan shops. Founded by ${FOUNDER_NAME}. ${WAKA_PRODUCT_DESCRIPTION}`}
         path="/about"
         structuredData="home"
       />
@@ -41,14 +40,14 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
         <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
           <h2 className="text-xl font-black text-stone-950">Our story</h2>
           <p className="mt-4 text-sm font-medium leading-relaxed text-stone-700">
-            Founded by {FOUNDER_NAME}, {WAKA_MAIN_PRODUCT} was built to help Ugandan businesses access affordable and
-            easy-to-use business technology. Many shops still rely on notebooks, memory, and manual stock counts. Waka
-            POS brings sales, receipts, stock, debts, reports, and staff tools into one simple system that works on the
-            phones and devices businesses already use.
+            {WAKA_BRAND_NAME} and {WAKA_MAIN_PRODUCT} were started by {FOUNDER_NAME} to give Ugandan shops affordable,
+            easy tools for everyday work. Many businesses still rely on notebooks and memory for stock and sales. Waka
+            POS brings checkout, receipts, stock, debts, reports, and staff into one simple app on the phones you already
+            use.
           </p>
           <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">
-            {WAKA_LEGAL_COMPANY_NAME} focuses on local support, practical features, and software that keeps working
-            when the network is slow, including offline mode and cloud backup when you are ready.
+            We focus on local support, plain language, and software that keeps working when the network is slow, with
+            offline selling and backup when you are online.
           </p>
         </section>
 
@@ -56,7 +55,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
           {[
             {
               title: "Simple by design",
-              body: "Clear screens, fast checkout, and everyday language, not enterprise jargon.",
+              body: "Clear screens, fast checkout, and everyday language you can explain to your staff.",
             },
             {
               title: "Offline-friendly",

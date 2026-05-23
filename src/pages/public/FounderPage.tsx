@@ -11,6 +11,7 @@ import {
   FOUNDER_QUOTE_SECOND,
   FOUNDER_ROLE,
   FOUNDER_VISION,
+  WAKA_BRAND_NAME,
   WAKA_LEGAL_COMPANY_NAME,
   WAKA_MAIN_PRODUCT,
   WAKA_PRODUCT_DESCRIPTION,
@@ -26,8 +27,8 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title={`${FOUNDER_NAME} — Ugandan software founder of Waka POS`}
-        description={`${FOUNDER_NAME} is a Ugandan technology entrepreneur and founder of Waka Marketplace Limited. ${FOUNDER_JOURNEY_SUMMARY}`}
+        title={`${FOUNDER_NAME} — Founder of Waka Technologies`}
+        description={`${FOUNDER_NAME} founded ${WAKA_BRAND_NAME} and ${WAKA_MAIN_PRODUCT}. ${FOUNDER_JOURNEY_SUMMARY}`}
         path="/founder"
         type="profile"
         structuredData="founder"
@@ -39,8 +40,9 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
           <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-orange-700">Founder profile</p>
           <h1 className="mt-2 text-4xl font-black text-stone-950">{FOUNDER_NAME}</h1>
           <p className="mt-2 text-lg font-bold text-orange-800">
-            {FOUNDER_ROLE}, {WAKA_LEGAL_COMPANY_NAME}
+            {FOUNDER_ROLE}, {WAKA_BRAND_NAME}
           </p>
+          <p className="mt-1 text-xs font-medium text-stone-500">Legal entity: {WAKA_LEGAL_COMPANY_NAME}</p>
           <p className="mt-1 text-sm font-semibold text-stone-500">{FOUNDER_BASE}</p>
         </header>
 
@@ -73,8 +75,8 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
           <div className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm">
             <h3 className="font-black text-stone-950">Company</h3>
             <p className="mt-2 text-sm font-medium text-stone-700">
-              {WAKA_LEGAL_COMPANY_NAME} is a Ugandan registered technology company serving shops, pharmacies, salons,
-              supermarkets, restaurants, and market vendors with software built for local business life.
+              {WAKA_BRAND_NAME} builds simple technology for shops, pharmacies, salons, supermarkets, restaurants, and
+              market vendors across Uganda. Registered as {WAKA_LEGAL_COMPANY_NAME}.
             </p>
           </div>
         </section>

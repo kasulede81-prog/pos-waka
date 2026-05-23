@@ -53,7 +53,7 @@ export function normalizePlanCode(raw: string | undefined | null): SubscriptionP
 }
 
 /**
- * Effective SaaS tier for feature gates.
+ * Effective subscription tier for feature gates.
  * - New users: Free Mode immediately, no admin approval required.
  * - Paid rows unlock Starter, Business, or Waka Plus.
  */

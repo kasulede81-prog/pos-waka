@@ -5,7 +5,7 @@
  * Does NOT use signInWithOAuth, redirectTo, or *.supabase.co/auth/v1/callback.
  *
  * Google Cloud (Web client):
- * - Authorized JavaScript origins: https://waka-ug.com , http://localhost:5173
+ * - Authorized JavaScript origins: https://pos.waka.ug , https://waka.ug , http://localhost:5173
  * - Authorized redirect URIs: NOT required for GIS popup (do not add supabase.co)
  *
  * Supabase → Auth → Google → Authorized Client IDs: same Web Client ID

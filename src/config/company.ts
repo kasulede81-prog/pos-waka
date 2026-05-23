@@ -1,14 +1,29 @@
-/** Public company identity, founder, and SEO defaults for waka-ug.com */
+/** Public brand, SEO, and legal identity for waka.ug / pos.waka.ug */
 
-export const WAKA_SITE_URL = "https://waka-ug.com";
+/** Marketing site (home, about, legal pages served from same app). */
+export const WAKA_SITE_URL = "https://waka.ug";
 
+/** Live POS web app — use for auth redirects, PWA scope, and app canonical URLs. */
+export const WAKA_POS_URL = "https://pos.waka.ug";
+
+/** @deprecated Use WAKA_POS_URL for app; WAKA_SITE_URL for marketing canonicals. */
+export const CANONICAL_MARKETING_ORIGIN = WAKA_SITE_URL.replace(/\/$/, "");
+
+export const WAKA_BRAND_NAME = "Waka Technologies";
+export const WAKA_SLOGAN = "Tech for next generation";
+export const WAKA_BRAND_LINE = "Simple technology for everyday business";
+
+/** Registered legal entity (terms, privacy, invoices, company page only). */
 export const WAKA_LEGAL_COMPANY_NAME = "WAKA MARKETPLACE LIMITED";
 export const WAKA_COMPANY_TYPE = "Private Limited By Shares";
 export const WAKA_COMPANY_COUNTRY = "Uganda";
-export const WAKA_COMPANY_TAGLINE = "Uganda-based business software company";
+
 export const WAKA_MAIN_PRODUCT = "Waka POS";
 export const WAKA_PRODUCT_DESCRIPTION =
-  "Waka POS is a Ugandan point-of-sale system designed for shops, supermarkets, pharmacies, salons, restaurants, and small businesses across Uganda.";
+  "Waka POS by Waka Technologies helps shops, supermarkets, pharmacies, salons, and restaurants in Uganda manage sales, stock, and daily reports without complicated systems.";
+
+export const WAKA_SEO_DEFAULT_TITLE = "Waka POS | Simple POS for Shops in Uganda";
+export const WAKA_SEO_DEFAULT_DESCRIPTION = WAKA_PRODUCT_DESCRIPTION;
 
 export const WAKA_OFFICE_STREET =
   "Opposite Freedom City, Namasuba – Kikajjo Road, Namasuba Central, Masajja Ward, Wakiso District";
@@ -32,42 +47,37 @@ export const FOUNDER_ROLE = "Founder & CEO";
 export const FOUNDER_BIRTH_PLACE = "Uganda";
 export const FOUNDER_BASE = "Uganda / Italy";
 export const FOUNDER_PHOTO_SRC = "/founder-kasule-denis.jpg";
-export const FOUNDER_PHOTO_ALT =
-  "Kasule Denis, Ugandan technology entrepreneur and Founder & CEO of Waka Marketplace Limited, the company behind Waka POS";
+export const FOUNDER_PHOTO_ALT = "Kasule Denis, founder of Waka Technologies and Waka POS";
 
-/** Short line for homepage and compact founder cards */
 export const FOUNDER_BIO_SHORT =
-  "Ugandan technology entrepreneur and founder of Waka POS. Building simple business software for shops and SMEs across Uganda.";
+  "Ugandan entrepreneur building Waka POS with Waka Technologies. Simple tools for real shops and businesses.";
 
-/** One sentence for homepage hero area */
 export const FOUNDER_HOME_LINE =
-  "Founded by Kasule Denis, a Ugandan software founder who built Waka POS from real shop experience.";
+  "Built by Kasule Denis and Waka Technologies for shop owners who want clear sales and stock without stress.";
 
 export const FOUNDER_VISION =
-  "We want to build technology that genuinely helps African businesses grow. Simple systems that work well, save time, and make daily business easier for ordinary people.";
+  "We build technology that helps African businesses grow. Simple systems that save time and make daily work easier for ordinary people.";
 
 export const FOUNDER_QUOTE = FOUNDER_VISION;
 
 export const FOUNDER_QUOTE_SECOND =
   "Waka POS is for everyday businesses: shops, pharmacies, salons, supermarkets, restaurants, and market vendors.";
 
-/** SEO / meta snippets */
 export const FOUNDER_JOURNEY_SUMMARY =
-  "Kasule Denis founded Waka Marketplace Limited after running businesses in Uganda, working in Qatar in 2021, and later focusing on technology from Italy to build Waka POS for African SMEs.";
+  "Kasule Denis built Waka Technologies and Waka POS after running businesses in Uganda, working abroad, and later focusing on software from Italy to serve African SMEs.";
 
-export const FOUNDER_JOURNEY_BUSINESS = `Before Waka POS, he owned and operated businesses including DK Computer Arena and Hospel Medical Center. As his interest in technology grew, he sold those businesses to focus fully on building software and digital systems for African businesses.`;
+export const FOUNDER_JOURNEY_BUSINESS = `Before Waka POS, he owned and operated businesses including DK Computer Arena and Hospel Medical Center. He later sold those businesses to focus on building software for African businesses.`;
 
-export const FOUNDER_JOURNEY_QATAR = `In 2021, he worked in Qatar. That experience helped shape his discipline, independence, and understanding of how everyday people work hard to build better lives and businesses.`;
+export const FOUNDER_JOURNEY_QATAR = `In 2021, he worked in Qatar. That experience shaped his discipline and his understanding of how people work hard to build better lives and businesses.`;
 
-export const FOUNDER_JOURNEY_ITALY = `Moving to Italy became another important step in his journey. It gave him time to learn more, experience different systems, focus deeply on technology, and raise more capital to invest into Waka POS and future projects for Uganda and Africa.`;
+export const FOUNDER_JOURNEY_ITALY = `Time in Italy helped him learn more, focus on technology, and raise capital to invest in Waka POS and future projects for Uganda and Africa.`;
 
-export const FOUNDER_WHY_WAKA = `Waka POS was created from real business experience and real market challenges. Many small businesses in Uganda still manage stock, sales, and records manually. The goal is to give shops, supermarkets, pharmacies, salons, restaurants, and market vendors a modern system that is simple, practical, and easy to use.`;
+export const FOUNDER_WHY_WAKA = `Waka POS comes from real shop experience. Many small businesses in Uganda still manage stock, sales, and records manually. The goal is a simple, practical system for shops, supermarkets, pharmacies, salons, restaurants, and market vendors.`;
 
-export const FOUNDER_JOURNEY_TODAY = `Today, Kasule Denis continues building business technology focused on African SMEs, with an emphasis on mobile-first systems, simplicity, and tools that work in real business environments.`;
+export const FOUNDER_JOURNEY_TODAY = `Today, Kasule Denis continues building business technology for African SMEs, with mobile-first tools that work in real business environments.`;
 
-/** Full founder page narrative (paragraphs) */
 export const FOUNDER_BIO_PARAGRAPHS: readonly string[] = [
-  "Kasule Denis is a Ugandan technology entrepreneur and the founder of Waka Marketplace Limited, the company behind Waka POS.",
+  `${FOUNDER_NAME} is a Ugandan entrepreneur and founder of ${WAKA_BRAND_NAME}, the company behind ${WAKA_MAIN_PRODUCT}.`,
   FOUNDER_JOURNEY_BUSINESS,
   FOUNDER_JOURNEY_QATAR,
   FOUNDER_JOURNEY_ITALY,
@@ -78,34 +88,43 @@ export const FOUNDER_BIO_PARAGRAPHS: readonly string[] = [
 /** @deprecated use FOUNDER_BIO_PARAGRAPHS */
 export const FOUNDER_BIO_LONG = FOUNDER_BIO_PARAGRAPHS.join("\n\n");
 
-export const DEFAULT_OG_IMAGE = `${WAKA_SITE_URL}/og-waka-pos.png`;
+/** @deprecated use WAKA_BRAND_LINE */
+export const WAKA_COMPANY_TAGLINE = WAKA_SLOGAN;
+
+export const DEFAULT_OG_IMAGE = `${WAKA_SITE_URL}/og-waka-technologies.png`;
 
 export const SEO_KEYWORDS = [
   "Uganda POS",
   "POS system Uganda",
   "Waka POS",
+  "Waka Technologies",
+  "shop POS Uganda",
   "supermarket POS Uganda",
   "pharmacy POS Uganda",
   "salon POS Uganda",
+  "restaurant POS Uganda",
   "offline POS Uganda",
-  "Uganda inventory system",
-  "Uganda business software",
-  "Ugandan tech entrepreneur",
-  "Founder of Waka POS",
-  "Waka Marketplace Limited",
-  "Uganda POS founder",
-  "African software entrepreneur",
-  "African startup founder",
-  "Ugandan software founder",
+  "inventory Uganda",
+  "small business software Uganda",
+  "Kasule Denis",
+  "Uganda tech founder",
 ].join(", ");
 
-export function absoluteUrl(path: string): string {
+export function absoluteUrl(path: string, base: string = WAKA_SITE_URL): string {
   if (path.startsWith("http")) return path;
-  const base = WAKA_SITE_URL.replace(/\/$/, "");
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  const origin = base.replace(/\/$/, "");
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-export function wakaSupportWhatsAppUrl(text = "Hello Waka POS team, I need help."): string {
+export function marketingCanonical(path: string): string {
+  return absoluteUrl(path, WAKA_SITE_URL);
+}
+
+export function posCanonical(path: string): string {
+  return absoluteUrl(path, WAKA_POS_URL);
+}
+
+export function wakaSupportWhatsAppUrl(text = "Hello Waka Technologies, I need help with Waka POS."): string {
   return `https://wa.me/${WAKA_SUPPORT_WHATSAPP_WA_ME}?text=${encodeURIComponent(text)}`;
 }
 

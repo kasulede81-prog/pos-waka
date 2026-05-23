@@ -25,7 +25,7 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="Waka POS — Uganda POS system for shops & SMEs"
+        title="Waka POS | Simple POS for Shops in Uganda"
         description={WAKA_PRODUCT_DESCRIPTION}
         path="/home"
         structuredData="home"
@@ -95,13 +95,13 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
         <FounderSection compact />
 
         <section className="rounded-3xl border border-orange-100 bg-white p-6 text-center shadow-waka-sm">
-          <h2 className="text-xl font-black text-stone-950">Trusted by growing Ugandan businesses</h2>
+          <h2 className="text-xl font-black text-stone-950">Built for real shops and businesses</h2>
           <p className="mt-2 text-sm font-medium text-stone-600">
-            Simple technology, local support, and software that works when the network is slow.
+            Waka Technologies brings simple tools, local support, and software that still works when the network is slow.
           </p>
           <div className="mt-5 flex flex-wrap justify-center gap-3">
             <Link to="/about" className="text-sm font-black text-orange-800 underline">
-              About Waka POS
+              About us
             </Link>
             <Link to="/contact" className="text-sm font-black text-orange-800 underline">
               Contact

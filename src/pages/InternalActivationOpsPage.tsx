@@ -8,12 +8,14 @@ import {
   opsResolveActivationRequest,
   type OpsActivationRow,
 } from "../lib/businessActivation";
+import { AdminEmpty, AdminSection } from "../components/internal-admin/adminUi";
 
 type Props = {
   lang: Language;
+  lovableUi?: boolean;
 };
 
-export function InternalActivationOpsPage({ lang }: Props) {
+export function InternalActivationOpsPage({ lang, lovableUi = false }: Props) {
   const [rows, setRows] = useState<OpsActivationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [planCode, setPlanCode] = useState("business");
@@ -78,26 +80,49 @@ export function InternalActivationOpsPage({ lang }: Props) {
     await load();
   };
 
+  const card = lovableUi
+    ? "rounded-2xl border border-stone-200 bg-white shadow-sm"
+    : "rounded-xl border border-border bg-card";
+  const muted = lovableUi ? "text-stone-500" : "text-muted-foreground";
+  const fg = lovableUi ? "text-stone-900" : "text-card-foreground";
+
   return (
-    <div className="space-y-4 pb-6">
-      <div className="rounded-xl border border-border bg-card p-4">
+    <div className={lovableUi ? "space-y-6 pb-6" : "space-y-4 pb-6"}>
+      {lovableUi ? (
+        <AdminSection title={t(lang, "internalActivationsTitle")} count={rows.length}>
+          <p className="mb-3 text-sm font-medium text-stone-600">{t(lang, "internalActivationsSub")}</p>
+        </AdminSection>
+      ) : null}
+      <div className={clsx(card, "p-4")}>
         <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div
+            className={clsx(
+              "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+              lovableUi ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary",
+            )}
+          >
             <WalletCards className="h-4 w-4" />
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Admin queue</p>
-            <h1 className="text-sm font-semibold text-card-foreground">{t(lang, "internalActivationsTitle")}</h1>
-            <p className="mt-1 max-w-3xl text-xs font-medium leading-relaxed text-muted-foreground">
-            {t(lang, "internalActivationsSub")}
-            </p>
-          </div>
+          {!lovableUi ? (
+            <div className="min-w-0 flex-1">
+              <p className={clsx("text-[10px] font-black uppercase tracking-wider", muted)}>Admin queue</p>
+              <h1 className={clsx("text-sm font-semibold", fg)}>{t(lang, "internalActivationsTitle")}</h1>
+              <p className={clsx("mt-1 max-w-3xl text-xs font-medium leading-relaxed", muted)}>
+                {t(lang, "internalActivationsSub")}
+              </p>
+            </div>
+          ) : (
+            <div className="min-w-0 flex-1" />
+          )}
         </div>
         <div className="mt-3 flex gap-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => void load()}
-            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card px-3 text-xs font-black text-foreground"
+            className={clsx(
+              "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-black",
+              lovableUi ? "border-stone-200 bg-white text-stone-900" : "border-border bg-card text-foreground",
+            )}
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refresh
@@ -105,8 +130,8 @@ export function InternalActivationOpsPage({ lang }: Props) {
         </div>
       </div>
 
-      <div className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-3">
-        <label className="block text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+      <div className={clsx("grid gap-3 p-4 sm:grid-cols-3", card)}>
+        <label className={clsx("block text-[10px] font-black uppercase tracking-wider", muted)}>
           {t(lang, "internalActivationsPlan")}
           <input
             value={planCode}
@@ -114,7 +139,7 @@ export function InternalActivationOpsPage({ lang }: Props) {
             className="mt-2 min-h-[40px] w-full rounded-xl border border-input bg-background px-3 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/25"
           />
         </label>
-        <label className="block text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <label className={clsx("block text-[10px] font-black uppercase tracking-wider", muted)}>
           {t(lang, "internalActivationsDays")}
           <input
             type="number"
@@ -125,7 +150,7 @@ export function InternalActivationOpsPage({ lang }: Props) {
             className="mt-2 min-h-[40px] w-full rounded-xl border border-input bg-background px-3 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/25"
           />
         </label>
-        <label className="block text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <label className={clsx("block text-[10px] font-black uppercase tracking-wider", muted)}>
           {t(lang, "internalActivationsDevices")}
           <input
             type="number"
@@ -149,18 +174,25 @@ export function InternalActivationOpsPage({ lang }: Props) {
           ))}
         </div>
       ) : rows.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card px-6 py-12 text-center text-sm font-semibold text-muted-foreground">
-          <WalletCards className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-          <p>{t(lang, "internalActivationsEmpty")}</p>
-        </div>
+        lovableUi ? (
+          <AdminEmpty>
+            <WalletCards className="mx-auto mb-2 h-6 w-6 text-stone-400" />
+            <p>{t(lang, "internalActivationsEmpty")}</p>
+          </AdminEmpty>
+        ) : (
+          <div className="rounded-xl border border-border bg-card px-6 py-12 text-center text-sm font-semibold text-muted-foreground">
+            <WalletCards className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+            <p>{t(lang, "internalActivationsEmpty")}</p>
+          </div>
+        )
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="border-b border-border px-4 py-3">
-            <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+        <div className={clsx("overflow-hidden", card)}>
+          <div className={clsx("border-b px-4 py-3", lovableUi ? "border-stone-100" : "border-border")}>
+            <p className={clsx("text-[10px] font-black uppercase tracking-wider", muted)}>
               {rows.length} activation requests
             </p>
           </div>
-          <div className="divide-y divide-border">
+          <div className={clsx("divide-y", lovableUi ? "divide-stone-100" : "divide-border")}>
             {rows.map((r) => {
               const open = expanded[r.id] ?? r.status === "pending";
               return (

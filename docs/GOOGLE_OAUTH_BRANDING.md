@@ -21,16 +21,17 @@ User → Continue with Google (Waka button)
 | Field | Value |
 |-------|--------|
 | App name | **Waka POS** |
-| Logo | Your Waka logo |
-| Home | `https://waka-ug.com` |
-| Privacy | `https://waka-ug.com/privacy` |
-| Terms | `https://waka-ug.com/terms` |
+| Logo | Waka Technologies logo |
+| Home | `https://waka.ug` |
+| Privacy | `https://waka.ug/privacy` |
+| Terms | `https://waka.ug/terms` |
 
 ### OAuth 2.0 Client ID → **Web application**
 
 | Setting | Value |
 |---------|--------|
-| **Authorized JavaScript origins** | `https://waka-ug.com` |
+| **Authorized JavaScript origins** | `https://pos.waka.ug` |
+| | `https://waka.ug` |
 | | `http://localhost:5173` (local dev only) |
 | **Authorized redirect URIs** | **Leave empty** for GIS popup — do **not** add `*.supabase.co/auth/v1/callback` |
 
@@ -45,17 +46,19 @@ Copy the **Client ID** → `VITE_GOOGLE_OAUTH_CLIENT_ID`.
 
 **Authentication → URL configuration**
 
-- Site URL: `https://waka-ug.com`
+- Site URL: `https://pos.waka.ug`
 - Redirect URLs: still needed for **email** and **password reset**, not for Google GIS login:
-  - `https://waka-ug.com/auth/callback`
-  - `https://waka-ug.com/auth/recovery`
+  - `https://pos.waka.ug/auth/callback`
+  - `https://pos.waka.ug/auth/recovery`
+  - `https://waka.ug/auth/callback` (if marketing host serves the same app)
+  - `https://waka.ug/auth/recovery`
 
 ---
 
 ## Production environment (Vercel)
 
 ```env
-VITE_APP_URL=https://waka-ug.com
+VITE_APP_URL=https://pos.waka.ug
 VITE_GOOGLE_OAUTH_CLIENT_ID=xxxx.apps.googleusercontent.com
 VITE_SUPABASE_URL=https://YOUR_REF.supabase.co
 VITE_SUPABASE_ANON_KEY=...
@@ -81,7 +84,7 @@ Redeploy after setting `VITE_GOOGLE_OAUTH_CLIENT_ID`. Without it, the Google but
 | Symptom | Fix |
 |---------|-----|
 | Google button missing / amber warning | Set `VITE_GOOGLE_OAUTH_CLIENT_ID` and redeploy |
-| Pop-up blocked | Allow pop-ups for `waka-ug.com` |
+| Pop-up blocked | Allow pop-ups for `pos.waka.ug` |
 | `signInWithIdToken` error | Add Client ID under Supabase → Google → Authorized Client IDs |
 | Still need supabase.co in Google redirect URIs | Old build or old tab — hard refresh; confirm env var in Vercel **Production** |
 | GIS error `origin_mismatch` | Add exact origin to Google **JavaScript origins** |
@@ -94,4 +97,4 @@ Redeploy after setting `VITE_GOOGLE_OAUTH_CLIENT_ID`. Without it, the Google but
 2. Click **Continue with Google**.
 3. Confirm there is **no** navigation to `supabase.co/auth/v1/authorize`.
 4. A **popup** from `accounts.google.com` should appear.
-5. After choosing an account, you stay on `waka-ug.com` with a session (no full-page redirect to Supabase).
+5. After choosing an account, you stay on `pos.waka.ug` with a session (no full-page redirect to Supabase).

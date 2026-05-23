@@ -1,12 +1,11 @@
 /**
- * Canonical auth redirect configuration for Waka POS (Supabase + Google OAuth).
- * Production must always return https://waka-ug.com — never localhost or supabase.co as the app redirect base.
+ * Auth redirect configuration for Waka POS (Supabase + Google OAuth).
+ * Production app URL: https://pos.waka.ug
  */
 
-import { WAKA_SITE_URL } from "../config/company";
+import { WAKA_POS_URL } from "../config/company";
 
-/** Production site — must match Supabase Auth Site URL and Google OAuth branding domain (with custom auth domain). */
-export const CANONICAL_APP_URL = WAKA_SITE_URL.replace(/\/$/, "");
+export const CANONICAL_APP_URL = WAKA_POS_URL.replace(/\/$/, "");
 
 const AUTH_CALLBACK_PATH = "/auth/callback";
 const AUTH_RECOVERY_PATH = "/auth/recovery";
@@ -19,7 +18,6 @@ function parseHost(url: string): string | null {
   }
 }
 
-/** Hosts that must never be used as the post-auth redirect base in production builds. */
 export function isUnsafeAppRedirectHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
   return (
@@ -47,10 +45,7 @@ export function enforceHttpsOrigin(origin: string): string {
   }
 }
 
-/**
- * Origin used for emailRedirectTo, redirectTo, and OAuth return URLs.
- * Production: VITE_APP_URL → canonical https://waka-ug.com (never window.origin fallback).
- */
+/** Origin for email links, OAuth return URLs, and password reset. */
 export function authRedirectOrigin(): string {
   const fromEnv = import.meta.env.VITE_APP_URL?.trim().replace(/\/$/, "");
 
@@ -86,7 +81,6 @@ export function getAuthRecoveryUrl(): string {
   return `${authRedirectOrigin()}${AUTH_RECOVERY_PATH}`;
 }
 
-/** Supabase project ref from VITE_SUPABASE_URL (for dashboard / Google redirect URI docs). */
 export function getSupabaseProjectRef(): string | null {
   const url = import.meta.env.VITE_SUPABASE_URL?.trim();
   if (!url) return null;
@@ -99,12 +93,8 @@ export function getSupabaseProjectRef(): string | null {
   }
 }
 
-/**
- * Google Cloud → Authorized JavaScript origins (GIS popup / signInWithIdToken).
- * Do NOT add *.supabase.co to redirect URIs for Google login — not used by this app.
- */
 export function getGoogleOAuthJavaScriptOrigins(): string[] {
-  const origins = new Set<string>([CANONICAL_APP_URL]);
+  const origins = new Set<string>([CANONICAL_APP_URL, "https://waka.ug"]);
   if (import.meta.env.DEV) {
     origins.add("http://localhost:5173");
   }

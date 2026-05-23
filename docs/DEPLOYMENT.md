@@ -52,7 +52,7 @@ Copy examples:
 1. Create a **production** project (separate from dev/staging recommended).
 2. Run SQL migrations from `supabase/migrations/` in order (CLI: `supabase db push` or paste in SQL editor).
 3. **Auth → URL configuration**
-   - **Site URL:** `https://waka-ug.com` (must match `VITE_APP_URL`).
+   - **Site URL:** `https://pos.waka.ug` (must match `VITE_APP_URL`).
    - **Google OAuth branding:** see [GOOGLE_OAUTH_BRANDING.md](./GOOGLE_OAUTH_BRANDING.md) (custom auth domain + consent screen).
    - **Redirect URLs** (add every surface you use), for example:
      - `http://localhost:5173/**`
@@ -61,9 +61,12 @@ Copy examples:
      - `https://your-staging.vercel.app/**`
      - `https://your-staging.vercel.app/auth/callback`
      - `https://your-staging.vercel.app/auth/recovery`
-     - `https://waka-ug.com/**`
-     - `https://waka-ug.com/auth/callback`
-     - `https://waka-ug.com/auth/recovery`
+     - `https://pos.waka.ug/**`
+     - `https://pos.waka.ug/auth/callback`
+     - `https://pos.waka.ug/auth/recovery`
+     - `https://waka.ug/**`
+     - `https://waka.ug/auth/callback`
+     - `https://waka.ug/auth/recovery`
 4. **Email templates** — ensure links use the redirect host Supabase generates (tied to `emailRedirectTo` / `redirectTo` in `src/hooks/useAuth.ts`, which use `authRedirectOrigin()` from `VITE_APP_URL` or `window.location.origin`).
 5. **Secrets:** service role key only in Edge Functions / backend jobs — **not** in this SPA.
 

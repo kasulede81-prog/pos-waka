@@ -1,5 +1,7 @@
 /** Re-exports for app support — canonical source: company.ts */
 export {
+  WAKA_BRAND_NAME,
+  WAKA_SLOGAN,
   WAKA_LEGAL_COMPANY_NAME,
   WAKA_COMPANY_TYPE,
   WAKA_COMPANY_COUNTRY,

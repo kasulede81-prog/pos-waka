@@ -31,8 +31,8 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
   const content = (
     <>
       <SeoHead
-        title="Support — Waka POS Uganda"
-        description="Get help with Waka POS setup, subscriptions, backup, staff accounts, and device issues. WhatsApp and email support in Kampala, Uganda."
+        title="Support — Waka POS by Waka Technologies"
+        description="Get help with Waka POS: setup, plans, backup, staff, and devices. WhatsApp and email from Waka Technologies in Kampala, Uganda."
         path="/support"
         structuredData="contact"
       />

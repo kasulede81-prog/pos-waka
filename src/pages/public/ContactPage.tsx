@@ -4,7 +4,8 @@ import { MarketingLayout } from "../../components/marketing/MarketingLayout";
 import { SeoHead } from "../../components/marketing/SeoHead";
 import {
   WAKA_COMPANY_POSTAL_ADDRESS,
-  WAKA_LEGAL_COMPANY_NAME,
+  WAKA_BRAND_NAME,
+  WAKA_MAIN_PRODUCT,
   WAKA_OFFICE_CITY,
   WAKA_OFFICE_HOURS,
   WAKA_OFFICE_STREET,
@@ -24,7 +25,7 @@ export function ContactPage({ lang, setLang, isAuthenticated }: Props) {
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
         title="Contact Waka POS — Kampala, Uganda"
-        description={`Contact ${WAKA_LEGAL_COMPANY_NAME} for Waka POS support, sales, and office visits in Kampala, Uganda.`}
+        description={`Contact ${WAKA_BRAND_NAME} for ${WAKA_MAIN_PRODUCT} support, sales, and office visits in Kampala, Uganda.`}
         path="/contact"
         structuredData="contact"
       />

@@ -3,6 +3,7 @@ import {
   FOUNDER_JOURNEY_SUMMARY,
   FOUNDER_NAME,
   FOUNDER_PHOTO_SRC,
+  WAKA_BRAND_NAME,
   WAKA_COMPANY_COUNTRY,
   WAKA_LEGAL_COMPANY_NAME,
   WAKA_MAIN_PRODUCT,
@@ -11,8 +12,9 @@ import {
   WAKA_OFFICE_STREET,
   WAKA_PRODUCT_DESCRIPTION,
   WAKA_SITE_URL,
+  WAKA_SLOGAN,
   WAKA_SUPPORT_EMAIL,
-  absoluteUrl,
+  marketingCanonical,
   DEFAULT_OG_IMAGE,
   SEO_KEYWORDS,
 } from "../../config/company";
@@ -62,10 +64,11 @@ function organizationSchema() {
   return {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: WAKA_LEGAL_COMPANY_NAME,
+    name: WAKA_BRAND_NAME,
     legalName: WAKA_LEGAL_COMPANY_NAME,
+    slogan: WAKA_SLOGAN,
     url: WAKA_SITE_URL,
-    logo: absoluteUrl("/favicon.svg"),
+    logo: marketingCanonical("/favicon.svg"),
     email: WAKA_SUPPORT_EMAIL,
     foundingDate: "2023",
     founder: { "@type": "Person", name: FOUNDER_NAME },
@@ -88,7 +91,8 @@ function softwareSchema() {
     operatingSystem: "Web, Android",
     offers: { "@type": "Offer", price: "0", priceCurrency: "UGX" },
     description: WAKA_PRODUCT_DESCRIPTION,
-    provider: { "@type": "Organization", name: WAKA_LEGAL_COMPANY_NAME },
+    url: "https://pos.waka.ug",
+    provider: { "@type": "Organization", name: WAKA_BRAND_NAME },
     author: { "@type": "Person", name: FOUNDER_NAME },
   };
 }
@@ -99,18 +103,12 @@ function personSchema() {
     "@type": "Person",
     name: FOUNDER_NAME,
     jobTitle: "Founder & CEO",
-    description: `${FOUNDER_NAME} is a Ugandan technology entrepreneur and founder of Waka POS. ${FOUNDER_JOURNEY_SUMMARY}`,
-    image: absoluteUrl(FOUNDER_PHOTO_SRC),
-    worksFor: { "@type": "Organization", name: WAKA_LEGAL_COMPANY_NAME },
+    description: `${FOUNDER_NAME} founded ${WAKA_BRAND_NAME} and ${WAKA_MAIN_PRODUCT}. ${FOUNDER_JOURNEY_SUMMARY}`,
+    image: marketingCanonical(FOUNDER_PHOTO_SRC),
+    worksFor: { "@type": "Organization", name: WAKA_BRAND_NAME },
     nationality: { "@type": "Country", name: "Uganda" },
-    knowsAbout: [
-      "Point of sale",
-      "Business software",
-      "Inventory management",
-      "Ugandan SMEs",
-      "African startups",
-    ],
-    url: absoluteUrl("/founder"),
+    knowsAbout: ["Point of sale", "Shop software", "Inventory", "Ugandan SMEs"],
+    url: marketingCanonical("/founder"),
   };
 }
 
@@ -118,9 +116,9 @@ function localBusinessSchema() {
   return {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    name: WAKA_LEGAL_COMPANY_NAME,
+    name: WAKA_BRAND_NAME,
     image: DEFAULT_OG_IMAGE,
-    url: absoluteUrl("/contact"),
+    url: marketingCanonical("/contact"),
     telephone: "+256-792-521711",
     email: WAKA_SUPPORT_EMAIL,
     address: {
@@ -155,8 +153,8 @@ export function SeoHead({
   noindex = false,
   structuredData = "page",
 }: SeoProps) {
-  const canonical = absoluteUrl(path);
-  const fullTitle = title.includes("Waka") ? title : `${title} | ${WAKA_MAIN_PRODUCT}`;
+  const canonical = marketingCanonical(path);
+  const fullTitle = title.includes("|") ? title : `${title} | ${WAKA_MAIN_PRODUCT}`;
 
   useEffect(() => {
     document.title = fullTitle;
@@ -170,7 +168,7 @@ export function SeoHead({
     setMeta("og:type", type, "property");
     setMeta("og:url", canonical, "property");
     setMeta("og:image", image, "property");
-    setMeta("og:site_name", WAKA_MAIN_PRODUCT, "property");
+    setMeta("og:site_name", WAKA_BRAND_NAME, "property");
     setMeta("og:locale", "en_UG", "property");
 
     setMeta("twitter:card", "summary_large_image", "property");

@@ -62,7 +62,7 @@ export function AuthRecoveryPage({ lang, setLang, mode, updatePassword }: Props)
     <AuthLayout lang={lang} setLang={setLang}>
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold">{t(lang, "chooseNewPassword")}</h1>
-        <p className="mt-3 text-xs text-slate-500">{t(lang, "forgotSubtitle")}</p>
+        <p className="mt-3 text-sm text-slate-600">{t(lang, "recoveryChooseSubtitle")}</p>
 
         <form onSubmit={submit} className="mt-6 space-y-3">
           <label className="block text-sm">

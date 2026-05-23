@@ -4,12 +4,17 @@ import {
   Building2,
   Calendar,
   ChevronRight,
+  CreditCard,
   Headphones,
+  LifeBuoy,
   MapPin,
   RefreshCw,
   Sparkles,
+  Store,
   Trash2,
 } from "lucide-react";
+import { AdminHero, AdminShortcut } from "./adminUi";
+import { LovableFieldMap } from "./LovableFieldMap";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -62,6 +67,8 @@ type Props = {
   adminRow: WakaInternalAdminRow | null;
   /** Dev / soft gate: show layout without live Supabase data. */
   previewMode: boolean;
+  /** Use Lovable-import visual patterns (hero, shortcuts, simple map). */
+  lovableUi?: boolean;
 };
 
 function kampalaNowParts(): { hour: number; dateStr: string } {
@@ -193,7 +200,7 @@ function PlanPremiumCard({ lang, plan, tone }: { lang: Language; plan: PlanTierM
   );
 }
 
-export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Props) {
+export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovableUi = false }: Props) {
   const { hour, dateStr } = useMemo(() => kampalaNowParts(), []);
   const displayName =
     adminRow?.full_name?.trim() ||
@@ -368,15 +375,25 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
   }, [stats]);
 
   const workAreas = [
-    { href: "#ops-support", label: "Support", count: tickets.length, Icon: Headphones, tone: "bg-violet-50 text-violet-900" },
-    { href: "#ops-recent-shops", label: "Shops", count: recent.length, Icon: Building2, tone: "bg-orange-50 text-orange-950" },
-    { href: "#ops-annual-queue", label: "Payments", count: pendingAnnualTickets.length, Icon: Calendar, tone: "bg-amber-50 text-amber-950" },
+    { href: "#ops-support", label: "Support", count: tickets.length, Icon: lovableUi ? LifeBuoy : Headphones, tone: "bg-violet-50 text-violet-900" },
+    { href: "#ops-recent-shops", label: "Shops", count: recent.length, Icon: lovableUi ? Store : Building2, tone: "bg-orange-50 text-orange-950" },
+    { href: "#ops-annual-queue", label: "Payments", count: pendingAnnualTickets.length, Icon: lovableUi ? CreditCard : Calendar, tone: "bg-amber-50 text-amber-950" },
     { href: "#ops-districts", label: "Districts", count: districts.length, Icon: MapPin, tone: "bg-emerald-50 text-emerald-950" },
   ];
 
   return (
-    <div className="space-y-4 pb-6">
-      {/* Hero */}
+    <div className={lovableUi ? "space-y-6 pb-6" : "space-y-4 pb-6"}>
+      {lovableUi ? (
+        <AdminHero
+          greeting={t(lang, greetingKey(hour))}
+          subtitle={displayName}
+          dateLabel={dateStr}
+          roleLabel={(adminRow?.role ?? "admin").replace(/_/g, " ")}
+          districtCount={adminRow?.assigned_district_ids?.length ?? 0}
+          onRefresh={() => void loadAll()}
+          refreshing={opsLoading}
+        />
+      ) : (
       <header className="relative overflow-hidden rounded-xl border border-border bg-card p-4">
         <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -423,6 +440,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
           </div>
         </div>
       </header>
+      )}
 
       {previewMode ? (
         <p className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-semibold text-foreground">
@@ -443,22 +461,31 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
         </p>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {workAreas.map(({ href, label, count, Icon, tone }) => (
-          <a
-            key={href}
-            href={href}
-            className={clsx("rounded-2xl border border-border bg-card p-3 shadow-sm active:scale-[0.99]", tone)}
-          >
-            <span className="flex items-center justify-between gap-2">
-              <Icon className="h-4 w-4" />
-              <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-black">{count}</span>
-            </span>
-            <span className="mt-3 block text-sm font-black">{label}</span>
-            <span className="mt-0.5 block text-[11px] font-bold opacity-70">Open section</span>
-          </a>
-        ))}
-      </section>
+      {lovableUi ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <AdminShortcut href="#ops-support" Icon={LifeBuoy} label="Support" count={tickets.length} />
+          <AdminShortcut href="#ops-recent-shops" Icon={Store} label="Shops" count={recent.length} />
+          <AdminShortcut href="#ops-annual-queue" Icon={CreditCard} label="Payments" count={pendingAnnualTickets.length} />
+          <AdminShortcut href="#ops-districts" Icon={MapPin} label="Districts" count={districts.length} />
+        </div>
+      ) : (
+        <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {workAreas.map(({ href, label, count, Icon, tone }) => (
+            <a
+              key={href}
+              href={href}
+              className={clsx("rounded-2xl border border-border bg-card p-3 shadow-sm active:scale-[0.99]", tone)}
+            >
+              <span className="flex items-center justify-between gap-2">
+                <Icon className="h-4 w-4" />
+                <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-black">{count}</span>
+              </span>
+              <span className="mt-3 block text-sm font-black">{label}</span>
+              <span className="mt-0.5 block text-[11px] font-bold opacity-70">Open section</span>
+            </a>
+          ))}
+        </section>
+      )}
 
       {/* Stats — compact pulse with drill-down */}
       <section id="ops-pulse" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
@@ -1181,13 +1208,19 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode }: Pro
               <p className="mt-4 text-sm font-bold text-orange-50">
                 {t(lang, "internalMapShopCount").replace("{{count}}", String(mapPins.length))}
               </p>
-              <Suspense
-                fallback={
-                  <div className="mt-4 h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-800/80 ring-1 ring-white/10" />
-                }
-              >
-                <InternalFieldOpsMap lang={lang} pins={mapPins} accessToken={mapboxAccessToken} />
-              </Suspense>
+              {lovableUi ? (
+                <div className="mt-4">
+                  <LovableFieldMap pins={mapPins} />
+                </div>
+              ) : (
+                <Suspense
+                  fallback={
+                    <div className="mt-4 h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-800/80 ring-1 ring-white/10" />
+                  }
+                >
+                  <InternalFieldOpsMap lang={lang} pins={mapPins} accessToken={mapboxAccessToken} />
+                </Suspense>
+              )}
             </div>
           </section>
 

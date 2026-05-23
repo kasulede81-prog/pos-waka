@@ -1,31 +1,36 @@
 import type { SVGProps } from "react";
 
-/** Square POS mark — use `className="h-9 w-9 shrink-0 text-waka-600"` */
+/** Orange W with cart motif — Waka Technologies mark */
 export function WakaMarkIcon(props: SVGProps<SVGSVGElement>) {
   const { className = "", ...rest } = props;
   return (
-    <svg viewBox="0 0 48 48" role="img" aria-hidden className={className} {...rest}>
+    <svg viewBox="0 0 48 48" role="img" aria-label="Waka Technologies logo" className={className} {...rest}>
       <rect width="48" height="48" rx="12" fill="currentColor" />
-      {/* receipt teeth */}
       <path
         fill="#fff"
-        d="M14 8h20v6H14V8zm2 1.5h2.2v3H16v-3zm3.4 0h2.2v3h-2.2v-3zm3.4 0h2.2v3h-2.2v-3zm3.3 0h2.2v3h-2.2v-3zm3.4 0h2.2v3h-2.2v-3zm3.4 0H34v3h-2.2v-3z"
+        d="M8 32V14h5.5l4 11.5L21.5 14h4l4 11.5L34 14h5.5v18h-6V24.5L25.5 32h-3.6l-7.4-11V32H8z"
       />
-      {/* screen */}
-      <rect x="11" y="16" width="26" height="22" rx="3" fill="#fff" />
-      {/* subtle W */}
-      <path
-        fill="currentColor"
-        fillOpacity={0.2}
-        d="M16 34V22h3l2.2 7.5L23.5 22h1L28 29.5 30 22h3v12h-2.8v-8.2L26.5 34h-1.8l-3.6-8.3V34H16z"
-      />
-      {/* keypad */}
-      <g fill="#ea580c" fillOpacity={0.55}>
-        <rect x="15" y="36" width="3.5" height="3.5" rx="0.7" />
-        <rect x="20.5" y="36" width="3.5" height="3.5" rx="0.7" />
-        <rect x="26" y="36" width="3.5" height="3.5" rx="0.7" />
-        <rect x="31.5" y="36" width="3.5" height="3.5" rx="0.7" />
-      </g>
+      <path fill="#fff" d="M30 32h10v2.2H30V32z" />
+      <circle fill="#fff" cx="33" cy="36.5" r="1.6" />
+      <circle fill="#fff" cx="37" cy="36.5" r="1.6" />
     </svg>
+  );
+}
+
+type WordmarkProps = SVGProps<SVGSVGElement> & { showProduct?: boolean };
+
+/** Full wordmark for marketing header */
+export function WakaBrandWordmark({ className = "", showProduct = true }: WordmarkProps) {
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-2.5 ${className}`}>
+      <WakaMarkIcon className="h-11 w-11 shrink-0 text-orange-600 shadow-md" />
+      <span className="min-w-0 leading-tight">
+        <span className="block truncate text-base font-black text-orange-600">Waka</span>
+        <span className="block truncate text-sm font-black text-stone-800">Technologies</span>
+        {showProduct ? (
+          <span className="block truncate text-[10px] font-bold uppercase tracking-wide text-stone-500">Waka POS</span>
+        ) : null}
+      </span>
+    </span>
   );
 }

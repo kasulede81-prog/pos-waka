@@ -45,11 +45,12 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: "autoUpdate",
-        includeAssets: ["favicon.svg"],
+        includeAssets: ["favicon.svg", "og-waka-technologies.png"],
         manifest: {
           name: appName,
           short_name: shortName,
-          description: "Trusted point of sale for Uganda — offline-first, simple for every shop.",
+          description:
+            "Waka POS by Waka Technologies — simple sales, stock, and reports for shops in Uganda. Works offline too.",
           theme_color: "#ea580c",
           background_color: "#fff7ed",
           display: "standalone",

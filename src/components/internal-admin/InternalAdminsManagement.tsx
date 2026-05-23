@@ -12,7 +12,7 @@ import {
   type InternalAdminRow,
 } from "../../lib/wakaInternalAdmin";
 
-type Props = { lang: Language };
+type Props = { lang: Language; lovableUi?: boolean };
 
 type RoleCode = "super_admin" | "operations_admin" | "support_admin" | "field_agent";
 
@@ -77,7 +77,7 @@ function Modal({
   );
 }
 
-export function InternalAdminsManagement({ lang }: Props) {
+export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [admins, setAdmins] = useState<InternalAdminRow[]>([]);
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
@@ -219,7 +219,8 @@ export function InternalAdminsManagement({ lang }: Props) {
   };
 
   return (
-    <div className="space-y-6 pb-12 pt-2">
+    <div className={lovableUi ? "space-y-6 pb-6" : "space-y-6 pb-12 pt-2"}>
+      {!lovableUi ? (
       <header className="rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-orange-50/40 to-white p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -236,6 +237,16 @@ export function InternalAdminsManagement({ lang }: Props) {
           </div>
         </div>
       </header>
+      ) : (
+        <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-wider text-stone-500">{t(lang, "internalAdminsHeaderTitle")}</p>
+          <h1 className="mt-1 text-xl font-black text-stone-900">{t(lang, "internalAdminsHeaderH1")}</h1>
+          <p className="mt-1 text-sm text-stone-600">{t(lang, "internalAdminsHeaderSub")}</p>
+          <p className="mt-2 text-xs font-bold text-stone-500">
+            {t(lang, "internalAdminsCountLabel")}: {admins.length}
+          </p>
+        </div>
+      )}
 
       <section className="grid gap-5 lg:grid-cols-3">
         <div className="lg:col-span-1 space-y-4">

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ArrowLeft } from "lucide-react";
 import { Link, Navigate, useParams } from "react-router-dom";
+import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
@@ -115,38 +117,22 @@ export function InternalShopOpsPage({ lang, email }: Props) {
     window.dispatchEvent(new Event("waka:subscription-updated"));
   };
 
-  if (loadingAdmin) {
-    return (
-      <div className="pb-12 pt-2">
-        <div className="h-32 animate-pulse rounded-3xl bg-stone-200/70" />
-      </div>
-    );
-  }
-
-  if (!adminRow) {
-    return <Navigate to="/" replace />;
-  }
-
-  if (!shopId) {
+  if (!shopId && !loadingAdmin) {
     return <Navigate to="/internal/waka" replace />;
   }
 
   const subId = detail?.subscription?.id;
 
   return (
-    <div className="fixed inset-0 z-[90] flex h-[100dvh] flex-col overflow-hidden bg-muted/50 font-admin text-foreground">
-      <header className="flex shrink-0 items-center gap-3 bg-primary px-4 py-3 text-primary-foreground">
-        <Link to="/internal/waka#ops-recent-shops" className="text-xl font-black leading-none" aria-label={t(lang, "internalShopProfileBack")}>
-          ←
+    <WakaAdminShell lang={lang} adminRow={adminRow} loading={loadingAdmin} active="shop">
+      <div className="mx-auto max-w-3xl space-y-4 pb-8">
+        <Link
+          to="/internal/waka#ops-recent-shops"
+          className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-700 hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          {t(lang, "internalShopProfileBack")}
         </Link>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-black">{detail?.shop.name ?? "Shop profile"}</p>
-          <p className="truncate text-[11px] font-semibold text-primary-foreground/80">{email ?? "Internal admin"}</p>
-        </div>
-      </header>
-
-      <main className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-        <div className="mx-auto max-w-3xl space-y-4 pb-8">
 
       {loadingShop ? (
         <p className="rounded-3xl border border-stone-200 bg-white px-5 py-8 text-center font-semibold text-stone-600">
@@ -524,8 +510,7 @@ export function InternalShopOpsPage({ lang, email }: Props) {
           ) : null}
         </>
       )}
-        </div>
-      </main>
-    </div>
+      </div>
+    </WakaAdminShell>
   );
 }

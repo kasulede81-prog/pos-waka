@@ -9,7 +9,7 @@ type CallbackState = "loading" | "success" | "error";
 
 /**
  * OAuth / email confirmation return URL.
- * Add `https://waka-ug.com/auth/callback` to Supabase Auth → Redirect URLs.
+ * Add `https://pos.waka.ug/auth/callback` to Supabase Auth → Redirect URLs.
  */
 export function AuthCallbackPage() {
   const [state, setState] = useState<CallbackState>("loading");
