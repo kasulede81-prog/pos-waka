@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
-import type { Language, UserRole } from "../types";
+import type { Language, ReceiptPaperSize, UserRole } from "../types";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -28,6 +28,14 @@ type Props = {
 };
 
 const ROLE_OPTIONS: UserRole[] = ["owner", "manager", "cashier", "stock_keeper"];
+
+const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
+
+function receiptPaperLabelKey(size: ReceiptPaperSize): string {
+  if (size === "58mm") return "receiptPaperSize58";
+  if (size === "80mm") return "receiptPaperSize80";
+  return "receiptPaperSizeA4";
+}
 
 export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode }: Props) {
   const navigate = useNavigate();
@@ -421,6 +429,30 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
             />
             {t(lang, "kioskQuickSellLabel")}
           </label>
+
+          <div className="mt-8 rounded-2xl border-2 border-stone-200 bg-white p-4">
+            <p className="text-lg font-black text-stone-950">{t(lang, "receiptPrintSettingsTitle")}</p>
+            <p className="mt-1 text-sm text-stone-600">{t(lang, "receiptPrintSettingsSub")}</p>
+            <p className="mt-2 text-xs font-semibold text-stone-500">{t(lang, "receiptPrintAirPrintHint")}</p>
+            <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "receiptPaperSizeLabel")}</label>
+            <select
+              value={preferences.receiptPaperSize ?? "80mm"}
+              onChange={(e) => setPreferences({ receiptPaperSize: e.target.value as ReceiptPaperSize })}
+              className="mt-2 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-semibold"
+            >
+              {RECEIPT_PAPER_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {t(lang, receiptPaperLabelKey(size))}
+                </option>
+              ))}
+            </select>
+            <Link
+              to="/office/hardware"
+              className="mt-3 inline-block text-sm font-bold text-waka-800 underline"
+            >
+              {t(lang, "receiptPrintHardwareLink")} →
+            </Link>
+          </div>
 
           <div className="mt-8 rounded-2xl border-2 border-waka-200/80 bg-white/80 p-4">
             <p className="text-lg font-black text-waka-950">{t(lang, "settingsBackOfficePinTitle")}</p>

@@ -2,8 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { readSyncQueue } from "../offline/localDb";
-import { pullCloudAndMergeIntoStore } from "../offline/cloudSync";
-import { flushSyncQueue } from "../offline/syncEngine";
+import { countUnsyncedSales, syncShopWithCloud } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
 import type { SyncStatus } from "../types";
@@ -20,6 +19,11 @@ export type SyncStatusApi = {
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
+async function pendingUploadCount(): Promise<number> {
+  const queue = await readSyncQueue();
+  return queue.length + countUnsyncedSales();
+}
+
 function useSyncStatusEngine(): SyncStatusApi {
   const { isOnline } = useOfflineStatus();
   const [pendingCount, setPendingCount] = useState(0);
@@ -28,7 +32,7 @@ function useSyncStatusEngine(): SyncStatusApi {
   const syncingRef = useRef(false);
 
   const refreshQueue = useCallback(() => {
-    void readSyncQueue().then((q) => setPendingCount(q.length));
+    void pendingUploadCount().then(setPendingCount);
     setHealth(readSyncHealthMeta());
   }, []);
 
@@ -40,9 +44,8 @@ function useSyncStatusEngine(): SyncStatusApi {
     writeSyncHealthMeta({ lastAttemptAt: attemptAt });
     setHealth(readSyncHealthMeta());
     try {
-      await pullCloudAndMergeIntoStore();
-      const { failed } = await flushSyncQueue();
-      if (failed === 0) {
+      const { push, queueFailed } = await syncShopWithCloud();
+      if (push.fail === 0 && queueFailed === 0) {
         writeSyncHealthMeta({
           lastSuccessAt: attemptAt,
           lastIssueCode: "none",
@@ -63,8 +66,7 @@ function useSyncStatusEngine(): SyncStatusApi {
       syncingRef.current = false;
       setSyncing(false);
       setHealth(readSyncHealthMeta());
-      const q = await readSyncQueue();
-      setPendingCount(q.length);
+      setPendingCount(await pendingUploadCount());
     }
   }, []);
 

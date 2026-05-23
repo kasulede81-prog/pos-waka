@@ -7,12 +7,14 @@ import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
+import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { usePosStore, flushPendingPersist } from "../store/usePosStore";
 
 type LocalSession = { email: string };
 
 const LOCAL_AUTH_KEY = "waka-pos-local-session";
+const PENDING_REFERRAL_KEY = "waka-pending-referral";
 
 const AUTH_MODE: "supabase" | "local" = hasSupabaseConfig ? "supabase" : "local";
 
@@ -73,6 +75,8 @@ export type SignUpProfileMeta = {
   defaultCurrency?: string;
   latitude?: number;
   longitude?: number;
+  /** Marketing agent referral code (optional). */
+  referralCode?: string;
 };
 
 export function useAuth() {
@@ -81,6 +85,18 @@ export function useAuth() {
   const [localEmail, setLocalEmail] = useState<string | null>(null);
 
   const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
+
+  const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
+    if (!next?.user || !supabase) return;
+    const meta = next.user.user_metadata as Record<string, unknown> | undefined;
+    const fromMeta = String(meta?.referral_code ?? "").trim();
+    const fromStorage = sessionStorage.getItem(PENDING_REFERRAL_KEY)?.trim() ?? "";
+    const code = fromMeta || fromStorage;
+    if (!code) return;
+    const res = await applyReferralCode(code);
+    if (res.ok) sessionStorage.removeItem(PENDING_REFERRAL_KEY);
+    else if (import.meta.env.DEV) console.warn("[waka-auth] apply_referral_code", res.error);
+  }, []);
 
   const ensureWorkspaceForSession = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
@@ -141,11 +157,12 @@ export function useAuth() {
         }
       }
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+      await tryApplyPendingReferral(next);
     } catch (e) {
       console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
       throw new Error("Could not finish creating your shop. Please try again.");
     }
-  }, [bootstrappedUserIds]);
+  }, [bootstrappedUserIds, tryApplyPendingReferral]);
 
   useEffect(() => {
     if (!hasSupabaseConfig || !supabase) {
@@ -268,6 +285,11 @@ export function useAuth() {
     if (profile?.latitude != null && profile?.longitude != null && !Number.isNaN(profile.latitude) && !Number.isNaN(profile.longitude)) {
       meta.latitude = profile.latitude;
       meta.longitude = profile.longitude;
+    }
+    const refCode = profile?.referralCode?.trim().toUpperCase();
+    if (refCode && refCode.length >= 3) {
+      meta.referral_code = refCode;
+      sessionStorage.setItem(PENDING_REFERRAL_KEY, refCode);
     }
 
     const firstAttempt = await supabase.auth.signUp({

@@ -644,28 +644,27 @@ export function StockPage({ lang }: { lang: Language }) {
                     className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
                   />
                 </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="block text-sm font-bold text-slate-800">
-                    {t(lang, "buyingPackPriceLabel")}
-                    <input
-                      value={buyPackPrice}
-                      onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                      inputMode="numeric"
-                      placeholder="0"
-                      className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
-                    />
-                  </label>
-                  <label className="block text-sm font-bold text-slate-800">
-                    {t(lang, "howManyInsideLabel")}
-                    <input
-                      value={piecesInside}
-                      onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                      inputMode="decimal"
-                      placeholder="20"
-                      className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
-                    />
-                  </label>
-                </div>
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "buyingPackPriceLabel")}
+                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{t(lang, "buyingPackPriceHint")}</p>
+                  <input
+                    value={buyPackPrice}
+                    onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                    inputMode="numeric"
+                    placeholder="12000"
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "howManyInsideLabel")}
+                  <input
+                    value={piecesInside}
+                    onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                    inputMode="decimal"
+                    placeholder="30"
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
+                  />
+                </label>
                 <label className="block text-sm font-bold text-slate-800">
                   {t(lang, "supplierOptionalLabel")}
                   <input

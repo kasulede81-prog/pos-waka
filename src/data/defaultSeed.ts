@@ -25,6 +25,7 @@ export function createDefaultPreferences(): ShopPreferences {
     activeStaffId: null,
     posLocked: false,
     shifts: [],
+    receiptPaperSize: "80mm",
   };
 }
 

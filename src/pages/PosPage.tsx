@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ScanLine, Search, X } from "lucide-react";
-import type { Language, LineInputMode, Product, Sale } from "../types";
+import type { Language, LineInputMode, Product } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
@@ -28,50 +28,7 @@ const MAX_RECENT_SEARCHES = 4;
 const MAX_RECENT_PRODUCTS = 14;
 const MAX_FAVORITE_PRODUCTS = 20;
 
-function buildSaleReceiptText(params: {
-  shopName: string;
-  cashier: string;
-  sale: Sale;
-  customerName: string | null;
-  customerBalanceUgx: number | null;
-  labels: {
-    cashier: string;
-    items: string;
-    total: string;
-    paid: string;
-    debtSale: string;
-    balance: string;
-    time: string;
-  };
-}): string {
-  const { shopName, cashier, sale, customerName, customerBalanceUgx, labels } = params;
-  const lines: string[] = [];
-  lines.push(shopName);
-  lines.push("");
-  lines.push(`${labels.cashier}: ${cashier}`);
-  lines.push(`${labels.time}: ${new Date(sale.createdAt).toLocaleString()}`);
-  lines.push("");
-  lines.push(labels.items);
-  for (const ln of sale.lines) {
-    const q =
-      ln.inputMode === "money"
-        ? `${ln.name} (${(ln.moneyAmountUgx ?? ln.lineTotalUgx).toLocaleString()} UGX)`
-        : `${ln.name} × ${ln.quantity}`;
-    lines.push(`· ${q}  →  UGX ${ln.lineTotalUgx.toLocaleString()}`);
-  }
-  lines.push("");
-  lines.push(`${labels.total}: UGX ${sale.totalUgx.toLocaleString()}`);
-  lines.push(`${labels.paid}: UGX ${sale.cashPaidUgx.toLocaleString()}`);
-  if (sale.debtUgx > 0) {
-    lines.push(`${labels.debtSale}: UGX ${sale.debtUgx.toLocaleString()}`);
-    if (customerName) lines.push(`${labels.balance} (${customerName}): UGX ${(customerBalanceUgx ?? 0).toLocaleString()}`);
-    else lines.push(`${labels.balance}: UGX ${(customerBalanceUgx ?? 0).toLocaleString()}`);
-  }
-  lines.push("");
-  lines.push("—");
-  lines.push("Waka POS");
-  return lines.join("\n");
-}
+import { buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
 const SEARCH_ALIASES: Record<string, string[]> = {
   blueband: ["margarine"],
   margarine: ["blueband"],
@@ -1257,17 +1214,8 @@ export function PosPage({ lang }: { lang: Language }) {
                 type="button"
                 className="min-h-[48px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white"
                 onClick={() => {
-                  const w = window.open("", "_blank", "noopener,noreferrer,width=400,height=600");
-                  if (!w) return;
-                  w.document.open();
-                  w.document.write(
-                    `<!doctype html><meta charset="utf-8"/><title>Receipt</title><body style="font-family:system-ui,sans-serif;padding:16px"><pre id="waka-r" style="white-space:pre-wrap;margin:0"></pre></body></html>`,
-                  );
-                  w.document.close();
-                  w.document.getElementById("waka-r")!.textContent = receiptPlain;
-                  w.focus();
-                  w.print();
-                  w.close();
+                  const ok = printReceiptText(receiptPlain, preferences.receiptPaperSize ?? "80mm");
+                  if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
                 }}
               >
                 {t(lang, "receiptPrint")}

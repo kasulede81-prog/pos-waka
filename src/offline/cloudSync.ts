@@ -175,6 +175,14 @@ function mergeById<T extends { id: string }>(local: T[], remote: T[], pick: (a: 
   return [...map.values()];
 }
 
+function markSaleSyncState(saleId: string, synced: boolean, errorCode: string | null): void {
+  usePosStore.setState((s) => ({
+    sales: s.sales.map((x) =>
+      x.id === saleId ? { ...x, pendingSync: !synced, lastSyncError: synced ? null : errorCode } : x,
+    ),
+  }));
+}
+
 export async function pushProductToCloud(product: Product, ctx: ShopCtx, deleted = false): Promise<boolean> {
   if (!supabase || !isUuid(product.id)) return false;
   if (deleted) {
@@ -196,14 +204,20 @@ export async function pushCustomerToCloud(customer: Customer, ctx: ShopCtx): Pro
 }
 
 export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean> {
-  if (!supabase || !isUuid(sale.id)) return false;
+  if (!supabase || !isUuid(sale.id)) {
+    markSaleSyncState(sale.id, false, "invalid_sale_id");
+    return false;
+  }
 
   for (const line of sale.lines) {
     if (!isUuid(line.productId)) continue;
     const p = usePosStore.getState().products.find((x) => x.id === line.productId);
     if (p) {
       const ok = await pushProductToCloud(p, ctx);
-      if (!ok) return false;
+      if (!ok) {
+        markSaleSyncState(sale.id, false, "product_push_failed");
+        return false;
+      }
     }
   }
 
@@ -228,7 +242,10 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
   };
 
   const { error: saleErr } = await supabase.from("sales").upsert(saleRow, { onConflict: "id" });
-  if (saleErr) return false;
+  if (saleErr) {
+    markSaleSyncState(sale.id, false, "sale_upsert_failed");
+    return false;
+  }
 
   await supabase.from("sale_line_items").delete().eq("sale_id", sale.id);
 
@@ -252,7 +269,10 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
 
   if (lineRows.length > 0) {
     const { error: linesErr } = await supabase.from("sale_line_items").insert(lineRows);
-    if (linesErr) return false;
+    if (linesErr) {
+      markSaleSyncState(sale.id, false, "sale_lines_failed");
+      return false;
+    }
   }
 
   await supabase.from("sale_payments").delete().eq("sale_id", sale.id);
@@ -264,7 +284,10 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
       amount_ugx: sale.cashPaidUgx,
       recorded_by: ctx.userId,
     });
-    if (payErr) return false;
+    if (payErr) {
+      markSaleSyncState(sale.id, false, "sale_payment_failed");
+      return false;
+    }
   }
 
   const { error: completeErr } = await supabase
@@ -276,12 +299,24 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
     })
     .eq("id", sale.id)
     .eq("shop_id", ctx.shopId);
-  if (completeErr) return false;
+  if (completeErr) {
+    markSaleSyncState(sale.id, false, "sale_complete_failed");
+    return false;
+  }
 
-  usePosStore.setState((s) => ({
-    sales: s.sales.map((x) => (x.id === sale.id ? { ...x, pendingSync: false, lastSyncError: null } : x)),
-  }));
+  markSaleSyncState(sale.id, true, null);
   return true;
+}
+
+/** Push one sale to Supabase as soon as possible (after checkout). */
+export async function syncSaleImmediately(saleId: string): Promise<boolean> {
+  if (!hasSupabaseConfig) return false;
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+  const sale = usePosStore.getState().sales.find((s) => s.id === saleId);
+  if (!sale) return false;
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
+  return pushSaleToCloud(sale, ctx);
 }
 
 export async function processCloudSyncOperation(op: SyncOperation): Promise<boolean> {
@@ -359,7 +394,7 @@ export async function pullShopDataFromCloud(): Promise<{
     .from("sales")
     .select("*, sale_line_items(*)")
     .eq("shop_id", ctx.shopId)
-    .eq("status", "completed")
+    .in("status", ["completed", "draft"])
     .order("created_at", { ascending: false })
     .limit(3000);
   if (sErr) return null;
@@ -436,27 +471,42 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
   return true;
 }
 
-/** Push all local products/sales still marked pending to cloud (one-time recovery). */
+/** Push local rows still marked pendingSync to cloud (recovery / new device). */
 export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: number }> {
   const ctx = await resolveShopCtx();
   if (!ctx) return { ok: 0, fail: 0 };
 
   let ok = 0;
   let fail = 0;
-  const { products, sales, customers } = usePosStore.getState();
+  const { sales } = usePosStore.getState();
 
-  for (const p of products) {
-    if (await pushProductToCloud(p, ctx)) ok += 1;
-    else fail += 1;
-  }
-  for (const c of customers) {
-    if (await pushCustomerToCloud(c, ctx)) ok += 1;
-    else fail += 1;
-  }
   for (const s of sales) {
+    if (!s.pendingSync) continue;
     if (await pushSaleToCloud(s, ctx)) ok += 1;
     else fail += 1;
   }
 
   return { ok, fail };
+}
+
+/** Pull cloud data, push pending local rows, then drain the offline queue. */
+export async function syncShopWithCloud(): Promise<{
+  pulled: boolean;
+  push: { ok: number; fail: number };
+  queueFailed: number;
+}> {
+  const pulled = await pullCloudAndMergeIntoStore();
+  let push = { ok: 0, fail: 0 };
+  let queueFailed = 0;
+  if (typeof navigator === "undefined" || navigator.onLine) {
+    push = await pushAllPendingToCloud();
+    const { flushSyncQueue } = await import("./syncEngine");
+    const result = await flushSyncQueue();
+    queueFailed = result.failed;
+  }
+  return { pulled, push, queueFailed };
+}
+
+export function countUnsyncedSales(): number {
+  return usePosStore.getState().sales.filter((s) => s.pendingSync).length;
 }

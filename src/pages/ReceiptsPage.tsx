@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { CalendarDays, ChevronDown, FileDown } from "lucide-react";
+import { CalendarDays, ChevronDown, FileDown, Printer } from "lucide-react";
 import type { Language, Sale } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "../lib/datesUg";
+import { buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
 
 function formatReceiptsDayHeading(dateKey: string): string {
   const parts = dateKey.split("-").map(Number);
@@ -58,6 +59,31 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   }, [pruneExpiredSales]);
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
+  const customers = usePosStore((s) => s.customers);
+
+  const printSale = (sale: Sale) => {
+    const shopName = shopLabel || "Waka POS";
+    const cashier = (actor.displayName ?? actor.userId).trim();
+    const cust = sale.customerId ? customers.find((c) => c.id === sale.customerId) : null;
+    const text = buildSaleReceiptText({
+      shopName,
+      cashier,
+      sale,
+      customerName: cust?.name ?? null,
+      customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
+      labels: {
+        cashier: t(lang, "receiptCashier"),
+        items: t(lang, "receiptItemsLabel"),
+        total: t(lang, "receiptTotalLabel"),
+        paid: t(lang, "receiptPaidLabel"),
+        debtSale: t(lang, "receiptDebtLine"),
+        balance: t(lang, "receiptBalanceLine"),
+        time: t(lang, "receiptTimeLabel"),
+      },
+    });
+    const ok = printReceiptText(text, preferences.receiptPaperSize ?? "80mm");
+    if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
+  };
 
   const filteredSales = useMemo(
     () => sales.filter((s) => saleMatchesReceiptRange(s.createdAt, range)),
@@ -199,6 +225,14 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                       </li>
                     ))}
                   </ul>
+                  <button
+                    type="button"
+                    onClick={() => printSale(sale)}
+                    className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
+                  >
+                    <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    {t(lang, "receiptPrint")}
+                  </button>
                 </article>
               ))}
             </div>

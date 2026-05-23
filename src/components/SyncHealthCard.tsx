@@ -3,6 +3,8 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { useOfflineStatus } from "../hooks/useOfflineStatus";
+import { countUnsyncedSales } from "../offline/cloudSync";
+import { tTemplate } from "../lib/i18n";
 
 type Props = { lang: Language };
 
@@ -26,6 +28,7 @@ export function SyncHealthCard({ lang }: Props) {
   const [msg, setMsg] = useState<string | null>(null);
   const h = sync.health;
 
+  const unsyncedSales = countUnsyncedSales();
   const needsAttention = isOnline && (h.lastIssueCode === "error" || (h.lastIssueCode === "partial" && sync.pendingCount > 5));
 
   return (
@@ -33,6 +36,12 @@ export function SyncHealthCard({ lang }: Props) {
       <p className="text-xl font-black text-stone-900">{t(lang, "syncDiagnosticsTitle")}</p>
       <p className="mt-1 text-sm text-stone-600">{t(lang, "syncDiagnosticsSub")}</p>
       <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-950">{t(lang, "syncMultiDeviceHint")}</p>
+
+      {unsyncedSales > 0 ? (
+        <p className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+          {tTemplate(lang, "unsyncedSalesHint", { count: String(unsyncedSales) })}
+        </p>
+      ) : null}
 
       {needsAttention ? (
         <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">

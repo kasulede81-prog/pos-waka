@@ -302,6 +302,9 @@ export type StaffAccount = {
   updatedAt: string;
 };
 
+/** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */
+export type ReceiptPaperSize = "58mm" | "80mm" | "a4";
+
 export type ShopPreferences = {
   businessType: BusinessType;
   /** Giant one-hand sell screen */
@@ -360,6 +363,8 @@ export type ShopPreferences = {
   recentProductIds?: string[];
   /** Sell screen category chip: real category name, or `__waka_uncategorized__`; omit / null = All */
   posSellCategoryFilter?: string | null;
+  /** Thermal / AirPrint receipt width (Settings → Receipts). */
+  receiptPaperSize?: ReceiptPaperSize;
 };
 
 export type SyncOperationKind =

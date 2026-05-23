@@ -7,22 +7,26 @@ export async function resolvePrimaryOrganizationForUser(userId: string): Promise
 } | null> {
   if (!supabase) return null;
 
-  const { data: member, error: mErr } = await supabase
+  const { data: members, error: mErr } = await supabase
     .from("shop_members")
-    .select("shop_id")
+    .select("shop_id, role, created_at")
     .eq("user_id", userId)
-    .limit(1)
-    .maybeSingle();
-  if (mErr || !member?.shop_id) return null;
+    .order("created_at", { ascending: true });
+  if (mErr || !members?.length) return null;
+
+  const ownerRow = members.find((m) => m.role === "owner");
+  const managerRow = members.find((m) => m.role === "manager");
+  const shopId = (ownerRow ?? managerRow ?? members[0])?.shop_id;
+  if (!shopId) return null;
 
   const { data: shop, error: sErr } = await supabase
     .from("shops")
     .select("organization_id")
-    .eq("id", member.shop_id)
+    .eq("id", shopId)
     .maybeSingle();
   if (sErr || !shop?.organization_id) return null;
 
-  return { organizationId: shop.organization_id, shopId: member.shop_id };
+  return { organizationId: shop.organization_id, shopId };
 }
 
 /**

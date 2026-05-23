@@ -52,6 +52,9 @@ const StaffActivityPage = lazy(() =>
 const HardwareSettingsPage = lazy(() =>
   import("./pages/HardwareSettingsPage").then((m) => ({ default: m.HardwareSettingsPage })),
 );
+const MarketingAgentPage = lazy(() =>
+  import("./pages/MarketingAgentPage").then((m) => ({ default: m.MarketingAgentPage })),
+);
 
 function LazyWait() {
   return (
@@ -194,6 +197,16 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
+            <Route
+              path="agent"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <MarketingAgentPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="upgrade" element={<UpgradePage lang={lang} />} />
             <Route
               path="stock"
@@ -285,6 +298,7 @@ function App() {
             />
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/agents" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
               </Route>

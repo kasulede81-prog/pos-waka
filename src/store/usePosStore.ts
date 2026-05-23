@@ -881,6 +881,9 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     void queueRemote("sale", { saleId: sale.id });
+    if (hasSupabaseConfig && typeof navigator !== "undefined" && navigator.onLine) {
+      void import("../offline/cloudSync").then((m) => m.syncSaleImmediately(sale.id));
+    }
     void clearPersistedDraft();
     pushAudit("sale_completed", `Sale UGX ${total.toLocaleString()}`, {
       saleId: sale.id,
@@ -1490,6 +1493,10 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       p.posSellCategoryFilter === undefined || p.posSellCategoryFilter === null || String(p.posSellCategoryFilter).trim() === ""
         ? undefined
         : String(p.posSellCategoryFilter).trim().slice(0, 120),
+    receiptPaperSize:
+      p.receiptPaperSize === "58mm" || p.receiptPaperSize === "80mm" || p.receiptPaperSize === "a4"
+        ? p.receiptPaperSize
+        : base.receiptPaperSize ?? "80mm",
   };
 }
 
@@ -1616,12 +1623,13 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   usePosStore.getState().pruneExpiredSales();
 
   if (hasSupabaseConfig && key.startsWith("sb:")) {
-    const { pullCloudAndMergeIntoStore, pushAllPendingToCloud } = await import("../offline/cloudSync");
-    await pullCloudAndMergeIntoStore();
+    const runCloudSync = async () => {
+      const { syncShopWithCloud } = await import("../offline/cloudSync");
+      await syncShopWithCloud();
+    };
+    await runCloudSync();
     if (typeof navigator !== "undefined" && navigator.onLine) {
-      await pushAllPendingToCloud();
-      const { flushSyncQueue } = await import("../offline/syncEngine");
-      await flushSyncQueue();
+      window.setTimeout(() => void runCloudSync(), 2500);
     }
   }
 }

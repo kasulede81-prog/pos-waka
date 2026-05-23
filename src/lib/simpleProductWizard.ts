@@ -122,7 +122,7 @@ export function buyLabelForKind(kind: BuyPackKind, custom: string, lang: Languag
   return t(lang, row.labelKey as "buyHow_tray");
 }
 
-function parseQtyFromSellLabel(label: string): number | null {
+export function parseQtyFromSellLabel(label: string): number | null {
   const n = label.toLowerCase();
   if (/\bfull\b|\bwhole\b|\bentire\b|\btray\b|\bcrate\b|\bcarton\b/.test(n)) return null;
   const m = n.match(/(\d+(?:\.\d+)?)\s*(?:egg|bottle|packet|piece|kg|kilo|litre|liter|ea)?/);
@@ -130,6 +130,47 @@ function parseQtyFromSellLabel(label: string): number | null {
   if (/\bhalf\b|½|1\/2/.test(n)) return 0.5;
   if (/\bone\b|1\s/.test(n) || /^1\b/.test(n.trim())) return 1;
   return null;
+}
+
+/** Cost per sell unit (egg, bottle, kg…) from what you paid for the whole pack. */
+export function wizardCostPerSellUnitUgx(
+  packPriceUgx: number,
+  piecesInside: number,
+  buyHow: BuyPackKind,
+): number | null {
+  if (packPriceUgx <= 0) return null;
+  if (buyHow === "kg") return packPriceUgx;
+  const pieces = Math.max(1, piecesInside);
+  return Math.floor(packPriceUgx / pieces);
+}
+
+export function estimateSellOptionProfitUgx(input: {
+  buyHow: BuyPackKind;
+  packPriceUgx: number;
+  piecesInside: number;
+  option: WizardSellOption;
+}): number | null {
+  const { buyHow, packPriceUgx, piecesInside, option } = input;
+  const price = Math.floor(Number(option.priceUgx.replace(/\D/g, "")) || 0);
+  if (price <= 0 || packPriceUgx <= 0) return null;
+
+  const costPer = wizardCostPerSellUnitUgx(packPriceUgx, piecesInside, buyHow);
+  if (costPer == null) return null;
+
+  const label = option.label.trim();
+  const pieces = Math.max(1, piecesInside);
+  if (pieces > 1 && /\bfull|whole|entire|tray|crate|carton\b/i.test(label.toLowerCase())) {
+    return price - packPriceUgx;
+  }
+
+  const qty = parseQtyFromSellLabel(label);
+  if (qty != null && qty > 0) {
+    if (buyHow === "kg") return price - Math.floor(qty * costPer);
+    return price - Math.floor(qty * costPer);
+  }
+
+  if (buyHow === "kg" || buyHow === "piece") return price - costPer;
+  return price - costPer;
 }
 
 export type BuiltWizardProduct = {

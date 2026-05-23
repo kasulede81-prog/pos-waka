@@ -10,6 +10,7 @@ import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
 import { InternalOpsDashboard } from "../components/internal-admin/InternalOpsDashboard";
 import { InternalAdminsManagement } from "../components/internal-admin/InternalAdminsManagement";
 import { InternalActivationOpsPage } from "./InternalActivationOpsPage";
+import { InternalMarketingAgents } from "../components/internal-admin/InternalMarketingAgents";
 
 type Props = {
   lang: Language;
@@ -22,6 +23,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   const location = useLocation();
   const activeHash = location.hash;
   const isAdminsRoute = location.pathname === "/internal/waka/admins";
+  const isAgentsRoute = location.pathname === "/internal/waka/agents";
   const isActivationsRoute = location.pathname === "/internal/waka/activations";
   const previewRequested = isInternalAdminPreviewActive(location.search);
 
@@ -46,11 +48,13 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     [adminRow, previewMode],
   );
 
-  const shellActive = isActivationsRoute ? "activations" : isAdminsRoute ? "admins" : "overview";
+  const shellActive = isActivationsRoute ? "activations" : isAdminsRoute ? "admins" : isAgentsRoute ? "agents" : "overview";
 
   let body: React.ReactNode;
   if (isActivationsRoute) {
     body = <InternalActivationOpsPage lang={lang} lovableUi previewMode={previewMode} />;
+  } else if (isAgentsRoute) {
+    body = <InternalMarketingAgents lang={lang} lovableUi previewMode={previewMode} />;
   } else if (isAdminsRoute) {
     if (!previewMode && adminRow?.role !== "super_admin") {
       body = (

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
+import clsx from "clsx";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { shelfIconFor } from "../../lib/productCategories";
@@ -7,7 +8,9 @@ import {
   BUY_PACK_OPTIONS,
   COMMON_PRODUCT_CHIPS,
   buildProductFromSimpleWizard,
+  estimateSellOptionProfitUgx,
   hintForProductName,
+  wizardCostPerSellUnitUgx,
   type BuiltWizardProduct,
   type BuyPackKind,
   type WizardSellOption,
@@ -16,7 +19,7 @@ import {
 
 type Step = "name" | "buyHow" | "inside" | "buyPrice" | "stock" | "sell" | "shelf";
 
-const STEPS: Step[] = ["name", "buyHow", "inside", "buyPrice", "stock", "sell", "shelf"];
+const STEPS: Step[] = ["name", "buyHow", "buyPrice", "inside", "stock", "sell", "shelf"];
 
 type Props = {
   lang: Language;
@@ -59,6 +62,18 @@ export function SimpleAddProductWizard({
 
   const hint = useMemo(() => hintForProductName(name), [name]);
   const buyUnitLabel = buyHow ? buyLabelForKind(buyHow, buyCustom, lang) : "";
+  const packPriceN = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
+  const piecesN = useMemo(() => {
+    if (!buyHow) return 0;
+    if (buyHow === "kg" || buyHow === "piece") return 1;
+    const n = Math.floor(Number(piecesInside.replace(/[^\d.]/g, "")) || 0);
+    return n > 0 ? n : hint?.piecesInside ?? 0;
+  }, [buyHow, piecesInside, hint?.piecesInside]);
+  const costPerPieceUgx = useMemo(
+    () => (buyHow ? wizardCostPerSellUnitUgx(packPriceN, piecesN, buyHow) : null),
+    [buyHow, packPriceN, piecesN],
+  );
+  const sellPieceLabel = hint?.sellBaseUnit ?? (buyHow === "bottle" ? "bottle" : buyHow === "kg" ? "kg" : "piece");
 
   const reset = () => {
     setStep("name");
@@ -298,14 +313,51 @@ export function SimpleAddProductWizard({
             </div>
           ) : null}
 
+          {step === "buyPrice" ? (
+            <div className="space-y-3">
+              <h2 className="text-2xl font-black text-slate-900">
+                {tTemplate(lang, "simpleAddStep3Title", { unit: buyUnitLabel })}
+              </h2>
+              <p className="text-base text-slate-600">{t(lang, "simpleAddStep3Hint")}</p>
+              {hint?.suggestLineKey === "simpleAddHintEggs" ? (
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+                  {t(lang, "simpleAddBuyPriceExampleEggs")}
+                </p>
+              ) : hint?.suggestLineKey === "simpleAddHintSoda" ? (
+                <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+                  {t(lang, "simpleAddBuyPriceExampleSoda")}
+                </p>
+              ) : (
+                <p className="text-sm font-semibold text-slate-500">{t(lang, "simpleAddBuyPriceExampleGeneric")}</p>
+              )}
+              <input
+                value={buyPackPrice}
+                onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                inputMode="numeric"
+                placeholder={hint?.suggestLineKey === "simpleAddHintEggs" ? "12000" : "12000"}
+                autoFocus
+                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
+              />
+              <p className="text-sm font-semibold text-slate-500">UGX · {t(lang, "simpleAddBuyPriceWholeUnit")}</p>
+            </div>
+          ) : null}
+
           {step === "inside" ? (
             <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep3Title")}</h2>
+              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep4Title")}</h2>
               <p className="text-base text-slate-600">
                 {buyHow === "kg"
-                  ? t(lang, "simpleAddStep3SkipKg")
-                  : tTemplate(lang, "simpleAddStep3Hint", { unit: buyUnitLabel })}
+                  ? t(lang, "simpleAddStep4SkipKg")
+                  : tTemplate(lang, "simpleAddStep4Hint", { unit: buyUnitLabel })}
               </p>
+              {packPriceN > 0 ? (
+                <p className="rounded-xl bg-waka-50 px-3 py-2 text-sm font-bold text-waka-900">
+                  {tTemplate(lang, "simpleAddPaidForUnit", {
+                    amount: packPriceN.toLocaleString(),
+                    unit: buyUnitLabel,
+                  })}
+                </p>
+              ) : null}
               {buyHow !== "kg" && buyHow !== "piece" ? (
                 <>
                   <input
@@ -316,38 +368,30 @@ export function SimpleAddProductWizard({
                     }}
                     inputMode="numeric"
                     placeholder={hint ? String(hint.piecesInside) : "30"}
+                    autoFocus
                     className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
                   />
                   <p className="text-sm font-semibold text-slate-500">
-                    {tTemplate(lang, "simpleAddStep3Example", {
+                    {tTemplate(lang, "simpleAddStep4Example", {
                       count: piecesInside || String(hint?.piecesInside ?? "30"),
                       thing: name.trim() || t(lang, "simpleAddStep1Example"),
                       unit: buyUnitLabel,
                     })}
                   </p>
+                  {costPerPieceUgx != null && costPerPieceUgx > 0 ? (
+                    <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+                      {tTemplate(lang, "simpleAddCostPerPiece", {
+                        piece: sellPieceLabel,
+                        amount: costPerPieceUgx.toLocaleString(),
+                      })}
+                    </p>
+                  ) : null}
                 </>
               ) : (
                 <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
-                  {t(lang, "simpleAddStep3OnePiece")}
+                  {buyHow === "kg" ? t(lang, "simpleAddStep4SkipKg") : t(lang, "simpleAddStep4OnePiece")}
                 </p>
               )}
-            </div>
-          ) : null}
-
-          {step === "buyPrice" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">
-                {tTemplate(lang, "simpleAddStep4Title", { unit: buyUnitLabel })}
-              </h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep4Hint")}</p>
-              <input
-                value={buyPackPrice}
-                onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                inputMode="numeric"
-                placeholder="12,000"
-                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
-              />
-              <p className="text-sm font-semibold text-slate-500">UGX</p>
             </div>
           ) : null}
 
@@ -404,6 +448,27 @@ export function SimpleAddProductWizard({
                         </button>
                       ) : null}
                     </div>
+                    {buyHow && packPriceN > 0 && piecesN > 0 ? (() => {
+                      const profit = estimateSellOptionProfitUgx({
+                        buyHow,
+                        packPriceUgx: packPriceN,
+                        piecesInside: piecesN,
+                        option: opt,
+                      });
+                      if (profit == null) return null;
+                      return (
+                        <p
+                          className={clsx(
+                            "mt-2 text-sm font-bold",
+                            profit >= 0 ? "text-emerald-800" : "text-rose-800",
+                          )}
+                        >
+                          {tTemplate(lang, "simpleAddSellProfitPreview", {
+                            profit: profit.toLocaleString(),
+                          })}
+                        </p>
+                      );
+                    })() : null}
                   </div>
                 ))}
               </div>

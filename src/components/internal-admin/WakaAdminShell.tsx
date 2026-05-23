@@ -7,11 +7,12 @@ import { t } from "../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../lib/wakaInternalAdmin";
 import { internalAdminPreviewHref } from "../../lib/internalAdminPreview";
 
-type TabRoute = "/internal/waka" | "/internal/waka/activations" | "/internal/waka/admins";
+type TabRoute = "/internal/waka" | "/internal/waka/activations" | "/internal/waka/admins" | "/internal/waka/agents";
 
 const TABS: { to: TabRoute; label: string; active: Props["active"]; superOnly?: boolean }[] = [
   { to: "/internal/waka", label: "Overview", active: "overview" },
   { to: "/internal/waka/activations", label: "Activations", active: "activations" },
+  { to: "/internal/waka/agents", label: "Agents", active: "agents" },
   { to: "/internal/waka/admins", label: "Admins", active: "admins", superOnly: true },
 ];
 
@@ -38,7 +39,7 @@ type Props = {
   lang: Language;
   adminRow: WakaInternalAdminRow | null;
   loading: boolean;
-  active: "overview" | "activations" | "admins" | "shop";
+  active: "overview" | "activations" | "admins" | "agents" | "shop";
   activeHash?: string;
   /** Sample-data UI; no live mutations. */
   previewMode?: boolean;

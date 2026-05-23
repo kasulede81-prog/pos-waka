@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
+import { fetchMarketingAgentMe } from "../lib/referralAgents";
 import { internalAdminPreviewHref, isInternalAdminPreviewEnabled } from "../lib/internalAdminPreview";
 import {
   Package,
@@ -16,6 +17,8 @@ import {
   UserCog,
   ShieldCheck,
   Cloud,
+  Printer,
+  Share2,
 } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -39,17 +42,20 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const { snapshot, authMode } = useSubscription();
   const { email } = useAuth();
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
+  const [showAgentPortal, setShowAgentPortal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       if (!supabase) {
         setShowInternalAdmin(false);
+        setShowAgentPortal(false);
         return;
       }
-      const me = await fetchWakaInternalAdminMe();
+      const [me, agent] = await Promise.all([fetchWakaInternalAdminMe(), fetchMarketingAgentMe()]);
       if (cancelled) return;
       setShowInternalAdmin(Boolean(me));
+      setShowAgentPortal(Boolean(agent));
     })();
     return () => {
       cancelled = true;
@@ -98,6 +104,20 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       subKey: "officeCardSettingsSub",
       Icon: Settings,
       perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
+    },
+    {
+      to: "/office/hardware",
+      titleKey: "officeCardHardware",
+      subKey: "officeCardHardwareSub",
+      Icon: Printer,
+      perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
+    },
+    {
+      to: "/agent",
+      titleKey: "officeCardAgentPortal",
+      subKey: "officeCardAgentPortalSub",
+      Icon: Share2,
+      perm: showAgentPortal,
     },
     {
       to: "/settings",

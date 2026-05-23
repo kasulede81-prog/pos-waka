@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import type { BusinessType, Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
@@ -29,6 +29,7 @@ type Props = {
 
 export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleSignIn }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [organizationName, setOrganizationName] = useState("");
   const [shopDisplayName, setShopDisplayName] = useState("");
   const [ownerFullName, setOwnerFullName] = useState("");
@@ -47,6 +48,12 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.trim().toUpperCase() ?? "");
+
+  useEffect(() => {
+    const ref = searchParams.get("ref")?.trim();
+    if (ref) setReferralCode(ref.toUpperCase());
+  }, [searchParams]);
 
   const loadDistricts = useCallback(async () => {
     setDistrictsLoading(true);
@@ -111,6 +118,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
         gpsSkipped,
         latitude: !gpsSkipped && latitude != null ? latitude : undefined,
         longitude: !gpsSkipped && longitude != null ? longitude : undefined,
+        referralCode: referralCode.trim() || undefined,
       };
       const result = await signUp(email, password, organizationName.trim(), businessType, profile);
       if (result.needsEmailVerification) navigate("/verify-email", { replace: true, state: { email } });
@@ -318,6 +326,17 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
                 </button>
               </div>
             </div>
+
+            <label className="block text-sm font-medium">
+              {t(lang, "registerReferralLabel")}
+              <input
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                placeholder={t(lang, "registerReferralPh")}
+                className="mt-1 w-full rounded-xl border px-3 py-2 font-mono uppercase outline-none ring-waka-200 focus:ring"
+              />
+              <span className="mt-1 block text-xs font-medium text-stone-500">{t(lang, "registerReferralHint")}</span>
+            </label>
 
             <label className="block text-sm font-medium">
               {t(lang, "email")}
