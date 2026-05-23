@@ -11,8 +11,9 @@ import {
   internalAdminUpdateRoleAndDistricts,
   type InternalAdminRow,
 } from "../../lib/wakaInternalAdmin";
+import { PREVIEW_INTERNAL_ADMINS } from "../../lib/internalAdminPreview";
 
-type Props = { lang: Language; lovableUi?: boolean };
+type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
 
 type RoleCode = "super_admin" | "operations_admin" | "support_admin" | "field_agent";
 
@@ -77,7 +78,7 @@ function Modal({
   );
 }
 
-export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
+export function InternalAdminsManagement({ lang, lovableUi = false, previewMode = false }: Props) {
   const [loading, setLoading] = useState(true);
   const [admins, setAdmins] = useState<InternalAdminRow[]>([]);
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
@@ -107,6 +108,12 @@ export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
     let cancelled = false;
     setLoading(true);
     setDistrictLoadErr(false);
+    if (previewMode) {
+      setAdmins(PREVIEW_INTERNAL_ADMINS);
+      setDistricts([]);
+      setLoading(false);
+      return;
+    }
     void (async () => {
       try {
         const [dr, list] = await Promise.all([fetchDistricts(), fetchInternalAdmins()]);
@@ -123,7 +130,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [previewMode]);
 
   const refresh = async () => {
     const list = await fetchInternalAdmins();
@@ -163,6 +170,10 @@ export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
   };
 
   const submitCreate = async () => {
+    if (previewMode) {
+      setCreateMsg(t(lang, "internalAdminPreviewActionBlocked"));
+      return;
+    }
     setCreateMsg(null);
     if (!createEmail.trim()) {
       setCreateMsg(t(lang, "internalAdminsCreateEmailRequired"));
@@ -192,6 +203,10 @@ export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
   };
 
   const submitEdit = async () => {
+    if (previewMode) {
+      setEditMsg(t(lang, "internalAdminPreviewActionBlocked"));
+      return;
+    }
     if (!editTargetId) return;
     setEditBusyId(editTargetId);
     setEditMsg(null);
@@ -220,6 +235,11 @@ export function InternalAdminsManagement({ lang, lovableUi = false }: Props) {
 
   return (
     <div className={lovableUi ? "space-y-6 pb-6" : "space-y-6 pb-12 pt-2"}>
+      {previewMode ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
+          {t(lang, "internalAdminPreviewShellHint")}
+        </p>
+      ) : null}
       {!lovableUi ? (
       <header className="rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-orange-50/40 to-white p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

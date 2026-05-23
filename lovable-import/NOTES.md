@@ -29,6 +29,19 @@ Reference UI lives in `lovable-import/lovable-ui/` (from `waka-safari-shop-main`
 
 Map (optional): `VITE_MAPBOX_TOKEN` or `VITE_MAPBOX_ACCESS_TOKEN`
 
+## Preview mode
+
+- URLs: `/internal/waka?preview=1` (+ activations, admins, `shop/preview-shop-demo`)
+- Data: `src/lib/internalAdminPreview.ts` (sample rows; mutations blocked)
+- Dev-only unless `VITE_INTERNAL_ADMIN_PREVIEW=1`
+
+## Lovable UI updates (repeatable)
+
+1. Refresh files under `lovable-import/lovable-ui/`
+2. Ask Cursor to port **visual** changes into `src/components/internal-admin/` + pages
+3. Do **not** replace `wakaInternalAdmin.ts` or `supabase/`
+4. `npm run build` in repo root
+
 ## Remaining gaps vs Lovable mock
 
 - [ ] Full metric grid parity on overview (Lovable had lighter metrics; main app keeps full ops dashboard)

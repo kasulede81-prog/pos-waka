@@ -9,13 +9,15 @@ import {
   type OpsActivationRow,
 } from "../lib/businessActivation";
 import { AdminEmpty, AdminSection } from "../components/internal-admin/adminUi";
+import { PREVIEW_ACTIVATIONS } from "../lib/internalAdminPreview";
 
 type Props = {
   lang: Language;
   lovableUi?: boolean;
+  previewMode?: boolean;
 };
 
-export function InternalActivationOpsPage({ lang, lovableUi = false }: Props) {
+export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode = false }: Props) {
   const [rows, setRows] = useState<OpsActivationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [planCode, setPlanCode] = useState("business");
@@ -33,10 +35,15 @@ export function InternalActivationOpsPage({ lang, lovableUi = false }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    if (previewMode) {
+      setRows(PREVIEW_ACTIVATIONS);
+      setLoading(false);
+      return;
+    }
     const list = await opsListActivationRequests();
     setRows(list);
     setLoading(false);
-  }, []);
+  }, [previewMode]);
 
   useEffect(() => {
     void load();
@@ -51,6 +58,10 @@ export function InternalActivationOpsPage({ lang, lovableUi = false }: Props) {
   };
 
   const approve = async (id: string) => {
+    if (previewMode) {
+      setToast(t(lang, "internalAdminPreviewActionBlocked"));
+      return;
+    }
     setBusyId(id);
     setToast(null);
     const r = await opsResolveActivationRequest({
@@ -69,6 +80,10 @@ export function InternalActivationOpsPage({ lang, lovableUi = false }: Props) {
   };
 
   const reject = async (id: string) => {
+    if (previewMode) {
+      setToast(t(lang, "internalAdminPreviewActionBlocked"));
+      return;
+    }
     setBusyId(id);
     setToast(null);
     const r = await opsResolveActivationRequest({ requestId: id, approve: false });
@@ -88,6 +103,11 @@ export function InternalActivationOpsPage({ lang, lovableUi = false }: Props) {
 
   return (
     <div className={lovableUi ? "space-y-6 pb-6" : "space-y-4 pb-6"}>
+      {previewMode ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
+          {t(lang, "internalAdminPreviewActivationsHint")}
+        </p>
+      ) : null}
       {lovableUi ? (
         <AdminSection title={t(lang, "internalActivationsTitle")} count={rows.length}>
           <p className="mb-3 text-sm font-medium text-stone-600">{t(lang, "internalActivationsSub")}</p>

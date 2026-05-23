@@ -19,6 +19,17 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
+  PREVIEW_BIZ_TYPES,
+  PREVIEW_DASHBOARD_STATS,
+  PREVIEW_DISTRICTS,
+  PREVIEW_MAP_PINS,
+  PREVIEW_PLAN_METRICS,
+  PREVIEW_RECENT_SHOPS,
+  PREVIEW_SUPPORT_TICKETS,
+  internalAdminShopHref,
+  previewDayBuckets,
+} from "../../lib/internalAdminPreview";
+import {
   fetchBusinessTypeSlices,
   fetchDistrictOpsTable,
   fetchFieldMapPins,
@@ -257,7 +268,31 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
   const [billingOfferRows, setBillingOfferRows] = useState<OrgBillingOfferStaffRow[]>([]);
   const [billingFulfillBusy, setBillingFulfillBusy] = useState<string | null>(null);
 
+  const seedPreview = useCallback(() => {
+    const buckets = previewDayBuckets();
+    setStats(PREVIEW_DASHBOARD_STATS);
+    setPlans(PREVIEW_PLAN_METRICS);
+    setRecent(PREVIEW_RECENT_SHOPS);
+    setTickets(PREVIEW_SUPPORT_TICKETS);
+    setDistricts(PREVIEW_DISTRICTS);
+    setBizTypes(PREVIEW_BIZ_TYPES);
+    setSignups7(buckets);
+    setSubs7(buckets);
+    setSales7(buckets);
+    setVisits([]);
+    setMapPins(PREVIEW_MAP_PINS);
+    setPendingTrials([]);
+    setBillingOfferRows([]);
+    setStatsError(false);
+    setStatsErrorMessage("");
+    setOpsLoading(false);
+  }, []);
+
   const loadAll = useCallback(async () => {
+    if (previewMode) {
+      seedPreview();
+      return;
+    }
     if (!adminRow) return;
     setOpsLoading(true);
     setStatsError(false);
@@ -311,12 +346,16 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
     } finally {
       setOpsLoading(false);
     }
-  }, [adminRow, mapDistrictId]);
+  }, [adminRow, mapDistrictId, previewMode, seedPreview]);
 
   useEffect(() => {
-    if (previewMode || !adminRow) return;
+    if (previewMode) {
+      seedPreview();
+      return;
+    }
+    if (!adminRow) return;
     void loadAll();
-  }, [adminRow, previewMode, loadAll]);
+  }, [adminRow, previewMode, loadAll, seedPreview]);
 
   useEffect(() => {
     if (previewMode || !adminRow) return;
@@ -390,7 +429,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
           dateLabel={dateStr}
           roleLabel={(adminRow?.role ?? "admin").replace(/_/g, " ")}
           districtCount={adminRow?.assigned_district_ids?.length ?? 0}
-          onRefresh={() => void loadAll()}
+          onRefresh={() => void (previewMode ? seedPreview() : loadAll())}
           refreshing={opsLoading}
         />
       ) : (
@@ -443,8 +482,8 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
       )}
 
       {previewMode ? (
-        <p className="rounded-xl border border-border bg-card px-4 py-3 text-xs font-semibold text-foreground">
-          {t(lang, "internalAdminDbGateHint")}
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
+          {t(lang, "internalAdminPreviewOverviewHint")}
         </p>
       ) : null}
       {!previewMode && statsError ? (
@@ -579,7 +618,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                 key={s.shop_id}
                 className="rounded-2xl border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-4 shadow-sm"
               >
-                <Link to={`/internal/waka/shop/${s.shop_id}`} className="text-base font-black text-orange-950 underline decoration-orange-200">
+                <Link
+                  to={internalAdminShopHref(s.shop_id, previewMode)}
+                  className="text-base font-black text-orange-950 underline decoration-orange-200"
+                >
                   {s.shop_name}
                 </Link>
                 <p className="mt-1 text-xs font-semibold text-stone-600">
@@ -713,7 +755,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                       </p>
                       {req.shop_id ? (
                         <Link
-                          to={`/internal/waka/shop/${req.shop_id}`}
+                          to={internalAdminShopHref(req.shop_id, previewMode)}
                           className="mt-2 inline-block text-xs font-black uppercase text-orange-800 underline decoration-orange-300"
                         >
                           {t(lang, "internalMapOpenShop")}
@@ -1025,7 +1067,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                         </span>
                       </div>
                       <Link
-                        to={`/internal/waka/shop/${row.id}`}
+                        to={internalAdminShopHref(row.id, previewMode)}
                         className="mt-3 inline-flex h-9 w-full items-center justify-center rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground shadow-sm active:bg-primary/90"
                       >
                         Open / edit shop
@@ -1098,7 +1140,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                           </span>
                           {tk.shop_id ? (
                             <Link
-                              to={`/internal/waka/shop/${tk.shop_id}`}
+                              to={internalAdminShopHref(tk.shop_id, previewMode)}
                               className="rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-black uppercase text-orange-950 underline decoration-orange-400"
                             >
                               {t(lang, "internalShopProfileTitle")}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft } from "lucide-react";
-import { Link, Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -23,6 +23,13 @@ import {
   type ShopOpsDetail,
   type WakaInternalAdminRow,
 } from "../lib/wakaInternalAdmin";
+import {
+  INTERNAL_ADMIN_PREVIEW_ROW,
+  PREVIEW_SHOP_ID,
+  PREVIEW_SHOP_OPS_DETAIL,
+  internalAdminPreviewHref,
+  isInternalAdminPreviewActive,
+} from "../lib/internalAdminPreview";
 
 type Props = {
   lang: Language;
@@ -42,6 +49,8 @@ function deviceOnline(lastSeen: string | null): boolean {
 
 export function InternalShopOpsPage({ lang, email }: Props) {
   const { shopId } = useParams<{ shopId: string }>();
+  const location = useLocation();
+  const previewMode = isInternalAdminPreviewActive(location.search);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(true);
   const [detail, setDetail] = useState<ShopOpsDetail | null>(null);
@@ -56,10 +65,19 @@ export function InternalShopOpsPage({ lang, email }: Props) {
   const loadShop = useCallback(async () => {
     if (!shopId) return;
     setLoadingShop(true);
+    if (previewMode) {
+      setDetail(
+        shopId === PREVIEW_SHOP_ID || shopId.startsWith("preview-")
+          ? PREVIEW_SHOP_OPS_DETAIL
+          : { ...PREVIEW_SHOP_OPS_DETAIL, shop: { ...PREVIEW_SHOP_OPS_DETAIL.shop, id: shopId, name: `${PREVIEW_SHOP_OPS_DETAIL.shop.name} (${shopId})` } },
+      );
+      setLoadingShop(false);
+      return;
+    }
     const d = await fetchShopOpsDetail(shopId);
     setDetail(d);
     setLoadingShop(false);
-  }, [shopId]);
+  }, [shopId, previewMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,7 +110,13 @@ export function InternalShopOpsPage({ lang, email }: Props) {
     return PLAN_AMOUNTS[code] ?? PLAN_AMOUNTS.business;
   }, [detail?.plan_code, detail?.subscription?.plan_code]);
 
+  const shellAdmin = previewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow;
+
   const run = async (fn: () => Promise<{ ok: boolean; message?: string }>) => {
+    if (previewMode) {
+      setToast({ kind: "err", text: t(lang, "internalAdminPreviewActionBlocked") });
+      return;
+    }
     setBusy(true);
     setToast(null);
     const r = await fn();
@@ -124,10 +148,21 @@ export function InternalShopOpsPage({ lang, email }: Props) {
   const subId = detail?.subscription?.id;
 
   return (
-    <WakaAdminShell lang={lang} adminRow={adminRow} loading={loadingAdmin} active="shop">
+    <WakaAdminShell
+      lang={lang}
+      adminRow={shellAdmin}
+      loading={loadingAdmin}
+      active="shop"
+      previewMode={previewMode}
+    >
       <div className="mx-auto max-w-3xl space-y-4 pb-8">
+        {previewMode ? (
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
+            {t(lang, "internalAdminPreviewShopHint")}
+          </p>
+        ) : null}
         <Link
-          to="/internal/waka#ops-recent-shops"
+          to={previewMode ? internalAdminPreviewHref("/internal/waka#ops-recent-shops") : "/internal/waka#ops-recent-shops"}
           className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-700 hover:underline"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />

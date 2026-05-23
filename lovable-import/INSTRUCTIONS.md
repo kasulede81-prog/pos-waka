@@ -162,3 +162,49 @@ Deploy as usual from **`pos-waka`** root, not from `lovable-import`.
 - [ ] Sent integration message to agent  
 
 When the checklist is done, say **“Lovable is in lovable-ui, please integrate”** and we start Part 2.
+
+---
+
+## Part 5 — Updating UI after more Lovable work (same process)
+
+Lovable is **not** the live app. It is a **reference folder**. Each time you change admin UI in Lovable:
+
+1. **Export / pull** the Lovable Git project again.
+2. **Copy** changed files into `C:\projects\pos-waka\lovable-import\lovable-ui\` (same rules as Part 1 — no `node_modules`, no Lovable `supabase/`, no secrets).
+3. In Cursor on **`pos-waka`**, send a focused message, for example:
+
+```
+I updated Lovable admin UI in lovable-import/lovable-ui.
+Port visual changes into src/components/internal-admin/ and admin pages.
+Keep wakaInternalAdmin.ts, businessActivation.ts, and supabase/ unchanged.
+Run npm run build.
+```
+
+4. The agent **ports layout/classes/components** from Lovable into the main app and keeps **your APIs** (`wakaInternalAdmin.ts`, RPCs, real table names).
+5. Test in the **main app** (`npm run dev`), not by running Lovable’s separate `package.json`.
+
+### Preview mode (no Supabase admin row)
+
+While developing, open sample-data admin UI without live RPCs:
+
+| URL | What you see |
+|-----|----------------|
+| `/internal/waka?preview=1` | Overview with sample metrics |
+| `/internal/waka/activations?preview=1` | Sample activation queue |
+| `/internal/waka/admins?preview=1` | Sample admin list |
+| `/internal/waka/shop/preview-shop-demo?preview=1` | Sample shop profile |
+
+- **Dev:** `?preview=1` works automatically when `npm run dev`.
+- **Production:** off unless you set `VITE_INTERNAL_ADMIN_PREVIEW=1` in the deploy env (not recommended for public sites).
+- **Office hub:** link “Preview admin UI (sample data)” appears in dev.
+
+Remove `?preview=1` and sign in as a real internal admin for live data.
+
+### What does *not* auto-sync
+
+| Lovable | Main app (you keep) |
+|---------|---------------------|
+| `waka_shops`, mock hooks | `shops`, `wakaInternalAdmin.ts` |
+| TanStack Router files | `src/App.tsx` React Router routes |
+| Lovable `supabase/` folder | `supabase/migrations/` in this repo |
+| Whole `package.json` swap | Add only missing deps to root if needed |

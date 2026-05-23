@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
+import { internalAdminPreviewHref, isInternalAdminPreviewEnabled } from "../lib/internalAdminPreview";
 import {
   Package,
   Truck,
@@ -185,6 +186,14 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
             className="inline-flex min-h-[44px] items-center text-sm font-bold text-stone-500 underline decoration-stone-300"
           >
             {t(lang, "internalAdminFooterLink")}
+          </Link>
+        ) : null}
+        {isInternalAdminPreviewEnabled() ? (
+          <Link
+            to={internalAdminPreviewHref("/internal/waka")}
+            className="inline-flex min-h-[44px] items-center text-sm font-bold text-orange-700 underline decoration-orange-300"
+          >
+            {t(lang, "internalAdminPreviewOfficeLink")}
           </Link>
         ) : null}
         <Link to="/" className="inline-flex min-h-[48px] items-center rounded-2xl font-bold text-waka-800 underline">

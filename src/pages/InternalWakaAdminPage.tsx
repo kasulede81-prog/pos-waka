@@ -1,7 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import type { Language } from "../types";
 import { fetchWakaInternalAdminMe, type WakaInternalAdminRow } from "../lib/wakaInternalAdmin";
+import {
+  INTERNAL_ADMIN_PREVIEW_ROW,
+  isInternalAdminPreviewActive,
+} from "../lib/internalAdminPreview";
 import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
 import { InternalOpsDashboard } from "../components/internal-admin/InternalOpsDashboard";
 import { InternalAdminsManagement } from "../components/internal-admin/InternalAdminsManagement";
@@ -19,6 +23,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   const activeHash = location.hash;
   const isAdminsRoute = location.pathname === "/internal/waka/admins";
   const isActivationsRoute = location.pathname === "/internal/waka/activations";
+  const previewRequested = isInternalAdminPreviewActive(location.search);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,28 +39,35 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     };
   }, []);
 
+  /** Sample data when `?preview=1` (dev / `VITE_INTERNAL_ADMIN_PREVIEW=1`). Works with or without a real internal admin row. */
+  const previewMode = previewRequested;
+  const shellAdmin = useMemo(
+    () => (previewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow),
+    [adminRow, previewMode],
+  );
+
   const shellActive = isActivationsRoute ? "activations" : isAdminsRoute ? "admins" : "overview";
 
   let body: React.ReactNode;
   if (isActivationsRoute) {
-    body = <InternalActivationOpsPage lang={lang} lovableUi />;
+    body = <InternalActivationOpsPage lang={lang} lovableUi previewMode={previewMode} />;
   } else if (isAdminsRoute) {
-    if (adminRow?.role !== "super_admin") {
+    if (!previewMode && adminRow?.role !== "super_admin") {
       body = (
         <div className="rounded-xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
           Super admin only.
         </div>
       );
     } else {
-      body = <InternalAdminsManagement lang={lang} lovableUi />;
+      body = <InternalAdminsManagement lang={lang} lovableUi previewMode={previewMode} />;
     }
   } else {
     body = (
       <InternalOpsDashboard
         lang={lang}
         email={email}
-        adminRow={adminRow}
-        previewMode={false}
+        adminRow={shellAdmin}
+        previewMode={previewMode}
         lovableUi
       />
     );
@@ -64,10 +76,11 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   return (
     <WakaAdminShell
       lang={lang}
-      adminRow={adminRow}
+      adminRow={shellAdmin}
       loading={loading}
       active={shellActive}
       activeHash={activeHash}
+      previewMode={previewMode}
     >
       {body}
     </WakaAdminShell>

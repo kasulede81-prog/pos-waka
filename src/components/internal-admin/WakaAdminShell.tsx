@@ -5,6 +5,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../lib/wakaInternalAdmin";
+import { internalAdminPreviewHref } from "../../lib/internalAdminPreview";
 
 type TabRoute = "/internal/waka" | "/internal/waka/activations" | "/internal/waka/admins";
 
@@ -39,10 +40,12 @@ type Props = {
   loading: boolean;
   active: "overview" | "activations" | "admins" | "shop";
   activeHash?: string;
+  /** Sample-data UI; no live mutations. */
+  previewMode?: boolean;
   children: ReactNode;
 };
 
-export function WakaAdminShell({ lang, adminRow, loading, active, activeHash = "", children }: Props) {
+export function WakaAdminShell({ lang, adminRow, loading, active, activeHash = "", previewMode = false, children }: Props) {
   if (loading) {
     return (
       <div className="fixed inset-0 z-[80] flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
@@ -52,11 +55,13 @@ export function WakaAdminShell({ lang, adminRow, loading, active, activeHash = "
     );
   }
 
-  if (!adminRow) {
+  if (!adminRow && !previewMode) {
     return <Navigate to="/" replace />;
   }
 
-  const isSuper = adminRow.role === "super_admin";
+  const row = adminRow!;
+  const isSuper = row.role === "super_admin";
+  const tabTo = (path: TabRoute) => (previewMode ? internalAdminPreviewHref(path) : path);
 
   return (
     <div className="fixed inset-0 z-[80] flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
@@ -73,16 +78,27 @@ export function WakaAdminShell({ lang, adminRow, loading, active, activeHash = "
           <div className="min-w-0 flex-1">
             <div className="text-lg font-black leading-tight">Waka Uganda Admin</div>
             <div className="truncate text-xs opacity-90">
-              {adminRow.full_name || adminRow.email || "Internal team"}
+              {row.full_name || row.email || "Internal team"}
             </div>
           </div>
+          {previewMode ? (
+            <span className="shrink-0 rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black uppercase text-amber-950">
+              {t(lang, "internalDashPreviewBadge")}
+            </span>
+          ) : null}
           <span className="hidden rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold sm:inline">
-            {roleLabel(adminRow.role)}
+            {roleLabel(row.role)}
           </span>
           <span className="hidden rounded-full bg-white/15 px-2.5 py-1 text-xs font-bold md:inline">
-            {adminRow.assigned_district_ids?.length ?? 0} districts
+            {row.assigned_district_ids?.length ?? 0} districts
           </span>
         </div>
+
+        {previewMode ? (
+          <p className="mx-auto max-w-7xl px-4 pb-2 text-[11px] font-semibold text-white/90">
+            {t(lang, "internalAdminPreviewShellHint")}
+          </p>
+        ) : null}
 
         {active === "overview" ? (
           <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
@@ -105,7 +121,7 @@ export function WakaAdminShell({ lang, adminRow, loading, active, activeHash = "
           {TABS.filter((tab) => !tab.superOnly || isSuper).map((tab) => (
             <Link
               key={tab.to}
-              to={tab.to}
+              to={tabTo(tab.to)}
               className={clsx(
                 "whitespace-nowrap border-b-2 px-4 py-2.5 text-xs font-black transition",
                 active === tab.active && (tab.active !== "overview" || !activeHash)
@@ -120,7 +136,7 @@ export function WakaAdminShell({ lang, adminRow, loading, active, activeHash = "
             ? HASH_TABS.map((tab) => (
                 <a
                   key={tab.hash}
-                  href={`/internal/waka${tab.hash}`}
+                  href={previewMode ? internalAdminPreviewHref(`/internal/waka${tab.hash}`) : `/internal/waka${tab.hash}`}
                   className={clsx(
                     "whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-black transition",
                     activeHash === tab.hash
