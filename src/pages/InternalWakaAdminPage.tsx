@@ -21,7 +21,6 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   const [loading, setLoading] = useState(true);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const location = useLocation();
-  const activeHash = location.hash;
   const isAdminsRoute = location.pathname === "/internal/waka/admins";
   const isAgentsRoute = location.pathname === "/internal/waka/agents";
   const isActivationsRoute = location.pathname === "/internal/waka/activations";
@@ -83,7 +82,6 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
       adminRow={shellAdmin}
       loading={loading}
       active={shellActive}
-      activeHash={activeHash}
       previewMode={previewMode}
     >
       {body}

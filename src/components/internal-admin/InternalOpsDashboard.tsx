@@ -4,16 +4,13 @@ import {
   Building2,
   Calendar,
   ChevronRight,
-  CreditCard,
   Headphones,
-  LifeBuoy,
   MapPin,
   RefreshCw,
   Sparkles,
-  Store,
   Trash2,
 } from "lucide-react";
-import { AdminHero, AdminShortcut } from "./adminUi";
+import { AdminHero } from "./adminUi";
 import { LovableFieldMap } from "./LovableFieldMap";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -49,6 +46,8 @@ import {
   fetchShopSignupBuckets7d,
   fetchSubscriptionGrowthBuckets7d,
   fetchSupportTickets,
+  formatDisplayEmail,
+  formatLastActive,
   googleMapsDirectionsUrl,
   markFieldVisitCompleted,
   updateSupportTicketStatus,
@@ -413,13 +412,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
     };
   }, [stats]);
 
-  const workAreas = [
-    { href: "#ops-support", label: "Support", count: tickets.length, Icon: lovableUi ? LifeBuoy : Headphones, tone: "bg-violet-50 text-violet-900" },
-    { href: "#ops-recent-shops", label: "Shops", count: recent.length, Icon: lovableUi ? Store : Building2, tone: "bg-orange-50 text-orange-950" },
-    { href: "#ops-annual-queue", label: "Payments", count: pendingAnnualTickets.length, Icon: lovableUi ? CreditCard : Calendar, tone: "bg-amber-50 text-amber-950" },
-    { href: "#ops-districts", label: "Districts", count: districts.length, Icon: MapPin, tone: "bg-emerald-50 text-emerald-950" },
-  ];
-
   return (
     <div className={lovableUi ? "space-y-6 pb-6" : "space-y-4 pb-6"}>
       {lovableUi ? (
@@ -499,32 +491,6 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
           {deleteMsg}
         </p>
       ) : null}
-
-      {lovableUi ? (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <AdminShortcut href="#ops-support" Icon={LifeBuoy} label="Support" count={tickets.length} />
-          <AdminShortcut href="#ops-recent-shops" Icon={Store} label="Shops" count={recent.length} />
-          <AdminShortcut href="#ops-annual-queue" Icon={CreditCard} label="Payments" count={pendingAnnualTickets.length} />
-          <AdminShortcut href="#ops-districts" Icon={MapPin} label="Districts" count={districts.length} />
-        </div>
-      ) : (
-        <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {workAreas.map(({ href, label, count, Icon, tone }) => (
-            <a
-              key={href}
-              href={href}
-              className={clsx("rounded-2xl border border-border bg-card p-3 shadow-sm active:scale-[0.99]", tone)}
-            >
-              <span className="flex items-center justify-between gap-2">
-                <Icon className="h-4 w-4" />
-                <span className="rounded-full bg-white/70 px-2 py-0.5 text-xs font-black">{count}</span>
-              </span>
-              <span className="mt-3 block text-sm font-black">{label}</span>
-              <span className="mt-0.5 block text-[11px] font-bold opacity-70">Open section</span>
-            </a>
-          ))}
-        </section>
-      )}
 
       {/* Stats — compact pulse with drill-down */}
       <section id="ops-pulse" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
@@ -1038,7 +1004,11 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                             {[row.district, row.city].filter(Boolean).join(" · ") || "No location"}
                           </p>
                           <p className="mt-1 truncate text-xs font-bold text-stone-700">
-                            {row.owner_label ?? row.owner_email ?? "No owner shown"}
+                            {formatDisplayEmail(row.owner_email) ?? row.owner_label ?? "No owner shown"}
+                          </p>
+                          <p className="mt-1 text-[11px] font-semibold text-stone-500">
+                            {formatLastActive(row.last_seen_at ?? null)} · {row.product_count ?? 0} products ·{" "}
+                            {row.sale_count_30d ?? 0} sales/30d
                           </p>
                         </div>
                         <span
@@ -1250,11 +1220,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
               <p className="mt-4 text-sm font-bold text-orange-50">
                 {t(lang, "internalMapShopCount").replace("{{count}}", String(mapPins.length))}
               </p>
-              {lovableUi ? (
-                <div className="mt-4">
-                  <LovableFieldMap pins={mapPins} />
-                </div>
-              ) : (
+              {mapboxAccessToken ? (
                 <Suspense
                   fallback={
                     <div className="mt-4 h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-800/80 ring-1 ring-white/10" />
@@ -1262,6 +1228,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                 >
                   <InternalFieldOpsMap lang={lang} pins={mapPins} accessToken={mapboxAccessToken} />
                 </Suspense>
+              ) : (
+                <div className="mt-4">
+                  <LovableFieldMap pins={mapPins} />
+                </div>
               )}
             </div>
           </section>

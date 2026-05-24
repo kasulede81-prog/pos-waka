@@ -4,7 +4,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
-  internalCreateMarketingAgent,
+  internalGrantMarketingAgent,
   internalListMarketingAgents,
   listAgentReferrals,
   type AgentReferralRow,
@@ -68,10 +68,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
-  const [createCode, setCreateCode] = useState("");
-  const [createName, setCreateName] = useState("");
-  const [createEmail, setCreateEmail] = useState("");
-  const [createPhone, setCreatePhone] = useState("");
+  const [grantEmail, setGrantEmail] = useState("");
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [detailAgentId, setDetailAgentId] = useState<string | null>(null);
   const [detailRows, setDetailRows] = useState<AgentReferralRow[]>([]);
@@ -117,29 +114,32 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     setDetailLoading(false);
   };
 
-  const submitCreate = async () => {
+  const submitGrant = async () => {
     if (previewMode) {
       setCreateMsg("Preview mode — no changes saved.");
       return;
     }
     setCreateBusy(true);
     setCreateMsg(null);
-    const res = await internalCreateMarketingAgent({
-      referralCode: createCode,
-      fullName: createName,
-      email: createEmail,
-      phoneE164: createPhone,
-    });
+    const res = await internalGrantMarketingAgent(grantEmail);
     setCreateBusy(false);
     if (!res.ok) {
-      setCreateMsg(res.error === "code_taken" ? t(lang, "internalAgentsCodeTaken") : res.error ?? t(lang, "internalAgentsCreateFail"));
+      const key =
+        res.error === "user_not_found"
+          ? t(lang, "internalAgentsUserNotFound")
+          : res.error === "invalid_email"
+            ? t(lang, "internalAgentsInvalidEmail")
+            : res.error ?? t(lang, "internalAgentsCreateFail");
+      setCreateMsg(key);
       return;
     }
     setCreateOpen(false);
-    setCreateCode("");
-    setCreateName("");
-    setCreateEmail("");
-    setCreatePhone("");
+    setGrantEmail("");
+    setCreateMsg(
+      res.alreadyAgent
+        ? t(lang, "internalAgentsAlreadyAgent").replace("{{code}}", res.referralCode ?? "")
+        : t(lang, "internalAgentsGranted").replace("{{code}}", res.referralCode ?? ""),
+    );
     await load();
   };
 
@@ -163,7 +163,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
           className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-orange-600 px-4 py-2 text-sm font-black text-white"
         >
           <Plus className="h-4 w-4" aria-hidden />
-          {t(lang, "internalAgentsCreate")}
+          {t(lang, "internalAgentsGrant")}
         </button>
       </div>
 
@@ -208,37 +208,27 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
         </ul>
       )}
 
-      <Modal title={t(lang, "internalAgentsCreateTitle")} open={createOpen} onClose={() => setCreateOpen(false)}>
+      <Modal title={t(lang, "internalAgentsGrantTitle")} open={createOpen} onClose={() => setCreateOpen(false)}>
         <div className="space-y-3">
+          <p className="text-sm font-medium text-stone-600">{t(lang, "internalAgentsGrantHint")}</p>
           <label className="block text-sm font-bold">
-            {t(lang, "internalAgentsCodeLabel")}
+            {t(lang, "internalAgentsGrantEmailLabel")}
             <input
-              value={createCode}
-              onChange={(e) => setCreateCode(e.target.value.toUpperCase())}
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2 font-mono"
-              placeholder="WAKA-KLA"
+              type="email"
+              value={grantEmail}
+              onChange={(e) => setGrantEmail(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2"
+              placeholder="owner@example.com"
             />
-          </label>
-          <label className="block text-sm font-bold">
-            {t(lang, "internalAgentsNameLabel")}
-            <input value={createName} onChange={(e) => setCreateName(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2" />
-          </label>
-          <label className="block text-sm font-bold">
-            Email
-            <input value={createEmail} onChange={(e) => setCreateEmail(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2" />
-          </label>
-          <label className="block text-sm font-bold">
-            Phone (+256…)
-            <input value={createPhone} onChange={(e) => setCreatePhone(e.target.value)} className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2" />
           </label>
           {createMsg ? <p className="text-sm font-bold text-rose-700">{createMsg}</p> : null}
           <button
             type="button"
             disabled={createBusy}
-            onClick={() => void submitCreate()}
+            onClick={() => void submitGrant()}
             className="w-full rounded-2xl bg-orange-600 py-3 text-sm font-black text-white disabled:opacity-60"
           >
-            {createBusy ? "…" : t(lang, "internalAgentsCreateSubmit")}
+            {createBusy ? "…" : t(lang, "internalAgentsGrantSubmit")}
           </button>
         </div>
       </Modal>

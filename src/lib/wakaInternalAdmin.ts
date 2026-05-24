@@ -400,6 +400,21 @@ export function googleMapsDirectionsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${lat},${lng}`)}`;
 }
 
+export function formatDisplayEmail(raw: string | null | undefined): string | null {
+  const e = (raw ?? "").trim().toLowerCase();
+  return e || null;
+}
+
+export function formatLastActive(iso: string | null | undefined): string {
+  if (!iso) return "Never";
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "Just now";
+  if (ms < 15 * 60 * 1000) return "Active now";
+  if (ms < 60 * 60 * 1000) return `${Math.max(1, Math.floor(ms / 60_000))}m ago`;
+  if (ms < 24 * 60 * 60 * 1000) return `${Math.floor(ms / 3_600_000)}h ago`;
+  return `${Math.floor(ms / 86_400_000)}d ago`;
+}
+
 export const ADMIN_PLAN_CODES = ["free", "starter", "business", "waka_plus"] as const;
 export type AdminPlanCode = (typeof ADMIN_PLAN_CODES)[number];
 
@@ -429,6 +444,9 @@ export type RecentShopRow = {
   phone_e164?: string | null;
   business_type?: string | null;
   gps_missing?: boolean | null;
+  last_seen_at?: string | null;
+  product_count?: number;
+  sale_count_30d?: number;
 };
 
 export type PendingSubscriptionRequestRow = {
@@ -481,6 +499,10 @@ export type ShopOpsDetail = {
     longitude?: number | null;
   };
   owner_label: string | null;
+  owner_email: string | null;
+  product_count: number;
+  sale_count_30d: number;
+  last_sale_at: string | null;
   subscription: {
     id: string;
     status: string;
@@ -815,10 +837,13 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
         plan_code: (row.plan_code as string) ?? null,
         trial_days_left: trialDaysLeft(trialEnds, status),
         owner_label: (row.owner_label as string) ?? null,
-        owner_email: (row.owner_email as string) ?? null,
+        owner_email: formatDisplayEmail(row.owner_email as string) ?? null,
         phone_e164: (row.phone_e164 as string) ?? null,
         business_type: (row.business_type as string) ?? null,
         gps_missing: row.gps_missing === null || row.gps_missing === undefined ? null : Boolean(row.gps_missing),
+        last_seen_at: (row.last_seen_at as string) ?? null,
+        product_count: Number(row.product_count ?? 0),
+        sale_count_30d: Number(row.sale_count_30d ?? 0),
       };
     });
   }
@@ -945,6 +970,10 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
         longitude: shopRaw.longitude != null ? Number(shopRaw.longitude) : null,
       },
       owner_label: (j.owner_label as string) ?? null,
+      owner_email: formatDisplayEmail(j.owner_email as string),
+      product_count: Number(j.product_count ?? 0),
+      sale_count_30d: Number(j.sale_count_30d ?? 0),
+      last_sale_at: (j.last_sale_at as string) ?? null,
       subscription,
       plan_code: (j.plan_code as string) ?? null,
       devices,
@@ -1017,6 +1046,10 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
       longitude: shop.longitude != null ? Number(shop.longitude) : null,
     },
     owner_label: null,
+    owner_email: null,
+    product_count: 0,
+    sale_count_30d: 0,
+    last_sale_at: null,
     subscription,
     plan_code,
     devices,

@@ -85,6 +85,26 @@ export async function internalListMarketingAgents(): Promise<InternalMarketingAg
   });
 }
 
+export async function internalGrantMarketingAgent(email: string): Promise<{
+  ok: boolean;
+  id?: string;
+  referralCode?: string;
+  error?: string;
+  alreadyAgent?: boolean;
+}> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const { data, error } = await supabase.rpc("internal_grant_marketing_agent", { p_email: email.trim() });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as { ok?: boolean; id?: string; referral_code?: string; error?: string; already_agent?: boolean };
+  if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
+  return {
+    ok: true,
+    id: row.id,
+    referralCode: row.referral_code,
+    alreadyAgent: row.already_agent,
+  };
+}
+
 export async function internalCreateMarketingAgent(input: {
   referralCode: string;
   fullName?: string;

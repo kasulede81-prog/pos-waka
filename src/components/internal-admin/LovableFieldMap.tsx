@@ -10,13 +10,14 @@ type Props = {
   pins: FieldMapPin[];
 };
 
-/** Lightweight Mapbox map (from Lovable import). */
+/** Lightweight Mapbox map fallback when token env is missing from advanced map. */
 export function LovableFieldMap({ pins }: Props) {
   const ref = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
 
   useEffect(() => {
-    if (!TOKEN || !ref.current) return;
+    if (!TOKEN || !ref.current || mapRef.current) return;
     mapboxgl.accessToken = TOKEN;
     const map = new mapboxgl.Map({
       container: ref.current,
@@ -26,6 +27,8 @@ export function LovableFieldMap({ pins }: Props) {
     });
     mapRef.current = map;
     return () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
       map.remove();
       mapRef.current = null;
     };
@@ -34,27 +37,33 @@ export function LovableFieldMap({ pins }: Props) {
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const markers: mapboxgl.Marker[] = [];
+
+    const clearMarkers = () => {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+    };
 
     const addPins = () => {
-      pins.slice(0, 400).forEach((p) => {
-        if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
+      clearMarkers();
+      const valid = pins.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)).slice(0, 400);
+      for (const p of valid) {
         const el = document.createElement("div");
         el.style.cssText = `width:14px;height:14px;border-radius:9999px;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4);background:${p.is_active ? "#16a34a" : "#9ca3af"}`;
         const popup = new mapboxgl.Popup({ offset: 12 }).setHTML(
           `<div style="font-family:system-ui;font-size:12px"><div style="font-weight:700">${escapeHtml(p.shop_name)}</div><div>${escapeHtml(p.district ?? "")}</div></div>`,
         );
         const marker = new mapboxgl.Marker(el).setLngLat([p.lng, p.lat]).setPopup(popup).addTo(map);
-        markers.push(marker);
-      });
+        markersRef.current.push(marker);
+      }
+      if (valid.length > 0) {
+        const bounds = new mapboxgl.LngLatBounds();
+        valid.forEach((p) => bounds.extend([p.lng, p.lat]));
+        map.fitBounds(bounds, { padding: 48, maxZoom: 12, duration: 0 });
+      }
     };
 
     if (map.loaded()) addPins();
-    else map.on("load", addPins);
-
-    return () => {
-      markers.forEach((m) => m.remove());
-    };
+    else map.once("load", addPins);
   }, [pins]);
 
   if (!TOKEN) {
@@ -69,10 +78,10 @@ export function LovableFieldMap({ pins }: Props) {
     <div className="space-y-2">
       <div ref={ref} className="h-96 w-full overflow-hidden rounded-xl border border-stone-200" />
       {pins.length > 0 ? (
-        <p className="text-xs font-semibold text-stone-500">
-          {pins.length} shops with GPS · tap a pin for details, or open from Recent shops below.
-        </p>
-      ) : null}
+        <p className="text-xs font-semibold text-stone-500">{pins.length} shops with GPS · tap a pin for details.</p>
+      ) : (
+        <p className="text-xs font-semibold text-amber-800">No GPS pins yet — shops need location from onboarding.</p>
+      )}
     </div>
   );
 }

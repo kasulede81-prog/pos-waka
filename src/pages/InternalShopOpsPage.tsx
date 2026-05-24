@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import { Link, Navigate, useLocation, useParams } from "react-router-dom";
+import { Navigate, useLocation, useParams } from "react-router-dom";
 import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -18,6 +17,8 @@ import {
   adminSubscriptionSetStatus,
   fetchShopOpsDetail,
   fetchWakaInternalAdminMe,
+  formatDisplayEmail,
+  formatLastActive,
   googleMapsDirectionsUrl,
   type AdminPlanCode,
   type ShopOpsDetail,
@@ -27,7 +28,6 @@ import {
   INTERNAL_ADMIN_PREVIEW_ROW,
   PREVIEW_SHOP_ID,
   PREVIEW_SHOP_OPS_DETAIL,
-  internalAdminPreviewHref,
   isInternalAdminPreviewActive,
 } from "../lib/internalAdminPreview";
 
@@ -47,7 +47,7 @@ function deviceOnline(lastSeen: string | null): boolean {
   return Date.now() - new Date(lastSeen).getTime() < 15 * 60 * 1000;
 }
 
-export function InternalShopOpsPage({ lang, email }: Props) {
+export function InternalShopOpsPage({ lang }: Props) {
   const { shopId } = useParams<{ shopId: string }>();
   const location = useLocation();
   const previewMode = isInternalAdminPreviewActive(location.search);
@@ -161,13 +161,6 @@ export function InternalShopOpsPage({ lang, email }: Props) {
             {t(lang, "internalAdminPreviewShopHint")}
           </p>
         ) : null}
-        <Link
-          to={previewMode ? internalAdminPreviewHref("/internal/waka#ops-recent-shops") : "/internal/waka#ops-recent-shops"}
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-orange-700 hover:underline"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden />
-          {t(lang, "internalShopProfileBack")}
-        </Link>
 
       {loadingShop ? (
         <p className="rounded-3xl border border-stone-200 bg-white px-5 py-8 text-center font-semibold text-stone-600">
@@ -180,16 +173,32 @@ export function InternalShopOpsPage({ lang, email }: Props) {
       ) : (
         <>
           <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-sm">
-            <p className="text-xs font-black uppercase tracking-wider text-orange-700">{email ?? "—"}</p>
+            {formatDisplayEmail(detail.owner_email) ? (
+              <p className="text-sm font-semibold text-stone-600">{formatDisplayEmail(detail.owner_email)}</p>
+            ) : detail.owner_label ? (
+              <p className="text-sm font-semibold text-stone-600">{detail.owner_label}</p>
+            ) : null}
             <h1 className="mt-1 text-2xl font-black text-stone-900">{detail.shop.name}</h1>
             <p className="mt-2 text-sm font-semibold text-stone-600">
               {[detail.shop.district, detail.shop.city].filter(Boolean).join(" · ") || "—"}
             </p>
-            {detail.owner_label ? (
-              <p className="mt-2 text-sm font-bold text-stone-800">
-                {t(lang, "internalRecentColOwner")}: {detail.owner_label}
-              </p>
-            ) : null}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-black ${
+                  formatLastActive(detail.shop.last_seen_at) === "Active now"
+                    ? "bg-emerald-100 text-emerald-900"
+                    : "bg-stone-100 text-stone-700"
+                }`}
+              >
+                {t(lang, "internalShopProfileLastSeen")}: {formatLastActive(detail.shop.last_seen_at)}
+              </span>
+              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-900">
+                {detail.product_count} {t(lang, "internalShopProfileProducts")}
+              </span>
+              <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-900">
+                {detail.sale_count_30d} {t(lang, "internalShopProfileSales30d")}
+              </span>
+            </div>
             {detail.shop.phone_e164 ? (
               <p className="mt-1 font-mono text-sm text-stone-700">{detail.shop.phone_e164}</p>
             ) : null}

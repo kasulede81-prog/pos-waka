@@ -67,30 +67,70 @@ body { max-width: 80mm; font-size: 12px; }`;
   }
 }
 
-/** Opens a print window (AirPrint / system printer on desktop & mobile browsers). */
-export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
-  const w = window.open("", "_blank", "noopener,noreferrer,width=420,height=720");
-  if (!w) return false;
+function receiptHtml(receiptPlain: string, paper: ReceiptPaperSize): string {
   const css = paperCss(paper);
-  w.document.open();
-  w.document.write(`<!doctype html>
+  const safe = receiptPlain
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<!doctype html>
 <html><head><meta charset="utf-8"/><title>Receipt</title>
 <style>
 ${css}
-body { font-family: ui-monospace, "Courier New", monospace; padding: 8px; color: #111; }
+body { font-family: ui-monospace, "Courier New", monospace; padding: 8px; color: #111; margin: 0; }
 pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 @media print { body { padding: 0; } }
 </style></head>
-<body><pre id="waka-r"></pre></body></html>`);
-  w.document.close();
-  const el = w.document.getElementById("waka-r");
-  if (!el) {
-    w.close();
+<body><pre>${safe}</pre></body></html>`;
+}
+
+/** Print via hidden iframe (avoids popup blockers; works with AirPrint / system dialog). */
+export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
+  if (typeof document === "undefined") return false;
+
+  const html = receiptHtml(receiptPlain, paper);
+  const iframe = document.createElement("iframe");
+  iframe.setAttribute("title", "Waka receipt print");
+  iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+
+  const win = iframe.contentWindow;
+  const doc = iframe.contentDocument ?? win?.document;
+  if (!win || !doc) {
+    document.body.removeChild(iframe);
     return false;
   }
-  el.textContent = receiptPlain;
-  w.focus();
-  w.print();
-  w.setTimeout(() => w.close(), 500);
+
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  const cleanup = () => {
+    window.setTimeout(() => {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }, 800);
+  };
+
+  const doPrint = () => {
+    try {
+      win.focus();
+      win.print();
+      cleanup();
+    } catch {
+      cleanup();
+      return false;
+    }
+    return true;
+  };
+
+  if (doc.readyState === "complete") {
+    window.setTimeout(doPrint, 150);
+    return true;
+  }
+
+  iframe.onload = () => {
+    window.setTimeout(doPrint, 150);
+  };
+
   return true;
 }

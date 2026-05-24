@@ -273,6 +273,10 @@ export const PREVIEW_SHOP_OPS_DETAIL: ShopOpsDetail = {
     longitude: 32.5825,
   },
   owner_label: "Sarah N.",
+  owner_email: "sarah.n@example.com",
+  product_count: 42,
+  sale_count_30d: 128,
+  last_sale_at: daysAgo(0),
   subscription: {
     id: "preview-sub-1",
     status: "active",
