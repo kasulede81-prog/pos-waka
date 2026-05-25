@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { TrendingUp } from "lucide-react";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -110,7 +111,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const gridCols = canProfit && canStock ? "lg:grid-cols-4" : canProfit || canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-4">
       {!preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
 
       {deniedBanner ? (
@@ -188,8 +189,37 @@ export function DashboardPage({ lang }: { lang: Language }) {
               {t(lang, "closeDay")}
             </Link>
           ) : null}
+          {canProfit ? (
+            <Link
+              to="/reports"
+              className="inline-flex min-h-[46px] shrink-0 items-center gap-1.5 rounded-2xl border border-waka-300 bg-waka-50 px-4 py-3 text-base font-black text-waka-950 shadow-sm active:bg-waka-100"
+            >
+              <TrendingUp className="h-5 w-5 shrink-0" aria-hidden />
+              {t(lang, "cardProfitToday")}
+            </Link>
+          ) : null}
         </div>
       </div>
+
+      {canProfit ? (
+        <section className="rounded-3xl border-2 border-waka-200 bg-gradient-to-br from-waka-50 via-white to-orange-50/40 p-4 shadow-waka-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "homeProfitWindowTitle")}</p>
+              <p className="mt-1 text-3xl font-black text-waka-950 sm:text-4xl">UGX {profitToday.toLocaleString()}</p>
+              <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "dashboardProfitShortNote")}</p>
+            </div>
+            {canReports ? (
+              <Link
+                to="/reports"
+                className="inline-flex min-h-[44px] shrink-0 items-center rounded-2xl bg-waka-600 px-4 py-2.5 text-sm font-black text-white shadow-sm active:bg-waka-700"
+              >
+                {t(lang, "homeProfitOpenReports")} →
+              </Link>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-3xl border border-stone-200 bg-white p-3.5 shadow-waka-sm">
         <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "dashboardSyncTitle")}</p>

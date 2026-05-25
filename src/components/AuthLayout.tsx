@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { languageToggleLabel, nextLanguage } from "../lib/language";
 import { WakaMarkIcon } from "./brand/WakaLogo";
 import { WAKA_BRAND_NAME, WAKA_LEGAL_COMPANY_NAME, WAKA_SLOGAN } from "../config/wakaSupport";
 
@@ -29,10 +30,10 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
           </Link>
           <button
             type="button"
-            onClick={() => setLang(lang === "en" ? "lg" : "en")}
+            onClick={() => setLang(nextLanguage(lang))}
             className="shrink-0 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-800 shadow-sm active:bg-stone-50"
           >
-            {lang === "en" ? "Luganda" : "English"}
+            {languageToggleLabel(lang)}
           </button>
         </header>
         {children}

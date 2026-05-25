@@ -4,6 +4,7 @@ import { Home, ShoppingCart, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
+import { languageToggleLabel, nextLanguage } from "../../lib/language";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
@@ -254,10 +255,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               </div>
               <button
                 type="button"
-                onClick={() => setLang(lang === "en" ? "lg" : "en")}
-                className="min-h-[38px] rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50"
+                onClick={() => setLang(nextLanguage(lang))}
+                className="min-h-[38px] max-w-[7.5rem] truncate rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50"
+                aria-label={t(lang, "langEnglish")}
               >
-                {lang === "en" ? "Luganda" : "English"}
+                {languageToggleLabel(lang)}
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-export type Language = "en" | "lg";
+export type Language = "en" | "lg" | "sw";
 
 /** POS staff role — persisted in snapshot + Supabase `shop_members` / user metadata when configured. */
 export type UserRole = "owner" | "manager" | "cashier" | "stock_keeper";

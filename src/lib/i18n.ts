@@ -1,4 +1,5 @@
 import type { Language } from "../types";
+import { swOverrides } from "./i18n/swOverrides";
 
 type Dict = Record<string, string>;
 
@@ -286,6 +287,11 @@ const en: Dict = {
   settingsBackOfficePinLength: "Use 4 to 6 digits.",
   homeCashierHello: "Ready to sell",
   homeCashierSub: "Start selling fast",
+  homeProfitWindowTitle: "Today's profit",
+  homeProfitOpenReports: "Profit reports",
+  langEnglish: "English",
+  langLuganda: "Luganda",
+  langSwahili: "Swahili",
   dashboardDeniedBackOffice: "That area is for the owner or manager. Keep selling from Home.",
   dashboardSyncTitle: "Sync",
   dashboardOpenPosTiles: "Quick products",
@@ -1682,6 +1688,11 @@ const lg: Dict = {
   settingsBackOfficePinLength: "Kozesa namba 4 okutuuka ku 6.",
   homeCashierHello: "Weteekeddwa okutunda",
   homeCashierSub: "Tandika okutunda mangu",
+  homeProfitWindowTitle: "Amagoba ga leero",
+  homeProfitOpenReports: "Ripooti z'amagoba",
+  langEnglish: "English",
+  langLuganda: "Luganda",
+  langSwahili: "Kiswahili",
   dashboardDeniedBackOffice: "Ekitundu kino ky'abannyini n'abafuzi. Semberayo okutunda okuva awaka.",
   dashboardSyncTitle: "Okutusa",
   dashboardOpenPosTiles: "Ebintu ebyangu",
@@ -2794,13 +2805,16 @@ const lg: Dict = {
   loadingAuth: "Tukunga…",
 };
 
-const dictionaries: Record<Language, Dict> = { en, lg };
+const sw: Dict = { ...en, ...swOverrides };
 
-export const t = (lang: Language, key: string) => dictionaries[lang][key] ?? key;
+const dictionaries: Record<Language, Dict> = { en, lg, sw };
+
+export const t = (lang: Language, key: string) =>
+  dictionaries[lang][key] ?? dictionaries.en[key] ?? key;
 
 /** Replace `{name}`-style placeholders in a dictionary string. */
 export function tTemplate(lang: Language, key: string, vars: Record<string, string | number>): string {
-  let out = dictionaries[lang][key] ?? key;
+  let out = dictionaries[lang][key] ?? dictionaries.en[key] ?? key;
   for (const [k, v] of Object.entries(vars)) {
     out = out.split(`{${k}}`).join(String(v));
   }

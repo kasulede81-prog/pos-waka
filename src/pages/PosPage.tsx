@@ -588,9 +588,7 @@ export function PosPage({ lang }: { lang: Language }) {
     <div
       className={clsx(
         "space-y-3",
-        draftLines.length > 0 && saleCheckoutMinimized
-          ? "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]"
-          : "pb-8",
+        draftLines.length > 0 && saleCheckoutMinimized && "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]",
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -731,7 +729,7 @@ export function PosPage({ lang }: { lang: Language }) {
           )}
         </section>
       ) : showShelfBoxes ? (
-        <section className="space-y-3">
+        <section className="space-y-3 pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
@@ -788,7 +786,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
         </section>
       ) : (
-        <section className="space-y-2 pb-[calc(6rem+env(safe-area-inset-bottom,0px))]">
+        <section className="space-y-2 pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
             <button
               type="button"

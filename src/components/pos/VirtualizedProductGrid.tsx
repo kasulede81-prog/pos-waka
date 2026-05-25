@@ -7,7 +7,7 @@ import { shelfIconFor } from "../../lib/productCategories";
 
 const COLS = 2;
 const ROW_ESTIMATE = 132;
-const BOTTOM_SCROLL_GUTTER = 112;
+const BOTTOM_SCROLL_GUTTER = 160;
 
 type Props = {
   products: Product[];

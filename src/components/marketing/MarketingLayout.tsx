@@ -58,6 +58,13 @@ export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Pr
               >
                 LG
               </button>
+              <button
+                type="button"
+                onClick={() => setLang("sw")}
+                className={clsx("rounded-full px-3 py-1", lang === "sw" ? "bg-white text-orange-700 shadow-sm" : "text-stone-600")}
+              >
+                SW
+              </button>
             </div>
             {!isAuthenticated ? (
               <>
