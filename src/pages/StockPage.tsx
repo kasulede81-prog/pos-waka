@@ -117,6 +117,10 @@ export function StockPage({ lang }: { lang: Language }) {
   const [qaPrice, setQaPrice] = useState("");
   const [qaStock, setQaStock] = useState("");
   const [qaCategory, setQaCategory] = useState("");
+  const [qaBoughtAs, setQaBoughtAs] = useState("");
+  const [qaBuyPackPrice, setQaBuyPackPrice] = useState("");
+  const [qaPiecesInside, setQaPiecesInside] = useState("");
+  const [qaSupplierName, setQaSupplierName] = useState("");
 
   const [mainName, setMainName] = useState("");
   const [mainCategory, setMainCategory] = useState("");
@@ -232,13 +236,26 @@ export function StockPage({ lang }: { lang: Language }) {
     const price = Math.floor(Number(qaPrice) || 0);
     if (price < 0) return;
     const sellUnit = resolveSellUnit(qaUnitPreset, qaUnitCustom);
+    const sellingMode = sellingModeFromSellUnit(sellUnit);
+    const pack = Math.floor(Number(qaBuyPackPrice.replace(/\D/g, "")) || 0);
+    const pieces = Math.floor(Number(qaPiecesInside.replace(/[^\d.]/g, "")) || 0);
+    const hasTrack = qaBoughtAs.trim().length > 0 && pack > 0 && pieces > 0;
+    const costPerSell = hasTrack ? Math.floor(pack / pieces) : undefined;
+    const buyingUnitLabel = hasTrack
+      ? qaSupplierName.trim()
+        ? `${qaBoughtAs.trim()} · ${qaSupplierName.trim()}`
+        : qaBoughtAs.trim()
+      : undefined;
     const r = quickAddProduct({
       name: qaName,
       priceUgx: price,
       stockQty: Number(qaStock) || 0,
       category: qaCategory.trim() || t(lang, "generalCategory"),
       baseUnit: sellUnit,
-      sellingMode: sellingModeFromSellUnit(sellUnit),
+      sellingMode,
+      buyingUnit: hasTrack ? buyingUnitLabel! : undefined,
+      conversionRate: hasTrack ? pieces : undefined,
+      costPricePerUnitUgx: hasTrack ? costPerSell! : undefined,
     });
     if (!r.ok) return;
     setQaName("");
@@ -247,6 +264,10 @@ export function StockPage({ lang }: { lang: Language }) {
     setQaPrice("");
     setQaStock("");
     setQaCategory("");
+    setQaBoughtAs("");
+    setQaBuyPackPrice("");
+    setQaPiecesInside("");
+    setQaSupplierName("");
     setQuickOpen(false);
   };
 
@@ -448,7 +469,7 @@ export function StockPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-6 pb-4">
       <div>
         <h1 className="text-3xl font-black text-slate-900">{t(lang, "stockTitle")}</h1>
         <p className="mt-1 text-lg text-slate-600">{t(lang, "stockChangeTitle")}</p>
@@ -844,16 +865,17 @@ export function StockPage({ lang }: { lang: Language }) {
 
       {quickOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center"
+          className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
           role="dialog"
           aria-modal
           onClick={() => setQuickOpen(false)}
         >
           <form
             onSubmit={submitQuick}
-            className="w-full max-w-lg rounded-t-[2rem] bg-white p-6 shadow-2xl sm:rounded-3xl"
+            className="flex max-h-[min(92dvh,900px)] w-full max-w-lg flex-col overflow-hidden rounded-t-[2rem] bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
             <p className="text-center text-2xl font-black text-slate-900">{t(lang, "quickAddTitle")}</p>
             <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "quickAddSub")}</p>
             <label className="mt-6 block text-base font-bold text-slate-800">
@@ -941,13 +963,63 @@ export function StockPage({ lang }: { lang: Language }) {
                 required
               />
             </label>
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button type="button" className="rounded-2xl border-2 py-4 text-lg font-bold" onClick={() => setQuickOpen(false)}>
+
+            <section className="mt-5 rounded-2xl border-2 border-waka-100 bg-waka-50/60 p-4">
+              <p className="text-base font-black text-slate-900">{t(lang, "quickAddBuySection")}</p>
+              <p className="mt-1 text-xs text-slate-600">{t(lang, "trackBuyingProfitHint")}</p>
+              <div className="mt-3 space-y-3">
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "howYouBuyPack")}
+                  <input
+                    value={qaBoughtAs}
+                    onChange={(e) => setQaBoughtAs(e.target.value)}
+                    placeholder={t(lang, "howYouBuyPackPh")}
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "buyingPackPriceLabel")}
+                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{t(lang, "buyingPackPriceHint")}</p>
+                  <input
+                    value={qaBuyPackPrice}
+                    onChange={(e) => setQaBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                    inputMode="numeric"
+                    placeholder="12000"
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-bold"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "howManyInsideLabel")}
+                  <input
+                    value={qaPiecesInside}
+                    onChange={(e) => setQaPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                    inputMode="decimal"
+                    placeholder={sellingModeFromSellUnit(resolveSellUnit(qaUnitPreset, qaUnitCustom)) === "weighted" ? "50" : "30"}
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-bold"
+                  />
+                </label>
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "supplierOptionalLabel")}
+                  <input
+                    value={qaSupplierName}
+                    onChange={(e) => setQaSupplierName(e.target.value)}
+                    placeholder={t(lang, "supplierOptionalPh")}
+                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
+                  />
+                </label>
+              </div>
+            </section>
+            </div>
+
+            <div className="shrink-0 border-t border-slate-100 bg-white px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" className="min-h-[52px] rounded-2xl border-2 py-3 text-lg font-bold" onClick={() => setQuickOpen(false)}>
                 {t(lang, "cancel")}
               </button>
-              <button type="submit" className="rounded-2xl bg-waka-600 py-4 text-lg font-black text-white">
+              <button type="submit" className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-lg font-black text-white">
                 {t(lang, "quickAddSave")}
               </button>
+            </div>
             </div>
           </form>
         </div>

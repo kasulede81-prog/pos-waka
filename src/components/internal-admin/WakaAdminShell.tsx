@@ -47,7 +47,7 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
 
   const handleBack = () => {
     if (active === "shop") {
-      navigate(previewMode ? internalAdminPreviewHref("/internal/waka#ops-recent-shops") : "/internal/waka#ops-recent-shops");
+      navigate(previewMode ? internalAdminPreviewHref("/internal/waka") : "/internal/waka");
       return;
     }
     if (active !== "overview") {

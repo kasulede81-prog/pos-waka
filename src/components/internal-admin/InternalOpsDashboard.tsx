@@ -1,16 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  BarChart3,
   Building2,
   Calendar,
   ChevronRight,
+  ClipboardList,
   Headphones,
+  Map as MapIcon,
   MapPin,
   RefreshCw,
   Sparkles,
-  Trash2,
 } from "lucide-react";
-import { AdminHero } from "./adminUi";
+import { AdminHero, AdminOpsPanel, OpsPanelNavButton } from "./adminUi";
 import { LovableFieldMap } from "./LovableFieldMap";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -35,11 +37,6 @@ import {
   fetchInternalOpsCharts7d,
   fetchOrgBillingOffersForQueue,
   fetchPendingSubscriptionRequests,
-  deleteSubscriptionRequest,
-  deleteSupportTicket,
-  internalOpsOrgBillingOfferFulfill,
-  internalOpsOrgBillingOfferSend,
-  internalOpsSetSubscriptionRequestStatus,
   fetchPlanTierMetrics,
   fetchRecentShops,
   fetchSalesVolumeBuckets7d,
@@ -47,11 +44,6 @@ import {
   fetchSubscriptionGrowthBuckets7d,
   fetchSupportTickets,
   formatDisplayEmail,
-  formatLastActive,
-  googleMapsDirectionsUrl,
-  markFieldVisitCompleted,
-  updateSupportTicketStatus,
-  whatsappUrlFromPhone,
   type BusinessTypeSlice,
   type DayBucket,
   type DistrictOpsRow,
@@ -65,6 +57,8 @@ import {
   type SupportTicketRow,
   type WakaInternalAdminRow,
 } from "../../lib/wakaInternalAdmin";
+
+import { InternalOpsQueuePanels } from "./InternalOpsQueuePanels";
 
 const InternalFieldOpsMap = lazy(async () => {
   const m = await import("./InternalFieldOpsMap");
@@ -138,11 +132,7 @@ function MiniSparkline({ values, stroke }: { values: number[]; stroke: string })
   );
 }
 
-function scrollToOpsSection(id: string) {
-  window.requestAnimationFrame(() => {
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-}
+type OpsPanelId = "shops" | "districts" | "map" | "plans" | "support" | "trials" | "annual" | "charts" | "visits";
 
 function PulseMetricChip({
   label,
@@ -266,6 +256,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
   const [annualAmountByTicket, setAnnualAmountByTicket] = useState<Record<string, string>>({});
   const [billingOfferRows, setBillingOfferRows] = useState<OrgBillingOfferStaffRow[]>([]);
   const [billingFulfillBusy, setBillingFulfillBusy] = useState<string | null>(null);
+  const [activePanel, setActivePanel] = useState<OpsPanelId | null>(null);
+
+  const openPanel = useCallback((id: OpsPanelId) => setActivePanel(id), []);
+  const closePanel = useCallback(() => setActivePanel(null), []);
 
   const seedPreview = useCallback(() => {
     const buckets = previewDayBuckets();
@@ -362,11 +356,45 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
     return () => window.clearInterval(id);
   }, [adminRow, previewMode, loadAll]);
 
+  useEffect(() => {
+    if (previewMode || !adminRow) return;
+    void fetchFieldMapPins({ districtId: mapDistrictId || null, limit: 400 }).then(setMapPins);
+  }, [adminRow, mapDistrictId, previewMode]);
+
   const filteredDistricts = useMemo(() => {
     const q = districtFilter.trim().toLowerCase();
     if (!q) return districts;
     return districts.filter((d) => d.label.toLowerCase().includes(q));
   }, [districts, districtFilter]);
+
+  const shopOpenings = useMemo(() => {
+    const byId = new Map<string, RecentShopRow>();
+    for (const row of recent) byId.set(row.id, row);
+    for (const s of stats?.latestSignups ?? []) {
+      if (byId.has(s.shop_id)) continue;
+      byId.set(s.shop_id, {
+        id: s.shop_id,
+        name: s.shop_name,
+        district: s.district,
+        city: null,
+        owner_email: s.owner_email,
+        owner_label: s.owner_name,
+        plan_code: s.plan_code,
+        trial_days_left: null,
+        is_active: s.subscription_status === "active",
+        gps_missing: true,
+        created_at: s.created_at,
+        last_seen_at: null,
+        product_count: undefined,
+        sale_count_30d: undefined,
+      });
+    }
+    return [...byId.values()].sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return tb - ta;
+    });
+  }, [recent, stats?.latestSignups]);
 
   const pendingAnnualTickets = useMemo(
     () => tickets.filter((tk) => tk.status === "pending" && tk.issue_type === "annual_plan_request"),
@@ -492,57 +520,119 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
         </p>
       ) : null}
 
+      <div className="sticky top-0 z-10 -mx-1 overflow-x-auto rounded-xl border border-border bg-card/95 px-2 py-2 backdrop-blur-sm [scrollbar-width:none]">
+        <div className="flex min-w-max gap-2">
+          <OpsPanelNavButton
+            label={t(lang, "internalOpsPanelShops")}
+            count={Number(statGrid.total) || shopOpenings.length}
+            active={activePanel === "shops"}
+            onClick={() => openPanel("shops")}
+            Icon={Building2}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalOpsPanelDistricts")}
+            count={districts.length}
+            active={activePanel === "districts"}
+            onClick={() => openPanel("districts")}
+            Icon={MapPin}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalOpsPanelMap")}
+            count={mapPins.length}
+            active={activePanel === "map"}
+            onClick={() => openPanel("map")}
+            Icon={MapIcon}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalPlansTitle")}
+            active={activePanel === "plans"}
+            onClick={() => openPanel("plans")}
+            Icon={Sparkles}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalSupportTitle")}
+            count={Number(statGrid.support) || tickets.length}
+            active={activePanel === "support"}
+            onClick={() => openPanel("support")}
+            Icon={Headphones}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalPendingTrialsTitle")}
+            count={pendingTrials.length}
+            active={activePanel === "trials"}
+            onClick={() => openPanel("trials")}
+            Icon={ClipboardList}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalAnnualQueueTitle")}
+            count={pendingAnnualTickets.length}
+            active={activePanel === "annual"}
+            onClick={() => openPanel("annual")}
+            Icon={Calendar}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalInsightsTitle")}
+            active={activePanel === "charts"}
+            onClick={() => openPanel("charts")}
+            Icon={BarChart3}
+          />
+          <OpsPanelNavButton
+            label={t(lang, "internalFieldVisitsTitle")}
+            count={visits.length}
+            active={activePanel === "visits"}
+            onClick={() => openPanel("visits")}
+            Icon={MapPin}
+          />
+        </div>
+      </div>
+
       {/* Stats — compact pulse with drill-down */}
-      <section id="ops-pulse" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
-        <details open className="group/pulse">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
-            <div>
-              <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalDashPulseTitle")}</h2>
-              <p className="text-[11px] font-medium text-muted-foreground">
-                {statGrid.total} {t(lang, "internalStat_totalShops").toLowerCase()} · {statGrid.active}{" "}
-                {t(lang, "internalStat_activeToday").toLowerCase()}
-                {opsLoading ? <span className="ml-2 text-primary">{t(lang, "internalDashSyncing")}</span> : null}
-              </p>
-            </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-open/pulse:rotate-90" />
-          </summary>
-          <div className="space-y-3 border-t border-border bg-muted/20 px-3 pb-3 pt-3">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="px-4 py-3">
+          <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalDashPulseTitle")}</h2>
+          <p className="text-[11px] font-medium text-muted-foreground">
+            {statGrid.total} {t(lang, "internalStat_totalShops").toLowerCase()} · {statGrid.active}{" "}
+            {t(lang, "internalStat_activeToday").toLowerCase()}
+            {opsLoading ? <span className="ml-2 text-primary">{t(lang, "internalDashSyncing")}</span> : null}
+          </p>
+        </div>
+        <div className="space-y-3 border-t border-border bg-muted/20 px-3 pb-3 pt-3">
             <p className="text-[11px] font-semibold text-muted-foreground">{t(lang, "internalPulseTapHint")}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
               <PulseMetricChip
                 label={t(lang, "internalStat_totalShops")}
                 value={statGrid.total}
-                onOpen={() => scrollToOpsSection("ops-recent-shops")}
+                onOpen={() => openPanel("shops")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_activeToday")}
                 value={statGrid.active}
-                onOpen={() => scrollToOpsSection("ops-districts")}
+                onOpen={() => openPanel("districts")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_paidSubs")}
                 value={statGrid.paid}
-                onOpen={() => scrollToOpsSection("ops-plans")}
+                onOpen={() => openPanel("plans")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_trialSubs")}
                 value={statGrid.trial}
-                onOpen={() => scrollToOpsSection("ops-pending-trials")}
+                onOpen={() => openPanel("trials")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_salesShort")}
                 value={statGrid.sales}
-                onOpen={() => scrollToOpsSection("ops-charts")}
+                onOpen={() => openPanel("charts")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_supportOpen")}
                 value={statGrid.support}
-                onOpen={() => scrollToOpsSection("ops-support")}
+                onOpen={() => openPanel("support")}
               />
               <PulseMetricChip
                 label={t(lang, "internalStat_pendingAnnual")}
                 value={statGrid.pendingAnnual}
-                onOpen={() => scrollToOpsSection("ops-annual-queue")}
+                onOpen={() => openPanel("annual")}
               />
             </div>
             <details className="rounded-xl border border-stone-100 bg-stone-50/50 px-3 py-2">
@@ -569,792 +659,265 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
               </dl>
             </details>
           </div>
-        </details>
       </section>
 
-      {stats?.latestSignups?.length ? (
-        <details className="rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-50/50 to-white px-4 py-3 shadow-sm">
-          <summary className="cursor-pointer text-base font-black text-stone-900 marker:content-none [&::-webkit-details-marker]:hidden">
-            {t(lang, "internalLatestSignupsTitle")}{" "}
-            <span className="ml-2 font-mono text-sm font-bold text-orange-800">({stats.latestSignups.length})</span>
-          </summary>
-          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {stats.latestSignups.map((s) => (
-              <li
-                key={s.shop_id}
-                className="rounded-2xl border border-orange-100 bg-gradient-to-br from-white to-orange-50/40 p-4 shadow-sm"
-              >
-                <Link
-                  to={internalAdminShopHref(s.shop_id, previewMode)}
-                  className="text-base font-black text-orange-950 underline decoration-orange-200"
-                >
-                  {s.shop_name}
-                </Link>
-                <p className="mt-1 text-xs font-semibold text-stone-600">
-                  {[s.district].filter(Boolean).join(" · ") || "—"} · {s.owner_email ?? "—"}
-                </p>
-                <p className="mt-2 text-xs font-bold text-stone-500">
-                  {t(lang, "internalRecentColPlan")}: <span className="font-mono uppercase text-stone-800">{s.plan_code ?? "—"}</span> ·{" "}
-                  {t(lang, "internalRecentColStatus")}:{" "}
-                  <span className="font-mono uppercase text-stone-800">{s.subscription_status ?? "—"}</span>
-                </p>
-                <p className="mt-1 text-xs text-stone-500">
-                  {t(lang, "internalRecentColTrial")}: {s.trial_ends_at ? new Date(s.trial_ends_at).toLocaleDateString("en-GB") : "—"}
-                </p>
-                <p className="mt-1 font-mono text-[11px] text-stone-400">
-                  {s.created_at ? new Date(s.created_at).toLocaleString("en-GB") : ""}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </details>
-      ) : null}
-
-      {/* Plans */}
-      <section id="ops-plans" className="space-y-3 scroll-mt-4">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{t(lang, "internalPlansTitle")}</h2>
-          <Building2 className="h-4 w-4 text-primary" />
-        </div>
-        <div className="grid gap-3 lg:grid-cols-3">
-          {opsLoading && !plans.length
-            ? [0, 1, 2].map((i) => (
-                <div key={i} className="h-44 animate-pulse rounded-xl border border-border bg-card" />
-              ))
-            : (plans.length ? plans : [{ code: "starter" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 }, { code: "business" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 }, { code: "waka_plus" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 }]).map((plan, idx) => (
-                <PlanPremiumCard key={plan.code} lang={lang} plan={plan} tone={idx === 0 ? "slate" : idx === 1 ? "orange" : "gold"} />
-              ))}
-        </div>
-      </section>
-
-      <div className="grid gap-4 xl:grid-cols-3">
-        <div className="space-y-4 xl:col-span-2">
-          {/* Districts */}
-          <section id="ops-districts" className="rounded-xl border border-border bg-card p-4 scroll-mt-4">
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalDistrictTitle")}</h2>
-              <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={districtFilter}
-                  onChange={(e) => setDistrictFilter(e.target.value)}
-                  placeholder={t(lang, "internalDistrictSearch")}
-                  className="w-full rounded-xl border border-input bg-background py-2 pl-9 pr-3 text-sm font-semibold text-foreground outline-none ring-primary/20 focus:ring-2"
-                />
-              </div>
-            </div>
-            <div className="mt-4 overflow-x-auto rounded-xl ring-1 ring-border">
-              <table className="min-w-[640px] w-full border-collapse text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                    <th className="px-4 py-3">{t(lang, "internalDistrictColDistrict")}</th>
-                    <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColShops")}</th>
-                    <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColActive")}</th>
-                    <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColPaid")}</th>
-                    <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColAgents")}</th>
+      <AdminOpsPanel
+        title={t(lang, "internalOpsPanelShops")}
+        subtitle={t(lang, "internalOpsPanelShopsSub")}
+        open={activePanel === "shops"}
+        onClose={closePanel}
+        wide
+      >
+        <div className="overflow-x-auto rounded-xl ring-1 ring-border">
+          <table className="min-w-[720px] w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                <th className="px-3 py-2">{t(lang, "internalRecentColName")}</th>
+                <th className="px-3 py-2">{t(lang, "internalRecentColDistrict")}</th>
+                <th className="px-3 py-2">{t(lang, "internalRecentColOwner")}</th>
+                <th className="px-3 py-2">{t(lang, "internalRecentColPlan")}</th>
+                <th className="px-3 py-2">{t(lang, "internalRecentColJoined")}</th>
+                <th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {opsLoading && !shopOpenings.length ? (
+                [...Array(5)].map((_, i) => (
+                  <tr key={i} className="border-b border-stone-50">
+                    <td colSpan={6} className="px-3 py-2">
+                      <div className="h-4 animate-pulse rounded bg-stone-100" />
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {opsLoading && !districts.length ? (
-                    [...Array(6)].map((_, i) => (
-                      <tr key={i} className="border-b border-stone-50">
-                        <td colSpan={5} className="px-4 py-3">
-                          <div className="h-4 animate-pulse rounded bg-stone-100" />
-                        </td>
-                      </tr>
-                    ))
-                  ) : filteredDistricts.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-sm font-semibold text-stone-500">
-                        {t(lang, "internalDistrictEmpty")}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredDistricts.map((row) => (
-                      <tr key={row.districtId ?? row.label} className="border-b border-stone-50 transition hover:bg-orange-50/30">
-                        <td className="px-4 py-3 font-bold text-stone-900">{row.label}</td>
-                        <td className="px-4 py-3 text-right font-mono text-stone-800">{row.totalShops}</td>
-                        <td className="px-4 py-3 text-right font-mono text-emerald-800">{row.activeToday}</td>
-                        <td className="px-4 py-3 text-right font-mono text-stone-800">{row.paidShops}</td>
-                        <td className="px-4 py-3 text-right font-mono text-orange-900">{row.fieldAgentsAssigned}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section id="ops-pending-trials" className="overflow-hidden rounded-xl border border-border bg-card scroll-mt-4">
-            <details open={pendingTrials.length > 0} className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold text-card-foreground">{t(lang, "internalPendingTrialsTitle")}</h2>
-                  <p className="mt-1 truncate text-[11px] font-semibold text-muted-foreground">{t(lang, "internalPendingTrialsSub")}</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-black text-muted-foreground">
-                  {pendingTrials.length}
-                </span>
-              </summary>
-            <ul className="space-y-3 border-t border-border bg-muted/10 p-3">
-              {opsLoading && !pendingTrials.length ? (
-                [...Array(3)].map((_, i) => (
-                  <li key={i} className="h-16 animate-pulse rounded-xl bg-muted" />
                 ))
-              ) : pendingTrials.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-border bg-muted/20 px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
-                  {t(lang, "internalPendingTrialsEmpty")}
-                </li>
+              ) : shopOpenings.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm font-semibold text-stone-500">
+                    No shops found
+                  </td>
+                </tr>
               ) : (
-                pendingTrials.map((req) => (
-                  <li
-                    key={req.id}
-                    className="flex flex-col gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-black text-stone-900">
-                        {t(lang, "internalTrialPlanLabel")}:{" "}
-                        <span className="uppercase text-orange-800">{req.requested_plan}</span>
-                      </p>
-                      <p className="mt-1 font-mono text-xs text-stone-500">
-                        org {req.organization_id.slice(0, 8)}… · {new Date(req.created_at).toLocaleString("en-GB")}
-                      </p>
-                      {req.shop_id ? (
-                        <Link
-                          to={internalAdminShopHref(req.shop_id, previewMode)}
-                          className="mt-2 inline-block text-xs font-black uppercase text-orange-800 underline decoration-orange-300"
-                        >
-                          {t(lang, "internalMapOpenShop")}
-                        </Link>
-                      ) : null}
-                    </div>
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        style={!canManageTrials ? { display: "none" } : undefined}
-                        disabled={!canManageTrials || trialBusyId === `${req.id}-ok`}
-                        onClick={async () => {
-                          setTrialBusyId(`${req.id}-ok`);
-                          const r = await internalOpsSetSubscriptionRequestStatus(req.id, "approved", null);
-                          setTrialBusyId(null);
-                          if (r.ok) {
-                            window.dispatchEvent(new Event("waka:subscription-updated"));
-                            void loadAll();
-                          }
-                        }}
-                        className="h-7 rounded-lg bg-secondary px-3 text-xs font-black text-secondary-foreground disabled:opacity-40"
-                      >
-                        {trialBusyId === `${req.id}-ok` ? "…" : t(lang, "internalTrialApprove")}
-                      </button>
-                      <button
-                        type="button"
-                        style={!canManageTrials ? { display: "none" } : undefined}
-                        disabled={!canManageTrials || trialBusyId === `${req.id}-no`}
-                        onClick={async () => {
-                          setTrialBusyId(`${req.id}-no`);
-                          const r = await internalOpsSetSubscriptionRequestStatus(req.id, "rejected", "Rejected from dashboard");
-                          setTrialBusyId(null);
-                          if (r.ok) void loadAll();
-                        }}
-                        className="h-7 rounded-lg bg-destructive px-3 text-xs font-black text-destructive-foreground disabled:opacity-40"
-                      >
-                        {trialBusyId === `${req.id}-no` ? "…" : t(lang, "internalTrialReject")}
-                      </button>
-                      <button
-                        type="button"
-                        style={!canManageTrials ? { display: "none" } : undefined}
-                        disabled={!canManageTrials || trialBusyId === `${req.id}-del`}
-                        onClick={async () => {
-                          if (!window.confirm("Delete this request?")) return;
-                          setTrialBusyId(`${req.id}-del`);
-                          setDeleteMsg(null);
-                          const r = await deleteSubscriptionRequest(req.id);
-                          setTrialBusyId(null);
-                          if (r.ok) void loadAll();
-                          else setDeleteMsg(r.message ?? "Delete failed.");
-                        }}
-                        className="inline-flex h-7 items-center gap-1 rounded-lg border border-destructive/30 bg-card px-3 text-xs font-black text-destructive disabled:opacity-40"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {trialBusyId === `${req.id}-del` ? "…" : "Delete"}
-                      </button>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-            </details>
-          </section>
-
-          <section id="ops-annual-queue" className="overflow-hidden rounded-3xl border border-amber-200/80 bg-white shadow-[0_12px_40px_rgb(28_25_23/0.04)] scroll-mt-4">
-            <details open={pendingAnnualTickets.length > 0} className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 bg-gradient-to-br from-amber-50/50 to-white px-4 py-3 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-black text-stone-900 sm:text-base">{t(lang, "internalAnnualQueueTitle")}</h2>
-                  <p className="mt-1 truncate text-xs font-semibold text-stone-600">{t(lang, "internalAnnualQueueSub")}</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-black text-amber-900">
-                  {pendingAnnualTickets.length}
-                </span>
-              </summary>
-            <ul className="space-y-3 border-t border-amber-100 bg-amber-50/20 p-3 sm:p-4">
-              {pendingAnnualTickets.length === 0 ? (
-                <li className="rounded-2xl border border-dashed border-amber-200 bg-white/80 px-4 py-6 text-center text-sm font-semibold text-stone-600">
-                  {t(lang, "internalAnnualQueueEmpty")}
-                </li>
-              ) : (
-                pendingAnnualTickets.map((tk) => (
-                  <li
-                    key={tk.id}
-                    className="flex flex-col gap-3 rounded-2xl border border-amber-100 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-black text-stone-900">{tk.shop_name ?? "—"}</p>
-                      <p className="mt-1 text-xs font-semibold text-stone-500">
-                        {tk.owner_email ?? "—"} · {tk.shop_phone_e164 ?? tk.contact_phone_e164 ?? "—"}
-                      </p>
-                      {tk.organization_id ? (
-                        <p className="mt-1 font-mono text-[10px] text-stone-400">org {tk.organization_id}</p>
-                      ) : (
-                        <p className="mt-1 text-xs font-bold text-rose-700">{t(lang, "internalAnnualMissingOrg")}</p>
-                      )}
-                      <p className="mt-1 line-clamp-3 text-xs text-stone-600">{tk.body ?? tk.subject}</p>
-                      <p className="mt-1 font-mono text-[11px] text-stone-400">{new Date(tk.created_at).toLocaleString("en-GB")}</p>
-                    </div>
-                    <div className="flex w-full min-w-[12rem] shrink-0 flex-col gap-2 sm:max-w-xs">
-                      <label className="text-[10px] font-black uppercase text-stone-500">
-                        {t(lang, "internalAnnualAmountUgx")}
-                        <input
-                          type="number"
-                          min={1}
-                          inputMode="numeric"
-                          value={annualAmountByTicket[tk.id] ?? ""}
-                          onChange={(e) =>
-                            setAnnualAmountByTicket((prev) => ({
-                              ...prev,
-                              [tk.id]: e.target.value,
-                            }))
-                          }
-                          placeholder={t(lang, "internalAnnualAmountPlaceholder")}
-                          className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-bold text-stone-900"
-                        />
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          style={!canSendAnnualOffer ? { display: "none" } : undefined}
-                          disabled={
-                            !canSendAnnualOffer ||
-                            !tk.organization_id ||
-                            annualSendBusy === tk.id ||
-                            !(Number(annualAmountByTicket[tk.id] ?? 0) > 0)
-                          }
-                          onClick={async () => {
-                            if (!tk.organization_id) return;
-                            const amt = Math.floor(Number(annualAmountByTicket[tk.id] ?? 0));
-                            if (!(amt > 0)) return;
-                            setAnnualSendBusy(tk.id);
-                            const r = await internalOpsOrgBillingOfferSend(
-                              tk.organization_id,
-                              amt,
-                              t(lang, "internalAnnualOfferDefaultNote"),
-                              tk.shop_id ?? null,
-                            );
-                            setAnnualSendBusy(null);
-                            if (r.ok) {
-                              window.dispatchEvent(new Event("waka:subscription-updated"));
-                              void loadAll();
-                            }
-                          }}
-                          className="rounded-xl bg-orange-600 px-3 py-2 text-xs font-black text-white disabled:opacity-40"
-                        >
-                          {annualSendBusy === tk.id ? "…" : t(lang, "internalAnnualSendOffer")}
-                        </button>
-                        <button
-                          type="button"
-                          style={!canResolveSupport ? { display: "none" } : undefined}
-                          disabled={!canResolveSupport || annualBusyId === `${tk.id}-ok`}
-                          onClick={async () => {
-                            setAnnualBusyId(`${tk.id}-ok`);
-                            const r = await updateSupportTicketStatus(tk.id, "in_progress");
-                            setAnnualBusyId(null);
-                            if (r.ok) void loadAll();
-                          }}
-                          className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-black text-white disabled:opacity-40"
-                        >
-                          {annualBusyId === `${tk.id}-ok` ? "…" : t(lang, "internalAnnualQueueWorking")}
-                        </button>
-                        <button
-                          type="button"
-                          style={!canResolveSupport ? { display: "none" } : undefined}
-                          disabled={!canResolveSupport || annualBusyId === `${tk.id}-cl`}
-                          onClick={async () => {
-                            setAnnualBusyId(`${tk.id}-cl`);
-                            const r = await updateSupportTicketStatus(tk.id, "closed");
-                            setAnnualBusyId(null);
-                            if (r.ok) void loadAll();
-                          }}
-                          className="rounded-xl border-2 border-stone-300 bg-white px-3 py-2 text-xs font-black text-stone-900 disabled:opacity-40"
-                        >
-                          {annualBusyId === `${tk.id}-cl` ? "…" : t(lang, "internalAnnualQueueClose")}
-                        </button>
-                        <button
-                          type="button"
-                          style={!canResolveSupport ? { display: "none" } : undefined}
-                          disabled={!canResolveSupport || annualBusyId === `${tk.id}-del`}
-                          onClick={async () => {
-                            if (!window.confirm("Delete this request?")) return;
-                            setAnnualBusyId(`${tk.id}-del`);
-                            setDeleteMsg(null);
-                            const r = await deleteSupportTicket(tk.id);
-                            setAnnualBusyId(null);
-                            if (r.ok) void loadAll();
-                            else setDeleteMsg(r.message ?? "Delete failed.");
-                          }}
-                          className="inline-flex items-center gap-1 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-700 disabled:opacity-40"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          {annualBusyId === `${tk.id}-del` ? "…" : "Delete"}
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                ))
-              )}
-            </ul>
-
-            {billingOfferRows.length > 0 ? (
-              <div className="mt-6 rounded-2xl border border-orange-200/80 bg-white/90 p-4">
-                <h3 className="text-sm font-black text-stone-900">{t(lang, "internalBillingOffersQueueTitle")}</h3>
-                <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "internalBillingOffersQueueSub")}</p>
-                <ul className="mt-3 space-y-2">
-                  {billingOfferRows.map((o) => (
-                    <li
-                      key={o.id}
-                      className="flex flex-col gap-2 rounded-xl border border-stone-100 bg-stone-50/80 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="font-mono text-xs text-stone-500">
-                          {o.organization_id.slice(0, 8)}… · {o.status}
-                        </p>
-                        <p className="font-black text-stone-900">
-                          UGX {Number(o.amount_ugx).toLocaleString("en-UG")}{" "}
-                          <span className="text-xs font-semibold text-stone-600">{o.message ? `· ${o.message}` : ""}</span>
-                        </p>
-                        <p className="text-[11px] text-stone-500">{new Date(o.created_at).toLocaleString("en-GB")}</p>
-                      </div>
-                      {o.status === "claimed_paid" && canManageBillingOffers ? (
-                        <button
-                          type="button"
-                          disabled={billingFulfillBusy === o.id}
-                          onClick={async () => {
-                            setBillingFulfillBusy(o.id);
-                            const r = await internalOpsOrgBillingOfferFulfill(o.id, null);
-                            setBillingFulfillBusy(null);
-                            if (r.ok) {
-                              window.dispatchEvent(new Event("waka:subscription-updated"));
-                              void loadAll();
-                            }
-                          }}
-                          className="shrink-0 rounded-lg bg-emerald-700 px-3 py-2 text-xs font-black text-white disabled:opacity-40"
-                        >
-                          {billingFulfillBusy === o.id ? "…" : t(lang, "internalBillingOfferFulfill")}
-                        </button>
-                      ) : o.status === "pending" ? (
-                        <span className="shrink-0 text-xs font-bold text-amber-800">{t(lang, "internalBillingOfferAwaitingOwner")}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            </details>
-          </section>
-
-          <section id="ops-recent-shops" className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-[0_12px_40px_rgb(28_25_23/0.04)] scroll-mt-4">
-            <details className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
-                <div className="min-w-0">
-                  <h2 className="text-sm font-black text-stone-900 sm:text-base">{t(lang, "internalRecentTitle")}</h2>
-                  <p className="mt-1 truncate text-xs font-semibold text-stone-500">Latest shops and plan status</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
-                  {recent.length}
-                </span>
-              </summary>
-            <div className="border-t border-stone-100 bg-stone-50/40 p-3">
-              {opsLoading && !recent.length ? (
-                <div className="space-y-2">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="h-24 animate-pulse rounded-2xl bg-stone-100" />
-                  ))}
-                </div>
-              ) : recent.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm font-semibold text-stone-600">
-                  No shops found
-                </p>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {recent.map((row) => (
-                    <article key={row.id} className="rounded-2xl border border-stone-100 bg-white p-3 shadow-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h3 className="truncate text-sm font-black text-stone-950">{row.name}</h3>
-                          <p className="mt-0.5 truncate text-xs font-semibold text-stone-500">
-                            {[row.district, row.city].filter(Boolean).join(" · ") || "No location"}
-                          </p>
-                          <p className="mt-1 truncate text-xs font-bold text-stone-700">
-                            {formatDisplayEmail(row.owner_email) ?? row.owner_label ?? "No owner shown"}
-                          </p>
-                          <p className="mt-1 text-[11px] font-semibold text-stone-500">
-                            {formatLastActive(row.last_seen_at ?? null)} · {row.product_count ?? 0} products ·{" "}
-                            {row.sale_count_30d ?? 0} sales/30d
-                          </p>
-                        </div>
-                        <span
-                          className={clsx(
-                            "shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase",
-                            row.is_active ? "bg-emerald-100 text-emerald-900" : "bg-stone-200 text-stone-700",
-                          )}
-                        >
-                          {row.is_active ? t(lang, "internalStatusActive") : t(lang, "internalStatusInactive")}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        <span className="rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-black uppercase text-stone-700">
-                          {row.plan_code ?? "no plan"}
-                        </span>
-                        <span
-                          className={clsx(
-                            "rounded-lg px-2 py-1 text-[10px] font-black uppercase",
-                            row.gps_missing === false ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900",
-                          )}
-                        >
-                          {row.gps_missing === false ? t(lang, "internalGpsOk") : t(lang, "internalGpsMissing")}
-                        </span>
-                        <span className="rounded-lg bg-stone-100 px-2 py-1 text-[10px] font-bold text-stone-600">
-                          {row.created_at ? new Date(row.created_at).toLocaleDateString("en-GB") : "—"}
-                        </span>
-                      </div>
+                shopOpenings.map((row) => (
+                  <tr key={row.id} className="border-b border-stone-50 hover:bg-orange-50/30">
+                    <td className="max-w-[10rem] truncate px-3 py-2 font-bold text-stone-900">{row.name}</td>
+                    <td className="max-w-[8rem] truncate px-3 py-2 text-xs text-stone-600">
+                      {[row.district, row.city].filter(Boolean).join(" · ") || "—"}
+                    </td>
+                    <td className="max-w-[10rem] truncate px-3 py-2 text-xs font-semibold text-stone-700">
+                      {formatDisplayEmail(row.owner_email) ?? row.owner_label ?? "—"}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs uppercase">{row.plan_code ?? "—"}</td>
+                    <td className="px-3 py-2 text-xs text-stone-500">
+                      {row.created_at ? new Date(row.created_at).toLocaleDateString("en-GB") : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right">
                       <Link
                         to={internalAdminShopHref(row.id, previewMode)}
-                        className="mt-3 inline-flex h-9 w-full items-center justify-center rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground shadow-sm active:bg-primary/90"
+                        onClick={closePanel}
+                        className="inline-flex rounded-lg bg-primary px-2.5 py-1 text-[10px] font-black uppercase text-primary-foreground"
                       >
-                        Open / edit shop
+                        Open
                       </Link>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </div>
-            </details>
-          </section>
-
-          {/* Support */}
-          <section id="ops-support" className="overflow-hidden rounded-3xl border border-stone-200/80 bg-white shadow-[0_12px_40px_rgb(28_25_23/0.04)] scroll-mt-4">
-            <details open={tickets.length > 0} className="group">
-              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5 [&::-webkit-details-marker]:hidden">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-sm font-black text-stone-900 sm:text-base">{t(lang, "internalSupportTitle")}</h2>
-                    <Headphones className="h-4 w-4 text-violet-500" />
-                  </div>
-                  <p className="mt-1 truncate text-xs font-semibold text-stone-500">{t(lang, "internalSupportSub")}</p>
-                </div>
-                <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
-                  {tickets.length}
-                </span>
-              </summary>
-            <ul className="space-y-3 border-t border-stone-100 bg-stone-50/50 p-3 sm:p-4">
-              {opsLoading && !tickets.length ? (
-                [...Array(4)].map((_, i) => (
-                  <li key={i} className="h-20 animate-pulse rounded-2xl bg-stone-100" />
+                    </td>
+                  </tr>
                 ))
-              ) : tickets.length === 0 ? (
-                <li className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 px-4 py-8 text-center text-sm font-semibold text-stone-600">
-                  {t(lang, "internalSupportEmpty")}
-                </li>
-              ) : (
-                tickets.map((tk) => {
-                  const waUrl = whatsappUrlFromPhone(tk.contact_phone_e164 ?? tk.shop_phone_e164);
-                  return (
-                    <li
-                      key={tk.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-stone-100 bg-gradient-to-br from-white to-stone-50/80 p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate font-black text-stone-900">{tk.subject || t(lang, "internalSupportNoSubject")}</p>
-                        <p className="mt-0.5 text-xs font-semibold text-stone-500">
-                          {[tk.shop_name, tk.shop_district].filter(Boolean).join(" · ") || "—"} · {tk.channel} ·{" "}
-                          {new Date(tk.created_at).toLocaleString("en-GB")}
-                        </p>
-                        {tk.owner_name || tk.owner_email ? (
-                          <p className="mt-1 text-xs font-bold text-stone-700">
-                            {t(lang, "internalRecentColOwner")}: {[tk.owner_name, tk.owner_email].filter(Boolean).join(" · ")}
-                          </p>
-                        ) : null}
-                        {tk.issue_type ? (
-                          <p className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide text-stone-500">{tk.issue_type}</p>
-                        ) : null}
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span className="rounded-md bg-stone-900 px-2 py-0.5 text-[10px] font-black uppercase text-white">{tk.status}</span>
-                          <span
-                            className={clsx(
-                              "rounded-md px-2 py-0.5 text-[10px] font-black uppercase",
-                              tk.priority === "urgent" || tk.priority === "high"
-                                ? "bg-rose-100 text-rose-900"
-                                : "bg-orange-100 text-orange-900",
-                            )}
-                          >
-                            {tk.priority}
-                          </span>
-                          {tk.shop_id ? (
-                            <Link
-                              to={internalAdminShopHref(tk.shop_id, previewMode)}
-                              className="rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-black uppercase text-orange-950 underline decoration-orange-400"
-                            >
-                              {t(lang, "internalShopProfileTitle")}
-                            </Link>
-                          ) : null}
-                          {waUrl ? (
-                            <a
-                              href={waUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] font-black uppercase text-white"
-                            >
-                              {t(lang, "internalSupportWhatsapp")}
-                            </a>
-                          ) : null}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col sm:items-end">
-                        <button
-                          type="button"
-                          style={!canResolveSupport ? { display: "none" } : undefined}
-                          disabled={!canResolveSupport || tk.status === "in_progress" || ticketBusyId === `${tk.id}-ip`}
-                          onClick={async () => {
-                            setTicketBusyId(`${tk.id}-ip`);
-                            const r = await updateSupportTicketStatus(tk.id, "in_progress");
-                            setTicketBusyId(null);
-                            if (r.ok) void loadAll();
-                          }}
-                          className="rounded-xl border-2 border-stone-300 bg-white px-4 py-2.5 text-xs font-black text-stone-900 transition hover:bg-stone-50 disabled:opacity-40"
-                        >
-                          {ticketBusyId === `${tk.id}-ip` ? "…" : t(lang, "internalSupportInProgress")}
-                        </button>
-                        <button
-                          type="button"
-                          style={!canResolveSupport ? { display: "none" } : undefined}
-                          disabled={!canResolveSupport || tk.status === "resolved" || ticketBusyId === `${tk.id}-rs`}
-                          onClick={async () => {
-                            setTicketBusyId(`${tk.id}-rs`);
-                            const r = await updateSupportTicketStatus(tk.id, "resolved");
-                            setTicketBusyId(null);
-                            if (r.ok) void loadAll();
-                          }}
-                          className="rounded-xl bg-stone-900 px-4 py-2.5 text-xs font-black text-white transition hover:bg-stone-800 disabled:opacity-40"
-                        >
-                          {ticketBusyId === `${tk.id}-rs` ? "…" : t(lang, "internalSupportMarkResolved")}
-                        </button>
-                        <button
-                          type="button"
-                          style={!canResolveSupport ? { display: "none" } : undefined}
-                          disabled={!canResolveSupport || ticketBusyId === `${tk.id}-del`}
-                          onClick={async () => {
-                            if (!window.confirm("Delete this support request?")) return;
-                            setTicketBusyId(`${tk.id}-del`);
-                            setDeleteMsg(null);
-                            const r = await deleteSupportTicket(tk.id);
-                            setTicketBusyId(null);
-                            if (r.ok) void loadAll();
-                            else setDeleteMsg(r.message ?? "Delete failed.");
-                          }}
-                          className="inline-flex items-center justify-center gap-1 rounded-xl border border-rose-200 bg-white px-4 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:opacity-40"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          {ticketBusyId === `${tk.id}-del` ? "…" : "Delete"}
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })
               )}
-            </ul>
-            </details>
-          </section>
+            </tbody>
+          </table>
         </div>
+      </AdminOpsPanel>
 
-        {/* Sidebar: map + insights */}
-        <div className="space-y-8">
-          <section id="ops-map" className="relative overflow-hidden rounded-3xl border border-orange-100 bg-gradient-to-b from-stone-900 to-stone-800 p-5 text-white shadow-xl sm:p-6 scroll-mt-4">
-            <div className="pointer-events-none absolute inset-0 opacity-40" style={{ backgroundImage: "radial-gradient(circle at 20% 20%, rgba(251,146,60,0.35), transparent 50%), radial-gradient(circle at 80% 60%, rgba(255,255,255,0.08), transparent 45%)" }} />
-            <div className="relative">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-5 w-5 text-orange-300" />
-                    <h2 className="text-lg font-black">{t(lang, "internalMapTitle")}</h2>
-                  </div>
-                  <p className="mt-2 text-sm font-medium text-stone-300">{t(lang, "internalMapSub")}</p>
-                  <p className="mt-2 text-xs font-bold text-orange-100/90">{t(lang, "internalMapLiveTitle")}</p>
-                </div>
-                <label className="flex min-w-[10rem] flex-col text-[11px] font-black uppercase tracking-wide text-orange-100/90">
-                  {t(lang, "internalMapFilterDistrict")}
-                  <select
-                    value={mapDistrictId}
-                    onChange={(e) => setMapDistrictId(e.target.value)}
-                    className="mt-1 rounded-xl border border-white/20 bg-stone-950/60 px-3 py-2 text-sm font-bold text-white outline-none ring-orange-300/40 focus:ring-2"
-                  >
-                    <option value="">{t(lang, "internalMapFilterAll")}</option>
-                    {districts
-                      .filter((row) => row.districtId)
-                      .map((row) => (
-                        <option key={row.districtId!} value={row.districtId!}>
-                          {row.label}
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              </div>
-              <p className="mt-4 text-sm font-bold text-orange-50">
-                {t(lang, "internalMapShopCount").replace("{{count}}", String(mapPins.length))}
-              </p>
-              {mapboxAccessToken ? (
-                <Suspense
-                  fallback={
-                    <div className="mt-4 h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-800/80 ring-1 ring-white/10" />
-                  }
-                >
-                  <InternalFieldOpsMap lang={lang} pins={mapPins} accessToken={mapboxAccessToken} />
-                </Suspense>
+      <AdminOpsPanel
+        title={t(lang, "internalDistrictTitle")}
+        subtitle={t(lang, "internalOpsPanelDistrictsSub")}
+        open={activePanel === "districts"}
+        onClose={closePanel}
+        wide
+      >
+        <div className="relative mb-3">
+          <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={districtFilter}
+            onChange={(e) => setDistrictFilter(e.target.value)}
+            placeholder={t(lang, "internalDistrictSearch")}
+            className="w-full rounded-xl border border-input bg-background py-2 pl-9 pr-3 text-sm font-semibold text-foreground outline-none ring-primary/20 focus:ring-2"
+          />
+        </div>
+        <div className="overflow-x-auto rounded-xl ring-1 ring-border">
+          <table className="min-w-[640px] w-full border-collapse text-left text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3">{t(lang, "internalDistrictColDistrict")}</th>
+                <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColShops")}</th>
+                <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColActive")}</th>
+                <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColPaid")}</th>
+                <th className="px-4 py-3 text-right">{t(lang, "internalDistrictColAgents")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDistricts.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-8 text-center text-sm font-semibold text-stone-500">
+                    {t(lang, "internalDistrictEmpty")}
+                  </td>
+                </tr>
               ) : (
-                <div className="mt-4">
-                  <LovableFieldMap pins={mapPins} />
-                </div>
+                filteredDistricts.map((row) => (
+                  <tr key={row.districtId ?? row.label} className="border-b border-stone-50 hover:bg-orange-50/30">
+                    <td className="px-4 py-3 font-bold text-stone-900">{row.label}</td>
+                    <td className="px-4 py-3 text-right font-mono text-stone-800">{row.totalShops}</td>
+                    <td className="px-4 py-3 text-right font-mono text-emerald-800">{row.activeToday}</td>
+                    <td className="px-4 py-3 text-right font-mono text-stone-800">{row.paidShops}</td>
+                    <td className="px-4 py-3 text-right font-mono text-orange-900">{row.fieldAgentsAssigned}</td>
+                  </tr>
+                ))
               )}
-            </div>
-          </section>
-
-          <section id="ops-charts" className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6 scroll-mt-4">
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "internalInsightsTitle")}</h2>
-            <div className="mt-5 space-y-6">
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSignups")}</p>
-                  <MiniSparkline values={signupSpark.length ? signupSpark : [0, 0, 0, 0, 0]} stroke="#ea580c" />
-                </div>
-                <SparkBars buckets={signups7} accentClass="bg-gradient-to-t from-orange-500 to-orange-300" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSubs")}</p>
-                  <MiniSparkline values={subsSpark.length ? subsSpark : [0, 0, 0, 0, 0]} stroke="#0d9488" />
-                </div>
-                <SparkBars buckets={subs7} accentClass="bg-gradient-to-t from-teal-500 to-emerald-300" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSalesTrend")}</p>
-                  <MiniSparkline values={salesSpark.length ? salesSpark : [0, 0, 0, 0, 0]} stroke="#7c3aed" />
-                </div>
-                <SparkBars buckets={sales7} accentClass="bg-gradient-to-t from-violet-500 to-violet-300" />
-                <p className="mt-2 text-[11px] font-semibold text-stone-500">{t(lang, "internalChartSalesNote")}</p>
-              </div>
-              <div>
-                <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartBizTypes")}</p>
-                <ul className="mt-3 space-y-2">
-                  {(bizTypes.length ? bizTypes : [{ type: "—", count: 0 }]).map((b) => (
-                    <li key={b.type} className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
-                      <span className="font-semibold capitalize text-stone-800">
-                        {(() => {
-                          const k = `businessType_${b.type}`;
-                          const lbl = t(lang, k);
-                          return lbl === k ? b.type.replace(/_/g, " ") : lbl;
-                        })()}
-                      </span>
-                      <span className="font-mono font-black text-orange-700">{b.count}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </section>
+            </tbody>
+          </table>
         </div>
-      </div>
-
-      {/* Top districts strip + visits */}
-      <div id="ops-visits" className="grid gap-8 scroll-mt-4 lg:grid-cols-2">
-        <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "internalStat_topDistricts")}</h2>
-          <ul className="mt-4 space-y-2">
-            {(stats?.shopsByDistrict?.length ? stats.shopsByDistrict : []).slice(0, 8).map((d) => (
-              <li
+        {(stats?.shopsByDistrict?.length ? stats.shopsByDistrict : []).length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(stats?.shopsByDistrict ?? []).slice(0, 12).map((d) => (
+              <span
                 key={d.label}
-                className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-orange-50/50 to-white px-4 py-3 ring-1 ring-orange-100/60"
+                className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-bold text-stone-800"
               >
-                <span className="font-bold text-stone-900">{d.label}</span>
-                <span className="font-mono text-lg font-black text-orange-800">{d.count}</span>
-              </li>
+                {d.label}
+                <span className="font-mono text-orange-800">{d.count}</span>
+              </span>
             ))}
-            {!stats?.shopsByDistrict?.length && !opsLoading ? (
-              <li className="rounded-2xl border border-dashed border-stone-200 px-4 py-6 text-center text-sm text-stone-500">{t(lang, "internalDistrictEmpty")}</li>
-            ) : null}
-          </ul>
-        </section>
+          </div>
+        ) : null}
+      </AdminOpsPanel>
 
-        <section className="rounded-3xl border border-stone-200/80 bg-white p-5 shadow-[0_12px_40px_rgb(28_25_23/0.04)] sm:p-6">
-          <h2 className="text-lg font-black text-stone-900">{t(lang, "internalFieldVisitsTitle")}</h2>
-          {visitMsg ? <p className="mt-2 text-sm font-bold text-rose-600">{visitMsg}</p> : null}
-          <ul className="mt-4 space-y-3">
-            {visits.length === 0 ? (
-              <li className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 px-4 py-8 text-center text-sm font-semibold text-stone-600">
-                {t(lang, "internalVisitNoOpen")}
-              </li>
-            ) : (
-              visits.map((v) => {
-                const shop = v.shops;
-                const lat = shop?.latitude ?? null;
-                const lng = shop?.longitude ?? null;
-                const canDir = lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng);
-                return (
-                  <li key={v.id} className="rounded-2xl border border-stone-100 bg-stone-50/60 p-4 shadow-sm">
-                    <p className="font-black text-stone-900">{shop?.name ?? v.shop_id}</p>
-                    <p className="text-xs font-semibold text-stone-500">{[shop?.district, shop?.city].filter(Boolean).join(" · ") || "—"}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {canDir ? (
-                        <a
-                          href={googleMapsDirectionsUrl(lat!, lng!)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex min-h-[44px] items-center rounded-xl bg-orange-600 px-4 py-2 text-xs font-black text-white shadow-md hover:bg-orange-700"
-                        >
-                          {t(lang, "internalVisitDirections")}
-                        </a>
-                      ) : null}
-                      <button
-                        type="button"
-                        disabled={visitBusyId === v.id}
-                        className="inline-flex min-h-[44px] items-center rounded-xl border-2 border-stone-300 bg-white px-4 py-2 text-xs font-black text-stone-900 hover:bg-stone-50 disabled:opacity-50"
-                        onClick={async () => {
-                          setVisitMsg(null);
-                          setVisitBusyId(v.id);
-                          const r = await markFieldVisitCompleted(v.id);
-                          setVisitBusyId(null);
-                          if (!r.ok) setVisitMsg(r.message ?? t(lang, "internalVisitDoneError"));
-                          else void loadAll();
-                        }}
-                      >
-                        {visitBusyId === v.id ? "…" : t(lang, "internalVisitDone")}
-                      </button>
-                    </div>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </section>
-      </div>
+      <AdminOpsPanel
+        title={t(lang, "internalMapTitle")}
+        subtitle={t(lang, "internalMapSub")}
+        open={activePanel === "map"}
+        onClose={closePanel}
+        wide
+      >
+        <label className="mb-3 flex max-w-xs flex-col text-[11px] font-black uppercase tracking-wide text-stone-600">
+          {t(lang, "internalMapFilterDistrict")}
+          <select
+            value={mapDistrictId}
+            onChange={(e) => setMapDistrictId(e.target.value)}
+            className="mt-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-bold text-stone-900"
+          >
+            <option value="">{t(lang, "internalMapFilterAll")}</option>
+            {districts
+              .filter((row) => row.districtId)
+              .map((row) => (
+                <option key={row.districtId!} value={row.districtId!}>
+                  {row.label}
+                </option>
+              ))}
+          </select>
+        </label>
+        <p className="mb-3 text-sm font-bold text-stone-700">
+          {t(lang, "internalMapShopCount").replace("{{count}}", String(mapPins.length))}
+        </p>
+        {mapboxAccessToken ? (
+          <Suspense fallback={<div className="h-[min(22rem,55vh)] min-h-[220px] animate-pulse rounded-2xl bg-stone-100" />}>
+            <InternalFieldOpsMap lang={lang} pins={mapPins} accessToken={mapboxAccessToken} />
+          </Suspense>
+        ) : (
+          <LovableFieldMap pins={mapPins} />
+        )}
+      </AdminOpsPanel>
+
+      <AdminOpsPanel
+        title={t(lang, "internalPlansTitle")}
+        open={activePanel === "plans"}
+        onClose={closePanel}
+        wide
+      >
+        <div className="grid gap-3 lg:grid-cols-3">
+          {(plans.length
+            ? plans
+            : [
+                { code: "starter" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 },
+                { code: "business" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 },
+                { code: "waka_plus" as const, activeCount: 0, trialCount: 0, expiringSoonCount: 0, monthlyPriceUgx: 0, estimatedMonthlyRevenueUgx: 0 },
+              ]
+          ).map((plan, idx) => (
+            <PlanPremiumCard key={plan.code} lang={lang} plan={plan} tone={idx === 0 ? "slate" : idx === 1 ? "orange" : "gold"} />
+          ))}
+        </div>
+      </AdminOpsPanel>
+
+      <AdminOpsPanel
+        title={t(lang, "internalInsightsTitle")}
+        open={activePanel === "charts"}
+        onClose={closePanel}
+        wide
+      >
+        <div className="space-y-6">
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSignups")}</p>
+              <MiniSparkline values={signupSpark.length ? signupSpark : [0, 0, 0, 0, 0]} stroke="#ea580c" />
+            </div>
+            <SparkBars buckets={signups7} accentClass="bg-gradient-to-t from-orange-500 to-orange-300" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSubs")}</p>
+              <MiniSparkline values={subsSpark.length ? subsSpark : [0, 0, 0, 0, 0]} stroke="#0d9488" />
+            </div>
+            <SparkBars buckets={subs7} accentClass="bg-gradient-to-t from-teal-500 to-emerald-300" />
+          </div>
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSalesTrend")}</p>
+              <MiniSparkline values={salesSpark.length ? salesSpark : [0, 0, 0, 0, 0]} stroke="#7c3aed" />
+            </div>
+            <SparkBars buckets={sales7} accentClass="bg-gradient-to-t from-violet-500 to-violet-300" />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(bizTypes.length ? bizTypes : [{ type: "—", count: 0 }]).map((b) => (
+              <span key={b.type} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold capitalize text-stone-800">
+                {b.type.replace(/_/g, " ")} <span className="font-mono font-black text-orange-700">{b.count}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </AdminOpsPanel>
+
+      {/* trials, support, annual, visits panels — reuse legacy markup via id refs */}
+      <InternalOpsQueuePanels
+        lang={lang}
+        previewMode={previewMode}
+        activePanel={activePanel}
+        closePanel={closePanel}
+        opsLoading={opsLoading}
+        pendingTrials={pendingTrials}
+        pendingAnnualTickets={pendingAnnualTickets}
+        tickets={tickets}
+        visits={visits}
+        visitMsg={visitMsg}
+        canManageTrials={canManageTrials}
+        canResolveSupport={canResolveSupport}
+        canSendAnnualOffer={canSendAnnualOffer}
+        canManageBillingOffers={canManageBillingOffers}
+        trialBusyId={trialBusyId}
+        setTrialBusyId={setTrialBusyId}
+        annualBusyId={annualBusyId}
+        setAnnualBusyId={setAnnualBusyId}
+        annualSendBusy={annualSendBusy}
+        setAnnualSendBusy={setAnnualSendBusy}
+        ticketBusyId={ticketBusyId}
+        setTicketBusyId={setTicketBusyId}
+        visitBusyId={visitBusyId}
+        setVisitBusyId={setVisitBusyId}
+        setVisitMsg={setVisitMsg}
+        setDeleteMsg={setDeleteMsg}
+        annualAmountByTicket={annualAmountByTicket}
+        setAnnualAmountByTicket={setAnnualAmountByTicket}
+        billingOfferRows={billingOfferRows}
+        billingFulfillBusy={billingFulfillBusy}
+        setBillingFulfillBusy={setBillingFulfillBusy}
+        loadAll={loadAll}
+      />
     </div>
   );
 }
