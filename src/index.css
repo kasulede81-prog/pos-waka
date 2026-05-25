@@ -79,8 +79,8 @@ body {
    * Generous so last lines of long pages are not covered when scrolled to the end.
    */
   .pb-nav-safe {
-    /* Bottom tab bar (tall Sell icon) + safe area + scroll buffer */
-    padding-bottom: calc(12rem + env(safe-area-inset-bottom, 0px));
+    /* Legacy / marketing pages — app shell uses MobileScrollTail instead */
+    padding-bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
   }
   .pb-bottom-nav {
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -88,7 +88,7 @@ body {
   /** Applied to AppShell <main> — keeps scroll-end / focus-scroll clear of fixed chrome */
   .scroll-main-chrome {
     scroll-padding-top: 0.75rem;
-    scroll-padding-bottom: calc(12rem + env(safe-area-inset-bottom, 0px));
+    scroll-padding-bottom: calc(13rem + env(safe-area-inset-bottom, 0px));
   }
 
   @media (min-width: 1024px) {

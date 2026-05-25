@@ -18,6 +18,7 @@ import { WakaMarkIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { FloatingSupportFab } from "../support/FloatingSupportFab";
+import { MobileScrollTail } from "./MobileScrollTail";
 
 type Props = {
   lang: Language;
@@ -264,7 +265,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </div>
         </header>
-        <main className="scroll-main-chrome mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-x-hidden overflow-y-auto overscroll-y-contain px-3 py-3 max-lg:pb-nav-safe sm:px-4 lg:px-6 lg:pb-8">
+        <main className="mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 lg:px-6">
           <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">
@@ -295,10 +296,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
               })}
             </ul>
           </nav>
-          <section className="min-w-0 max-w-full flex-1 lg:pb-0">
-            <BackOfficeRouteGuard lang={lang}>
-              <Outlet />
-            </BackOfficeRouteGuard>
+          <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col lg:pb-0">
+            <div className="scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+              <BackOfficeRouteGuard lang={lang}>
+                <Outlet />
+              </BackOfficeRouteGuard>
+              <MobileScrollTail />
+            </div>
           </section>
         </main>
         <nav className="fixed bottom-0 left-0 right-0 z-[45] border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden">

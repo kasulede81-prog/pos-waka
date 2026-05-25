@@ -160,7 +160,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const visible = cards.filter((c) => c.perm);
 
   return (
-    <div className="space-y-5 pb-10">
+    <div className="space-y-5">
       <div>
         <h1 className="text-3xl font-black text-stone-950">{t(lang, "officeHubTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "officeHubSub")}</p>

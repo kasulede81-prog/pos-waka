@@ -1,6 +1,8 @@
 import type { BusinessType } from "../types";
+import { fetchOwnerOnboardingStatus } from "./ownerOnboarding";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
+import { usePosStore } from "../store/usePosStore";
 
 export type SaveOwnerBundleArgs = {
   shopName: string;
@@ -123,12 +125,59 @@ async function getPrimaryShopForUser(userId: string) {
   if (!member?.shop_id) return null;
   const { data: shop, error: shopErr } = await supabase
     .from("shops")
-    .select("id, organization_id, business_type, district_id, city, area, latitude, longitude")
+    .select("id, organization_id, name, business_type, phone_e164, district_id, city, area, latitude, longitude")
     .eq("id", member.shop_id)
     .maybeSingle();
   if (shopErr) throw shopErr;
   if (!shop) return null;
   return { shop };
+}
+
+/**
+ * New browser/device: local store is empty but cloud may already have the shop.
+ * Pull shop name and profile into preferences so Home does not ask for setup again.
+ */
+export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
+  if (!supabase) return;
+  const { data: authData, error: authErr } = await supabase.auth.getUser();
+  if (authErr || !authData.user) return;
+
+  const primary = await getPrimaryShopForUser(authData.user.id);
+  if (!primary?.shop) return;
+
+  const s = primary.shop as {
+    name: string | null;
+    business_type: string | null;
+    phone_e164: string | null;
+    organization_id: string;
+  };
+  const shopName = String(s.name ?? "").trim();
+  if (!shopName) return;
+
+  const { data: org } = await supabase
+    .from("organizations")
+    .select("default_currency")
+    .eq("id", s.organization_id)
+    .maybeSingle();
+
+  const onboarding = await fetchOwnerOnboardingStatus();
+  const store = usePosStore.getState();
+  const businessType = (String(s.business_type ?? store.preferences.businessType ?? "kiosk_duka") ||
+    "kiosk_duka") as BusinessType;
+  const currency = String(org?.default_currency ?? store.preferences.shopCurrency ?? "UGX")
+    .trim()
+    .toUpperCase();
+
+  store.setPreferences({
+    shopDisplayName: shopName,
+    shopPhoneE164: s.phone_e164 ? String(s.phone_e164) : store.preferences.shopPhoneE164,
+    shopCurrency: currency.length === 3 ? currency : store.preferences.shopCurrency,
+  });
+
+  // Returning owner on a fresh device: do not repeat the local “new shop” overlay.
+  if (onboarding?.complete || shopName !== "My Shop") {
+    store.completeBusinessOnboarding(businessType);
+  }
 }
 
 /** Load primary shop row fields used by the location section in Settings. */

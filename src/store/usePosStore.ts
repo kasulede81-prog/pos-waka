@@ -44,6 +44,7 @@ import {
   purchaseLineCostTotalUgx,
   weightedCostAfterStockIn,
 } from "../lib/sellingEngine";
+import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
 import { canTogglePosUiMode } from "../lib/permissions";
@@ -275,7 +276,9 @@ type PosState = {
   addSupplier: (input: { name: string; phone?: string; location?: string; notes?: string }) => void;
   addSupplierPayment: (supplierId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
   recordPurchase: (input: {
-    supplierId: string;
+    supplierId?: string | null;
+    /** Display name when buying in town (no fixed supplier). */
+    supplierName?: string;
     lines: Array<{ productId: string; qtyBuyingUnits: number; costPerBuyingUnitUgx: number }>;
     amountPaidUgx: number;
     notes?: string;
@@ -1249,9 +1252,21 @@ export const usePosStore = create<PosState>((set, get) => {
 
   recordPurchase: (input) => {
     const state = get();
-    const supplier = state.suppliers.find((s) => s.id === input.supplierId);
-    if (!supplier) return { ok: false, errorKey: "missingSupplier" };
     if (!input.lines.length) return { ok: false, errorKey: "emptySale" };
+
+    const walkIn = isWalkInSupplierId(input.supplierId);
+    let supplierId: string;
+    let supplierName: string;
+
+    if (walkIn) {
+      supplierId = WALK_IN_SUPPLIER_ID;
+      supplierName = (input.supplierName ?? "").trim() || "Town / market";
+    } else {
+      const supplierRow = state.suppliers.find((s) => s.id === input.supplierId);
+      if (!supplierRow) return { ok: false, errorKey: "missingSupplier" };
+      supplierId = supplierRow.id;
+      supplierName = supplierRow.name;
+    }
 
     let totalCostUgx = 0;
     const builtLines: PurchaseLine[] = [];
@@ -1301,14 +1316,14 @@ export const usePosStore = create<PosState>((set, get) => {
         kind: "purchase_in",
         summary: `Restock +${baseIn} ${p.baseUnit}`,
         refId: purchaseId,
-        supplierId: supplier.id,
+        supplierId: walkIn ? null : supplierId,
       });
     }
 
     const purchase: Purchase = {
       id: purchaseId,
-      supplierId: supplier.id,
-      supplierName: supplier.name,
+      supplierId,
+      supplierName,
       lines: builtLines,
       totalCostUgx,
       amountPaidUgx,
@@ -1318,17 +1333,19 @@ export const usePosStore = create<PosState>((set, get) => {
       pendingSync: true,
     };
 
-    const suppliers = state.suppliers.map((s) =>
-      s.id === supplier.id
-        ? {
-            ...s,
-            balanceOwedUgx: s.balanceOwedUgx + balanceDeltaUgx,
-            totalPurchasesUgx: s.totalPurchasesUgx + totalCostUgx,
-            lastSupplyAt: createdAt,
-            version: s.version + 1,
-          }
-        : s,
-    );
+    const suppliers = walkIn
+      ? state.suppliers
+      : state.suppliers.map((s) =>
+          s.id === supplierId
+            ? {
+                ...s,
+                balanceOwedUgx: s.balanceOwedUgx + balanceDeltaUgx,
+                totalPurchasesUgx: s.totalPurchasesUgx + totalCostUgx,
+                lastSupplyAt: createdAt,
+                version: s.version + 1,
+              }
+            : s,
+        );
 
     set({
       products,
@@ -1338,10 +1355,10 @@ export const usePosStore = create<PosState>((set, get) => {
     });
 
     void queueRemote("purchase", { purchaseId: purchase.id });
-    pushAudit("purchase_saved", `Restock UGX ${totalCostUgx.toLocaleString()} · ${supplier.name}`, {
+    pushAudit("purchase_saved", `Restock UGX ${totalCostUgx.toLocaleString()} · ${supplierName}`, {
       purchaseId: purchase.id,
-      supplierId: supplier.id,
-      supplierName: supplier.name,
+      supplierId,
+      supplierName,
       totalCostUgx,
       amountPaidUgx,
       lineCount: builtLines.length,
@@ -1623,6 +1640,8 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   usePosStore.getState().pruneExpiredSales();
 
   if (hasSupabaseConfig && key.startsWith("sb:")) {
+    const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
+    await hydrateLocalShopProfileFromCloud().catch(() => undefined);
     const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
     scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
     scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });

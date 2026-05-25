@@ -11,6 +11,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
+import { canSeeHomeProfit, computeTodayProfitBreakdown } from "../lib/homeProfit";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { supabase } from "../lib/supabase";
 
@@ -46,6 +47,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   }, [authMode, snapshot]);
 
   const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const showHomeProfit = canSeeHomeProfit(actor.role, authMode);
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
   const canBackOffice = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode);
   const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
@@ -75,7 +77,11 @@ export function DashboardPage({ lang }: { lang: Language }) {
   );
 
   const cashToday = useMemo(() => todaySales.reduce((a, s) => a + s.cashPaidUgx, 0), [todaySales]);
-  const profitToday = useMemo(() => todaySales.reduce((a, s) => a + s.estimatedProfitUgx, 0), [todaySales]);
+  const profitBreakdown = useMemo(
+    () => computeTodayProfitBreakdown(todaySales, productById),
+    [todaySales, productById],
+  );
+  const profitToday = profitBreakdown.profitUgx;
   const debtToday = useMemo(() => todaySales.reduce((a, s) => a + s.debtUgx, 0), [todaySales]);
   const lowStockProducts = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
 
@@ -108,7 +114,8 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const quickTiles = useMemo(() => products.slice(0, 10), [products]);
 
-  const gridCols = canProfit && canStock ? "lg:grid-cols-4" : canProfit || canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
+  const gridCols =
+    showHomeProfit && canStock ? "lg:grid-cols-4" : showHomeProfit || canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
 
   return (
     <div className="space-y-4">
@@ -189,25 +196,28 @@ export function DashboardPage({ lang }: { lang: Language }) {
               {t(lang, "closeDay")}
             </Link>
           ) : null}
-          {canProfit ? (
+          {showHomeProfit ? (
             <Link
-              to="/reports"
-              className="inline-flex min-h-[46px] shrink-0 items-center gap-1.5 rounded-2xl border border-waka-300 bg-waka-50 px-4 py-3 text-base font-black text-waka-950 shadow-sm active:bg-waka-100"
+              to={canReports ? "/reports" : "/stock"}
+              className="inline-flex min-h-[46px] shrink-0 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-waka-400 bg-waka-600 px-4 py-2.5 text-center text-white shadow-waka-sm active:bg-waka-700"
             >
-              <TrendingUp className="h-5 w-5 shrink-0" aria-hidden />
-              {t(lang, "cardProfitToday")}
+              <span className="inline-flex items-center gap-1.5 text-sm font-black">
+                <TrendingUp className="h-5 w-5 shrink-0" aria-hidden />
+                {t(lang, "cardProfitToday")}
+              </span>
+              <span className="text-xs font-bold text-waka-100">UGX {profitToday.toLocaleString()}</span>
             </Link>
           ) : null}
         </div>
       </div>
 
-      {canProfit ? (
-        <section className="rounded-3xl border-2 border-waka-200 bg-gradient-to-br from-waka-50 via-white to-orange-50/40 p-4 shadow-waka-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="min-w-0">
+      {showHomeProfit ? (
+        <section className="rounded-3xl border-2 border-waka-300 bg-gradient-to-br from-waka-50 via-white to-orange-50/50 p-4 shadow-waka-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "homeProfitWindowTitle")}</p>
               <p className="mt-1 text-3xl font-black text-waka-950 sm:text-4xl">UGX {profitToday.toLocaleString()}</p>
-              <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "dashboardProfitShortNote")}</p>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-stone-700">{t(lang, "homeProfitFormula")}</p>
             </div>
             {canReports ? (
               <Link
@@ -218,6 +228,32 @@ export function DashboardPage({ lang }: { lang: Language }) {
               </Link>
             ) : null}
           </div>
+          <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="rounded-2xl bg-white/90 px-3 py-2 ring-1 ring-waka-100">
+              <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "homeProfitSalesLabel")}</dt>
+              <dd className="font-mono text-lg font-black text-stone-900">UGX {profitBreakdown.salesUgx.toLocaleString()}</dd>
+            </div>
+            <div className="rounded-2xl bg-white/90 px-3 py-2 ring-1 ring-waka-100">
+              <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "homeProfitCostLabel")}</dt>
+              <dd className="font-mono text-lg font-black text-stone-900">UGX {profitBreakdown.costUgx.toLocaleString()}</dd>
+            </div>
+            <div className="col-span-2 rounded-2xl bg-waka-600/10 px-3 py-2 ring-1 ring-waka-200 sm:col-span-1">
+              <dt className="text-[10px] font-black uppercase text-waka-800">{t(lang, "cardProfitToday")}</dt>
+              <dd className={`font-mono text-lg font-black ${profitToday < 0 ? "text-slate-700" : "text-waka-900"}`}>
+                UGX {profitToday.toLocaleString()}
+              </dd>
+            </div>
+          </dl>
+          {profitBreakdown.linesMissingCost > 0 && canBackOffice ? (
+            <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-950">
+              <p>
+                {t(lang, "homeProfitMissingCost").replace("{{count}}", String(profitBreakdown.linesMissingCost))}
+              </p>
+              <Link to="/stock" className="mt-2 inline-flex min-h-[40px] items-center font-black text-waka-800 underline">
+                {t(lang, "homeProfitAddCostCta")} →
+              </Link>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -302,7 +338,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
               .replace("{{amount}}", cashToday.toLocaleString())}
           </p>
         </article>
-        {canProfit ? (
+        {showHomeProfit ? (
           <article
             className={`rounded-3xl p-4 text-white shadow-waka-sm ${
               profitToday < 0

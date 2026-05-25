@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -6,6 +6,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { buyingUnitsToBaseUnits, purchaseLineCostTotalUgx } from "../lib/sellingEngine";
+import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 
 type LineRow = { key: string; productId: string; qtyBuyingStr: string; costPerBuyingStr: string };
 
@@ -19,17 +20,15 @@ export function RestockPage({ lang }: { lang: Language }) {
   const products = usePosStore((s) => s.products);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
 
-  const [supplierId, setSupplierId] = useState("");
+  const [supplierId, setSupplierId] = useState(WALK_IN_SUPPLIER_ID);
+  const [townPlace, setTownPlace] = useState("");
   const [lines, setLines] = useState<LineRow[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [paidStr, setPaidStr] = useState("");
   const [notes, setNotes] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (suppliers.length && !supplierId) setSupplierId(suppliers[0]!.id);
-  }, [suppliers, supplierId]);
-
+  const walkIn = isWalkInSupplierId(supplierId);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
   const totals = useMemo(() => {
@@ -60,10 +59,6 @@ export function RestockPage({ lang }: { lang: Language }) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setMsg(null);
-    if (!supplierId) {
-      setMsg(t(lang, "restockPickSupplier"));
-      return;
-    }
     const built = lines
       .map((r) => ({
         productId: r.productId,
@@ -76,7 +71,17 @@ export function RestockPage({ lang }: { lang: Language }) {
       return;
     }
     const paid = Math.floor(Number(paidStr) || 0);
-    const r = recordPurchase({ supplierId, lines: built, amountPaidUgx: paid, notes });
+    const townLabel = townPlace.trim();
+    const supplierName = walkIn
+      ? townLabel || t(lang, "restockTownBuy")
+      : suppliers.find((s) => s.id === supplierId)?.name;
+    const r = recordPurchase({
+      supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
+      supplierName,
+      lines: built,
+      amountPaidUgx: paid,
+      notes,
+    });
     if (!r.ok) {
       setMsg(t(lang, "restockSaveError"));
       return;
@@ -84,6 +89,7 @@ export function RestockPage({ lang }: { lang: Language }) {
     setLines([]);
     setPaidStr("");
     setNotes("");
+    setTownPlace("");
     setMsg(t(lang, "restockSaved"));
   };
 
@@ -110,17 +116,32 @@ export function RestockPage({ lang }: { lang: Language }) {
             onChange={(e) => setSupplierId(e.target.value)}
             className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
           >
+            <option value={WALK_IN_SUPPLIER_ID}>{t(lang, "restockTownBuy")}</option>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </select>
+          <p className="mt-1.5 text-xs font-medium leading-relaxed text-slate-600">{t(lang, "restockTownBuyHint")}</p>
         </label>
+
+        {walkIn ? (
+          <label className="block text-sm font-bold text-slate-700">
+            {t(lang, "restockTownPlace")}
+            <input
+              value={townPlace}
+              onChange={(e) => setTownPlace(e.target.value)}
+              placeholder={t(lang, "restockTownPlacePh")}
+              className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            />
+          </label>
+        ) : null}
+
         {suppliers.length === 0 ? (
-          <p className="text-sm font-semibold text-amber-800">
-            {t(lang, "restockNoSuppliers")}{" "}
-            <Link to="/suppliers" className="font-black underline">
+          <p className="text-sm font-semibold text-slate-600">
+            {t(lang, "restockNoSuppliersOptional")}{" "}
+            <Link to="/suppliers" className="font-black text-waka-800 underline">
               {t(lang, "navSuppliers")}
             </Link>
           </p>
@@ -207,7 +228,9 @@ export function RestockPage({ lang }: { lang: Language }) {
               className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
             />
           </label>
-          <p className="mt-2 text-xs text-slate-600">{t(lang, "restockPaidHint")}</p>
+          <p className="mt-2 text-xs text-slate-600">
+            {walkIn ? t(lang, "restockPaidHintTown") : t(lang, "restockPaidHint")}
+          </p>
         </div>
 
         <label className="block text-sm font-bold text-slate-700">
@@ -221,7 +244,7 @@ export function RestockPage({ lang }: { lang: Language }) {
 
         <button
           type="submit"
-          disabled={!lines.length || !supplierId}
+          disabled={!lines.length}
           className="w-full rounded-2xl bg-waka-600 py-4 text-lg font-black text-white disabled:opacity-50"
         >
           {t(lang, "restockSave")}
