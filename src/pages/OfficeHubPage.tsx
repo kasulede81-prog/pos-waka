@@ -19,7 +19,9 @@ import {
   Cloud,
   Printer,
   Share2,
+  TrendingUp,
 } from "lucide-react";
+import { canSeeOfficeProfit } from "../lib/homeProfit";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -90,6 +92,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       subKey: "officeCardReportsSub",
       Icon: BarChart3,
       perm: hasEffectivePermission(actor.role, "reports.view", snapshot, authMode),
+    },
+    {
+      to: "/office/profit",
+      titleKey: "officeCardProfit",
+      subKey: "officeCardProfitSub",
+      Icon: TrendingUp,
+      perm:
+        canSeeOfficeProfit(actor.role, authMode) &&
+        hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode),
     },
     {
       to: "/close-day",

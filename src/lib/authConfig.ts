@@ -117,6 +117,17 @@ export function formatAuthError(err: unknown): string {
     if (msg.toLowerCase().includes("redirect")) {
       return "Sign-in could not finish. Please try again, or contact support if this continues.";
     }
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes("supabase") ||
+      lower.includes("vite_") ||
+      lower.includes(".env") ||
+      lower.includes("oauth") ||
+      lower.includes("jwt") ||
+      lower.includes("rpc")
+    ) {
+      return "Sign-in did not work. Please try again, or contact Waka support.";
+    }
     return msg;
   }
   return "Something went wrong during sign-in. Please try again.";

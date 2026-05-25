@@ -605,8 +605,10 @@ export function SettingsPage({ lang, email, shopName, onSignOut, user, authMode 
       {canBackup ? <BackupSettingsCard lang={lang} /> : null}
 
       <article className="rounded-3xl border-2 border-slate-100 bg-white p-5">
-        <p className="font-bold text-slate-900">Supabase</p>
-        <p className="text-sm text-slate-600">{hasSupabaseConfig ? "Connected keys found." : t(lang, "supabaseMissing")}</p>
+        <p className="font-bold text-slate-900">{t(lang, "settingsAccountHeading")}</p>
+        <p className="text-sm text-slate-600">
+          {hasSupabaseConfig ? t(lang, "settingsAccountOnline") : t(lang, "settingsAccountOffline")}
+        </p>
       </article>
     </div>
   );

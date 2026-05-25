@@ -29,6 +29,7 @@ import { PosDataProvider } from "./providers/PosDataProvider";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
 import { OfficeHubPage } from "./pages/OfficeHubPage";
+import { ProfitPage } from "./pages/ProfitPage";
 import { StockPage } from "./pages/StockPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
@@ -187,6 +188,14 @@ function App() {
               >
             <Route index element={<DashboardPage lang={lang} />} />
             <Route path="office" element={<OfficeHubPage lang={lang} />} />
+            <Route
+              path="office/profit"
+              element={
+                <RoleProtectedRoute permission="back_office.access">
+                  <ProfitPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
             <Route
               path="office/hardware"
               element={
