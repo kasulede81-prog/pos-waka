@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { fetchRemoteSubscriptionForUser } from "../lib/fetchShopSubscription";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
@@ -33,11 +33,13 @@ export function SubscriptionProvider({
   );
   /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
   const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
+  const loadedOnceRef = useRef(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (authMode === "local") {
       setSnapshot({ kind: "local_full" });
       setLoading(false);
+      loadedOnceRef.current = true;
       return;
     }
     if (!user?.id) {
@@ -45,10 +47,11 @@ export function SubscriptionProvider({
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!opts?.silent && !loadedOnceRef.current) setLoading(true);
     try {
       const row = await fetchRemoteSubscriptionForUser(user.id);
       setSnapshot(row ? { kind: "remote", row } : { kind: "none" });
+      loadedOnceRef.current = true;
     } catch {
       setSnapshot({ kind: "none" });
     } finally {
@@ -62,7 +65,7 @@ export function SubscriptionProvider({
 
   useEffect(() => {
     const on = () => {
-      void load();
+      void load({ silent: true });
     };
     window.addEventListener("waka:subscription-updated", on);
     return () => window.removeEventListener("waka:subscription-updated", on);

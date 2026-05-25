@@ -1,7 +1,7 @@
 import type { Customer, Product, Sale, SaleLine, SellingMode } from "../types";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
-import { writeSyncHealthMeta } from "../lib/syncMeta";
+import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { usePosStore } from "../store/usePosStore";
 import { writeSnapshot } from "./localDb";
 import type { SyncOperation } from "../types";
@@ -420,7 +420,8 @@ export async function pullShopDataFromCloud(): Promise<{
     )
     .then(() => undefined);
 
-  writeSyncHealthMeta({ lastSuccessAt: new Date().toISOString(), lastIssueCode: "none", lastIssueAt: null });
+  const pulledAt = new Date().toISOString();
+  writeSyncHealthMeta({ lastSuccessAt: pulledAt, lastPullAt: pulledAt, lastIssueCode: "none", lastIssueAt: null });
 
   return { products, customers, sales };
 }
@@ -489,13 +490,20 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   return { ok, fail };
 }
 
-/** Pull cloud data, push pending local rows, then drain the offline queue. */
-export async function syncShopWithCloud(): Promise<{
-  pulled: boolean;
+const PULL_MIN_INTERVAL_MS = 5 * 60_000;
+
+function shouldPullFromCloud(): boolean {
+  const last = readSyncHealthMeta().lastPullAt;
+  if (!last) return true;
+  const age = Date.now() - new Date(last).getTime();
+  return age >= PULL_MIN_INTERVAL_MS;
+}
+
+/** Push pending sales/queue only (fast, for background sync). */
+export async function pushShopPendingToCloud(): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
-  const pulled = await pullCloudAndMergeIntoStore();
   let push = { ok: 0, fail: 0 };
   let queueFailed = 0;
   if (typeof navigator === "undefined" || navigator.onLine) {
@@ -504,7 +512,31 @@ export async function syncShopWithCloud(): Promise<{
     const result = await flushSyncQueue();
     queueFailed = result.failed;
   }
+  return { push, queueFailed };
+}
+
+/** Pull cloud data, push pending local rows, then drain the offline queue. */
+export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
+  pulled: boolean;
+  push: { ok: number; fail: number };
+  queueFailed: number;
+}> {
+  const doPull =
+    opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();
+  const pulled = doPull ? await pullCloudAndMergeIntoStore() : false;
+  const { push, queueFailed } = await pushShopPendingToCloud();
   return { pulled, push, queueFailed };
+}
+
+/** Fire-and-forget cloud sync after local hydrate (does not block UI). */
+export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: number }): void {
+  if (!hasSupabaseConfig) return;
+  const delay = opts?.delayMs ?? 0;
+  const run = () => {
+    void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
+  };
+  if (delay > 0) window.setTimeout(run, delay);
+  else window.setTimeout(run, 0);
 }
 
 export function countUnsyncedSales(): number {

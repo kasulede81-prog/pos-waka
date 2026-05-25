@@ -19,13 +19,14 @@ type Props = {
 
 function LoadingSkeleton({ lang }: { lang: Language }) {
   return (
-    <div className="flex min-h-dvh flex-col bg-gradient-to-b from-waka-50/90 via-stone-50 to-stone-100 px-5 pt-[max(2rem,env(safe-area-inset-top))]">
-      <div className="mx-auto w-full max-w-md space-y-6">
-        <div>
-          <div className="h-8 w-40 rounded-xl waka-skeleton-bar" />
-          <div className="mt-3 h-4 w-full max-w-xs rounded-lg waka-skeleton-bar opacity-80" />
-        </div>
-        <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
+      <div className="flex min-h-dvh flex-col bg-gradient-to-b from-waka-50/90 via-stone-50 to-stone-100 px-5 pt-[max(2rem,env(safe-area-inset-top))]">
+        <div className="mx-auto w-full max-w-md space-y-6">
+          <div>
+            <div className="h-8 w-40 rounded-xl waka-skeleton-bar" />
+            <div className="mt-3 h-4 w-full max-w-xs rounded-lg waka-skeleton-bar opacity-80" />
+          </div>
+          <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
+          <p className="text-center text-xs font-medium text-stone-500">{t(lang, "openingShopLocalHint")}</p>
         <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
         <div className="space-y-3 rounded-3xl border border-stone-100 bg-white/90 p-5 shadow-waka-sm">
           <div className="h-14 w-full rounded-2xl waka-skeleton-bar" />

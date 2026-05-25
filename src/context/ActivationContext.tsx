@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
 import { fetchMyActivationGate, isPosUnlocked, type ActivationGatePayload } from "../lib/businessActivation";
@@ -18,6 +18,28 @@ const Ctx = createContext<ActivationContextValue>({
   unlocked: true,
   refresh: async () => {},
 });
+
+const ACTIVATION_CACHE_KEY = "waka.activation.gate.v1";
+
+function readActivationCache(userId: string): ActivationGatePayload | null {
+  try {
+    const raw = sessionStorage.getItem(`${ACTIVATION_CACHE_KEY}:${userId}`);
+    if (!raw) return null;
+    return JSON.parse(raw) as ActivationGatePayload;
+  } catch {
+    return null;
+  }
+}
+
+function writeActivationCache(userId: string, gate: ActivationGatePayload | null): void {
+  try {
+    const k = `${ACTIVATION_CACHE_KEY}:${userId}`;
+    if (!gate) sessionStorage.removeItem(k);
+    else sessionStorage.setItem(k, JSON.stringify(gate));
+  } catch {
+    /* ignore */
+  }
+}
 
 const ACTIVATION_GATE_TIMEOUT_MS = 12_000;
 
@@ -70,9 +92,14 @@ export function ActivationProvider({
   user: User | null;
   children: ReactNode;
 }) {
-  const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
-  const [gate, setGate] = useState<ActivationGatePayload | null>(null);
+  const cachedGate = user?.id && authMode === "supabase" ? readActivationCache(user.id) : null;
+  const [loading, setLoading] = useState(
+    () => authMode === "supabase" && Boolean(user?.id) && !cachedGate,
+  );
+  const [gate, setGate] = useState<ActivationGatePayload | null>(cachedGate);
   const [internalBypass, setInternalBypass] = useState(false);
+  const gateRef = useRef(gate);
+  gateRef.current = gate;
 
   const load = useCallback(async () => {
     if (authMode !== "supabase" || !user?.id) {
@@ -81,15 +108,16 @@ export function ActivationProvider({
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!gateRef.current) setLoading(true);
     try {
-      const g = await withTimeout(fetchMyActivationGate(), ACTIVATION_GATE_TIMEOUT_MS, null);
+      const g = await withTimeout(fetchMyActivationGate(), ACTIVATION_GATE_TIMEOUT_MS, gateRef.current);
       setGate(g);
+      writeActivationCache(user.id, g);
       void withTimeout(fetchWakaInternalAdminMe(), ACTIVATION_GATE_TIMEOUT_MS, null).then((adm) => {
         if (adm?.active) setInternalBypass(true);
       });
     } catch {
-      setGate(null);
+      if (!gateRef.current) setGate(null);
       setInternalBypass(false);
     } finally {
       setLoading(false);

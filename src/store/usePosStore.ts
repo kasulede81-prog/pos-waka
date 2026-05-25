@@ -1623,14 +1623,9 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   usePosStore.getState().pruneExpiredSales();
 
   if (hasSupabaseConfig && key.startsWith("sb:")) {
-    const runCloudSync = async () => {
-      const { syncShopWithCloud } = await import("../offline/cloudSync");
-      await syncShopWithCloud();
-    };
-    await runCloudSync();
-    if (typeof navigator !== "undefined" && navigator.onLine) {
-      window.setTimeout(() => void runCloudSync(), 2500);
-    }
+    const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
+    scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
+    scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
   }
 }
 

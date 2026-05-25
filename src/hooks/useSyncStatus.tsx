@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { readSyncQueue } from "../offline/localDb";
-import { countUnsyncedSales, syncShopWithCloud } from "../offline/cloudSync";
+import { countUnsyncedSales, pushShopPendingToCloud, syncShopWithCloud } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
 import type { SyncStatus } from "../types";
@@ -19,6 +19,10 @@ export type SyncStatusApi = {
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
+const QUEUE_POLL_MS = 12_000;
+const MIN_PUSH_INTERVAL_MS = 8_000;
+const MIN_FULL_SYNC_INTERVAL_MS = 90_000;
+
 async function pendingUploadCount(): Promise<number> {
   const queue = await readSyncQueue();
   return queue.length + countUnsyncedSales();
@@ -30,32 +34,61 @@ function useSyncStatusEngine(): SyncStatusApi {
   const [syncing, setSyncing] = useState(false);
   const [health, setHealth] = useState<SyncHealthMeta>(() => readSyncHealthMeta());
   const syncingRef = useRef(false);
+  const lastPushAtRef = useRef(0);
+  const lastFullSyncAtRef = useRef(0);
+  const visTimerRef = useRef<number | null>(null);
+  const pendingRef = useRef(0);
 
   const refreshQueue = useCallback(() => {
-    void pendingUploadCount().then(setPendingCount);
+    void pendingUploadCount().then((n) => {
+      pendingRef.current = n;
+      setPendingCount(n);
+    });
     setHealth(readSyncHealthMeta());
   }, []);
 
-  const runFlush = useCallback(async () => {
+  const runFlush = useCallback(async (opts?: { pull?: boolean; showSpinner?: boolean }) => {
     if (!navigator.onLine || syncingRef.current) return;
+    const now = Date.now();
+    const wantPull = opts?.pull === true;
+    const showSpinner = opts?.showSpinner ?? wantPull;
+
+    if (!wantPull && now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && pendingRef.current === 0) {
+      return;
+    }
+    if (wantPull && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
+      if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS) return;
+    }
+
     syncingRef.current = true;
-    setSyncing(true);
+    if (showSpinner) setSyncing(true);
     const attemptAt = new Date().toISOString();
     writeSyncHealthMeta({ lastAttemptAt: attemptAt });
     setHealth(readSyncHealthMeta());
     try {
-      const { push, queueFailed } = await syncShopWithCloud();
-      if (push.fail === 0 && queueFailed === 0) {
-        writeSyncHealthMeta({
-          lastSuccessAt: attemptAt,
-          lastIssueCode: "none",
-          lastIssueAt: null,
-        });
+      if (wantPull) {
+        const { push, queueFailed } = await syncShopWithCloud({ pull: true });
+        lastFullSyncAtRef.current = Date.now();
+        lastPushAtRef.current = lastFullSyncAtRef.current;
+        if (push.fail === 0 && queueFailed === 0) {
+          writeSyncHealthMeta({
+            lastSuccessAt: attemptAt,
+            lastIssueCode: "none",
+            lastIssueAt: null,
+          });
+        } else {
+          writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
+        }
       } else {
-        writeSyncHealthMeta({
-          lastIssueAt: attemptAt,
-          lastIssueCode: "partial",
-        });
+        const { push, queueFailed } = await pushShopPendingToCloud();
+        lastPushAtRef.current = Date.now();
+        if (push.fail === 0 && queueFailed === 0 && push.ok > 0) {
+          writeSyncHealthMeta({
+            lastSuccessAt: attemptAt,
+            lastIssueCode: "none",
+            lastIssueAt: null,
+          });
+        }
       }
     } catch {
       writeSyncHealthMeta({
@@ -64,7 +97,7 @@ function useSyncStatusEngine(): SyncStatusApi {
       });
     } finally {
       syncingRef.current = false;
-      setSyncing(false);
+      if (showSpinner) setSyncing(false);
       setHealth(readSyncHealthMeta());
       setPendingCount(await pendingUploadCount());
     }
@@ -72,26 +105,37 @@ function useSyncStatusEngine(): SyncStatusApi {
 
   useEffect(() => {
     refreshQueue();
-    const id = window.setInterval(refreshQueue, 5000);
+    const id = window.setInterval(refreshQueue, QUEUE_POLL_MS);
     return () => window.clearInterval(id);
   }, [refreshQueue]);
 
   useEffect(() => {
-    if (isOnline) void runFlush();
+    if (isOnline) {
+      window.setTimeout(() => void runFlush({ pull: false }), 1200);
+    }
   }, [isOnline, runFlush]);
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState === "visible" && navigator.onLine) void runFlush();
+      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
+      visTimerRef.current = window.setTimeout(() => {
+        void runFlush({ pull: false });
+      }, 2500);
     };
     document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
+    };
   }, [runFlush]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (s) => {
-      if (s.isActive && navigator.onLine) void runFlush();
+      if (s.isActive && navigator.onLine) {
+        window.setTimeout(() => void runFlush({ pull: false }), 2000);
+      }
     });
     return () => {
       void sub.then((h) => h.remove());
@@ -110,7 +154,7 @@ function useSyncStatusEngine(): SyncStatusApi {
     status,
     health,
     refreshQueue,
-    flush: runFlush,
+    flush: () => runFlush({ pull: true, showSpinner: true }),
   };
 }
 

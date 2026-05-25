@@ -7,6 +7,7 @@ import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
+import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { usePosStore, flushPendingPersist } from "../store/usePosStore";
@@ -100,7 +101,10 @@ export function useAuth() {
 
   const ensureWorkspaceForSession = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
-    if (bootstrappedUserIds[next.user.id]) return;
+    if (bootstrappedUserIds[next.user.id] || isWorkspaceBootstrapped(next.user.id)) {
+      setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+      return;
+    }
 
     const meta = next.user.user_metadata as Record<string, unknown> | undefined;
     const orgFromMeta =
@@ -157,6 +161,7 @@ export function useAuth() {
         }
       }
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+      markWorkspaceBootstrapped(next.user.id);
       await tryApplyPendingReferral(next);
     } catch (e) {
       console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
@@ -184,19 +189,16 @@ export function useAuth() {
     }
 
     supabase.auth.getSession().then(async ({ data }) => {
-      try {
-        await ensureWorkspaceForSession(data.session ?? null);
-      } catch (e) {
+      const next = data.session ?? null;
+      applyAccountSwitchSync(
+        computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
+      );
+      applySignupProfileToLocalStore(next);
+      setSession(next);
+      setInitializing(false);
+      void ensureWorkspaceForSession(next).catch((e) => {
         console.error("[waka-auth] bootstrap on initial session failed", e);
-      } finally {
-        const next = data.session ?? null;
-        applyAccountSwitchSync(
-          computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
-        );
-        applySignupProfileToLocalStore(next);
-        setSession(next);
-        setInitializing(false);
-      }
+      });
     });
 
     const {

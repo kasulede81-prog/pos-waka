@@ -185,6 +185,7 @@ const en: Dict = {
   checkout: "Save sale",
 
   openingShop: "Opening your shop…",
+  openingShopLocalHint: "Loading from this phone first. Cloud backup runs quietly in the background.",
   loadingTrustLine: "Your sales stay on this phone first. Nothing is lost when the internet sleeps.",
   navHome: "Home",
   navStock: "Stock",
@@ -1580,6 +1581,7 @@ const lg: Dict = {
   checkout: "Terekawo okutunda",
 
   openingShop: "Tuggula dduuka lyo…",
+  openingShopLocalHint: "Tukutwala ku ssimu eno okusooka. Okutereka ku cloud kukola mu maaso.",
   loadingTrustLine: "Ebintu byo bitereddwa ku ssimu eno. Tekubula nga intaneeti teriwo.",
   navHome: "Awaka",
   navStock: "Sitoka",
