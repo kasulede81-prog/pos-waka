@@ -879,7 +879,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {draftLines.length > 0 && !saleCheckoutMinimized ? (
         <div
-          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
+          className="waka-overlay-full waka-overlay-clear-nav fixed inset-0 flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
           role="dialog"
           aria-modal
           aria-labelledby="pos-checkout-title"
@@ -1062,8 +1062,13 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {sheetOpen && selected && (
         <div
-          className="fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
-          style={{ paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)" }}
+          className="waka-overlay-clear-nav fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
+          style={{
+            paddingBottom:
+              keyboardInset > 0
+                ? `max(${keyboardInset}px, calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom)))`
+                : undefined,
+          }}
           role="dialog"
           aria-modal
           aria-labelledby="pos-add-sheet-title"
@@ -1202,7 +1207,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {receiptSale && receiptPlain ? (
         <div
-          className="fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
+          className="waka-overlay-clear-nav fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
           style={{ zIndex: "var(--waka-z-pos-receipt)" }}
           role="dialog"
           aria-modal

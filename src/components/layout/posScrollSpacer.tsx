@@ -8,7 +8,7 @@ export function PosPageScrollSpacer({ minimizedCheckout }: { minimizedCheckout: 
       className={clsx(
         "pointer-events-none shrink-0",
         minimizedCheckout
-          ? "h-[calc(var(--waka-pos-checkout-strip-h)+var(--waka-safe-bottom)+0.75rem)]"
+          ? "h-[calc(var(--waka-bottom-nav-h)+var(--waka-pos-checkout-strip-h)+var(--waka-safe-bottom)+0.75rem)] lg:h-3"
           : "h-3",
       )}
     />

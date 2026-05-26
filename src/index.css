@@ -96,6 +96,20 @@ body {
   }
 
   /**
+   * Full-screen sheets rendered inside the main scroller still sit above the fixed
+   * bottom tab bar in the layout — pad the bottom so action footers stay tappable.
+   */
+  .waka-overlay-clear-nav {
+    padding-bottom: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
+  }
+
+  @media (min-width: 1024px) {
+    .waka-overlay-clear-nav {
+      padding-bottom: 0;
+    }
+  }
+
+  /**
    * Space for fixed bottom tab bar + floating help FAB + home indicator.
    * Generous so last lines of long pages are not covered when scrolled to the end.
    */
