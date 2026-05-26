@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { useMemo, type ReactNode } from "react";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, ShieldCheck, Loader2 } from "lucide-react";
-import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../lib/wakaInternalAdmin";
 import { internalAdminPreviewHref } from "../../lib/internalAdminPreview";
+import { AdminSectionSelect } from "./adminUi";
 
 type TabRoute = "/internal/waka" | "/internal/waka/activations" | "/internal/waka/admins" | "/internal/waka/agents";
 
@@ -27,6 +27,7 @@ type Props = {
 
 export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = false, children }: Props) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -45,9 +46,20 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
   const isSuper = row.role === "super_admin";
   const tabTo = (path: TabRoute) => (previewMode ? internalAdminPreviewHref(path) : path);
 
+  const visibleTabs = TABS.filter((tab) => !tab.superOnly || isSuper);
+  const currentTabPath =
+    active === "shop"
+      ? "/internal/waka"
+      : (visibleTabs.find((tab) => tab.active === active)?.to ?? "/internal/waka");
+
+  const navOptions = useMemo(
+    () => visibleTabs.map((tab) => ({ value: tabTo(tab.to), label: tab.label })),
+    [visibleTabs, previewMode],
+  );
+
   const handleBack = () => {
     if (active === "shop") {
-      navigate(previewMode ? internalAdminPreviewHref("/internal/waka") : "/internal/waka");
+      navigate(tabTo("/internal/waka"));
       return;
     }
     if (active !== "overview") {
@@ -56,61 +68,62 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
   };
 
   const showBack = active !== "overview";
+  const pageTitle =
+    active === "shop"
+      ? t(lang, "internalShopProfileTitle")
+      : visibleTabs.find((tab) => tab.active === active)?.label ?? "Admin";
 
   return (
     <div className="fixed inset-0 z-[80] flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
       <header className="shrink-0 bg-orange-600 text-white shadow-md">
-        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
           {showBack ? (
             <button
               type="button"
               onClick={handleBack}
-              className="rounded-full p-1.5 hover:bg-white/10"
+              className="flex min-h-[40px] min-w-[40px] items-center justify-center rounded-full hover:bg-white/10"
               aria-label={t(lang, "internalAdminBack")}
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           ) : (
-            <span className="w-8" aria-hidden />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10" aria-hidden>
+              <ShieldCheck className="h-5 w-5" />
+            </span>
           )}
-          <ShieldCheck className="h-6 w-6 shrink-0" aria-hidden />
-          <p className="min-w-0 flex-1">
-            <span className="block text-lg font-black leading-tight">Waka Uganda Admin</span>
-            <span className="block truncate text-xs opacity-90">{row.full_name || row.email || "Internal team"}</span>
-          </p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-black leading-tight sm:text-lg">{pageTitle}</p>
+            <p className="truncate text-[10px] opacity-90 sm:text-xs">{row.full_name || row.email || "Internal team"}</p>
+          </div>
           {previewMode ? (
-            <span className="shrink-0 rounded-full bg-amber-300 px-2.5 py-1 text-[10px] font-black uppercase text-amber-950">
+            <span className="hidden shrink-0 rounded-full bg-amber-300 px-2 py-0.5 text-[10px] font-black uppercase text-amber-950 sm:inline">
               {t(lang, "internalDashPreviewBadge")}
             </span>
           ) : null}
           <Link
             to="/office"
-            className="shrink-0 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold hover:bg-white/25"
+            className="shrink-0 rounded-full bg-white/15 px-2.5 py-1.5 text-[10px] font-bold hover:bg-white/25 sm:px-3 sm:text-xs"
           >
             {t(lang, "internalAdminExitOffice")}
           </Link>
         </div>
       </header>
 
-      <nav className="shrink-0 border-b border-stone-200 bg-white" aria-label="Admin sections">
-        <div className="mx-auto flex max-w-7xl overflow-x-auto [scrollbar-width:none]">
-          {TABS.filter((tab) => !tab.superOnly || isSuper).map((tab) => (
-            <Link
-              key={tab.to}
-              to={tabTo(tab.to)}
-              className={clsx(
-                "whitespace-nowrap border-b-2 px-4 py-2.5 text-xs font-black transition",
-                active === tab.active ? "border-orange-600 text-orange-700" : "border-transparent text-stone-500 hover:text-stone-800",
-              )}
-            >
-              {tab.label}
-            </Link>
-          ))}
+      {active !== "shop" ? (
+        <div className="shrink-0 border-b border-stone-200 bg-white px-3 py-2 sm:px-4">
+          <AdminSectionSelect
+            label={t(lang, "internalAdminNavSelect")}
+            value={currentTabPath}
+            onChange={(path) => {
+              if (path && path !== location.pathname) navigate(path);
+            }}
+            options={navOptions}
+          />
         </div>
-      </nav>
+      ) : null}
 
-      <main className="min-h-0 flex-1 overflow-y-auto bg-stone-50/80">
-        <div className="mx-auto w-full max-w-7xl p-4">{children}</div>
+      <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-stone-50/80 [-webkit-overflow-scrolling:touch]">
+        <div className="mx-auto w-full max-w-7xl p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4">{children}</div>
       </main>
     </div>
   );

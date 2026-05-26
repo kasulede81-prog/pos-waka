@@ -19,6 +19,7 @@ import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { FloatingSupportFab } from "../support/FloatingSupportFab";
 import { MobileScrollTail } from "./MobileScrollTail";
+import { AppModalOverlay } from "./AppModalOverlay";
 
 type Props = {
   lang: Language;
@@ -342,7 +343,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
           </div>
         </nav>
         {preferences.posLocked ? (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-stone-950/85 p-4">
+          <AppModalOverlay className="z-[120] flex items-center justify-center bg-stone-950/85 p-4">
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
               <p className="text-2xl font-black text-stone-900">{t(lang, "lockPosTitle")}</p>
               <p className="mt-1 text-sm text-stone-600">{t(lang, "lockPosSub")}</p>
@@ -395,7 +396,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                 {t(lang, "unlockSubmit")}
               </button>
             </div>
-          </div>
+          </AppModalOverlay>
         ) : null}
         <FloatingSupportFab lang={lang} />
       </div>

@@ -1,18 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  BarChart3,
-  Building2,
   Calendar,
   ChevronRight,
-  ClipboardList,
-  Headphones,
-  Map as MapIcon,
   MapPin,
   RefreshCw,
   Sparkles,
 } from "lucide-react";
-import { AdminHero, AdminOpsPanel, OpsPanelNavButton } from "./adminUi";
+import { AdminHero, AdminOpsPanel, AdminSectionSelect } from "./adminUi";
 import { LovableFieldMap } from "./LovableFieldMap";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -441,7 +436,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
   }, [stats]);
 
   return (
-    <div className={lovableUi ? "space-y-6 pb-6" : "space-y-4 pb-6"}>
+    <div className={lovableUi ? "space-y-4 pb-4 sm:space-y-6 sm:pb-6" : "space-y-3 pb-4 sm:space-y-4 sm:pb-6"}>
       {lovableUi ? (
         <AdminHero
           greeting={t(lang, greetingKey(hour))}
@@ -520,71 +515,31 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
         </p>
       ) : null}
 
-      <div className="sticky top-0 z-10 -mx-1 overflow-x-auto rounded-xl border border-border bg-card/95 px-2 py-2 backdrop-blur-sm [scrollbar-width:none]">
-        <div className="flex min-w-max gap-2">
-          <OpsPanelNavButton
-            label={t(lang, "internalOpsPanelShops")}
-            count={Number(statGrid.total) || shopOpenings.length}
-            active={activePanel === "shops"}
-            onClick={() => openPanel("shops")}
-            Icon={Building2}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalOpsPanelDistricts")}
-            count={districts.length}
-            active={activePanel === "districts"}
-            onClick={() => openPanel("districts")}
-            Icon={MapPin}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalOpsPanelMap")}
-            count={mapPins.length}
-            active={activePanel === "map"}
-            onClick={() => openPanel("map")}
-            Icon={MapIcon}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalPlansTitle")}
-            active={activePanel === "plans"}
-            onClick={() => openPanel("plans")}
-            Icon={Sparkles}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalSupportTitle")}
-            count={Number(statGrid.support) || tickets.length}
-            active={activePanel === "support"}
-            onClick={() => openPanel("support")}
-            Icon={Headphones}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalPendingTrialsTitle")}
-            count={pendingTrials.length}
-            active={activePanel === "trials"}
-            onClick={() => openPanel("trials")}
-            Icon={ClipboardList}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalAnnualQueueTitle")}
-            count={pendingAnnualTickets.length}
-            active={activePanel === "annual"}
-            onClick={() => openPanel("annual")}
-            Icon={Calendar}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalInsightsTitle")}
-            active={activePanel === "charts"}
-            onClick={() => openPanel("charts")}
-            Icon={BarChart3}
-          />
-          <OpsPanelNavButton
-            label={t(lang, "internalFieldVisitsTitle")}
-            count={visits.length}
-            active={activePanel === "visits"}
-            onClick={() => openPanel("visits")}
-            Icon={MapPin}
-          />
-        </div>
-      </div>
+      <AdminSectionSelect
+        label={t(lang, "internalAdminOpsSelect")}
+        value={activePanel ?? ""}
+        onChange={(v) => {
+          if (!v) closePanel();
+          else openPanel(v as OpsPanelId);
+        }}
+        options={[
+          { value: "", label: t(lang, "internalAdminOverviewOnly") },
+          {
+            value: "shops",
+            label: t(lang, "internalOpsPanelShops"),
+            count: Number(statGrid.total) || shopOpenings.length,
+          },
+          { value: "districts", label: t(lang, "internalOpsPanelDistricts"), count: districts.length },
+          { value: "map", label: t(lang, "internalOpsPanelMap"), count: mapPins.length },
+          { value: "plans", label: t(lang, "internalPlansTitle") },
+          { value: "support", label: t(lang, "internalSupportTitle"), count: Number(statGrid.support) || tickets.length },
+          { value: "trials", label: t(lang, "internalPendingTrialsTitle"), count: pendingTrials.length },
+          { value: "annual", label: t(lang, "internalAnnualQueueTitle"), count: pendingAnnualTickets.length },
+          { value: "charts", label: t(lang, "internalInsightsTitle") },
+          { value: "visits", label: t(lang, "internalFieldVisitsTitle"), count: visits.length },
+        ]}
+        className="rounded-xl border border-border bg-card p-3"
+      />
 
       {/* Stats — compact pulse with drill-down */}
       <section className="overflow-hidden rounded-xl border border-border bg-card">

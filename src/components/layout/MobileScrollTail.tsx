@@ -7,21 +7,15 @@ import { isBackOfficePath } from "../../lib/backOfficePaths";
  */
 export function MobileScrollTail() {
   const { pathname } = useLocation();
-  const hideFab =
-    pathname.startsWith("/pos") || pathname.startsWith("/internal/") || isBackOfficePath(pathname);
-
   const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
+  const isBackOffice = isBackOfficePath(pathname);
 
-  return (
-    <div
-      aria-hidden
-      className={
-        hideFab
-          ? isPos
-            ? "h-[var(--waka-scroll-tail-pos)] shrink-0 lg:hidden"
-            : "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden"
-          : "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden"
-      }
-    />
-  );
+  let tailClass = "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden";
+  if (isPos) {
+    tailClass = "h-[var(--waka-scroll-tail-pos)] shrink-0 lg:hidden";
+  } else if (isBackOffice) {
+    tailClass = "h-[var(--waka-scroll-tail-back-office)] shrink-0 lg:hidden";
+  }
+
+  return <div aria-hidden className={tailClass} />;
 }

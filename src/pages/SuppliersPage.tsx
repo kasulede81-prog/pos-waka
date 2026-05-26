@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 export function SuppliersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const canView = hasPermission(actor.role, "suppliers.view");
@@ -138,7 +139,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
       </section>
 
       {paying ? (
-        <div className="fixed inset-0 z-[56] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
+        <AppModalOverlay className="z-[56] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
           <form
             onSubmit={submitPay}
             className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"
@@ -166,7 +167,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
               </button>
             </div>
           </form>
-        </div>
+        </AppModalOverlay>
       ) : null}
     </div>
   );

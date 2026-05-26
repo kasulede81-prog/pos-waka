@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { AppModalOverlay } from "./layout/AppModalOverlay";
 
 type Props = {
   lang: Language;
@@ -12,8 +13,8 @@ export function ProductLockedModal({ lang, open, onClose }: Props) {
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4"
+    <AppModalOverlay
+      className="z-[80] flex items-center justify-center bg-black/55 p-4"
       role="dialog"
       aria-modal
       onClick={onClose}
@@ -41,6 +42,6 @@ export function ProductLockedModal({ lang, open, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </AppModalOverlay>
   );
 }

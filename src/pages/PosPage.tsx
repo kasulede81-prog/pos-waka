@@ -7,6 +7,7 @@ import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
+import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { useVisualViewportInset } from "../hooks/useVisualViewportInset";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
@@ -1284,7 +1285,7 @@ export function PosPage({ lang }: { lang: Language }) {
       )}
 
       {firstSaleOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 pb-[env(safe-area-inset-bottom)]" role="dialog" aria-modal>
+        <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
           <div className="max-w-md rounded-[2rem] bg-gradient-to-b from-amber-100 to-white p-8 text-center shadow-2xl">
             <p className="text-4xl" aria-hidden>
               🎉
@@ -1312,7 +1313,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </button>
             </div>
           </div>
-        </div>
+        </AppModalOverlay>
       ) : null}
 
       <PosPageScrollSpacer minimizedCheckout={draftLines.length > 0 && saleCheckoutMinimized} />

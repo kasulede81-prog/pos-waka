@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { shelfIconFor } from "../../lib/productCategories";
+import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
   BUY_PACK_OPTIONS,
   COMMON_PRODUCT_CHIPS,
@@ -183,8 +184,8 @@ export function SimpleAddProductWizard({
   if (!open) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-[56] flex items-end justify-center bg-black/55 sm:items-center"
+    <AppModalOverlay
+      className="z-[56] flex items-end justify-center bg-black/55 sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}
@@ -583,6 +584,6 @@ export function SimpleAddProductWizard({
           )}
         </div>
       </div>
-    </div>
+    </AppModalOverlay>
   );
 }

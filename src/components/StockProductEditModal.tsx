@@ -3,6 +3,7 @@ import type { Language, Product, SellingMode, StockMovement } from "../types";
 import { t } from "../lib/i18n";
 import { formatProductPriceLabel } from "../store/usePosStore";
 import { formatStockLabel } from "../lib/sellingEngine";
+import { AppModalOverlay } from "./layout/AppModalOverlay";
 
 const SELLING_MODES: SellingMode[] = ["unit", "weighted", "portion"];
 
@@ -175,8 +176,8 @@ export function StockProductEditModal({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[58] flex flex-col bg-white pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-[max(0.5rem,env(safe-area-inset-top))]"
+    <AppModalOverlay
+      className="z-[58] flex flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top))]"
       role="dialog"
       aria-modal
       aria-labelledby="stock-edit-title"
@@ -437,6 +438,6 @@ export function StockProductEditModal({
           </button>
         </div>
       </form>
-    </div>
+    </AppModalOverlay>
   );
 }

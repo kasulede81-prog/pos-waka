@@ -12,6 +12,7 @@ import {
   type InternalAdminRow,
 } from "../../lib/wakaInternalAdmin";
 import { PREVIEW_INTERNAL_ADMINS } from "../../lib/internalAdminPreview";
+import { AdminCollapsible } from "./adminUi";
 
 type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
 
@@ -268,13 +269,10 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
         </div>
       )}
 
-      <section className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-1 space-y-4">
-          <div className="rounded-3xl border border-stone-200/80 bg-white p-4 shadow-waka-sm">
-            <p className="text-lg font-black text-stone-900">{t(lang, "internalAdminsCreateTitle")}</p>
-            <p className="mt-1 text-sm text-stone-600">{t(lang, "internalAdminsCreateSub")}</p>
-
-            <div className="mt-4 space-y-3">
+      <section className="grid gap-3 lg:grid-cols-3 lg:gap-5">
+        <div className="lg:col-span-1">
+          <AdminCollapsible title={t(lang, "internalAdminsCreateTitle")} summary={t(lang, "internalAdminsCreateSub")}>
+          <div className="space-y-3">
               <label className="block">
                 <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAdminsEmailLabel")}</p>
                 <input
@@ -354,7 +352,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
 
               <p className="text-xs font-semibold text-stone-500">{t(lang, "internalAdminsCreateHint")}</p>
             </div>
-          </div>
+          </AdminCollapsible>
         </div>
 
         <div className="lg:col-span-2 space-y-4">

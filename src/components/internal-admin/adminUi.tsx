@@ -1,6 +1,6 @@
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import clsx from "clsx";
-import { RefreshCw, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, RefreshCw, X, type LucideIcon } from "lucide-react";
 
 export function AdminHero({
   greeting,
@@ -20,14 +20,14 @@ export function AdminHero({
   refreshing?: boolean;
 }) {
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 p-5 text-white shadow-md">
+    <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 p-3.5 text-white shadow-md sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-xs font-bold uppercase opacity-80">{dateLabel}</div>
-          <h1 className="mt-1 text-2xl font-black leading-tight">
+          <div className="text-[10px] font-bold uppercase opacity-80 sm:text-xs">{dateLabel}</div>
+          <h1 className="mt-0.5 text-lg font-black leading-tight sm:mt-1 sm:text-2xl">
             {greeting}, {subtitle}
           </h1>
-          <p className="mt-0.5 text-sm opacity-90">
+          <p className="mt-0.5 text-xs opacity-90 sm:text-sm">
             {roleLabel} · {districtCount} districts
           </p>
         </div>
@@ -116,6 +116,156 @@ export function AdminEmpty({ children }: { children: ReactNode }) {
 export function AdminCard({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div className={clsx("rounded-2xl border border-stone-200 bg-white shadow-sm", className)}>{children}</div>
+  );
+}
+
+export type AdminSelectOption = {
+  value: string;
+  label: string;
+  count?: number;
+  group?: string;
+  disabled?: boolean;
+};
+
+/** Mobile-first section picker — one control instead of a horizontal tab strip. */
+export function AdminSectionSelect({
+  label,
+  value,
+  onChange,
+  options,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: AdminSelectOption[];
+  className?: string;
+}) {
+  const grouped = options.reduce<Map<string, AdminSelectOption[]>>((acc, opt) => {
+    const g = opt.group ?? "";
+    const list = acc.get(g) ?? [];
+    list.push(opt);
+    acc.set(g, list);
+    return acc;
+  }, new Map());
+
+  return (
+    <label className={clsx("block", className)}>
+      <span className="mb-1.5 block text-[10px] font-black uppercase tracking-wide text-stone-500">{label}</span>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="min-h-[48px] w-full appearance-none rounded-xl border border-stone-200 bg-white py-2.5 pl-3 pr-10 text-sm font-bold text-stone-900 outline-none ring-orange-200 focus:border-orange-400 focus:ring-2"
+        >
+          {[...grouped.entries()].map(([group, items]) =>
+            group ? (
+              <optgroup key={group} label={group}>
+                {items.map((opt) => (
+                  <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+                    {opt.label}
+                    {typeof opt.count === "number" ? ` (${opt.count})` : ""}
+                  </option>
+                ))}
+              </optgroup>
+            ) : (
+              items.map((opt) => (
+                <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+                  {opt.label}
+                  {typeof opt.count === "number" ? ` (${opt.count})` : ""}
+                </option>
+              ))
+            ),
+          )}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden />
+      </div>
+    </label>
+  );
+}
+
+export type AdminActionOption = {
+  id: string;
+  label: string;
+  group: string;
+  disabled?: boolean;
+  confirm?: string;
+};
+
+/** Compact action picker for shop / user admin screens. */
+export function AdminActionPicker({
+  label,
+  runLabel,
+  placeholder,
+  actions,
+  busy,
+  onRun,
+}: {
+  label: string;
+  runLabel: string;
+  placeholder?: string;
+  actions: AdminActionOption[];
+  busy?: boolean;
+  onRun: (actionId: string) => void;
+}) {
+  const [picked, setPicked] = useState("");
+
+  return (
+    <AdminCard className="p-3 sm:p-4">
+      <AdminSectionSelect
+        label={label}
+        value={picked}
+        onChange={setPicked}
+        options={[
+          { value: "", label: placeholder ?? "Choose action…" },
+          ...actions.map((a) => ({
+            value: a.id,
+            label: a.label,
+            group: a.group,
+            disabled: a.disabled,
+          })),
+        ]}
+      />
+      <button
+        type="button"
+        disabled={!picked || busy}
+        onClick={() => {
+          if (!picked) return;
+          const action = actions.find((a) => a.id === picked);
+          if (action?.confirm && !window.confirm(action.confirm)) return;
+          onRun(picked);
+          setPicked("");
+        }}
+        className="mt-3 min-h-[48px] w-full rounded-xl bg-orange-600 text-sm font-black text-white disabled:opacity-40 active:bg-orange-700"
+      >
+        {busy ? "…" : runLabel}
+      </button>
+    </AdminCard>
+  );
+}
+
+export function AdminCollapsible({
+  title,
+  summary,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  summary?: string;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group rounded-2xl border border-stone-200 bg-white shadow-sm" open={defaultOpen}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-3 sm:px-4 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <p className="text-sm font-black text-stone-900">{title}</p>
+          {summary ? <p className="mt-0.5 truncate text-xs font-medium text-stone-500">{summary}</p> : null}
+        </div>
+        <ChevronDown className="h-4 w-4 shrink-0 text-stone-400 transition group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="border-t border-stone-100 px-3 pb-3 pt-2 sm:px-4 sm:pb-4">{children}</div>
+    </details>
   );
 }
 

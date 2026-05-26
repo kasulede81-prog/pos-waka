@@ -5,6 +5,7 @@ import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 import { usePosStore } from "../store/usePosStore";
 import { saveBusinessProfileToCloud } from "../lib/businessProfile";
 import { getActiveAccountKey } from "../offline/accountScope";
+import { AppModalOverlay } from "./layout/AppModalOverlay";
 
 const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
 
@@ -69,7 +70,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[56] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+    <AppModalOverlay className="z-[56] flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white p-5 shadow-2xl sm:rounded-[2rem] sm:p-6">
         <p className="text-center text-xs font-black uppercase tracking-[0.24em] text-waka-700">{t(lang, "wakaSlogan")}</p>
         <p className="mt-3 text-center text-3xl font-black leading-tight text-slate-900">{t(lang, "onboardTitle")}</p>
@@ -202,6 +203,6 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
           </button>
         </div>
       </div>
-    </div>
+    </AppModalOverlay>
   );
 }

@@ -18,6 +18,7 @@ import { SimpleAddProductWizard } from "../components/stock/SimpleAddProductWiza
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { StockProductCard } from "../components/stock/StockProductCard";
+import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
 import {
   costPerUnitFromPackAndStock,
@@ -560,8 +561,8 @@ export function StockPage({ lang }: { lang: Language }) {
       )}
 
       {quickOpen ? (
-        <div
-          className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
+        <AppModalOverlay
+          className="z-[70] flex flex-col justify-end bg-black/50 sm:items-center sm:justify-center sm:p-4"
           role="dialog"
           aria-modal
           onClick={() => setQuickOpen(false)}
@@ -617,12 +618,12 @@ export function StockPage({ lang }: { lang: Language }) {
             </div>
             </div>
           </form>
-        </div>
+        </AppModalOverlay>
       ) : null}
 
       {starterOpen ? (
-        <div
-          className="fixed inset-0 z-[56] flex items-end justify-center bg-black/50 sm:items-center"
+        <AppModalOverlay
+          className="z-[56] flex items-end justify-center bg-black/50 sm:items-center"
           role="dialog"
           aria-modal
           onClick={() => setStarterOpen(false)}
@@ -689,7 +690,7 @@ export function StockPage({ lang }: { lang: Language }) {
               </button>
             </div>
           </div>
-        </div>
+        </AppModalOverlay>
       ) : null}
 
       <SimpleAddProductWizard
@@ -719,7 +720,7 @@ export function StockPage({ lang }: { lang: Language }) {
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 
       {removeId ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
+        <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
           <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
             <p className="text-lg font-black text-slate-900">{t(lang, "removeProductConfirm")}</p>
             <div className="mt-6 flex gap-3">
@@ -731,7 +732,7 @@ export function StockPage({ lang }: { lang: Language }) {
               </button>
             </div>
           </div>
-        </div>
+        </AppModalOverlay>
       ) : null}
     </div>
   );

@@ -7,6 +7,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { buyingUnitsToBaseUnits, purchaseLineCostTotalUgx } from "../lib/sellingEngine";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
+import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 
 type LineRow = { key: string; productId: string; qtyBuyingStr: string; costPerBuyingStr: string };
 
@@ -252,7 +253,7 @@ export function RestockPage({ lang }: { lang: Language }) {
       </form>
 
       {pickerOpen ? (
-        <div className="fixed inset-0 z-[56] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
+        <AppModalOverlay className="z-[56] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
           <div className="max-h-[min(88dvh,900px)] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))] sm:rounded-3xl">
             <div className="flex items-center justify-between gap-2">
               <p className="text-lg font-black">{t(lang, "restockPickProduct")}</p>
@@ -277,7 +278,7 @@ export function RestockPage({ lang }: { lang: Language }) {
               ))}
             </ul>
           </div>
-        </div>
+        </AppModalOverlay>
       ) : null}
     </div>
   );

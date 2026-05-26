@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
+import { AppModalOverlay } from "./AppModalOverlay";
 
 type Props = { lang: Language };
 
@@ -25,7 +26,7 @@ export function BackOfficeUnlockModal({ lang }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-stone-900/50 p-3 sm:items-center">
+    <AppModalOverlay className="z-[100] flex items-end justify-center bg-stone-900/50 p-3 sm:items-center">
       <div
         role="dialog"
         aria-modal
@@ -60,6 +61,6 @@ export function BackOfficeUnlockModal({ lang }: Props) {
           </button>
         </form>
       </div>
-    </div>
+    </AppModalOverlay>
   );
 }
