@@ -29,6 +29,19 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
   const navigate = useNavigate();
   const location = useLocation();
 
+  const isSuper = adminRow?.role === "super_admin";
+  const tabTo = (path: TabRoute) => (previewMode ? internalAdminPreviewHref(path) : path);
+
+  const visibleTabs = useMemo(
+    () => TABS.filter((tab) => !tab.superOnly || isSuper),
+    [isSuper],
+  );
+
+  const navOptions = useMemo(
+    () => visibleTabs.map((tab) => ({ value: tabTo(tab.to), label: tab.label })),
+    [visibleTabs, previewMode],
+  );
+
   if (loading) {
     return (
       <div className="fixed inset-0 z-[80] flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
@@ -43,19 +56,13 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
   }
 
   const row = adminRow!;
-  const isSuper = row.role === "super_admin";
-  const tabTo = (path: TabRoute) => (previewMode ? internalAdminPreviewHref(path) : path);
 
-  const visibleTabs = TABS.filter((tab) => !tab.superOnly || isSuper);
   const currentTabPath =
     active === "shop"
-      ? "/internal/waka"
-      : (visibleTabs.find((tab) => tab.active === active)?.to ?? "/internal/waka");
+      ? tabTo("/internal/waka")
+      : tabTo((visibleTabs.find((tab) => tab.active === active)?.to ?? "/internal/waka") as TabRoute);
 
-  const navOptions = useMemo(
-    () => visibleTabs.map((tab) => ({ value: tabTo(tab.to), label: tab.label })),
-    [visibleTabs, previewMode],
-  );
+  const locationPath = `${location.pathname}${location.search}`;
 
   const handleBack = () => {
     if (active === "shop") {
@@ -115,7 +122,7 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
             label={t(lang, "internalAdminNavSelect")}
             value={currentTabPath}
             onChange={(path) => {
-              if (path && path !== location.pathname) navigate(path);
+              if (path && path !== locationPath) navigate(path);
             }}
             options={navOptions}
           />
