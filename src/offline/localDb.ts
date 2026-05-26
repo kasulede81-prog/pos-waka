@@ -6,12 +6,14 @@ import type {
   DebtPayment,
   Product,
   Purchase,
+  ReturnRecord,
   Sale,
   ShopPreferences,
   StockMovement,
   Supplier,
   SupplierPayment,
   SyncOperation,
+  VoidRecord,
 } from "../types";
 import { getActiveAccountKey } from "./accountScope";
 
@@ -55,6 +57,8 @@ export type PersistedSnapshot = {
   purchases?: Purchase[];
   supplierPayments?: SupplierPayment[];
   stockMovements?: StockMovement[];
+  voidRecords?: VoidRecord[];
+  returnRecords?: ReturnRecord[];
   updatedAt: string;
 };
 

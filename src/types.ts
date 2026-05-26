@@ -42,6 +42,10 @@ export type Permission =
 export type AuditAction =
   | "sale_completed"
   | "sale_refund"
+  | "sale_void"
+  | "sale_return"
+  | "discount_given"
+  | "shift_close_count"
   | "stock_adjust"
   | "price_change"
   | "debt_payment"
@@ -84,6 +88,53 @@ export type ShiftRecord = {
   debtTotalUgx: number;
   refundsUgx: number;
   estimatedCashUgx: number;
+  /** Total customer price reductions given today on this shift */
+  discountsTotalUgx?: number;
+  /** Voided item value removed from sales */
+  voidsTotalUgx?: number;
+  /** Returned item refunds */
+  returnsTotalUgx?: number;
+  /** Cash physically counted at shift close */
+  countedCashUgx?: number | null;
+  /** counted − expected (positive = over, negative = short) */
+  cashDifferenceUgx?: number | null;
+};
+
+export type VoidReason = "wrong_item" | "customer_changed_mind" | "returned_item" | "wrong_quantity" | "other";
+
+export type ReturnReason = "damaged" | "warm_bad" | "broken" | "wrong_item" | "other";
+
+/** Logged when a cashier voids a line from a completed sale — never silent deletion. */
+export type VoidRecord = {
+  id: string;
+  saleId: string;
+  lineIndex: number;
+  productId: string;
+  productName: string;
+  quantity: number;
+  amountUgx: number;
+  reason: VoidReason;
+  note?: string;
+  actorUserId: string;
+  actorName?: string;
+  shiftId?: string | null;
+  createdAt: string;
+};
+
+/** Customer brought product back — stock restored, sale totals adjusted. */
+export type ReturnRecord = {
+  id: string;
+  saleId?: string | null;
+  productId: string;
+  productName: string;
+  quantity: number;
+  refundAmountUgx: number;
+  reason: ReturnReason;
+  note?: string;
+  actorUserId: string;
+  actorName?: string;
+  shiftId?: string | null;
+  createdAt: string;
 };
 
 /** What kind of shop this is — drives simple adaptive UI */
@@ -226,10 +277,17 @@ export type SaleLine = {
   /** Buying cost per base unit at the time of sale */
   unitCostUgx: number;
   lineTotalUgx: number;
+  /** List price before any discount (defaults to lineTotalUgx) */
+  originalLineTotalUgx?: number;
+  /** UGX taken off this line for the customer */
+  discountUgx?: number;
   /** Simple estimate: line total minus buying cost x quantity */
   estimatedProfitUgx: number;
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
+  /** Set when voided after payment — line stays on receipt for audit */
+  voided?: boolean;
+  voidedAt?: string | null;
 };
 
 export type Sale = {
@@ -240,6 +298,10 @@ export type Sale = {
   cashPaidUgx: number;
   /** Amount still on account */
   debtUgx: number;
+  /** Sum of line discounts on this sale */
+  discountTotalUgx?: number;
+  /** Running total voided from this sale after completion */
+  voidedTotalUgx?: number;
   estimatedProfitUgx: number;
   createdAt: string;
   pendingSync: boolean;

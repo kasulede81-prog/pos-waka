@@ -1,6 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import { buildRestockSuggestions } from "../lib/restockSuggestions";
 import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -11,14 +10,19 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
-import { StockProductEditModal } from "../components/StockProductEditModal";
+import { StockProductEditModal } from "../components/stock/StockProductEditModal";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard } from "../components/stock/SimpleAddProductWizard";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { StockProductCard } from "../components/stock/StockProductCard";
+import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSectionTabs";
+import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
+import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
+import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
+import { shelfIconFor } from "../lib/productCategories";
 import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
 import {
   costPerUnitFromPackAndStock,
@@ -34,14 +38,6 @@ import {
   productMatchesCategoryFilter,
 } from "../lib/productCategories";
 
-const UNIT_PRESETS: Record<string, string[]> = {
-  kiosk_duka: ["piece", "packet", "bottle", "crate"],
-  restaurant: ["plate", "cup", "litre", "tray"],
-  hardware: ["meter", "roll", "box"],
-  pharmacy: ["tablet", "strip", "bottle"],
-  boutique: ["pair", "pack", "piece"],
-  default: ["piece", "kg", "gram", "litre", "bottle", "packet", "box", "tray", "crate", "sack", "bale", "roll", "pair", "meter", "carton", "bundle", "dozen", "tin", "plate", "cup"],
-};
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
@@ -54,12 +50,9 @@ export function StockPage({ lang }: { lang: Language }) {
   const canPresets = hasPermission(actor.role, "products.edit_presets");
   const canSell = hasPermission(actor.role, "pos.sell");
   const canRestock = hasPermission(actor.role, "purchases.record");
-  const canSuppliers = hasPermission(actor.role, "suppliers.view");
-  const canPurchaseHistory = hasPermission(actor.role, "purchases.view");
 
   const products = usePosStore((s) => s.products);
-  const sales = usePosStore((s) => s.sales);
-  const purchases = usePosStore((s) => s.purchases);
+  const suppliers = usePosStore((s) => s.suppliers);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const preferences = usePosStore((s) => s.preferences);
   const currentTier = resolveEffectivePlanTier(snapshot);
@@ -74,39 +67,11 @@ export function StockPage({ lang }: { lang: Language }) {
   const freeProductLimitReached = productLimit !== null && products.length >= productLimit;
   const productSlotsLeft = productLimit === null ? null : Math.max(0, productLimit - products.length);
 
-  const purchaseLinesByProduct = useMemo(() => {
-    const m = new Map<string, Array<{ at: string; supplier: string; qty: number; cost: number }>>();
-    for (const pur of purchases) {
-      for (const ln of pur.lines) {
-        const arr = m.get(ln.productId) ?? [];
-        if (arr.length < 8) {
-          arr.push({
-            at: pur.createdAt,
-            supplier: pur.supplierName,
-            qty: ln.qtyBuyingUnits,
-            cost: ln.costPerBuyingUnitUgx,
-          });
-        }
-        m.set(ln.productId, arr);
-      }
-    }
-    return m;
-  }, [purchases]);
-
-  const movementsByProduct = useMemo(() => {
-    const m = new Map<string, typeof stockMovements>();
-    for (const mv of stockMovements) {
-      const arr = m.get(mv.productId) ?? [];
-      if (arr.length < 12) arr.push(mv);
-      m.set(mv.productId, arr);
-    }
-    return m;
-  }, [stockMovements]);
-
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
   const removeProduct = usePosStore((s) => s.removeProduct);
   const adjustStock = usePosStore((s) => s.adjustStock);
   const updateProduct = usePosStore((s) => s.updateProduct);
+  const recordPurchase = usePosStore((s) => s.recordPurchase);
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [starterOpen, setStarterOpen] = useState(false);
@@ -121,8 +86,9 @@ export function StockPage({ lang }: { lang: Language }) {
   const [qaBuyPackTotal, setQaBuyPackTotal] = useState("");
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
-  const [showRestockIdeas, setShowRestockIdeas] = useState(false);
-
+  const [stockTab, setStockTab] = useState<StockHubTab>("overview");
+  const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
+  const [restockProduct, setRestockProduct] = useState<Product | null>(null);
 
   const navigate = useNavigate();
   const [listQuery, setListQuery] = useState("");
@@ -138,11 +104,6 @@ export function StockPage({ lang }: { lang: Language }) {
     if (!n) return null;
     return inferFromProductName(n);
   }, [qaName]);
-
-  const businessUnitOptions = useMemo(() => {
-    const typed = (preferences.businessType ?? "default") as string;
-    return UNIT_PRESETS[typed] ?? UNIT_PRESETS.default;
-  }, [preferences.businessType]);
 
   const defaultGroupByCategory = products.length > 12;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
@@ -175,6 +136,43 @@ export function StockPage({ lang }: { lang: Language }) {
   }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
 
   const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
+  const outOfStockCount = useMemo(() => unlockedProducts.filter((p) => p.stockOnHand <= 0).length, [unlockedProducts]);
+  const inventoryValueUgx = useMemo(
+    () => unlockedProducts.reduce((a, p) => a + Math.max(0, p.stockOnHand) * Math.max(0, p.costPricePerUnitUgx), 0),
+    [unlockedProducts],
+  );
+  const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
+
+  const shelfFolders = useMemo(() => {
+    const keys = [...stockCategoryPicklist];
+    if (stockHasUncategorized) keys.push(UNCATEGORIZED_SENTINEL);
+    return keys.sort((a, b) => {
+      if (a === UNCATEGORIZED_SENTINEL) return 1;
+      if (b === UNCATEGORIZED_SENTINEL) return -1;
+      return a.localeCompare(b, undefined, { sensitivity: "base" });
+    });
+  }, [stockCategoryPicklist, stockHasUncategorized]);
+
+  const shelfProductCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of unlockedProducts) {
+      const g = normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL;
+      m.set(g, (m.get(g) ?? 0) + 1);
+    }
+    return m;
+  }, [unlockedProducts]);
+
+  const productsInSelectedShelf = useMemo(() => {
+    if (!selectedShelf) return [];
+    return unlockedProducts
+      .filter((p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === selectedShelf)
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [selectedShelf, unlockedProducts]);
+
+  const recentMovements = useMemo(
+    () => [...stockMovements].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
+    [stockMovements],
+  );
 
   const categoryGroups = useMemo(() => {
     if (!groupByCategory) return null;
@@ -228,9 +226,7 @@ export function StockPage({ lang }: { lang: Language }) {
       category: qaCategory.trim() || t(lang, "generalCategory"),
       baseUnit: sellUnit,
       sellingMode,
-      buyingUnit: costPerSell !== undefined ? "pack" : undefined,
-      conversionRate: costPerSell !== undefined ? stockQty : undefined,
-      costPricePerUnitUgx: costPerSell,
+      costPricePerUnitUgx: costPerSell ?? null,
     });
     if (!r.ok) return;
     setQaName("");
@@ -245,7 +241,7 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const openAddProductSheet = () => {
     if (freeProductLimitReached) return;
-    setQuickOpen(true);
+    setBulkOpen(true);
   };
 
   const applyStarter = () => {
@@ -346,39 +342,74 @@ export function StockPage({ lang }: { lang: Language }) {
       case "sell":
         if (canSell) navigate("/pos", { state: { preferProductId: p.id } });
         break;
+      case "restock":
+        if (canRestock) setRestockProduct(p);
+        break;
       default:
         break;
     }
   };
 
+  const handleSimpleRestock = (input: {
+    productId: string;
+    packQty: number;
+    costPerPackUgx: number;
+    supplierId: string;
+    supplierName: string;
+  }) => {
+    const total = input.packQty * input.costPerPackUgx;
+    return recordPurchase({
+      supplierId: input.supplierId,
+      supplierName: input.supplierName,
+      lines: [
+        {
+          productId: input.productId,
+          qtyBuyingUnits: input.packQty,
+          costPerBuyingUnitUgx: input.costPerPackUgx,
+        },
+      ],
+      amountPaidUgx: total,
+    });
+  };
+
+  const renderProductCards = (items: Product[]) => {
+    if (items.length === 0) {
+      return (
+        <p className="rounded-2xl bg-slate-50 px-4 py-10 text-center text-base font-semibold text-slate-500">
+          {t(lang, "stockNoListMatch")}
+        </p>
+      );
+    }
+
+    return (
+      <ul className="space-y-3">
+        {items.map((p) => (
+          <StockProductCard
+            key={p.id}
+            lang={lang}
+            product={p}
+            locked={isProductPlanLocked(p.id, lockedIds)}
+            canAdd={canAdd}
+            canRemove={canRemove}
+            canSell={canSell}
+            canRestock={canRestock}
+            onAction={(action) => handleRowAction(p, action)}
+          />
+        ))}
+      </ul>
+    );
+  };
+
+  const handleStockTabChange = (tab: StockHubTab) => {
+    setStockTab(tab);
+    if (tab !== "shelves") setSelectedShelf(null);
+  };
+
   return (
     <div className="space-y-5 pb-4">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{t(lang, "stockTitle")}</h1>
-          <p className="mt-1 text-base text-slate-600">{t(lang, "stockPageSub")}</p>
-          {unlockedProducts.length > 0 ? (
-            <p className="mt-2 text-sm font-semibold text-slate-500">
-              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(products.length) })}
-              {lowStockCount > 0 ? (
-                <span className="text-rose-700">
-                  {" "}
-                  · {tTemplate(lang, "stockLowStockCount", { count: String(lowStockCount) })}
-                </span>
-              ) : null}
-            </p>
-          ) : null}
-        </div>
-        {canAdd ? (
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={openAddProductSheet}
-            className="w-full shrink-0 rounded-2xl bg-waka-600 px-5 py-3.5 text-base font-black text-white shadow-md active:bg-waka-700 sm:w-auto sm:min-w-[10rem]"
-          >
-            {t(lang, "stockAddProductBtn")}
-          </button>
-        ) : null}
+      <header>
+        <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{t(lang, "stockTitle")}</h1>
+        <p className="mt-1 text-base text-slate-600">{t(lang, "stockPageSub")}</p>
       </header>
 
       {freeProductLimitReached ? (
@@ -408,64 +439,6 @@ export function StockPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      {(canRestock || canSuppliers) && products.length > 0 ? (
-        <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-3 shadow-sm">
-          <span className="w-full text-xs font-bold text-slate-500 sm:w-auto sm:pr-1">{t(lang, "stockRestockLinks")}</span>
-          {canRestock ? (
-            <Link to="/restock" className="rounded-xl bg-waka-600 px-3 py-2 text-sm font-black text-white">
-              {t(lang, "stockGoRestock")}
-            </Link>
-          ) : null}
-          {canSuppliers ? (
-            <Link
-              to="/suppliers"
-              className="rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-sm font-black text-waka-950"
-            >
-              {t(lang, "stockGoSuppliers")}
-            </Link>
-          ) : null}
-          {canPurchaseHistory && buildRestockSuggestions(lang, unlockedProducts, sales, purchases).length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowRestockIdeas((v) => !v)}
-              className="ml-auto text-sm font-bold text-waka-800 underline-offset-2 hover:underline"
-            >
-              {showRestockIdeas ? t(lang, "stockHideRestockIdeas") : t(lang, "stockShowRestockIdeas")}
-            </button>
-          ) : null}
-        </section>
-      ) : null}
-      {showRestockIdeas && canPurchaseHistory && products.length > 0 ? (
-        <ul className="rounded-2xl border border-waka-100 bg-waka-50/50 px-4 py-3 text-sm font-semibold text-slate-700">
-          {buildRestockSuggestions(lang, unlockedProducts, sales, purchases).map((s, i) => (
-            <li key={i} className="py-0.5">
-              · {s}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      {canAdd && unlockedProducts.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={openStarter}
-            className="rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800"
-          >
-            {t(lang, "starterPackOpen")}
-          </button>
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={() => setBulkOpen(true)}
-            className="rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800"
-          >
-            {t(lang, "bulkAddOpen")}
-          </button>
-        </div>
-      ) : null}
-
       {unlockedProducts.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-white px-6 py-10 text-center">
           <p className="text-xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
@@ -492,72 +465,118 @@ export function StockPage({ lang }: { lang: Language }) {
           ) : null}
         </section>
       ) : (
-        <section className="space-y-4">
-          <h2 className="text-lg font-black text-slate-900">{t(lang, "stockYourProducts")}</h2>
+        <>
+          <StockSectionTabs lang={lang} active={stockTab} onChange={handleStockTabChange} />
 
-          <StockListToolbar
-            lang={lang}
-            listQuery={listQuery}
-            onListQuery={setListQuery}
-            listSort={listSort}
-            onListSort={setListSort}
-            listFilter={listFilter}
-            onListFilter={setListFilter}
-            stockCategoryFilter={stockCategoryFilter}
-            onStockCategoryFilter={setStockCategoryFilter}
-            stockCategoryPicklist={stockCategoryPicklist}
-            stockHasUncategorized={stockHasUncategorized}
-            groupByCategory={groupByCategory}
-            onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
-          />
+          {stockTab === "overview" ? (
+            <StockOverviewPanel
+              lang={lang}
+              totalProducts={unlockedProducts.length}
+              lowStockCount={lowStockCount}
+              outOfStockCount={outOfStockCount}
+              inventoryValueUgx={inventoryValueUgx}
+              canAdd={canAdd}
+              canRestock={canRestock}
+              freeProductLimitReached={freeProductLimitReached}
+              onAddProduct={openAddProductSheet}
+            />
+          ) : null}
 
-          {listableProducts.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 px-4 py-10 text-center text-base font-semibold text-slate-500">
-              {t(lang, "stockNoListMatch")}
-            </p>
-          ) : groupByCategory && categoryGroups ? (
-            <div className="space-y-5">
-              {categoryGroups.keys.map((gk) => (
-                <div key={gk}>
-                  <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-waka-800">
-                    {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
-                  </h3>
-                  <ul className="space-y-3">
-                    {(categoryGroups.map.get(gk) ?? []).map((p) => (
-                      <StockProductCard
-                        key={p.id}
-                        lang={lang}
-                        product={p}
-                        locked={isProductPlanLocked(p.id, lockedIds)}
-                        canAdd={canAdd}
-                        canAdjust={canAdjust}
-                        canRemove={canRemove}
-                        canSell={canSell}
-                        onAction={(action) => handleRowAction(p, action)}
-                      />
-                    ))}
-                  </ul>
+          {stockTab === "products" ? (
+            <section className="space-y-4">
+              <StockListToolbar
+                lang={lang}
+                listQuery={listQuery}
+                onListQuery={setListQuery}
+                listSort={listSort}
+                onListSort={setListSort}
+                listFilter={listFilter}
+                onListFilter={setListFilter}
+                stockCategoryFilter={stockCategoryFilter}
+                onStockCategoryFilter={setStockCategoryFilter}
+                stockCategoryPicklist={stockCategoryPicklist}
+                stockHasUncategorized={stockHasUncategorized}
+                groupByCategory={groupByCategory}
+                onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
+              />
+              {groupByCategory && categoryGroups && listableProducts.length > 0 ? (
+                <div className="space-y-5">
+                  {categoryGroups.keys.map((gk) => (
+                    <div key={gk}>
+                      <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-waka-800">
+                        {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
+                      </h3>
+                      {renderProductCards(categoryGroups.map.get(gk) ?? [])}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <ul className="space-y-3">
-              {listableProducts.map((p) => (
-                <StockProductCard
-                  key={p.id}
-                  lang={lang}
-                  product={p}
-                  locked={isProductPlanLocked(p.id, lockedIds)}
-                  canAdd={canAdd}
-                  canAdjust={canAdjust}
-                  canRemove={canRemove}
-                  canSell={canSell}
-                  onAction={(action) => handleRowAction(p, action)}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
+              ) : (
+                renderProductCards(listableProducts)
+              )}
+            </section>
+          ) : null}
+
+          {stockTab === "shelves" ? (
+            <section className="space-y-4">
+              {selectedShelf ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedShelf(null)}
+                    className="text-sm font-bold text-waka-800 underline-offset-2 hover:underline"
+                  >
+                    {t(lang, "stockShelfBack")}
+                  </button>
+                  <h2 className="text-lg font-black text-slate-900">
+                    {selectedShelf === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : selectedShelf}
+                  </h2>
+                  {renderProductCards(productsInSelectedShelf)}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-600">{t(lang, "stockShelvesHint")}</p>
+                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {shelfFolders.map((shelf) => {
+                      const label = shelf === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : shelf;
+                      const count = shelfProductCounts.get(shelf) ?? 0;
+                      return (
+                        <li key={shelf}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedShelf(shelf)}
+                            className="flex min-h-[72px] w-full items-center gap-3 rounded-[1.35rem] border border-slate-200 bg-white p-4 text-left shadow-sm active:bg-slate-50"
+                          >
+                            <span className="text-2xl">{shelfIconFor(label) ?? "📦"}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-base font-black text-slate-900">{label}</span>
+                              <span className="mt-0.5 block text-sm font-semibold text-slate-500">
+                                {tTemplate(lang, "stockShelfProductCount", { count: String(count) })}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+            </section>
+          ) : null}
+
+          {stockTab === "low" ? (
+            <section className="space-y-4">
+              {lowStockProducts.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 px-4 py-10 text-center text-base font-semibold text-emerald-900">
+                  {t(lang, "stockLowStockEmpty")}
+                </p>
+              ) : (
+                renderProductCards(lowStockProducts)
+              )}
+            </section>
+          ) : null}
+
+          {stockTab === "movements" ? <StockMovementsPanel lang={lang} movements={recentMovements} /> : null}
+        </>
       )}
 
       {quickOpen ? (
@@ -708,13 +727,18 @@ export function StockPage({ lang }: { lang: Language }) {
         product={editProduct}
         open={editProduct !== null}
         onClose={() => setEditProduct(null)}
-        businessUnitOptions={businessUnitOptions}
         canPresets={canPresets}
-        canPurchaseHistory={canPurchaseHistory}
-        purchaseLines={editProduct ? (purchaseLinesByProduct.get(editProduct.id) ?? []) : []}
-        movements={editProduct ? (movementsByProduct.get(editProduct.id) ?? []) : []}
         updateProduct={updateProduct}
         categorySuggestions={stockCategoryPicklist}
+      />
+
+      <SimpleProductRestockModal
+        lang={lang}
+        open={restockProduct !== null}
+        product={restockProduct}
+        suppliers={suppliers}
+        onClose={() => setRestockProduct(null)}
+        onSave={handleSimpleRestock}
       />
 
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />

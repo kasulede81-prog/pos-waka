@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { CalendarDays, ChevronDown, FileDown, Printer } from "lucide-react";
-import type { Language, Sale } from "../types";
+import type { Language, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "../lib/datesUg";
 import { buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
+import { VoidLineModal } from "../components/pos/VoidLineModal";
+import { ReturnProductModal } from "../components/pos/ReturnProductModal";
+import type { VoidReason } from "../types";
 
 function formatReceiptsDayHeading(dateKey: string): string {
   const parts = dateKey.split("-").map(Number);
@@ -50,9 +53,14 @@ const RECEIPT_FILTERS: { key: ReceiptDateRange; labelKey: "receiptsFilterToday" 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const sales = usePosStore((s) => s.sales);
+  const products = usePosStore((s) => s.products);
+  const voidSaleLine = usePosStore((s) => s.voidSaleLine);
+  const returnProduct = usePosStore((s) => s.returnProduct);
   const preferences = usePosStore((s) => s.preferences);
   const pruneExpiredSales = usePosStore((s) => s.pruneExpiredSales);
   const [range, setRange] = useState<ReceiptDateRange>("today");
+  const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
+  const [returnSale, setReturnSale] = useState<Sale | null>(null);
 
   useEffect(() => {
     pruneExpiredSales();
@@ -213,32 +221,86 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                     ) : null}
                   </p>
                   <ul className="mt-2 space-y-1 text-sm text-slate-700">
-                    {sale.lines.map((line) => (
-                      <li key={`${sale.id}-${line.productId}`} className="flex justify-between gap-2">
+                    {sale.lines.map((line, lineIndex) => (
+                      <li key={`${sale.id}-${line.productId}-${lineIndex}`} className="flex flex-wrap items-center justify-between gap-2">
                         <span className="min-w-0">
-                          {line.name}{" "}
+                          {line.voided ? (
+                            <span className="font-bold text-rose-700 line-through">{line.name}</span>
+                          ) : (
+                            line.name
+                          )}{" "}
                           <span className="text-xs text-slate-500">
                             ({line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")})
                           </span>
                         </span>
-                        <span className="shrink-0">UGX {line.lineTotalUgx.toLocaleString()}</span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className={line.voided ? "line-through text-slate-400" : ""}>
+                            UGX {line.lineTotalUgx.toLocaleString()}
+                          </span>
+                          {!line.voided && hasPermission(actor.role, "pos.sell") ? (
+                            <button
+                              type="button"
+                              onClick={() => setVoidTarget({ sale, lineIndex, line })}
+                              className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black uppercase text-rose-800"
+                            >
+                              {t(lang, "voidBtn")}
+                            </button>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
-                  <button
-                    type="button"
-                    onClick={() => printSale(sale)}
-                    className="mt-3 inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
-                  >
-                    <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    {t(lang, "receiptPrint")}
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => printSale(sale)}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
+                    >
+                      <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {t(lang, "receiptPrint")}
+                    </button>
+                    {hasPermission(actor.role, "pos.sell") ? (
+                      <button
+                        type="button"
+                        onClick={() => setReturnSale(sale)}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-950"
+                      >
+                        {t(lang, "returnBtn")}
+                      </button>
+                    ) : null}
+                  </div>
                 </article>
               ))}
             </div>
           </details>
         ))}
       </div>
+
+      <VoidLineModal
+        lang={lang}
+        open={voidTarget !== null}
+        line={voidTarget?.line ?? null}
+        onClose={() => setVoidTarget(null)}
+        onConfirm={(reason: VoidReason, note) => {
+          if (!voidTarget) return;
+          voidSaleLine({
+            saleId: voidTarget.sale.id,
+            lineIndex: voidTarget.lineIndex,
+            reason,
+            note,
+          });
+          setVoidTarget(null);
+        }}
+      />
+
+      <ReturnProductModal
+        lang={lang}
+        open={returnSale !== null}
+        sale={returnSale}
+        products={products}
+        onClose={() => setReturnSale(null)}
+        onConfirm={(input) => returnProduct(input)}
+      />
     </div>
   );
 }

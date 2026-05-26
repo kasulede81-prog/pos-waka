@@ -5,7 +5,7 @@ import { usePosStore } from "../store/usePosStore";
 import { readSnapshotWithFallback, getBackupRecord } from "../offline/localDb";
 import { appendManualBackup, buildExportEnvelope, listBackupMeta, parseImportEnvelope } from "../offline/backupEngine";
 
-type Props = { lang: Language };
+type Props = { lang: Language; compact?: boolean };
 
 function downloadJson(filename: string, body: string) {
   const blob = new Blob([body], { type: "application/json;charset=utf-8" });
@@ -20,7 +20,7 @@ function downloadJson(filename: string, body: string) {
   URL.revokeObjectURL(url);
 }
 
-export function BackupSettingsCard({ lang }: Props) {
+export function BackupSettingsCard({ lang, compact }: Props) {
   const applyRestoredSnapshot = usePosStore((s) => s.applyRestoredSnapshot);
   const [meta, setMeta] = useState<Array<{ id: string; kind: string; createdAt: string; dateKey?: string }>>([]);
   const [msg, setMsg] = useState<string | null>(null);
@@ -116,36 +116,39 @@ export function BackupSettingsCard({ lang }: Props) {
   };
 
   return (
-    <article className="rounded-3xl border-2 border-waka-100 bg-waka-50/30 p-5">
-      <p className="text-xl font-black text-waka-950">{t(lang, "backupTitle")}</p>
-      <p className="mt-1 text-sm text-waka-900">{t(lang, "backupSub")}</p>
-      <p className="mt-3 rounded-2xl bg-white/90 px-3 py-2 text-sm font-semibold text-waka-950">{t(lang, "backupTrustLine")}</p>
-      {msg ? <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold text-slate-800">{msg}</p> : null}
+    <article className={compact ? "rounded-2xl border border-stone-200 bg-white p-4 shadow-sm" : "rounded-3xl border-2 border-waka-100 bg-waka-50/30 p-5"}>
+      {!compact ? (
+        <>
+          <p className="text-xl font-black text-waka-950">{t(lang, "backupTitle")}</p>
+          <p className="mt-1 text-sm text-waka-900">{t(lang, "backupSub")}</p>
+        </>
+      ) : null}
+      {msg ? <p className="mt-2 rounded-xl bg-stone-50 px-3 py-2 text-sm font-semibold text-slate-800">{msg}</p> : null}
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void exportNow()}
-          className="min-h-[52px] rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm disabled:opacity-50"
-        >
-          {t(lang, "backupExportFile")}
-        </button>
+      <div className={compact ? "mt-2 flex flex-col gap-2" : "mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap"}>
         <button
           type="button"
           disabled={busy}
           onClick={() => void saveLocalBackup()}
-          className="min-h-[52px] rounded-2xl border-2 border-waka-600 bg-white px-4 py-3 text-sm font-black text-waka-900 disabled:opacity-50"
+          className="min-h-[48px] rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50"
         >
           {t(lang, "backupSaveOnPhone")}
         </button>
-        <label className="inline-flex min-h-[52px] cursor-pointer items-center justify-center rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 disabled:opacity-50">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void exportNow()}
+          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white px-4 py-3 text-sm font-black text-waka-900 disabled:opacity-50"
+        >
+          {t(lang, "backupDownloadCopy")}
+        </button>
+        <label className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 disabled:opacity-50">
           <input type="file" accept="application/json,.json" className="sr-only" disabled={busy} onChange={onPickFile} />
           {t(lang, "backupRestoreFile")}
         </label>
       </div>
 
-      <div className="mt-6">
+      <div className={compact ? "mt-4" : "mt-6"}>
         <p className="text-sm font-bold text-slate-800">{t(lang, "backupListTitle")}</p>
         <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-2xl border border-white/60 bg-white/80 p-3">
           {meta.length === 0 ? (

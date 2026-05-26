@@ -16,7 +16,13 @@ import { LoginPage } from "./pages/LoginPage";
 import { PosPage } from "./pages/PosPage";
 import { ReceiptsPage } from "./pages/ReceiptsPage";
 import { RegisterPage } from "./pages/RegisterPage";
-import { SettingsPage } from "./pages/SettingsPage";
+import { SettingsHubPage } from "./pages/SettingsHubPage";
+import { SettingsShopPage } from "./pages/SettingsShopPage";
+import { SettingsSellingPage } from "./pages/SettingsSellingPage";
+import { SettingsPinPage } from "./pages/SettingsPinPage";
+import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
+import { BackupSyncPage } from "./pages/BackupSyncPage";
+import { AccountPage } from "./pages/AccountPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MarketingHomePage } from "./pages/MarketingHomePage";
 import { AboutPage } from "./pages/public/AboutPage";
@@ -218,6 +224,29 @@ function App() {
             />
             <Route path="upgrade" element={<UpgradePage lang={lang} />} />
             <Route
+              path="office/backup"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <BackupSyncPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/account"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <AccountPage
+                    lang={lang}
+                    email={auth.email}
+                    shopName={auth.shopName}
+                    onSignOut={auth.signOut}
+                    user={auth.user}
+                    authMode={auth.mode}
+                  />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="stock"
               element={
                 <RoleProtectedRoute permission="stock.view">
@@ -294,14 +323,45 @@ function App() {
               path="settings"
               element={
                 <RoleProtectedRoute permission="settings.view">
-                  <SettingsPage
+                  <SettingsHubPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/shop"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsShopPage
                     lang={lang}
                     email={auth.email}
                     shopName={auth.shopName}
-                    onSignOut={auth.signOut}
                     user={auth.user}
                     authMode={auth.mode}
                   />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/selling"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsSellingPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/pin"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsPinPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/notifications"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <SettingsNotificationsPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

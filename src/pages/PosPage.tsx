@@ -2,10 +2,14 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ScanLine, Search, X } from "lucide-react";
-import type { Language, LineInputMode, Product } from "../types";
+import type { Language, LineInputMode, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
+import { DiscountLineModal } from "../components/pos/DiscountLineModal";
+import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
+import { lineDiscountUgx } from "../lib/saleAdjustments";
+import type { DiscountMode } from "../lib/saleAdjustments";
 import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { useVisualViewportInset } from "../hooks/useVisualViewportInset";
@@ -25,6 +29,7 @@ import {
   productMatchesSellSearch,
   shelfIconFor,
 } from "../lib/productCategories";
+import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 16;
 const MAX_RECENT_SEARCHES = 4;
@@ -118,6 +123,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const setDraftInput = usePosStore((s) => s.setDraftInput);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
   const removeDraftLine = usePosStore((s) => s.removeDraftLine);
+  const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
+  const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const clearDraft = usePosStore((s) => s.clearDraft);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
   const addCustomer = usePosStore((s) => s.addCustomer);
@@ -145,6 +152,13 @@ export function PosPage({ lang }: { lang: Language }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const draftTotal = useMemo(() => draftLines.reduce((a, l) => a + l.lineTotalUgx, 0), [draftLines]);
+  const draftDiscountTotal = useMemo(() => draftLines.reduce((a, l) => a + lineDiscountUgx(l), 0), [draftLines]);
+  const activeShift = useMemo(
+    () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
+    [preferences.shifts, actor.userId],
+  );
+  const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
+  const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
@@ -582,6 +596,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
+  const sellPresets = selected ? getPosSellPresets(selected) : [];
   const keyboardInset = useVisualViewportInset();
 
   if (!hasPermission(actor.role, "pos.sell")) {
@@ -604,6 +619,15 @@ export function PosPage({ lang }: { lang: Language }) {
             {t(lang, "clearSale")}
           </button>
         )}
+        {activeShift ? (
+          <button
+            type="button"
+            onClick={() => setShiftCloseOpen(true)}
+            className="min-h-[48px] rounded-full border border-waka-300 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900 shadow-sm active:bg-waka-100"
+          >
+            {t(lang, "shiftCloseBtn")}
+          </button>
+        ) : null}
       </div>
 
       {lockedProductCount > 0 ? (
@@ -850,8 +874,8 @@ export function PosPage({ lang }: { lang: Language }) {
                       {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
                       {(p.category ?? "").trim() ? p.category.trim() : t(lang, "posNoShelf")}
                     </p>
-                    <p className="mt-0.5 truncate text-xs font-bold text-slate-600">
-                      {t(lang, "stockLabel")}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
+                    <p className="mt-0.5 line-clamp-2 text-xs font-bold leading-snug text-slate-600">
+                      {t(lang, "stockLabel")}: {formatStockLabel(p)}
                     </p>
                     {p.stockOnHand <= p.minimumStockAlert ? (
                       <p className="mt-0.5 text-[11px] font-bold text-rose-700">{t(lang, "cardLowStock")}</p>
@@ -907,20 +931,30 @@ export function PosPage({ lang }: { lang: Language }) {
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
             <ul className="space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
               {draftLines.map((line) => (
-                <li key={line.productId} className="flex items-center justify-between gap-2 text-lg text-slate-900">
-                  <span className="min-w-0 font-bold">
-                    {line.name}{" "}
-                    <span className="text-xs font-medium text-slate-500">
-                      {line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")}
-                    </span>
-                  </span>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="text-lg font-black">UGX {line.lineTotalUgx.toLocaleString()}</span>
+                <li key={line.productId} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-900">{line.name}</p>
+                      {lineDiscountUgx(line) > 0 ? (
+                        <p className="text-xs font-bold text-amber-800">
+                          − UGX {lineDiscountUgx(line).toLocaleString()} {t(lang, "discountBtn").toLowerCase()}
+                        </p>
+                      ) : null}
+                    </div>
+                    <p className="shrink-0 text-lg font-black">UGX {line.lineTotalUgx.toLocaleString()}</p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="flex min-h-[44px] min-w-[44px] items-center justify-center text-lg text-red-600 active:bg-red-50"
+                      onClick={() => setDiscountLine(line)}
+                      className="min-h-[40px] flex-1 rounded-xl border-2 border-waka-200 bg-white px-3 text-sm font-black text-waka-900"
+                    >
+                      {t(lang, "discountBtn")}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => removeDraftLine(line.productId)}
-                      aria-label={t(lang, "removeLine")}
+                      className="min-h-[40px] rounded-xl border-2 border-rose-200 bg-rose-50 px-3 text-sm font-black text-rose-800"
                     >
                       ✕
                     </button>
@@ -928,6 +962,11 @@ export function PosPage({ lang }: { lang: Language }) {
                 </li>
               ))}
             </ul>
+            {draftDiscountTotal > 0 ? (
+              <p className="mt-2 text-sm font-bold text-amber-800">
+                {t(lang, "ownerDiscountsToday")}: UGX {draftDiscountTotal.toLocaleString()}
+              </p>
+            ) : null}
             <p className="mt-4 text-3xl font-black text-slate-900">
               {t(lang, "totalLabel")}{" "}
               <span className="text-waka-700">UGX {draftTotal.toLocaleString()}</span>
@@ -1087,42 +1126,28 @@ export function PosPage({ lang }: { lang: Language }) {
                 {selected.name}
               </p>
               <p className="truncate text-sm font-semibold text-slate-500">{formatProductPriceLabel(selected)}</p>
+              <p className="truncate text-xs font-bold text-slate-600">{formatStockLabel(selected)}</p>
             </div>
             <span className="min-h-[48px] w-[5.5rem] shrink-0" aria-hidden />
           </header>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 pb-4 [-webkit-overflow-scrolling:touch]">
-            {(moneyPresets.length > 0 || qtyPresets.length > 0) && (
+            {(sellPresets.length > 0 || moneyPresets.length > 0 || qtyPresets.length > 0) && (
               <div className="space-y-3">
                 <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">{t(lang, "tapQuickAmount")}</p>
-                {moneyPresets.length > 0 && (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {moneyPresets.map((amt) => (
-                      <button
-                        key={`m-${amt}`}
-                        type="button"
-                        onClick={() => applyPreset("money", amt)}
-                        className="min-h-[56px] min-w-[104px] rounded-2xl bg-waka-600 px-4 text-xl font-black text-white shadow-md active:bg-waka-700"
-                      >
-                        {amt.toLocaleString()}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {qtyPresets.length > 0 && (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {qtyPresets.map((q) => (
-                      <button
-                        key={`q-${q}`}
-                        type="button"
-                        onClick={() => applyPreset("quantity", q)}
-                        className="min-h-[56px] min-w-[92px] rounded-2xl bg-slate-900 px-4 text-xl font-black text-white shadow-md active:bg-slate-800"
-                      >
-                        {q} {selected.baseUnit}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <div className="grid grid-cols-2 gap-2">
+                  {sellPresets.map((preset, i) => (
+                    <button
+                      key={`sell-${i}-${preset.mode}-${preset.value}`}
+                      type="button"
+                      onClick={() => applyPreset(preset.mode, preset.value)}
+                      className="flex min-h-[72px] flex-col items-center justify-center rounded-2xl bg-waka-600 px-3 py-3 text-white shadow-md active:bg-waka-700"
+                    >
+                      <span className="text-lg font-black leading-tight">{preset.label}</span>
+                      <span className="mt-0.5 text-sm font-bold text-waka-100">{preset.priceLabel}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1275,6 +1300,41 @@ export function PosPage({ lang }: { lang: Language }) {
           </footer>
         </div>
       ) : null}
+
+      <DiscountLineModal
+        lang={lang}
+        open={discountLine !== null}
+        line={discountLine}
+        onClose={() => setDiscountLine(null)}
+        onApply={(mode: DiscountMode, value: number) => {
+          if (!discountLine) return;
+          const r = applyDraftLineDiscount(discountLine.productId, mode, value);
+          if (!r.ok) {
+            setToast(t(lang, "saleError"));
+            window.setTimeout(() => setToast(null), 2200);
+            return;
+          }
+          setDiscountLine(null);
+        }}
+      />
+
+      <ShiftCloseModal
+        lang={lang}
+        open={shiftCloseOpen}
+        shift={activeShift}
+        onClose={() => setShiftCloseOpen(false)}
+        onConfirm={(counted) => {
+          const r = closeShiftWithCashCount(counted);
+          if (!r.ok) {
+            setToast(t(lang, "saleError"));
+            window.setTimeout(() => setToast(null), 2200);
+            return { ok: false };
+          }
+          setToast(t(lang, "shiftCloseConfirm"));
+          window.setTimeout(() => setToast(null), 2200);
+          return { ok: true };
+        }}
+      />
 
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 

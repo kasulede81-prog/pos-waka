@@ -6,21 +6,21 @@ import { t, tTemplate } from "../../lib/i18n";
 import { shelfIconFor } from "../../lib/productCategories";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
-  BUY_PACK_OPTIONS,
-  COMMON_PRODUCT_CHIPS,
+  PACK_TYPE_OPTIONS,
+  SELL_UNIT_OPTIONS,
   buildProductFromSimpleWizard,
-  estimateSellOptionProfitUgx,
-  hintForProductName,
+  packKindLabel,
+  profitPerSellUnitUgx,
+  sellUnitLabel,
   wizardCostPerSellUnitUgx,
   type BuiltWizardProduct,
-  type BuyPackKind,
-  type WizardSellOption,
-  buyLabelForKind,
+  type PackKind,
+  type SellUnitKind,
 } from "../../lib/simpleProductWizard";
 
-type Step = "name" | "buyHow" | "inside" | "buyPrice" | "stock" | "sell" | "shelf";
+type Step = "name" | "shelf" | "sellUnit" | "pack" | "piecesPerPack" | "stock" | "sellPrice" | "buyPrice";
 
-const STEPS: Step[] = ["name", "buyHow", "buyPrice", "inside", "stock", "sell", "shelf"];
+const STEPS: Step[] = ["name", "shelf", "sellUnit", "pack", "piecesPerPack", "stock", "sellPrice", "buyPrice"];
 
 type Props = {
   lang: Language;
@@ -31,10 +31,6 @@ type Props = {
   disabled?: boolean;
   onSave: (payload: BuiltWizardProduct | null) => boolean;
 };
-
-function emptySellOptions(): WizardSellOption[] {
-  return [{ label: "", priceUgx: "" }];
-}
 
 export function SimpleAddProductWizard({
   lang,
@@ -47,51 +43,47 @@ export function SimpleAddProductWizard({
 }: Props) {
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
-  const [buyHow, setBuyHow] = useState<BuyPackKind | null>(null);
-  const [buyCustom, setBuyCustom] = useState("");
-  const [piecesInside, setPiecesInside] = useState("");
-  const [buyPackPrice, setBuyPackPrice] = useState("");
-  const [stockPacks, setStockPacks] = useState("");
-  const [sellOptions, setSellOptions] = useState<WizardSellOption[]>(emptySellOptions);
   const [shelfPick, setShelfPick] = useState("");
   const [shelfNew, setShelfNew] = useState("");
   const [creatingShelf, setCreatingShelf] = useState(false);
-  const [supplier, setSupplier] = useState("");
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [sellUnit, setSellUnit] = useState<SellUnitKind>("piece");
+  const [hasPack, setHasPack] = useState(false);
+  const [packKind, setPackKind] = useState<PackKind>("crate");
+  const [packCustom, setPackCustom] = useState("");
+  const [piecesPerPack, setPiecesPerPack] = useState("");
+  const [stockCount, setStockCount] = useState("");
+  const [sellPrice, setSellPrice] = useState("");
+  const [buyPackPrice, setBuyPackPrice] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
-  const [hintTouched, setHintTouched] = useState(false);
 
-  const hint = useMemo(() => hintForProductName(name), [name]);
-  const buyUnitLabel = buyHow ? buyLabelForKind(buyHow, buyCustom, lang) : "";
-  const packPriceN = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
+  const unitLabel = sellUnitLabel(sellUnit, lang);
+  const packLabel = packKindLabel(packKind, packCustom, lang);
   const piecesN = useMemo(() => {
-    if (!buyHow) return 0;
-    if (buyHow === "kg" || buyHow === "piece") return 1;
-    const n = Math.floor(Number(piecesInside.replace(/[^\d.]/g, "")) || 0);
-    return n > 0 ? n : hint?.piecesInside ?? 0;
-  }, [buyHow, piecesInside, hint?.piecesInside]);
-  const costPerPieceUgx = useMemo(
-    () => (buyHow ? wizardCostPerSellUnitUgx(packPriceN, piecesN, buyHow) : null),
-    [buyHow, packPriceN, piecesN],
-  );
-  const sellPieceLabel = hint?.sellBaseUnit ?? (buyHow === "bottle" ? "bottle" : buyHow === "kg" ? "kg" : "piece");
+    if (!hasPack) return 1;
+    return Math.max(1, Math.floor(Number(piecesPerPack.replace(/[^\d.]/g, "")) || 0));
+  }, [hasPack, piecesPerPack]);
+  const packPriceN = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
+  const sellPriceN = Math.floor(Number(sellPrice.replace(/\D/g, "")) || 0);
+  const stockN = Math.max(0, Number(stockCount.replace(/[^\d.]/g, "")) || 0);
+  const costPerUnit = wizardCostPerSellUnitUgx(packPriceN, piecesN);
+  const profitPerUnit = profitPerSellUnitUgx(sellPriceN, costPerUnit);
+  const totalPieces = hasPack ? stockN * piecesN : stockN;
 
   const reset = () => {
     setStep("name");
     setName("");
-    setBuyHow(null);
-    setBuyCustom("");
-    setPiecesInside("");
-    setBuyPackPrice("");
-    setStockPacks("");
-    setSellOptions(emptySellOptions());
     setShelfPick("");
     setShelfNew("");
     setCreatingShelf(false);
-    setSupplier("");
-    setAdvancedOpen(false);
+    setSellUnit("piece");
+    setHasPack(false);
+    setPackKind("crate");
+    setPackCustom("");
+    setPiecesPerPack("");
+    setStockCount("");
+    setSellPrice("");
+    setBuyPackPrice("");
     setSavedFlash(false);
-    setHintTouched(false);
   };
 
   useEffect(() => {
@@ -103,61 +95,63 @@ export function SimpleAddProductWizard({
     if (step === "shelf" && shelves.length === 0) setCreatingShelf(true);
   }, [step, shelves.length]);
 
-  useEffect(() => {
-    if (hintTouched || !hint) return;
-    setBuyHow(hint.buyHow);
-    setPiecesInside(String(hint.piecesInside));
-    if (hint.defaultSellOptions.length) setSellOptions(hint.defaultSellOptions.map((o) => ({ ...o })));
-  }, [hint, hintTouched]);
-
   const stepIndex = STEPS.indexOf(step);
+  const shelfValue = creatingShelf ? shelfNew.trim() : shelfPick.trim() || generalCategoryLabel;
 
   const goNext = () => {
     const i = STEPS.indexOf(step);
-    if (i < STEPS.length - 1) setStep(STEPS[i + 1]!);
+    if (i < STEPS.length - 1) {
+      let next = STEPS[i + 1]!;
+      if (next === "piecesPerPack" && !hasPack) next = "stock";
+      if (next === "buyPrice" && !hasPack) return handleSave(false);
+      setStep(next);
+    }
   };
 
   const goBack = () => {
     const i = STEPS.indexOf(step);
-    if (i > 0) setStep(STEPS[i - 1]!);
+    if (i <= 0) return;
+    let prev = STEPS[i - 1]!;
+    if (prev === "piecesPerPack" && !hasPack) prev = "pack";
+    setStep(prev);
   };
 
   const canNext = (): boolean => {
     switch (step) {
       case "name":
         return name.trim().length > 0;
-      case "buyHow":
-        return buyHow !== null && (buyHow !== "custom" || buyCustom.trim().length > 0);
-      case "inside":
-        return buyHow === "kg" || buyHow === "piece" || Number(piecesInside) > 0;
-      case "buyPrice":
-        return Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0) > 0;
-      case "stock":
-        return true;
-      case "sell":
-        return sellOptions.some((o) => Math.floor(Number(o.priceUgx.replace(/\D/g, "")) || 0) > 0);
       case "shelf":
         return creatingShelf ? shelfNew.trim().length > 0 : shelfPick.trim().length > 0 || shelves.length === 0;
+      case "sellUnit":
+        return true;
+      case "pack":
+        return !hasPack || packKind !== "custom" || packCustom.trim().length > 0;
+      case "piecesPerPack":
+        return piecesN > 0;
+      case "stock":
+        return true;
+      case "sellPrice":
+        return sellPriceN > 0;
+      case "buyPrice":
+        return true;
       default:
         return false;
     }
   };
 
-  const shelfValue = creatingShelf ? shelfNew.trim() : shelfPick.trim() || generalCategoryLabel;
-
   const handleSave = (addAnother: boolean) => {
-    if (!buyHow) return;
     const built = buildProductFromSimpleWizard(
       {
         name,
-        buyHow,
-        buyCustom,
-        piecesInside,
-        buyPackPriceUgx: buyPackPrice,
-        stockPacks,
-        sellOptions,
         shelf: shelfValue,
-        supplier: advancedOpen ? supplier : undefined,
+        sellUnit,
+        hasPack,
+        packKind,
+        packCustom,
+        piecesPerPack,
+        stockCount,
+        sellPriceUgx: sellPrice,
+        buyPackPriceUgx: buyPackPrice,
       },
       lang,
     );
@@ -167,13 +161,17 @@ export function SimpleAddProductWizard({
     if (addAnother) {
       setSavedFlash(true);
       setName("");
-      setBuyHow(null);
-      setBuyCustom("");
-      setPiecesInside("");
+      setShelfPick("");
+      setShelfNew("");
+      setCreatingShelf(shelves.length === 0);
+      setSellUnit("piece");
+      setHasPack(false);
+      setPackKind("crate");
+      setPackCustom("");
+      setPiecesPerPack("");
+      setStockCount("");
+      setSellPrice("");
       setBuyPackPrice("");
-      setStockPacks("0");
-      setSellOptions(emptySellOptions());
-      setHintTouched(false);
       setStep("name");
       window.setTimeout(() => setSavedFlash(false), 1800);
       return;
@@ -182,6 +180,8 @@ export function SimpleAddProductWizard({
   };
 
   if (!open) return null;
+
+  const isLastStep = step === "buyPrice" || (step === "sellPrice" && !hasPack);
 
   return (
     <AppModalOverlay
@@ -226,7 +226,7 @@ export function SimpleAddProductWizard({
             {STEPS.map((s, i) => (
               <span
                 key={s}
-                className={`h-2 rounded-full transition-all ${i <= stepIndex ? "w-6 bg-waka-600" : "w-2 bg-slate-200"}`}
+                className={`h-2 rounded-full transition-all ${i <= stepIndex ? "w-5 bg-waka-600" : "w-2 bg-slate-200"}`}
               />
             ))}
           </div>
@@ -240,253 +240,22 @@ export function SimpleAddProductWizard({
           ) : null}
 
           {step === "name" ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep1Title")}</h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep1Hint")}</p>
               <input
                 value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  setHintTouched(false);
-                }}
+                onChange={(e) => setName(e.target.value)}
                 placeholder={t(lang, "simpleAddStep1Example")}
                 autoFocus
                 className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-waka-300 focus:ring"
               />
-              {hint?.suggestLineKey ? (
-                <p className="rounded-xl bg-waka-50 px-3 py-2 text-sm font-bold text-waka-900">
-                  {t(lang, hint.suggestLineKey)}
-                </p>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                {COMMON_PRODUCT_CHIPS.map((chip) => (
-                  <button
-                    key={chip}
-                    type="button"
-                    onClick={() => {
-                      setName(chip);
-                      setHintTouched(false);
-                    }}
-                    className="min-h-[44px] rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 text-base font-black text-waka-950 active:bg-waka-100"
-                  >
-                    {chip}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {step === "buyHow" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep2Title")}</h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep2Hint")}</p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {BUY_PACK_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() => {
-                      setBuyHow(opt.id);
-                      setHintTouched(true);
-                      if (opt.id === "kg" || opt.id === "piece") setPiecesInside("1");
-                    }}
-                    className={`flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-2xl border-2 px-2 py-3 text-center font-black transition active:scale-[0.98] ${
-                      buyHow === opt.id
-                        ? "border-waka-500 bg-waka-600 text-white shadow-md"
-                        : "border-slate-200 bg-white text-slate-900"
-                    }`}
-                  >
-                    <span className="text-2xl" aria-hidden>
-                      {opt.icon}
-                    </span>
-                    <span className="text-sm leading-tight">{t(lang, opt.labelKey as "buyHow_tray")}</span>
-                  </button>
-                ))}
-              </div>
-              {buyHow === "custom" ? (
-                <input
-                  value={buyCustom}
-                  onChange={(e) => setBuyCustom(e.target.value)}
-                  placeholder={t(lang, "bulkAddUnitCustomPlaceholder")}
-                  className="min-h-[52px] w-full rounded-2xl border-2 border-dashed border-waka-300 px-4 text-lg font-bold"
-                />
-              ) : null}
-            </div>
-          ) : null}
-
-          {step === "buyPrice" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">
-                {tTemplate(lang, "simpleAddStep3Title", { unit: buyUnitLabel })}
-              </h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep3Hint")}</p>
-              {hint?.suggestLineKey === "simpleAddHintEggs" ? (
-                <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-                  {t(lang, "simpleAddBuyPriceExampleEggs")}
-                </p>
-              ) : hint?.suggestLineKey === "simpleAddHintSoda" ? (
-                <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-                  {t(lang, "simpleAddBuyPriceExampleSoda")}
-                </p>
-              ) : (
-                <p className="text-sm font-semibold text-slate-500">{t(lang, "simpleAddBuyPriceExampleGeneric")}</p>
-              )}
-              <input
-                value={buyPackPrice}
-                onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                inputMode="numeric"
-                placeholder={hint?.suggestLineKey === "simpleAddHintEggs" ? "12000" : "12000"}
-                autoFocus
-                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
-              />
-              <p className="text-sm font-semibold text-slate-500">UGX · {t(lang, "simpleAddBuyPriceWholeUnit")}</p>
-            </div>
-          ) : null}
-
-          {step === "inside" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep4Title")}</h2>
-              <p className="text-base text-slate-600">
-                {buyHow === "kg"
-                  ? t(lang, "simpleAddStep4SkipKg")
-                  : tTemplate(lang, "simpleAddStep4Hint", { unit: buyUnitLabel })}
-              </p>
-              {packPriceN > 0 ? (
-                <p className="rounded-xl bg-waka-50 px-3 py-2 text-sm font-bold text-waka-900">
-                  {tTemplate(lang, "simpleAddPaidForUnit", {
-                    amount: packPriceN.toLocaleString(),
-                    unit: buyUnitLabel,
-                  })}
-                </p>
-              ) : null}
-              {buyHow !== "kg" && buyHow !== "piece" ? (
-                <>
-                  <input
-                    value={piecesInside}
-                    onChange={(e) => {
-                      setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 6));
-                      setHintTouched(true);
-                    }}
-                    inputMode="numeric"
-                    placeholder={hint ? String(hint.piecesInside) : "30"}
-                    autoFocus
-                    className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
-                  />
-                  <p className="text-sm font-semibold text-slate-500">
-                    {tTemplate(lang, "simpleAddStep4Example", {
-                      count: piecesInside || String(hint?.piecesInside ?? "30"),
-                      thing: name.trim() || t(lang, "simpleAddStep1Example"),
-                      unit: buyUnitLabel,
-                    })}
-                  </p>
-                  {costPerPieceUgx != null && costPerPieceUgx > 0 ? (
-                    <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                      {tTemplate(lang, "simpleAddCostPerPiece", {
-                        piece: sellPieceLabel,
-                        amount: costPerPieceUgx.toLocaleString(),
-                      })}
-                    </p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
-                  {buyHow === "kg" ? t(lang, "simpleAddStep4SkipKg") : t(lang, "simpleAddStep4OnePiece")}
-                </p>
-              )}
-            </div>
-          ) : null}
-
-          {step === "stock" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">
-                {tTemplate(lang, "simpleAddStep5Title", { unit: buyUnitLabel })}
-              </h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep5Hint")}</p>
-              <input
-                value={stockPacks}
-                onChange={(e) => setStockPacks(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                inputMode="decimal"
-                placeholder="0"
-                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
-              />
-            </div>
-          ) : null}
-
-          {step === "sell" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep6Title")}</h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep6Hint")}</p>
-              <div className="space-y-2">
-                {sellOptions.map((opt, i) => (
-                  <div key={i} className="rounded-2xl border-2 border-slate-100 bg-slate-50/80 p-3">
-                    <input
-                      value={opt.label}
-                      onChange={(e) =>
-                        setSellOptions((rows) => rows.map((r, j) => (j === i ? { ...r, label: e.target.value } : r)))
-                      }
-                      placeholder={t(lang, "simpleAddSellLabelPh")}
-                      className="mb-2 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 text-base font-bold"
-                    />
-                    <div className="flex items-center gap-2">
-                      <input
-                        value={opt.priceUgx}
-                        onChange={(e) =>
-                          setSellOptions((rows) =>
-                            rows.map((r, j) => (j === i ? { ...r, priceUgx: e.target.value.replace(/\D/g, "") } : r)),
-                          )
-                        }
-                        inputMode="numeric"
-                        placeholder="UGX"
-                        className="min-h-[48px] flex-1 rounded-xl border-2 border-slate-200 px-3 text-xl font-black"
-                      />
-                      {sellOptions.length > 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => setSellOptions((rows) => rows.filter((_, j) => j !== i))}
-                          className="rounded-xl px-3 py-2 text-sm font-bold text-red-700"
-                        >
-                          {t(lang, "simpleAddRemoveSell")}
-                        </button>
-                      ) : null}
-                    </div>
-                    {buyHow && packPriceN > 0 && piecesN > 0 ? (() => {
-                      const profit = estimateSellOptionProfitUgx({
-                        buyHow,
-                        packPriceUgx: packPriceN,
-                        piecesInside: piecesN,
-                        option: opt,
-                      });
-                      if (profit == null) return null;
-                      return (
-                        <p
-                          className={clsx(
-                            "mt-2 text-sm font-bold",
-                            profit >= 0 ? "text-emerald-800" : "text-rose-800",
-                          )}
-                        >
-                          {tTemplate(lang, "simpleAddSellProfitPreview", {
-                            profit: profit.toLocaleString(),
-                          })}
-                        </p>
-                      );
-                    })() : null}
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSellOptions((rows) => [...rows, { label: "", priceUgx: "" }])}
-                className="w-full min-h-[48px] rounded-2xl border-2 border-dashed border-waka-300 py-3 text-base font-black text-waka-800"
-              >
-                {t(lang, "simpleAddAnotherSell")}
-              </button>
             </div>
           ) : null}
 
           {step === "shelf" ? (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddShelfTitle")}</h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddShelfHint")}</p>
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep2Title")}</h2>
+              <p className="text-base text-slate-600">{t(lang, "simpleAddStep2Hint")}</p>
               {shelves.length > 0 && !creatingShelf ? (
                 <div className="grid grid-cols-2 gap-2">
                   {shelves.map((s) => (
@@ -494,11 +263,12 @@ export function SimpleAddProductWizard({
                       key={s}
                       type="button"
                       onClick={() => setShelfPick(s)}
-                      className={`flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border-2 px-3 text-base font-black ${
+                      className={clsx(
+                        "flex min-h-[56px] items-center justify-center gap-2 rounded-2xl border-2 px-3 text-base font-black",
                         shelfPick === s
                           ? "border-waka-500 bg-waka-600 text-white"
-                          : "border-slate-200 bg-white text-slate-900"
-                      }`}
+                          : "border-slate-200 bg-white text-slate-900",
+                      )}
                     >
                       {shelfIconFor(s) ? <span>{shelfIconFor(s)}</span> : null}
                       {s}
@@ -507,16 +277,13 @@ export function SimpleAddProductWizard({
                 </div>
               ) : null}
               {creatingShelf || shelves.length === 0 ? (
-                <label className="block">
-                  <span className="text-sm font-bold text-slate-800">{t(lang, "simpleAddNewShelf")}</span>
-                  <input
-                    value={shelfNew}
-                    onChange={(e) => setShelfNew(e.target.value)}
-                    placeholder={t(lang, "simpleAddShelfPlaceholder")}
-                    autoFocus
-                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-lg font-bold"
-                  />
-                </label>
+                <input
+                  value={shelfNew}
+                  onChange={(e) => setShelfNew(e.target.value)}
+                  placeholder={t(lang, "simpleAddShelfPlaceholder")}
+                  autoFocus
+                  className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-waka-300 focus:ring"
+                />
               ) : (
                 <button
                   type="button"
@@ -529,31 +296,197 @@ export function SimpleAddProductWizard({
                   {t(lang, "simpleAddNewShelf")}
                 </button>
               )}
+            </div>
+          ) : null}
 
-              <details
-                className="rounded-2xl border border-slate-200 bg-slate-50/50 px-3 open:pb-3"
-                open={advancedOpen}
-                onToggle={(e) => setAdvancedOpen((e.target as HTMLDetailsElement).open)}
-              >
-                <summary className="cursor-pointer py-3 text-sm font-black text-slate-700 marker:hidden [&::-webkit-details-marker]:hidden">
-                  {t(lang, "simpleAddAdvanced")}
-                </summary>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "supplierOptionalLabel")}
-                  <input
-                    value={supplier}
-                    onChange={(e) => setSupplier(e.target.value)}
-                    placeholder={t(lang, "supplierOptionalPh")}
-                    className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 text-base"
-                  />
-                </label>
-              </details>
+          {step === "sellUnit" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep3Title")}</h2>
+              <p className="text-base text-slate-600">{t(lang, "simpleAddStep3Hint")}</p>
+              <div className="space-y-2">
+                {SELL_UNIT_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setSellUnit(opt.id)}
+                    className={clsx(
+                      "flex min-h-[56px] w-full items-center rounded-2xl border-2 px-4 text-lg font-black transition active:scale-[0.99]",
+                      sellUnit === opt.id
+                        ? "border-waka-500 bg-waka-600 text-white shadow-md"
+                        : "border-slate-200 bg-white text-slate-900",
+                    )}
+                  >
+                    {t(lang, opt.labelKey as "sellUnit_piece")}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {step === "pack" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep4Title")}</h2>
+              <label className="flex min-h-[56px] cursor-pointer items-center gap-3 rounded-2xl border-2 border-slate-200 bg-slate-50 px-4">
+                <input
+                  type="checkbox"
+                  checked={hasPack}
+                  onChange={(e) => setHasPack(e.target.checked)}
+                  className="h-6 w-6 shrink-0 accent-waka-600"
+                />
+                <span className="text-base font-black text-slate-900">{t(lang, "simpleAddPackToggle")}</span>
+              </label>
+              {hasPack ? (
+                <>
+                  <p className="text-sm font-semibold text-slate-600">{t(lang, "simpleAddPackTypeLabel")}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {PACK_TYPE_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setPackKind(opt.id)}
+                        className={clsx(
+                          "min-h-[52px] rounded-2xl border-2 px-3 text-base font-black",
+                          packKind === opt.id
+                            ? "border-waka-500 bg-waka-600 text-white"
+                            : "border-slate-200 bg-white text-slate-900",
+                        )}
+                      >
+                        {t(lang, opt.labelKey as "packKind_crate")}
+                      </button>
+                    ))}
+                  </div>
+                  {packKind === "custom" ? (
+                    <input
+                      value={packCustom}
+                      onChange={(e) => setPackCustom(e.target.value)}
+                      placeholder={t(lang, "simpleAddPackCustomPh")}
+                      className="min-h-[52px] w-full rounded-2xl border-2 border-dashed border-waka-300 px-4 text-lg font-bold"
+                    />
+                  ) : null}
+                </>
+              ) : (
+                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-600">
+                  {t(lang, "simpleAddNoPackHint")}
+                </p>
+              )}
+            </div>
+          ) : null}
+
+          {step === "piecesPerPack" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">
+                {tTemplate(lang, "simpleAddStep5Title", { unit: unitLabel, pack: packLabel })}
+              </h2>
+              <p className="text-base text-slate-600">
+                {tTemplate(lang, "simpleAddStep5Example", { count: "24", unit: unitLabel, pack: packLabel })}
+              </p>
+              <input
+                value={piecesPerPack}
+                onChange={(e) => setPiecesPerPack(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))}
+                inputMode="numeric"
+                placeholder="24"
+                autoFocus
+                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
+              />
+            </div>
+          ) : null}
+
+          {step === "stock" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">
+                {hasPack
+                  ? tTemplate(lang, "simpleAddStep6TitlePack", { pack: packLabel })
+                  : t(lang, "simpleAddStep6TitleLoose")}
+              </h2>
+              <p className="text-base text-slate-600">{t(lang, "simpleAddStep6Hint")}</p>
+              <input
+                value={stockCount}
+                onChange={(e) => setStockCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                inputMode="decimal"
+                placeholder={hasPack ? "5" : "0"}
+                autoFocus
+                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
+              />
+              {hasPack && piecesN > 0 && stockN > 0 ? (
+                <p className="rounded-xl bg-waka-50 px-3 py-2 text-sm font-bold text-waka-900">
+                  {tTemplate(lang, "simpleAddStockSummary", {
+                    packs: String(stockN),
+                    packLabel,
+                    total: String(totalPieces),
+                    unit: unitLabel,
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {step === "sellPrice" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">
+                {tTemplate(lang, "simpleAddStep7Title", { unit: unitLabel })}
+              </h2>
+              <input
+                value={sellPrice}
+                onChange={(e) => setSellPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                inputMode="numeric"
+                placeholder="1000"
+                autoFocus
+                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
+              />
+              <p className="text-sm font-semibold text-slate-500">UGX</p>
+              {hasPack && piecesN > 1 && sellPriceN > 0 ? (
+                <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
+                  {tTemplate(lang, "simpleAddFullPackSellPrice", {
+                    pack: packLabel,
+                    amount: (sellPriceN * piecesN).toLocaleString(),
+                  })}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {step === "buyPrice" ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-slate-900">
+                {tTemplate(lang, "simpleAddStep8Title", { pack: packLabel })}
+              </h2>
+              <p className="text-base text-slate-600">{t(lang, "simpleAddStep8Hint")}</p>
+              <input
+                value={buyPackPrice}
+                onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                inputMode="numeric"
+                placeholder="36000"
+                autoFocus
+                className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
+              />
+              <p className="text-sm font-semibold text-slate-500">UGX · {t(lang, "simpleAddStep8Optional")}</p>
+              {costPerUnit != null && costPerUnit > 0 ? (
+                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
+                  {tTemplate(lang, "simpleAddCostPerPiece", {
+                    piece: unitLabel,
+                    amount: costPerUnit.toLocaleString(),
+                  })}
+                </p>
+              ) : null}
+              {profitPerUnit != null && sellPriceN > 0 ? (
+                <p
+                  className={clsx(
+                    "rounded-xl px-3 py-2 text-sm font-bold",
+                    profitPerUnit >= 0 ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900",
+                  )}
+                >
+                  {tTemplate(lang, "simpleAddProfitPerUnit", {
+                    unit: unitLabel,
+                    amount: profitPerUnit.toLocaleString(),
+                  })}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>
 
         <div className="shrink-0 border-t border-slate-100 p-4 sm:p-5">
-          {step === "shelf" ? (
+          {isLastStep ? (
             <div className="grid grid-cols-1 gap-2">
               <button
                 type="button"

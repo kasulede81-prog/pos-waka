@@ -2,6 +2,150 @@ import type { LineInputMode, Product, SaleLine } from "../types";
 
 const MONEY_ROUND = 4;
 
+export type StockBreakdown = {
+  fullPacks: number;
+  loosePieces: number;
+  totalPieces: number;
+  hasPackTracking: boolean;
+  packLabel: string | null;
+  pieceLabel: string;
+};
+
+export type PosSellPreset = {
+  mode: LineInputMode;
+  value: number;
+  label: string;
+  priceLabel: string;
+};
+
+function capitalizeWord(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+/** Pack name stored on product (before optional supplier suffix). */
+export function packLabelFromProduct(product: Product): string | null {
+  const raw = (product.buyingUnit ?? "").trim();
+  if (!raw) return null;
+  return raw.split("·")[0]?.trim() || null;
+}
+
+export function stockBreakdown(product: Product): StockBreakdown {
+  const total = Math.max(0, Number(product.stockOnHand) || 0);
+  const pieceLabel = product.baseUnit || "ea";
+  const packLabel = packLabelFromProduct(product);
+  const rate = baseUnitsPerBuyingUnit(product);
+  const hasPackTracking = Boolean(packLabel && rate > 1);
+
+  if (!hasPackTracking) {
+    return {
+      fullPacks: 0,
+      loosePieces: total,
+      totalPieces: total,
+      hasPackTracking: false,
+      packLabel: null,
+      pieceLabel,
+    };
+  }
+
+  const fullPacks = Math.floor(total / rate);
+  const loosePieces = Math.round((total - fullPacks * rate) * 10 ** MONEY_ROUND) / 10 ** MONEY_ROUND;
+
+  return {
+    fullPacks,
+    loosePieces,
+    totalPieces: total,
+    hasPackTracking: true,
+    packLabel,
+    pieceLabel,
+  };
+}
+
+export function formatStockLabel(product: Product): string {
+  const b = stockBreakdown(product);
+  if (!b.hasPackTracking || !b.packLabel) {
+    const n = b.totalPieces;
+    const shown = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, "");
+    return `${shown} ${b.pieceLabel}`;
+  }
+
+  const pack = capitalizeWord(b.packLabel);
+  const piece = b.pieceLabel;
+  const packPlural = b.fullPacks === 1 ? pack : `${pack}s`;
+
+  if (b.loosePieces <= 0) {
+    const totalShown = Number.isInteger(b.totalPieces)
+      ? String(b.totalPieces)
+      : b.totalPieces.toFixed(2).replace(/\.?0+$/, "");
+    return `${b.fullPacks} ${packPlural} · ${totalShown} ${capitalizeWord(piece)}`;
+  }
+
+  if (b.fullPacks <= 0) {
+    const looseShown = Number.isInteger(b.loosePieces)
+      ? String(b.loosePieces)
+      : b.loosePieces.toFixed(2).replace(/\.?0+$/, "");
+    return `${looseShown} ${capitalizeWord(piece)}`;
+  }
+
+  const looseShown = Number.isInteger(b.loosePieces)
+    ? String(b.loosePieces)
+    : b.loosePieces.toFixed(2).replace(/\.?0+$/, "");
+  return `${b.fullPacks} Full ${packPlural} + ${looseShown} ${capitalizeWord(piece)}`;
+}
+
+/** Friendly sell buttons: one piece + full pack when applicable. */
+export function getPosSellPresets(product: Product): PosSellPreset[] {
+  const price = pricePerBaseUnitUgx(product);
+  if (price <= 0) return [];
+
+  const unit = product.baseUnit || "ea";
+  const rate = baseUnitsPerBuyingUnit(product);
+  const packName = packLabelFromProduct(product);
+  const presets: PosSellPreset[] = [
+    {
+      mode: "quantity",
+      value: 1,
+      label: `1 ${unit}`,
+      priceLabel: `${price.toLocaleString()} UGX`,
+    },
+  ];
+
+  if (rate > 1 && packName) {
+    const packPrice = Math.round(price * rate);
+    presets.push({
+      mode: "quantity",
+      value: rate,
+      label: `Full ${packName}`,
+      priceLabel: `${packPrice.toLocaleString()} UGX`,
+    });
+  }
+
+  const moneyPresets = product.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
+  const qtyPresets = product.quickPresetsQty?.filter((x) => x > 0) ?? [];
+  for (let i = 0; i < moneyPresets.length; i++) {
+    const money = moneyPresets[i]!;
+    const qty = qtyPresets[i];
+    if (qty != null && qty > 0 && qty !== 1 && qty !== rate) {
+      presets.push({
+        mode: "quantity",
+        value: qty,
+        label: `${qty} ${unit}`,
+        priceLabel: `${Math.round(qty * price).toLocaleString()} UGX`,
+      });
+    }
+    if (money !== price && money !== Math.round(price * rate)) {
+      presets.push({
+        mode: "money",
+        value: money,
+        label: `${money.toLocaleString()} UGX`,
+        priceLabel: qty != null && qty > 0 ? `${qty} ${unit}` : "",
+      });
+    }
+  }
+
+  return presets;
+}
+
 /** UGX price per base unit used at the till (falls back to legacy mental model). */
 export function pricePerBaseUnitUgx(product: Product): number {
   const p = product.sellingPricePerUnitUgx;
@@ -18,8 +162,24 @@ export function costPerBaseUnitUgx(product: Product): number {
  * Example: 1000 UGX at 10,000 UGX/litre → 0.1 litre.
  */
 export function quantityFromMoneyUgx(product: Product, moneyUgx: number): number {
+  const moneyPresets = product.quickPresetsMoneyUgx ?? [];
+  const qtyPresets = product.quickPresetsQty ?? [];
+  for (let i = 0; i < moneyPresets.length; i++) {
+    if (moneyPresets[i] === moneyUgx && qtyPresets[i] != null && qtyPresets[i]! > 0) {
+      return qtyPresets[i]!;
+    }
+  }
+
+  const rate = baseUnitsPerBuyingUnit(product);
+  const packName = packLabelFromProduct(product);
   const price = pricePerBaseUnitUgx(product);
   if (price <= 0 || moneyUgx <= 0) return 0;
+
+  if (rate > 1 && packName) {
+    const fullPackPrice = Math.round(price * rate);
+    if (moneyUgx === fullPackPrice) return rate;
+  }
+
   const q = moneyUgx / price;
   return Math.round(q * 10 ** MONEY_ROUND) / 10 ** MONEY_ROUND;
 }
@@ -93,13 +253,6 @@ export function lowStockThreshold(product: Product): number {
 export function isLowStock(product: Product): boolean {
   const t = lowStockThreshold(product);
   return t > 0 && product.stockOnHand <= t;
-}
-
-export function formatStockLabel(product: Product): string {
-  const u = product.baseUnit || "ea";
-  const n = Number(product.stockOnHand);
-  const shown = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, "");
-  return `${shown} ${u}`;
 }
 
 /** How many base units (kg, bottles, …) one buying unit (sack, crate, jerrican) contains. */

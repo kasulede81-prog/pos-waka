@@ -2,175 +2,67 @@ import type { Language, SellingMode } from "../types";
 import { t } from "./i18n";
 import { inferFromProductName } from "./smartProductGuess";
 
-export type BuyPackKind = "tray" | "box" | "carton" | "packet" | "bottle" | "kg" | "piece" | "custom";
+/** How customers buy one item at the till. */
+export type SellUnitKind = "piece" | "bottle" | "packet" | "kg" | "litre";
+
+/** How stock arrives from the market. */
+export type PackKind = "crate" | "carton" | "box" | "sack" | "pack" | "tray" | "bale" | "custom";
+
+export const SELL_UNIT_OPTIONS: { id: SellUnitKind; labelKey: string }[] = [
+  { id: "piece", labelKey: "sellUnit_piece" },
+  { id: "bottle", labelKey: "sellUnit_bottle" },
+  { id: "packet", labelKey: "sellUnit_packet" },
+  { id: "kg", labelKey: "sellUnit_kg" },
+  { id: "litre", labelKey: "sellUnit_litre" },
+];
+
+export const PACK_TYPE_OPTIONS: { id: PackKind; labelKey: string }[] = [
+  { id: "crate", labelKey: "packKind_crate" },
+  { id: "carton", labelKey: "packKind_carton" },
+  { id: "box", labelKey: "packKind_box" },
+  { id: "sack", labelKey: "packKind_sack" },
+  { id: "pack", labelKey: "packKind_pack" },
+  { id: "tray", labelKey: "packKind_tray" },
+  { id: "bale", labelKey: "packKind_bale" },
+  { id: "custom", labelKey: "packKind_custom" },
+];
+
+/** @deprecated kept for imports that reference legacy wizard chips */
+export const COMMON_PRODUCT_CHIPS: readonly string[] = [];
+
+/** @deprecated legacy type — use PackKind */
+export type BuyPackKind = PackKind | "packet" | "bottle" | "kg" | "piece";
 
 export type WizardSellOption = { label: string; priceUgx: string };
 
-export type ProductNameHint = {
-  buyHow: BuyPackKind;
-  buyLabel: string;
-  piecesInside: number;
-  sellBaseUnit: string;
-  suggestLineKey: "simpleAddHintEggs" | "simpleAddHintSoda" | "simpleAddHintSugar" | null;
-  defaultSellOptions: WizardSellOption[];
-};
-
-export const COMMON_PRODUCT_CHIPS = ["Eggs", "Sugar", "Soda", "Rice", "Milk", "Bread", "Soap", "Salt", "Oil"] as const;
-
-export const BUY_PACK_OPTIONS: { id: BuyPackKind; icon: string; labelKey: string }[] = [
-  { id: "tray", icon: "🥚", labelKey: "buyHow_tray" },
-  { id: "box", icon: "📦", labelKey: "buyHow_box" },
-  { id: "carton", icon: "📦", labelKey: "buyHow_carton" },
-  { id: "packet", icon: "🧃", labelKey: "buyHow_packet" },
-  { id: "bottle", icon: "🍾", labelKey: "buyHow_bottle" },
-  { id: "kg", icon: "⚖️", labelKey: "buyHow_kg" },
-  { id: "piece", icon: "1️⃣", labelKey: "buyHow_piece" },
-  { id: "custom", icon: "✏️", labelKey: "buyHow_custom" },
-];
-
-export function hintForProductName(raw: string): ProductNameHint | null {
-  const n = raw.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
-
-  if (/\begg/.test(n)) {
-    return {
-      buyHow: "tray",
-      buyLabel: "tray",
-      piecesInside: 30,
-      sellBaseUnit: "egg",
-      suggestLineKey: "simpleAddHintEggs",
-      defaultSellOptions: [
-        { label: "1 egg", priceUgx: "500" },
-        { label: "3 eggs", priceUgx: "1000" },
-        { label: "Full tray", priceUgx: "15000" },
-      ],
-    };
-  }
-  if (/\b(soda|fanta|sprite|coke|cola|stoney|novida|mirinda|pepsi)\b/.test(n)) {
-    return {
-      buyHow: "carton",
-      buyLabel: "crate",
-      piecesInside: 24,
-      sellBaseUnit: "bottle",
-      suggestLineKey: "simpleAddHintSoda",
-      defaultSellOptions: [
-        { label: "1 bottle", priceUgx: "1000" },
-        { label: "2 bottles", priceUgx: "1800" },
-        { label: "Full crate", priceUgx: "22000" },
-      ],
-    };
-  }
-  if (/\b(sugar|sukari|sukali)\b/.test(n)) {
-    return {
-      buyHow: "kg",
-      buyLabel: "kg",
-      piecesInside: 1,
-      sellBaseUnit: "kg",
-      suggestLineKey: "simpleAddHintSugar",
-      defaultSellOptions: [
-        { label: "½ kg", priceUgx: "2000" },
-        { label: "1 kg", priceUgx: "3500" },
-        { label: "2 kg", priceUgx: "7000" },
-      ],
-    };
-  }
-  if (/\b(rice|posho|maize|beans|flour)\b/.test(n)) {
-    return {
-      buyHow: "kg",
-      buyLabel: "sack",
-      piecesInside: 50,
-      sellBaseUnit: "kg",
-      suggestLineKey: null,
-      defaultSellOptions: [
-        { label: "1 kg", priceUgx: "3500" },
-        { label: "2 kg", priceUgx: "7000" },
-        { label: "5 kg", priceUgx: "17000" },
-      ],
-    };
-  }
-  if (/\b(milk|juice|yoghurt|yogurt)\b/.test(n)) {
-    return {
-      buyHow: "carton",
-      buyLabel: "carton",
-      piecesInside: 12,
-      sellBaseUnit: "packet",
-      suggestLineKey: null,
-      defaultSellOptions: [
-        { label: "1 packet", priceUgx: "1500" },
-        { label: "Full carton", priceUgx: "16000" },
-      ],
-    };
-  }
-
-  return null;
+export function sellUnitLabel(kind: SellUnitKind, lang: Language): string {
+  const row = SELL_UNIT_OPTIONS.find((o) => o.id === kind);
+  return row ? t(lang, row.labelKey as "sellUnit_piece") : kind;
 }
 
-const BUY_LABEL_EN: Record<BuyPackKind, string> = {
-  tray: "tray",
-  box: "box",
-  carton: "carton",
-  packet: "packet",
-  bottle: "bottle",
-  kg: "kg",
-  piece: "piece",
-  custom: "pack",
-};
-
-export function buyLabelForKind(kind: BuyPackKind, custom: string, lang: Language): string {
-  if (kind === "custom") return custom.trim() || t(lang, "buyHow_custom");
-  const row = BUY_PACK_OPTIONS.find((b) => b.id === kind);
-  if (!row) return BUY_LABEL_EN[kind];
-  return t(lang, row.labelKey as "buyHow_tray");
+export function packKindLabel(kind: PackKind, custom: string, lang: Language): string {
+  if (kind === "custom") return custom.trim() || t(lang, "packKind_custom");
+  const row = PACK_TYPE_OPTIONS.find((o) => o.id === kind);
+  return row ? t(lang, row.labelKey as "packKind_crate") : kind;
 }
 
-export function parseQtyFromSellLabel(label: string): number | null {
-  const n = label.toLowerCase();
-  if (/\bfull\b|\bwhole\b|\bentire\b|\btray\b|\bcrate\b|\bcarton\b/.test(n)) return null;
-  const m = n.match(/(\d+(?:\.\d+)?)\s*(?:egg|bottle|packet|piece|kg|kilo|litre|liter|ea)?/);
-  if (m) return Number(m[1]);
-  if (/\bhalf\b|½|1\/2/.test(n)) return 0.5;
-  if (/\bone\b|1\s/.test(n) || /^1\b/.test(n.trim())) return 1;
-  return null;
+export function baseUnitFromSellKind(kind: SellUnitKind): string {
+  return kind;
 }
 
-/** Cost per sell unit (egg, bottle, kg…) from what you paid for the whole pack. */
-export function wizardCostPerSellUnitUgx(
-  packPriceUgx: number,
-  piecesInside: number,
-  buyHow: BuyPackKind,
-): number | null {
-  if (packPriceUgx <= 0) return null;
-  if (buyHow === "kg") return packPriceUgx;
-  const pieces = Math.max(1, piecesInside);
-  return Math.floor(packPriceUgx / pieces);
+export function sellingModeFromSellKind(kind: SellUnitKind): SellingMode {
+  return kind === "kg" || kind === "litre" ? "weighted" : "unit";
 }
 
-export function estimateSellOptionProfitUgx(input: {
-  buyHow: BuyPackKind;
-  packPriceUgx: number;
-  piecesInside: number;
-  option: WizardSellOption;
-}): number | null {
-  const { buyHow, packPriceUgx, piecesInside, option } = input;
-  const price = Math.floor(Number(option.priceUgx.replace(/\D/g, "")) || 0);
-  if (price <= 0 || packPriceUgx <= 0) return null;
+/** Cost per sell unit from what you paid for one full pack. */
+export function wizardCostPerSellUnitUgx(packPriceUgx: number, piecesInside: number): number | null {
+  if (packPriceUgx <= 0 || piecesInside <= 0) return null;
+  return Math.floor(packPriceUgx / piecesInside);
+}
 
-  const costPer = wizardCostPerSellUnitUgx(packPriceUgx, piecesInside, buyHow);
-  if (costPer == null) return null;
-
-  const label = option.label.trim();
-  const pieces = Math.max(1, piecesInside);
-  if (pieces > 1 && /\bfull|whole|entire|tray|crate|carton\b/i.test(label.toLowerCase())) {
-    return price - packPriceUgx;
-  }
-
-  const qty = parseQtyFromSellLabel(label);
-  if (qty != null && qty > 0) {
-    if (buyHow === "kg") return price - Math.floor(qty * costPer);
-    return price - Math.floor(qty * costPer);
-  }
-
-  if (buyHow === "kg" || buyHow === "piece") return price - costPer;
-  return price - costPer;
+export function profitPerSellUnitUgx(sellPriceUgx: number, costPerUnitUgx: number | null | undefined): number | null {
+  if (sellPriceUgx <= 0 || costPerUnitUgx == null || costPerUnitUgx < 0) return null;
+  return sellPriceUgx - costPerUnitUgx;
 }
 
 export type BuiltWizardProduct = {
@@ -188,7 +80,75 @@ export type BuiltWizardProduct = {
   inferName: string;
 };
 
-export function buildProductFromSimpleWizard(
+export type SimpleWizardInput = {
+  name: string;
+  shelf: string;
+  sellUnit: SellUnitKind;
+  hasPack: boolean;
+  packKind: PackKind;
+  packCustom: string;
+  piecesPerPack: string;
+  stockCount: string;
+  sellPriceUgx: string;
+  buyPackPriceUgx: string;
+};
+
+export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Language): BuiltWizardProduct | null {
+  const name = input.name.trim();
+  if (!name) return null;
+
+  const sellPrice = Math.floor(Number(input.sellPriceUgx.replace(/\D/g, "")) || 0);
+  if (sellPrice <= 0) return null;
+
+  const guess = inferFromProductName(name);
+  const baseUnit = baseUnitFromSellKind(input.sellUnit);
+  const sellingMode = sellingModeFromSellKind(input.sellUnit);
+
+  const piecesPerPack = input.hasPack
+    ? Math.max(1, Math.floor(Number(input.piecesPerPack.replace(/[^\d.]/g, "")) || 0))
+    : 1;
+
+  const stockInput = Math.max(0, Number(input.stockCount.replace(/[^\d.]/g, "")) || 0);
+  const packLabel = input.hasPack ? packKindLabel(input.packKind, input.packCustom, lang).toLowerCase() : "";
+
+  const stockQty = input.hasPack ? stockInput * piecesPerPack : stockInput;
+
+  const buyPackPrice = Math.floor(Number(input.buyPackPriceUgx.replace(/\D/g, "")) || 0);
+  const costPerUnit =
+    input.hasPack && buyPackPrice > 0 && piecesPerPack > 0
+      ? Math.floor(buyPackPrice / piecesPerPack)
+      : undefined;
+
+  const buyingUnit = input.hasPack && piecesPerPack > 1 ? packLabel : undefined;
+  const conversionRate = input.hasPack && piecesPerPack > 1 ? piecesPerPack : undefined;
+
+  const quickPresetsMoneyUgx: number[] = [sellPrice];
+  const quickPresetsQty: number[] = [1];
+
+  if (input.hasPack && piecesPerPack > 1) {
+    const fullPackPrice = Math.round(sellPrice * piecesPerPack);
+    quickPresetsMoneyUgx.push(fullPackPrice);
+    quickPresetsQty.push(piecesPerPack);
+  }
+
+  return {
+    name,
+    priceUgx: sellPrice,
+    stockQty,
+    category: input.shelf.trim() || "General",
+    sellingMode: guess.sellingMode === "weighted" && sellingMode === "unit" ? guess.sellingMode : sellingMode,
+    baseUnit: guess.baseUnit && !input.hasPack ? guess.baseUnit : baseUnit,
+    buyingUnit,
+    conversionRate,
+    costPricePerUnitUgx: costPerUnit,
+    quickPresetsMoneyUgx,
+    quickPresetsQty,
+    inferName: name,
+  };
+}
+
+/** @deprecated legacy builder — maps old wizard shape to new builder when possible */
+export function buildProductFromLegacyWizard(
   input: {
     name: string;
     buyHow: BuyPackKind;
@@ -202,106 +162,32 @@ export function buildProductFromSimpleWizard(
   },
   lang: Language,
 ): BuiltWizardProduct | null {
-  const name = input.name.trim();
-  if (!name) return null;
-
-  const hint = hintForProductName(name);
-  const guess = inferFromProductName(name);
-
-  const buyLabel =
-    input.buyHow === "custom"
-      ? input.buyCustom.trim() || "pack"
-      : buyLabelForKind(input.buyHow, input.buyCustom, lang).toLowerCase();
-
-  let pieces = Math.floor(Number(input.piecesInside.replace(/[^\d.]/g, "")) || 0);
-  if (pieces <= 0) {
-    if (input.buyHow === "kg" || input.buyHow === "piece") pieces = 1;
-    else pieces = hint?.piecesInside ?? 1;
-  }
-
-  const packPrice = Math.floor(Number(input.buyPackPriceUgx.replace(/\D/g, "")) || 0);
-  const packsInStock = Math.max(0, Number(input.stockPacks.replace(/[^\d.]/g, "")) || 0);
-
   const sellParsed = input.sellOptions
     .map((o) => ({
-      label: o.label.trim(),
       price: Math.floor(Number(o.priceUgx.replace(/\D/g, "")) || 0),
-      qty: parseQtyFromSellLabel(o.label.trim()),
     }))
     .filter((o) => o.price > 0);
-
   if (!sellParsed.length) return null;
 
-  const fullTrayQty =
-    hint && pieces > 1
-      ? pieces
-      : pieces > 1
-        ? pieces
-        : null;
-  for (const o of sellParsed) {
-    if (o.qty == null && fullTrayQty && /\bfull|tray|crate|carton\b/i.test(o.label)) {
-      o.qty = fullTrayQty;
-    }
-  }
+  const sellUnit: SellUnitKind =
+    input.buyHow === "kg" ? "kg" : input.buyHow === "bottle" ? "bottle" : input.buyHow === "packet" ? "packet" : "piece";
 
-  let baseUnit = hint?.sellBaseUnit ?? guess.baseUnit;
-  if (input.buyHow === "kg") baseUnit = "kg";
-  else if (input.buyHow === "bottle") baseUnit = "bottle";
-  else if (input.buyHow === "piece") baseUnit = "piece";
+  const packKinds: PackKind[] = ["crate", "carton", "box", "sack", "pack", "tray", "bale", "custom"];
+  const hasPack = packKinds.includes(input.buyHow as PackKind) && input.buyHow !== "piece" && input.buyHow !== "kg";
 
-  const sellingMode: SellingMode =
-    input.buyHow === "kg" || baseUnit === "kg" ? "weighted" : guess.sellingMode;
-
-  const singleUnit = sellParsed.find((o) => o.qty === 1 || o.qty === 0.5);
-  let priceUgx = singleUnit?.price ?? 0;
-  if (priceUgx <= 0 && singleUnit?.qty === 0.5) priceUgx = singleUnit.price * 2;
-  if (priceUgx <= 0) {
-    const withQty = sellParsed.filter((o) => o.qty && o.qty > 0);
-    if (withQty.length) {
-      const best = withQty[0]!;
-      priceUgx = Math.floor(best.price / best.qty!);
-    } else {
-      priceUgx = sellParsed[0]!.price;
-    }
-  }
-
-  const moneyPresets = [...new Set(sellParsed.map((o) => o.price))].sort((a, b) => a - b);
-  const qtyPresets = [
-    ...new Set(
-      sellParsed
-        .map((o) => o.qty)
-        .filter((q): q is number => q != null && q > 0),
-    ),
-  ].sort((a, b) => a - b);
-
-  const hasPackTrack = packPrice > 0 && pieces > 0 && input.buyHow !== "kg";
-  const costPerUnit = hasPackTrack ? Math.floor(packPrice / pieces) : undefined;
-  const stockQty =
-    input.buyHow === "kg"
-      ? packsInStock
-      : hasPackTrack && pieces > 1
-        ? packsInStock * pieces
-        : packsInStock;
-
-  const buyingUnit =
-    hasPackTrack && input.buyHow !== "kg"
-      ? input.supplier?.trim()
-        ? `${buyLabel} · ${input.supplier.trim()}`
-        : buyLabel
-      : undefined;
-
-  return {
-    name,
-    priceUgx,
-    stockQty,
-    category: input.shelf.trim() || "General",
-    sellingMode,
-    baseUnit,
-    buyingUnit,
-    conversionRate: hasPackTrack && pieces > 1 ? pieces : input.buyHow === "kg" ? undefined : pieces > 1 ? pieces : undefined,
-    costPricePerUnitUgx: costPerUnit,
-    quickPresetsMoneyUgx: moneyPresets,
-    quickPresetsQty: qtyPresets,
-    inferName: name,
-  };
+  return buildProductFromSimpleWizard(
+    {
+      name: input.name,
+      shelf: input.shelf,
+      sellUnit,
+      hasPack,
+      packKind: (packKinds.includes(input.buyHow as PackKind) ? input.buyHow : "custom") as PackKind,
+      packCustom: input.buyCustom,
+      piecesPerPack: input.piecesInside,
+      stockCount: input.stockPacks,
+      sellPriceUgx: String(sellParsed[0]!.price),
+      buyPackPriceUgx: input.buyPackPriceUgx,
+    },
+    lang,
+  );
 }

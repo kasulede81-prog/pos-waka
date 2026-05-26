@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
+import { formatStockLabel } from "../../lib/sellingEngine";
 import { shelfIconFor } from "../../lib/productCategories";
 
 const COLS = 2;
@@ -78,8 +79,8 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
                       {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
                       {(p.category ?? "").trim() || noShelfLabel}
                     </span>
-                    <span className="mt-0.5 block truncate text-xs font-bold text-slate-600">
-                      {stockLabel}: {Math.max(0, Math.floor(p.stockOnHand * 1000) / 1000)} {p.baseUnit}
+                    <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-slate-600">
+                      {stockLabel}: {formatStockLabel(p)}
                     </span>
                   </span>
                   <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>

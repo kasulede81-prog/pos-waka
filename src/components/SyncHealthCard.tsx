@@ -6,7 +6,7 @@ import { useOfflineStatus } from "../hooks/useOfflineStatus";
 import { countUnsyncedSales } from "../offline/cloudSync";
 import { tTemplate } from "../lib/i18n";
 
-type Props = { lang: Language };
+type Props = { lang: Language; variant?: "full" | "simple" };
 
 function fmtShort(iso: string | null, lang: Language): string {
   if (!iso) return "—";
@@ -22,49 +22,50 @@ function fmtShort(iso: string | null, lang: Language): string {
   }
 }
 
-export function SyncHealthCard({ lang }: Props) {
+export function SyncHealthCard({ lang, variant = "full" }: Props) {
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
   const [msg, setMsg] = useState<string | null>(null);
   const h = sync.health;
+  const simple = variant === "simple";
 
   const unsyncedSales = countUnsyncedSales();
   const needsAttention = isOnline && (h.lastIssueCode === "error" || (h.lastIssueCode === "partial" && sync.pendingCount > 5));
 
   return (
-    <article className="rounded-3xl border border-stone-200/90 bg-white p-5 shadow-waka-sm">
-      <p className="text-xl font-black text-stone-900">{t(lang, "syncDiagnosticsTitle")}</p>
-      <p className="mt-1 text-sm text-stone-600">{t(lang, "syncDiagnosticsSub")}</p>
-      <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-950">{t(lang, "syncMultiDeviceHint")}</p>
+    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
+      <p className="text-base font-black text-stone-900">
+        {simple ? t(lang, "backupSyncOnlineTitle") : t(lang, "syncDiagnosticsTitle")}
+      </p>
+      {!simple ? <p className="mt-1 text-sm text-stone-600">{t(lang, "syncDiagnosticsSub")}</p> : null}
+      <p className="mt-2 text-sm font-semibold text-stone-600">
+        {isOnline ? t(lang, "backupSyncOnlineActive") : t(lang, "backupSyncOfflineActive")}
+      </p>
 
       {unsyncedSales > 0 ? (
-        <p className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-          {tTemplate(lang, "unsyncedSalesHint", { count: String(unsyncedSales) })}
+        <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+          {tTemplate(lang, "backupSyncWaitingUploads", { count: String(unsyncedSales) })}
         </p>
       ) : null}
 
-      {needsAttention ? (
-        <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+      {!simple && needsAttention ? (
+        <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
           {t(lang, "syncNeedsReview")}
         </p>
       ) : null}
 
-      <dl className="mt-4 grid gap-3 text-sm">
-        <div className="flex justify-between gap-2 rounded-2xl bg-stone-50 px-3 py-2">
-          <dt className="font-semibold text-stone-600">{t(lang, "syncQueueLabel")}</dt>
+      <dl className="mt-3 grid gap-2 text-sm">
+        <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
+          <dt className="font-semibold text-stone-600">{t(lang, "backupSyncPendingLabel")}</dt>
           <dd className="font-black text-stone-900">{sync.pendingCount}</dd>
         </div>
-        <div className="flex justify-between gap-2 rounded-2xl bg-stone-50 px-3 py-2">
-          <dt className="font-semibold text-stone-600">{t(lang, "syncLastTry")}</dt>
-          <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastAttemptAt, lang)}</dd>
-        </div>
-        <div className="flex justify-between gap-2 rounded-2xl bg-stone-50 px-3 py-2">
-          <dt className="font-semibold text-stone-600">{t(lang, "syncLastOk")}</dt>
+        <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
+          <dt className="font-semibold text-stone-600">{t(lang, "backupSyncLastUpload")}</dt>
           <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>
         </div>
       </dl>
 
-      {msg ? <p className="mt-3 text-sm font-semibold text-waka-800">{msg}</p> : null}
+      {msg ? <p className="mt-2 text-sm font-semibold text-waka-800">{msg}</p> : null}
 
       <button
         type="button"
@@ -75,9 +76,9 @@ export function SyncHealthCard({ lang }: Props) {
           setMsg(t(lang, "syncRetryDone"));
           window.setTimeout(() => setMsg(null), 4000);
         }}
-        className="mt-4 w-full rounded-2xl bg-waka-600 py-3.5 text-base font-black text-white shadow-waka-sm transition-waka active:scale-[0.99] disabled:opacity-50 motion-reduce:active:scale-100"
+        className="mt-3 w-full rounded-2xl bg-waka-600 py-3 text-sm font-black text-white disabled:opacity-50"
       >
-        {sync.syncing ? t(lang, "syncingShort") : t(lang, "syncRetryNow")}
+        {sync.syncing ? t(lang, "syncingShort") : t(lang, "backupSyncUploadNow")}
       </button>
     </article>
   );

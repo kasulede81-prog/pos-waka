@@ -10,6 +10,8 @@ import type {
   Product,
   Purchase,
   PurchaseLine,
+  ReturnReason,
+  ReturnRecord,
   Sale,
   SaleLine,
   SellingMode,
@@ -22,6 +24,8 @@ import type {
   SupplierPayment,
   SyncOperationKind,
   UserRole,
+  VoidReason,
+  VoidRecord,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
 import { getOrCreateDeviceId } from "../lib/deviceId";
@@ -44,6 +48,12 @@ import {
   purchaseLineCostTotalUgx,
   weightedCostAfterStockIn,
 } from "../lib/sellingEngine";
+import {
+  applyDiscountToLine,
+  reduceSaleTotalsByAmount,
+  shiftExpectedCash,
+  type DiscountMode,
+} from "../lib/saleAdjustments";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
@@ -132,6 +142,11 @@ function normalizeShifts(raw: unknown): ShiftRecord[] {
         debtTotalUgx: Number(o.debtTotalUgx ?? 0) || 0,
         refundsUgx: Number(o.refundsUgx ?? 0) || 0,
         estimatedCashUgx: Number(o.estimatedCashUgx ?? 0) || 0,
+        discountsTotalUgx: Number(o.discountsTotalUgx ?? 0) || 0,
+        voidsTotalUgx: Number(o.voidsTotalUgx ?? 0) || 0,
+        returnsTotalUgx: Number(o.returnsTotalUgx ?? 0) || 0,
+        countedCashUgx: o.countedCashUgx != null ? Number(o.countedCashUgx) : null,
+        cashDifferenceUgx: o.cashDifferenceUgx != null ? Number(o.cashDifferenceUgx) : null,
       };
     })
     .filter(Boolean) as ShiftRecord[];
@@ -156,6 +171,8 @@ type PosState = {
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
   stockMovements: StockMovement[];
+  voidRecords: VoidRecord[];
+  returnRecords: ReturnRecord[];
   /** Current signed-in actor (not persisted); synced from App shell / auth. */
   sessionActor: SessionActor | null;
   draftLines: SaleLine[];
@@ -174,6 +191,8 @@ type PosState = {
       purchases?: Purchase[];
       supplierPayments?: SupplierPayment[];
       stockMovements?: StockMovement[];
+      voidRecords?: VoidRecord[];
+      returnRecords?: ReturnRecord[];
     },
     opts?: { replaceAudit?: boolean },
   ) => void;
@@ -207,7 +226,23 @@ type PosState = {
   setDraftInput: (input: DraftLineInput | null) => void;
   addDraftLineFromInput: () => { ok: boolean; errorKey?: string };
   removeDraftLine: (productId: string) => void;
+  applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
   clearDraft: () => void;
+  voidSaleLine: (input: {
+    saleId: string;
+    lineIndex: number;
+    reason: VoidReason;
+    note?: string;
+  }) => { ok: boolean; errorKey?: string };
+  returnProduct: (input: {
+    saleId?: string | null;
+    productId: string;
+    quantity: number;
+    refundAmountUgx: number;
+    reason: ReturnReason;
+    note?: string;
+  }) => { ok: boolean; errorKey?: string };
+  closeShiftWithCashCount: (countedCashUgx: number) => { ok: boolean; errorKey?: string; differenceUgx?: number };
   finalizeDraftSale: (opts: {
     debtUgx: number;
     customerId?: string | null;
@@ -305,6 +340,8 @@ function fireSnapshotWrite(s: PosState): void {
       purchases: s.purchases,
       supplierPayments: s.supplierPayments,
       stockMovements: s.stockMovements,
+      voidRecords: s.voidRecords,
+      returnRecords: s.returnRecords,
     });
     const cur = usePosStore.getState();
     if (!cur._hydrated) return;
@@ -420,8 +457,12 @@ function normalizeSaleLine(line: SaleLine): SaleLine {
     unitPriceUgx,
     unitCostUgx,
     lineTotalUgx,
+    originalLineTotalUgx: Math.max(0, Math.floor(Number(line.originalLineTotalUgx ?? lineTotalUgx) || 0)),
+    discountUgx: Math.max(0, Math.floor(Number(line.discountUgx) || 0)),
     estimatedProfitUgx,
     moneyAmountUgx: line.moneyAmountUgx ?? null,
+    voided: line.voided === true,
+    voidedAt: line.voidedAt ?? null,
   };
 }
 
@@ -493,6 +534,8 @@ export const usePosStore = create<PosState>((set, get) => {
   purchases: [],
   supplierPayments: [],
   stockMovements: [],
+  voidRecords: [],
+  returnRecords: [],
   sessionActor: null,
   draftLines: [],
   draftInput: null,
@@ -512,6 +555,8 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: mergeStockMovements(data.stockMovements ?? [], opts?.replaceAudit ? [] : get().stockMovements).map(
         normalizeStockMovement,
       ),
+      voidRecords: data.voidRecords ?? [],
+      returnRecords: data.returnRecords ?? [],
       _hydrated: true,
       draftLines: [],
       draftInput: null,
@@ -532,6 +577,8 @@ export const usePosStore = create<PosState>((set, get) => {
         purchases: snap.purchases ?? [],
         supplierPayments: snap.supplierPayments ?? [],
         stockMovements: snap.stockMovements ?? [],
+        voidRecords: snap.voidRecords ?? [],
+        returnRecords: snap.returnRecords ?? [],
       },
       { replaceAudit: true },
     );
@@ -548,6 +595,8 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: s.purchases,
       supplierPayments: s.supplierPayments,
       stockMovements: s.stockMovements,
+      voidRecords: s.voidRecords,
+      returnRecords: s.returnRecords,
     });
     void clearPersistedDraft();
   },
@@ -574,6 +623,8 @@ export const usePosStore = create<PosState>((set, get) => {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
+      voidRecords: [],
+      returnRecords: [],
       sessionActor: null,
       draftLines: [],
       draftInput: null,
@@ -691,6 +742,11 @@ export const usePosStore = create<PosState>((set, get) => {
       debtTotalUgx: 0,
       refundsUgx: 0,
       estimatedCashUgx: 0,
+      discountsTotalUgx: 0,
+      voidsTotalUgx: 0,
+      returnsTotalUgx: 0,
+      countedCashUgx: null,
+      cashDifferenceUgx: null,
     };
     set((st) => ({
       preferences: {
@@ -782,6 +838,19 @@ export const usePosStore = create<PosState>((set, get) => {
     scheduleDraftPersist(get);
   },
 
+  applyDraftLineDiscount: (productId, mode, value) => {
+    const state = get();
+    const line = state.draftLines.find((l) => l.productId === productId);
+    if (!line) return { ok: false, errorKey: "noSelection" };
+    const next = applyDiscountToLine(line, mode, value);
+    if (!next) return { ok: false, errorKey: "invalid" };
+    set((s) => ({
+      draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
+    }));
+    scheduleDraftPersist(get);
+    return { ok: true };
+  },
+
   clearDraft: () => {
     set({ draftLines: [], draftInput: null });
     void clearPersistedDraft();
@@ -792,8 +861,11 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
     const isFirstSale = state.sales.length === 0;
 
-    const subtotal = state.draftLines.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const saleLines = state.draftLines.map((line) => normalizeSaleLine(line));
+    const listSubtotal = saleLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
+    const subtotal = saleLines.reduce((a, l) => a + l.lineTotalUgx, 0);
     const total = subtotal;
+    const discountTotal = Math.max(0, listSubtotal - subtotal);
     const debt = Math.min(Math.max(0, Math.floor(debtUgx)), total);
     const cashPaidUgx = total - debt;
 
@@ -812,7 +884,6 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
 
-    const saleLines = state.draftLines.map((line) => normalizeSaleLine(line));
     const estimatedProfitUgx = saleLines.reduce((sum, line) => {
       const p = products.find((x) => x.id === line.productId)!;
       return sum + estimatedProfitForLine(p, line);
@@ -822,10 +893,12 @@ export const usePosStore = create<PosState>((set, get) => {
     const sale: Sale = {
       id: crypto.randomUUID(),
       lines: saleLines,
-      subtotalUgx: subtotal,
+      subtotalUgx: listSubtotal,
       totalUgx: total,
       cashPaidUgx,
       debtUgx: debt,
+      discountTotalUgx: discountTotal,
+      voidedTotalUgx: 0,
       estimatedProfitUgx,
       createdAt: new Date().toISOString(),
       pendingSync: true,
@@ -876,6 +949,7 @@ export const usePosStore = create<PosState>((set, get) => {
                   salesTotalUgx: sh.salesTotalUgx + total,
                   debtTotalUgx: sh.debtTotalUgx + debt,
                   estimatedCashUgx: sh.estimatedCashUgx + cashPaidUgx,
+                  discountsTotalUgx: (sh.discountsTotalUgx ?? 0) + discountTotal,
                 }
               : sh,
           ),
@@ -897,7 +971,253 @@ export const usePosStore = create<PosState>((set, get) => {
       lineCount: sale.lines.length,
       firstLineName: sale.lines[0]?.name ?? null,
     });
+    if (discountTotal > 0) {
+      pushAudit("discount_given", `Discount UGX ${discountTotal.toLocaleString()}`, {
+        saleId: sale.id,
+        discountUgx: discountTotal,
+        soldByUserId: actorId,
+      });
+    }
     return { ok: true, firstSale: isFirstSale, saleId: sale.id };
+  },
+
+  voidSaleLine: ({ saleId, lineIndex, reason, note }) => {
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const saleIdx = state.sales.findIndex((s) => s.id === saleId);
+    if (saleIdx === -1) return { ok: false, errorKey: "missingProduct" };
+    const sale = state.sales[saleIdx]!;
+    const line = sale.lines[lineIndex];
+    if (!line || line.voided) return { ok: false, errorKey: "invalid" };
+
+    const amount = line.lineTotalUgx;
+    const cashReduce = Math.min(amount, sale.cashPaidUgx);
+    const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    const at = new Date().toISOString();
+
+    const voidRec: VoidRecord = {
+      id: crypto.randomUUID(),
+      saleId,
+      lineIndex,
+      productId: line.productId,
+      productName: line.name,
+      quantity: line.quantity,
+      amountUgx: amount,
+      reason,
+      note: note?.trim() || undefined,
+      actorUserId: actor.userId,
+      actorName: actor.displayName,
+      shiftId: openShift?.id ?? null,
+      createdAt: at,
+    };
+
+    const totals = reduceSaleTotalsByAmount(sale, amount);
+    const updatedLines = sale.lines.map((l, i) => (i === lineIndex ? { ...l, voided: true, voidedAt: at } : l));
+    const updatedSale: Sale = {
+      ...sale,
+      ...totals,
+      lines: updatedLines,
+      estimatedProfitUgx: Math.max(0, sale.estimatedProfitUgx - line.estimatedProfitUgx),
+      pendingSync: true,
+    };
+
+    const products = [...state.products];
+    const pIdx = products.findIndex((p) => p.id === line.productId);
+    if (pIdx >= 0) {
+      const p = products[pIdx]!;
+      products[pIdx] = {
+        ...p,
+        stockOnHand: p.stockOnHand + line.quantity,
+        updatedAt: at,
+        version: p.version + 1,
+      };
+    }
+
+    const movement: StockMovement = {
+      id: crypto.randomUUID(),
+      at,
+      productId: line.productId,
+      productName: line.name,
+      deltaBaseUnits: line.quantity,
+      kind: "adjust_other",
+      summary: `Void +${line.quantity}`,
+      refId: voidRec.id,
+      supplierId: null,
+    };
+
+    const sales = [...state.sales];
+    sales[saleIdx] = updatedSale;
+
+    set({
+      sales,
+      products,
+      voidRecords: [voidRec, ...state.voidRecords],
+      stockMovements: mergeStockMovements([movement], state.stockMovements),
+    });
+
+    if (openShift) {
+      set((st) => ({
+        preferences: {
+          ...st.preferences,
+          shifts: (st.preferences.shifts ?? []).map((sh) =>
+            sh.id === openShift.id
+              ? {
+                  ...sh,
+                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - cashReduce),
+                  voidsTotalUgx: (sh.voidsTotalUgx ?? 0) + amount,
+                  refundsUgx: sh.refundsUgx + amount,
+                }
+              : sh,
+          ),
+        },
+      }));
+    }
+
+    pushAudit("sale_void", `Void ${line.name} UGX ${amount.toLocaleString()}`, {
+      voidId: voidRec.id,
+      saleId,
+      productName: line.name,
+      amountUgx: amount,
+      reason,
+      note: note ?? null,
+      actorUserId: actor.userId,
+    });
+    return { ok: true };
+  },
+
+  returnProduct: ({ saleId, productId, quantity, refundAmountUgx, reason, note }) => {
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const qty = Math.max(0, Number(quantity) || 0);
+    const refund = Math.max(0, Math.floor(refundAmountUgx));
+    if (qty <= 0 || refund <= 0) return { ok: false, errorKey: "invalid" };
+
+    const product = state.products.find((p) => p.id === productId);
+    if (!product) return { ok: false, errorKey: "missingProduct" };
+
+    const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    const at = new Date().toISOString();
+
+    const returnRec: ReturnRecord = {
+      id: crypto.randomUUID(),
+      saleId: saleId ?? null,
+      productId,
+      productName: product.name,
+      quantity: qty,
+      refundAmountUgx: refund,
+      reason,
+      note: note?.trim() || undefined,
+      actorUserId: actor.userId,
+      actorName: actor.displayName,
+      shiftId: openShift?.id ?? null,
+      createdAt: at,
+    };
+
+    const products = state.products.map((p) =>
+      p.id === productId
+        ? { ...p, stockOnHand: p.stockOnHand + qty, updatedAt: at, version: p.version + 1 }
+        : p,
+    );
+
+    const movement: StockMovement = {
+      id: crypto.randomUUID(),
+      at,
+      productId,
+      productName: product.name,
+      deltaBaseUnits: qty,
+      kind: "adjust_other",
+      summary: `Return +${qty}`,
+      refId: returnRec.id,
+      supplierId: null,
+    };
+
+    let sales = state.sales;
+    if (saleId) {
+      const saleIdx = sales.findIndex((s) => s.id === saleId);
+      if (saleIdx >= 0) {
+        const sale = sales[saleIdx]!;
+        const totals = reduceSaleTotalsByAmount(sale, refund);
+        const updated: Sale = { ...sale, ...totals, pendingSync: true };
+        sales = [...sales];
+        sales[saleIdx] = updated;
+      }
+    }
+
+    set({
+      products,
+      sales,
+      returnRecords: [returnRec, ...state.returnRecords],
+      stockMovements: mergeStockMovements([movement], state.stockMovements),
+    });
+
+    if (openShift) {
+      set((st) => ({
+        preferences: {
+          ...st.preferences,
+          shifts: (st.preferences.shifts ?? []).map((sh) =>
+            sh.id === openShift.id
+              ? {
+                  ...sh,
+                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - refund),
+                  returnsTotalUgx: (sh.returnsTotalUgx ?? 0) + refund,
+                  refundsUgx: sh.refundsUgx + refund,
+                }
+              : sh,
+          ),
+        },
+      }));
+    }
+
+    pushAudit("sale_return", `Return ${product.name} UGX ${refund.toLocaleString()}`, {
+      returnId: returnRec.id,
+      saleId: saleId ?? null,
+      productName: product.name,
+      quantity: qty,
+      refundUgx: refund,
+      reason,
+      note: note ?? null,
+      actorUserId: actor.userId,
+    });
+    return { ok: true };
+  },
+
+  closeShiftWithCashCount: (countedCashUgx) => {
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
+    if (!open) return { ok: false, errorKey: "invalid" };
+    const expected = shiftExpectedCash(open);
+    const counted = Math.max(0, Math.floor(countedCashUgx));
+    const differenceUgx = counted - expected;
+    const endAt = new Date().toISOString();
+
+    set((st) => ({
+      preferences: {
+        ...st.preferences,
+        shifts: (st.preferences.shifts ?? []).map((sh) =>
+          sh.id === open.id
+            ? {
+                ...sh,
+                endAt,
+                countedCashUgx: counted,
+                cashDifferenceUgx: differenceUgx,
+              }
+            : sh,
+        ),
+      },
+    }));
+
+    pushAudit("shift_close_count", `Shift close · expected UGX ${expected.toLocaleString()} · counted UGX ${counted.toLocaleString()}`, {
+      shiftId: open.id,
+      expectedCashUgx: expected,
+      countedCashUgx: counted,
+      differenceUgx,
+      actorUserId: actor.userId,
+    });
+    return { ok: true, differenceUgx };
   },
 
   quickAddProduct: (input) => {
@@ -1554,6 +1874,8 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         purchases: [],
         supplierPayments: [],
         stockMovements: [],
+        voidRecords: [],
+        returnRecords: [],
       },
       { replaceAudit: true },
     );
@@ -1583,6 +1905,8 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       purchases: [] as Purchase[],
       supplierPayments: [] as SupplierPayment[],
       stockMovements: [] as StockMovement[],
+      voidRecords: [] as VoidRecord[],
+      returnRecords: [] as ReturnRecord[],
     };
     await writeSnapshot(migrated);
     snap = migrated;
@@ -1603,6 +1927,8 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
+      voidRecords: [],
+      returnRecords: [],
     });
     usePosStore.getState().hydrate({
       products,
@@ -1616,6 +1942,8 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       purchases: [],
       supplierPayments: [],
       stockMovements: [],
+      voidRecords: [],
+      returnRecords: [],
     });
     await restoreDraftSaleFromDisk();
     usePosStore.getState().pruneExpiredSales();
@@ -1635,6 +1963,8 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     purchases: (snap as { purchases?: Purchase[] }).purchases ?? [],
     supplierPayments: (snap as { supplierPayments?: SupplierPayment[] }).supplierPayments ?? [],
     stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
+    voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
+    returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
   });
   await restoreDraftSaleFromDisk();
   usePosStore.getState().pruneExpiredSales();

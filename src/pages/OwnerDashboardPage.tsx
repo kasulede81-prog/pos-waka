@@ -53,6 +53,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
+  const voidRecords = usePosStore((s) => s.voidRecords);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const [waCopied, setWaCopied] = useState(false);
@@ -61,6 +62,24 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const yesterdayKey = dateKeyDaysAgoKampala(1);
 
   const today = useMemo(() => sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey), [sales, todayKey]);
+
+  const todayVoids = useMemo(
+    () => voidRecords.filter((v) => dateKeyKampala(v.createdAt) === todayKey),
+    [voidRecords, todayKey],
+  );
+
+  const todayDiscountTotal = useMemo(
+    () => today.reduce((a, s) => a + (s.discountTotalUgx ?? 0), 0),
+    [today],
+  );
+
+  const todayDiscountEvents = useMemo(
+    () =>
+      auditLogs.filter(
+        (e) => e.action === "discount_given" && dateKeyKampala(e.at) === todayKey,
+      ),
+    [auditLogs, todayKey],
+  );
 
   const stats = useMemo(() => {
     const totalSalesUgx = today.reduce((a, s) => a + s.totalUgx, 0);
@@ -403,6 +422,55 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-[1.75rem] border border-rose-100 bg-rose-50/40 p-5 shadow-sm">
+          <h2 className="text-lg font-black text-rose-950">{t(lang, "ownerVoidsToday")}</h2>
+          {todayVoids.length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-rose-900/70">{t(lang, "ownerNoVoidsToday")}</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {todayVoids.slice(0, 8).map((v) => (
+                <li key={v.id} className="rounded-2xl border border-rose-100 bg-white p-3">
+                  <p className="text-xs font-bold uppercase tracking-wide text-rose-700">{t(lang, "voidBtn")}</p>
+                  <p className="mt-1 font-black text-slate-900">
+                    {v.productName} · UGX {v.amountUgx.toLocaleString()}
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">
+                    {tTemplate(lang, "ownerVoidBy", { name: v.actorName ?? v.actorUserId })}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {t(lang, `voidReason_${v.reason}`)} · {new Date(v.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="rounded-[1.75rem] border border-amber-100 bg-amber-50/40 p-5 shadow-sm">
+          <h2 className="text-lg font-black text-amber-950">{t(lang, "ownerDiscountsToday")}</h2>
+          {todayDiscountTotal <= 0 && todayDiscountEvents.length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-amber-900/70">{t(lang, "ownerNoDiscountsToday")}</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {todayDiscountTotal > 0 ? (
+                <p className="rounded-2xl border border-amber-100 bg-white p-3 text-xl font-black text-amber-950">
+                  UGX {todayDiscountTotal.toLocaleString()}
+                </p>
+              ) : null}
+              {todayDiscountEvents.slice(0, 6).map((e) => (
+                <div key={e.id} className="rounded-2xl border border-amber-100 bg-white p-3 text-sm font-semibold text-slate-700">
+                  {e.payloadSummary}
+                  <p className="mt-1 text-xs text-slate-500">
+                    {e.actorName ?? e.actorUserId} · {new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">

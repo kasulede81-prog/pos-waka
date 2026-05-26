@@ -10,34 +10,28 @@ import {
   Truck,
   Users,
   BarChart3,
-  CalendarCheck,
   Settings,
   LayoutDashboard,
   ScrollText,
   UserCog,
-  ShieldCheck,
   Cloud,
   Printer,
   Share2,
   TrendingUp,
+  CreditCard,
+  HelpCircle,
+  User,
 } from "lucide-react";
 import { canSeeOfficeProfit } from "../lib/homeProfit";
-import type { Language } from "../types";
+import type { Language, Permission } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
-
-type Card = {
-  to: string;
-  titleKey: string;
-  titleText?: string;
-  subKey?: string;
-  subText?: string;
-  Icon: typeof Package;
-  perm: boolean;
-};
+import { OfficeNavSection } from "../components/office/OfficeNavSection";
+import { OfficeNavCard } from "../components/office/OfficeNavCard";
+import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -64,173 +58,192 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     };
   }, [email]);
 
-  const cards: Card[] = [
-    {
-      to: "/stock",
-      titleKey: "officeCardStock",
-      subKey: "officeCardStockSub",
-      Icon: Package,
-      perm: hasEffectivePermission(actor.role, "stock.view", snapshot, authMode),
-    },
-    {
-      to: "/restock",
-      titleKey: "officeCardRestock",
-      subKey: "officeCardRestockSub",
-      Icon: Truck,
-      perm: hasEffectivePermission(actor.role, "purchases.record", snapshot, authMode),
-    },
-    {
-      to: "/suppliers",
-      titleKey: "officeCardSuppliers",
-      subKey: "officeCardSuppliersSub",
-      Icon: Users,
-      perm: hasEffectivePermission(actor.role, "suppliers.view", snapshot, authMode),
-    },
-    {
-      to: "/reports",
-      titleKey: "officeCardReports",
-      subKey: "officeCardReportsSub",
-      Icon: BarChart3,
-      perm: hasEffectivePermission(actor.role, "reports.view", snapshot, authMode),
-    },
-    {
-      to: "/office/profit",
-      titleKey: "officeCardProfit",
-      subKey: "officeCardProfitSub",
-      Icon: TrendingUp,
-      perm:
-        canSeeOfficeProfit(actor.role, authMode) &&
-        hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode),
-    },
-    {
-      to: "/close-day",
-      titleKey: "officeCardCloseDay",
-      subKey: "officeCardCloseDaySub",
-      Icon: CalendarCheck,
-      perm: hasEffectivePermission(actor.role, "day.close", snapshot, authMode),
-    },
-    {
-      to: "/settings",
-      titleKey: "officeCardSettings",
-      subKey: "officeCardSettingsSub",
-      Icon: Settings,
-      perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
-    },
-    {
-      to: "/office/hardware",
-      titleKey: "officeCardHardware",
-      subKey: "officeCardHardwareSub",
-      Icon: Printer,
-      perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
-    },
-    {
-      to: "/agent",
-      titleKey: "officeCardAgentPortal",
-      subKey: "officeCardAgentPortalSub",
-      Icon: Share2,
-      perm: showAgentPortal,
-    },
-    {
-      to: "/settings",
-      titleKey: "officeCardBackup",
-      subKey: "officeCardBackupSub",
-      Icon: Cloud,
-      perm: hasEffectivePermission(actor.role, "settings.view", snapshot, authMode),
-    },
-    {
-      to: "/owner",
-      titleKey: "officeCardOwner",
-      subKey: "officeCardOwnerSub",
-      Icon: LayoutDashboard,
-      perm: hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode),
-    },
-    {
-      to: "/owner/activity",
-      titleKey: "officeCardActivity",
-      subKey: "officeCardActivitySub",
-      Icon: ScrollText,
-      perm: hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode),
-    },
-    {
-      to: "/staff-access",
-      titleKey: "officeCardStaffAccess",
-      subKey: "officeCardStaffAccessSub",
-      Icon: UserCog,
-      perm: hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode),
-    },
-    {
-      to: "/internal/waka",
-      titleKey: "internalAdminFooterLink",
-      titleText: "Internal dashboard",
-      subText: "Manage shops, support, plans, and admin tools",
-      Icon: ShieldCheck,
-      perm: showInternalAdmin,
-    },
-  ];
+  const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
 
-  const visible = cards.filter((c) => c.perm);
+  const hasDaily =
+    can("stock.view") || can("purchases.record") || can("suppliers.view") || can("day.close");
+  const hasInsights =
+    can("reports.view") ||
+    (canSeeOfficeProfit(actor.role, authMode) && can("back_office.access")) ||
+    can("owner.dashboard") ||
+    can("owner.activity");
+  const hasShopControl = can("settings.view") || can("settings.shop");
+  const hasData = can("settings.view");
+  const hasHelp = true;
+
+  const empty = !hasDaily && !hasInsights && !hasShopControl && !hasData && !hasHelp;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h1 className="text-3xl font-black text-stone-950">{t(lang, "officeHubTitle")}</h1>
+    <div className="space-y-6 pb-4">
+      <header>
+        <h1 className="text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">{t(lang, "officeHubTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
-      </div>
+      </header>
 
       <OfficePremiumSection lang={lang} />
 
-      {visible.length === 0 ? (
+      {empty ? (
         <p className="rounded-2xl bg-amber-50 px-4 py-4 text-sm font-bold text-amber-950">{t(lang, "officeHubEmpty")}</p>
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {visible.map((c) => (
-            <li key={c.to}>
-              <Link
-                to={c.to}
-                className="flex min-h-[84px] items-center gap-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-waka active:scale-[0.99] motion-reduce:active:scale-100"
-              >
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-waka-50 text-waka-700">
-                  <c.Icon className="h-6 w-6" strokeWidth={2.25} aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-base font-black text-stone-950">{t(lang, c.titleKey)}</span>
-                  {c.titleText ? (
-                    <span className="mt-0.5 block text-xs font-semibold text-stone-500">{c.titleText}</span>
-                  ) : null}
-                  {c.subKey || c.subText ? (
-                    <span className="mt-0.5 block text-xs font-semibold text-stone-500">{c.subText ?? t(lang, c.subKey!)}</span>
-                  ) : null}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-6">
+          {hasDaily ? (
+            <OfficeNavSection title={t(lang, "officeSectionDaily")}>
+              {can("stock.view") ? (
+                <OfficeNavCard
+                  to="/stock"
+                  title={t(lang, "officeCardStock")}
+                  subtitle={t(lang, "officeCardStockSub")}
+                  Icon={Package}
+                />
+              ) : null}
+              {can("purchases.record") ? (
+                <OfficeNavCard
+                  to="/restock"
+                  title={t(lang, "officeCardRestock")}
+                  subtitle={t(lang, "officeCardRestockSub")}
+                  Icon={Truck}
+                />
+              ) : null}
+              {can("suppliers.view") ? (
+                <OfficeNavCard
+                  to="/suppliers"
+                  title={t(lang, "officeCardSuppliers")}
+                  subtitle={t(lang, "officeCardSuppliersSub")}
+                  Icon={Users}
+                />
+              ) : null}
+              {can("day.close") ? <OfficeCloseDayCard lang={lang} /> : null}
+            </OfficeNavSection>
+          ) : null}
+
+          {hasInsights ? (
+            <OfficeNavSection title={t(lang, "officeSectionInsights")}>
+              {can("reports.view") ? (
+                <OfficeNavCard
+                  to="/reports"
+                  title={t(lang, "officeCardReports")}
+                  subtitle={t(lang, "officeCardReportsSub")}
+                  Icon={BarChart3}
+                />
+              ) : null}
+              {canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") ? (
+                <OfficeNavCard
+                  to="/office/profit"
+                  title={t(lang, "officeCardProfit")}
+                  subtitle={t(lang, "officeCardProfitSub")}
+                  Icon={TrendingUp}
+                />
+              ) : null}
+              {can("owner.dashboard") ? (
+                <OfficeNavCard
+                  to="/owner"
+                  title={t(lang, "officeCardOwner")}
+                  subtitle={t(lang, "officeCardOwnerSub")}
+                  Icon={LayoutDashboard}
+                />
+              ) : null}
+              {can("owner.activity") ? (
+                <OfficeNavCard
+                  to="/owner/activity"
+                  title={t(lang, "officeCardActivity")}
+                  subtitle={t(lang, "officeCardActivitySub")}
+                  Icon={ScrollText}
+                />
+              ) : null}
+            </OfficeNavSection>
+          ) : null}
+
+          {hasShopControl ? (
+            <OfficeNavSection title={t(lang, "officeSectionShopControl")}>
+              {can("settings.shop") ? (
+                <OfficeNavCard
+                  to="/staff-access"
+                  title={t(lang, "officeCardStaffAccess")}
+                  subtitle={t(lang, "officeCardStaffAccessSub")}
+                  Icon={UserCog}
+                />
+              ) : null}
+              {can("settings.view") ? (
+                <OfficeNavCard
+                  to="/office/hardware"
+                  title={t(lang, "officeCardHardware")}
+                  subtitle={t(lang, "officeCardHardwareSub")}
+                  Icon={Printer}
+                />
+              ) : null}
+              {can("settings.view") ? (
+                <OfficeNavCard
+                  to="/settings"
+                  title={t(lang, "officeCardAppSettings")}
+                  subtitle={t(lang, "officeCardAppSettingsSub")}
+                  Icon={Settings}
+                />
+              ) : null}
+            </OfficeNavSection>
+          ) : null}
+
+          {hasData ? (
+            <OfficeNavSection title={t(lang, "officeSectionData")}>
+              <OfficeNavCard
+                to="/office/backup"
+                title={t(lang, "officeCardBackup")}
+                subtitle={t(lang, "officeCardBackupSub")}
+                Icon={Cloud}
+              />
+            </OfficeNavSection>
+          ) : null}
+
+          <OfficeNavSection title={t(lang, "officeSectionHelp")}>
+            <OfficeNavCard
+              to="/upgrade"
+              title={t(lang, "officeCardPlans")}
+              subtitle={t(lang, "officeCardPlansSub")}
+              Icon={CreditCard}
+            />
+            <OfficeNavCard
+              to="/support"
+              title={t(lang, "officeCardSupport")}
+              subtitle={t(lang, "officeCardSupportSub")}
+              Icon={HelpCircle}
+            />
+            <OfficeNavCard
+              to="/office/account"
+              title={t(lang, "officeCardAccount")}
+              subtitle={t(lang, "officeCardAccountSub")}
+              Icon={User}
+            />
+            {showAgentPortal ? (
+              <OfficeNavCard
+                to="/agent"
+                title={t(lang, "officeCardAgentPortal")}
+                subtitle={t(lang, "officeCardAgentPortalSub")}
+                Icon={Share2}
+              />
+            ) : null}
+          </OfficeNavSection>
+        </div>
       )}
 
-      <div className="flex flex-col gap-3 border-t border-stone-100 pt-6">
-        <Link to="/support" className="inline-flex min-h-[48px] items-center text-base font-black text-waka-800 underline">
-          {t(lang, "supportOfficeFooter")} →
-        </Link>
-        {showInternalAdmin ? (
-          <Link
-            to="/internal/waka"
-            className="inline-flex min-h-[44px] items-center text-sm font-bold text-stone-500 underline decoration-stone-300"
-          >
-            {t(lang, "internalAdminFooterLink")}
-          </Link>
-        ) : null}
-        {isInternalAdminPreviewEnabled() ? (
-          <Link
-            to={internalAdminPreviewHref("/internal/waka")}
-            className="inline-flex min-h-[44px] items-center text-sm font-bold text-orange-700 underline decoration-orange-300"
-          >
-            {t(lang, "internalAdminPreviewOfficeLink")}
-          </Link>
-        ) : null}
-        <Link to="/" className="inline-flex min-h-[48px] items-center rounded-2xl font-bold text-waka-800 underline">
-          ← {t(lang, "officeBackHome")}
-        </Link>
-      </div>
+      {(showInternalAdmin || isInternalAdminPreviewEnabled()) && (
+        <div className="border-t border-stone-100 pt-4">
+          {showInternalAdmin ? (
+            <Link
+              to="/internal/waka"
+              className="inline-flex min-h-[40px] items-center text-xs font-bold text-stone-500 underline decoration-stone-300"
+            >
+              {t(lang, "internalAdminFooterLink")}
+            </Link>
+          ) : null}
+          {isInternalAdminPreviewEnabled() ? (
+            <Link
+              to={internalAdminPreviewHref("/internal/waka")}
+              className="ml-4 inline-flex min-h-[40px] items-center text-xs font-bold text-orange-700 underline"
+            >
+              {t(lang, "internalAdminPreviewOfficeLink")}
+            </Link>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

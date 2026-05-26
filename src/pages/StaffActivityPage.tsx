@@ -68,6 +68,17 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
                     <p className="mt-2 text-sm font-semibold text-slate-800">
                       UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
                     </p>
+                    {s.cashDifferenceUgx != null ? (
+                      <p
+                        className={`mt-1 text-xs font-bold ${
+                          s.cashDifferenceUgx === 0 ? "text-emerald-700" : s.cashDifferenceUgx > 0 ? "text-amber-800" : "text-rose-700"
+                        }`}
+                      >
+                        {t(lang, "shiftCloseExpected")}: UGX {(s.countedCashUgx ?? 0).toLocaleString()} ·{" "}
+                        {s.cashDifferenceUgx >= 0 ? "+" : ""}
+                        {s.cashDifferenceUgx.toLocaleString()}
+                      </p>
+                    ) : null}
                   </li>
                 ))}
               </ul>
