@@ -1,81 +1,129 @@
-# Google Sign-In — Waka POS (GIS popup only)
+# Google Sign-In — Waka POS
 
-## Final flow (implemented)
+## Two flows (web vs Android)
 
-```
-User → Continue with Google (Waka button)
-     → Google Identity Services popup (Waka POS name + logo)
-     → ID token returned in browser (JavaScript callback)
-     → supabase.auth.signInWithIdToken({ provider: 'google', token })
-     → Supabase session (no browser redirect to supabase.co)
-```
+| | **Website** (`pos.waka.ug`) | **Android app** (Capacitor) |
+|---|---------------------------|---------------------------|
+| How it signs in | Google popup (GIS) → `signInWithIdToken` | System browser → **Supabase OAuth** → back to app |
+| Google screen branding | Waka POS / waka.ug (your consent screen) | Same consent screen once redirect URIs are fixed |
+| **Authorized JavaScript origins** | Required (`pos.waka.ug`, etc.) | Optional (`https://localhost`) |
+| **Authorized redirect URIs** | Not used for GIS | **Required** — Supabase callback (see below) |
 
-**Not used:** `signInWithOAuth`, `redirectTo` for Google, PKCE redirect to Supabase, or `https://*.supabase.co/auth/v1/callback` in Google Cloud.
+Web works today because GIS only checks **JavaScript origins**, not redirect URIs.
 
----
-
-## Google Cloud setup
-
-### OAuth consent screen
-
-| Field | Value |
-|-------|--------|
-| App name | **Waka POS** |
-| Logo | Waka Technologies logo |
-| Home | `https://waka.ug` |
-| Privacy | `https://waka.ug/privacy` |
-| Terms | `https://waka.ug/terms` |
-
-### OAuth 2.0 Client ID → **Web application**
-
-| Setting | Value |
-|---------|--------|
-| **Authorized JavaScript origins** | `https://pos.waka.ug` |
-| | `https://waka.ug` |
-| | `http://localhost:5173` (local dev only) |
-| **Authorized redirect URIs** | **Leave empty** for GIS popup — do **not** add `*.supabase.co/auth/v1/callback` |
-
-Copy the **Client ID** → `VITE_GOOGLE_OAUTH_CLIENT_ID`.
-
-### Supabase
-
-**Authentication → Providers → Google**
-
-- Enable Google provider (client secret can stay for dashboard compatibility).
-- **Authorized Client IDs:** add the **same Web Client ID** (required for `signInWithIdToken`).
-
-**Authentication → URL configuration**
-
-- Site URL: `https://pos.waka.ug`
-- Redirect URLs: still needed for **email** and **password reset**, not for Google GIS login:
-  - `https://pos.waka.ug/auth/callback`
-  - `https://pos.waka.ug/auth/recovery`
-  - `https://waka.ug/auth/callback` (if marketing host serves the same app)
-  - `https://waka.ug/auth/recovery`
+Android failed with **`redirect_uri_mismatch`** because **redirect URIs were empty** on your Web client — Google never saw an allowed callback for the Supabase OAuth step.
 
 ---
 
-## Production environment (Vercel)
+## Google Cloud — same Web client for both
+
+Use one **OAuth 2.0 Client ID → Web application** (the one in Supabase and `VITE_GOOGLE_OAUTH_CLIENT_ID`).
+
+### OAuth consent screen (Branding)
+
+You already have this — it is why the web login shows **Waka POS** / **waka.ug**:
+
+| Field | Your setup |
+|-------|------------|
+| App name | Waka POS |
+| Home | `https://pos.waka.ug` or `https://waka.ug` |
+| Privacy / Terms | `https://pos.waka.ug/privacy`, `/terms` |
+| Authorized domains | `waka.ug`, etc. |
+
+“Branding not shown” in Console only affects verification status for **external** users; **Testing** users (added under Audience → Test users) can still sign in.
+
+### Web client — Authorized JavaScript origins
+
+Keep what you have, and add the app origin:
+
+| URI | Used for |
+|-----|----------|
+| `https://pos.waka.ug` | Production web |
+| `https://waka.ug` | Marketing / alternate host |
+| `http://localhost:5173` | Local dev |
+| `https://localhost` | Capacitor Android/iOS WebView origin |
+
+### Web client — Authorized redirect URIs (fix Android)
+
+Click **+ Add URI** and add **exactly** (replace project ref if yours differs):
+
+```
+https://ljaedextsenbkxzzgxcg.supabase.co/auth/v1/callback
+```
+
+To find your ref: Supabase project → **Settings → API** → Project URL  
+(`https://XXXX.supabase.co` → use `https://XXXX.supabase.co/auth/v1/callback`).
+
+If you use a **custom Supabase Auth domain** (e.g. `auth.waka.ug`), also add:
+
+```
+https://YOUR_AUTH_DOMAIN/auth/v1/callback
+```
+
+You do **not** need `https://localhost/...` in Google redirect URIs for Android — that URL is only in **Supabase** redirect allowlist (below).
+
+### Show **pos.waka.ug** on Google (“Continue to …”) on Android
+
+Google shows the **OAuth redirect host** (`redirect_uri`). To show `pos.waka.ug` instead of `*.supabase.co`:
+
+1. **Deploy** the app so `https://pos.waka.ug` proxies Supabase Auth (included in repo `vercel.json`):
+
+   `/auth/v1/*` → `https://ljaedextsenbkxzzgxcg.supabase.co/auth/v1/*`
+
+   If your Supabase **project ref** is different from `ljaedextsenbkxzzgxcg`, change the destination URL in **`vercel.json`** to match your project.
+
+2. In **Authorized redirect URIs**, add:
+
+   ```
+   https://pos.waka.ug/auth/v1/callback
+   ```
+
+   Keep the **Supabase** callback URI as well (`https://<ref>.supabase.co/auth/v1/callback`) so nothing breaks during rollout.
+
+The Android app automatically rewrites the OAuth authorize URL to use `https://pos.waka.ug/auth/v1/...` whenever `VITE_APP_URL=https://pos.waka.ug` (or production default canonical).
+
+**Save** the client. Wait 1–3 minutes before testing on the phone.
+
+---
+
+## Supabase
+
+### Authentication → Providers → Google
+
+- **Enabled**
+- **Client ID** = same Web client ID as `VITE_GOOGLE_OAUTH_CLIENT_ID`
+- **Client secret** = from the same Google Web client (Supabase OAuth needs the secret; GIS web login does not)
+
+**Authorized Client IDs** (for web GIS): same Web Client ID.
+
+### Authentication → URL configuration
+
+**Site URL:** `https://pos.waka.ug`
+
+**Redirect URLs** (allow app return after Supabase finishes Google):
+
+```
+https://pos.waka.ug/auth/callback
+https://pos.waka.ug/auth/recovery
+https://waka.ug/auth/callback
+https://waka.ug/auth/recovery
+https://localhost/auth/callback
+https://localhost/auth/recovery
+http://localhost:5173/auth/callback
+```
+
+---
+
+## Environment
 
 ```env
 VITE_APP_URL=https://pos.waka.ug
-VITE_GOOGLE_OAUTH_CLIENT_ID=xxxx.apps.googleusercontent.com
-VITE_SUPABASE_URL=https://YOUR_REF.supabase.co
+VITE_GOOGLE_OAUTH_CLIENT_ID=1069323619932-....apps.googleusercontent.com
+VITE_SUPABASE_URL=https://ljaedextsenbkxzzgxcg.supabase.co
 VITE_SUPABASE_ANON_KEY=...
 ```
 
-Redeploy after setting `VITE_GOOGLE_OAUTH_CLIENT_ID`. Without it, the Google button is hidden and a config message is shown.
-
----
-
-## Code map
-
-| File | Role |
-|------|------|
-| `src/lib/googleIdentity.ts` | GIS script, `ux_mode: 'popup'`, `requestGoogleIdToken()` |
-| `src/hooks/useAuth.ts` | `signInWithIdToken` only for Google |
-| `src/components/auth/GoogleSignInButton.tsx` | Waka-branded trigger |
-| `src/pages/LoginPage.tsx` / `RegisterPage.tsx` | Google button when client ID is set |
+After any env change: `npm run cap:build` and reinstall the Android app.
 
 ---
 
@@ -83,18 +131,21 @@ Redeploy after setting `VITE_GOOGLE_OAUTH_CLIENT_ID`. Without it, the Google but
 
 | Symptom | Fix |
 |---------|-----|
-| Google button missing / amber warning | Set `VITE_GOOGLE_OAUTH_CLIENT_ID` and redeploy |
-| Pop-up blocked | Allow pop-ups for `pos.waka.ug` |
-| `signInWithIdToken` error | Add Client ID under Supabase → Google → Authorized Client IDs |
-| Still need supabase.co in Google redirect URIs | Old build or old tab — hard refresh; confirm env var in Vercel **Production** |
-| GIS error `origin_mismatch` | Add exact origin to Google **JavaScript origins** |
+| Web works, Android `redirect_uri_mismatch` | Add `https://<project-ref>.supabase.co/auth/v1/callback` under **Authorized redirect URIs** on the Web client |
+| `origin_mismatch` on web | Add exact site to **JavaScript origins** |
+| `signInWithIdToken` error on web | Supabase → Google → **Authorized Client IDs** = Web Client ID |
+| Android opens browser but app stays logged out | Supabase redirect URLs must include `https://localhost/auth/callback` |
+| Google still shows *.supabase.co on Android | Deploy `vercel.json` proxy on `pos.waka.ug`; add `https://pos.waka.ug/auth/v1/callback` to Google redirect URIs; rebuild app |
+| Pop-up blocked on web | Allow pop-ups for `pos.waka.ug` |
 
 ---
 
-## Verify (no Supabase OAuth redirect)
+## Code map
 
-1. Open DevTools → Network.
-2. Click **Continue with Google**.
-3. Confirm there is **no** navigation to `supabase.co/auth/v1/authorize`.
-4. A **popup** from `accounts.google.com` should appear.
-5. After choosing an account, you stay on `pos.waka.ug` with a session (no full-page redirect to Supabase).
+| File | Role |
+|------|------|
+| `src/lib/googleIdentity.ts` | Web: GIS popup + `signInWithIdToken` |
+| `src/lib/nativeOAuthBrandedProxy.ts` | Rewrite Android OAuth URL → `pos.waka.ug/auth/v1/...` (Google shows your domain) |
+| `src/lib/nativeGoogleAuth.ts` | Android: browser OAuth + deep link |
+| `src/hooks/useAuth.ts` | Picks web vs native Google flow |
+| `docs/ANDROID.md` | Full Android build + auth notes |

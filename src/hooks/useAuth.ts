@@ -1,7 +1,11 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl } from "../lib/authConfig";
+import { Capacitor } from "@capacitor/core";
 import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
+import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
+import { hydrateAccountFromCloud } from "../lib/postAuthCloudHydrate";
+import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType } from "../types";
@@ -103,6 +107,16 @@ export function useAuth() {
     if (!next?.user || !supabase) return;
     if (bootstrappedUserIds[next.user.id] || isWorkspaceBootstrapped(next.user.id)) {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+      void hydrateAccountFromCloud({ forcePull: Capacitor.isNativePlatform() });
+      return;
+    }
+
+    const existing = await resolvePrimaryOrganizationForUser(next.user.id);
+    if (existing?.shopId) {
+      setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+      markWorkspaceBootstrapped(next.user.id);
+      await tryApplyPendingReferral(next);
+      void hydrateAccountFromCloud({ forcePull: true });
       return;
     }
 
@@ -163,6 +177,7 @@ export function useAuth() {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
       markWorkspaceBootstrapped(next.user.id);
       await tryApplyPendingReferral(next);
+      void hydrateAccountFromCloud({ forcePull: Capacitor.isNativePlatform() });
     } catch (e) {
       console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
       throw new Error("Could not finish creating your shop. Please try again.");
@@ -237,6 +252,17 @@ export function useAuth() {
       throw new Error("Supabase is not configured.");
     }
 
+    if (Capacitor.isNativePlatform()) {
+      authDevLog("log", "Google Sign-In: native browser OAuth → Supabase callback");
+      await signInWithGoogleNative();
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        throw new Error("Sign-in did not complete. Please try again.");
+      }
+      await hydrateAccountFromCloud({ forcePull: true });
+      return;
+    }
+
     const googleClientId = requireGoogleOAuthClientId();
     authDevLog("log", "Google Sign-In: GIS popup → signInWithIdToken (no Supabase OAuth redirect)");
 
@@ -254,6 +280,7 @@ export function useAuth() {
       reportAuthIssue("google_oauth_failed", { status: error.status ?? 0 });
       throw new Error(formatAuthError(error));
     }
+    await hydrateAccountFromCloud();
   }, []);
 
   const signUp = useCallback(
