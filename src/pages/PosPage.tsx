@@ -6,6 +6,8 @@ import type { Language, LineInputMode, Product } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
+import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
+import { useVisualViewportInset } from "../hooks/useVisualViewportInset";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
@@ -579,18 +581,14 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
+  const keyboardInset = useVisualViewportInset();
 
   if (!hasPermission(actor.role, "pos.sell")) {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <div
-      className={clsx(
-        "space-y-3",
-        draftLines.length > 0 && saleCheckoutMinimized && "pb-[calc(7.5rem+env(safe-area-inset-bottom,0px))]",
-      )}
-    >
+    <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-950">{t(lang, "sellTitle")}</h2>
@@ -729,7 +727,7 @@ export function PosPage({ lang }: { lang: Language }) {
           )}
         </section>
       ) : showShelfBoxes ? (
-        <section className="space-y-3 pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+        <section className="space-y-3">
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
@@ -786,7 +784,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
         </section>
       ) : (
-        <section className="space-y-2 pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+        <section className="space-y-2">
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
             <button
               type="button"
@@ -1044,7 +1042,7 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {draftLines.length > 0 && saleCheckoutMinimized ? (
-        <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom\,0px))] left-0 right-0 z-[45] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[45] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "totalLabel")}</p>
@@ -1063,7 +1061,8 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {sheetOpen && selected && (
         <div
-          className="fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          className="fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
+          style={{ paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)" }}
           role="dialog"
           aria-modal
           aria-labelledby="pos-add-sheet-title"
@@ -1084,7 +1083,8 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
             <span className="min-h-[48px] w-[5.5rem] shrink-0" aria-hidden />
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 pb-6">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 pb-4 [-webkit-overflow-scrolling:touch]">
             {(moneyPresets.length > 0 || qtyPresets.length > 0) && (
               <div className="space-y-3">
                 <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">{t(lang, "tapQuickAmount")}</p>
@@ -1167,15 +1167,20 @@ export function PosPage({ lang }: { lang: Language }) {
                   <Numpad allowDecimal={inputMode === "quantity"} onDigit={appendDigit} onClear={() => setDisplay("")} />
                 </div>
 
+              </>
+            )}
+            </div>
+            <div className="shrink-0 border-t border-slate-100 bg-white p-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+              {quickSell && !showAdvanced ? null : (
                 <button
                   type="button"
                   onClick={applyDraftInput}
-                  className="mt-5 min-h-[56px] w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white active:bg-slate-800"
+                  className="min-h-[56px] w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white active:bg-slate-800"
                 >
                   {t(lang, "addToSale")}
                 </button>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1256,7 +1261,7 @@ export function PosPage({ lang }: { lang: Language }) {
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 
       {toast && (
-        <div className="fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom,0px))] left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
+        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
           {toast}
         </div>
       )}
@@ -1292,6 +1297,8 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         </div>
       ) : null}
+
+      <PosPageScrollSpacer minimizedCheckout={draftLines.length > 0 && saleCheckoutMinimized} />
     </div>
   );
 }

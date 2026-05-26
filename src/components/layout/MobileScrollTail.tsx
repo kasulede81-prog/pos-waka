@@ -10,13 +10,17 @@ export function MobileScrollTail() {
   const hideFab =
     pathname.startsWith("/pos") || pathname.startsWith("/internal/") || isBackOfficePath(pathname);
 
+  const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
+
   return (
     <div
       aria-hidden
       className={
         hideFab
-          ? "shrink-0 lg:hidden h-[calc(8.5rem+env(safe-area-inset-bottom,0px))]"
-          : "shrink-0 lg:hidden h-[calc(13rem+env(safe-area-inset-bottom,0px))]"
+          ? isPos
+            ? "h-[var(--waka-scroll-tail-pos)] shrink-0 lg:hidden"
+            : "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden"
+          : "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden"
       }
     />
   );

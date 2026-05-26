@@ -7,7 +7,7 @@ import { shelfIconFor } from "../../lib/productCategories";
 
 const COLS = 2;
 const ROW_ESTIMATE = 132;
-const BOTTOM_SCROLL_GUTTER = 160;
+const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
   products: Product[];
@@ -25,16 +25,15 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
-    getScrollElement: () => parentRef.current,
+    getScrollElement: () =>
+      parentRef.current?.closest<HTMLElement>(".scroll-main-chrome") ??
+      document.querySelector<HTMLElement>(".scroll-main-chrome"),
     estimateSize: () => ROW_ESTIMATE,
     overscan: 5,
   });
 
   return (
-    <div
-      ref={parentRef}
-      className="max-h-[min(540px,calc(100dvh-270px))] overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]"
-    >
+    <div ref={parentRef} className="w-full">
       <div
         className="relative w-full"
         style={{

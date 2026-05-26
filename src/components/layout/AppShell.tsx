@@ -297,7 +297,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </ul>
           </nav>
           <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col lg:pb-0">
-            <div className="scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
+            <div
+              className={`scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] ${
+                location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : ""
+              }`}
+            >
               <BackOfficeRouteGuard lang={lang}>
                 <Outlet />
               </BackOfficeRouteGuard>

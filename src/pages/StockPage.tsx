@@ -1,11 +1,10 @@
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { buildRestockSuggestions } from "../lib/restockSuggestions";
-import type { Language, Product, SellingMode } from "../types";
+import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { formatProductPriceLabel } from "../store/usePosStore";
-import { formatStockLabel, isLowStock } from "../lib/sellingEngine";
+import { isLowStock } from "../lib/sellingEngine";
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -16,7 +15,16 @@ import { StockProductEditModal } from "../components/StockProductEditModal";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard } from "../components/stock/SimpleAddProductWizard";
+import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
+import { StockListToolbar } from "../components/stock/StockListToolbar";
+import { StockProductCard } from "../components/stock/StockProductCard";
 import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
+import {
+  costPerUnitFromPackAndStock,
+  resolveQuickAddSellUnit,
+  sellUnitPresetFromBaseUnit,
+  sellingModeFromSellUnit,
+} from "../lib/quickAddProductForm";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
@@ -24,12 +32,6 @@ import {
   normalizedCategoryKey,
   productMatchesCategoryFilter,
 } from "../lib/productCategories";
-
-function sellingModeFromSellUnit(unit: string): SellingMode {
-  const s = unit.toLowerCase();
-  if (/\b(kg|kilo|gram|gramme|litre|liter)\b/.test(s) || /^g$|^l$/.test(s)) return "weighted";
-  return "unit";
-}
 
 const UNIT_PRESETS: Record<string, string[]> = {
   kiosk_duka: ["piece", "packet", "bottle", "crate"],
@@ -43,8 +45,6 @@ const UNIT_PRESETS: Record<string, string[]> = {
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
 export function StockPage({ lang }: { lang: Language }) {
-  const stockQuickCategoryListId = useId();
-  const stockModalCategoryListId = useId();
   const actor = useSessionActor();
   const { snapshot } = useSubscription();
   const canRemove = hasPermission(actor.role, "products.remove");
@@ -117,33 +117,18 @@ export function StockPage({ lang }: { lang: Language }) {
   const [qaPrice, setQaPrice] = useState("");
   const [qaStock, setQaStock] = useState("");
   const [qaCategory, setQaCategory] = useState("");
-  const [qaBoughtAs, setQaBoughtAs] = useState("");
-  const [qaBuyPackPrice, setQaBuyPackPrice] = useState("");
-  const [qaPiecesInside, setQaPiecesInside] = useState("");
-  const [qaSupplierName, setQaSupplierName] = useState("");
-
-  const [mainName, setMainName] = useState("");
-  const [mainCategory, setMainCategory] = useState("");
-  const [mainSellUnitPreset, setMainSellUnitPreset] = useState("piece");
-  const [mainSellUnitCustom, setMainSellUnitCustom] = useState("");
-  const [mainPrice, setMainPrice] = useState("");
-  const [mainStock, setMainStock] = useState("");
-  const [boughtAs, setBoughtAs] = useState("");
-  const [buyPackPrice, setBuyPackPrice] = useState("");
-  const [piecesInside, setPiecesInside] = useState("");
-  const [supplierName, setSupplierName] = useState("");
+  const [qaBuyPackTotal, setQaBuyPackTotal] = useState("");
 
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
+  const [showRestockIdeas, setShowRestockIdeas] = useState(false);
 
 
   const navigate = useNavigate();
   const [listQuery, setListQuery] = useState("");
   const [listSort, setListSort] = useState<"name_az" | "name_za" | "stock_low" | "updated">("name_az");
   const [listFilter, setListFilter] = useState<"all" | "low">("all");
-  const [actionTick, setActionTick] = useState(0);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
-  const [addProductFormOpen, setAddProductFormOpen] = useState(() => products.length === 0);
   const [stockCategoryFilter, setStockCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
   const [stockGroupByCategoryOverride, setStockGroupByCategoryOverride] = useState<boolean | null>(null);
 
@@ -152,9 +137,6 @@ export function StockPage({ lang }: { lang: Language }) {
     if (!n) return null;
     return inferFromProductName(n);
   }, [qaName]);
-
-  const resolveSellUnit = (preset: string, custom: string) =>
-    (preset === "custom" ? custom : preset).trim() || "piece";
 
   const businessUnitOptions = useMemo(() => {
     const typed = (preferences.businessType ?? "default") as string;
@@ -191,9 +173,7 @@ export function StockPage({ lang }: { lang: Language }) {
     });
   }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
 
-  useEffect(() => {
-    if (products.length > 0) setAddProductFormOpen(false);
-  }, [products.length]);
+  const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
 
   const categoryGroups = useMemo(() => {
     if (!groupByCategory) return null;
@@ -235,27 +215,21 @@ export function StockPage({ lang }: { lang: Language }) {
     if (freeProductLimitReached) return;
     const price = Math.floor(Number(qaPrice) || 0);
     if (price < 0) return;
-    const sellUnit = resolveSellUnit(qaUnitPreset, qaUnitCustom);
+    const sellUnit = resolveQuickAddSellUnit(qaUnitPreset, qaUnitCustom);
     const sellingMode = sellingModeFromSellUnit(sellUnit);
-    const pack = Math.floor(Number(qaBuyPackPrice.replace(/\D/g, "")) || 0);
-    const pieces = Math.floor(Number(qaPiecesInside.replace(/[^\d.]/g, "")) || 0);
-    const hasTrack = qaBoughtAs.trim().length > 0 && pack > 0 && pieces > 0;
-    const costPerSell = hasTrack ? Math.floor(pack / pieces) : undefined;
-    const buyingUnitLabel = hasTrack
-      ? qaSupplierName.trim()
-        ? `${qaBoughtAs.trim()} · ${qaSupplierName.trim()}`
-        : qaBoughtAs.trim()
-      : undefined;
+    const stockQty = Number(qaStock.replace(/[^\d.]/g, "")) || 0;
+    const packTotal = Math.floor(Number(qaBuyPackTotal.replace(/\D/g, "")) || 0);
+    const costPerSell = costPerUnitFromPackAndStock(packTotal, stockQty);
     const r = quickAddProduct({
       name: qaName,
       priceUgx: price,
-      stockQty: Number(qaStock) || 0,
+      stockQty,
       category: qaCategory.trim() || t(lang, "generalCategory"),
       baseUnit: sellUnit,
       sellingMode,
-      buyingUnit: hasTrack ? buyingUnitLabel! : undefined,
-      conversionRate: hasTrack ? pieces : undefined,
-      costPricePerUnitUgx: hasTrack ? costPerSell! : undefined,
+      buyingUnit: costPerSell !== undefined ? "pack" : undefined,
+      conversionRate: costPerSell !== undefined ? stockQty : undefined,
+      costPricePerUnitUgx: costPerSell,
     });
     if (!r.ok) return;
     setQaName("");
@@ -264,52 +238,13 @@ export function StockPage({ lang }: { lang: Language }) {
     setQaPrice("");
     setQaStock("");
     setQaCategory("");
-    setQaBoughtAs("");
-    setQaBuyPackPrice("");
-    setQaPiecesInside("");
-    setQaSupplierName("");
+    setQaBuyPackTotal("");
     setQuickOpen(false);
   };
 
-  const submitMainQuick = (e: FormEvent) => {
-    e.preventDefault();
+  const openAddProductSheet = () => {
     if (freeProductLimitReached) return;
-    const price = Math.floor(Number(mainPrice.replace(/\D/g, "")) || 0);
-    if (price <= 0) return;
-    const sellUnit = resolveSellUnit(mainSellUnitPreset, mainSellUnitCustom);
-    const sellingMode = sellingModeFromSellUnit(sellUnit);
-    const pack = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
-    const pieces = Math.floor(Number(piecesInside.replace(/[^\d.]/g, "")) || 0);
-    const hasTrack = boughtAs.trim().length > 0 && pack > 0 && pieces > 0;
-    const costPerSell = hasTrack ? Math.floor(pack / pieces) : undefined;
-    const buyingUnitLabel = hasTrack
-      ? supplierName.trim()
-        ? `${boughtAs.trim()} · ${supplierName.trim()}`
-        : boughtAs.trim()
-      : undefined;
-
-    const r = quickAddProduct({
-      name: mainName.trim(),
-      priceUgx: price,
-      stockQty: Number(mainStock.replace(/[^\d.]/g, "")) || 0,
-      category: mainCategory.trim() || t(lang, "generalCategory"),
-      baseUnit: sellUnit,
-      sellingMode,
-      buyingUnit: hasTrack ? buyingUnitLabel! : undefined,
-      conversionRate: hasTrack ? pieces : undefined,
-      costPricePerUnitUgx: hasTrack ? costPerSell! : undefined,
-    });
-    if (!r.ok) return;
-    setMainName("");
-    setMainCategory("");
-    setMainSellUnitPreset("piece");
-    setMainSellUnitCustom("");
-    setMainPrice("");
-    setMainStock("");
-    setBoughtAs("");
-    setBuyPackPrice("");
-    setPiecesInside("");
-    setSupplierName("");
+    setQuickOpen(true);
   };
 
   const applyStarter = () => {
@@ -356,22 +291,19 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const openDuplicateToQuick = (p: Product) => {
     if (freeProductLimitReached) return;
-    setAddProductFormOpen(true);
-    setMainName(`${p.name} (2)`);
-    setMainCategory((p.category ?? "").trim());
-    setMainSellUnitPreset(businessUnitOptions.includes(p.baseUnit) ? p.baseUnit : "custom");
-    setMainSellUnitCustom(businessUnitOptions.includes(p.baseUnit) ? "" : p.baseUnit);
-    setMainPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
-    setMainStock(String(p.stockOnHand));
-    setBoughtAs(p.buyingUnit?.replace(/\s·\s.*$/, "") ?? "");
-    setSupplierName(p.buyingUnit && p.buyingUnit.includes(" · ") ? p.buyingUnit.split(" · ").slice(1).join(" · ") : "");
-    setBuyPackPrice(
-      p.conversionRate && p.conversionRate > 0
-        ? String(Math.floor(p.costPricePerUnitUgx * p.conversionRate))
+    setQaName(`${p.name} (2)`);
+    setQaCategory((p.category ?? "").trim());
+    const preset = sellUnitPresetFromBaseUnit(p.baseUnit);
+    setQaUnitPreset(preset);
+    setQaUnitCustom(preset === "other" ? p.baseUnit : "");
+    setQaPrice(String(Math.floor(p.sellingPricePerUnitUgx)));
+    setQaStock(String(p.stockOnHand));
+    setQaBuyPackTotal(
+      p.stockOnHand > 0 && p.costPricePerUnitUgx > 0
+        ? String(Math.floor(p.costPricePerUnitUgx * p.stockOnHand))
         : "",
     );
-    setPiecesInside(p.conversionRate && p.conversionRate > 0 ? String(p.conversionRate) : "");
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setQuickOpen(true);
   };
 
   const confirmRemove = (id: string) => {
@@ -381,7 +313,6 @@ export function StockPage({ lang }: { lang: Language }) {
   };
 
   const handleRowAction = (p: Product, action: string) => {
-    setActionTick((x) => x + 1);
     if (isProductPlanLocked(p.id, lockedIds)) {
       setProductLockedOpen(true);
       return;
@@ -419,61 +350,35 @@ export function StockPage({ lang }: { lang: Language }) {
     }
   };
 
-  const renderStockRow = (p: Product) => {
-    const locked = isProductPlanLocked(p.id, lockedIds);
-    return (
-    <li
-      key={p.id}
-      className={`flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5 ${locked ? "opacity-50" : ""}`}
-    >
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-base font-black text-slate-900">
-          {p.name}
-          {locked ? (
-            <span className="ml-2 rounded-full bg-stone-800 px-2 py-0.5 text-[10px] font-black uppercase text-white">
-              {t(lang, "productLockedBadge")}
-            </span>
-          ) : null}
-        </p>
-        <p className="truncate text-xs text-slate-500">
-          {normalizedCategoryKey(p) ? p.category.trim() : t(lang, "uncategorized")} · {t(lang, `mode_${p.sellingMode}`)} ·{" "}
-          {formatProductPriceLabel(p)}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-        <p className="text-right text-sm font-black text-slate-800">{formatStockLabel(p)}</p>
-        <select
-          key={`${p.id}-${actionTick}`}
-          defaultValue=""
-          aria-label={t(lang, "stockRowActionLabel")}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v) handleRowAction(p, v);
-          }}
-          className="min-h-[44px] min-w-[10.5rem] rounded-xl border-2 border-slate-200 bg-white px-2 py-2 text-xs font-black text-slate-900 sm:min-w-[11rem] sm:text-sm"
-        >
-          <option value="">{t(lang, "stockRowActionPlaceholder")}</option>
-          {canAdd ? <option value="edit">{t(lang, "stockActionEditDetails")}</option> : null}
-          {canAdjust ? <option value="add10">{t(lang, "stockActionAdd10")}</option> : null}
-          {canAdjust ? <option value="add1">{t(lang, "stockActionAdd1")}</option> : null}
-          {canAdjust ? <option value="sold1">{t(lang, "stockActionSold1")}</option> : null}
-          {canAdjust ? <option value="damaged1">{t(lang, "stockActionDamaged1")}</option> : null}
-          {canAdjust ? <option value="home1">{t(lang, "stockActionHome1")}</option> : null}
-          {canAdd ? <option value="duplicate">{t(lang, "stockActionDuplicate")}</option> : null}
-          {canRemove ? <option value="remove">{t(lang, "stockActionRemove")}</option> : null}
-          {canSell ? <option value="sell">{t(lang, "stockActionOpenSell")}</option> : null}
-        </select>
-      </div>
-    </li>
-    );
-  };
-
   return (
-    <div className="space-y-6 pb-4">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900">{t(lang, "stockTitle")}</h1>
-        <p className="mt-1 text-lg text-slate-600">{t(lang, "stockChangeTitle")}</p>
-      </div>
+    <div className="space-y-5 pb-4">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{t(lang, "stockTitle")}</h1>
+          <p className="mt-1 text-base text-slate-600">{t(lang, "stockPageSub")}</p>
+          {unlockedProducts.length > 0 ? (
+            <p className="mt-2 text-sm font-semibold text-slate-500">
+              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(products.length) })}
+              {lowStockCount > 0 ? (
+                <span className="text-rose-700">
+                  {" "}
+                  · {tTemplate(lang, "stockLowStockCount", { count: String(lowStockCount) })}
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+        </div>
+        {canAdd ? (
+          <button
+            type="button"
+            disabled={freeProductLimitReached}
+            onClick={openAddProductSheet}
+            className="w-full shrink-0 rounded-2xl bg-waka-600 px-5 py-3.5 text-base font-black text-white shadow-md active:bg-waka-700 sm:w-auto sm:min-w-[10rem]"
+          >
+            {t(lang, "stockAddProductBtn")}
+          </button>
+        ) : null}
+      </header>
 
       {freeProductLimitReached ? (
         <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
@@ -503,255 +408,49 @@ export function StockPage({ lang }: { lang: Language }) {
       ) : null}
 
       {(canRestock || canSuppliers) && products.length > 0 ? (
-        <section className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-sm">
-          <p className="text-sm font-black uppercase tracking-wide text-waka-900">{t(lang, "stockRestockLinks")}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {canRestock ? (
-              <Link
-                to="/restock"
-                className="rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm"
-              >
-                {t(lang, "stockGoRestock")}
-              </Link>
-            ) : null}
-            {canSuppliers ? (
-              <Link
-                to="/suppliers"
-                className="rounded-2xl border-2 border-waka-200 bg-waka-50/80 px-4 py-3 text-sm font-black text-waka-950"
-              >
-                {t(lang, "stockGoSuppliers")}
-              </Link>
-            ) : null}
-          </div>
-          {canPurchaseHistory ? (
-            <>
-              <p className="mt-4 text-sm font-black text-slate-800">{t(lang, "restockIdeasTitle")}</p>
-              <ul className="mt-2 space-y-1 text-sm font-semibold text-slate-700">
-                {buildRestockSuggestions(lang, unlockedProducts, sales, purchases).map((s, i) => (
-                  <li key={i}>· {s}</li>
-                ))}
-              </ul>
-            </>
+        <section className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-3 py-3 shadow-sm">
+          <span className="w-full text-xs font-bold text-slate-500 sm:w-auto sm:pr-1">{t(lang, "stockRestockLinks")}</span>
+          {canRestock ? (
+            <Link to="/restock" className="rounded-xl bg-waka-600 px-3 py-2 text-sm font-black text-white">
+              {t(lang, "stockGoRestock")}
+            </Link>
           ) : null}
-        </section>
-      ) : null}
-
-      {canAdd ? (
-        <details
-          className="rounded-[2rem] border-2 border-waka-300 bg-gradient-to-b from-white to-waka-50/60 shadow-lg open:shadow-md"
-          open={addProductFormOpen}
-          onToggle={(e) => setAddProductFormOpen((e.target as HTMLDetailsElement).open)}
-        >
-          <summary className="cursor-pointer list-none px-5 py-4 marker:hidden sm:px-6 sm:py-5 [&::-webkit-details-marker]:hidden">
-            <span className="flex items-center justify-between gap-2 text-lg font-black text-waka-900">
-              {t(lang, "stockAddProductToggle")}
-              <span className="text-xs font-bold uppercase tracking-wide text-waka-700">{t(lang, "stockQuickAddHeading")}</span>
-            </span>
-          </summary>
-          <form
-            onSubmit={submitMainQuick}
-            className="space-y-4 border-t border-waka-100/80 px-5 pb-5 pt-4 sm:px-6 sm:pb-6"
-          >
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "stockQuickAddHeading")}</p>
-              <p className="mt-1 text-lg font-black text-slate-900">{t(lang, "stockQuickAddTitle")}</p>
-              <p className="mt-1 text-base text-slate-600">{t(lang, "stockQuickAddSub")}</p>
-            </div>
-
-            <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddName")}</span>
-              <input
-                value={mainName}
-                onChange={(e) => setMainName(e.target.value)}
-                placeholder={t(lang, "productNamePh")}
-                required
-                className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "posCategoryLabel")}</span>
-              <input
-                value={mainCategory}
-                onChange={(e) => setMainCategory(e.target.value)}
-                list={stockCategoryPicklist.length > 0 ? stockQuickCategoryListId : undefined}
-                placeholder={t(lang, "categoryNewPlaceholder")}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
-              />
-              {stockCategoryPicklist.length > 0 ? (
-                <datalist id={stockQuickCategoryListId}>
-                  {stockCategoryPicklist.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              ) : null}
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</span>
-              <p className="mt-0.5 text-xs text-slate-500">{t(lang, "stockSellUnitSelectHint")}</p>
-              <select
-                value={mainSellUnitPreset === "custom" ? "custom" : mainSellUnitPreset}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "custom") setMainSellUnitPreset("custom");
-                  else {
-                    setMainSellUnitPreset(v);
-                    setMainSellUnitCustom("");
-                  }
-                }}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900 outline-none ring-waka-200 focus:ring"
-              >
-                {businessUnitOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-                <option value="custom">{t(lang, "unitCustomOption")}</option>
-              </select>
-            </label>
-            {mainSellUnitPreset === "custom" ? (
-              <label className="block">
-                <span className="text-sm font-bold text-slate-800">{t(lang, "unitCustomPlaceholder")}</span>
-                <input
-                  value={mainSellUnitCustom}
-                  onChange={(e) => setMainSellUnitCustom(e.target.value)}
-                  placeholder={t(lang, "unitCustomPlaceholder")}
-                  className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-                />
-              </label>
-            ) : null}
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddPrice")}</span>
-                <input
-                  value={mainPrice}
-                  onChange={(e) => setMainPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  inputMode="numeric"
-                  placeholder="0"
-                  required
-                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-bold text-slate-800">{t(lang, "stockNowLabel")}</span>
-                <input
-                  value={mainStock}
-                  onChange={(e) => setMainStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
-                  inputMode="decimal"
-                  placeholder="0"
-                  required
-                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-2xl font-black outline-none ring-waka-200 focus:ring"
-                />
-              </label>
-            </div>
-
-            <details className="group rounded-2xl border-2 border-slate-200 bg-white/90 px-4 open:pb-3 open:pt-1">
-              <summary className="cursor-pointer list-none py-4 text-base font-black text-slate-900 marker:hidden [&::-webkit-details-marker]:hidden">
-                <span className="flex items-center justify-between gap-2">
-                  {t(lang, "trackBuyingProfit")}
-                  <span className="text-xs font-bold text-waka-700">{t(lang, "optional")}</span>
-                </span>
-              </summary>
-              <p className="text-xs text-slate-500">{t(lang, "trackBuyingProfitHint")}</p>
-              <div className="mt-3 space-y-3">
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "howYouBuyPack")}
-                  <input
-                    value={boughtAs}
-                    onChange={(e) => setBoughtAs(e.target.value)}
-                    placeholder={t(lang, "howYouBuyPackPh")}
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "buyingPackPriceLabel")}
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{t(lang, "buyingPackPriceHint")}</p>
-                  <input
-                    value={buyPackPrice}
-                    onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                    inputMode="numeric"
-                    placeholder="12000"
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "howManyInsideLabel")}
-                  <input
-                    value={piecesInside}
-                    onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                    inputMode="decimal"
-                    placeholder="30"
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-bold"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "supplierOptionalLabel")}
-                  <input
-                    value={supplierName}
-                    onChange={(e) => setSupplierName(e.target.value)}
-                    placeholder={t(lang, "supplierOptionalPh")}
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-                  />
-                </label>
-              </div>
-            </details>
-
-            <button
-              type="submit"
-              disabled={freeProductLimitReached}
-              className="w-full min-h-[56px] rounded-3xl bg-waka-600 py-4 text-xl font-black text-white shadow-md active:scale-[0.99] active:bg-waka-700"
+          {canSuppliers ? (
+            <Link
+              to="/suppliers"
+              className="rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-sm font-black text-waka-950"
             >
-              {t(lang, "saveProduct")}
+              {t(lang, "stockGoSuppliers")}
+            </Link>
+          ) : null}
+          {canPurchaseHistory && buildRestockSuggestions(lang, unlockedProducts, sales, purchases).length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowRestockIdeas((v) => !v)}
+              className="ml-auto text-sm font-bold text-waka-800 underline-offset-2 hover:underline"
+            >
+              {showRestockIdeas ? t(lang, "stockHideRestockIdeas") : t(lang, "stockShowRestockIdeas")}
             </button>
-          </form>
-        </details>
-      ) : null}
-
-      {unlockedProducts.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50 to-white p-6 text-center shadow-sm">
-          <p className="text-2xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
-          <p className="mt-2 text-lg text-slate-600">{t(lang, "stockEmptySub")}</p>
-          <p className="mt-2 text-base font-semibold text-waka-900">{t(lang, "stockEmptyUseFormAbove")}</p>
-          {canAdd ? (
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <button
-                type="button"
-                disabled={freeProductLimitReached}
-                onClick={() => setQuickOpen(true)}
-                className="rounded-3xl border-2 border-waka-300 bg-white px-6 py-4 text-lg font-black text-waka-900"
-              >
-                {t(lang, "quickAddOpen")}
-              </button>
-              <button
-                type="button"
-                disabled={freeProductLimitReached}
-                onClick={openStarter}
-                className="rounded-3xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-lg active:scale-[0.99]"
-              >
-                {t(lang, "starterPackOpen")}
-              </button>
-            </div>
           ) : null}
         </section>
       ) : null}
+      {showRestockIdeas && canPurchaseHistory && products.length > 0 ? (
+        <ul className="rounded-2xl border border-waka-100 bg-waka-50/50 px-4 py-3 text-sm font-semibold text-slate-700">
+          {buildRestockSuggestions(lang, unlockedProducts, sales, purchases).map((s, i) => (
+            <li key={i} className="py-0.5">
+              · {s}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
-      {canAdd ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={() => setQuickOpen(true)}
-            className="min-h-[64px] rounded-3xl border-2 border-waka-200 bg-white py-4 text-base font-black text-waka-900 shadow-sm active:bg-waka-50"
-          >
-            {t(lang, "quickAddOpen")}
-          </button>
+      {canAdd && unlockedProducts.length > 0 ? (
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             disabled={freeProductLimitReached}
             onClick={openStarter}
-            className="min-h-[64px] rounded-3xl border-2 border-slate-200 bg-white py-4 text-base font-black text-slate-900 active:bg-slate-50"
+            className="rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800"
           >
             {t(lang, "starterPackOpen")}
           </button>
@@ -759,109 +458,106 @@ export function StockPage({ lang }: { lang: Language }) {
             type="button"
             disabled={freeProductLimitReached}
             onClick={() => setBulkOpen(true)}
-            className="min-h-[64px] rounded-3xl border-2 border-waka-400 bg-waka-600 py-4 text-base font-black text-white shadow-md active:bg-waka-700"
+            className="rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-800"
           >
             {t(lang, "bulkAddOpen")}
           </button>
         </div>
       ) : null}
 
-      <section className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <h2 className="text-2xl font-black text-slate-900">{t(lang, "quickStockFix")}</h2>
-          {unlockedProducts.length > 0 ? (
-            <p className="text-sm font-semibold text-slate-500">
-              {tTemplate(lang, "stockListCount", { shown: String(listableProducts.length), total: String(products.length) })}
-            </p>
+      {unlockedProducts.length === 0 ? (
+        <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-white px-6 py-10 text-center">
+          <p className="text-xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
+          <p className="mx-auto mt-2 max-w-sm text-base text-slate-600">{t(lang, "stockEmptySub")}</p>
+          {canAdd ? (
+            <button
+              type="button"
+              disabled={freeProductLimitReached}
+              onClick={openAddProductSheet}
+              className="mt-6 w-full max-w-xs rounded-2xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-md active:bg-waka-700 sm:mx-auto"
+            >
+              {t(lang, "stockAddProductBtn")}
+            </button>
           ) : null}
-        </div>
+          {canAdd ? (
+            <button
+              type="button"
+              disabled={freeProductLimitReached}
+              onClick={openStarter}
+              className="mt-3 text-sm font-bold text-waka-800 underline-offset-2 hover:underline"
+            >
+              {t(lang, "starterPackOpen")}
+            </button>
+          ) : null}
+        </section>
+      ) : (
+        <section className="space-y-4">
+          <h2 className="text-lg font-black text-slate-900">{t(lang, "stockYourProducts")}</h2>
 
-        {unlockedProducts.length === 0 ? (
-          <p className="rounded-2xl bg-slate-50 px-4 py-6 text-center text-lg text-slate-600">{t(lang, "stockListEmptyHint")}</p>
-        ) : (
-          <div className="space-y-3 rounded-2xl border-2 border-slate-100 bg-white p-4 shadow-sm sm:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-              <label className="block min-w-0 flex-1 sm:min-w-[12rem]">
-                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockListSearchPh")}</span>
-                <input
-                  value={listQuery}
-                  onChange={(e) => setListQuery(e.target.value)}
-                  placeholder={t(lang, "stockListSearchPh")}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 py-2 text-base font-semibold text-slate-900 outline-none ring-waka-200 focus:ring"
-                />
-              </label>
-              <label className="block sm:w-44">
-                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockListSortLabel")}</span>
-                <select
-                  value={listSort}
-                  onChange={(e) => setListSort(e.target.value as "name_az" | "name_za" | "stock_low" | "updated")}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
-                >
-                  <option value="name_az">{t(lang, "stockSortNameAz")}</option>
-                  <option value="name_za">{t(lang, "stockSortNameZa")}</option>
-                  <option value="stock_low">{t(lang, "stockSortStockLow")}</option>
-                  <option value="updated">{t(lang, "stockSortUpdatedNew")}</option>
-                </select>
-              </label>
-              <label className="block sm:w-44">
-                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockFilterLabel")}</span>
-                <select
-                  value={listFilter}
-                  onChange={(e) => setListFilter(e.target.value as "all" | "low")}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
-                >
-                  <option value="all">{t(lang, "stockFilterAll")}</option>
-                  <option value="low">{t(lang, "stockFilterLow")}</option>
-                </select>
-              </label>
-              <label className="block sm:w-48">
-                <span className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "stockFilterCategoryLabel")}</span>
-                <select
-                  value={stockCategoryFilter}
-                  onChange={(e) => setStockCategoryFilter(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
-                >
-                  <option value={CATEGORY_FILTER_ALL}>{t(lang, "posCategoryAll")}</option>
-                  {stockHasUncategorized ? (
-                    <option value={UNCATEGORIZED_SENTINEL}>{t(lang, "uncategorized")}</option>
-                  ) : null}
-                  {stockCategoryPicklist.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 self-center pt-1 sm:pt-6">
-                <input
-                  type="checkbox"
-                  className="h-5 w-5 accent-waka-600"
-                  checked={groupByCategory}
-                  onChange={(e) => setStockGroupByCategoryOverride(e.target.checked)}
-                />
-                <span className="text-sm font-bold text-slate-800">{t(lang, "stockGroupByCategory")}</span>
-              </label>
+          <StockListToolbar
+            lang={lang}
+            listQuery={listQuery}
+            onListQuery={setListQuery}
+            listSort={listSort}
+            onListSort={setListSort}
+            listFilter={listFilter}
+            onListFilter={setListFilter}
+            stockCategoryFilter={stockCategoryFilter}
+            onStockCategoryFilter={setStockCategoryFilter}
+            stockCategoryPicklist={stockCategoryPicklist}
+            stockHasUncategorized={stockHasUncategorized}
+            groupByCategory={groupByCategory}
+            onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
+          />
+
+          {listableProducts.length === 0 ? (
+            <p className="rounded-2xl bg-slate-50 px-4 py-10 text-center text-base font-semibold text-slate-500">
+              {t(lang, "stockNoListMatch")}
+            </p>
+          ) : groupByCategory && categoryGroups ? (
+            <div className="space-y-5">
+              {categoryGroups.keys.map((gk) => (
+                <div key={gk}>
+                  <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-waka-800">
+                    {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
+                  </h3>
+                  <ul className="space-y-3">
+                    {(categoryGroups.map.get(gk) ?? []).map((p) => (
+                      <StockProductCard
+                        key={p.id}
+                        lang={lang}
+                        product={p}
+                        locked={isProductPlanLocked(p.id, lockedIds)}
+                        canAdd={canAdd}
+                        canAdjust={canAdjust}
+                        canRemove={canRemove}
+                        canSell={canSell}
+                        onAction={(action) => handleRowAction(p, action)}
+                      />
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
-
-            {listableProducts.length === 0 ? (
-              <p className="py-8 text-center text-base font-semibold text-slate-500">{t(lang, "stockNoListMatch")}</p>
-            ) : groupByCategory && categoryGroups ? (
-              <div className="divide-y divide-slate-100">
-                {categoryGroups.keys.map((gk) => (
-                  <div key={gk} className="py-3 first:pt-1">
-                    <h3 className="px-1 pb-2 text-xs font-black uppercase tracking-wide text-waka-800">
-                      {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
-                    </h3>
-                    <ul className="divide-y divide-slate-100">{(categoryGroups.map.get(gk) ?? []).map((p) => renderStockRow(p))}</ul>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <ul className="divide-y divide-slate-100">{listableProducts.map((p) => renderStockRow(p))}</ul>
-            )}
-          </div>
-        )}
-      </section>
+          ) : (
+            <ul className="space-y-3">
+              {listableProducts.map((p) => (
+                <StockProductCard
+                  key={p.id}
+                  lang={lang}
+                  product={p}
+                  locked={isProductPlanLocked(p.id, lockedIds)}
+                  canAdd={canAdd}
+                  canAdjust={canAdjust}
+                  canRemove={canRemove}
+                  canSell={canSell}
+                  onAction={(action) => handleRowAction(p, action)}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
       {quickOpen ? (
         <div
@@ -876,139 +572,38 @@ export function StockPage({ lang }: { lang: Language }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
-            <p className="text-center text-2xl font-black text-slate-900">{t(lang, "quickAddTitle")}</p>
-            <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "quickAddSub")}</p>
-            <label className="mt-6 block text-base font-bold text-slate-800">
-              {t(lang, "quickAddName")}
-              <input
-                value={qaName}
-                onChange={(e) => setQaName(e.target.value)}
-                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-4 text-xl font-semibold"
-                placeholder={t(lang, "productNamePh")}
-                autoFocus
-              />
-            </label>
-            <label className="mt-4 block text-base font-bold text-slate-800">
-              {t(lang, "posCategoryLabel")}
-              <input
-                value={qaCategory}
-                onChange={(e) => setQaCategory(e.target.value)}
-                list={stockCategoryPicklist.length > 0 ? stockModalCategoryListId : undefined}
-                placeholder={t(lang, "categoryNewPlaceholder")}
-                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold"
-              />
-              {stockCategoryPicklist.length > 0 ? (
-                <datalist id={stockModalCategoryListId}>
-                  {stockCategoryPicklist.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              ) : null}
-            </label>
-            <label className="mt-4 block text-base font-bold text-slate-800">
-              {t(lang, "howYouSellUnit")}
-              <p className="mt-0.5 text-xs font-normal text-slate-500">{t(lang, "stockSellUnitSelectHint")}</p>
-              <select
-                value={qaUnitPreset === "custom" ? "custom" : qaUnitPreset}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "custom") setQaUnitPreset("custom");
-                  else {
-                    setQaUnitPreset(v);
-                    setQaUnitCustom("");
-                  }
-                }}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900"
-              >
-                {businessUnitOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-                <option value="custom">{t(lang, "unitCustomOption")}</option>
-              </select>
-            </label>
-            {qaUnitPreset === "custom" ? (
-              <input
-                value={qaUnitCustom}
-                onChange={(e) => setQaUnitCustom(e.target.value)}
-                placeholder={t(lang, "unitCustomPlaceholder")}
-                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-              />
-            ) : null}
+            <p className="text-center text-xl font-black text-slate-900">{t(lang, "stockQuickAddTitle")}</p>
+            <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "stockQuickAddSub")}</p>
             {guessPreview ? (
-              <p className="mt-2 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
+              <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
                 {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
               </p>
             ) : null}
-            <label className="mt-4 block text-base font-bold text-slate-800">
-              {t(lang, "quickAddPrice")}
-              <input
-                value={qaPrice}
-                onChange={(e) => setQaPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                inputMode="numeric"
-                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-4 text-2xl font-black"
-                placeholder="0"
-                required
+            <div className="mt-4">
+              <QuickAddProductFields
+                lang={lang}
+                variant="sheet"
+                categorySuggestions={stockCategoryPicklist}
+                values={{
+                  name: qaName,
+                  category: qaCategory,
+                  sellUnitPreset: qaUnitPreset,
+                  sellUnitCustom: qaUnitCustom,
+                  price: qaPrice,
+                  stock: qaStock,
+                  buyPackTotal: qaBuyPackTotal,
+                }}
+                onChange={(patch) => {
+                  if (patch.name !== undefined) setQaName(patch.name);
+                  if (patch.category !== undefined) setQaCategory(patch.category);
+                  if (patch.sellUnitPreset !== undefined) setQaUnitPreset(patch.sellUnitPreset);
+                  if (patch.sellUnitCustom !== undefined) setQaUnitCustom(patch.sellUnitCustom);
+                  if (patch.price !== undefined) setQaPrice(patch.price);
+                  if (patch.stock !== undefined) setQaStock(patch.stock);
+                  if (patch.buyPackTotal !== undefined) setQaBuyPackTotal(patch.buyPackTotal);
+                }}
               />
-            </label>
-            <label className="mt-4 block text-base font-bold text-slate-800">
-              {t(lang, "quickAddStock")}
-              <input
-                value={qaStock}
-                onChange={(e) => setQaStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 12))}
-                inputMode="decimal"
-                className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-4 text-2xl font-black"
-                placeholder="0"
-                required
-              />
-            </label>
-
-            <section className="mt-5 rounded-2xl border-2 border-waka-100 bg-waka-50/60 p-4">
-              <p className="text-base font-black text-slate-900">{t(lang, "quickAddBuySection")}</p>
-              <p className="mt-1 text-xs text-slate-600">{t(lang, "trackBuyingProfitHint")}</p>
-              <div className="mt-3 space-y-3">
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "howYouBuyPack")}
-                  <input
-                    value={qaBoughtAs}
-                    onChange={(e) => setQaBoughtAs(e.target.value)}
-                    placeholder={t(lang, "howYouBuyPackPh")}
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "buyingPackPriceLabel")}
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{t(lang, "buyingPackPriceHint")}</p>
-                  <input
-                    value={qaBuyPackPrice}
-                    onChange={(e) => setQaBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                    inputMode="numeric"
-                    placeholder="12000"
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-bold"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "howManyInsideLabel")}
-                  <input
-                    value={qaPiecesInside}
-                    onChange={(e) => setQaPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                    inputMode="decimal"
-                    placeholder={sellingModeFromSellUnit(resolveSellUnit(qaUnitPreset, qaUnitCustom)) === "weighted" ? "50" : "30"}
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-bold"
-                  />
-                </label>
-                <label className="block text-sm font-bold text-slate-800">
-                  {t(lang, "supplierOptionalLabel")}
-                  <input
-                    value={qaSupplierName}
-                    onChange={(e) => setQaSupplierName(e.target.value)}
-                    placeholder={t(lang, "supplierOptionalPh")}
-                    className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
-                  />
-                </label>
-              </div>
-            </section>
+            </div>
             </div>
 
             <div className="shrink-0 border-t border-slate-100 bg-white px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
