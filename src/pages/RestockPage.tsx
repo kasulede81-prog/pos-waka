@@ -43,7 +43,10 @@ export function RestockPage({ lang }: { lang: Language }) {
     const q = pickerQuery.trim().toLowerCase();
     const picked = new Set(lines.map((l) => l.productId));
     let list = products.filter((p) => !picked.has(p.id));
-    if (q) list = list.filter((p) => [p.name, p.category, p.baseUnit].filter(Boolean).join(" ").toLowerCase().includes(q));
+    if (q)
+      list = list.filter((p) =>
+        [p.name, p.category, p.baseUnit, p.buyingUnit].filter(Boolean).join(" ").toLowerCase().includes(q),
+      );
     return list.slice(0, 80);
   }, [products, pickerQuery, lines]);
 
