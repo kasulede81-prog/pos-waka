@@ -3,6 +3,7 @@
  * Production app URL: https://pos.waka.ug
  */
 
+import { Capacitor } from "@capacitor/core";
 import { WAKA_POS_URL } from "../config/company";
 
 export const CANONICAL_APP_URL = WAKA_POS_URL.replace(/\/$/, "");
@@ -47,6 +48,10 @@ export function enforceHttpsOrigin(origin: string): string {
 
 /** Origin for email links, OAuth return URLs, and password reset. */
 export function authRedirectOrigin(): string {
+  if (typeof window !== "undefined" && Capacitor.isNativePlatform()) {
+    return enforceHttpsOrigin(window.location.origin);
+  }
+
   const fromEnv = import.meta.env.VITE_APP_URL?.trim().replace(/\/$/, "");
 
   if (import.meta.env.PROD) {
@@ -98,7 +103,23 @@ export function getGoogleOAuthJavaScriptOrigins(): string[] {
   if (import.meta.env.DEV) {
     origins.add("http://localhost:5173");
   }
+  /** Capacitor Android/iOS WebView origin when androidScheme is https */
+  origins.add("https://localhost");
   return [...origins];
+}
+
+/** Redirect URLs to allow in Supabase Auth (documentation helper). */
+export function getSupabaseAuthRedirectUrls(): string[] {
+  return [
+    `${CANONICAL_APP_URL}/auth/callback`,
+    `${CANONICAL_APP_URL}/auth/recovery`,
+    "https://waka.ug/auth/callback",
+    "https://waka.ug/auth/recovery",
+    "https://localhost/auth/callback",
+    "https://localhost/auth/recovery",
+    "http://localhost:5173/auth/callback",
+    "http://localhost:5173/auth/recovery",
+  ];
 }
 
 export function authDevLog(level: "log" | "warn" | "error", message: string, detail?: unknown): void {

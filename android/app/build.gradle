@@ -42,6 +42,11 @@ android {
             }
         }
     }
+    bundle {
+        language {
+            enableSplit = false
+        }
+    }
 }
 
 repositories {

@@ -92,10 +92,11 @@ Copy examples:
 ## 6. Android (Capacitor)
 
 1. `npm run build` with the **same** `VITE_*` values you want in the app (they are inlined at build time).
-2. `npm run cap:sync` then open Android Studio (`npm run cap:open:android`).
-3. Release signing: `android/README-RELEASE.md`.
+2. `npm run cap:build` (or `npx cap sync android`) then open Android Studio (`npm run cap:open:android`).
+3. Play Store bundle: `npm run cap:bundle:release` → `android/app/build/outputs/bundle/release/app-release.aab`
+4. Signing & versions: `android/README-RELEASE.md` and **`docs/ANDROID.md`**.
 
-`capacitor.config.ts` uses `webDir: "dist"`. There is no runtime “switch” for Supabase URL on device beyond rebuilding after env change.
+`capacitor.config.ts` uses `webDir: "dist"` and app ID `ug.waka.pos`. Do **not** run `npx cap init`. There is no runtime “switch” for Supabase URL on device beyond rebuilding after env change.
 
 ---
 

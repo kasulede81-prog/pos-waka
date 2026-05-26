@@ -10,8 +10,8 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { purchaseLineCostTotalUgx } from "../lib/sellingEngine";
 import { WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
-import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { RestockLineCard, type RestockLineRow } from "../components/stock/RestockLineCard";
+import { RestockProductPicker } from "../components/stock/RestockProductPicker";
 
 type BuySource = "town" | "supplier";
 
@@ -301,55 +301,15 @@ export function RestockPage({ lang }: { lang: Language }) {
         </div>
       </form>
 
-      {pickerOpen ? (
-        <AppModalOverlay
-          className="z-[56] flex items-end justify-center bg-black/50 sm:items-center"
-          role="dialog"
-          aria-modal
-          onClick={() => setPickerOpen(false)}
-        >
-          <div
-            className="flex max-h-[min(88dvh,640px)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="shrink-0 border-b border-slate-100 px-4 py-4">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-lg font-black text-slate-900">{t(lang, "restockPickProduct")}</p>
-                <button type="button" className="text-sm font-bold text-slate-600" onClick={() => setPickerOpen(false)}>
-                  {t(lang, "cancel")}
-                </button>
-              </div>
-              <input
-                value={pickerQuery}
-                onChange={(e) => setPickerQuery(e.target.value)}
-                placeholder={t(lang, "restockSearchProducts")}
-                className="mt-3 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 text-base font-semibold"
-                autoFocus
-              />
-            </div>
-            <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-3">
-              {filteredProducts.length === 0 ? (
-                <li className="px-2 py-8 text-center text-sm font-semibold text-slate-500">{t(lang, "restockNoProductsMatch")}</li>
-              ) : (
-                filteredProducts.map((p) => (
-                  <li key={p.id} className="mb-2">
-                    <button
-                      type="button"
-                      onClick={() => addProductLine(p.id)}
-                      className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-left active:bg-waka-50"
-                    >
-                      <span className="text-base font-black text-slate-900">{p.name}</span>
-                      {p.category ? (
-                        <span className="mt-0.5 block text-xs font-semibold text-slate-500">{p.category}</span>
-                      ) : null}
-                    </button>
-                  </li>
-                ))
-              )}
-            </ul>
-          </div>
-        </AppModalOverlay>
-      ) : null}
+      <RestockProductPicker
+        lang={lang}
+        open={pickerOpen}
+        query={pickerQuery}
+        onQueryChange={setPickerQuery}
+        products={filteredProducts}
+        onPick={addProductLine}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   );
 }

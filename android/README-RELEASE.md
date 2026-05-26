@@ -2,13 +2,13 @@
 
 ## One-time: create a signing key
 
-From the `android` folder, generate a keystore (adjust names as you like):
+From the `android` folder:
 
 ```bash
 keytool -genkeypair -v -keystore waka-release.jks -alias waka -keyalg RSA -keysize 2048 -validity 10000
 ```
 
-Place `waka-release.jks` in this `android` folder (or another path you prefer).
+Place `waka-release.jks` in this `android` folder (or set `storeFile` to another path in `keystore.properties`).
 
 ## Configure signing
 
@@ -18,19 +18,38 @@ Place `waka-release.jks` in this `android` folder (or another path you prefer).
 
 `keystore.properties` and `*.jks` must stay out of git (see `.gitignore`).
 
-## Build a signed release APK
+## Build from project root
 
-From the project root (after `npm run build` and `npx cap sync android`):
+After `npm run build` and `npx cap sync android` (or `npm run cap:build`):
+
+### Signed release APK
 
 ```bash
 cd android
-./gradlew assembleRelease
+gradlew.bat assembleRelease
 ```
 
-The APK is under `android/app/build/outputs/apk/release/`.
+macOS/Linux: `./gradlew assembleRelease`
 
-If `keystore.properties` is missing, Gradle still builds an **unsigned** release APK (useful for internal testing); Play Console or sideloading usually needs a signed build.
+**Output:** `android/app/build/outputs/apk/release/app-release.apk`
+
+### Signed Android App Bundle (Play Store)
+
+```bash
+cd android
+gradlew.bat bundleRelease
+```
+
+macOS/Linux: `./gradlew bundleRelease`
+
+**Output:** `android/app/build/outputs/bundle/release/app-release.aab`
+
+Or from repo root: `npm run cap:bundle:release` (Windows).
+
+If `keystore.properties` is missing, Gradle still builds an **unsigned** release (internal testing only).
 
 ## Play / updates
 
 Bump `versionCode` in `app/build.gradle` for every store upload. Keep `versionName` human-readable (e.g. `1.0.1`).
+
+Full guide: `docs/ANDROID.md`

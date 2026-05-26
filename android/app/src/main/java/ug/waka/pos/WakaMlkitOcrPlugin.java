@@ -93,14 +93,15 @@ public class WakaMlkitOcrPlugin extends Plugin {
   private InputImage buildInputImage(String rawPath) throws Exception {
     String path = rawPath.trim();
     if (path.startsWith("content:")) {
-      return InputImage.fromFilePath(getContext(), copyContentUriToCache(Uri.parse(path)));
+      java.io.File cached = new java.io.File(copyContentUriToCache(Uri.parse(path)));
+      return InputImage.fromFilePath(getContext(), Uri.fromFile(cached));
     }
     String filePath = path;
     if (path.startsWith("file:")) {
       String p = Uri.parse(path).getPath();
       if (p != null) filePath = p;
     }
-    return InputImage.fromFilePath(getContext(), filePath);
+    return InputImage.fromFilePath(getContext(), Uri.fromFile(new java.io.File(filePath)));
   }
 
   /**
