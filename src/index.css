@@ -84,6 +84,15 @@ body {
     --waka-scroll-tail-default: calc(13rem + var(--waka-safe-bottom));
     --waka-scroll-tail-pos: calc(16.5rem + var(--waka-safe-bottom));
     --waka-scroll-tail-pos-sale: calc(16.5rem + var(--waka-safe-bottom));
+    /* Stacking: main scroll < FAB 35 < bottom nav 45 < POS sheets 52+ < receipt 65 */
+    --waka-z-bottom-nav: 45;
+    --waka-z-pos-overlay: 56;
+    --waka-z-pos-receipt: 65;
+  }
+
+  /** Full-screen overlays that must cover the mobile bottom tab bar */
+  .waka-overlay-full {
+    z-index: var(--waka-z-pos-overlay);
   }
 
   /**

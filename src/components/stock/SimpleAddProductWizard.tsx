@@ -184,7 +184,7 @@ export function SimpleAddProductWizard({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 sm:items-center"
+      className="fixed inset-0 z-[56] flex items-end justify-center bg-black/55 sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}

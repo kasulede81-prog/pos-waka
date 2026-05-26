@@ -138,7 +138,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
       </section>
 
       {paying ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
+        <div className="fixed inset-0 z-[56] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
           <form
             onSubmit={submitPay}
             className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"

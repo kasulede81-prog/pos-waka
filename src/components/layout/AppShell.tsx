@@ -309,7 +309,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
             </div>
           </section>
         </main>
-        <nav className="fixed bottom-0 left-0 right-0 z-[45] border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden">
+        <nav
+          className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden"
+          style={{ zIndex: "var(--waka-z-bottom-nav)" }}
+        >
           <div
             className="mx-auto grid max-w-lg gap-0.5 px-1 py-2 pb-bottom-nav"
             style={{ gridTemplateColumns: `repeat(${Math.min(navDefs.length, 5)}, minmax(0, 1fr))` }}

@@ -879,7 +879,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {draftLines.length > 0 && !saleCheckoutMinimized ? (
         <div
-          className="fixed inset-0 z-[44] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
           role="dialog"
           aria-modal
           aria-labelledby="pos-checkout-title"
@@ -903,7 +903,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {t(lang, "posAddMoreItems")}
             </button>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
             <ul className="space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
               {draftLines.map((line) => (
                 <li key={line.productId} className="flex items-center justify-between gap-2 text-lg text-slate-900">
@@ -1029,20 +1029,21 @@ export function PosPage({ lang }: { lang: Language }) {
                 ) : null}
               </>
             ) : null}
-
+          </div>
+          <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
             <button
               type="button"
               onClick={finishSale}
-              className="mt-5 min-h-[56px] w-full rounded-3xl bg-waka-600 py-5 text-2xl font-black text-white shadow-lg active:bg-waka-700"
+              className="min-h-[56px] w-full rounded-3xl bg-waka-600 py-4 text-2xl font-black text-white shadow-lg active:bg-waka-700"
             >
               {t(lang, "saveSale")}
             </button>
-          </div>
+          </footer>
         </div>
       ) : null}
 
       {draftLines.length > 0 && saleCheckoutMinimized ? (
-        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[45] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
+        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "totalLabel")}</p>
@@ -1201,21 +1202,32 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {receiptSale && receiptPlain ? (
         <div
-          className="fixed inset-0 z-[58] flex items-end justify-center bg-black/50 p-3 pb-[env(safe-area-inset-bottom)] sm:items-center"
+          className="fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
+          style={{ zIndex: "var(--waka-z-pos-receipt)" }}
           role="dialog"
           aria-modal
+          aria-labelledby="pos-receipt-title"
         >
-          <div className="max-h-[85vh] w-full max-w-md overflow-hidden rounded-[2rem] bg-white shadow-2xl">
-            <div className="border-b border-slate-100 px-5 py-4">
-              <p className="text-xl font-black text-slate-900">{t(lang, "receiptTitle")}</p>
-            </div>
-            <pre className="max-h-[42vh] overflow-y-auto whitespace-pre-wrap break-words px-5 py-4 text-sm leading-relaxed text-slate-800 sm:max-h-[50vh]">
-              {receiptPlain}
-            </pre>
-            <div className="grid grid-cols-2 gap-2 border-t border-slate-100 p-4 sm:grid-cols-4">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+            <h2 id="pos-receipt-title" className="text-xl font-black text-slate-900">
+              {t(lang, "receiptTitle")}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setReceiptSaleId(null)}
+              className="min-h-[44px] rounded-xl border-2 border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 active:bg-slate-50"
+            >
+              {t(lang, "receiptClose")}
+            </button>
+          </header>
+          <pre className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain whitespace-pre-wrap break-words px-5 py-5 text-base leading-relaxed text-slate-800 [-webkit-overflow-scrolling:touch]">
+            {receiptPlain}
+          </pre>
+          <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <button
                 type="button"
-                className="min-h-[48px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white"
+                className="min-h-[52px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white active:bg-slate-800"
                 onClick={() => {
                   const ok = printReceiptText(receiptPlain, preferences.receiptPaperSize ?? "80mm");
                   if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
@@ -1225,7 +1237,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </button>
               <button
                 type="button"
-                className="min-h-[48px] rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white"
+                className="min-h-[52px] rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white active:bg-emerald-700"
                 onClick={() => {
                   window.open(`https://wa.me/?text=${encodeURIComponent(receiptPlain)}`, "_blank", "noopener,noreferrer");
                 }}
@@ -1234,7 +1246,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </button>
               <button
                 type="button"
-                className="min-h-[48px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-black text-slate-800"
+                className="min-h-[52px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-black text-slate-800 active:bg-slate-50"
                 onClick={() => {
                   const a = document.createElement("a");
                   const url = URL.createObjectURL(new Blob([receiptPlain], { type: "text/plain;charset=utf-8" }));
@@ -1248,13 +1260,13 @@ export function PosPage({ lang }: { lang: Language }) {
               </button>
               <button
                 type="button"
-                className="min-h-[48px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-bold text-slate-600 sm:col-span-1"
+                className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white active:bg-waka-700 sm:col-span-1"
                 onClick={() => setReceiptSaleId(null)}
               >
                 {t(lang, "receiptClose")}
               </button>
             </div>
-          </div>
+          </footer>
         </div>
       ) : null}
 
