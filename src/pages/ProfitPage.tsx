@@ -7,6 +7,7 @@ import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canSeeOfficeProfit, computeProfitGroupedByCategory } from "../lib/homeProfit";
+import { PageHeader } from "../components/layout/PageHeader";
 
 type Range = "today" | "week" | "month";
 
@@ -47,16 +48,12 @@ export function ProfitPage({ lang }: Props) {
 
   return (
     <div className="space-y-5 pb-12">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to="/office" className="text-sm font-bold text-waka-700">
-          ← {t(lang, "officeHubNav")}
-        </Link>
-      </div>
-
-      <div>
-        <h1 className="text-3xl font-black text-stone-950">{t(lang, "profitPageTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "profitPageSub")}</p>
-      </div>
+      <PageHeader
+        lang={lang}
+        title={t(lang, "profitPageTitle")}
+        subtitle={t(lang, "profitPageSub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
 
       <div className="flex gap-2">
         {(["today", "week", "month"] as const).map((r) => (

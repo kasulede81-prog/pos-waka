@@ -3,7 +3,7 @@ import { t } from "./i18n";
 import { inferFromProductName } from "./smartProductGuess";
 
 /** How customers buy one item at the till. */
-export type SellUnitKind = "piece" | "bottle" | "packet" | "kg" | "litre";
+export type SellUnitKind = "piece" | "bottle" | "packet" | "kg" | "litre" | "custom";
 
 /** How stock arrives from the market. */
 export type PackKind = "crate" | "carton" | "box" | "sack" | "pack" | "tray" | "bale" | "custom";
@@ -14,6 +14,7 @@ export const SELL_UNIT_OPTIONS: { id: SellUnitKind; labelKey: string }[] = [
   { id: "packet", labelKey: "sellUnit_packet" },
   { id: "kg", labelKey: "sellUnit_kg" },
   { id: "litre", labelKey: "sellUnit_litre" },
+  { id: "custom", labelKey: "sellUnit_other" },
 ];
 
 export const PACK_TYPE_OPTIONS: { id: PackKind; labelKey: string }[] = [
@@ -35,9 +36,28 @@ export type BuyPackKind = PackKind | "packet" | "bottle" | "kg" | "piece";
 
 export type WizardSellOption = { label: string; priceUgx: string };
 
-export function sellUnitLabel(kind: SellUnitKind, lang: Language): string {
+export function sellUnitLabel(kind: SellUnitKind, lang: Language, custom = ""): string {
+  if (kind === "custom") return custom.trim() || t(lang, "sellUnit_other");
   const row = SELL_UNIT_OPTIONS.find((o) => o.id === kind);
   return row ? t(lang, row.labelKey as "sellUnit_piece") : kind;
+}
+
+export function parseSellUnitFromBaseUnit(baseUnit: string): { kind: SellUnitKind; custom: string } {
+  const u = baseUnit.trim().toLowerCase();
+  if (u === "liter") return { kind: "litre", custom: "" };
+  if (u === "piece" || u === "bottle" || u === "packet" || u === "kg" || u === "litre") {
+    return { kind: u, custom: "" };
+  }
+  if (!u) return { kind: "piece", custom: "" };
+  return { kind: "custom", custom: baseUnit.trim() };
+}
+
+export function resolveSellBaseUnit(kind: SellUnitKind, custom: string): string {
+  if (kind === "custom") {
+    const c = custom.trim().toLowerCase();
+    return c || "piece";
+  }
+  return baseUnitFromSellKind(kind);
 }
 
 export function packKindLabel(kind: PackKind, custom: string, lang: Language): string {
@@ -50,8 +70,13 @@ export function baseUnitFromSellKind(kind: SellUnitKind): string {
   return kind;
 }
 
-export function sellingModeFromSellKind(kind: SellUnitKind): SellingMode {
-  return kind === "kg" || kind === "litre" ? "weighted" : "unit";
+export function sellingModeFromSellKind(kind: SellUnitKind, custom = ""): SellingMode {
+  if (kind === "kg" || kind === "litre") return "weighted";
+  if (kind === "custom") {
+    const c = custom.trim().toLowerCase();
+    if (c === "kg" || c === "litre" || c === "liter") return "weighted";
+  }
+  return "unit";
 }
 
 /** Cost per sell unit from what you paid for one full pack. */
@@ -84,6 +109,7 @@ export type SimpleWizardInput = {
   name: string;
   shelf: string;
   sellUnit: SellUnitKind;
+  sellUnitCustom: string;
   hasPack: boolean;
   packKind: PackKind;
   packCustom: string;
@@ -101,8 +127,8 @@ export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Lan
   if (sellPrice <= 0) return null;
 
   const guess = inferFromProductName(name);
-  const baseUnit = baseUnitFromSellKind(input.sellUnit);
-  const sellingMode = sellingModeFromSellKind(input.sellUnit);
+  const baseUnit = resolveSellBaseUnit(input.sellUnit, input.sellUnitCustom);
+  const sellingMode = sellingModeFromSellKind(input.sellUnit, input.sellUnitCustom);
 
   const piecesPerPack = input.hasPack
     ? Math.max(1, Math.floor(Number(input.piecesPerPack.replace(/[^\d.]/g, "")) || 0))
@@ -180,6 +206,7 @@ export function buildProductFromLegacyWizard(
       name: input.name,
       shelf: input.shelf,
       sellUnit,
+      sellUnitCustom: "",
       hasPack,
       packKind: (packKinds.includes(input.buyHow as PackKind) ? input.buyHow : "custom") as PackKind,
       packCustom: input.buyCustom,

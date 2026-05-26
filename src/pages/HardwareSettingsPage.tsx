@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { PageBackBar } from "../components/layout/PageBackBar";
 import { Printer } from "lucide-react";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
@@ -46,10 +46,8 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 pb-16 pt-2">
-      <Link to="/office" className="text-sm font-bold text-waka-800 underline">
-        ← {t(lang, "officeHubTitle")}
-      </Link>
-      <h1 className="text-3xl font-black text-stone-900">{t(lang, "hardwareSettingsTitle")}</h1>
+      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+      <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
       <p className="text-sm font-medium text-stone-600">{t(lang, "hardwareSettingsSub")}</p>
 
       <article className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">

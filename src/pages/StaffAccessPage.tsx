@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
+import { PageHeader } from "../components/layout/PageHeader";
 import type { Language, UserRole } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -29,10 +30,12 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-8">
-      <div>
-        <h1 className="text-3xl font-black text-slate-900">{t(lang, "staffAccessTitle")}</h1>
-        <p className="mt-1 text-base text-slate-600">{t(lang, "staffAccessSub")}</p>
-      </div>
+      <PageHeader
+        lang={lang}
+        title={t(lang, "staffAccessTitle")}
+        subtitle={t(lang, "staffAccessSub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
 
       <section className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">
         <p className="text-lg font-black text-slate-900">{t(lang, "staffCreateTitle")}</p>

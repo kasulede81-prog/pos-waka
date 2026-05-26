@@ -1,22 +1,24 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { getBackFallbackPath, historyCanGoBack } from "../lib/navigationBack";
 
 /**
- * Hardware back: go back in web history when possible, otherwise home.
+ * Hardware back: go back in web history when possible, otherwise sensible parent route.
  */
 export function useAndroidBackButton() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     let handle: { remove: () => void } | undefined;
     void App.addListener("backButton", () => {
-      if (window.history.length > 1) {
-        window.history.back();
+      if (historyCanGoBack()) {
+        navigate(-1);
       } else {
-        navigate("/", { replace: false });
+        navigate(getBackFallbackPath(location.pathname), { replace: false });
       }
     }).then((h) => {
       handle = h;
@@ -24,5 +26,5 @@ export function useAndroidBackButton() {
     return () => {
       void handle?.remove();
     };
-  }, [navigate]);
+  }, [navigate, location.pathname]);
 }

@@ -7,6 +7,8 @@ import {
   PACK_TYPE_OPTIONS,
   SELL_UNIT_OPTIONS,
   packKindLabel,
+  parseSellUnitFromBaseUnit,
+  resolveSellBaseUnit,
   sellUnitLabel,
   type PackKind,
   type SellUnitKind,
@@ -42,14 +44,7 @@ type Props = {
   ) => { ok: boolean; errorKey?: string };
 };
 
-const SELL_UNITS: SellUnitKind[] = ["piece", "bottle", "packet", "kg", "litre"];
-
-function sellKindFromBaseUnit(baseUnit: string): SellUnitKind {
-  const u = baseUnit.trim().toLowerCase();
-  if (u === "bottle" || u === "packet" || u === "kg" || u === "litre" || u === "piece") return u;
-  if (u === "liter") return "litre";
-  return "piece";
-}
+const SELL_UNITS: SellUnitKind[] = ["piece", "bottle", "packet", "kg", "litre", "custom"];
 
 function packKindFromBuyingUnit(raw: string | null | undefined): { kind: PackKind; custom: string } {
   if (!raw) return { kind: "crate", custom: "" };
@@ -72,6 +67,7 @@ export function StockProductEditModal({
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [sellUnit, setSellUnit] = useState<SellUnitKind>("piece");
+  const [sellUnitCustom, setSellUnitCustom] = useState("");
   const [hasPack, setHasPack] = useState(false);
   const [packKind, setPackKind] = useState<PackKind>("crate");
   const [packCustom, setPackCustom] = useState("");
@@ -90,7 +86,9 @@ export function StockProductEditModal({
     if (!open || !product) return;
     setName(product.name);
     setCategory((product.category ?? "").trim());
-    setSellUnit(sellKindFromBaseUnit(product.baseUnit));
+    const su = parseSellUnitFromBaseUnit(product.baseUnit);
+    setSellUnit(su.kind);
+    setSellUnitCustom(su.custom);
     const b = stockBreakdown(product);
     const pk = packKindFromBuyingUnit(product.buyingUnit);
     setHasPack(b.hasPackTracking);
@@ -122,7 +120,7 @@ export function StockProductEditModal({
     return packsN * piecesN + looseN;
   }, [hasPack, pieceOnlyStock, packsN, piecesN, looseN]);
 
-  const unitLabel = sellUnitLabel(sellUnit, lang);
+  const unitLabel = sellUnitLabel(sellUnit, lang, sellUnitCustom);
   const packLabel = packKindLabel(packKind, packCustom, lang);
 
   if (!open || !product) return null;
@@ -130,7 +128,7 @@ export function StockProductEditModal({
   const previewProduct: Product = {
     ...product,
     stockOnHand: totalStock,
-    baseUnit: sellUnit,
+    baseUnit: resolveSellBaseUnit(sellUnit, sellUnitCustom),
     buyingUnit: hasPack && piecesN > 1 ? packLabel.toLowerCase() : null,
     conversionRate: hasPack && piecesN > 1 ? piecesN : null,
   };
@@ -139,6 +137,8 @@ export function StockProductEditModal({
     e.preventDefault();
     const priceUgx = Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0));
     if (priceUgx <= 0 || !name.trim()) return;
+    if (sellUnit === "custom" && !sellUnitCustom.trim()) return;
+    if (hasPack && packKind === "custom" && !packCustom.trim()) return;
 
     const packPrice = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
     const hasTrack = hasPack && piecesN > 1;
@@ -149,7 +149,7 @@ export function StockProductEditModal({
 
     const patch: Parameters<typeof updateProduct>[1] = {
       name: name.trim(),
-      baseUnit: sellUnit,
+      baseUnit: resolveSellBaseUnit(sellUnit, sellUnitCustom),
       buyingUnit,
       conversionRate,
       sellingPricePerUnitUgx: priceUgx,
@@ -237,6 +237,14 @@ export function StockProductEditModal({
                 </button>
               ))}
             </div>
+            {sellUnit === "custom" ? (
+              <input
+                value={sellUnitCustom}
+                onChange={(e) => setSellUnitCustom(e.target.value)}
+                placeholder={t(lang, "simpleAddSellUnitCustomPh")}
+                className={clsx(inputClass, "mt-2")}
+              />
+            ) : null}
           </div>
 
           <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/80 p-4">
@@ -251,8 +259,9 @@ export function StockProductEditModal({
             </label>
             {hasPack ? (
               <div className="mt-3 space-y-3">
+                <p className="text-xs font-semibold text-slate-600">{t(lang, "simpleAddPackTypeLabel")}</p>
                 <div className="grid grid-cols-2 gap-2">
-                  {PACK_TYPE_OPTIONS.slice(0, 6).map((opt) => (
+                  {PACK_TYPE_OPTIONS.map((opt) => (
                     <button
                       key={opt.id}
                       type="button"
@@ -266,6 +275,14 @@ export function StockProductEditModal({
                     </button>
                   ))}
                 </div>
+                {packKind === "custom" ? (
+                  <input
+                    value={packCustom}
+                    onChange={(e) => setPackCustom(e.target.value)}
+                    placeholder={t(lang, "simpleAddPackCustomPh")}
+                    className={inputClass}
+                  />
+                ) : null}
                 <label className="block text-sm font-bold text-slate-800">
                   {tTemplate(lang, "simpleAddStep5Title", { unit: unitLabel, pack: packLabel })}
                   <input

@@ -9,6 +9,7 @@ import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
+import { PageHeader } from "../components/layout/PageHeader";
 
 type Range = "today" | "week" | "month";
 
@@ -145,7 +146,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-8">
-      <h2 className="text-2xl font-bold text-slate-900">{t(lang, "reports")}</h2>
+      <PageHeader lang={lang} title={t(lang, "reports")} backLabel={t(lang, "officeBackToHub")} />
 
       <div className="flex gap-2">
         {(["today", "week", "month"] as const).map((r) => (

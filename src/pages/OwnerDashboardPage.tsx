@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { PageBackBar } from "../components/layout/PageBackBar";
 import { Building2, ClipboardList, Sparkles } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -228,6 +229,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
+      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
       <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-waka-50/40 p-6 shadow-sm">
         <div className="flex flex-wrap items-start gap-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-waka-600 text-white shadow-md">

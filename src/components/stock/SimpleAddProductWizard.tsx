@@ -47,6 +47,7 @@ export function SimpleAddProductWizard({
   const [shelfNew, setShelfNew] = useState("");
   const [creatingShelf, setCreatingShelf] = useState(false);
   const [sellUnit, setSellUnit] = useState<SellUnitKind>("piece");
+  const [sellUnitCustom, setSellUnitCustom] = useState("");
   const [hasPack, setHasPack] = useState(false);
   const [packKind, setPackKind] = useState<PackKind>("crate");
   const [packCustom, setPackCustom] = useState("");
@@ -56,7 +57,7 @@ export function SimpleAddProductWizard({
   const [buyPackPrice, setBuyPackPrice] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
 
-  const unitLabel = sellUnitLabel(sellUnit, lang);
+  const unitLabel = sellUnitLabel(sellUnit, lang, sellUnitCustom);
   const packLabel = packKindLabel(packKind, packCustom, lang);
   const piecesN = useMemo(() => {
     if (!hasPack) return 1;
@@ -76,6 +77,7 @@ export function SimpleAddProductWizard({
     setShelfNew("");
     setCreatingShelf(false);
     setSellUnit("piece");
+    setSellUnitCustom("");
     setHasPack(false);
     setPackKind("crate");
     setPackCustom("");
@@ -123,7 +125,7 @@ export function SimpleAddProductWizard({
       case "shelf":
         return creatingShelf ? shelfNew.trim().length > 0 : shelfPick.trim().length > 0 || shelves.length === 0;
       case "sellUnit":
-        return true;
+        return sellUnit !== "custom" || sellUnitCustom.trim().length > 0;
       case "pack":
         return !hasPack || packKind !== "custom" || packCustom.trim().length > 0;
       case "piecesPerPack":
@@ -145,6 +147,7 @@ export function SimpleAddProductWizard({
         name,
         shelf: shelfValue,
         sellUnit,
+        sellUnitCustom,
         hasPack,
         packKind,
         packCustom,
@@ -165,6 +168,7 @@ export function SimpleAddProductWizard({
       setShelfNew("");
       setCreatingShelf(shelves.length === 0);
       setSellUnit("piece");
+    setSellUnitCustom("");
       setHasPack(false);
       setPackKind("crate");
       setPackCustom("");
@@ -319,6 +323,14 @@ export function SimpleAddProductWizard({
                     {t(lang, opt.labelKey as "sellUnit_piece")}
                   </button>
                 ))}
+                {sellUnit === "custom" ? (
+                  <input
+                    value={sellUnitCustom}
+                    onChange={(e) => setSellUnitCustom(e.target.value)}
+                    placeholder={t(lang, "simpleAddSellUnitCustomPh")}
+                    className="min-h-[52px] w-full rounded-2xl border-2 border-dashed border-waka-300 px-4 text-lg font-bold"
+                  />
+                ) : null}
               </div>
             </div>
           ) : null}

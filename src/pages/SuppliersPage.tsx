@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -53,17 +54,16 @@ export function SuppliersPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-3xl font-black text-slate-900">{t(lang, "suppliersTitle")}</h1>
+      <PageHeader lang={lang} title={t(lang, "suppliersTitle")} backLabel={t(lang, "officeBackToHub")}>
         {hasPermission(actor.role, "purchases.record") ? (
           <Link
             to="/restock"
-            className="rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm"
+            className="mt-2 inline-flex rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm"
           >
             {t(lang, "navRestock")}
           </Link>
         ) : null}
-      </div>
+      </PageHeader>
       <p className="text-slate-600">{t(lang, "suppliersSub")}</p>
 
       {canManage ? (

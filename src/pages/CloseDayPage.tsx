@@ -4,7 +4,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala } from "../lib/datesUg";
-import { Link } from "react-router-dom";
+import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 
@@ -50,9 +50,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   if (!hasPermission(actor.role, "day.close")) {
     return (
       <div className="space-y-4 pb-8">
-        <Link to="/" className="inline-block text-base font-bold text-waka-700">
-          ← {t(lang, "backHome")}
-        </Link>
+        <PageHeader lang={lang} title={t(lang, "closeDay")} backLabel={t(lang, "officeBackToHub")} />
         <p className="text-lg text-slate-700">{t(lang, "noPermission")}</p>
       </div>
     );
@@ -60,13 +58,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-4 pb-8">
-      <Link to="/" className="inline-block text-base font-bold text-waka-700">
-        ← {t(lang, "backHome")}
-      </Link>
-      <div>
-        <h1 className="text-3xl font-black text-slate-950">{t(lang, "closeDay")}</h1>
-        <p className="mt-1 text-base font-medium text-slate-500">{t(lang, "closeDaySimpleHelp")}</p>
-      </div>
+      <PageHeader
+        lang={lang}
+        title={t(lang, "closeDay")}
+        subtitle={t(lang, "closeDaySimpleHelp")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
 
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-waka-sm">
         <div className="grid grid-cols-2 gap-3">

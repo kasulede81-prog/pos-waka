@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -96,16 +97,12 @@ export function RestockPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-12">
-      <div className="flex flex-wrap items-center gap-2">
-        <Link to="/stock" className="text-sm font-bold text-waka-700">
-          ← {t(lang, "stockTitle")}
-        </Link>
-        <Link to="/suppliers" className="text-sm font-bold text-slate-600">
-          {t(lang, "navSuppliers")}
-        </Link>
-      </div>
-      <h1 className="text-3xl font-black text-slate-900">{t(lang, "restockTitle")}</h1>
-      <p className="text-slate-600">{t(lang, "restockSub")}</p>
+      <PageHeader
+        lang={lang}
+        title={t(lang, "restockTitle")}
+        subtitle={t(lang, "restockSub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
 
       {msg ? <p className="rounded-2xl bg-waka-50 px-4 py-3 text-sm font-bold text-waka-900">{msg}</p> : null}
 

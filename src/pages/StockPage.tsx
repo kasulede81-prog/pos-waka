@@ -23,6 +23,7 @@ import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { shelfIconFor } from "../lib/productCategories";
+import { PageHeader } from "../components/layout/PageHeader";
 import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
 import {
   costPerUnitFromPackAndStock,
@@ -407,10 +408,12 @@ export function StockPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-4">
-      <header>
-        <h1 className="text-2xl font-black tracking-tight text-slate-900 sm:text-3xl">{t(lang, "stockTitle")}</h1>
-        <p className="mt-1 text-base text-slate-600">{t(lang, "stockPageSub")}</p>
-      </header>
+      <PageHeader
+        lang={lang}
+        title={t(lang, "stockTitle")}
+        subtitle={t(lang, "stockPageSub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
 
       {freeProductLimitReached ? (
         <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">

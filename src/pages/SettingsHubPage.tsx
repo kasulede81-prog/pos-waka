@@ -4,7 +4,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { PageBackBar } from "../components/layout/PageBackBar";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 
@@ -23,13 +23,11 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "settingsHubTitle")}
-        subtitle={t(lang, "settingsHubSub")}
-        backTo="/office"
-        backLabel={t(lang, "officeBackToHub")}
-      />
+      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+      <div>
+        <h1 className="text-2xl font-black text-stone-950">{t(lang, "settingsHubTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
+      </div>
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
         {canShop ? (

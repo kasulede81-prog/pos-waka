@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Link } from "react-router-dom";
+import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -39,13 +39,12 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
-      <Link to="/owner" className="inline-block text-sm font-bold text-waka-700">
-        ← {t(lang, "ownerDashboardTitle")}
-      </Link>
-      <div>
-        <h1 className="text-3xl font-black text-slate-900">{t(lang, "staffActivityTitle")}</h1>
-        <p className="mt-1 text-slate-600">{t(lang, "staffActivitySub")}</p>
-      </div>
+      <PageHeader
+        lang={lang}
+        title={t(lang, "staffActivityTitle")}
+        subtitle={t(lang, "staffActivitySub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
 
       {groups.length === 0 ? (
         <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>

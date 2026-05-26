@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { PageBackBar } from "../components/layout/PageBackBar";
 import { Copy, Users } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -69,10 +69,8 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
   if (!agent) {
     return (
       <div className="mx-auto max-w-lg space-y-4 px-4 pb-16 pt-2">
-        <Link to="/office" className="text-sm font-bold text-waka-800 underline">
-          ← {t(lang, "officeHubTitle")}
-        </Link>
-        <h1 className="text-3xl font-black text-stone-900">{t(lang, "agentPortalTitle")}</h1>
+        <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+        <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "agentPortalTitle")}</h1>
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-950">
           {t(lang, "agentPortalNotAgent")}
         </p>
@@ -82,11 +80,9 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 pb-16 pt-2">
-      <Link to="/office" className="text-sm font-bold text-waka-800 underline">
-        ← {t(lang, "officeHubTitle")}
-      </Link>
+      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
       <div>
-        <h1 className="text-3xl font-black text-stone-900">{t(lang, "agentPortalTitle")}</h1>
+        <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "agentPortalTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "agentPortalSub")}</p>
       </div>
 
