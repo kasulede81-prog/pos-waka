@@ -32,7 +32,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 3;
+const PERM_MATRIX_VERSION = 4;
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
@@ -68,10 +68,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "stock.view",
     "stock.adjust",
     "products.add",
-    "products.remove",
     "products.edit_presets",
     "customers.view",
-    "customers.debt",
     "day.close",
     "reports.view",
     "reports.profit",
@@ -84,18 +82,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.record",
     "purchases.view",
   ],
-  /** Sell-first: today’s activity on Home; no stock, reports, settings, or supplier data. */
-  cashier: ["pos.sell", "receipts.view", "customers.view", "customers.debt"],
+  /** Sell-first: can sell, print receipts, returns, and see own receipt history. */
+  cashier: ["pos.sell", "receipts.view", "customers.view"],
   stock_keeper: [
-    "back_office.access",
     "receipts.view",
     "stock.view",
     "stock.adjust",
     "products.add",
-    "products.remove",
     "products.edit_presets",
-    "reports.view",
-    "settings.view",
     "suppliers.view",
     "suppliers.manage",
     "purchases.record",
@@ -115,6 +109,10 @@ function permSet(role: UserRole): Set<Permission> {
 
 export function hasPermission(role: UserRole, permission: Permission): boolean {
   return permSet(role).has(permission);
+}
+
+export function permissionsForRole(role: UserRole): Permission[] {
+  return [...permSet(role)];
 }
 
 export function canUseDevRoleSimulator(authResolvedRole: UserRole): boolean {

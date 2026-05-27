@@ -139,6 +139,9 @@ export function formatAuthError(err: unknown): string {
       return "Sign-in could not finish. Please try again, or contact support if this continues.";
     }
     const lower = msg.toLowerCase();
+    if (lower.includes("unable to exchange external code") || lower.includes("exchange external code")) {
+      return "Google sign-in could not finish. Please try again.";
+    }
     if (
       lower.includes("supabase") ||
       lower.includes("vite_") ||

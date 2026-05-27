@@ -88,6 +88,10 @@ function App() {
               isAuthenticated={auth.isAuthenticated}
               onLogin={auth.signIn}
               onGoogleLogin={auth.signInWithGoogle}
+              onStaffLogin={auth.signInStaff}
+              listStaffShops={auth.listStaffShops}
+              rememberedStaffDevice={auth.rememberedStaffDevice}
+              onClearRememberedStaff={auth.clearRememberedStaff}
               mode={auth.mode}
             />
           }

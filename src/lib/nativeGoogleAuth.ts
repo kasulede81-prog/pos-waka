@@ -11,7 +11,10 @@ import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { Browser } from "@capacitor/browser";
 import { getAuthCallbackUrl } from "./authConfig";
-import { rewriteNativeOAuthAuthorizeUrl } from "./nativeOAuthBrandedProxy";
+import {
+  getSupabaseOAuthCallbackUrl,
+  resolveNativeGoogleOAuthBrowserUrl,
+} from "./nativeOAuthBrandedProxy";
 import { supabase } from "./supabase";
 
 let deepLinkRegistered = false;
@@ -56,8 +59,12 @@ async function finishOAuthFromUrl(url: string): Promise<boolean> {
     new URLSearchParams(hash).get("error_description");
   if (err) {
     if (String(err).includes("redirect_uri_mismatch")) {
+      const supabaseCb = getSupabaseOAuthCallbackUrl();
+      const brandedCb = "https://pos.waka.ug/auth/v1/callback";
       throw new Error(
-        "Google sign-in is not configured for the Android app yet. In Google Cloud, open your Web OAuth client and add this Authorized redirect URI: your Supabase URL + /auth/v1/callback (see docs/GOOGLE_OAUTH_BRANDING.md).",
+        supabaseCb
+          ? `Google redirect URI mismatch. In Google Cloud → your Web OAuth client → Authorized redirect URIs, add BOTH:\n${supabaseCb}\n${brandedCb}\nSave, wait 2 minutes, then try again.`
+          : "Google redirect URI mismatch. Add your Supabase /auth/v1/callback and https://pos.waka.ug/auth/v1/callback in Google Cloud (see docs/GOOGLE_OAUTH_BRANDING.md).",
       );
     }
     throw new Error(err);
@@ -104,7 +111,7 @@ export async function signInWithGoogleNative(): Promise<void> {
   if (error) throw error;
   if (!data?.url) throw new Error("Could not start Google sign-in.");
 
-  const url = rewriteNativeOAuthAuthorizeUrl(data.url);
+  const url = await resolveNativeGoogleOAuthBrowserUrl(data.url);
 
   return new Promise<void>((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {

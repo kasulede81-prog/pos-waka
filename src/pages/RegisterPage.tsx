@@ -12,6 +12,7 @@ import type { SignUpProfileMeta, SignUpResult } from "../hooks/useAuth";
 import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { DeviceLocationRequestError, getDevicePosition } from "../lib/deviceLocation";
 
 type Props = {
   lang: Language;
@@ -152,21 +153,20 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
 
   const captureGps = () => {
     setError(null);
-    if (!("geolocation" in navigator)) {
-      setError(t(lang, "shopGpsNotSupported"));
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude);
-        setLongitude(pos.coords.longitude);
+    void (async () => {
+      try {
+        const pos = await getDevicePosition();
+        setLatitude(pos.latitude);
+        setLongitude(pos.longitude);
         setGpsSkipped(false);
-      },
-      () => {
-        setError(t(lang, "shopGpsDenied"));
-      },
-      { enableHighAccuracy: true, timeout: 25_000, maximumAge: 120_000 },
-    );
+      } catch (err) {
+        if (err instanceof DeviceLocationRequestError && err.reason === "unsupported") {
+          setError(t(lang, "shopGpsNotSupported"));
+        } else {
+          setError(t(lang, "shopGpsDenied"));
+        }
+      }
+    })();
   };
 
   const skipGps = () => {

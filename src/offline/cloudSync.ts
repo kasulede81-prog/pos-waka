@@ -1,4 +1,4 @@
-import type { Customer, Product, Sale, SaleLine, SellingMode } from "../types";
+import type { Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, SupplierPayment } from "../types";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
@@ -7,6 +7,11 @@ import { writeSnapshot } from "./localDb";
 import type { SyncOperation } from "../types";
 
 type ShopCtx = { shopId: string; userId: string };
+
+function isMissingTableError(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === "42P01";
+}
 
 function isUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
@@ -308,6 +313,49 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
   return true;
 }
 
+async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase) return false;
+  const payload = {
+    id: returnRow.id,
+    shop_id: ctx.shopId,
+    sale_id: returnRow.saleId ?? null,
+    product_id: returnRow.productId,
+    quantity: returnRow.quantity,
+    refund_amount_ugx: returnRow.refundAmountUgx,
+    reason: returnRow.reason,
+    note: returnRow.note ?? null,
+    created_by: isUuid(returnRow.actorUserId) ? returnRow.actorUserId : ctx.userId,
+    created_at: returnRow.createdAt,
+    metadata: {
+      productName: returnRow.productName,
+      actorName: returnRow.actorName ?? null,
+      shiftId: returnRow.shiftId ?? null,
+      wakaClient: true,
+    },
+  };
+  const { error } = await supabase.from("sale_returns").upsert(payload, { onConflict: "id" });
+  if (!error) return true;
+  if (isMissingTableError(error)) return true;
+  return false;
+}
+
+async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase) return false;
+  const payload = {
+    id: payment.id,
+    shop_id: ctx.shopId,
+    supplier_id: payment.supplierId,
+    amount_ugx: payment.amountUgx,
+    created_at: payment.createdAt,
+    recorded_by: ctx.userId,
+    metadata: { wakaClient: true },
+  };
+  const { error } = await supabase.from("supplier_payments").upsert(payload, { onConflict: "id" });
+  if (!error) return true;
+  if (isMissingTableError(error)) return true;
+  return false;
+}
+
 /** Push one sale to Supabase as soon as possible (after checkout). */
 export async function syncSaleImmediately(saleId: string): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
@@ -341,6 +389,14 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (!product) return true;
       return pushProductToCloud(product, ctx);
     }
+    case "pending_stock_updates":
+    case "stock_move": {
+      const productId = String(payload.productId ?? payload.id ?? "");
+      const product = usePosStore.getState().products.find((p) => p.id === productId);
+      if (!product) return true;
+      return pushProductToCloud(product, ctx);
+    }
+    case "pending_sales":
     case "sale": {
       if (payload.kind === "day_close") return true;
       const saleId = String(payload.saleId ?? "");
@@ -348,6 +404,27 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (!sale) return true;
       return pushSaleToCloud(sale, ctx);
     }
+    case "pending_returns": {
+      const returnId = String(payload.returnId ?? "");
+      const row = usePosStore.getState().returnRecords.find((r) => r.id === returnId);
+      if (!row) return true;
+      if (row.saleId) {
+        const sale = usePosStore.getState().sales.find((s) => s.id === row.saleId);
+        if (sale) {
+          const synced = await pushSaleToCloud(sale, ctx);
+          if (!synced) return false;
+        }
+      }
+      return pushReturnToCloud(row, ctx);
+    }
+    case "pending_expenses":
+      if (payload.kind === "supplier_payment") {
+        const paymentId = String(payload.paymentId ?? "");
+        const payment = usePosStore.getState().supplierPayments.find((p) => p.id === paymentId);
+        if (!payment) return true;
+        return pushSupplierPaymentToCloud(payment, ctx);
+      }
+      return true;
     case "customer": {
       const customerId = String(payload.id ?? "");
       const customer = usePosStore.getState().customers.find((c) => c.id === customerId);

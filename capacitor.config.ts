@@ -24,7 +24,9 @@ const config: CapacitorConfig = {
       launchShowDuration: 0,
       launchAutoHide: false,
       backgroundColor: "#ffffff",
-      androidScaleType: "CENTER",
+      /** Full logo from `res/drawable/splash.png` (generated from `resources/splash.png`) */
+      androidSplashResourceName: "splash",
+      androidScaleType: "FIT_CENTER",
       showSpinner: false,
     },
   },

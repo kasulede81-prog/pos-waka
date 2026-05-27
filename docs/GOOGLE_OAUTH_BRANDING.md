@@ -72,15 +72,16 @@ Google shows the **OAuth redirect host** (`redirect_uri`). To show `pos.waka.ug`
 
    If your Supabase **project ref** is different from `ljaedextsenbkxzzgxcg`, change the destination URL in **`vercel.json`** to match your project.
 
-2. In **Authorized redirect URIs**, add:
+2. In **Authorized redirect URIs**, add **both** (Supabase always sends the `*.supabase.co` URI to Google; the app also uses the branded one):
 
    ```
+   https://ljaedextsenbkxzzgxcg.supabase.co/auth/v1/callback
    https://pos.waka.ug/auth/v1/callback
    ```
 
-   Keep the **Supabase** callback URI as well (`https://<ref>.supabase.co/auth/v1/callback`) so nothing breaks during rollout.
+   If you only add `pos.waka.ug`, you will get **`redirect_uri_mismatch`** until the Supabase URI is listed too.
 
-The Android app automatically rewrites the OAuth authorize URL to use `https://pos.waka.ug/auth/v1/...` whenever `VITE_APP_URL=https://pos.waka.ug` (or production default canonical).
+The Android app routes authorize through `https://pos.waka.ug/auth/v1/...` when possible, but **must not** change Google’s `redirect_uri` (that causes `Unable to exchange external code`). Google’s “Continue to …” may still show `*.supabase.co` unless you add a Supabase custom auth domain.
 
 **Save** the client. Wait 1–3 minutes before testing on the phone.
 

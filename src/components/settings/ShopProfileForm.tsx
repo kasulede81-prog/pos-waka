@@ -14,6 +14,7 @@ import {
 } from "../../lib/businessProfile";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { fetchDistricts, type DistrictRow } from "../../lib/shopDistricts";
+import { DeviceLocationRequestError, getDevicePosition } from "../../lib/deviceLocation";
 
 type Props = {
   lang: Language;
@@ -255,20 +256,21 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
               onClick={() => {
                 setGpsHint(null);
                 setRecordGpsSnapshot(false);
-                if (!("geolocation" in navigator)) {
-                  setGpsHint(t(lang, "shopGpsNotSupported"));
-                  return;
-                }
-                navigator.geolocation.getCurrentPosition(
-                  (pos) => {
-                    setShopLat(pos.coords.latitude);
-                    setShopLng(pos.coords.longitude);
+                void (async () => {
+                  try {
+                    const pos = await getDevicePosition();
+                    setShopLat(pos.latitude);
+                    setShopLng(pos.longitude);
                     setRecordGpsSnapshot(true);
                     setGpsHint(t(lang, "shopGpsSaved"));
-                  },
-                  () => setGpsHint(t(lang, "shopGpsDenied")),
-                  { enableHighAccuracy: true, timeout: 20_000, maximumAge: 60_000 },
-                );
+                  } catch (err) {
+                    if (err instanceof DeviceLocationRequestError && err.reason === "unsupported") {
+                      setGpsHint(t(lang, "shopGpsNotSupported"));
+                    } else {
+                      setGpsHint(t(lang, "shopGpsDenied"));
+                    }
+                  }
+                })();
               }}
             >
               {t(lang, "shopUseGps")}

@@ -17,6 +17,7 @@ import type {
   SellingMode,
   ShiftRecord,
   ShopPreferences,
+  Permission,
   StaffAccount,
   StockMovement,
   StockMovementKind,
@@ -57,7 +58,9 @@ import {
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
-import { canTogglePosUiMode } from "../lib/permissions";
+import { canTogglePosUiMode, permissionsForRole } from "../lib/permissions";
+import { hashStaffSecret, normalizePin } from "../lib/staffSecret";
+import { clearPendingStaffSelection, readPendingStaffSelection } from "../lib/staffOfflineAuth";
 
 const MAX_AUDIT_LOGS = 5000;
 const MAX_STOCK_MOVEMENTS = 4000;
@@ -112,9 +115,15 @@ function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
     out.push({
       id: typeof obj.id === "string" && obj.id ? obj.id : crypto.randomUUID(),
       name,
+      username: typeof obj.username === "string" ? obj.username.trim().toLowerCase() || null : null,
       role,
+      permissions: Array.isArray(obj.permissions)
+        ? (obj.permissions as string[]).map((p) => p.trim()).filter(Boolean) as Permission[]
+        : permissionsForRole(role),
       pin: typeof obj.pin === "string" ? obj.pin.replace(/\D/g, "").slice(0, 6) || null : null,
       password: typeof obj.password === "string" ? obj.password || null : null,
+      pinHash: typeof obj.pinHash === "string" ? obj.pinHash.trim() || null : null,
+      passwordHash: typeof obj.passwordHash === "string" ? obj.passwordHash.trim() || null : null,
       phone: typeof obj.phone === "string" ? obj.phone || null : null,
       active: obj.active !== false,
       createdAt: typeof obj.createdAt === "string" ? obj.createdAt : new Date().toISOString(),
@@ -212,8 +221,8 @@ type PosState = {
   setSessionActor: (actor: SessionActor | null) => void;
 
   setPreferences: (p: Partial<ShopPreferences>) => void;
-  addStaffAccount: (input: { name: string; role: UserRole; pin?: string; password?: string; phone?: string }) => { ok: boolean; errorKey?: string; id?: string };
-  updateStaffAccount: (id: string, patch: { name?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
+  addStaffAccount: (input: { name: string; username?: string; role: UserRole; pin?: string; password?: string; phone?: string }) => { ok: boolean; errorKey?: string; id?: string };
+  updateStaffAccount: (id: string, patch: { name?: string; username?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
   switchStaffAccount: (id: string | null) => void;
   setPosLocked: (locked: boolean) => void;
@@ -647,14 +656,19 @@ export const usePosStore = create<PosState>((set, get) => {
   addStaffAccount: (input) => {
     const name = input.name.trim();
     if (!name) return { ok: false, errorKey: "personNamePh" };
-    const pin = (input.pin ?? "").replace(/\D/g, "").slice(0, 6) || null;
+    const username = (input.username ?? "").trim().toLowerCase() || null;
+    const pin = normalizePin(input.pin ?? "") || null;
     const password = (input.password ?? "").trim() || null;
     const row: StaffAccount = {
       id: crypto.randomUUID(),
       name,
+      username,
       role: input.role,
-      pin,
-      password,
+      permissions: permissionsForRole(input.role),
+      pin: null,
+      password: null,
+      pinHash: pin ? hashStaffSecret(pin) : null,
+      passwordHash: password ? hashStaffSecret(password) : null,
       phone: (input.phone ?? "").trim() || null,
       active: true,
       createdAt: new Date().toISOString(),
@@ -679,6 +693,11 @@ export const usePosStore = create<PosState>((set, get) => {
                 ...a,
                 name: patch.name?.trim() ?? a.name,
                 role: patch.role ?? a.role,
+                username:
+                  patch.username === undefined
+                    ? (a.username ?? null)
+                    : patch.username.trim().toLowerCase() || null,
+                permissions: patch.role ? permissionsForRole(patch.role) : (a.permissions ?? permissionsForRole(a.role)),
                 phone: patch.phone === undefined ? a.phone : patch.phone.trim() || null,
                 active: patch.active ?? a.active,
                 updatedAt: new Date().toISOString(),
@@ -697,8 +716,16 @@ export const usePosStore = create<PosState>((set, get) => {
           a.id === id
             ? {
                 ...a,
-                pin: patch.pin === undefined ? a.pin : ((patch.pin ?? "").replace(/\D/g, "").slice(0, 6) || null),
-                password: patch.password === undefined ? a.password : (patch.password?.trim() || null),
+                pin: patch.pin === undefined ? a.pin : null,
+                password: patch.password === undefined ? a.password : null,
+                pinHash:
+                  patch.pin === undefined
+                    ? (a.pinHash ?? null)
+                    : (normalizePin(patch.pin ?? "") ? hashStaffSecret(normalizePin(patch.pin ?? "")) : null),
+                passwordHash:
+                  patch.password === undefined
+                    ? (a.passwordHash ?? null)
+                    : (patch.password?.trim() ? hashStaffSecret(patch.password.trim()) : null),
                 updatedAt: new Date().toISOString(),
               }
             : a,
@@ -957,7 +984,7 @@ export const usePosStore = create<PosState>((set, get) => {
       }));
     }
 
-    void queueRemote("sale", { saleId: sale.id });
+    void queueRemote("pending_sales", { saleId: sale.id });
     if (hasSupabaseConfig && typeof navigator !== "undefined" && navigator.onLine) {
       void import("../offline/cloudSync").then((m) => m.syncSaleImmediately(sale.id));
     }
@@ -1179,6 +1206,13 @@ export const usePosStore = create<PosState>((set, get) => {
       reason,
       note: note ?? null,
       actorUserId: actor.userId,
+    });
+    void queueRemote("pending_returns", {
+      returnId: returnRec.id,
+      saleId: saleId ?? null,
+      productId,
+      quantity: qty,
+      refundAmountUgx: refund,
     });
     return { ok: true };
   },
@@ -1462,7 +1496,7 @@ export const usePosStore = create<PosState>((set, get) => {
       ),
       stockMovements: mergeStockMovements([movement], s.stockMovements),
     }));
-    void queueRemote("stock_move", { productId, delta, note: reason ?? "" });
+    void queueRemote("pending_stock_updates", { productId, delta, note: reason ?? "" });
     pushAudit("stock_adjust", `${reason ?? "adjust"} ${delta >= 0 ? "+" : ""}${delta} · ${prev?.name ?? productId}`, {
       productId,
       delta,
@@ -1560,7 +1594,7 @@ export const usePosStore = create<PosState>((set, get) => {
       ),
       supplierPayments: [payment, ...state.supplierPayments],
     });
-    void queueRemote("supplier", { kind: "payment", paymentId: payment.id });
+    void queueRemote("pending_expenses", { kind: "supplier_payment", paymentId: payment.id, supplierId, amountUgx: pay });
     pushAudit("supplier_payment", `Paid supplier UGX ${pay.toLocaleString()}`, {
       supplierId,
       supplierName: sup.name,
@@ -1674,7 +1708,7 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: mergeStockMovements(movements, state.stockMovements),
     });
 
-    void queueRemote("purchase", { purchaseId: purchase.id });
+    void queueRemote("pending_stock_updates", { kind: "purchase", purchaseId: purchase.id });
     pushAudit("purchase_saved", `Restock UGX ${totalCostUgx.toLocaleString()} · ${supplierName}`, {
       purchaseId: purchase.id,
       supplierId,
@@ -1719,7 +1753,7 @@ export const usePosStore = create<PosState>((set, get) => {
       createdAt: new Date().toISOString(),
     };
     set((s) => ({ dayCloses: [row, ...s.dayCloses] }));
-    void queueRemote("sale", { kind: "day_close", id: row.id });
+    void queueRemote("pending_sales", { kind: "day_close", id: row.id });
     pushAudit("day_close", `Close ${dateKey} counted UGX ${counted.toLocaleString()}`, {
       dayCloseId: row.id,
       dateKey,
@@ -1951,6 +1985,13 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   }
 
   const preferences = mergePreferencesFromPartial(snap);
+  const pendingStaff = readPendingStaffSelection();
+  const activeKey = getActiveAccountKey();
+  if (pendingStaff && activeKey && pendingStaff.accountKey === activeKey) {
+    const exists = (preferences.staffAccounts ?? []).some((s) => s.id === pendingStaff.staffId && s.active);
+    preferences.activeStaffId = exists ? pendingStaff.staffId : null;
+    clearPendingStaffSelection();
+  }
   usePosStore.getState().hydrate({
     products: (snap.products ?? []).map((p) => normalizeProduct(p as Product)),
     customers: (snap.customers ?? []).map((c) => normalizeCustomer(c as Customer)),

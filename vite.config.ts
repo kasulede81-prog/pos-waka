@@ -45,20 +45,21 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: "autoUpdate",
-        includeAssets: ["favicon.svg", "og-waka-technologies.png"],
+        includeAssets: ["waka-logo.png", "icons/icon-192.webp", "icons/icon-512.webp", "og-waka-technologies.png"],
         manifest: {
           name: appName,
           short_name: shortName,
           description:
             "Waka POS by Waka Technologies — simple sales, stock, and reports for shops in Uganda. Works offline too.",
           theme_color: "#ea580c",
-          background_color: "#fff7ed",
+          background_color: "#ffffff",
           display: "standalone",
           start_url: "/",
           scope: "/",
           icons: [
-            { src: "favicon.svg", sizes: "512x512", type: "image/svg+xml", purpose: "any" },
-            { src: "favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "maskable" },
+            { src: "icons/icon-192.webp", sizes: "192x192", type: "image/webp", purpose: "any" },
+            { src: "icons/icon-512.webp", sizes: "512x512", type: "image/webp", purpose: "any" },
+            { src: "icons/icon-512.webp", sizes: "512x512", type: "image/webp", purpose: "maskable" },
           ],
         },
         workbox: {

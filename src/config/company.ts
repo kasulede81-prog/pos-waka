@@ -9,7 +9,7 @@ export const WAKA_POS_URL = "https://pos.waka.ug";
 /** @deprecated Use WAKA_POS_URL for app; WAKA_SITE_URL for marketing canonicals. */
 export const CANONICAL_MARKETING_ORIGIN = WAKA_SITE_URL.replace(/\/$/, "");
 
-export const WAKA_BRAND_NAME = "Waka Technologies";
+export const WAKA_BRAND_NAME = "WAKA";
 export const WAKA_SLOGAN = "Tech for next generation";
 export const WAKA_BRAND_LINE = "Simple technology for everyday business";
 
@@ -20,7 +20,7 @@ export const WAKA_COMPANY_COUNTRY = "Uganda";
 
 export const WAKA_MAIN_PRODUCT = "Waka POS";
 export const WAKA_PRODUCT_DESCRIPTION =
-  "Waka POS by Waka Technologies helps shops, supermarkets, pharmacies, salons, and restaurants in Uganda manage sales, stock, and daily reports without complicated systems.";
+  "Waka POS by WAKA helps shops, supermarkets, pharmacies, salons, and restaurants in Uganda manage sales, stock, and daily reports without complicated systems.";
 
 export const WAKA_SEO_DEFAULT_TITLE = "Waka POS | Simple POS for Shops in Uganda";
 export const WAKA_SEO_DEFAULT_DESCRIPTION = WAKA_PRODUCT_DESCRIPTION;
@@ -50,10 +50,10 @@ export const FOUNDER_PHOTO_SRC = "/founder-kasule-denis.jpg";
 export const FOUNDER_PHOTO_ALT = "Kasule Denis, founder of Waka Technologies and Waka POS";
 
 export const FOUNDER_BIO_SHORT =
-  "Ugandan entrepreneur building Waka POS with Waka Technologies. Simple tools for real shops and businesses.";
+  "Ugandan entrepreneur building Waka POS with WAKA. Simple tools for real shops and businesses.";
 
 export const FOUNDER_HOME_LINE =
-  "Built by Kasule Denis and Waka Technologies for shop owners who want clear sales and stock without stress.";
+  "Built by Kasule Denis and WAKA for shop owners who want clear sales and stock without stress.";
 
 export const FOUNDER_VISION =
   "We build technology that helps African businesses grow. Simple systems that save time and make daily work easier for ordinary people.";
@@ -97,7 +97,7 @@ export const SEO_KEYWORDS = [
   "Uganda POS",
   "POS system Uganda",
   "Waka POS",
-  "Waka Technologies",
+  "WAKA",
   "shop POS Uganda",
   "supermarket POS Uganda",
   "pharmacy POS Uganda",

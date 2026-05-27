@@ -59,6 +59,29 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
           <dt className="font-semibold text-stone-600">{t(lang, "backupSyncPendingLabel")}</dt>
           <dd className="font-black text-stone-900">{sync.pendingCount}</dd>
         </div>
+        {!simple ? (
+          <div className="rounded-xl bg-stone-50 px-3 py-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t(lang, "backupSyncQueueBreakdown")}</p>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs font-semibold text-stone-700">
+              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+                <span>{t(lang, "backupSyncQueueSales")}</span>
+                <span className="font-black text-stone-900">{sync.pendingBreakdown.sales}</span>
+              </p>
+              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+                <span>{t(lang, "backupSyncQueueStock")}</span>
+                <span className="font-black text-stone-900">{sync.pendingBreakdown.stock}</span>
+              </p>
+              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+                <span>{t(lang, "backupSyncQueueReturns")}</span>
+                <span className="font-black text-stone-900">{sync.pendingBreakdown.returns}</span>
+              </p>
+              <p className="flex items-center justify-between rounded-lg bg-white px-2 py-1">
+                <span>{t(lang, "backupSyncQueueExpenses")}</span>
+                <span className="font-black text-stone-900">{sync.pendingBreakdown.expenses}</span>
+              </p>
+            </div>
+          </div>
+        ) : null}
         <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
           <dt className="font-semibold text-stone-600">{t(lang, "backupSyncLastUpload")}</dt>
           <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>

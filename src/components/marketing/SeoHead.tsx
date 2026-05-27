@@ -68,7 +68,7 @@ function organizationSchema() {
     legalName: WAKA_LEGAL_COMPANY_NAME,
     slogan: WAKA_SLOGAN,
     url: WAKA_SITE_URL,
-    logo: marketingCanonical("/favicon.svg"),
+    logo: marketingCanonical("/waka-logo.png"),
     email: WAKA_SUPPORT_EMAIL,
     foundingDate: "2023",
     founder: { "@type": "Person", name: FOUNDER_NAME },

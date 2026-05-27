@@ -93,10 +93,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
   };
 
-  const filteredSales = useMemo(
-    () => sales.filter((s) => saleMatchesReceiptRange(s.createdAt, range)),
-    [sales, range],
-  );
+  const filteredSales = useMemo(() => {
+    const inRange = sales.filter((s) => saleMatchesReceiptRange(s.createdAt, range));
+    if (actor.role !== "cashier") return inRange;
+    return inRange.filter((s) => s.soldByUserId && s.soldByUserId === actor.userId);
+  }, [sales, range, actor.role, actor.userId]);
 
   const byDay = useMemo(() => groupSalesByKampalaDay(filteredSales), [filteredSales]);
 

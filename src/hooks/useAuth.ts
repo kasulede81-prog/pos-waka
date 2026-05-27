@@ -8,15 +8,32 @@ import { hydrateAccountFromCloud } from "../lib/postAuthCloudHydrate";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
-import type { BusinessType } from "../types";
+import type { BusinessType, UserRole } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { usePosStore, flushPendingPersist } from "../store/usePosStore";
+import {
+  authenticateOfflineStaff,
+  clearPendingStaffSelection,
+  clearRememberedStaffDevice,
+  listCachedShopsForStaffLogin,
+  readRememberedStaffDevice,
+  type CachedShop,
+  type RememberedStaffDevice,
+  type StaffLoginInput,
+} from "../lib/staffOfflineAuth";
 
 type LocalSession = { email: string };
+type StaffSession = {
+  accountKey: string;
+  businessName: string;
+  staffId: string;
+  staffName: string;
+  role: UserRole;
+};
 
 const LOCAL_AUTH_KEY = "waka-pos-local-session";
 const PENDING_REFERRAL_KEY = "waka-pending-referral";
@@ -88,6 +105,10 @@ export function useAuth() {
   const [initializing, setInitializing] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
   const [localEmail, setLocalEmail] = useState<string | null>(null);
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
+  const [rememberedStaffDevice, setRememberedStaffDevice] = useState<RememberedStaffDevice | null>(
+    () => readRememberedStaffDevice(),
+  );
 
   const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
 
@@ -411,6 +432,12 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (staffSession) {
+      applyAccountSwitchSync(null);
+      clearPendingStaffSelection();
+      setStaffSession(null);
+      return;
+    }
     if (hasSupabaseConfig && supabase) {
       await supabase.auth.signOut();
       applyAccountSwitchSync(null);
@@ -420,9 +447,33 @@ export function useAuth() {
     localStorage.removeItem(LOCAL_AUTH_KEY);
     applyAccountSwitchSync(null);
     setLocalEmail(null);
+  }, [staffSession]);
+
+  const signInStaff = useCallback(async (input: StaffLoginInput) => {
+    const auth = await authenticateOfflineStaff(input);
+    applyAccountSwitchSync(auth.accountKey);
+    setSession(null);
+    setLocalEmail(null);
+    setStaffSession({
+      accountKey: auth.accountKey,
+      businessName: auth.businessName,
+      staffId: auth.staffId,
+      staffName: auth.staffName,
+      role: auth.role,
+    });
+    setRememberedStaffDevice(readRememberedStaffDevice());
   }, []);
 
-  const isAuthenticated = Boolean(session?.user) || Boolean(localEmail);
+  const listStaffShops = useCallback(async (): Promise<CachedShop[]> => {
+    return listCachedShopsForStaffLogin();
+  }, []);
+
+  const clearRememberedStaff = useCallback(() => {
+    clearRememberedStaffDevice();
+    setRememberedStaffDevice(null);
+  }, []);
+
+  const isAuthenticated = Boolean(session?.user) || Boolean(localEmail) || Boolean(staffSession);
   const user = session?.user ?? null;
   const metaStr = user?.user_metadata as Record<string, string> | undefined;
   const shopName =
@@ -430,11 +481,13 @@ export function useAuth() {
     (metaStr?.business_name as string | undefined)?.trim() ||
     "";
   const email = user?.email ?? localEmail;
-  const accountKey = computeAccountKey({
-    mode: AUTH_MODE,
-    userId: user?.id ?? null,
-    email,
-  }) ?? getActiveAccountKey();
+  const effectiveMode: "supabase" | "local" = staffSession ? "local" : AUTH_MODE;
+  const accountKey = staffSession?.accountKey
+    ?? computeAccountKey({
+      mode: AUTH_MODE,
+      userId: user?.id ?? null,
+      email,
+    }) ?? getActiveAccountKey();
 
   return useMemo(
     () => ({
@@ -444,10 +497,14 @@ export function useAuth() {
       user,
       shopName,
       email,
-      mode: AUTH_MODE,
+      mode: effectiveMode,
       accountKey,
       signIn,
       signInWithGoogle,
+      signInStaff,
+      listStaffShops,
+      rememberedStaffDevice,
+      clearRememberedStaff,
       signUp,
       signOut,
       requestPasswordReset,
@@ -461,9 +518,14 @@ export function useAuth() {
       user,
       shopName,
       email,
+      effectiveMode,
       accountKey,
       signIn,
       signInWithGoogle,
+      signInStaff,
+      listStaffShops,
+      rememberedStaffDevice,
+      clearRememberedStaff,
       signUp,
       signOut,
       requestPasswordReset,

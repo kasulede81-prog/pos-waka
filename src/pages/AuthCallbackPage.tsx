@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { WakaMarkIcon } from "../components/brand/WakaLogo";
+import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { authDevLog, formatAuthError, parseOAuthCallbackError } from "../lib/authConfig";
 import { supabase } from "../lib/supabase";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
@@ -100,7 +100,7 @@ export function AuthCallbackPage() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-orange-50 via-white to-stone-50 px-4 py-10">
-      <WakaMarkIcon className="h-14 w-14 text-orange-600 shadow-waka-sm" />
+      <WakaPosLogo size="lg" className="mx-auto" />
       <p className="mt-4 text-lg font-black text-stone-900">Waka POS</p>
       <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{WAKA_LEGAL_COMPANY_NAME}</p>
 

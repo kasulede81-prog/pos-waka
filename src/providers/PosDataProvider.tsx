@@ -3,6 +3,7 @@ import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
 import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
+import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { t } from "../lib/i18n";
 import type { Language } from "../types";
 
@@ -19,12 +20,9 @@ type Props = {
 
 function LoadingSkeleton({ lang }: { lang: Language }) {
   return (
-      <div className="flex min-h-dvh flex-col bg-gradient-to-b from-waka-50/90 via-stone-50 to-stone-100 px-5 pt-[max(2rem,env(safe-area-inset-top))]">
+      <div className="flex min-h-dvh flex-col items-center bg-white px-5 pt-[max(2rem,env(safe-area-inset-top))]">
+        <WakaPosLogo size="splash" className="mb-8 mt-4" />
         <div className="mx-auto w-full max-w-md space-y-6">
-          <div>
-            <div className="h-8 w-40 rounded-xl waka-skeleton-bar" />
-            <div className="mt-3 h-4 w-full max-w-xs rounded-lg waka-skeleton-bar opacity-80" />
-          </div>
           <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
           <p className="text-center text-xs font-medium text-stone-500">{t(lang, "openingShopLocalHint")}</p>
         <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>

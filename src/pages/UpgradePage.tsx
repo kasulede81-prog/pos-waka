@@ -4,6 +4,7 @@ import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
 import {
+  getPaidPlanRenewalCountdown,
   maxDevicesHintForTier,
   maxProductsForTier,
   maxStaffAccountsForTier,
@@ -37,6 +38,7 @@ function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | 
 export function UpgradePage({ lang }: { lang: Language }) {
   const { snapshot, authMode, loading, refetch } = useSubscription();
   const current = resolveEffectivePlanTier(snapshot);
+  const renewalCountdown = getPaidPlanRenewalCountdown(snapshot);
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
   const [annualRequestBusy, setAnnualRequestBusy] = useState(false);
   const [annualRequestMsg, setAnnualRequestMsg] = useState<string | null>(null);
@@ -82,6 +84,11 @@ export function UpgradePage({ lang }: { lang: Language }) {
           <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "upgradeCurrentLabel")}</p>
           <p className="mt-1 text-2xl font-black text-slate-900">{t(lang, planLabelKey(current))}</p>
           <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
+          {renewalCountdown ? (
+            <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
+              VIP countdown: {renewalCountdown.days} days {renewalCountdown.hours} hours left
+            </p>
+          ) : null}
           <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
         </section>
       ) : null}

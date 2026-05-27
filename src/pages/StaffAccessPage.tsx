@@ -18,6 +18,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const resetStaffSecret = usePosStore((s) => s.resetStaffSecret);
 
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
   const [role, setRole] = useState<UserRole>("cashier");
   const [pin, setPin] = useState("");
   const [password, setPassword] = useState("");
@@ -41,6 +42,12 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         <p className="text-lg font-black text-slate-900">{t(lang, "staffCreateTitle")}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t(lang, "staffNamePh")} className="rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg" />
+          <input
+            value={username}
+            onChange={(e) => setUsername(e.target.value.replace(/\s+/g, "").toLowerCase())}
+            placeholder="username (e.g cashier01)"
+            className="rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+          />
           <select value={role} onChange={(e) => setRole(e.target.value as UserRole)} className="rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold">
             {ROLE_OPTIONS.map((r) => (
               <option key={r} value={r}>
@@ -57,12 +64,13 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           type="button"
           className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
           onClick={() => {
-            const res = addStaffAccount({ name, role, pin, password, phone });
+            const res = addStaffAccount({ name, username, role, pin, password, phone });
             if (!res.ok) {
               setMsg(t(lang, "staffCreateFail"));
               return;
             }
             setName("");
+            setUsername("");
             setPin("");
             setPassword("");
             setPhone("");
@@ -81,6 +89,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
               <div>
                 <p className="text-xl font-black text-slate-900">{s.name}</p>
                 <p className="text-sm font-semibold text-slate-500">{t(lang, `role_${s.role}`)}</p>
+                {s.username ? <p className="text-xs font-semibold text-slate-400">@{s.username}</p> : null}
               </div>
               <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold">
                 <input

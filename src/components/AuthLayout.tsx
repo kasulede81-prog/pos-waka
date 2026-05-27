@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
-import { t } from "../lib/i18n";
 import { languageToggleLabel, nextLanguage } from "../lib/language";
-import { WakaMarkIcon } from "./brand/WakaLogo";
+import { WakaPosLogo } from "./brand/WakaLogo";
 import { WAKA_BRAND_NAME, WAKA_LEGAL_COMPANY_NAME, WAKA_SLOGAN } from "../config/wakaSupport";
 
 type Props = {
@@ -19,14 +18,8 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
     <div className="min-h-dvh bg-gradient-to-b from-waka-50 via-stone-50 to-stone-100">
       <div className="mx-auto flex max-w-md flex-col gap-4 px-4 py-8">
         <header className="flex items-center justify-between gap-3">
-          <Link to={brandHref} className="flex min-w-0 items-center gap-2.5 rounded-2xl py-1">
-            <WakaMarkIcon className="h-10 w-10 shrink-0 text-waka-600 shadow-waka-sm" />
-            <span className="min-w-0">
-              <span className="block truncate text-lg font-black text-stone-900">{t(lang, "appName")}</span>
-              <span className="block truncate text-[11px] font-semibold uppercase tracking-wide text-stone-500">
-                {t(lang, "brandTagline")}
-              </span>
-            </span>
+          <Link to={brandHref} className="block min-w-0 rounded-2xl py-1">
+            <WakaPosLogo size="md" className="max-w-[min(100%,280px)]" />
           </Link>
           <button
             type="button"

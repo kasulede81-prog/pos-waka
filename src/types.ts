@@ -355,9 +355,15 @@ export type Expense = {
 export type StaffAccount = {
   id: string;
   name: string;
+  /** Unique per shop when set (e.g. cashier01). */
+  username?: string | null;
   role: UserRole;
+  /** Cached effective permissions for offline checks / audits. */
+  permissions?: Permission[];
   pin?: string | null;
   password?: string | null;
+  pinHash?: string | null;
+  passwordHash?: string | null;
   phone?: string | null;
   active: boolean;
   createdAt: string;
@@ -430,6 +436,12 @@ export type ShopPreferences = {
 };
 
 export type SyncOperationKind =
+  /** Canonical queue buckets for offline-first shop operations */
+  | "pending_sales"
+  | "pending_stock_updates"
+  | "pending_returns"
+  | "pending_expenses"
+  /** Legacy queue kinds kept for backward compatibility */
   | "sale"
   | "product"
   | "customer"

@@ -14,6 +14,7 @@
     "preview": "vite preview",
     "cap:sync": "npx cap sync android",
     "cap:open:android": "npx cap open android",
+    "cap:assets": "capacitor-assets generate --assetPath resources --android --pwa",
     "cap:build": "npm run build && npx cap sync android",
     "cap:run:android": "npm run cap:build && npx cap run android",
     "cap:apk:release": "npm run cap:build && cd android && gradlew.bat assembleRelease",
@@ -26,6 +27,7 @@
     "@capacitor/camera": "^8.2.0",
     "@capacitor/cli": "^8.3.4",
     "@capacitor/core": "^8.3.4",
+    "@capacitor/geolocation": "^8.2.0",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
@@ -49,6 +51,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",

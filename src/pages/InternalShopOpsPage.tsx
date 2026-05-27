@@ -48,6 +48,19 @@ function deviceOnline(lastSeen: string | null): boolean {
   return Date.now() - new Date(lastSeen).getTime() < 15 * 60 * 1000;
 }
 
+function vipCountdownLabel(currentPeriodEnd: string | null | undefined): string | null {
+  if (!currentPeriodEnd) return null;
+  const end = new Date(currentPeriodEnd).getTime();
+  if (!Number.isFinite(end)) return null;
+  const left = end - Date.now();
+  if (left <= 0) return "VIP expired";
+  const dayMs = 24 * 60 * 60 * 1000;
+  const hourMs = 60 * 60 * 1000;
+  const days = Math.floor(left / dayMs);
+  const hours = Math.floor((left % dayMs) / hourMs);
+  return `VIP ${days}d ${hours}h left`;
+}
+
 export function InternalShopOpsPage({ lang }: Props) {
   const { shopId } = useParams<{ shopId: string }>();
   const location = useLocation();
@@ -110,6 +123,11 @@ export function InternalShopOpsPage({ lang }: Props) {
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "business").toLowerCase();
     return PLAN_AMOUNTS[code] ?? PLAN_AMOUNTS.business;
   }, [detail?.plan_code, detail?.subscription?.plan_code]);
+  const vipCountdown = useMemo(() => {
+    const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "").toLowerCase();
+    if (code !== "waka_plus") return null;
+    return vipCountdownLabel(detail?.subscription?.current_period_end ?? null);
+  }, [detail?.plan_code, detail?.subscription?.plan_code, detail?.subscription?.current_period_end]);
 
   const shellAdmin = previewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow;
   const subId = detail?.subscription?.id;
@@ -133,11 +151,13 @@ export function InternalShopOpsPage({ lang }: Props) {
 
   const setAdminPlan = async (planCode: AdminPlanCode) => {
     if (!detail) return;
+    const effectiveDays = planCode === "waka_plus" ? 30 : planControlDays;
+    if (planCode === "waka_plus" && planControlDays !== 30) setPlanControlDays(30);
     await run(() =>
       adminShopSetSubscriptionPlan({
         shopId: detail.shop.id,
         planCode,
-        days: planControlDays,
+        days: effectiveDays,
       }),
     );
     window.dispatchEvent(new Event("waka:subscription-updated"));
@@ -307,6 +327,11 @@ export function InternalShopOpsPage({ lang }: Props) {
               <span className="rounded-full bg-stone-100 px-2.5 py-0.5 text-[10px] font-black text-stone-700">
                 {detail.sale_count_30d} {t(lang, "internalShopProfileSales30d")}
               </span>
+              {vipCountdown ? (
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-black text-emerald-900">
+                  {vipCountdown}
+                </span>
+              ) : null}
             </div>
             {detail.shop.phone_e164 ? (
               <p className="mt-1.5 font-mono text-xs text-stone-700">{detail.shop.phone_e164}</p>
@@ -375,11 +400,14 @@ export function InternalShopOpsPage({ lang }: Props) {
                   max={3650}
                   value={planControlDays}
                   onChange={(e) => setPlanControlDays(Math.max(1, Number(e.target.value) || 30))}
-                  disabled={!canSubs || busy || planControlCode === "free"}
+                  disabled={!canSubs || busy || planControlCode === "free" || planControlCode === "waka_plus"}
                   className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200 disabled:opacity-50"
                 />
               </label>
             </div>
+            {planControlCode === "waka_plus" ? (
+              <p className="mt-2 text-xs font-semibold text-emerald-800">VIP is always granted for 30 days.</p>
+            ) : null}
             <button
               type="button"
               disabled={busy || !canSubs}

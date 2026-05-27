@@ -5,11 +5,20 @@ import { readSyncQueue } from "../offline/localDb";
 import { countUnsyncedSales, pushShopPendingToCloud, syncShopWithCloud } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
-import type { SyncStatus } from "../types";
+import type { SyncOperationKind, SyncStatus } from "../types";
+
+type PendingBreakdown = {
+  sales: number;
+  stock: number;
+  returns: number;
+  expenses: number;
+  other: number;
+};
 
 export type SyncStatusApi = {
   isOnline: boolean;
   pendingCount: number;
+  pendingBreakdown: PendingBreakdown;
   syncing: boolean;
   status: SyncStatus;
   health: SyncHealthMeta;
@@ -23,14 +32,35 @@ const QUEUE_POLL_MS = 12_000;
 const MIN_PUSH_INTERVAL_MS = 8_000;
 const MIN_FULL_SYNC_INTERVAL_MS = 90_000;
 
-async function pendingUploadCount(): Promise<number> {
+function emptyBreakdown(): PendingBreakdown {
+  return { sales: 0, stock: 0, returns: 0, expenses: 0, other: 0 };
+}
+
+function bucketForKind(kind: SyncOperationKind): keyof PendingBreakdown {
+  if (kind === "pending_sales" || kind === "sale") return "sales";
+  if (kind === "pending_stock_updates" || kind === "stock_move" || kind === "product" || kind === "purchase") return "stock";
+  if (kind === "pending_returns") return "returns";
+  if (kind === "pending_expenses") return "expenses";
+  return "other";
+}
+
+async function pendingUploadStats(): Promise<{ total: number; breakdown: PendingBreakdown }> {
   const queue = await readSyncQueue();
-  return queue.length + countUnsyncedSales();
+  const breakdown = emptyBreakdown();
+  for (const op of queue) {
+    const bucket = bucketForKind(op.kind);
+    breakdown[bucket] += 1;
+  }
+  const unsyncedSales = countUnsyncedSales();
+  breakdown.sales += unsyncedSales;
+  const total = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
+  return { total, breakdown };
 }
 
 function useSyncStatusEngine(): SyncStatusApi {
   const { isOnline } = useOfflineStatus();
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingBreakdown, setPendingBreakdown] = useState<PendingBreakdown>(() => emptyBreakdown());
   const [syncing, setSyncing] = useState(false);
   const [health, setHealth] = useState<SyncHealthMeta>(() => readSyncHealthMeta());
   const syncingRef = useRef(false);
@@ -40,9 +70,10 @@ function useSyncStatusEngine(): SyncStatusApi {
   const pendingRef = useRef(0);
 
   const refreshQueue = useCallback(() => {
-    void pendingUploadCount().then((n) => {
-      pendingRef.current = n;
-      setPendingCount(n);
+    void pendingUploadStats().then(({ total, breakdown }) => {
+      pendingRef.current = total;
+      setPendingCount(total);
+      setPendingBreakdown(breakdown);
     });
     setHealth(readSyncHealthMeta());
   }, []);
@@ -99,7 +130,10 @@ function useSyncStatusEngine(): SyncStatusApi {
       syncingRef.current = false;
       if (showSpinner) setSyncing(false);
       setHealth(readSyncHealthMeta());
-      setPendingCount(await pendingUploadCount());
+      const { total, breakdown } = await pendingUploadStats();
+      pendingRef.current = total;
+      setPendingCount(total);
+      setPendingBreakdown(breakdown);
     }
   }, []);
 
@@ -150,6 +184,7 @@ function useSyncStatusEngine(): SyncStatusApi {
   return {
     isOnline,
     pendingCount,
+    pendingBreakdown,
     syncing,
     status,
     health,

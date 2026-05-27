@@ -14,12 +14,13 @@ import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
-import { WakaMarkIcon } from "../brand/WakaLogo";
+import { WakaPosLogo } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { FloatingSupportFab } from "../support/FloatingSupportFab";
 import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
+import { hashStaffSecret, normalizePin } from "../../lib/staffSecret";
 
 type Props = {
   lang: Language;
@@ -155,13 +156,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
         ) : null}
         <header className="relative z-20 shrink-0 overflow-visible border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4">
-            <div className="flex min-w-0 flex-1 items-center gap-2.5">
-              <WakaMarkIcon className="h-8 w-8 shrink-0 text-waka-600 shadow-waka-sm" aria-hidden />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <WakaPosLogo size="xs" className="max-w-[7.5rem] shrink-0" aria-hidden />
               <div className="min-w-0">
-                <h1 className="truncate text-base font-black tracking-tight text-stone-900">{t(lang, "appName")}</h1>
-                <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-                  {t(lang, "brandTagline")}
-                </p>
                 <p className="truncate text-[11px] font-medium text-waka-800/90">{syncStripLabel(lang, sync, isOnline)}</p>
               </div>
             </div>
@@ -380,8 +377,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
                 onClick={() => {
                   const staff = (preferences.staffAccounts ?? []).find((s) => s.id === lockStaffId && s.active);
                   const secret = lockSecret.trim();
-                  const validStaff = Boolean(staff && ((staff.pin && staff.pin === secret.replace(/\D/g, "")) || (staff.password && staff.password === secret)));
-                  const validBackOffice = Boolean((preferences.backOfficePin ?? "") && (preferences.backOfficePin ?? "") === secret.replace(/\D/g, ""));
+                  const secretPin = normalizePin(secret);
+                  const secretHash = hashStaffSecret(secret);
+                  const secretPinHash = secretPin ? hashStaffSecret(secretPin) : "";
+                  const validStaff = Boolean(
+                    staff &&
+                      (
+                        (staff.pin && staff.pin === secretPin) ||
+                        (staff.password && staff.password === secret) ||
+                        (staff.pinHash && staff.pinHash === secretPinHash) ||
+                        (staff.passwordHash && staff.passwordHash === secretHash)
+                      ),
+                  );
+                  const validBackOffice = Boolean((preferences.backOfficePin ?? "") && (preferences.backOfficePin ?? "") === secretPin);
                   const canUnlock = validStaff || validBackOffice || (!staff && !(preferences.backOfficePin ?? "").length);
                   if (!canUnlock) {
                     setLockError(t(lang, "unlockWrongPin"));
