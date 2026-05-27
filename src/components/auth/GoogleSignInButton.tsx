@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { isGoogleAuthUiEnabled } from "../../lib/authFeatureFlags";
 
 type Props = {
   lang: Language;
@@ -34,6 +35,8 @@ function GoogleLogo({ className }: { className?: string }) {
 }
 
 export function GoogleSignInButton({ lang, busy, disabled, onClick, className }: Props) {
+  if (!isGoogleAuthUiEnabled()) return null;
+
   return (
     <button
       type="button"

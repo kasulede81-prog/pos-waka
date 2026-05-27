@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { ChevronDown, RefreshCw, X, type LucideIcon } from "lucide-react";
 
@@ -286,24 +287,29 @@ export function AdminOpsPanel({
 }) {
   useEffect(() => {
     if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [open, onClose]);
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-end justify-center bg-stone-950/55 p-2 sm:items-center sm:p-4"
+      className="waka-internal-admin-modal fixed inset-0 flex items-end justify-center bg-stone-950/55 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4 sm:pb-4"
       onClick={onClose}
       role="presentation"
     >
       <div
         className={clsx(
-          "flex max-h-[min(92dvh,900px)] w-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl",
+          "flex max-h-[min(88dvh,900px)] w-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl sm:max-h-[min(92dvh,900px)]",
           wide ? "max-w-5xl" : "max-w-2xl",
         )}
         onClick={(e) => e.stopPropagation()}
@@ -325,9 +331,12 @@ export function AdminOpsPanel({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5 sm:py-4">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch] sm:px-5 sm:py-4">
+          {children}
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

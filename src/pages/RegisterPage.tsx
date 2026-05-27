@@ -6,7 +6,7 @@ import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { formatAuthError } from "../lib/authConfig";
-import { getGoogleOAuthClientId } from "../lib/googleIdentity";
+import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpProfileMeta, SignUpResult } from "../hooks/useAuth";
 import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
@@ -49,6 +49,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const showGoogle = hasSupabaseConfig && isGoogleAuthUiAvailable();
   const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.trim().toUpperCase() ?? "");
 
   useEffect(() => {
@@ -178,10 +179,14 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
 
   if (isAuthenticated) return <Navigate to="/" replace />;
 
+  const fieldClass =
+    "mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
+
   return (
     <AuthLayout lang={lang} setLang={setLang}>
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-bold">{t(lang, "registerTitle")}</h1>
+      <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
+        <h1 className="text-2xl font-black text-stone-900">{t(lang, "registerTitle")}</h1>
+        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "loginOwnerHint")}</p>
 
         {!hasSupabaseConfig ? (
           <div className="mt-6 space-y-3">
@@ -190,25 +195,24 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
-            {getGoogleOAuthClientId() ? (
+            {showGoogle ? (
               <>
                 <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
-                <p className="text-xs font-semibold text-stone-500">{t(lang, "registerGoogleNote")}</p>
-                <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
+                <div className="flex items-center gap-3 py-1" aria-hidden>
+                  <span className="h-px flex-1 bg-stone-200" />
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">or</span>
+                  <span className="h-px flex-1 bg-stone-200" />
+                </div>
               </>
-            ) : (
-              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
-                {t(lang, "googleClientIdMissing")}
-              </p>
-            )}
+            ) : null}
 
-            <label className="block text-sm font-medium">
+            <label className="block text-sm font-bold text-stone-800">
               {t(lang, "registerOrgNameLabel")}
               <input
                 value={organizationName}
                 onChange={(e) => setOrganizationName(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                className={fieldClass}
               />
             </label>
             <label className="block text-sm font-medium">
@@ -217,7 +221,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
                 value={shopDisplayName}
                 onChange={(e) => setShopDisplayName(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                className={fieldClass}
               />
             </label>
             <label className="block text-sm font-medium">
@@ -227,7 +231,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
                 onChange={(e) => setOwnerFullName(e.target.value)}
                 required
                 autoComplete="name"
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                className={fieldClass}
               />
             </label>
             <label className="block text-sm font-medium">
@@ -239,10 +243,10 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
                 inputMode="tel"
                 autoComplete="tel"
                 placeholder="07XXXXXXXX"
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                className={fieldClass}
               />
             </label>
-            <label className="block text-sm font-medium">
+            <label className="block text-sm font-bold text-stone-800">
               {t(lang, "registerDistrictLabel")}
               {districtsLoading ? (
                 <p className="mt-1 text-xs font-semibold text-stone-500">{t(lang, "registerDistrictsLoading")}</p>
@@ -291,7 +295,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
             </label>
 
             <div>
-              <p className="block text-sm font-medium">{t(lang, "registerBusinessTypeLabel")}</p>
+              <p className="block text-sm font-bold text-stone-800">{t(lang, "registerBusinessTypeLabel")}</p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {BUSINESS_TYPE_IDS.map((id) => (
                   <button
@@ -346,7 +350,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                className={fieldClass}
               />
             </label>
             <label className="block text-sm font-medium">
@@ -357,11 +361,15 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUp, onGoogleS
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                className={fieldClass}
               />
             </label>
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
-            <button disabled={busy} className="w-full rounded-xl bg-slate-900 px-4 py-3 font-semibold text-white disabled:opacity-50">
+            <button
+              disabled={busy}
+              type="submit"
+              className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
+            >
               {busy ? "…" : t(lang, "createAccount")}
             </button>
           </form>

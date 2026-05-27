@@ -16,6 +16,7 @@ import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaPosLogo } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
+import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { FloatingSupportFab } from "../support/FloatingSupportFab";
 import { MobileScrollTail } from "./MobileScrollTail";
@@ -129,6 +130,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [menuOpen]);
+
+  const internalAdminRoute = isInternalAdminAppPath(location.pathname);
 
   const navDefs = useMemo((): NavDef[] => {
     const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
@@ -312,6 +315,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </section>
         </main>
+        {!internalAdminRoute ? (
         <nav
           className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden"
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}
@@ -344,6 +348,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             })}
           </div>
         </nav>
+        ) : null}
         {preferences.posLocked ? (
           <AppModalOverlay className="z-[120] flex items-center justify-center bg-stone-950/85 p-4">
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">

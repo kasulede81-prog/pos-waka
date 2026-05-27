@@ -2,6 +2,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl } from "../lib/authConfig";
 import { Capacitor } from "@capacitor/core";
+import { isGoogleAuthUiEnabled } from "../lib/authFeatureFlags";
 import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
 import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
 import { hydrateAccountFromCloud } from "../lib/postAuthCloudHydrate";
@@ -253,9 +254,15 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (identifier: string, password: string) => {
+    const trimmed = identifier.trim();
     if (hasSupabaseConfig && supabase) {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const phoneE164 = normalizeUgPhoneE164(trimmed);
+      const digitsOnly = trimmed.replace(/\D/g, "");
+      const usePhone = Boolean(phoneE164 && digitsOnly.length >= 9 && !trimmed.includes("@"));
+      const { error } = await supabase.auth.signInWithPassword(
+        usePhone && phoneE164 ? { phone: phoneE164, password } : { email: trimmed, password },
+      );
       if (error) {
         reportAuthIssue("sign_in_failed", { status: error.status ?? 0 });
         throw error;
@@ -263,12 +270,15 @@ export function useAuth() {
       return;
     }
     if (!password || password.length < 4) throw new Error("Invalid password.");
-    localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify({ email }));
-    applyAccountSwitchSync(computeAccountKey({ mode: "local", email }));
-    setLocalEmail(email);
+    localStorage.setItem(LOCAL_AUTH_KEY, JSON.stringify({ email: trimmed }));
+    applyAccountSwitchSync(computeAccountKey({ mode: "local", email: trimmed }));
+    setLocalEmail(trimmed);
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
+    if (!isGoogleAuthUiEnabled()) {
+      throw new Error("Google sign-in is not available. Use your email or phone and password.");
+    }
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Supabase is not configured.");
     }

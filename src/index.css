@@ -87,6 +87,8 @@ body {
     --waka-scroll-tail-pos-sale: calc(16.5rem + var(--waka-safe-bottom));
     /* Stacking: main scroll < FAB 35 < bottom nav 45 < POS sheets 52+ < receipt 65 */
     --waka-z-bottom-nav: 45;
+    --waka-z-internal-admin: 60;
+    --waka-z-internal-admin-modal: 70;
     --waka-z-pos-overlay: 56;
     --waka-z-pos-receipt: 65;
   }
@@ -94,6 +96,15 @@ body {
   /** Full-screen overlays that must cover the mobile bottom tab bar */
   .waka-overlay-full {
     z-index: var(--waka-z-pos-overlay);
+  }
+
+  /** Internal Waka admin — portaled above POS chrome and bottom tab bar */
+  .waka-internal-admin-root {
+    z-index: var(--waka-z-internal-admin);
+  }
+
+  .waka-internal-admin-modal {
+    z-index: var(--waka-z-internal-admin-modal);
   }
 
   /**

@@ -23,6 +23,8 @@ interface ImportMetaEnv {
    * Same Client ID must be listed in Supabase Auth → Google → Authorized Client IDs.
    */
   readonly VITE_GOOGLE_OAUTH_CLIENT_ID?: string;
+  /** When "true", show Google Sign-In on login/register. Default: hidden (false). */
+  readonly VITE_ENABLE_GOOGLE_AUTH?: string;
   /** Mapbox public token for internal ops live map (tiles + geocoder only in-app) */
   readonly VITE_MAPBOX_ACCESS_TOKEN?: string;
   /** Preferred alias for Mapbox token (either this or VITE_MAPBOX_ACCESS_TOKEN may be set). */

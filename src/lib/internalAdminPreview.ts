@@ -15,6 +15,11 @@ import type { InternalAdminRow } from "./wakaInternalAdmin";
 /** Demo shop id for preview shop profile (`/internal/waka/shop/preview-shop-demo?preview=1`). */
 export const PREVIEW_SHOP_ID = "preview-shop-demo";
 
+/** True when the app shell should yield the viewport to the internal admin overlay. */
+export function isInternalAdminAppPath(pathname: string): boolean {
+  return pathname === "/internal/waka" || pathname.startsWith("/internal/waka/");
+}
+
 export const INTERNAL_ADMIN_PREVIEW_ROW: WakaInternalAdminRow = {
   id: "00000000-0000-4000-8000-000000000099",
   email: "preview@waka.ug",

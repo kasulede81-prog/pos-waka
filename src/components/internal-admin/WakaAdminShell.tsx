@@ -1,4 +1,5 @@
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, ShieldCheck, Loader2 } from "lucide-react";
 import type { Language } from "../../types";
@@ -6,6 +7,22 @@ import { t } from "../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../lib/wakaInternalAdmin";
 import { internalAdminPreviewHref } from "../../lib/internalAdminPreview";
 import { AdminSectionSelect } from "./adminUi";
+
+function useLockUnderlyingAppScroll(active: boolean) {
+  useEffect(() => {
+    if (!active) return;
+    const shell = document.querySelector<HTMLElement>(".app-shell-root");
+    const scroller = document.querySelector<HTMLElement>(".scroll-main-chrome");
+    const prevShell = shell?.style.overflow ?? "";
+    const prevScroller = scroller?.style.overflow ?? "";
+    if (shell) shell.style.overflow = "hidden";
+    if (scroller) scroller.style.overflow = "hidden";
+    return () => {
+      if (shell) shell.style.overflow = prevShell;
+      if (scroller) scroller.style.overflow = prevScroller;
+    };
+  }, [active]);
+}
 
 type TabRoute = "/internal/waka" | "/internal/waka/activations" | "/internal/waka/admins" | "/internal/waka/agents";
 
@@ -28,6 +45,7 @@ type Props = {
 export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = false, children }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
+  useLockUnderlyingAppScroll(true);
 
   const isSuper = adminRow?.role === "super_admin";
   const tabTo = (path: TabRoute) => (previewMode ? internalAdminPreviewHref(path) : path);
@@ -43,11 +61,12 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
   );
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 z-[80] flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
+    return createPortal(
+      <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
         <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
         <p className="mt-3 text-sm font-semibold text-stone-600">Loading admin…</p>
-      </div>
+      </div>,
+      document.body,
     );
   }
 
@@ -80,8 +99,8 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
       ? t(lang, "internalShopProfileTitle")
       : visibleTabs.find((tab) => tab.active === active)?.label ?? "Admin";
 
-  return (
-    <div className="fixed inset-0 z-[80] flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
+  return createPortal(
+    <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
       <header className="shrink-0 bg-orange-600 text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
           {showBack ? (
@@ -130,8 +149,9 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
       ) : null}
 
       <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-stone-50/80 [-webkit-overflow-scrolling:touch]">
-        <div className="mx-auto w-full max-w-7xl p-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-4">{children}</div>
+        <div className="mx-auto w-full max-w-7xl p-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:p-4">{children}</div>
       </main>
-    </div>
+    </div>,
+    document.body,
   );
 }

@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
+import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 
 /**
  * Real block at the end of the scroll column (not padding on the scroller).
@@ -9,6 +10,11 @@ export function MobileScrollTail() {
   const { pathname } = useLocation();
   const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
   const isBackOffice = isBackOfficePath(pathname);
+  const isInternalAdmin = isInternalAdminAppPath(pathname);
+
+  if (isInternalAdmin) {
+    return null;
+  }
 
   let tailClass = "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden";
   if (isPos) {
