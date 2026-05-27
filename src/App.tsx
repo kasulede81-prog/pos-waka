@@ -189,6 +189,7 @@ function App() {
                             user={auth.user}
                             email={auth.email}
                             authMode={auth.mode}
+                            staffSession={auth.staffSession}
                           />
                         </BackOfficeSessionProvider>
                       </SyncStatusProvider>

@@ -7,7 +7,7 @@ import type { Permission, UserRole } from "../types";
  * - Local/offline sign-in: **owner** (single-device shop).
  * - Constrained accounts: set `pos_role` in Supabase user metadata to `cashier`, `manager`, or `stock_keeper`.
  */
-const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper"];
+const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper", "supervisor"];
 
 function isUserRole(v: string): v is UserRole {
   return (ALL_ROLES as string[]).includes(v);
@@ -32,7 +32,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 4;
+const PERM_MATRIX_VERSION = 5;
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
@@ -90,6 +90,28 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "stock.adjust",
     "products.add",
     "products.edit_presets",
+    "suppliers.view",
+    "suppliers.manage",
+    "purchases.record",
+    "purchases.view",
+  ],
+  /** Floor supervisor — same operational access as manager on device. */
+  supervisor: [
+    "pos.sell",
+    "back_office.access",
+    "receipts.view",
+    "stock.view",
+    "stock.adjust",
+    "products.add",
+    "products.edit_presets",
+    "customers.view",
+    "day.close",
+    "reports.view",
+    "reports.profit",
+    "settings.view",
+    "owner.activity",
+    "nav.office",
+    "ui.toggle_mode",
     "suppliers.view",
     "suppliers.manage",
     "purchases.record",

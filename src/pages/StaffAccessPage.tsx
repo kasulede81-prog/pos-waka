@@ -7,7 +7,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 
-const ROLE_OPTIONS: UserRole[] = ["owner", "manager", "cashier", "stock_keeper"];
+const ROLE_OPTIONS: UserRole[] = ["manager", "cashier", "stock_keeper", "supervisor"];
 
 export function StaffAccessPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();

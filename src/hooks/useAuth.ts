@@ -14,7 +14,7 @@ import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
-import { usePosStore, flushPendingPersist } from "../store/usePosStore";
+import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
   authenticateOfflineStaff,
   clearPendingStaffSelection,
@@ -454,6 +454,12 @@ export function useAuth() {
     applyAccountSwitchSync(auth.accountKey);
     setSession(null);
     setLocalEmail(null);
+    await bootstrapPosFromDisk();
+    const store = usePosStore.getState();
+    const staffRow = (store.preferences.staffAccounts ?? []).find((s) => s.id === auth.staffId && s.active);
+    if (staffRow) {
+      store.switchStaffAccount(auth.staffId);
+    }
     setStaffSession({
       accountKey: auth.accountKey,
       businessName: auth.businessName,
@@ -505,6 +511,7 @@ export function useAuth() {
       listStaffShops,
       rememberedStaffDevice,
       clearRememberedStaff,
+      staffSession,
       signUp,
       signOut,
       requestPasswordReset,
@@ -526,6 +533,7 @@ export function useAuth() {
       listStaffShops,
       rememberedStaffDevice,
       clearRememberedStaff,
+      staffSession,
       signUp,
       signOut,
       requestPasswordReset,

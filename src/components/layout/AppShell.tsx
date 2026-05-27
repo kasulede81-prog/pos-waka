@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Home, ShoppingCart, Receipt, Briefcase } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import type { Language, Permission } from "../../types";
+import type { Language, Permission, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { languageToggleLabel, nextLanguage } from "../../lib/language";
 import { useSubscription } from "../../context/SubscriptionContext";
@@ -29,6 +29,11 @@ type Props = {
   user: User | null;
   email: string | null | undefined;
   authMode: "supabase" | "local";
+  staffSession?: {
+    staffId: string;
+    staffName: string;
+    role: UserRole;
+  } | null;
 };
 
 type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
@@ -47,7 +52,7 @@ function navItemActive(path: string, pathname: string): boolean {
   return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Props) {
+export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staffSession = null }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   useAndroidBackButton();
@@ -87,8 +92,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode }: Pr
   }, [user?.id]);
 
   const actor = useMemo(
-    () => resolveSessionActor({ mode: authMode, user, email, preferences }),
-    [authMode, user, email, preferences],
+    () => resolveSessionActor({ mode: authMode, user, email, preferences, staffSession }),
+    [authMode, user, email, preferences, staffSession],
   );
 
   useLayoutEffect(() => {

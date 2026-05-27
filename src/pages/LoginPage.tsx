@@ -3,12 +3,19 @@ import type { FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
+import { StaffBusinessNameField } from "../components/auth/StaffBusinessNameField";
 import { t } from "../lib/i18n";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { formatAuthError } from "../lib/authConfig";
 import { getGoogleOAuthClientId } from "../lib/googleIdentity";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
+import {
+  STAFF_LOGIN_ROLES,
+  isStaffLoginRole,
+  staffLoginRoleLabel,
+  type StaffLoginRole,
+} from "../lib/staffLoginRoles";
 
 type Props = {
   lang: Language;
@@ -25,7 +32,6 @@ type Props = {
 };
 
 type LoginChoice = "owner" | "staff";
-const STAFF_ROLES: StaffLoginInput["role"][] = ["cashier", "manager", "stock_keeper", "owner"];
 
 export function LoginPage({
   lang,
@@ -44,7 +50,7 @@ export function LoginPage({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState(rememberedStaffDevice?.businessName ?? "");
-  const [staffRole, setStaffRole] = useState<StaffLoginInput["role"]>("cashier");
+  const [staffRole, setStaffRole] = useState<StaffLoginRole>("cashier");
   const [staffIdentifier, setStaffIdentifier] = useState(rememberedStaffDevice?.identifier ?? "");
   const [staffPin, setStaffPin] = useState("");
   const [rememberDevice, setRememberDevice] = useState(Boolean(rememberedStaffDevice));
@@ -54,8 +60,16 @@ export function LoginPage({
   const [googleBusy, setGoogleBusy] = useState(false);
   const [staffBusy, setStaffBusy] = useState(false);
   const [loadingShops, setLoadingShops] = useState(false);
+  const [staffRedirecting, setStaffRedirecting] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  const businessSuggestions = useMemo(
+    () => cachedShops.map((s) => ({ id: s.accountKey, label: s.businessName })),
+    [cachedShops],
+  );
+
+  if (isAuthenticated && !staffRedirecting) {
+    return <Navigate to="/" replace />;
+  }
 
   useEffect(() => {
     if (choice !== "staff") return;
@@ -74,7 +88,6 @@ export function LoginPage({
   }, [choice, listStaffShops]);
 
   const canOwnerSignIn = mode === "supabase" || mode === "local";
-  const shopNames = useMemo(() => cachedShops.map((s) => s.businessName), [cachedShops]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -92,6 +105,7 @@ export function LoginPage({
   const submitStaff = async (e: FormEvent) => {
     e.preventDefault();
     setStaffBusy(true);
+    setStaffRedirecting(true);
     setError(null);
     try {
       await onStaffLogin({
@@ -102,6 +116,7 @@ export function LoginPage({
         rememberDevice,
       });
     } catch (err) {
+      setStaffRedirecting(false);
       setError(formatAuthError(err));
     } finally {
       setStaffBusy(false);
@@ -126,6 +141,17 @@ export function LoginPage({
         <div className="flex flex-col items-center gap-3 py-8">
           <div className="h-10 w-40 rounded-xl waka-skeleton-bar" />
           <p className="text-center text-sm font-medium text-stone-600">{t(lang, "loadingAuth")}</p>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (staffRedirecting) {
+    return (
+      <AuthLayout lang={lang} setLang={setLang}>
+        <div className="flex flex-col items-center gap-3 py-10">
+          <div className="h-10 w-40 animate-pulse rounded-xl bg-orange-100" />
+          <p className="text-center text-sm font-semibold text-stone-700">{t(lang, "staffLoginOpening")}</p>
         </div>
       </AuthLayout>
     );
@@ -170,128 +196,123 @@ export function LoginPage({
 
         {choice === "owner" ? (
           <form onSubmit={submit} className="mt-6 space-y-4">
-          {mode === "supabase" && hasSupabaseConfig ? (
-            getGoogleOAuthClientId() ? (
-              <>
-                <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
-                <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
-              </>
-            ) : (
-              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
-                {t(lang, "googleClientIdMissing")}
-              </p>
-            )
-          ) : null}
-
-          <label className="block text-sm font-medium">
-            {t(lang, "email")}
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
-            />
-          </label>
-
-          <div className="flex items-center justify-between text-sm">
-            <label className="font-medium">
-              {t(lang, "password")}
-            </label>
             {mode === "supabase" && hasSupabaseConfig ? (
-              <Link to="/forgot-password" className="font-medium text-waka-700 underline underline-offset-2">
-                {t(lang, "forgotPassword")}
-              </Link>
+              getGoogleOAuthClientId() ? (
+                <>
+                  <GoogleSignInButton lang={lang} busy={googleBusy} onClick={googleSubmit} />
+                  <p className="text-[11px] font-medium text-stone-400">{t(lang, "googleOAuthBrandingNote")}</p>
+                </>
+              ) : (
+                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-950">
+                  {t(lang, "googleClientIdMissing")}
+                </p>
+              )
             ) : null}
-          </div>
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
-          />
 
-          {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
+            <label className="block text-sm font-medium">
+              {t(lang, "email")}
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 outline-none ring-waka-200 focus:ring"
+              />
+            </label>
 
-          <button
-            disabled={busy}
-            type="submit"
-            className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm transition-waka active:scale-[0.99] disabled:opacity-50 motion-reduce:active:scale-100"
-          >
-            {busy ? "…" : "Sign in to your shop"}
-          </button>
+            <div className="flex items-center justify-between text-sm">
+              <label className="font-medium">{t(lang, "password")}</label>
+              {mode === "supabase" && hasSupabaseConfig ? (
+                <Link to="/forgot-password" className="font-medium text-waka-700 underline underline-offset-2">
+                  {t(lang, "forgotPassword")}
+                </Link>
+              ) : null}
+            </div>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full rounded-xl border px-3 py-2.5 outline-none ring-waka-200 focus:ring"
+            />
+
+            {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
+
+            <button
+              disabled={busy}
+              type="submit"
+              className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm transition-waka active:scale-[0.99] disabled:opacity-50 motion-reduce:active:scale-100"
+            >
+              {busy ? "…" : "Sign in to your shop"}
+            </button>
           </form>
         ) : null}
 
         {choice === "staff" ? (
           <form onSubmit={submitStaff} className="mt-6 space-y-4">
-            <label className="block text-sm font-medium">
-              Business Name
-              <input
-                list="waka-staff-shops"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
-                placeholder="Nabukalu Wholesale"
-              />
-              <datalist id="waka-staff-shops">
-                {shopNames.map((name) => (
-                  <option value={name} key={name} />
-                ))}
-              </datalist>
-              {loadingShops ? <span className="mt-1 block text-xs text-stone-500">Loading saved shops…</span> : null}
-            </label>
+            <StaffBusinessNameField
+              label={t(lang, "staffLoginBusinessName")}
+              placeholder="Nabukalu Wholesale"
+              value={businessName}
+              onChange={setBusinessName}
+              suggestions={businessSuggestions}
+              loading={loadingShops}
+              hint={loadingShops ? t(lang, "staffLoginLoadingShops") : t(lang, "staffLoginBusinessHint")}
+            />
 
             <label className="block text-sm font-medium">
-              Staff Role
+              {t(lang, "staffLoginSelectRole")}
               <select
                 value={staffRole}
-                onChange={(e) => setStaffRole(e.target.value as StaffLoginInput["role"])}
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (isStaffLoginRole(v)) setStaffRole(v);
+                }}
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-base outline-none ring-waka-200 focus:ring"
               >
-                {STAFF_ROLES.map((r) => (
+                {STAFF_LOGIN_ROLES.map((r) => (
                   <option value={r} key={r}>
-                    {r === "stock_keeper" ? "Stock Keeper" : r[0].toUpperCase() + r.slice(1)}
+                    {staffLoginRoleLabel(r)}
                   </option>
                 ))}
               </select>
             </label>
 
             <label className="block text-sm font-medium">
-              Staff Username or ID
+              {t(lang, "staffLoginIdentifier")}
               <input
                 value={staffIdentifier}
                 onChange={(e) => setStaffIdentifier(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
+                autoComplete="username"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-base outline-none ring-waka-200 focus:ring"
                 placeholder="cashier01"
               />
             </label>
 
             <label className="block text-sm font-medium">
-              PIN / Password
+              {t(lang, "staffLoginPin")}
               <input
                 type="password"
                 value={staffPin}
                 onChange={(e) => setStaffPin(e.target.value)}
                 required
-                className="mt-1 w-full rounded-xl border px-3 py-2 outline-none ring-waka-200 focus:ring"
-                placeholder="Enter PIN"
+                autoComplete="current-password"
+                className="mt-1 w-full rounded-xl border px-3 py-2.5 text-base outline-none ring-waka-200 focus:ring"
+                placeholder={t(lang, "staffLoginPinPlaceholder")}
               />
             </label>
 
-            <label className="flex items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium text-stone-700">
+            <label className="flex min-h-[48px] items-center gap-2 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-sm font-medium text-stone-700">
               <input
                 type="checkbox"
                 className="h-4 w-4"
                 checked={rememberDevice}
                 onChange={(e) => setRememberDevice(e.target.checked)}
               />
-              Remember this device
+              {t(lang, "staffLoginRememberDevice")}
             </label>
             {rememberedStaffDevice ? (
               <button
@@ -299,7 +320,7 @@ export function LoginPage({
                 onClick={onClearRememberedStaff}
                 className="text-xs font-semibold text-stone-500 underline underline-offset-2"
               >
-                Clear remembered staff login
+                {t(lang, "staffLoginClearRemembered")}
               </button>
             ) : null}
 
@@ -310,7 +331,7 @@ export function LoginPage({
               type="submit"
               className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm transition-waka active:scale-[0.99] disabled:opacity-50"
             >
-              {staffBusy ? "…" : "Sign in as staff"}
+              {staffBusy ? "…" : t(lang, "staffLoginSubmit")}
             </button>
           </form>
         ) : null}
@@ -318,13 +339,13 @@ export function LoginPage({
         {choice ? (
           <button
             type="button"
-            className="mt-4 text-sm font-semibold text-stone-600 underline underline-offset-2"
+            className="mt-4 min-h-[44px] text-sm font-semibold text-stone-600 underline underline-offset-2"
             onClick={() => {
               setChoice(null);
               setError(null);
             }}
           >
-            Back to login options
+            {t(lang, "staffLoginBack")}
           </button>
         ) : null}
 

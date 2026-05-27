@@ -99,7 +99,7 @@ function parseStoredUserRole(v: unknown): UserRole | null {
   if (v === null) return null;
   if (typeof v !== "string") return null;
   const n = v.trim().toLowerCase();
-  if (n === "owner" || n === "manager" || n === "cashier" || n === "stock_keeper") return n;
+  if (n === "owner" || n === "manager" || n === "cashier" || n === "stock_keeper" || n === "supervisor") return n;
   return null;
 }
 
@@ -2011,11 +2011,16 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   usePosStore.getState().pruneExpiredSales();
 
   if (hasSupabaseConfig && key.startsWith("sb:")) {
-    const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
-    await hydrateLocalShopProfileFromCloud().catch(() => undefined);
-    const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
-    scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
-    scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
+    const { supabase: sb } = await import("../lib/supabase");
+    if (!sb) return;
+    const { data: sessionData } = await sb.auth.getSession();
+    if (sessionData.session?.user) {
+      const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
+      await hydrateLocalShopProfileFromCloud().catch(() => undefined);
+      const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
+      scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
+      scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
+    }
   }
 }
 

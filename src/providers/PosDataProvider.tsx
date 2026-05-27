@@ -55,6 +55,15 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
       usePosStore.getState().resetForSignOut();
       setActiveAccountKey(accountKey);
     }
+    if (usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey) {
+      setReady(true);
+      if (Capacitor.isNativePlatform()) {
+        void SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
     void bootstrapPosFromDisk()
       .catch(() => {
         if (!cancelled) setError("load");

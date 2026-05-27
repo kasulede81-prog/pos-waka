@@ -22,7 +22,17 @@ export function resolveSessionActor(params: {
   user: User | null;
   email: string | null | undefined;
   preferences: ShopPreferences;
+  /** Offline staff login — never treat as owner while store hydrates. */
+  staffSession?: { staffId: string; staffName: string; role: UserRole } | null;
 }): SessionActor {
+  if (params.staffSession) {
+    return {
+      userId: `staff:${params.staffSession.staffId}`,
+      role: params.staffSession.role,
+      displayName: params.staffSession.staffName,
+    };
+  }
+
   const meta = params.user?.user_metadata as Record<string, unknown> | undefined;
   const authRole = resolveAuthRole({ mode: params.mode, userMetadata: meta });
   const devAllowed = devOverrideAllowed();

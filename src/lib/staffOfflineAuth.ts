@@ -1,6 +1,8 @@
 import type { ShopPreferences, UserRole } from "../types";
 import { getLocalDb } from "../offline/localDb";
 import { hashStaffSecret, normalizePin } from "./staffSecret";
+import type { StaffLoginRole } from "./staffLoginRoles";
+import { staffLoginRoleMatches } from "./staffLoginRoles";
 
 const REMEMBER_DEVICE_KEY = "waka.staff.remembered.v1";
 const PENDING_STAFF_KEY = "waka.staff.pending.v1";
@@ -14,7 +16,7 @@ export type CachedShop = {
 
 export type StaffLoginInput = {
   businessName: string;
-  role: UserRole;
+  role: StaffLoginRole;
   identifier: string;
   pinOrPassword: string;
   rememberDevice: boolean;
@@ -120,7 +122,7 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
   const found = staffRows.find(
     (s) =>
       s.active &&
-      s.role === input.role &&
+      staffLoginRoleMatches(s.role, input.role) &&
       identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier) &&
       secretMatches({ pin: s.pin, password: s.password, pinHash: s.pinHash, passwordHash: s.passwordHash }, secret),
   );

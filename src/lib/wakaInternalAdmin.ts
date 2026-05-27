@@ -819,43 +819,23 @@ export async function deleteSubscriptionRequest(id: string): Promise<{ ok: boole
   return { ok: Boolean(payload?.ok), message: payload?.message };
 }
 
-export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
-  if (!supabase) return [];
+type RecentShopDbRow = {
+  id: string;
+  name: string;
+  district: string | null;
+  city: string | null;
+  is_active: boolean;
+  created_at: string;
+  organization_id: string;
+  last_seen_at?: string | null;
+  phone_e164?: string | null;
+  business_type?: string | null;
+  gps_missing?: boolean | null;
+};
 
-  const { data: rpcRows, error: rpcError } = await supabase.rpc("internal_ops_recent_shops", { p_limit: limit });
-  if (!rpcError && rpcRows && Array.isArray(rpcRows) && rpcRows.length > 0) {
-    return (rpcRows as Array<Record<string, unknown>>).map((row) => {
-      const status = (row.subscription_status as string) ?? "";
-      const trialEnds = (row.trial_ends_at as string | null) ?? null;
-      return {
-        id: row.id as string,
-        name: (row.name as string) ?? "—",
-        district: (row.district as string) ?? null,
-        city: (row.city as string) ?? null,
-        is_active: Boolean(row.is_active),
-        created_at: (row.created_at as string) ?? "",
-        plan_code: (row.plan_code as string) ?? null,
-        trial_days_left: trialDaysLeft(trialEnds, status),
-        owner_label: (row.owner_label as string) ?? null,
-        owner_email: formatDisplayEmail(row.owner_email as string) ?? null,
-        phone_e164: (row.phone_e164 as string) ?? null,
-        business_type: (row.business_type as string) ?? null,
-        gps_missing: row.gps_missing === null || row.gps_missing === undefined ? null : Boolean(row.gps_missing),
-        last_seen_at: (row.last_seen_at as string) ?? null,
-        product_count: Number(row.product_count ?? 0),
-        sale_count_30d: Number(row.sale_count_30d ?? 0),
-      };
-    });
-  }
-
-  const { data: shops, error } = await supabase
-    .from("shops")
-    .select("id, name, district, city, is_active, created_at, organization_id")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error || !shops?.length) return [];
-
-  const orgIds = [...new Set(shops.map((s) => s.organization_id as string).filter(Boolean))];
+async function enrichRecentShopRows(shops: RecentShopDbRow[]): Promise<RecentShopRow[]> {
+  if (!supabase || shops.length === 0) return [];
+  const orgIds = [...new Set(shops.map((s) => s.organization_id).filter(Boolean))];
   const { data: subs } = await supabase
     .from("subscriptions")
     .select("organization_id, status, trial_ends_at, plan_id, subscription_plans ( code )")
@@ -874,7 +854,7 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
   }
 
   return shops.map((s) => {
-    const sub = orgToSub.get(s.organization_id as string);
+    const sub = orgToSub.get(s.organization_id);
     let plan_code: string | null = null;
     if (sub?.subscription_plans) {
       const p = sub.subscription_plans;
@@ -882,17 +862,71 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
     }
     const trial_days_left = sub ? trialDaysLeft(sub.trial_ends_at, sub.status) : null;
     return {
-      id: s.id as string,
-      name: (s.name as string) ?? "—",
-      district: (s.district as string) ?? null,
-      city: (s.city as string) ?? null,
+      id: s.id,
+      name: s.name ?? "—",
+      district: s.district ?? null,
+      city: s.city ?? null,
       is_active: Boolean(s.is_active),
-      created_at: (s.created_at as string) ?? "",
+      created_at: s.created_at ?? "",
       plan_code,
       trial_days_left,
       owner_label: null,
+      owner_email: null,
+      phone_e164: s.phone_e164 ?? null,
+      business_type: s.business_type ?? null,
+      gps_missing: s.gps_missing ?? null,
+      last_seen_at: s.last_seen_at ?? null,
+      product_count: undefined,
+      sale_count_30d: undefined,
     };
   });
+}
+
+function mapRecentShopRpcRow(row: Record<string, unknown>): RecentShopRow {
+  const status = (row.subscription_status as string) ?? "";
+  const trialEnds = (row.trial_ends_at as string | null) ?? null;
+  return {
+    id: row.id as string,
+    name: (row.name as string) ?? "—",
+    district: (row.district as string) ?? null,
+    city: (row.city as string) ?? null,
+    is_active: Boolean(row.is_active),
+    created_at: (row.created_at as string) ?? "",
+    plan_code: (row.plan_code as string) ?? null,
+    trial_days_left: trialDaysLeft(trialEnds, status),
+    owner_label: (row.owner_label as string) ?? null,
+    owner_email: formatDisplayEmail(row.owner_email as string) ?? null,
+    phone_e164: (row.phone_e164 as string) ?? null,
+    business_type: (row.business_type as string) ?? null,
+    gps_missing: row.gps_missing === null || row.gps_missing === undefined ? null : Boolean(row.gps_missing),
+    last_seen_at: (row.last_seen_at as string) ?? null,
+    product_count: Number(row.product_count ?? 0),
+    sale_count_30d: Number(row.sale_count_30d ?? 0),
+  };
+}
+
+/** Shops sorted by signup date (newest first) — best for spotting new registrations. */
+export async function fetchShopsBySignupDate(limit = 50): Promise<RecentShopRow[]> {
+  if (!supabase) return [];
+  const cap = Math.min(Math.max(limit, 1), 100);
+  const { data: shops, error } = await supabase
+    .from("shops")
+    .select("id, name, district, city, is_active, created_at, organization_id, last_seen_at, phone_e164, business_type, gps_missing")
+    .order("created_at", { ascending: false })
+    .limit(cap);
+  if (error || !shops?.length) return [];
+  return enrichRecentShopRows(shops);
+}
+
+export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
+  if (!supabase) return [];
+
+  const { data: rpcRows, error: rpcError } = await supabase.rpc("internal_ops_recent_shops", { p_limit: limit });
+  if (!rpcError && rpcRows && Array.isArray(rpcRows)) {
+    return (rpcRows as Array<Record<string, unknown>>).map((row) => mapRecentShopRpcRow(row));
+  }
+
+  return fetchShopsBySignupDate(limit);
 }
 
 export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail | null> {

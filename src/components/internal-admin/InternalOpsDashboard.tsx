@@ -11,7 +11,7 @@ import { AdminHero, AdminOpsPanel, AdminSectionSelect } from "./adminUi";
 import { LovableFieldMap } from "./LovableFieldMap";
 import clsx from "clsx";
 import type { Language } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import {
   PREVIEW_BIZ_TYPES,
   PREVIEW_DASHBOARD_STATS,
@@ -33,7 +33,7 @@ import {
   fetchOrgBillingOffersForQueue,
   fetchPendingSubscriptionRequests,
   fetchPlanTierMetrics,
-  fetchRecentShops,
+  fetchShopsBySignupDate,
   fetchSalesVolumeBuckets7d,
   fetchShopSignupBuckets7d,
   fetchSubscriptionGrowthBuckets7d,
@@ -313,7 +313,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
 
       const [p, r, tk, d, b, v, pins, pend, offers] = await Promise.all([
         fetchPlanTierMetrics(),
-        fetchRecentShops(18),
+        fetchShopsBySignupDate(100),
         fetchSupportTickets(80),
         fetchDistrictOpsTable(),
         fetchBusinessTypeSlices(),
@@ -618,7 +618,14 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
 
       <AdminOpsPanel
         title={t(lang, "internalOpsPanelShops")}
-        subtitle={t(lang, "internalOpsPanelShopsSub")}
+        subtitle={
+          stats
+            ? tTemplate(lang, "internalOpsPanelShopsSubCount", {
+                shown: String(shopOpenings.length),
+                total: String(stats.totalShops),
+              })
+            : t(lang, "internalOpsPanelShopsSub")
+        }
         open={activePanel === "shops"}
         onClose={closePanel}
         wide
