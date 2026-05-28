@@ -505,6 +505,7 @@ export async function pullShopDataFromCloud(): Promise<{
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
+  const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   if (!hasSupabaseConfig) return false;
   const cloud = await pullShopDataFromCloud();
   if (!cloud) return false;
@@ -546,6 +547,7 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
     stockMovements: next.stockMovements,
   });
 
+  await applyShopRecoverySignalsForCurrentShop();
   return true;
 }
 

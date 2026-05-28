@@ -3,6 +3,7 @@ import { Navigate, useLocation, useParams } from "react-router-dom";
 import { AdminShell } from "../components/internal-admin/v2/AdminShell";
 import { BottomSheet } from "../components/internal-admin/v2/primitives";
 import { adminPermissions } from "../components/internal-admin/v2/adminRoles";
+import { AccountRecoveryPanel } from "../components/internal-admin/AccountRecoveryPanel";
 import { AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
 import { InternalNotesPanel, ShopTimelinePanel } from "../components/internal-admin/v2/ops/OpsWidgets";
 import {
@@ -13,6 +14,7 @@ import {
 import { fetchShopAuditTimeline, type OpsAuditRow } from "../lib/wakaInternalAdmin";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { sendOwnerPasswordResetEmail } from "../lib/shopRecoverySignals";
 import {
   ADMIN_PLAN_CODES,
   adminExtendSubscriptionTrial,
@@ -209,6 +211,16 @@ export function InternalShopOpsPage({ lang }: Props) {
         group: groupShop,
         confirm: t(lang, "internalShopActionConfirmLogout"),
       });
+      actions.push({
+        id: "password_reset",
+        label: "Send owner password reset",
+        group: "Account recovery",
+      });
+      actions.push({
+        id: "clear_bo_pin",
+        label: "Clear back office PIN",
+        group: "Account recovery",
+      });
     }
 
     if (subId && canSubs) {
@@ -261,6 +273,21 @@ export function InternalShopOpsPage({ lang }: Props) {
         break;
       case "force_logout":
         void run(() => adminShopForceLogoutDevices(detail.shop.id));
+        break;
+      case "password_reset":
+        void run(async () => {
+          const audit = await adminShopSendOwnerPasswordReset(detail.shop.id);
+          if (!audit.ok) return audit;
+          const email =
+            audit.ownerEmail ??
+            detail.owner_email?.trim().toLowerCase() ??
+            "";
+          if (!email) return { ok: false, message: "No owner email on file." };
+          return sendOwnerPasswordResetEmail(email);
+        });
+        break;
+      case "clear_bo_pin":
+        void run(() => adminShopResetBackOfficePin(detail.shop.id));
         break;
       case "extend_trial":
         if (subId) void run(() => adminExtendSubscriptionTrial(subId, 7));
@@ -425,6 +452,17 @@ export function InternalShopOpsPage({ lang }: Props) {
             ) : null}
           </div>
 
+          {canSupport ? (
+            <AccountRecoveryPanel
+              shopId={detail.shop.id}
+              detail={detail}
+              busy={busy}
+              previewMode={previewMode}
+              onBusy={setBusy}
+              onToast={setToast}
+            />
+          ) : null}
+
           {shopActions.length > 0 ? (
             <>
               <button
@@ -583,39 +621,6 @@ export function InternalShopOpsPage({ lang }: Props) {
                   {detail.sync_health.last_error ? "yes" : "none"}
                 </p>
               ) : null}
-            </AdminCollapsible>
-          ) : null}
-
-          {canSupport ? (
-            <AdminCollapsible title="Account recovery" summary="Reset owner access">
-              <p className="mb-2 text-xs text-stone-600">
-                Use these tools if shop owner forgot login or back office PIN.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="min-h-[44px] rounded-xl border border-stone-300 bg-white px-4 text-xs font-black disabled:opacity-40"
-                  onClick={() =>
-                    void run(() => adminShopSendOwnerPasswordReset(detail.shop.id))
-                  }
-                >
-                  Send owner password reset
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="min-h-[44px] rounded-xl bg-rose-600 px-4 text-xs font-black text-white disabled:opacity-40"
-                  onClick={() =>
-                    void run(() => adminShopResetBackOfficePin(detail.shop.id))
-                  }
-                >
-                  Reset back office PIN
-                </button>
-              </div>
-              <p className="mt-2 text-[11px] text-stone-500">
-                Password reset sends a recovery link to shop owner account. Back office PIN reset clears local lock requirement.
-              </p>
             </AdminCollapsible>
           ) : null}
 

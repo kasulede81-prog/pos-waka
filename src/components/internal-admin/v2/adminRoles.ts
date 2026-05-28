@@ -30,7 +30,7 @@ export function canSendAnnualOffer(role: string): boolean {
 }
 
 export function canShopSupport(role: string): boolean {
-  return canResolveSupport(role);
+  return canResolveSupport(role) || role === "operations_admin";
 }
 
 export function canShopSubs(role: string): boolean {

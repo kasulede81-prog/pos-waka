@@ -1,0 +1,102 @@
+import type { ShopOpsDetail } from "../../lib/wakaInternalAdmin";
+import {
+  adminShopResetBackOfficePin,
+  adminShopSendOwnerPasswordReset,
+} from "../../lib/wakaInternalAdmin";
+import { sendOwnerPasswordResetEmail } from "../../lib/shopRecoverySignals";
+
+type Props = {
+  shopId: string;
+  detail: ShopOpsDetail | null;
+  busy: boolean;
+  previewMode: boolean;
+  onBusy: (busy: boolean) => void;
+  onToast: (toast: { kind: "ok" | "err"; text: string }) => void;
+  onDone?: () => void;
+};
+
+export function AccountRecoveryPanel({
+  shopId,
+  detail,
+  busy,
+  previewMode,
+  onBusy,
+  onToast,
+  onDone,
+}: Props) {
+  const ownerEmail =
+    detail?.owner_email?.trim().toLowerCase() ||
+    (detail?.owner_label?.includes("@") ? detail.owner_label.trim().toLowerCase() : "");
+
+  const run = async (fn: () => Promise<{ ok: boolean; message?: string }>, okText: string) => {
+    if (previewMode) {
+      onToast({ kind: "err", text: "Preview mode — action blocked." });
+      return;
+    }
+    if (!window.confirm("Continue with this recovery action?")) return;
+    onBusy(true);
+    const r = await fn();
+    onBusy(false);
+    if (r.ok) {
+      onToast({ kind: "ok", text: okText });
+      onDone?.();
+    } else {
+      onToast({ kind: "err", text: r.message ?? "Action failed." });
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border-2 border-amber-200 bg-amber-50/90 p-4 shadow-sm">
+      <p className="text-[10px] font-black uppercase tracking-wide text-amber-900">Account recovery</p>
+      <h2 className="mt-0.5 text-base font-black text-stone-900">Reset login &amp; back office PIN</h2>
+      <p className="mt-1 text-xs font-medium text-stone-700">
+        Use when the shop owner forgot their sign-in password or back office / lock PIN.
+      </p>
+      {ownerEmail ? (
+        <p className="mt-2 font-mono text-xs text-stone-800">
+          Owner: <span className="font-bold">{ownerEmail}</span>
+        </p>
+      ) : (
+        <p className="mt-2 text-xs font-semibold text-rose-800">No owner email on file for this shop.</p>
+      )}
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+        <button
+          type="button"
+          disabled={busy || !ownerEmail}
+          className="min-h-[48px] flex-1 rounded-xl border-2 border-stone-300 bg-white px-4 text-sm font-black text-stone-900 disabled:opacity-40"
+          onClick={() =>
+            void run(async () => {
+              const audit = await adminShopSendOwnerPasswordReset(shopId);
+              if (!audit.ok) return audit;
+              const target = audit.ownerEmail ?? ownerEmail;
+              if (!target) return { ok: false, message: "No owner email on file." };
+              const sent = await sendOwnerPasswordResetEmail(target);
+              if (!sent.ok) return sent;
+              return { ok: true, message: `Password reset email sent to ${target}.` };
+            }, `Password reset email sent to ${ownerEmail}.`)
+          }
+        >
+          Send login password reset
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          className="min-h-[48px] flex-1 rounded-xl bg-rose-600 px-4 text-sm font-black text-white disabled:opacity-40"
+          onClick={() =>
+            void run(
+              () => adminShopResetBackOfficePin(shopId),
+              "Back office PIN cleared. Owner opens the app online to apply on this device.",
+            )
+          }
+        >
+          Clear back office PIN
+        </button>
+      </div>
+      <ul className="mt-3 list-disc space-y-1 pl-4 text-[11px] font-medium text-stone-600">
+        <li>Password reset sends an email link to set a new login password.</li>
+        <li>Back office PIN is cleared on the server; the owner must open Waka POS while online.</li>
+        <li>Staff switch-user PINs are reset in Settings → Staff on the owner device.</li>
+      </ul>
+    </section>
+  );
+}

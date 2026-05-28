@@ -36,6 +36,11 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
       <div>
         <h1 className="text-xl font-black text-stone-900">{t(lang, "internalSupportTitle")}</h1>
         <p className="text-sm text-stone-500">Helpdesk inbox</p>
+        {perms.canShopSupport ? (
+          <p className="mt-1 text-xs font-semibold text-amber-900">
+            Reset owner login or back office PIN: Shops → open shop → <strong>Account recovery</strong> card.
+          </p>
+        ) : null}
       </div>
 
       <div className="flex gap-2">

@@ -41,7 +41,7 @@ function writeActivationCache(userId: string, gate: ActivationGatePayload | null
   }
 }
 
-const ACTIVATION_GATE_TIMEOUT_MS = 12_000;
+const ACTIVATION_GATE_TIMEOUT_MS = 2_500;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, onTimeout: T): Promise<T> {
   return new Promise((resolve) => {
@@ -94,9 +94,8 @@ export function ActivationProvider({
   children: ReactNode;
 }) {
   const cachedGate = user?.id && authMode === "supabase" ? readActivationCache(user.id) : null;
-  const [loading, setLoading] = useState(
-    () => authMode === "supabase" && Boolean(user?.id) && !cachedGate,
-  );
+  /** Never block the shell — fetch activation in the background. */
+  const [loading, setLoading] = useState(false);
   const [gate, setGate] = useState<ActivationGatePayload | null>(cachedGate);
   const [internalBypass, setInternalBypass] = useState(false);
   const gateRef = useRef(gate);
@@ -109,7 +108,6 @@ export function ActivationProvider({
       setLoading(false);
       return;
     }
-    if (!gateRef.current) setLoading(true);
     try {
       const g = await withTimeout(fetchMyActivationGate(), ACTIVATION_GATE_TIMEOUT_MS, gateRef.current);
       setGate(g);

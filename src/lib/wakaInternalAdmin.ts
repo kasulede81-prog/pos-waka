@@ -1257,7 +1257,9 @@ export async function adminShopResetBackOfficePin(shopId: string): Promise<{ ok:
   return { ok: false, message: j.error ?? "Could not reset back office PIN." };
 }
 
-export async function adminShopSendOwnerPasswordReset(shopId: string): Promise<{ ok: boolean; message?: string }> {
+export async function adminShopSendOwnerPasswordReset(
+  shopId: string,
+): Promise<{ ok: boolean; message?: string; ownerEmail?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
   const { data, error } = await supabase.rpc("admin_shop_send_owner_password_reset", { p_shop_id: shopId });
   if (error) {
@@ -1269,8 +1271,10 @@ export async function adminShopSendOwnerPasswordReset(shopId: string): Promise<{
         : error.message,
     };
   }
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok === true) return { ok: true };
+  const j = (data ?? {}) as { ok?: boolean; error?: string; owner_email?: string };
+  if (j.ok === true) {
+    return { ok: true, ownerEmail: String(j.owner_email ?? "").trim() || undefined };
+  }
   return { ok: false, message: j.error ?? "Could not send password reset." };
 }
 

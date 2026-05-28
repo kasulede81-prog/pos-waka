@@ -207,6 +207,27 @@ type PosState = {
     opts?: { replaceAudit?: boolean },
   ) => void;
 
+  /** Fast path: products + preferences only — UI can render while sales load in background. */
+  hydrateEssentials: (data: {
+    products: Product[];
+    customers: Customer[];
+    preferences: ShopPreferences;
+  }) => void;
+
+  /** Background path: sales history and back-office collections (sales optional if already set). */
+  hydrateRemainder: (data: {
+    sales?: Sale[];
+    debtPayments?: DebtPayment[];
+    dayCloses?: DayCloseSummary[];
+    auditLogs?: AuditLogEntry[];
+    suppliers?: Supplier[];
+    purchases?: Purchase[];
+    supplierPayments?: SupplierPayment[];
+    stockMovements?: StockMovement[];
+    voidRecords?: VoidRecord[];
+    returnRecords?: ReturnRecord[];
+  }) => void;
+
   /** Replace local state + disk from a full backup (owner only in UI). */
   applyRestoredSnapshot: (snap: PersistedSnapshot) => void;
 
@@ -590,6 +611,40 @@ export const usePosStore = create<PosState>((set, get) => {
       draftLines: [],
       draftInput: null,
     }),
+
+  hydrateEssentials: (data) =>
+    set({
+      products: data.products.map(normalizeProduct),
+      customers: data.customers.map(normalizeCustomer),
+      sales: [],
+      preferences: data.preferences,
+      debtPayments: [],
+      dayCloses: [],
+      auditLogs: [],
+      suppliers: [],
+      purchases: [],
+      supplierPayments: [],
+      stockMovements: [],
+      voidRecords: [],
+      returnRecords: [],
+      _hydrated: true,
+      draftLines: [],
+      draftInput: null,
+    }),
+
+  hydrateRemainder: (data) =>
+    set((s) => ({
+      sales: data.sales ? data.sales.map(normalizeSale) : s.sales,
+      debtPayments: data.debtPayments ?? s.debtPayments,
+      dayCloses: data.dayCloses ?? s.dayCloses,
+      auditLogs: mergeAuditLogs(data.auditLogs ?? [], s.auditLogs),
+      suppliers: (data.suppliers ?? []).map(normalizeSupplier),
+      purchases: (data.purchases ?? []).map(normalizePurchase),
+      supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
+      stockMovements: mergeStockMovements(data.stockMovements ?? [], s.stockMovements).map(normalizeStockMovement),
+      voidRecords: data.voidRecords ?? s.voidRecords,
+      returnRecords: data.returnRecords ?? s.returnRecords,
+    })),
 
   applyRestoredSnapshot: (snap) => {
     const preferences = mergePreferencesFromPartial({ preferences: snap.preferences });
@@ -1946,6 +2001,90 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
   }
 }
 
+const SALES_HYDRATE_BATCH = 120;
+
+async function hydrateSalesBatched(raw: Sale[]): Promise<void> {
+  if (raw.length === 0) return;
+  const normalized: Sale[] = [];
+  for (let i = 0; i < raw.length; i += SALES_HYDRATE_BATCH) {
+    const chunk = raw.slice(i, i + SALES_HYDRATE_BATCH);
+    normalized.push(...chunk.map((s) => normalizeSale(s as Sale)));
+    if (i + SALES_HYDRATE_BATCH < raw.length) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    }
+  }
+  usePosStore.setState({ sales: normalized });
+}
+
+function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): void {
+  const run = () => {
+    void (async () => {
+      if (!usePosStore.getState()._hydrated) return;
+      const sales = (snap.sales ?? []) as Sale[];
+      await hydrateSalesBatched(sales);
+      usePosStore.getState().hydrateRemainder({
+        debtPayments: snap.debtPayments ?? [],
+        dayCloses: snap.dayCloses ?? [],
+        auditLogs: (snap as { auditLogs?: AuditLogEntry[] }).auditLogs ?? [],
+        suppliers: (snap as { suppliers?: Supplier[] }).suppliers ?? [],
+        purchases: (snap as { purchases?: Purchase[] }).purchases ?? [],
+        supplierPayments: (snap as { supplierPayments?: SupplierPayment[] }).supplierPayments ?? [],
+        stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
+        voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
+        returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
+      });
+    })();
+  };
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 800 });
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
+async function resolveLegacySnapshotIfEmpty(
+  snap: Partial<PersistedSnapshot> | null,
+): Promise<Partial<PersistedSnapshot> | null> {
+  const hasData = snap && ((snap.products?.length ?? 0) > 0 || (snap.sales?.length ?? 0) > 0);
+  if (hasData) return snap;
+  const legacyIdb = await claimLegacySnapshotForCurrentAccount();
+  if (legacyIdb) return legacyIdb;
+  const legacy = tryMigrateLegacyLocalStorage();
+  if (!legacy) return snap;
+  const migrated = {
+    products: legacy.products.map(normalizeProduct),
+    customers: legacy.customers.map(normalizeCustomer),
+    sales: legacy.sales.map(normalizeSale),
+    preferences: { ...createDefaultPreferences(), onboardingDone: true, schemaVersion: 2 },
+    debtPayments: [] as DebtPayment[],
+    dayCloses: [] as DayCloseSummary[],
+    auditLogs: [] as AuditLogEntry[],
+    suppliers: [] as Supplier[],
+    purchases: [] as Purchase[],
+    supplierPayments: [] as SupplierPayment[],
+    stockMovements: [] as StockMovement[],
+    voidRecords: [] as VoidRecord[],
+    returnRecords: [] as ReturnRecord[],
+  };
+  void writeSnapshot(migrated);
+  clearLegacyLocalStorage();
+  return migrated;
+}
+
+function applyBootstrapPreferences(snap: Partial<PersistedSnapshot>): ShopPreferences {
+  const preferences = mergePreferencesFromPartial(snap);
+  const pendingStaff = readPendingStaffSelection();
+  const activeKey = getActiveAccountKey();
+  if (pendingStaff && activeKey && pendingStaff.accountKey === activeKey) {
+    const exists = (preferences.staffAccounts ?? []).some((s) => s.id === pendingStaff.staffId && s.active);
+    preferences.activeStaffId = exists ? pendingStaff.staffId : null;
+    clearPendingStaffSelection();
+  }
+  return preferences;
+}
+
 /** Non-blocking follow-up after the shell can render (draft, prune, cloud pull). */
 function schedulePostBootstrapTasks(): void {
   const run = () => {
@@ -1976,7 +2115,9 @@ async function runPostBootstrapTasks(): Promise<void> {
   if (!sessionData.session?.user) return;
 
   const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
+  const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   void hydrateLocalShopProfileFromCloud().catch(() => undefined);
+  void applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
   const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
   scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
   scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
@@ -1996,116 +2137,48 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     prefs.shopDisplayName = "Demo shop";
     prefs.kioskQuickSell = true;
     const products = createDefaultProducts();
-    usePosStore.getState().hydrate(
-      {
-        products,
-        customers: [],
-        sales: [],
-        preferences: prefs,
-        debtPayments: [],
-        dayCloses: [],
-        auditLogs: [],
-        suppliers: [],
-        purchases: [],
-        supplierPayments: [],
-        stockMovements: [],
-        voidRecords: [],
-        returnRecords: [],
-      },
-      { replaceAudit: true },
-    );
-    schedulePostBootstrapTasks();
-    return;
-  }
-  let snap = await readSnapshotWithFallback();
-  const snapEmpty = !snap || ((snap.products?.length ?? 0) === 0 && (snap.sales?.length ?? 0) === 0);
-  if (snapEmpty) {
-    const legacyIdb = await claimLegacySnapshotForCurrentAccount();
-    if (legacyIdb) snap = legacyIdb;
-  }
-  const legacy = (!snap || ((snap.products?.length ?? 0) === 0 && (snap.sales?.length ?? 0) === 0))
-    ? tryMigrateLegacyLocalStorage()
-    : null;
-  if (legacy) {
-    const migrated = {
-      products: legacy.products.map(normalizeProduct),
-      customers: legacy.customers.map(normalizeCustomer),
-      sales: legacy.sales.map(normalizeSale),
-      preferences: { ...createDefaultPreferences(), onboardingDone: true, schemaVersion: 2 },
-      debtPayments: [] as DebtPayment[],
-      dayCloses: [] as DayCloseSummary[],
-      auditLogs: [] as AuditLogEntry[],
-      suppliers: [] as Supplier[],
-      purchases: [] as Purchase[],
-      supplierPayments: [] as SupplierPayment[],
-      stockMovements: [] as StockMovement[],
-      voidRecords: [] as VoidRecord[],
-      returnRecords: [] as ReturnRecord[],
-    };
-    await writeSnapshot(migrated);
-    snap = migrated;
-    clearLegacyLocalStorage();
-  }
-  if (!snap) {
-    const products: Product[] = [];
-    const preferences = createDefaultPreferences();
-    await writeSnapshot({
+    usePosStore.getState().hydrateEssentials({
       products,
       customers: [],
-      sales: [],
-      preferences,
-      debtPayments: [],
-      dayCloses: [],
-      auditLogs: [],
-      suppliers: [],
-      purchases: [],
-      supplierPayments: [],
-      stockMovements: [],
-      voidRecords: [],
-      returnRecords: [],
-    });
-    usePosStore.getState().hydrate({
-      products,
-      customers: [],
-      sales: [],
-      preferences,
-      debtPayments: [],
-      dayCloses: [],
-      auditLogs: [],
-      suppliers: [],
-      purchases: [],
-      supplierPayments: [],
-      stockMovements: [],
-      voidRecords: [],
-      returnRecords: [],
+      preferences: prefs,
     });
     schedulePostBootstrapTasks();
     return;
   }
 
-  const preferences = mergePreferencesFromPartial(snap);
-  const pendingStaff = readPendingStaffSelection();
-  const activeKey = getActiveAccountKey();
-  if (pendingStaff && activeKey && pendingStaff.accountKey === activeKey) {
-    const exists = (preferences.staffAccounts ?? []).some((s) => s.id === pendingStaff.staffId && s.active);
-    preferences.activeStaffId = exists ? pendingStaff.staffId : null;
-    clearPendingStaffSelection();
+  let snap = await readSnapshotWithFallback();
+  snap = await resolveLegacySnapshotIfEmpty(snap);
+
+  if (!snap) {
+    const products: Product[] = [];
+    const preferences = createDefaultPreferences();
+    usePosStore.getState().hydrateEssentials({ products, customers: [], preferences });
+    schedulePostBootstrapTasks();
+    void writeSnapshot({
+      products,
+      customers: [],
+      sales: [],
+      preferences,
+      debtPayments: [],
+      dayCloses: [],
+      auditLogs: [],
+      suppliers: [],
+      purchases: [],
+      supplierPayments: [],
+      stockMovements: [],
+      voidRecords: [],
+      returnRecords: [],
+    });
+    return;
   }
-  usePosStore.getState().hydrate({
+
+  const preferences = applyBootstrapPreferences(snap);
+  usePosStore.getState().hydrateEssentials({
     products: (snap.products ?? []) as Product[],
     customers: (snap.customers ?? []) as Customer[],
-    sales: (snap.sales ?? []) as Sale[],
     preferences,
-    debtPayments: snap.debtPayments ?? [],
-    dayCloses: snap.dayCloses ?? [],
-    auditLogs: (snap as { auditLogs?: AuditLogEntry[] }).auditLogs ?? [],
-    suppliers: (snap as { suppliers?: Supplier[] }).suppliers ?? [],
-    purchases: (snap as { purchases?: Purchase[] }).purchases ?? [],
-    supplierPayments: (snap as { supplierPayments?: SupplierPayment[] }).supplierPayments ?? [],
-    stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
-    voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
-    returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
   });
+  scheduleHydrateRemainderFromSnap(snap);
   schedulePostBootstrapTasks();
 }
 

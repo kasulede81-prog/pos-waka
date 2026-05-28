@@ -36,13 +36,16 @@ function LoadingSkeleton({ lang }: { lang: Language }) {
   );
 }
 
+function isStoreReadyForAccount(accountKey: string | null): boolean {
+  return Boolean(accountKey && usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey);
+}
+
 export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(() => !accountKey || isStoreReadyForAccount(accountKey));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setReady(false);
     setError(null);
     if (!accountKey) {
       setReady(true);
@@ -55,7 +58,7 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
       usePosStore.getState().resetForSignOut();
       setActiveAccountKey(accountKey);
     }
-    if (usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey) {
+    if (isStoreReadyForAccount(accountKey)) {
       setReady(true);
       if (Capacitor.isNativePlatform()) {
         void SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
@@ -64,6 +67,7 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
         cancelled = true;
       };
     }
+    setReady(false);
     void bootstrapPosFromDisk()
       .catch(() => {
         if (!cancelled) setError("load");

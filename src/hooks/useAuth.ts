@@ -7,6 +7,7 @@ import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleI
 import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
 import { hydrateAccountFromCloud } from "../lib/postAuthCloudHydrate";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
+import { hasLikelyPersistedSupabaseSession } from "../lib/authSessionHint";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
@@ -101,7 +102,9 @@ export type SignUpProfileMeta = {
 };
 
 export function useAuth() {
-  const [initializing, setInitializing] = useState(true);
+  const [initializing, setInitializing] = useState(
+    () => hasSupabaseConfig && !hasLikelyPersistedSupabaseSession(),
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [localEmail, setLocalEmail] = useState<string | null>(null);
   const [staffSession, setStaffSession] = useState<StaffSession | null>(null);

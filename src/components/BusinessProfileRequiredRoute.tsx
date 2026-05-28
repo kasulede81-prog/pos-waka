@@ -28,11 +28,10 @@ function pathAllowedBeforeBusinessProfileComplete(pathname: string): boolean {
 
 export function BusinessProfileRequiredRoute({ authMode, userId }: Props) {
   const location = useLocation();
-  const [status, setStatus] = useState<{ complete: boolean } | null>(() => {
+  const [status, setStatus] = useState<{ complete: boolean }>(() => {
     if (authMode !== "supabase") return { complete: true };
     const cached = readCachedOwnerOnboardingComplete(userId ?? undefined);
-    if (cached !== null) return { complete: cached };
-    return null;
+    return { complete: cached ?? true };
   });
 
   // Only depend on auth mode / user — not on every pathname. Including pathname caused
@@ -44,18 +43,8 @@ export function BusinessProfileRequiredRoute({ authMode, userId }: Props) {
       return;
     }
     let cancelled = false;
-    const slow = window.setTimeout(() => {
-      if (cancelled) return;
-      setStatus((prev) => {
-        if (prev !== null) return prev;
-        console.warn("[waka] owner_onboarding_status: slow response — unblocking shell (will apply result when ready)");
-        return { complete: true };
-      });
-    }, 2_500);
-
     void fetchOwnerOnboardingStatus().then((s) => {
       if (cancelled) return;
-      window.clearTimeout(slow);
       const complete = s?.complete ?? true;
       if (userId) writeCachedOwnerOnboardingComplete(userId, complete);
       setStatus({ complete });
@@ -63,7 +52,6 @@ export function BusinessProfileRequiredRoute({ authMode, userId }: Props) {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(slow);
     };
   }, [authMode, userId]);
 
@@ -77,14 +65,6 @@ export function BusinessProfileRequiredRoute({ authMode, userId }: Props) {
   }, [authMode]);
 
   if (authMode !== "supabase") return <Outlet />;
-
-  if (status === null) {
-    return (
-      <div className="flex min-h-[30vh] items-center justify-center bg-slate-50 text-sm font-semibold text-slate-600">
-        Loading…
-      </div>
-    );
-  }
 
   if (!status.complete) {
     if (pathAllowedBeforeBusinessProfileComplete(location.pathname)) {
