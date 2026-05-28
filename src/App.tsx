@@ -192,7 +192,7 @@ function App() {
                   </SubscriptionProvider>
                 }
               >
-                <Route path="onboarding" element={<ShopOnboardingPage lang={lang} setLang={setLang} />} />
+                <Route path="onboarding" element={<ShopOnboardingPage lang={lang} setLang={setLang} onSignOut={auth.signOut} />} />
                 <Route
                   element={
                     <SyncStatusProvider>

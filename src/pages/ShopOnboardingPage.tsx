@@ -16,7 +16,7 @@ import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLocation";
 import { inferFromProductName } from "../lib/smartProductGuess";
 
-type Props = { lang: Language; setLang: (lg: Language) => void };
+type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
 type Step = "welcome" | "business" | "selling" | "location" | "staff" | "products";
 
@@ -33,7 +33,7 @@ function ProgressDots({ step, total }: { step: number; total: number }) {
   );
 }
 
-export function ShopOnboardingPage({ lang, setLang }: Props) {
+export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const navigate = useNavigate();
   const preferences = usePosStore((s) => s.preferences);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
@@ -134,6 +134,13 @@ export function ShopOnboardingPage({ lang, setLang }: Props) {
             <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-waka-900">{shopName}</p>
             <button type="button" className={primaryBtn} onClick={() => setStep("business")}>
               {t(lang, "onboardLetsGo")}
+            </button>
+            <button
+              type="button"
+              className="mt-2 text-sm font-bold text-stone-500 underline-offset-2 hover:text-stone-800 hover:underline"
+              onClick={() => void onSignOut().then(() => navigate("/login"))}
+            >
+              {t(lang, "haveAccount")} — {t(lang, "staffLoginBack")} to sign in
             </button>
           </div>
         ) : null}

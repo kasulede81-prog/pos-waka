@@ -32,6 +32,8 @@ import type {
 import type { SessionActor } from "../lib/sessionActor";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
+import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
+import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
@@ -2163,6 +2165,19 @@ function scheduleLegacySnapshotMigration(initialSnap: Partial<PersistedSnapshot>
 
 const BOOTSTRAP_DISK_TIMEOUT_MS = 12_000;
 
+/** Returning Supabase owners should not be sent through new-shop onboarding after a slow/empty disk read. */
+function preferencesForAccountBootstrap(key: string): ShopPreferences {
+  const preferences = createDefaultPreferences();
+  if (!key.startsWith("sb:")) return preferences;
+  const userId = key.slice(3);
+  if (isWorkspaceBootstrapped(userId) || readCachedOwnerOnboardingComplete(userId) === true) {
+    preferences.onboardingDone = true;
+    preferences.onboardingWizardDone = true;
+    preferences.schemaVersion = 2;
+  }
+  return preferences;
+}
+
 /** Load local POS data; never hang the UI longer than BOOTSTRAP_DISK_TIMEOUT_MS. */
 export async function bootstrapPosFromDisk(): Promise<void> {
   const key = getActiveAccountKey();
@@ -2197,7 +2212,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     if (snap) {
       hydrateEssentialsFromSnap(snap);
     } else {
-      const preferences = createDefaultPreferences();
+      const preferences = preferencesForAccountBootstrap(key);
       usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
       void writeSnapshot({
         products: [],
@@ -2230,7 +2245,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       usePosStore.getState().hydrateEssentials({
         products: [],
         customers: [],
-        preferences: createDefaultPreferences(),
+        preferences: preferencesForAccountBootstrap(key),
       });
     }
     if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap disk", e);

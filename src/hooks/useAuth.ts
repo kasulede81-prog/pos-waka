@@ -13,6 +13,7 @@ import type { BusinessType, UserRole } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { phoneToLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
+import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
@@ -69,10 +70,15 @@ function applySignupProfileToLocalStore(next: Session | null): void {
     String(meta?.shop_display_name ?? "").trim() ||
     String(meta?.business_name ?? meta?.organization_name ?? meta?.shop_name ?? "").trim();
   const store = usePosStore.getState();
+  const existingOwner =
+    isWorkspaceBootstrapped(next.user.id) || readCachedOwnerOnboardingComplete(next.user.id) === true;
   store.setPreferences({
     shopDisplayName: shopName || store.preferences.shopDisplayName,
     shopPhoneE164: String(meta?.phone_e164 ?? "").trim() || store.preferences.shopPhoneE164,
     shopCurrency: "UGX",
+    ...(existingOwner
+      ? { onboardingDone: true, onboardingWizardDone: true, schemaVersion: 2 as const }
+      : {}),
   });
 }
 
@@ -277,8 +283,7 @@ export function useAuth() {
         setSession(next);
         return;
       }
-      // Do not clear the offline namespace on transient null sessions (token refresh glitches).
-      if (event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
+      if (event === "SIGNED_OUT") {
         applyAccountSwitchSync(null);
         setSession(null);
       }

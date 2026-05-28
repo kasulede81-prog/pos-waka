@@ -46,12 +46,20 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
                 {t(lang, "marketingCtaDemo")}
               </Link>
               {!isAuthenticated ? (
-                <Link
-                  to="/register"
-                  className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border-2 border-stone-200 bg-white px-8 py-3 text-lg font-black text-stone-900 hover:border-orange-200"
-                >
-                  {t(lang, "marketingCtaSignup")}
-                </Link>
+                <>
+                  <Link
+                    to="/login"
+                    className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border-2 border-stone-200 bg-white px-8 py-3 text-lg font-black text-stone-900 hover:border-orange-200"
+                  >
+                    {t(lang, "marketingCtaLogin")}
+                  </Link>
+                  <Link
+                    to="/register"
+                    className="inline-flex min-h-[52px] items-center justify-center rounded-2xl border-2 border-orange-200 bg-orange-50 px-8 py-3 text-lg font-black text-orange-900 hover:bg-orange-100"
+                  >
+                    {t(lang, "marketingCtaSignup")}
+                  </Link>
+                </>
               ) : null}
             </div>
           </div>

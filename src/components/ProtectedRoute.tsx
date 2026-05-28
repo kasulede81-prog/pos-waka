@@ -1,5 +1,4 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { hasLikelyPersistedSupabaseSession } from "../lib/authSessionHint";
 
 type Props = {
   initializing: boolean;
@@ -8,9 +7,8 @@ type Props = {
 
 export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
   const location = useLocation();
-  const likelySession = hasLikelyPersistedSupabaseSession();
 
-  if (initializing && !likelySession && !isAuthenticated) {
+  if (initializing) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-600">
         Loading…
@@ -18,7 +16,7 @@ export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
     );
   }
 
-  if (!isAuthenticated && !initializing) {
+  if (!isAuthenticated) {
     const p = location.pathname.split("?")[0] || "/";
     const to = p === "/" || p === "" ? "/home" : "/login";
     return <Navigate to={to} replace state={{ from: location.pathname }} />;
