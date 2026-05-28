@@ -2044,11 +2044,14 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
   }
 }
 
+function snapshotHasInventoryOrSales(snap: Partial<PersistedSnapshot> | null | undefined): boolean {
+  return Boolean(snap && ((snap.products?.length ?? 0) > 0 || (snap.sales?.length ?? 0) > 0));
+}
+
 async function resolveLegacySnapshotIfEmpty(
   snap: Partial<PersistedSnapshot> | null,
 ): Promise<Partial<PersistedSnapshot> | null> {
-  const hasData = snap && ((snap.products?.length ?? 0) > 0 || (snap.sales?.length ?? 0) > 0);
-  if (hasData) return snap;
+  if (snapshotHasInventoryOrSales(snap)) return snap;
   const legacyIdb = await claimLegacySnapshotForCurrentAccount();
   if (legacyIdb) return legacyIdb;
   const legacy = tryMigrateLegacyLocalStorage();
@@ -2099,7 +2102,7 @@ function schedulePostBootstrapTasks(): void {
 
 async function runPostBootstrapTasks(): Promise<void> {
   if (!usePosStore.getState()._hydrated) return;
-  await restoreDraftSaleFromDisk();
+  void restoreDraftSaleFromDisk();
   usePosStore.getState().pruneExpiredSales();
 
   if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
@@ -2123,10 +2126,47 @@ async function runPostBootstrapTasks(): Promise<void> {
   scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
 }
 
+function hydrateEssentialsFromSnap(snap: Partial<PersistedSnapshot>): void {
+  const preferences = applyBootstrapPreferences(snap);
+  usePosStore.getState().hydrateEssentials({
+    products: (snap.products ?? []) as Product[],
+    customers: (snap.customers ?? []) as Customer[],
+    preferences,
+  });
+}
+
+function scheduleLegacySnapshotMigration(initialSnap: Partial<PersistedSnapshot> | null): void {
+  void (async () => {
+    const legacySnap = await resolveLegacySnapshotIfEmpty(initialSnap);
+    if (!legacySnap || !snapshotHasInventoryOrSales(legacySnap)) return;
+    if (!usePosStore.getState()._hydrated) return;
+    hydrateEssentialsFromSnap(legacySnap);
+    scheduleHydrateRemainderFromSnap(legacySnap);
+    const next = usePosStore.getState();
+    void writeSnapshot({
+      products: next.products,
+      customers: next.customers,
+      sales: next.sales,
+      preferences: next.preferences,
+      debtPayments: next.debtPayments,
+      dayCloses: next.dayCloses,
+      auditLogs: next.auditLogs,
+      suppliers: next.suppliers,
+      purchases: next.purchases,
+      supplierPayments: next.supplierPayments,
+      stockMovements: next.stockMovements,
+      voidRecords: next.voidRecords,
+      returnRecords: next.returnRecords,
+    });
+  })();
+}
+
+const BOOTSTRAP_DISK_TIMEOUT_MS = 12_000;
+
+/** Load local POS data; never hang the UI longer than BOOTSTRAP_DISK_TIMEOUT_MS. */
 export async function bootstrapPosFromDisk(): Promise<void> {
   const key = getActiveAccountKey();
   if (!key) {
-    // Signed out / no namespace yet → nothing to hydrate.
     usePosStore.getState().resetForSignOut();
     return;
   }
@@ -2146,39 +2186,55 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     return;
   }
 
-  let snap = await readSnapshotWithFallback();
-  snap = await resolveLegacySnapshotIfEmpty(snap);
+  const load = async () => {
+    const snap = await readSnapshotWithFallback();
+    if (snapshotHasInventoryOrSales(snap)) {
+      hydrateEssentialsFromSnap(snap!);
+      scheduleHydrateRemainderFromSnap(snap!);
+      return;
+    }
 
-  if (!snap) {
-    const products: Product[] = [];
-    const preferences = createDefaultPreferences();
-    usePosStore.getState().hydrateEssentials({ products, customers: [], preferences });
-    schedulePostBootstrapTasks();
-    void writeSnapshot({
-      products,
-      customers: [],
-      sales: [],
-      preferences,
-      debtPayments: [],
-      dayCloses: [],
-      auditLogs: [],
-      suppliers: [],
-      purchases: [],
-      supplierPayments: [],
-      stockMovements: [],
-      voidRecords: [],
-      returnRecords: [],
-    });
-    return;
+    if (snap) {
+      hydrateEssentialsFromSnap(snap);
+    } else {
+      const preferences = createDefaultPreferences();
+      usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
+      void writeSnapshot({
+        products: [],
+        customers: [],
+        sales: [],
+        preferences,
+        debtPayments: [],
+        dayCloses: [],
+        auditLogs: [],
+        suppliers: [],
+        purchases: [],
+        supplierPayments: [],
+        stockMovements: [],
+        voidRecords: [],
+        returnRecords: [],
+      });
+    }
+    scheduleLegacySnapshotMigration(snap);
+  };
+
+  try {
+    await Promise.race([
+      load(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error("bootstrap_timeout")), BOOTSTRAP_DISK_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (e) {
+    if (!usePosStore.getState()._hydrated) {
+      usePosStore.getState().hydrateEssentials({
+        products: [],
+        customers: [],
+        preferences: createDefaultPreferences(),
+      });
+    }
+    if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap disk", e);
   }
-
-  const preferences = applyBootstrapPreferences(snap);
-  usePosStore.getState().hydrateEssentials({
-    products: (snap.products ?? []) as Product[],
-    customers: (snap.customers ?? []) as Customer[],
-    preferences,
-  });
-  scheduleHydrateRemainderFromSnap(snap);
   schedulePostBootstrapTasks();
 }
 

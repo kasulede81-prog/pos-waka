@@ -37,9 +37,13 @@ export async function applyShopRecoverySignalsForCurrentShop(): Promise<void> {
   const primary = await resolvePrimaryOrganizationForUser(userId);
   if (!primary?.shopId) return;
 
-  const { data, error } = await supabase.rpc("shop_fetch_recovery_signal", {
-    p_shop_id: primary.shopId,
-  });
+  const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: primary.shopId });
+  const { data, error } = await Promise.race([
+    rpc,
+    new Promise<{ data: null; error: { message: string } }>((resolve) => {
+      setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), 4_000);
+    }),
+  ]);
   if (error || !data || typeof data !== "object") return;
 
   const clearedAt = String((data as { clear_back_office_pin_at?: string }).clear_back_office_pin_at ?? "").trim();

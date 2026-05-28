@@ -7,7 +7,6 @@ import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleI
 import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
 import { hydrateAccountFromCloud } from "../lib/postAuthCloudHydrate";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
-import { hasLikelyPersistedSupabaseSession } from "../lib/authSessionHint";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
@@ -102,9 +101,8 @@ export type SignUpProfileMeta = {
 };
 
 export function useAuth() {
-  const [initializing, setInitializing] = useState(
-    () => hasSupabaseConfig && !hasLikelyPersistedSupabaseSession(),
-  );
+  /** Wait for getSession before routing — avoids protected shell with no account key. */
+  const [initializing, setInitializing] = useState(() => hasSupabaseConfig);
   const [session, setSession] = useState<Session | null>(null);
   const [localEmail, setLocalEmail] = useState<string | null>(null);
   const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
@@ -265,19 +263,25 @@ export function useAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, next) => {
+    } = supabase.auth.onAuthStateChange((event, next) => {
       if (next?.user) {
         clearStaffAuth();
         setStaffSession(null);
+        applyAccountSwitchSync(
+          computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
+        );
+        applySignupProfileToLocalStore(next);
+        void ensureWorkspaceForSession(next).catch((e) => {
+          console.error("[waka-auth] bootstrap on auth state change failed", e);
+        });
+        setSession(next);
+        return;
       }
-      applyAccountSwitchSync(
-        computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
-      );
-      applySignupProfileToLocalStore(next);
-      void ensureWorkspaceForSession(next).catch((e) => {
-        console.error("[waka-auth] bootstrap on auth state change failed", e);
-      });
-      setSession(next);
+      // Do not clear the offline namespace on transient null sessions (token refresh glitches).
+      if (event === "SIGNED_OUT" || event === "INITIAL_SESSION") {
+        applyAccountSwitchSync(null);
+        setSession(null);
+      }
     });
 
     return () => {

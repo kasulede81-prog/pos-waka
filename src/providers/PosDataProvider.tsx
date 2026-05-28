@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Capacitor } from "@capacitor/core";
 import { SplashScreen } from "@capacitor/splash-screen";
 import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
@@ -20,11 +20,11 @@ type Props = {
 
 function LoadingSkeleton({ lang }: { lang: Language }) {
   return (
-      <div className="flex min-h-dvh flex-col items-center bg-white px-5 pt-[max(2rem,env(safe-area-inset-top))]">
-        <WakaPosLogo size="splash" className="mb-8 mt-4" />
-        <div className="mx-auto w-full max-w-md space-y-6">
-          <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
-          <p className="text-center text-xs font-medium text-stone-500">{t(lang, "openingShopLocalHint")}</p>
+    <div className="flex min-h-dvh flex-col items-center bg-white px-5 pt-[max(2rem,env(safe-area-inset-top))]">
+      <WakaPosLogo size="splash" className="mb-8 mt-4" />
+      <div className="mx-auto w-full max-w-md space-y-6">
+        <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
+        <p className="text-center text-xs font-medium text-stone-500">{t(lang, "openingShopLocalHint")}</p>
         <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
         <div className="space-y-3 rounded-3xl border border-stone-100 bg-white/90 p-5 shadow-waka-sm">
           <div className="h-14 w-full rounded-2xl waka-skeleton-bar" />
@@ -36,6 +36,12 @@ function LoadingSkeleton({ lang }: { lang: Language }) {
   );
 }
 
+function hideNativeSplash(): void {
+  if (Capacitor.isNativePlatform()) {
+    void SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
+  }
+}
+
 function isStoreReadyForAccount(accountKey: string | null): boolean {
   return Boolean(accountKey && usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey);
 }
@@ -43,45 +49,43 @@ function isStoreReadyForAccount(accountKey: string | null): boolean {
 export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
   const [ready, setReady] = useState(() => !accountKey || isStoreReadyForAccount(accountKey));
   const [error, setError] = useState<string | null>(null);
+  const bootGenRef = useRef(0);
 
   useEffect(() => {
-    let cancelled = false;
+    const gen = ++bootGenRef.current;
     setError(null);
+
     if (!accountKey) {
       setReady(true);
-      return () => {
-        cancelled = true;
-      };
+      return;
     }
+
     if (getActiveAccountKey() !== accountKey) {
       flushPendingPersist();
       usePosStore.getState().resetForSignOut();
       setActiveAccountKey(accountKey);
     }
+
     if (isStoreReadyForAccount(accountKey)) {
       setReady(true);
-      if (Capacitor.isNativePlatform()) {
-        void SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
-      }
-      return () => {
-        cancelled = true;
-      };
+      hideNativeSplash();
+      return;
     }
+
     setReady(false);
+
     void bootstrapPosFromDisk()
       .catch(() => {
-        if (!cancelled) setError("load");
+        if (bootGenRef.current === gen) setError("load");
       })
       .finally(() => {
-        if (!cancelled) {
-          setReady(true);
-          if (Capacitor.isNativePlatform()) {
-            void SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
-          }
-        }
+        if (bootGenRef.current !== gen) return;
+        setReady(true);
+        hideNativeSplash();
       });
+
     return () => {
-      cancelled = true;
+      bootGenRef.current += 1;
     };
   }, [accountKey]);
 
