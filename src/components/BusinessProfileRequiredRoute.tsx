@@ -12,6 +12,7 @@ function pathAllowedBeforeBusinessProfileComplete(pathname: string): boolean {
   if (p === "/" || p === "") return true;
   if (p.startsWith("/settings")) return true;
   if (p.startsWith("/internal/")) return true;
+  if (p === "/onboarding" || p.startsWith("/onboarding/")) return true;
   if (p === "/pos" || p.startsWith("/pos/")) return true;
   if (p === "/receipts" || p.startsWith("/receipts/")) return true;
   if (p === "/upgrade" || p.startsWith("/upgrade/")) return true;

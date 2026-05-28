@@ -11,6 +11,7 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { phoneToLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
@@ -67,13 +68,10 @@ function applySignupProfileToLocalStore(next: Session | null): void {
   const shopName =
     String(meta?.shop_display_name ?? "").trim() ||
     String(meta?.business_name ?? meta?.organization_name ?? meta?.shop_name ?? "").trim();
-  const businessType = String(meta?.business_type ?? "").trim() as BusinessType;
-  if (!shopName || !businessType) return;
   const store = usePosStore.getState();
-  store.completeBusinessOnboarding(businessType);
   store.setPreferences({
-    shopDisplayName: shopName,
-    shopPhoneE164: String(meta?.phone_e164 ?? "").trim() || null,
+    shopDisplayName: shopName || store.preferences.shopDisplayName,
+    shopPhoneE164: String(meta?.phone_e164 ?? "").trim() || store.preferences.shopPhoneE164,
     shopCurrency: String(meta?.default_currency ?? "UGX").trim().toUpperCase() || "UGX",
   });
 }
@@ -260,9 +258,8 @@ export function useAuth() {
       const phoneE164 = normalizeUgPhoneE164(trimmed);
       const digitsOnly = trimmed.replace(/\D/g, "");
       const usePhone = Boolean(phoneE164 && digitsOnly.length >= 9 && !trimmed.includes("@"));
-      const { error } = await supabase.auth.signInWithPassword(
-        usePhone && phoneE164 ? { phone: phoneE164, password } : { email: trimmed, password },
-      );
+      const loginEmail = usePhone && phoneE164 ? phoneToLoginEmail(trimmed) : trimmed;
+      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
       if (error) {
         reportAuthIssue("sign_in_failed", { status: error.status ?? 0 });
         throw error;
@@ -408,6 +405,28 @@ export function useAuth() {
   },
   [ensureWorkspaceForSession]);
 
+  const signUpQuick = useCallback(
+    async (input: {
+      shopName: string;
+      ownerName: string;
+      phone: string;
+      password: string;
+      referralCode?: string;
+    }): Promise<SignUpResult> => {
+      const email = phoneToLoginEmail(input.phone);
+      return signUp(email, input.password, input.shopName.trim(), "kiosk_duka", {
+        fullName: input.ownerName.trim(),
+        phone: input.phone,
+        organizationName: input.shopName.trim(),
+        shopDisplayName: input.shopName.trim(),
+        defaultCurrency: "UGX",
+        gpsSkipped: true,
+        referralCode: input.referralCode?.trim(),
+      });
+    },
+    [signUp],
+  );
+
   const resendVerificationEmail = useCallback(async (email: string) => {
     if (!hasSupabaseConfig || !supabase) throw new Error("Supabase is not configured.");
     const { error } = await supabase.auth.resend({
@@ -523,6 +542,7 @@ export function useAuth() {
       clearRememberedStaff,
       staffSession,
       signUp,
+      signUpQuick,
       signOut,
       requestPasswordReset,
       updatePassword,
@@ -545,6 +565,7 @@ export function useAuth() {
       clearRememberedStaff,
       staffSession,
       signUp,
+      signUpQuick,
       signOut,
       requestPasswordReset,
       updatePassword,

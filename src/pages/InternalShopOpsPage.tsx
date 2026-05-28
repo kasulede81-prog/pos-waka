@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation, useParams } from "react-router-dom";
-import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
-import { AdminActionPicker, AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
+import { AdminShell } from "../components/internal-admin/v2/AdminShell";
+import { BottomSheet } from "../components/internal-admin/v2/primitives";
+import { adminPermissions } from "../components/internal-admin/v2/adminRoles";
+import { AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
+import { InternalNotesPanel, ShopTimelinePanel } from "../components/internal-admin/v2/ops/OpsWidgets";
+import {
+  buildShopTimelineFromDetail,
+  computeShopHealth,
+  detectFraudSignals,
+} from "../lib/internalOpsIntelligence";
+import { fetchShopAuditTimeline, type OpsAuditRow } from "../lib/wakaInternalAdmin";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
@@ -75,6 +84,7 @@ export function InternalShopOpsPage({ lang }: Props) {
   const [supportBody, setSupportBody] = useState("");
   const [planControlCode, setPlanControlCode] = useState<AdminPlanCode>("business");
   const [planControlDays, setPlanControlDays] = useState(30);
+  const [auditRows, setAuditRows] = useState<OpsAuditRow[]>([]);
 
   const loadShop = useCallback(async () => {
     if (!shopId) return;
@@ -111,13 +121,22 @@ export function InternalShopOpsPage({ lang }: Props) {
   }, [loadShop]);
 
   useEffect(() => {
+    if (!shopId || previewMode) {
+      setAuditRows([]);
+      return;
+    }
+    void fetchShopAuditTimeline(shopId, 20).then(setAuditRows);
+  }, [shopId, previewMode]);
+
+  useEffect(() => {
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "free").toLowerCase();
     if (ADMIN_PLAN_CODES.includes(code as AdminPlanCode)) setPlanControlCode(code as AdminPlanCode);
   }, [detail?.plan_code, detail?.subscription?.plan_code]);
 
-  const roleNorm = (adminRow?.role ?? "").toLowerCase();
-  const canSupport = ["super_admin", "support_admin", "finance_admin"].includes(roleNorm);
-  const canSubs = ["super_admin", "subscriptions_admin", "finance_admin", "operations_admin"].includes(roleNorm);
+  const perms = adminPermissions(adminRow);
+  const canSupport = perms.canShopSupport;
+  const canSubs = perms.canShopSubs;
+  const [actionSheet, setActionSheet] = useState(false);
 
   const suggestedPaymentUgx = useMemo(() => {
     const code = (detail?.plan_code ?? detail?.subscription?.plan_code ?? "business").toLowerCase();
@@ -269,12 +288,52 @@ export function InternalShopOpsPage({ lang }: Props) {
     }
   };
 
+  const shopIntel = useMemo(() => {
+    if (!detail) return null;
+    const health = computeShopHealth({
+      id: detail.shop.id,
+      name: detail.shop.name,
+      district: detail.shop.district,
+      city: detail.shop.city,
+      is_active: detail.shop.is_active,
+      created_at: detail.shop.created_at ?? "",
+      plan_code: detail.plan_code,
+      trial_days_left: null,
+      last_seen_at: detail.shop.last_seen_at,
+      sale_count_30d: detail.sale_count_30d,
+      gps_missing: false,
+    });
+    const fraud = detectFraudSignals(detail);
+    const timeline = [
+      ...buildShopTimelineFromDetail(detail),
+      ...auditRows.map((a) => ({
+        id: a.id,
+        at: a.created_at,
+        timeLabel: new Date(a.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+        message: `Admin: ${a.action.replace(/_/g, " ")}`,
+        priority: "low" as const,
+        kind: "system" as const,
+      })),
+    ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+    return { health, fraud, timeline };
+  }, [detail, auditRows]);
+
+  const actionGroups = useMemo(() => {
+    const groups = new Map<string, typeof shopActions>();
+    for (const a of shopActions) {
+      const list = groups.get(a.group) ?? [];
+      list.push(a);
+      groups.set(a.group, list);
+    }
+    return [...groups.entries()];
+  }, [shopActions]);
+
   if (!shopId && !loadingAdmin) {
-    return <Navigate to="/internal/waka" replace />;
+    return <Navigate to="/internal/waka/shops" replace />;
   }
 
   return (
-    <WakaAdminShell
+    <AdminShell
       lang={lang}
       adminRow={shellAdmin}
       loading={loadingAdmin}
@@ -298,6 +357,19 @@ export function InternalShopOpsPage({ lang }: Props) {
         </p>
       ) : (
         <>
+          {shopIntel ? (
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-900">
+                Health {shopIntel.health.score}%
+              </span>
+              {shopIntel.fraud.map((f) => (
+                <span key={f} className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black text-rose-800">
+                  {f}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
             {formatDisplayEmail(detail.owner_email) ? (
               <p className="text-xs font-semibold text-stone-600">{formatDisplayEmail(detail.owner_email)}</p>
@@ -352,14 +424,47 @@ export function InternalShopOpsPage({ lang }: Props) {
           </div>
 
           {shopActions.length > 0 ? (
-            <AdminActionPicker
-              label={t(lang, "internalShopActionsSelect")}
-              runLabel={t(lang, "internalShopActionsRun")}
-              placeholder={t(lang, "internalShopActionsChoose")}
-              actions={shopActions}
-              busy={busy}
-              onRun={runShopAction}
-            />
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setActionSheet(true)}
+                className="min-h-[48px] w-full rounded-2xl bg-orange-600 text-sm font-black text-white shadow-md disabled:opacity-40"
+              >
+                {t(lang, "internalShopActionsSelect")}
+              </button>
+              <BottomSheet
+                open={actionSheet}
+                onClose={() => setActionSheet(false)}
+                title={t(lang, "internalShopActionsSelect")}
+              >
+                <div className="space-y-4">
+                  {actionGroups.map(([group, actions]) => (
+                    <div key={group}>
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-stone-500">{group}</p>
+                      <ul className="space-y-2">
+                        {actions.map((a) => (
+                          <li key={a.id}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className="min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold text-stone-900 disabled:opacity-40"
+                              onClick={() => {
+                                if (a.confirm && !window.confirm(a.confirm)) return;
+                                runShopAction(a.id);
+                                setActionSheet(false);
+                              }}
+                            >
+                              {a.label}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </BottomSheet>
+            </>
           ) : null}
 
           {toast ? (
@@ -449,6 +554,45 @@ export function InternalShopOpsPage({ lang }: Props) {
               </dl>
             </AdminCollapsible>
           ) : null}
+
+          {canSupport ? (
+            <AdminCollapsible title="Remote support" summary="Sync & session tools">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="min-h-[44px] rounded-xl bg-stone-900 px-4 text-xs font-black text-white disabled:opacity-40"
+                  onClick={() => void run(() => adminShopResetSync(detail.shop.id))}
+                >
+                  Force sync reset
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="min-h-[44px] rounded-xl border border-stone-300 px-4 text-xs font-black disabled:opacity-40"
+                  onClick={() => void run(() => adminShopForceLogoutDevices(detail.shop.id))}
+                >
+                  Force logout devices
+                </button>
+              </div>
+              {detail.sync_health ? (
+                <p className="mt-2 text-xs text-stone-600">
+                  Queue: {detail.sync_health.pending_outbound} pending · last error{" "}
+                  {detail.sync_health.last_error ? "yes" : "none"}
+                </p>
+              ) : null}
+            </AdminCollapsible>
+          ) : null}
+
+          {shopIntel && shopIntel.timeline.length > 0 ? (
+            <AdminCollapsible title="Activity timeline" summary={`${shopIntel.timeline.length} events`}>
+              <ShopTimelinePanel events={shopIntel.timeline} />
+            </AdminCollapsible>
+          ) : null}
+
+          <AdminCollapsible title="Internal notes" summary="Staff only">
+            <InternalNotesPanel shopId={detail.shop.id} author={shellAdmin?.full_name ?? shellAdmin?.email ?? "Staff"} />
+          </AdminCollapsible>
 
           <AdminCollapsible
             title={t(lang, "internalShopProfileDevicesTitle")}
@@ -566,6 +710,6 @@ export function InternalShopOpsPage({ lang }: Props) {
         </>
       )}
       </div>
-    </WakaAdminShell>
+    </AdminShell>
   );
 }

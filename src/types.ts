@@ -137,6 +137,9 @@ export type ReturnRecord = {
   createdAt: string;
 };
 
+/** How the shop usually sells — set during onboarding */
+export type ShopSellingStyle = "piece" | "carton" | "sack" | "mixed";
+
 /** What kind of shop this is — drives simple adaptive UI */
 export type BusinessType =
   | "kiosk_duka"
@@ -379,6 +382,12 @@ export type ShopPreferences = {
   kioskQuickSell: boolean;
   /** First-time business type picker */
   onboardingDone: boolean;
+  /** Post-signup wizard (business type, selling style, optional GPS/staff/products) */
+  onboardingWizardDone?: boolean;
+  /** Uganda selling style from onboarding */
+  shopSellingStyle?: ShopSellingStyle | null;
+  /** Enable carton/sack breakdown defaults when selling style is mixed */
+  mixedPackSelling?: boolean;
   /** 2 = new prefs shape; missing = older snapshot → skip onboarding */
   schemaVersion?: number;
   /** After first-sale celebration modal is dismissed */

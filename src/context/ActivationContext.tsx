@@ -68,6 +68,7 @@ const LOCKED_ALLOWED_EXACT = new Set([
   "/verify-email",
   "/login",
   "/register",
+  "/onboarding",
   "/forgot-password",
   "/home",
   "/settings",

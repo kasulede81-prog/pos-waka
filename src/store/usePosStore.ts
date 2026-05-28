@@ -3,6 +3,7 @@ import type {
   AuditAction,
   AuditLogEntry,
   BusinessType,
+  ShopSellingStyle,
   Customer,
   DayCloseSummary,
   DebtPayment,
@@ -59,6 +60,7 @@ import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
 import { canTogglePosUiMode, permissionsForRole } from "../lib/permissions";
+import { generateStaffUsername } from "../lib/staffAccountHelpers";
 import { hashStaffSecret, normalizePin } from "../lib/staffSecret";
 import { clearPendingStaffSelection, readPendingStaffSelection } from "../lib/staffOfflineAuth";
 
@@ -221,7 +223,15 @@ type PosState = {
   setSessionActor: (actor: SessionActor | null) => void;
 
   setPreferences: (p: Partial<ShopPreferences>) => void;
-  addStaffAccount: (input: { name: string; username?: string; role: UserRole; pin?: string; password?: string; phone?: string }) => { ok: boolean; errorKey?: string; id?: string };
+  addStaffAccount: (input: {
+    name: string;
+    username?: string;
+    role: UserRole;
+    pin?: string;
+    password?: string;
+    phone?: string;
+    permissions?: Permission[];
+  }) => { ok: boolean; errorKey?: string; id?: string };
   updateStaffAccount: (id: string, patch: { name?: string; username?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
   switchStaffAccount: (id: string | null) => void;
@@ -230,6 +240,13 @@ type PosState = {
   endActiveShift: (actorUserId?: string) => void;
   logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
+  completeShopOnboardingWizard: (input: {
+    businessType: BusinessType;
+    sellingStyle: ShopSellingStyle;
+    latitude?: number;
+    longitude?: number;
+    gpsSkipped?: boolean;
+  }) => void;
   updateBusinessType: (businessType: BusinessType) => void;
 
   setDraftInput: (input: DraftLineInput | null) => void;
@@ -655,16 +672,24 @@ export const usePosStore = create<PosState>((set, get) => {
 
   addStaffAccount: (input) => {
     const name = input.name.trim();
-    if (!name) return { ok: false, errorKey: "personNamePh" };
-    const username = (input.username ?? "").trim().toLowerCase() || null;
+    if (!name) return { ok: false, errorKey: "staffNameRequired" };
     const pin = normalizePin(input.pin ?? "") || null;
     const password = (input.password ?? "").trim() || null;
+    if (!password && pin?.length !== 4) return { ok: false, errorKey: "staffPinMust4" };
+
+    const existing = get().preferences.staffAccounts ?? [];
+    let username = (input.username ?? "").trim().toLowerCase() || null;
+    if (!username) username = generateStaffUsername(name, existing);
+    else if (existing.some((a) => (a.username ?? "").toLowerCase() === username)) {
+      return { ok: false, errorKey: "staffUsernameTaken" };
+    }
+
     const row: StaffAccount = {
       id: crypto.randomUUID(),
       name,
       username,
       role: input.role,
-      permissions: permissionsForRole(input.role),
+      permissions: input.permissions ?? permissionsForRole(input.role),
       pin: null,
       password: null,
       pinHash: pin ? hashStaffSecret(pin) : null,
@@ -823,6 +848,23 @@ export const usePosStore = create<PosState>((set, get) => {
         businessType,
         kioskQuickSell: prof.kioskQuickSellDefault,
         onboardingDone: true,
+        onboardingWizardDone: true,
+        schemaVersion: 2,
+      },
+    }));
+  },
+
+  completeShopOnboardingWizard: (input) => {
+    const prof = getBusinessProfile(input.businessType);
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        businessType: input.businessType,
+        shopSellingStyle: input.sellingStyle,
+        mixedPackSelling: input.sellingStyle === "mixed",
+        kioskQuickSell: prof.kioskQuickSellDefault,
+        onboardingDone: true,
+        onboardingWizardDone: true,
         schemaVersion: 2,
       },
     }));

@@ -1,7 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useState, type ReactNode } from "react";
 import clsx from "clsx";
-import { ChevronDown, RefreshCw, X, type LucideIcon } from "lucide-react";
+import { ChevronDown, RefreshCw, type LucideIcon } from "lucide-react";
 
 export function AdminHero({
   greeting,
@@ -270,6 +269,8 @@ export function AdminCollapsible({
   );
 }
 
+import { BottomSheet } from "./v2/primitives";
+
 export function AdminOpsPanel({
   title,
   subtitle,
@@ -285,58 +286,10 @@ export function AdminOpsPanel({
   wide?: boolean;
   children: ReactNode;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return createPortal(
-    <div
-      className="waka-internal-admin-modal fixed inset-0 flex items-end justify-center bg-stone-950/55 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:items-center sm:p-4 sm:pb-4"
-      onClick={onClose}
-      role="presentation"
-    >
-      <div
-        className={clsx(
-          "flex max-h-[min(88dvh,900px)] w-full flex-col overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl sm:max-h-[min(92dvh,900px)]",
-          wide ? "max-w-5xl" : "max-w-2xl",
-        )}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-stone-100 px-4 py-3 sm:px-5">
-          <div className="min-w-0">
-            <h2 className="text-base font-black text-stone-900 sm:text-lg">{title}</h2>
-            {subtitle ? <p className="mt-0.5 text-xs font-semibold text-stone-500">{subtitle}</p> : null}
-          </div>
-          <button
-            type="button"
-            className="shrink-0 rounded-xl p-2 text-stone-600 hover:bg-stone-50"
-            onClick={onClose}
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-3 [-webkit-overflow-scrolling:touch] sm:px-5 sm:py-4">
-          {children}
-        </div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <BottomSheet open={open} onClose={onClose} title={title} subtitle={subtitle} wide={wide}>
+      {children}
+    </BottomSheet>
   );
 }
 

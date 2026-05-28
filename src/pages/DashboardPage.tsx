@@ -109,7 +109,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-4">
-      {!preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
+      {!preferences.onboardingWizardDone && !preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
 
       {deniedBanner ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950">

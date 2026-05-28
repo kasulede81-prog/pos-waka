@@ -1441,3 +1441,100 @@ export async function internalOpsOrgBillingOfferFulfill(
   if (j.ok) return { ok: true };
   return { ok: false, message: j.error ?? "Could not fulfill offer." };
 }
+
+export type FleetDeviceRow = ShopDeviceRow & {
+  shop_name: string;
+  shop_district: string | null;
+  shop_active: boolean;
+  shop_last_seen_at: string | null;
+  pending_sync: number;
+};
+
+/** Fleet-wide devices for internal ops (RLS: is_waka_internal_staff). */
+export async function fetchFleetDevices(limit = 120): Promise<FleetDeviceRow[]> {
+  if (!supabase) return [];
+  const cap = Math.min(Math.max(limit, 1), 200);
+  const { data: devices, error } = await supabase
+    .from("shop_devices")
+    .select("id, shop_id, device_fingerprint, label, platform, app_version, last_seen_at, is_active, trusted, suspicious_flag, created_at")
+    .order("last_seen_at", { ascending: false, nullsFirst: false })
+    .limit(cap);
+  if (error || !devices?.length) return [];
+
+  const shopIds = [...new Set(devices.map((d) => d.shop_id as string))];
+  const shopMap = new Map<string, { name: string; district: string | null; is_active: boolean; last_seen_at: string | null }>();
+  const syncMap = new Map<string, number>();
+
+  const [shopsRes, syncRes] = await Promise.all([
+    supabase.from("shops").select("id, name, district, is_active, last_seen_at").in("id", shopIds.slice(0, 100)),
+    supabase.from("sync_health").select("shop_id, pending_outbound").in("shop_id", shopIds.slice(0, 100)),
+  ]);
+
+  for (const s of shopsRes.data ?? []) {
+    shopMap.set(s.id as string, {
+      name: (s.name as string) ?? "Shop",
+      district: (s.district as string) ?? null,
+      is_active: Boolean(s.is_active),
+      last_seen_at: (s.last_seen_at as string) ?? null,
+    });
+  }
+  for (const row of syncRes.data ?? []) {
+    syncMap.set(row.shop_id as string, Number(row.pending_outbound ?? 0));
+  }
+
+  return devices.map((r) => {
+    const shopId = r.shop_id as string;
+    const shop = shopMap.get(shopId);
+    return {
+      id: r.id as string,
+      shop_id: shopId,
+      device_fingerprint: (r.device_fingerprint as string) ?? "",
+      label: (r.label as string) ?? null,
+      platform: (r.platform as string) ?? null,
+      app_version: (r.app_version as string) ?? null,
+      last_seen_at: (r.last_seen_at as string) ?? null,
+      is_active: Boolean(r.is_active),
+      trusted: Boolean(r.trusted),
+      suspicious_flag: Boolean(r.suspicious_flag),
+      created_at: (r.created_at as string) ?? "",
+      shop_name: shop?.name ?? "Shop",
+      shop_district: shop?.district ?? null,
+      shop_active: shop?.is_active ?? true,
+      shop_last_seen_at: shop?.last_seen_at ?? null,
+      pending_sync: syncMap.get(shopId) ?? 0,
+    };
+  });
+}
+
+export type OpsAuditRow = {
+  id: string;
+  actor: string | null;
+  action: string;
+  target_shop_id: string | null;
+  target_org_id: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+};
+
+export async function fetchOpsAuditFeed(limit = 30): Promise<OpsAuditRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("internal_ops_admin_audit")
+    .select("id, actor, action, target_shop_id, target_org_id, payload, created_at")
+    .order("created_at", { ascending: false })
+    .limit(Math.min(limit, 80));
+  if (error || !data) return [];
+  return data as OpsAuditRow[];
+}
+
+export async function fetchShopAuditTimeline(shopId: string, limit = 25): Promise<OpsAuditRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("internal_ops_admin_audit")
+    .select("id, actor, action, target_shop_id, target_org_id, payload, created_at")
+    .eq("target_shop_id", shopId)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(limit, 50));
+  if (error || !data) return [];
+  return data as OpsAuditRow[];
+}

@@ -47,6 +47,8 @@ import { SupportPage } from "./pages/SupportPage";
 import { LegalPolicyPage } from "./pages/LegalPolicyPage";
 import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
+import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
+import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import type { Language } from "./types";
 
@@ -104,7 +106,7 @@ function App() {
               lang={lang}
               setLang={setLang}
               isAuthenticated={auth.isAuthenticated}
-              signUp={auth.signUp}
+              signUpQuick={auth.signUpQuick}
               onGoogleSignIn={auth.signInWithGoogle}
             />
           }
@@ -180,9 +182,22 @@ function App() {
                 element={
                   <SubscriptionProvider user={auth.user} authMode={auth.mode}>
                     <PosDataProvider lang={lang} accountKey={auth.accountKey}>
-                      <SyncStatusProvider>
-                        <BackOfficeSessionProvider>
-                          <AppShell
+                      <OnboardingRouteGate
+                        authMode={auth.mode}
+                        user={auth.user}
+                        email={auth.email}
+                        staffSession={auth.staffSession}
+                      />
+                    </PosDataProvider>
+                  </SubscriptionProvider>
+                }
+              >
+                <Route path="onboarding" element={<ShopOnboardingPage lang={lang} setLang={setLang} />} />
+                <Route
+                  element={
+                    <SyncStatusProvider>
+                      <BackOfficeSessionProvider>
+                        <AppShell
                             lang={lang}
                             setLang={setLang}
                             onSignOut={auth.signOut}
@@ -191,12 +206,10 @@ function App() {
                             authMode={auth.mode}
                             staffSession={auth.staffSession}
                           />
-                        </BackOfficeSessionProvider>
-                      </SyncStatusProvider>
-                    </PosDataProvider>
-                  </SubscriptionProvider>
-                }
-              >
+                      </BackOfficeSessionProvider>
+                    </SyncStatusProvider>
+                  }
+                >
             <Route index element={<DashboardPage lang={lang} />} />
             <Route path="office" element={<OfficeHubPage lang={lang} />} />
             <Route
@@ -371,12 +384,18 @@ function App() {
               }
             />
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/shops" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/devices" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/analytics" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/support" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+            <Route path="internal/waka/billing" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/agents" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
               </Route>
             </Route>
+          </Route>
           </Route>
         </Route>
 

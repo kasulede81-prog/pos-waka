@@ -6,8 +6,13 @@ import {
   INTERNAL_ADMIN_PREVIEW_ROW,
   isInternalAdminPreviewActive,
 } from "../lib/internalAdminPreview";
-import { WakaAdminShell } from "../components/internal-admin/WakaAdminShell";
-import { InternalOpsDashboard } from "../components/internal-admin/InternalOpsDashboard";
+import { AdminShell, type AdminSectionId } from "../components/internal-admin/v2/AdminShell";
+import { AdminOverviewPage } from "../components/internal-admin/v2/pages/AdminOverviewPage";
+import { AdminShopsPage } from "../components/internal-admin/v2/pages/AdminShopsPage";
+import { AdminSupportPage } from "../components/internal-admin/v2/pages/AdminSupportPage";
+import { AdminBillingPage } from "../components/internal-admin/v2/pages/AdminBillingPage";
+import { AdminDevicesPage } from "../components/internal-admin/v2/pages/AdminDevicesPage";
+import { AdminAnalyticsPage } from "../components/internal-admin/v2/pages/AdminAnalyticsPage";
 import { InternalAdminsManagement } from "../components/internal-admin/InternalAdminsManagement";
 import { InternalActivationOpsPage } from "./InternalActivationOpsPage";
 import { InternalMarketingAgents } from "../components/internal-admin/InternalMarketingAgents";
@@ -17,14 +22,25 @@ type Props = {
   email: string | null | undefined;
 };
 
+function sectionFromPath(pathname: string): AdminSectionId {
+  if (pathname.startsWith("/internal/waka/shop/")) return "shop";
+  if (pathname === "/internal/waka/shops") return "shops";
+  if (pathname === "/internal/waka/devices") return "devices";
+  if (pathname === "/internal/waka/analytics") return "analytics";
+  if (pathname === "/internal/waka/support") return "support";
+  if (pathname === "/internal/waka/billing") return "billing";
+  if (pathname === "/internal/waka/agents") return "agents";
+  if (pathname === "/internal/waka/activations") return "activations";
+  if (pathname === "/internal/waka/admins") return "admins";
+  return "overview";
+}
+
 export function InternalWakaAdminPage({ lang, email }: Props) {
   const [loading, setLoading] = useState(true);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const location = useLocation();
-  const isAdminsRoute = location.pathname === "/internal/waka/admins";
-  const isAgentsRoute = location.pathname === "/internal/waka/agents";
-  const isActivationsRoute = location.pathname === "/internal/waka/activations";
   const previewRequested = isInternalAdminPreviewActive(location.search);
+  const section = sectionFromPath(location.pathname);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,24 +56,31 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     };
   }, []);
 
-  /** Sample data when `?preview=1` (dev / `VITE_INTERNAL_ADMIN_PREVIEW=1`). Works with or without a real internal admin row. */
   const previewMode = previewRequested;
   const shellAdmin = useMemo(
     () => (previewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow),
     [adminRow, previewMode],
   );
 
-  const shellActive = isActivationsRoute ? "activations" : isAdminsRoute ? "admins" : isAgentsRoute ? "agents" : "overview";
-
   let body: React.ReactNode;
-  if (isActivationsRoute) {
+  if (section === "shops") {
+    body = <AdminShopsPage lang={lang} adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "devices") {
+    body = <AdminDevicesPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "analytics") {
+    body = <AdminAnalyticsPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "support") {
+    body = <AdminSupportPage lang={lang} adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "billing") {
+    body = <AdminBillingPage lang={lang} adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "activations") {
     body = <InternalActivationOpsPage lang={lang} lovableUi previewMode={previewMode} />;
-  } else if (isAgentsRoute) {
+  } else if (section === "agents") {
     body = <InternalMarketingAgents lang={lang} lovableUi previewMode={previewMode} />;
-  } else if (isAdminsRoute) {
+  } else if (section === "admins") {
     if (!previewMode && adminRow?.role !== "super_admin") {
       body = (
-        <div className="rounded-xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
+        <div className="rounded-2xl border border-rose-200 bg-white p-6 text-center text-sm font-bold text-rose-800">
           Super admin only.
         </div>
       );
@@ -66,25 +89,13 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     }
   } else {
     body = (
-      <InternalOpsDashboard
-        lang={lang}
-        email={email}
-        adminRow={shellAdmin}
-        previewMode={previewMode}
-        lovableUi
-      />
+      <AdminOverviewPage lang={lang} email={email} adminRow={shellAdmin} previewMode={previewMode} />
     );
   }
 
   return (
-    <WakaAdminShell
-      lang={lang}
-      adminRow={shellAdmin}
-      loading={loading}
-      active={shellActive}
-      previewMode={previewMode}
-    >
+    <AdminShell lang={lang} adminRow={shellAdmin} loading={loading} active={section} previewMode={previewMode}>
       {body}
-    </WakaAdminShell>
+    </AdminShell>
   );
 }
