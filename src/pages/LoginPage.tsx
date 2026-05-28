@@ -10,7 +10,7 @@ import { formatAuthError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
-import { STAFF_LOGIN_ROLES, type StaffLoginRole } from "../lib/staffLoginRoles";
+import type { StaffLoginRole } from "../lib/staffLoginRoles";
 
 type Props = {
   lang: Language;
@@ -50,7 +50,7 @@ export function LoginPage({
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState(rememberedStaffDevice?.businessName ?? "");
-  const [staffRole, setStaffRole] = useState<StaffLoginRole>("cashier");
+  const staffRole: StaffLoginRole = "cashier";
   const [staffName, setStaffName] = useState(rememberedStaffDevice?.identifier ?? "");
   const [staffPin, setStaffPin] = useState("");
   const [rememberDevice, setRememberDevice] = useState(Boolean(rememberedStaffDevice));
@@ -293,29 +293,9 @@ export function LoginPage({
               hint={loadingShops ? t(lang, "staffLoginLoadingShops") : t(lang, "staffLoginBusinessHint")}
             />
 
-            <div>
-              <span className="text-sm font-bold text-stone-800">{t(lang, "staffLoginSelectRole")}</span>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {STAFF_LOGIN_ROLES.map((r) => {
-                  const on = staffRole === r;
-                  return (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => setStaffRole(r)}
-                      className={`min-h-[48px] rounded-2xl border-2 px-2 py-2.5 text-sm font-black leading-tight transition ${
-                        on
-                          ? "border-waka-500 bg-waka-50 text-waka-900 shadow-sm"
-                          : "border-stone-200 bg-stone-50 text-stone-600"
-                      }`}
-                    >
-                      {t(lang, `role_${r}`)}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-1 text-xs font-medium text-stone-500">If role is wrong, we still try your name + PIN.</p>
-            </div>
+            <p className="rounded-xl bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-600">
+              {t(lang, "staffLoginRoleAutoHint")}
+            </p>
 
             <label className="block text-sm font-bold text-stone-800">
               {t(lang, "staffLoginName")}

@@ -911,11 +911,11 @@ export async function fetchShopsBySignupDate(limit = 50): Promise<RecentShopRow[
   const cap = Math.min(Math.max(limit, 1), 100);
   const { data: shops, error } = await supabase
     .from("shops")
-    .select("id, name, district, city, is_active, created_at, organization_id, last_seen_at, phone_e164, business_type, gps_missing")
+    .select("id, name, district, city, is_active, created_at, organization_id, last_seen_at")
     .order("created_at", { ascending: false })
     .limit(cap);
   if (error || !shops?.length) return [];
-  return enrichRecentShopRows(shops);
+  return enrichRecentShopRows(shops as RecentShopDbRow[]);
 }
 
 export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {

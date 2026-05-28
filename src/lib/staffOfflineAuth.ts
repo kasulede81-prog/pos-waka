@@ -2,7 +2,6 @@ import type { ShopPreferences, UserRole } from "../types";
 import { getLocalDb } from "../offline/localDb";
 import { hashStaffSecret, normalizePin } from "./staffSecret";
 import type { StaffLoginRole } from "./staffLoginRoles";
-import { staffLoginRoleMatches } from "./staffLoginRoles";
 
 const REMEMBER_DEVICE_KEY = "waka.staff.remembered.v1";
 const PENDING_STAFF_KEY = "waka.staff.pending.v1";
@@ -132,22 +131,12 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
   const snap = (await db.get("kv", `${shop.accountKey}::snapshot`)) as SnapshotLike | undefined;
   const prefs = snap?.preferences;
   const staffRows = prefs?.staffAccounts ?? [];
-  const foundForRole = staffRows.find(
+  const found = staffRows.find(
     (s) =>
       s.active &&
-      staffLoginRoleMatches(s.role, input.role) &&
       identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier) &&
       secretMatches({ pin: s.pin, password: s.password, pinHash: s.pinHash, passwordHash: s.passwordHash }, secret),
   );
-  // Keep role for fast selection, but don't block login when role is picked wrong.
-  const found =
-    foundForRole ??
-    staffRows.find(
-      (s) =>
-        s.active &&
-        identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier) &&
-        secretMatches({ pin: s.pin, password: s.password, pinHash: s.pinHash, passwordHash: s.passwordHash }, secret),
-    );
 
   if (!found) {
     throw new Error("Invalid staff credentials.");
