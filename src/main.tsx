@@ -6,6 +6,9 @@ import "./index.css";
 import App from "./App";
 import { initCapacitorShell } from "./lib/capacitorInit";
 import { reportPwaIssue } from "./lib/monitoring";
+import { warmupLocalDb } from "./offline/localDb";
+
+warmupLocalDb();
 
 registerSW({
   immediate: true,

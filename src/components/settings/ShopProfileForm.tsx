@@ -15,6 +15,7 @@ import {
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { fetchDistricts, type DistrictRow } from "../../lib/shopDistricts";
 import { DeviceLocationRequestError, getDevicePosition } from "../../lib/deviceLocation";
+import { SHOP_CURRENCY } from "../../lib/shopCurrency";
 
 type Props = {
   lang: Language;
@@ -37,7 +38,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   const [shopNameInput, setShopNameInput] = useState(preferences.shopDisplayName ?? shopName ?? "");
   const [shopPhoneInput, setShopPhoneInput] = useState(preferences.shopPhoneE164 ?? "");
   const [shopAddressInput, setShopAddressInput] = useState(preferences.shopAddressLine ?? "");
-  const [shopCurrencyInput, setShopCurrencyInput] = useState(preferences.shopCurrency ?? "UGX");
+  const shopCurrencyLabel = preferences.shopCurrency ?? "UGX";
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
   const [districtIdSel, setDistrictIdSel] = useState("");
   const [shopCityField, setShopCityField] = useState("");
@@ -76,7 +77,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
         shopDisplayName: shopNameInput.trim(),
         shopPhoneE164: shopPhoneInput.trim() || null,
         shopAddressLine: shopAddressInput.trim() || null,
-        shopCurrency: shopCurrencyInput.trim().toUpperCase() || "UGX",
+        shopCurrency: SHOP_CURRENCY,
       });
       if (authMode === "supabase") {
         const ph = normalizeUgPhoneE164(shopPhoneInput);
@@ -86,7 +87,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           businessType: preferences.businessType,
           districtId: districtIdSel,
           phoneE164: ph,
-          currency: shopCurrencyInput.trim().toUpperCase() || "UGX",
+          currency: SHOP_CURRENCY,
           address: shopAddressInput,
           city: shopCityField,
           area: shopAreaField,
@@ -109,7 +110,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           {
             shopName: shopNameInput.trim(),
             businessType: preferences.businessType,
-            currency: shopCurrencyInput,
+            currency: SHOP_CURRENCY,
             phone: shopPhoneInput,
             address: shopAddressInput,
             ownerName: ownerDisplayName || undefined,
@@ -149,7 +150,6 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
     shopAddressInput,
     shopAreaField,
     shopCityField,
-    shopCurrencyInput,
     shopLat,
     shopLng,
     shopNameInput,
@@ -292,12 +292,10 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
         </div>
       ) : null}
 
-      <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "businessCurrency")}</label>
-      <input
-        value={shopCurrencyInput}
-        onChange={(e) => setShopCurrencyInput(e.target.value.toUpperCase())}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-      />
+      <p className="mt-3 text-sm font-bold text-slate-800">{t(lang, "businessCurrency")}</p>
+      <p className="mt-1 rounded-2xl border-2 border-slate-100 bg-slate-50 px-4 py-3 text-lg font-black text-slate-800">
+        {t(lang, "currencyUgxOnly")} ({shopCurrencyLabel})
+      </p>
       <p className="mt-3 text-xs font-bold text-stone-500">{t(lang, "businessTypeLockedMessage")}</p>
       <p className="text-sm font-semibold text-stone-700">{t(lang, `businessType_${preferences.businessType}`)}</p>
 

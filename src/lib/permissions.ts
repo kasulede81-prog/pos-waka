@@ -13,13 +13,22 @@ function isUserRole(v: string): v is UserRole {
   return (ALL_ROLES as string[]).includes(v);
 }
 
+/** Normalize legacy / mistyped role strings to a canonical `UserRole`. */
+export function normalizeUserRole(raw: unknown): UserRole | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") return null;
+  const n = raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  if (!n) return null;
+  if (n === "viewer") return "stock_keeper"; // legacy DB shop_members label
+  if (n === "store_keeper" || n === "storekeeper") return "stock_keeper";
+  if (n === "manage" || n === "management" || n === "mngr" || n === "shop_manager") return "manager";
+  return isUserRole(n) ? n : null;
+}
+
 export function parseRoleFromUserMetadata(meta: Record<string, unknown> | undefined): UserRole | null {
   if (!meta) return null;
   const raw = meta.pos_role ?? meta.role;
-  if (typeof raw !== "string") return null;
-  const n = raw.trim().toLowerCase();
-  if (n === "viewer") return "stock_keeper"; // align legacy DB label with client stock role
-  return isUserRole(n) ? n : null;
+  return normalizeUserRole(raw);
 }
 
 export function resolveAuthRole(params: {
@@ -32,7 +41,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 6;
+const PERM_MATRIX_VERSION = 7;
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
@@ -145,5 +154,5 @@ export function canUseDevRoleSimulator(authResolvedRole: UserRole): boolean {
 }
 
 export function canTogglePosUiMode(role: UserRole): boolean {
-  return role === "owner" || role === "manager";
+  return role === "owner" || role === "manager" || role === "supervisor";
 }

@@ -10,11 +10,8 @@ import { useAuth } from "./hooks/useAuth";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
 import { CustomersPage } from "./pages/CustomersPage";
-import { DashboardPage } from "./pages/DashboardPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
-import { PosPage } from "./pages/PosPage";
-import { ReceiptsPage } from "./pages/ReceiptsPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsHubPage } from "./pages/SettingsHubPage";
 import { SettingsShopPage } from "./pages/SettingsShopPage";
@@ -34,7 +31,6 @@ import { BusinessActivationPage } from "./pages/BusinessActivationPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
-import { OfficeHubPage } from "./pages/OfficeHubPage";
 import { ProfitPage } from "./pages/ProfitPage";
 import { StockPage } from "./pages/StockPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -64,6 +60,10 @@ const HardwareSettingsPage = lazy(() =>
 const MarketingAgentPage = lazy(() =>
   import("./pages/MarketingAgentPage").then((m) => ({ default: m.MarketingAgentPage })),
 );
+const DashboardPage = lazy(() => import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const PosPage = lazy(() => import("./pages/PosPage").then((m) => ({ default: m.PosPage })));
+const OfficeHubPage = lazy(() => import("./pages/OfficeHubPage").then((m) => ({ default: m.OfficeHubPage })));
+const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage").then((m) => ({ default: m.ReceiptsPage })));
 
 function LazyWait() {
   return (
@@ -169,7 +169,7 @@ function App() {
         <Route path="/demo" element={<DemoExperiencePage lang={lang} isAuthenticated={auth.isAuthenticated} />} />
 
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
-          <Route element={<BusinessProfileRequiredRoute authMode={auth.mode} />}>
+          <Route element={<BusinessProfileRequiredRoute authMode={auth.mode} userId={auth.user?.id} />}>
             <Route
               element={
                 <ActivationProvider authMode={auth.mode} user={auth.user}>
@@ -210,8 +210,22 @@ function App() {
                     </SyncStatusProvider>
                   }
                 >
-            <Route index element={<DashboardPage lang={lang} />} />
-            <Route path="office" element={<OfficeHubPage lang={lang} />} />
+            <Route
+              index
+              element={
+                <Suspense fallback={<LazyWait />}>
+                  <DashboardPage lang={lang} />
+                </Suspense>
+              }
+            />
+            <Route
+              path="office"
+              element={
+                <Suspense fallback={<LazyWait />}>
+                  <OfficeHubPage lang={lang} />
+                </Suspense>
+              }
+            />
             <Route
               path="office/profit"
               element={
@@ -289,7 +303,14 @@ function App() {
               }
             />
             <Route path="inventory" element={<Navigate to="/stock" replace />} />
-            <Route path="pos" element={<PosPage lang={lang} />} />
+            <Route
+              path="pos"
+              element={
+                <Suspense fallback={<LazyWait />}>
+                  <PosPage lang={lang} />
+                </Suspense>
+              }
+            />
             <Route
               path="reports"
               element={
@@ -336,7 +357,14 @@ function App() {
             />
             <Route path="customers" element={<CustomersPage lang={lang} />} />
             <Route path="debts" element={<CustomersPage lang={lang} />} />
-            <Route path="receipts" element={<ReceiptsPage lang={lang} />} />
+            <Route
+              path="receipts"
+              element={
+                <Suspense fallback={<LazyWait />}>
+                  <ReceiptsPage lang={lang} />
+                </Suspense>
+              }
+            />
             <Route
               path="settings"
               element={

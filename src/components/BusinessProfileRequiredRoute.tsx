@@ -1,9 +1,14 @@
 import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { fetchOwnerOnboardingStatus } from "../lib/ownerOnboarding";
+import {
+  fetchOwnerOnboardingStatus,
+  readCachedOwnerOnboardingComplete,
+  writeCachedOwnerOnboardingComplete,
+} from "../lib/ownerOnboarding";
 
 type Props = {
   authMode: "supabase" | "local";
+  userId?: string | null;
 };
 
 /** While Supabase says business profile is incomplete, still allow core POS routes so the app is not trapped on Settings. */
@@ -21,11 +26,16 @@ function pathAllowedBeforeBusinessProfileComplete(pathname: string): boolean {
   return false;
 }
 
-export function BusinessProfileRequiredRoute({ authMode }: Props) {
+export function BusinessProfileRequiredRoute({ authMode, userId }: Props) {
   const location = useLocation();
-  const [status, setStatus] = useState<{ complete: boolean } | null>(null);
+  const [status, setStatus] = useState<{ complete: boolean } | null>(() => {
+    if (authMode !== "supabase") return { complete: true };
+    const cached = readCachedOwnerOnboardingComplete(userId ?? undefined);
+    if (cached !== null) return { complete: cached };
+    return null;
+  });
 
-  // Only depend on auth mode — not on every pathname. Including pathname caused
+  // Only depend on auth mode / user — not on every pathname. Including pathname caused
   // status to reset to null on each navigation so the whole app (including Back Office)
   // showed "Loading…" and felt frozen while onboarding RPC re-ran.
   useEffect(() => {
@@ -34,7 +44,6 @@ export function BusinessProfileRequiredRoute({ authMode }: Props) {
       return;
     }
     let cancelled = false;
-    setStatus(null);
     const slow = window.setTimeout(() => {
       if (cancelled) return;
       setStatus((prev) => {
@@ -42,19 +51,21 @@ export function BusinessProfileRequiredRoute({ authMode }: Props) {
         console.warn("[waka] owner_onboarding_status: slow response — unblocking shell (will apply result when ready)");
         return { complete: true };
       });
-    }, 14_000);
+    }, 2_500);
 
     void fetchOwnerOnboardingStatus().then((s) => {
       if (cancelled) return;
       window.clearTimeout(slow);
-      setStatus({ complete: s?.complete ?? true });
+      const complete = s?.complete ?? true;
+      if (userId) writeCachedOwnerOnboardingComplete(userId, complete);
+      setStatus({ complete });
     });
 
     return () => {
       cancelled = true;
       window.clearTimeout(slow);
     };
-  }, [authMode]);
+  }, [authMode, userId]);
 
   useEffect(() => {
     if (authMode !== "supabase") return;

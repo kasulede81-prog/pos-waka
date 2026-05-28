@@ -59,10 +59,15 @@ import {
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
-import { canTogglePosUiMode, permissionsForRole } from "../lib/permissions";
+import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
+import { normalizeShopCurrency } from "../lib/shopCurrency";
 import { generateStaffUsername } from "../lib/staffAccountHelpers";
 import { hashStaffSecret, normalizePin } from "../lib/staffSecret";
-import { clearPendingStaffSelection, readPendingStaffSelection } from "../lib/staffOfflineAuth";
+import {
+  clearPendingStaffSelection,
+  readPendingStaffSelection,
+  readStaffSession,
+} from "../lib/staffOfflineAuth";
 
 const MAX_AUDIT_LOGS = 5000;
 const MAX_STOCK_MOVEMENTS = 4000;
@@ -98,11 +103,7 @@ function stockKindFromAdjustReason(reason: string | undefined): StockMovementKin
 }
 
 function parseStoredUserRole(v: unknown): UserRole | null {
-  if (v === null) return null;
-  if (typeof v !== "string") return null;
-  const n = v.trim().toLowerCase();
-  if (n === "owner" || n === "manager" || n === "cashier" || n === "stock_keeper" || n === "supervisor") return n;
-  return null;
+  return normalizeUserRole(v);
 }
 
 function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
@@ -119,9 +120,7 @@ function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
       name,
       username: typeof obj.username === "string" ? obj.username.trim().toLowerCase() || null : null,
       role,
-      permissions: Array.isArray(obj.permissions)
-        ? (obj.permissions as string[]).map((p) => p.trim()).filter(Boolean) as Permission[]
-        : permissionsForRole(role),
+      permissions: permissionsForRole(role),
       pin: typeof obj.pin === "string" ? obj.pin.replace(/\D/g, "").slice(0, 6) || null : null,
       password: typeof obj.password === "string" ? obj.password || null : null,
       pinHash: typeof obj.pinHash === "string" ? obj.pinHash.trim() || null : null,
@@ -677,6 +676,8 @@ export const usePosStore = create<PosState>((set, get) => {
   addStaffAccount: (input) => {
     const name = input.name.trim();
     if (!name) return { ok: false, errorKey: "staffNameRequired" };
+    const role = normalizeUserRole(input.role);
+    if (!role || role === "owner") return { ok: false, errorKey: "staffCreateFail" };
     const pin = normalizePin(input.pin ?? "") || null;
     const password = (input.password ?? "").trim() || null;
     if (!password && pin?.length !== 4) return { ok: false, errorKey: "staffPinMust4" };
@@ -692,8 +693,8 @@ export const usePosStore = create<PosState>((set, get) => {
       id: crypto.randomUUID(),
       name,
       username,
-      role: input.role,
-      permissions: input.permissions ?? permissionsForRole(input.role),
+      role,
+      permissions: input.permissions ?? permissionsForRole(role),
       pin: null,
       password: null,
       pinHash: pin ? hashStaffSecret(pin) : null,
@@ -716,23 +717,24 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({
       preferences: {
         ...s.preferences,
-        staffAccounts: (s.preferences.staffAccounts ?? []).map((a) =>
-          a.id === id
+        staffAccounts: (s.preferences.staffAccounts ?? []).map((a) => {
+          const nextRole = patch.role !== undefined ? normalizeUserRole(patch.role) : a.role;
+          return a.id === id
             ? {
                 ...a,
                 name: patch.name?.trim() ?? a.name,
-                role: patch.role ?? a.role,
+                role: nextRole ?? a.role,
                 username:
                   patch.username === undefined
                     ? (a.username ?? null)
                     : patch.username.trim().toLowerCase() || null,
-                permissions: patch.role ? permissionsForRole(patch.role) : (a.permissions ?? permissionsForRole(a.role)),
+                permissions: nextRole ? permissionsForRole(nextRole) : permissionsForRole(a.role),
                 phone: patch.phone === undefined ? a.phone : patch.phone.trim() || null,
                 active: patch.active ?? a.active,
                 updatedAt: new Date().toISOString(),
               }
-            : a,
-        ),
+            : a;
+        }),
       },
     }));
   },
@@ -1907,12 +1909,7 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : p.shopAddressLine === null
           ? null
           : String(p.shopAddressLine),
-    shopCurrency:
-      p.shopCurrency === undefined
-        ? (base.shopCurrency ?? "UGX")
-        : p.shopCurrency === null
-          ? "UGX"
-          : String(p.shopCurrency).trim().toUpperCase() || "UGX",
+    shopCurrency: normalizeShopCurrency(p.shopCurrency ?? base.shopCurrency),
     staffAccounts: normalizeStaffAccounts(p.staffAccounts),
     activeStaffId:
       p.activeStaffId === undefined
@@ -1949,6 +1946,42 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
   }
 }
 
+/** Non-blocking follow-up after the shell can render (draft, prune, cloud pull). */
+function schedulePostBootstrapTasks(): void {
+  const run = () => {
+    void runPostBootstrapTasks();
+  };
+  if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+    window.requestIdleCallback(run, { timeout: 1500 });
+  } else {
+    setTimeout(run, 0);
+  }
+}
+
+async function runPostBootstrapTasks(): Promise<void> {
+  if (!usePosStore.getState()._hydrated) return;
+  await restoreDraftSaleFromDisk();
+  usePosStore.getState().pruneExpiredSales();
+
+  if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
+    usePosStore.getState().switchStaffAccount(null);
+  }
+
+  const key = getActiveAccountKey();
+  if (!hasSupabaseConfig || !key?.startsWith("sb:")) return;
+
+  const { supabase: sb } = await import("../lib/supabase");
+  if (!sb) return;
+  const { data: sessionData } = await sb.auth.getSession();
+  if (!sessionData.session?.user) return;
+
+  const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
+  void hydrateLocalShopProfileFromCloud().catch(() => undefined);
+  const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
+  scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
+  scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
+}
+
 export async function bootstrapPosFromDisk(): Promise<void> {
   const key = getActiveAccountKey();
   if (!key) {
@@ -1981,8 +2014,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       },
       { replaceAudit: true },
     );
-    await restoreDraftSaleFromDisk();
-    usePosStore.getState().pruneExpiredSales();
+    schedulePostBootstrapTasks();
     return;
   }
   let snap = await readSnapshotWithFallback();
@@ -2047,8 +2079,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       voidRecords: [],
       returnRecords: [],
     });
-    await restoreDraftSaleFromDisk();
-    usePosStore.getState().pruneExpiredSales();
+    schedulePostBootstrapTasks();
     return;
   }
 
@@ -2061,9 +2092,9 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     clearPendingStaffSelection();
   }
   usePosStore.getState().hydrate({
-    products: (snap.products ?? []).map((p) => normalizeProduct(p as Product)),
-    customers: (snap.customers ?? []).map((c) => normalizeCustomer(c as Customer)),
-    sales: (snap.sales ?? []).map((s) => normalizeSale(s as Sale)),
+    products: (snap.products ?? []) as Product[],
+    customers: (snap.customers ?? []) as Customer[],
+    sales: (snap.sales ?? []) as Sale[],
     preferences,
     debtPayments: snap.debtPayments ?? [],
     dayCloses: snap.dayCloses ?? [],
@@ -2075,25 +2106,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
     returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
   });
-  await restoreDraftSaleFromDisk();
-  usePosStore.getState().pruneExpiredSales();
-  const { readStaffSession } = await import("../lib/staffOfflineAuth");
-  if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
-    usePosStore.getState().switchStaffAccount(null);
-  }
-
-  if (hasSupabaseConfig && key.startsWith("sb:")) {
-    const { supabase: sb } = await import("../lib/supabase");
-    if (!sb) return;
-    const { data: sessionData } = await sb.auth.getSession();
-    if (sessionData.session?.user) {
-      const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
-      await hydrateLocalShopProfileFromCloud().catch(() => undefined);
-      const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
-      scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
-      scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
-    }
-  }
+  schedulePostBootstrapTasks();
 }
 
 export function formatProductPriceLabel(product: Product): string {

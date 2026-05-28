@@ -154,24 +154,16 @@ export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
   const shopName = String(s.name ?? "").trim();
   if (!shopName) return;
 
-  const { data: org } = await supabase
-    .from("organizations")
-    .select("default_currency")
-    .eq("id", s.organization_id)
-    .maybeSingle();
-
   const onboarding = await fetchOwnerOnboardingStatus();
   const store = usePosStore.getState();
   const businessType = (String(s.business_type ?? store.preferences.businessType ?? "kiosk_duka") ||
     "kiosk_duka") as BusinessType;
-  const currency = String(org?.default_currency ?? store.preferences.shopCurrency ?? "UGX")
-    .trim()
-    .toUpperCase();
+  const currency = "UGX";
 
   store.setPreferences({
     shopDisplayName: shopName,
     shopPhoneE164: s.phone_e164 ? String(s.phone_e164) : store.preferences.shopPhoneE164,
-    shopCurrency: currency.length === 3 ? currency : store.preferences.shopCurrency,
+    shopCurrency: currency,
   });
 
   // Returning owner on a fresh device: do not repeat the local “new shop” overlay.
@@ -214,7 +206,7 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
   const user = authData.user;
 
   const safePhone = normalizeUgPhoneE164(input.phone);
-  const safeCurrency = (input.currency || "UGX").trim().toUpperCase();
+  const safeCurrency = "UGX";
 
   let primary = await getPrimaryShopForUser(user.id);
   if (!primary?.shop?.id) {

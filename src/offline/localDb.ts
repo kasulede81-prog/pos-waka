@@ -106,6 +106,11 @@ function scopedKey(name: string): string | null {
   return `${acc}::${name}`;
 }
 
+/** Open IndexedDB early (e.g. from main.tsx) so first sign-in reads faster. */
+export function warmupLocalDb(): void {
+  void getLocalDb();
+}
+
 export function getLocalDb(): Promise<IDBPDatabase<WakaDB>> {
   if (!dbPromise) {
     dbPromise = openDB<WakaDB>(DB_NAME, DB_VERSION, {

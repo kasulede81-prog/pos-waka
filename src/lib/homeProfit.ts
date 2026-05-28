@@ -4,7 +4,7 @@ import { costPerBaseUnitUgx, estimatedProfitForLine } from "./sellingEngine";
 /** Profit reports in Back Office — owners/managers only (not cashiers). */
 export function canSeeOfficeProfit(role: UserRole, authMode: "supabase" | "local"): boolean {
   if (authMode === "local") return true;
-  return role === "owner" || role === "manager";
+  return role === "owner" || role === "manager" || role === "supervisor";
 }
 
 /** @deprecated Use canSeeOfficeProfit — profit is not shown on cashier Home. */

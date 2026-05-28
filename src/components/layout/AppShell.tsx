@@ -23,6 +23,7 @@ import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { hashStaffSecret, normalizePin } from "../../lib/staffSecret";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
+import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 
 type Props = {
   lang: Language;
@@ -71,6 +72,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const [lockStaffId, setLockStaffId] = useState(preferences.activeStaffId ?? "");
   const [lockSecret, setLockSecret] = useState("");
   const [lockError, setLockError] = useState<string | null>(null);
+  const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
   const prevActorRef = useRef<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -147,6 +149,26 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     });
   }, [preferences.posLocked, preferences.staffAccounts, preferences.activeStaffId, canSwitchUser]);
 
+  useEffect(() => {
+    if (!preferences.posLocked) return;
+    if (canLockPos(preferences)) return;
+    if (activeStaffCanUnlock(preferences.staffAccounts)) return;
+    setPosLocked(false);
+  }, [preferences.posLocked, preferences.backOfficePin, preferences.staffAccounts, setPosLocked]);
+
+  const requestPosLock = () => {
+    setLockSetupHint(null);
+    if (!canLockPos(preferences)) {
+      if (hasPermission(actor.role, "settings.shop")) {
+        navigate("/settings/pin", { state: { setupLockPin: true, notice: t(lang, "lockPosNeedPinFirst") } });
+      } else {
+        setLockSetupHint(t(lang, "lockPosAskOwnerPin"));
+      }
+      return;
+    }
+    setPosLocked(true);
+  };
+
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
 
   const navDefs = useMemo((): NavDef[] => {
@@ -207,7 +229,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       role="menuitem"
                       className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
                       onClick={() => {
-                        setPosLocked(true);
+                        requestPosLock();
                         setMenuOpen(false);
                       }}
                     >
@@ -219,7 +241,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                         role="menuitem"
                         className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
                         onClick={() => {
-                          setPosLocked(true);
+                          requestPosLock();
                           setMenuOpen(false);
                         }}
                       >
@@ -409,6 +431,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
               />
               {lockError ? <p className="mt-2 text-sm font-bold text-rose-700">{lockError}</p> : null}
+              {!isBackOfficePinConfigured(preferences.backOfficePin) &&
+              hasPermission(actor.role, "settings.shop") ? (
+                <button
+                  type="button"
+                  className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-waka-200 bg-waka-50 py-2.5 text-sm font-black text-waka-900"
+                  onClick={() => {
+                    setPosLocked(false);
+                    navigate("/settings/pin", { state: { setupLockPin: true } });
+                  }}
+                >
+                  {t(lang, "settingsHubPin")}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
@@ -442,8 +477,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                         (staff.passwordHash && staff.passwordHash === secretHash)
                       ),
                   );
-                  const validBackOffice = Boolean((preferences.backOfficePin ?? "") && (preferences.backOfficePin ?? "") === secretPin);
-                  const canUnlock = validStaff || validBackOffice || (selectingOwner && !(preferences.backOfficePin ?? "").length);
+                  const validBackOffice = Boolean(
+                    isBackOfficePinConfigured(preferences.backOfficePin) &&
+                      (preferences.backOfficePin ?? "") === secretPin,
+                  );
+                  const canUnlock = validStaff || validBackOffice;
                   if (!canUnlock) {
                     setLockError(t(lang, "unlockWrongPin"));
                     return;
@@ -471,6 +509,21 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   Admin unlock & clear PIN
                 </button>
               ) : null}
+            </div>
+          </AppModalOverlay>
+        ) : null}
+        {lockSetupHint ? (
+          <AppModalOverlay className="z-[115] flex items-center justify-center bg-stone-950/70 p-4">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+              <p className="text-lg font-black text-stone-900">{t(lang, "lockPos")}</p>
+              <p className="mt-2 text-sm font-medium text-stone-600">{lockSetupHint}</p>
+              <button
+                type="button"
+                className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
+                onClick={() => setLockSetupHint(null)}
+              >
+                {t(lang, "cancel")}
+              </button>
             </div>
           </AppModalOverlay>
         ) : null}

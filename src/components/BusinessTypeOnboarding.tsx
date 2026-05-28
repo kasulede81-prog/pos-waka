@@ -5,6 +5,7 @@ import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 import { usePosStore } from "../store/usePosStore";
 import { saveBusinessProfileToCloud } from "../lib/businessProfile";
 import { getActiveAccountKey } from "../offline/accountScope";
+import { SHOP_CURRENCY } from "../lib/shopCurrency";
 import { AppModalOverlay } from "./layout/AppModalOverlay";
 
 const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
@@ -30,7 +31,6 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const [shopName, setShopName] = useState(() => preferences.shopDisplayName ?? "");
   const [businessType, setBusinessType] = useState<BusinessType>(() => preferences.businessType ?? "kiosk_duka");
-  const [currency, setCurrency] = useState(() => preferences.shopCurrency ?? "UGX");
   const [phone, setPhone] = useState(() => preferences.shopPhoneE164 ?? "");
   const [address, setAddress] = useState(() => preferences.shopAddressLine ?? "");
   const [busy, setBusy] = useState(false);
@@ -45,13 +45,11 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
       const d = JSON.parse(raw) as {
         shopName?: string;
         businessType?: BusinessType;
-        currency?: string;
         phone?: string;
         address?: string;
       };
       if (d.shopName) setShopName(d.shopName);
       if (d.businessType) setBusinessType(d.businessType);
-      if (d.currency) setCurrency(d.currency);
       if (d.phone) setPhone(d.phone);
       if (d.address) setAddress(d.address);
     } catch {
@@ -59,7 +57,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     }
   }, []);
 
-  const persistDraft = (next: { shopName: string; businessType: BusinessType; currency: string; phone: string; address: string }) => {
+  const persistDraft = (next: { shopName: string; businessType: BusinessType; phone: string; address: string }) => {
     try {
       const key = getDraftKey();
       if (!key) return;
@@ -83,7 +81,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
               onChange={(e) => {
                 const v = e.target.value;
                 setShopName(v);
-                persistDraft({ shopName: v, businessType, currency, phone, address });
+                persistDraft({ shopName: v, businessType, phone, address });
               }}
               className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
               placeholder={t(lang, "businessName")}
@@ -97,7 +95,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 type="button"
                 onClick={() => {
                   setBusinessType(id);
-                  persistDraft({ shopName, businessType: id, currency, phone, address });
+                  persistDraft({ shopName, businessType: id, phone, address });
                 }}
                 className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold ${
                   businessType === id ? "border-waka-500 bg-waka-50 text-waka-900" : "border-slate-200 bg-slate-50 text-slate-900"
@@ -122,18 +120,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
           <details className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <summary className="cursor-pointer text-sm font-black text-slate-800">{t(lang, "onboardOptionalDetails")}</summary>
             <div className="mt-4 space-y-4">
-              <label className="block text-sm font-bold text-slate-700">
-                {t(lang, "businessCurrency")}
-                <input
-                  value={currency}
-                  onChange={(e) => {
-                    const v = e.target.value.toUpperCase();
-                    setCurrency(v);
-                    persistDraft({ shopName, businessType, currency: v, phone, address });
-                  }}
-                  className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
-                />
-              </label>
+              <p className="text-sm font-semibold text-slate-600">{t(lang, "currencyUgxOnly")}</p>
               <label className="block text-sm font-bold text-slate-700">
                 {t(lang, "personPhonePh")}
                 <input
@@ -141,7 +128,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                   onChange={(e) => {
                     const v = e.target.value;
                     setPhone(v);
-                    persistDraft({ shopName, businessType, currency, phone: v, address });
+                    persistDraft({ shopName, businessType, phone: v, address });
                   }}
                   className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
                 />
@@ -153,7 +140,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                   onChange={(e) => {
                     const v = e.target.value;
                     setAddress(v);
-                    persistDraft({ shopName, businessType, currency, phone, address: v });
+                    persistDraft({ shopName, businessType, phone, address: v });
                   }}
                   className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg"
                 />
@@ -177,13 +164,13 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                   shopDisplayName: shopName.trim(),
                   shopPhoneE164: phone.trim() || null,
                   shopAddressLine: address.trim() || null,
-                  shopCurrency: (currency || "UGX").toUpperCase(),
+                  shopCurrency: SHOP_CURRENCY,
                 });
                 await saveBusinessProfileToCloud(
                   {
                     shopName: shopName.trim(),
                     businessType,
-                    currency,
+                    currency: SHOP_CURRENCY,
                     phone,
                     address,
                   },

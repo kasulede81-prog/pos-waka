@@ -19,7 +19,9 @@ export function staffLoginRoleLabel(role: StaffLoginRole): string {
   return STAFF_LOGIN_ROLE_LABELS[role];
 }
 
-/** Map legacy stored roles (e.g. manager used for supervisor) when matching credentials. */
+/** Map legacy stored roles (e.g. supervisor stored as manager) when matching credentials. */
 export function staffLoginRoleMatches(stored: UserRole, selected: StaffLoginRole): boolean {
-  return stored === selected;
+  if (stored === selected) return true;
+  if (stored === "supervisor" && selected === "manager") return true;
+  return false;
 }

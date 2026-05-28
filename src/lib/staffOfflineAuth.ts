@@ -1,5 +1,6 @@
 import type { ShopPreferences, UserRole } from "../types";
 import { getLocalDb } from "../offline/localDb";
+import { normalizeUserRole } from "./permissions";
 import { hashStaffSecret, normalizePin } from "./staffSecret";
 import type { StaffLoginRole } from "./staffLoginRoles";
 
@@ -142,12 +143,13 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
     throw new Error("Invalid staff credentials.");
   }
 
+  const role = normalizeUserRole(found.role) ?? found.role;
   const result: StaffAuthResult = {
     accountKey: shop.accountKey,
     businessName: shop.businessName,
     staffId: found.id,
     staffName: found.name,
-    role: found.role,
+    role,
     identifier,
   };
 
@@ -191,7 +193,9 @@ export function readStaffSession(): PersistedStaffSession | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<PersistedStaffSession>;
     if (!parsed.accountKey || !parsed.staffId || !parsed.staffName || !parsed.role) return null;
-    return parsed as PersistedStaffSession;
+    const role = normalizeUserRole(parsed.role);
+    if (!role) return null;
+    return { ...parsed, role } as PersistedStaffSession;
   } catch {
     return null;
   }

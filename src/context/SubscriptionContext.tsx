@@ -32,7 +32,8 @@ export function SubscriptionProvider({
     authMode === "local" ? { kind: "local_full" } : { kind: "none" },
   );
   /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
-  const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
+  /** Do not block the shell on subscription fetch — tier gates use snapshot when ready. */
+  const [loading, setLoading] = useState(false);
   const loadedOnceRef = useRef(false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {

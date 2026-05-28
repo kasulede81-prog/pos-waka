@@ -16,7 +16,7 @@ import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
-import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
+import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
   authenticateOfflineStaff,
   clearRememberedStaffDevice,
@@ -72,7 +72,7 @@ function applySignupProfileToLocalStore(next: Session | null): void {
   store.setPreferences({
     shopDisplayName: shopName || store.preferences.shopDisplayName,
     shopPhoneE164: String(meta?.phone_e164 ?? "").trim() || store.preferences.shopPhoneE164,
-    shopCurrency: String(meta?.default_currency ?? "UGX").trim().toUpperCase() || "UGX",
+    shopCurrency: "UGX",
   });
 }
 
@@ -527,12 +527,6 @@ export function useAuth() {
     setLocalEmail(null);
     if (hasSupabaseConfig && supabase) {
       await supabase.auth.signOut();
-    }
-    await bootstrapPosFromDisk();
-    const store = usePosStore.getState();
-    const staffRow = (store.preferences.staffAccounts ?? []).find((s) => s.id === auth.staffId && s.active);
-    if (staffRow) {
-      store.switchStaffAccount(auth.staffId);
     }
     setStaffSession({
       accountKey: auth.accountKey,
