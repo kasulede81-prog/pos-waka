@@ -22,7 +22,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
   const [district, setDistrict] = useState("");
   const [plan, setPlan] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const [sort, setSort] = useState<"health" | "recent">("health");
+  const [sort, setSort] = useState<"health" | "recent">("recent");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [massBusy, setMassBusy] = useState(false);
 
@@ -62,6 +62,12 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
         const ha = data.shopHealthById.get(a.id)?.score ?? 0;
         const hb = data.shopHealthById.get(b.id)?.score ?? 0;
         return ha - hb;
+      });
+    } else {
+      rows = [...rows].sort((a, b) => {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tb - ta;
       });
     }
     return rows;

@@ -740,12 +740,12 @@ export function PosPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
           <p className="text-2xl font-black text-slate-900">{t(lang, "posEmptyTitle")}</p>
           <p className="mt-2 text-lg text-slate-600">{t(lang, "posEmptySub")}</p>
-          {hasPermission(actor.role, "back_office.access") ? (
+          {hasPermission(actor.role, "products.add") ? (
             <Link
-              to="/office"
+              to="/stock"
               className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"
             >
-              {t(lang, "posEmptyCtaOffice")}
+              {t(lang, "posEmptyCtaProducts")}
             </Link>
           ) : (
             <p className="mt-4 text-base font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>

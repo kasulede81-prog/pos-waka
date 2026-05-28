@@ -39,9 +39,13 @@ export function resolveSessionActor(params: {
   const override = params.preferences.devRoleOverride;
   const simulatedRole: UserRole =
     devAllowed && override && canUseDevRoleSimulator(authRole) ? override : authRole;
-  const activeStaff = (params.preferences.staffAccounts ?? []).find(
-    (s) => s.id === params.preferences.activeStaffId && s.active,
-  );
+  /** Owner switched to a staff profile on this device (lock screen / switch user). */
+  const activeStaff =
+    authRole === "owner" && params.preferences.activeStaffId
+      ? (params.preferences.staffAccounts ?? []).find(
+          (s) => s.id === params.preferences.activeStaffId && s.active,
+        )
+      : undefined;
   const role: UserRole = activeStaff?.role ?? simulatedRole;
 
   const baseUserId =

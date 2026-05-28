@@ -19,10 +19,11 @@ import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../
 import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
   authenticateOfflineStaff,
-  clearPendingStaffSelection,
   clearRememberedStaffDevice,
+  clearStaffAuth,
   listCachedShopsForStaffLogin,
   readRememberedStaffDevice,
+  readStaffSession,
   type CachedShop,
   type RememberedStaffDevice,
   type StaffLoginInput,
@@ -110,6 +111,32 @@ export function useAuth() {
   );
 
   const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
+
+  const restoreStaffSessionFromDisk = useCallback(async (): Promise<StaffSession | null> => {
+    const persisted = readStaffSession();
+    if (!persisted) return null;
+    applyAccountSwitchSync(persisted.accountKey);
+    await bootstrapPosFromDisk();
+    const store = usePosStore.getState();
+    const staffRow = (store.preferences.staffAccounts ?? []).find(
+      (s) => s.id === persisted.staffId && s.active,
+    );
+    if (!staffRow) {
+      clearStaffAuth();
+      applyAccountSwitchSync(null);
+      return null;
+    }
+    if (store.preferences.activeStaffId !== persisted.staffId) {
+      store.switchStaffAccount(persisted.staffId);
+    }
+    return {
+      accountKey: persisted.accountKey,
+      businessName: persisted.businessName,
+      staffId: persisted.staffId,
+      staffName: persisted.staffName,
+      role: persisted.role,
+    };
+  }, []);
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
@@ -205,40 +232,83 @@ export function useAuth() {
   }, [bootstrappedUserIds, tryApplyPendingReferral]);
 
   useEffect(() => {
-    if (!hasSupabaseConfig || !supabase) {
-      const raw = localStorage.getItem(LOCAL_AUTH_KEY);
-      if (raw) {
-        try {
-          const email = (JSON.parse(raw) as LocalSession).email ?? null;
-          applyAccountSwitchSync(computeAccountKey({ mode: "local", email }));
-          setLocalEmail(email);
-        } catch {
-          localStorage.removeItem(LOCAL_AUTH_KEY);
-          applyAccountSwitchSync(null);
+    let cancelled = false;
+
+    const finishInit = async () => {
+      if (!hasSupabaseConfig || !supabase) {
+        const raw = localStorage.getItem(LOCAL_AUTH_KEY);
+        if (raw) {
+          try {
+            const email = (JSON.parse(raw) as LocalSession).email ?? null;
+            clearStaffAuth();
+            applyAccountSwitchSync(computeAccountKey({ mode: "local", email }));
+            setLocalEmail(email);
+            setStaffSession(null);
+          } catch {
+            localStorage.removeItem(LOCAL_AUTH_KEY);
+            applyAccountSwitchSync(null);
+          }
+        } else {
+          const staff = await restoreStaffSessionFromDisk();
+          if (cancelled) return;
+          if (staff) {
+            setStaffSession(staff);
+            setLocalEmail(null);
+            setSession(null);
+          } else {
+            applyAccountSwitchSync(null);
+            setStaffSession(null);
+          }
         }
+        if (!cancelled) setInitializing(false);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      const next = data.session ?? null;
+      if (cancelled) return;
+      if (next?.user) {
+        clearStaffAuth();
+        applyAccountSwitchSync(
+          computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
+        );
+        applySignupProfileToLocalStore(next);
+        setSession(next);
+        setStaffSession(null);
+        setLocalEmail(null);
+        setInitializing(false);
+        void ensureWorkspaceForSession(next).catch((e) => {
+          console.error("[waka-auth] bootstrap on initial session failed", e);
+        });
+        return;
+      }
+
+      const staff = await restoreStaffSessionFromDisk();
+      if (cancelled) return;
+      if (staff) {
+        setStaffSession(staff);
+        setSession(null);
+        setLocalEmail(null);
       } else {
         applyAccountSwitchSync(null);
+        setStaffSession(null);
       }
       setInitializing(false);
-      return;
-    }
+    };
 
-    supabase.auth.getSession().then(async ({ data }) => {
-      const next = data.session ?? null;
-      applyAccountSwitchSync(
-        computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
-      );
-      applySignupProfileToLocalStore(next);
-      setSession(next);
-      setInitializing(false);
-      void ensureWorkspaceForSession(next).catch((e) => {
-        console.error("[waka-auth] bootstrap on initial session failed", e);
-      });
-    });
+    void finishInit();
+
+    if (!hasSupabaseConfig || !supabase) return () => {
+      cancelled = true;
+    };
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, next) => {
+      if (next?.user) {
+        clearStaffAuth();
+        setStaffSession(null);
+      }
       applyAccountSwitchSync(
         computeAccountKey({ mode: "supabase", userId: next?.user?.id, email: next?.user?.email }),
       );
@@ -249,10 +319,15 @@ export function useAuth() {
       setSession(next);
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [restoreStaffSessionFromDisk, ensureWorkspaceForSession]);
 
   const signIn = useCallback(async (identifier: string, password: string) => {
+    clearStaffAuth();
+    setStaffSession(null);
     const trimmed = identifier.trim();
     if (hasSupabaseConfig && supabase) {
       const phoneE164 = normalizeUgPhoneE164(trimmed);
@@ -273,6 +348,8 @@ export function useAuth() {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
+    clearStaffAuth();
+    setStaffSession(null);
     if (!isGoogleAuthUiEnabled()) {
       throw new Error("Google sign-in is not available. Use your email or phone and password.");
     }
@@ -462,8 +539,15 @@ export function useAuth() {
 
   const signOut = useCallback(async () => {
     if (staffSession) {
+      flushPendingPersist();
+      const store = usePosStore.getState();
+      if (store.preferences.activeStaffId) {
+        store.switchStaffAccount(null);
+        await flushPendingPersist();
+      }
+      clearStaffAuth();
       applyAccountSwitchSync(null);
-      clearPendingStaffSelection();
+      usePosStore.getState().resetForSignOut();
       setStaffSession(null);
       return;
     }
@@ -483,6 +567,9 @@ export function useAuth() {
     applyAccountSwitchSync(auth.accountKey);
     setSession(null);
     setLocalEmail(null);
+    if (hasSupabaseConfig && supabase) {
+      await supabase.auth.signOut();
+    }
     await bootstrapPosFromDisk();
     const store = usePosStore.getState();
     const staffRow = (store.preferences.staffAccounts ?? []).find((s) => s.id === auth.staffId && s.active);

@@ -56,7 +56,9 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     };
   }, []);
 
-  const previewMode = previewRequested;
+  // If a real internal admin session exists, always prefer live data even if
+  // `?preview=1` is in the URL from an old/shared link.
+  const previewMode = previewRequested && !adminRow;
   const shellAdmin = useMemo(
     () => (previewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow),
     [adminRow, previewMode],

@@ -10,12 +10,7 @@ import { formatAuthError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
-import {
-  STAFF_LOGIN_ROLES,
-  isStaffLoginRole,
-  staffLoginRoleLabel,
-  type StaffLoginRole,
-} from "../lib/staffLoginRoles";
+import { STAFF_LOGIN_ROLES, type StaffLoginRole } from "../lib/staffLoginRoles";
 
 type Props = {
   lang: Language;
@@ -56,7 +51,7 @@ export function LoginPage({
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState(rememberedStaffDevice?.businessName ?? "");
   const [staffRole, setStaffRole] = useState<StaffLoginRole>("cashier");
-  const [staffIdentifier, setStaffIdentifier] = useState(rememberedStaffDevice?.identifier ?? "");
+  const [staffName, setStaffName] = useState(rememberedStaffDevice?.identifier ?? "");
   const [staffPin, setStaffPin] = useState("");
   const [rememberDevice, setRememberDevice] = useState(Boolean(rememberedStaffDevice));
   const [cachedShops, setCachedShops] = useState<CachedShop[]>([]);
@@ -118,7 +113,7 @@ export function LoginPage({
       await onStaffLogin({
         businessName,
         role: staffRole,
-        identifier: staffIdentifier,
+        identifier: staffName.trim(),
         pinOrPassword: staffPin,
         rememberDevice,
       });
@@ -298,33 +293,38 @@ export function LoginPage({
               hint={loadingShops ? t(lang, "staffLoginLoadingShops") : t(lang, "staffLoginBusinessHint")}
             />
 
-            <label className="block text-sm font-bold text-stone-800">
-              {t(lang, "staffLoginSelectRole")}
-              <select
-                value={staffRole}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (isStaffLoginRole(v)) setStaffRole(v);
-                }}
-                className={`${ownerInputClass} font-semibold`}
-              >
-                {STAFF_LOGIN_ROLES.map((r) => (
-                  <option value={r} key={r}>
-                    {staffLoginRoleLabel(r)}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "staffLoginSelectRole")}</span>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {STAFF_LOGIN_ROLES.map((r) => {
+                  const on = staffRole === r;
+                  return (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setStaffRole(r)}
+                      className={`min-h-[48px] rounded-2xl border-2 px-2 py-2.5 text-sm font-black leading-tight transition ${
+                        on
+                          ? "border-waka-500 bg-waka-50 text-waka-900 shadow-sm"
+                          : "border-stone-200 bg-stone-50 text-stone-600"
+                      }`}
+                    >
+                      {t(lang, `role_${r}`)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <label className="block text-sm font-bold text-stone-800">
-              {t(lang, "staffLoginIdentifier")}
+              {t(lang, "staffLoginName")}
               <input
-                value={staffIdentifier}
-                onChange={(e) => setStaffIdentifier(e.target.value)}
+                value={staffName}
+                onChange={(e) => setStaffName(e.target.value)}
                 required
-                autoComplete="username"
+                autoComplete="name"
                 className={ownerInputClass}
-                placeholder="cashier01"
+                placeholder={t(lang, "staffLoginNamePh")}
               />
             </label>
 
@@ -332,11 +332,14 @@ export function LoginPage({
               {t(lang, "staffLoginPin")}
               <input
                 type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
                 value={staffPin}
-                onChange={(e) => setStaffPin(e.target.value)}
+                onChange={(e) => setStaffPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                 required
-                autoComplete="current-password"
-                className={ownerInputClass}
+                autoComplete="off"
+                className={`${ownerInputClass} text-center font-mono text-2xl tracking-[0.35em]`}
                 placeholder={t(lang, "staffLoginPinPlaceholder")}
               />
             </label>
@@ -363,7 +366,7 @@ export function LoginPage({
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
 
             <button
-              disabled={staffBusy}
+              disabled={staffBusy || !businessName.trim() || !staffName.trim() || staffPin.length !== 4}
               type="submit"
               className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm transition-waka active:scale-[0.99] disabled:opacity-50"
             >

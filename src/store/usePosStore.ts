@@ -2057,6 +2057,10 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     if (!sb) return;
     const { data: sessionData } = await sb.auth.getSession();
     if (sessionData.session?.user) {
+      const { readStaffSession } = await import("../lib/staffOfflineAuth");
+      if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
+        usePosStore.getState().switchStaffAccount(null);
+      }
       const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
       await hydrateLocalShopProfileFromCloud().catch(() => undefined);
       const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");

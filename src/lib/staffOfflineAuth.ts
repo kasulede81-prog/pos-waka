@@ -6,6 +6,15 @@ import { staffLoginRoleMatches } from "./staffLoginRoles";
 
 const REMEMBER_DEVICE_KEY = "waka.staff.remembered.v1";
 const PENDING_STAFF_KEY = "waka.staff.pending.v1";
+const STAFF_SESSION_KEY = "waka.staff.session.v1";
+
+export type PersistedStaffSession = {
+  accountKey: string;
+  businessName: string;
+  staffId: string;
+  staffName: string;
+  role: UserRole;
+};
 
 type SnapshotLike = { preferences?: Partial<ShopPreferences> };
 
@@ -106,7 +115,11 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
   const identifier = input.identifier.trim();
   const secret = input.pinOrPassword.trim();
   if (!businessName || !identifier || !secret) {
-    throw new Error("Enter business name, staff ID/username, and PIN/password.");
+    throw new Error("Enter shop name, your name, and 4-digit PIN.");
+  }
+  const secretDigits = normalizePin(secret);
+  if (/^\d+$/.test(secret.trim()) && secretDigits.length !== 4) {
+    throw new Error("PIN must be exactly 4 digits.");
   }
 
   const shops = await listCachedShopsForStaffLogin();
@@ -152,9 +165,45 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
       PENDING_STAFF_KEY,
       JSON.stringify({ accountKey: result.accountKey, staffId: result.staffId }),
     );
+    writeStaffSession({
+      accountKey: result.accountKey,
+      businessName: result.businessName,
+      staffId: result.staffId,
+      staffName: result.staffName,
+      role: result.role,
+    });
   }
 
   return result;
+}
+
+export function writeStaffSession(session: PersistedStaffSession): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(STAFF_SESSION_KEY, JSON.stringify(session));
+}
+
+export function readStaffSession(): PersistedStaffSession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STAFF_SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<PersistedStaffSession>;
+    if (!parsed.accountKey || !parsed.staffId || !parsed.staffName || !parsed.role) return null;
+    return parsed as PersistedStaffSession;
+  } catch {
+    return null;
+  }
+}
+
+export function clearStaffSession(): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(STAFF_SESSION_KEY);
+}
+
+/** Clears offline staff login markers (session + pending selection). */
+export function clearStaffAuth(): void {
+  clearStaffSession();
+  clearPendingStaffSelection();
 }
 
 export function readRememberedStaffDevice(): RememberedStaffDevice | null {
