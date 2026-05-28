@@ -95,7 +95,9 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
     <div className="space-y-4 pb-20">
       <div>
         <h1 className="text-xl font-black text-stone-900">Shops</h1>
-        <p className="text-sm text-stone-500">{filtered.length} of {data.shopOpenings.length} · health sorted</p>
+        <p className="text-sm text-stone-500">
+          {filtered.length} of {data.shopOpenings.length} · {sort === "health" ? "health sorted" : "recent sorted"}
+        </p>
       </div>
 
       <input

@@ -32,6 +32,13 @@ export function AdminAnalyticsPage({ adminRow, previewMode }: Props) {
         <KpiPulseCard label="Sales (UGX)" value={data.statGrid.sales} accent />
       </div>
 
+      {data.opsLoading && data.signups7.length === 0 ? (
+        <div className="space-y-3">
+          <div className="h-36 animate-pulse rounded-2xl bg-stone-200" />
+          <div className="h-28 animate-pulse rounded-2xl bg-stone-200" />
+        </div>
+      ) : null}
+
       <PlatformAnalyticsPanel signups7={data.signups7} subs7={data.subs7} districts={data.districts} />
 
       <AppVersionPanel versions={data.appVersions} />

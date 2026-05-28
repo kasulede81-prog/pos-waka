@@ -41,16 +41,28 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
       </div>
 
       <div className="space-y-3">
-        {data.plans.map((plan) => (
-          <PlanCardV2
-            key={plan.code}
-            name={t(lang, planNameKey(plan.code) as "planStarterName")}
-            activeCount={plan.activeCount}
-            trialCount={plan.trialCount}
-            expiringCount={plan.expiringSoonCount}
-            mrrUgx={plan.estimatedMonthlyRevenueUgx}
-          />
-        ))}
+        {data.opsLoading && data.plans.length === 0 ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-stone-200" />
+            ))}
+          </div>
+        ) : data.plans.length === 0 ? (
+          <p className="rounded-2xl border border-stone-200 bg-white px-4 py-6 text-center text-sm font-semibold text-stone-500">
+            No billing plan metrics yet.
+          </p>
+        ) : (
+          data.plans.map((plan) => (
+            <PlanCardV2
+              key={plan.code}
+              name={t(lang, planNameKey(plan.code) as "planStarterName")}
+              activeCount={plan.activeCount}
+              trialCount={plan.trialCount}
+              expiringCount={plan.expiringSoonCount}
+              mrrUgx={plan.estimatedMonthlyRevenueUgx}
+            />
+          ))
+        )}
       </div>
 
       <div className="grid gap-2">

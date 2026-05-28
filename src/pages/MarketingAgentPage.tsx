@@ -1,14 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { PageBackBar } from "../components/layout/PageBackBar";
-import { Copy, Users } from "lucide-react";
+import { Copy, MapPin, Users } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
   fetchMarketingAgentMe,
   listAgentReferrals,
+  referralRowToMapPin,
   type AgentReferralRow,
   type MarketingAgentMe,
 } from "../lib/referralAgents";
+const LovableFieldMap = lazy(async () => {
+  const m = await import("../components/internal-admin/LovableFieldMap");
+  return { default: m.LovableFieldMap };
+});
 
 export function MarketingAgentPage({ lang }: { lang: Language }) {
   const [loading, setLoading] = useState(true);
@@ -59,6 +64,9 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
     }
     window.setTimeout(() => setCopyHint(null), 2500);
   };
+
+  const mapPins = referrals.map(referralRowToMapPin).filter((x): x is NonNullable<typeof x> => x !== null);
+  const activeReferrals = referrals.filter((r) => (r.subscriptionStatus ?? "").toLowerCase() === "active").length;
 
   if (loading) {
     return (
@@ -112,6 +120,16 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
       </article>
 
       <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <div className="mb-3 grid grid-cols-2 gap-2">
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Tracked shops</p>
+            <p className="text-xl font-black text-stone-900">{referrals.length}</p>
+          </div>
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-2">
+            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Active plans</p>
+            <p className="text-xl font-black text-waka-800">{activeReferrals}</p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-waka-700" aria-hidden />
           <h2 className="text-lg font-black text-stone-900">{t(lang, "agentReferralsTitle")}</h2>
@@ -133,6 +151,22 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
               </li>
             ))}
           </ul>
+        )}
+      </article>
+
+      <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <div className="mb-3 flex items-center gap-2">
+          <MapPin className="h-5 w-5 text-orange-600" aria-hidden />
+          <h2 className="text-lg font-black text-stone-900">Shop map view</h2>
+        </div>
+        {mapPins.length > 0 ? (
+          <Suspense fallback={<div className="h-64 animate-pulse rounded-2xl bg-stone-100" />}>
+            <LovableFieldMap pins={mapPins} />
+          </Suspense>
+        ) : (
+          <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            GPS map will appear when referred shops have location data.
+          </p>
         )}
       </article>
     </div>

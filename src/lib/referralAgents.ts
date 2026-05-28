@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import type { FieldMapPin } from "./wakaInternalAdmin";
 
 export type MarketingAgentMe = {
   referralCode: string;
@@ -11,6 +12,13 @@ export type AgentReferralRow = {
   shopName: string | null;
   ownerEmail: string | null;
   createdAt: string;
+  shopId?: string | null;
+  district?: string | null;
+  city?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  planCode?: string | null;
+  subscriptionStatus?: string | null;
 };
 
 export type InternalMarketingAgentRow = {
@@ -22,6 +30,15 @@ export type InternalMarketingAgentRow = {
   active: boolean;
   referralCount: number;
   createdAt: string;
+};
+
+export type AgentUserCandidate = {
+  key: string;
+  email: string;
+  fullName: string | null;
+  phoneE164: string | null;
+  shopName: string | null;
+  district: string | null;
 };
 
 export async function fetchMarketingAgentMe(): Promise<MarketingAgentMe | null> {
@@ -62,8 +79,64 @@ export async function listAgentReferrals(agentId?: string): Promise<AgentReferra
       shopName: x.shop_name != null ? String(x.shop_name) : null,
       ownerEmail: x.owner_email != null ? String(x.owner_email) : null,
       createdAt: String(x.created_at ?? ""),
+      shopId: x.shop_id != null ? String(x.shop_id) : null,
+      district: x.district != null ? String(x.district) : null,
+      city: x.city != null ? String(x.city) : null,
+      latitude: Number.isFinite(Number(x.latitude)) ? Number(x.latitude) : null,
+      longitude: Number.isFinite(Number(x.longitude)) ? Number(x.longitude) : null,
+      planCode: x.plan_code != null ? String(x.plan_code) : null,
+      subscriptionStatus: x.subscription_status != null ? String(x.subscription_status) : null,
     };
   });
+}
+
+export async function internalSearchAgentUserCandidates(query: string, limit = 120): Promise<AgentUserCandidate[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("internal_ops_recent_shops", {
+    p_limit: Math.min(Math.max(limit, 20), 300),
+  });
+  if (error || !Array.isArray(data)) return [];
+  const q = query.trim().toLowerCase();
+  const byKey = new Map<string, AgentUserCandidate>();
+  for (const raw of data) {
+    const row = raw as Record<string, unknown>;
+    const email = String(row.owner_email ?? "").trim().toLowerCase();
+    if (!email) continue;
+    const fullName = row.owner_label != null ? String(row.owner_label) : null;
+    const phone = row.phone_e164 != null ? String(row.phone_e164) : null;
+    const shopName = row.name != null ? String(row.name) : null;
+    const district = row.district != null ? String(row.district) : null;
+    const haystack = `${email} ${fullName ?? ""} ${phone ?? ""} ${shopName ?? ""} ${district ?? ""}`.toLowerCase();
+    if (q && !haystack.includes(q)) continue;
+    if (byKey.has(email)) continue;
+    byKey.set(email, {
+      key: email,
+      email,
+      fullName,
+      phoneE164: phone,
+      shopName,
+      district,
+    });
+  }
+  return [...byKey.values()].slice(0, limit);
+}
+
+export function referralRowToMapPin(row: AgentReferralRow): FieldMapPin | null {
+  if (!Number.isFinite(row.latitude) || !Number.isFinite(row.longitude)) return null;
+  return {
+    shop_id: row.shopId ?? row.id,
+    shop_name: row.shopName ?? "Shop",
+    lat: Number(row.latitude),
+    lng: Number(row.longitude),
+    district: row.district ?? null,
+    city: row.city ?? null,
+    is_active: (row.subscriptionStatus ?? "").toLowerCase() !== "inactive",
+    district_id: null,
+    owner_label: row.ownerEmail ?? null,
+    plan_code: row.planCode ?? null,
+    subscription_status: row.subscriptionStatus ?? null,
+    last_seen_at: row.createdAt ?? null,
+  };
 }
 
 export async function internalListMarketingAgents(): Promise<InternalMarketingAgentRow[]> {

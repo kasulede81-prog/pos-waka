@@ -1249,13 +1249,15 @@ export function whatsappUrlFromPhone(phone: string | null | undefined): string |
 
 export async function fetchDistrictOpsTable(): Promise<DistrictOpsRow[]> {
   if (!supabase) return [];
-  const [{ data: districts }, { data: shops }, { data: assigns }, dayStart, { data: paidSubs }] = await Promise.all([
+  const [{ data: districts, error: districtsErr }, { data: shops, error: shopsErr }, { data: assigns }, dayStart, { data: paidSubs }] = await Promise.all([
     supabase.from("districts").select("id, name").order("sort_order", { ascending: true }),
     supabase.from("shops").select("id, organization_id, district_id, district, city, is_active, last_seen_at"),
     supabase.from("admin_assignments").select("district_id").not("district_id", "is", null),
     Promise.resolve(kampalaDayStartIso()),
     supabase.from("subscriptions").select("organization_id").eq("status", "active"),
   ]);
+
+  if (shopsErr || !shops) return [];
 
   const paidOrgIds = new Set((paidSubs ?? []).map((r) => r.organization_id as string).filter(Boolean));
 
@@ -1266,33 +1268,53 @@ export async function fetchDistrictOpsTable(): Promise<DistrictOpsRow[]> {
     agentByDistrict.set(did, (agentByDistrict.get(did) ?? 0) + 1);
   }
 
-  const rows: DistrictOpsRow[] = (districts ?? []).map((d) => {
-    const id = d.id as string;
-    let totalShops = 0;
-    let activeToday = 0;
-    let paidShops = 0;
-    for (const sh of shops ?? []) {
-      const match =
-        (sh.district_id as string | null) === id ||
-        String(sh.district ?? "")
-          .toLowerCase()
-          .includes(String(d.name ?? "").toLowerCase());
-      if (!match) continue;
-      totalShops += 1;
-      const ls = sh.last_seen_at as string | null;
-      if (ls && ls >= dayStart) activeToday += 1;
-      const oid = sh.organization_id as string;
-      if (oid && paidOrgIds.has(oid)) paidShops += 1;
-    }
-    return {
-      districtId: id,
-      label: (d.name as string) ?? "—",
-      totalShops,
-      activeToday,
-      paidShops,
-      fieldAgentsAssigned: agentByDistrict.get(id) ?? 0,
+  const districtRows = !districtsErr && Array.isArray(districts) ? districts : [];
+  const rowsByKey = new Map<string, DistrictOpsRow>();
+  const ensureRow = (districtId: string | null, label: string): DistrictOpsRow => {
+    const key = districtId ?? `label:${label.toLowerCase()}`;
+    const existing = rowsByKey.get(key);
+    if (existing) return existing;
+    const created: DistrictOpsRow = {
+      districtId,
+      label: label || "—",
+      totalShops: 0,
+      activeToday: 0,
+      paidShops: 0,
+      fieldAgentsAssigned: districtId ? (agentByDistrict.get(districtId) ?? 0) : 0,
     };
-  });
+    rowsByKey.set(key, created);
+    return created;
+  };
+
+  for (const d of districtRows) {
+    const id = (d.id as string) ?? null;
+    const label = ((d.name as string) ?? "").trim() || "—";
+    ensureRow(id, label);
+  }
+
+  for (const sh of shops) {
+    const districtId = (sh.district_id as string | null) ?? null;
+    const districtLabel = String((sh.district as string | null) ?? "").trim() || "Unassigned";
+    let target: DistrictOpsRow | null = null;
+    if (districtId) {
+      target = ensureRow(districtId, districtLabel);
+    } else if (districtRows.length > 0) {
+      const match = districtRows.find((d) =>
+        districtLabel.toLowerCase().includes(String(d.name ?? "").toLowerCase()),
+      );
+      if (match) {
+        target = ensureRow(match.id as string, (match.name as string) ?? districtLabel);
+      }
+    }
+    if (!target) target = ensureRow(null, districtLabel);
+    target.totalShops += 1;
+    const ls = sh.last_seen_at as string | null;
+    if (ls && ls >= dayStart) target.activeToday += 1;
+    const oid = sh.organization_id as string;
+    if (oid && paidOrgIds.has(oid)) target.paidShops += 1;
+  }
+
+  const rows = [...rowsByKey.values()];
 
   rows.sort((a, b) => b.totalShops - a.totalShops);
   return rows;
