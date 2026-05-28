@@ -51,6 +51,29 @@ import {
 } from "../lib/wakaInternalAdmin";
 import { PREVIEW_FLEET_DEVICES } from "../lib/internalAdminPreview";
 
+type InternalOpsCacheSnapshot = {
+  at: number;
+  stats: InternalDashboardStats | null;
+  statsError: boolean;
+  statsErrorMessage: string;
+  plans: PlanTierMetrics[];
+  recent: RecentShopRow[];
+  tickets: SupportTicketRow[];
+  districts: DistrictOpsRow[];
+  bizTypes: BusinessTypeSlice[];
+  signups7: DayBucket[];
+  subs7: DayBucket[];
+  sales7: DayBucket[];
+  visits: FieldVisitRow[];
+  pendingTrials: PendingSubscriptionRequestRow[];
+  billingOfferRows: OrgBillingOfferStaffRow[];
+  fleetDevices: FleetDeviceRow[];
+  auditFeed: OpsAuditRow[];
+};
+
+let INTERNAL_OPS_CACHE: InternalOpsCacheSnapshot | null = null;
+const INTERNAL_OPS_CACHE_TTL_MS = 20_000;
+
 export function kampalaNowParts(): { hour: number; dateStr: string } {
   const now = new Date();
   const hour = Number(
@@ -117,13 +140,32 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
     setOpsLoading(false);
   }, []);
 
-  const loadAll = useCallback(async () => {
+  const hydrateFromCache = useCallback((cache: InternalOpsCacheSnapshot) => {
+    setStats(cache.stats);
+    setStatsError(cache.statsError);
+    setStatsErrorMessage(cache.statsErrorMessage);
+    setPlans(cache.plans);
+    setRecent(cache.recent);
+    setTickets(cache.tickets);
+    setDistricts(cache.districts);
+    setBizTypes(cache.bizTypes);
+    setSignups7(cache.signups7);
+    setSubs7(cache.subs7);
+    setSales7(cache.sales7);
+    setVisits(cache.visits);
+    setPendingTrials(cache.pendingTrials);
+    setBillingOfferRows(cache.billingOfferRows);
+    setFleetDevices(cache.fleetDevices);
+    setAuditFeed(cache.auditFeed);
+  }, []);
+
+  const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (previewMode) {
       seedPreview();
       return;
     }
     if (!adminRow) return;
-    setOpsLoading(true);
+    if (!opts?.silent) setOpsLoading(true);
     setStatsError(false);
     setStatsErrorMessage("");
     try {
@@ -176,10 +218,29 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
       setBillingOfferRows(offers);
       setFleetDevices(fleet);
       setAuditFeed(audit);
+      INTERNAL_OPS_CACHE = {
+        at: Date.now(),
+        stats: dash.ok ? dash.stats : null,
+        statsError: !dash.ok,
+        statsErrorMessage: dash.ok ? "" : dash.message,
+        plans: p,
+        recent: r,
+        tickets: tk,
+        districts: d,
+        bizTypes: b,
+        signups7: charts?.signups?.length ? charts.signups : signups7.length ? signups7 : [],
+        subs7: charts?.subscriptions?.length ? charts.subscriptions : subs7.length ? subs7 : [],
+        sales7: charts?.sales?.length ? charts.sales : sales7.length ? sales7 : [],
+        visits: v,
+        pendingTrials: pend,
+        billingOfferRows: offers,
+        fleetDevices: fleet,
+        auditFeed: audit,
+      };
     } finally {
       setOpsLoading(false);
     }
-  }, [adminRow, mapDistrictId, previewMode, seedPreview]);
+  }, [adminRow, mapDistrictId, previewMode, seedPreview, signups7, subs7, sales7]);
 
   useEffect(() => {
     if (previewMode) {
@@ -187,8 +248,15 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
       return;
     }
     if (!adminRow) return;
+    const cache = INTERNAL_OPS_CACHE;
+    if (cache && Date.now() - cache.at < INTERNAL_OPS_CACHE_TTL_MS) {
+      hydrateFromCache(cache);
+      setOpsLoading(false);
+      void loadAll({ silent: true });
+      return;
+    }
     void loadAll();
-  }, [adminRow, previewMode, loadAll, seedPreview]);
+  }, [adminRow, previewMode, loadAll, seedPreview, hydrateFromCache]);
 
   useEffect(() => {
     if (previewMode || !adminRow) return;

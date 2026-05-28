@@ -134,6 +134,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    if (!preferences.posLocked) return;
+    const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
+    setLockSecret("");
+    setLockError(null);
+    setLockStaffId((prev) => {
+      if (prev) return prev;
+      if (preferences.activeStaffId) return preferences.activeStaffId;
+      if (canSwitchUser && activeStaff.length > 0) return "__owner__";
+      return "";
+    });
+  }, [preferences.posLocked, preferences.staffAccounts, preferences.activeStaffId, canSwitchUser]);
+
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
 
   const navDefs = useMemo((): NavDef[] => {
@@ -364,7 +377,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   {t(lang, "switchUser")}
                   <select
                     value={lockStaffId}
-                    onChange={(e) => setLockStaffId(e.target.value)}
+                    onChange={(e) => {
+                      setLockStaffId(e.target.value);
+                      setLockError(null);
+                    }}
                     className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
                   >
                     <option value="">{t(lang, "staffPickAccount")}</option>
@@ -379,9 +395,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   </select>
                 </label>
               ) : null}
+              <p className="mt-2 text-xs font-medium text-slate-500">
+                Pick a user or enter a matching PIN/password directly.
+              </p>
               <input
                 value={lockSecret}
-                onChange={(e) => setLockSecret(e.target.value)}
+                onChange={(e) => {
+                  setLockSecret(e.target.value);
+                  setLockError(null);
+                }}
                 type="password"
                 placeholder={t(lang, "unlockPinPlaceholder")}
                 className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
@@ -392,13 +414,25 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
                 onClick={() => {
                   const selectingOwner = lockStaffId === "__owner__";
-                  const staff = selectingOwner
+                  const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
+                  const selectedStaff = selectingOwner
                     ? null
-                    : (preferences.staffAccounts ?? []).find((s) => s.id === lockStaffId && s.active);
+                    : activeStaff.find((s) => s.id === lockStaffId);
                   const secret = lockSecret.trim();
                   const secretPin = normalizePin(secret);
                   const secretHash = hashStaffSecret(secret);
                   const secretPinHash = secretPin ? hashStaffSecret(secretPin) : "";
+                  const fallbackStaff =
+                    !selectingOwner && !lockStaffId
+                      ? activeStaff.find(
+                          (s) =>
+                            (s.pin && s.pin === secretPin) ||
+                            (s.password && s.password === secret) ||
+                            (s.pinHash && s.pinHash === secretPinHash) ||
+                            (s.passwordHash && s.passwordHash === secretHash),
+                        )
+                      : null;
+                  const staff = selectedStaff ?? fallbackStaff ?? null;
                   const validStaff = Boolean(
                     staff &&
                       (
@@ -422,6 +456,21 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               >
                 {t(lang, "unlockSubmit")}
               </button>
+              {isInternalAdmin ? (
+                <button
+                  type="button"
+                  className="mt-2 min-h-[42px] w-full rounded-2xl border border-amber-300 bg-amber-50 py-2 text-sm font-black text-amber-900"
+                  onClick={() => {
+                    usePosStore.getState().setPreferences({ backOfficePin: null });
+                    switchStaffAccount(null);
+                    setPosLocked(false);
+                    setLockSecret("");
+                    setLockError(null);
+                  }}
+                >
+                  Admin unlock & clear PIN
+                </button>
+              ) : null}
             </div>
           </AppModalOverlay>
         ) : null}

@@ -1240,6 +1240,40 @@ export async function adminShopOpenSupportMessage(
   return { ok: true, id: data as string | undefined };
 }
 
+export async function adminShopResetBackOfficePin(shopId: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_reset_backoffice_pin", { p_shop_id: shopId });
+  if (error) {
+    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
+    return {
+      ok: false,
+      message: missingFn
+        ? "Missing RPC: admin_shop_reset_backoffice_pin. Add DB function and retry."
+        : error.message,
+    };
+  }
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok === true) return { ok: true };
+  return { ok: false, message: j.error ?? "Could not reset back office PIN." };
+}
+
+export async function adminShopSendOwnerPasswordReset(shopId: string): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_send_owner_password_reset", { p_shop_id: shopId });
+  if (error) {
+    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
+    return {
+      ok: false,
+      message: missingFn
+        ? "Missing RPC: admin_shop_send_owner_password_reset. Add DB function and retry."
+        : error.message,
+    };
+  }
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok === true) return { ok: true };
+  return { ok: false, message: j.error ?? "Could not send password reset." };
+}
+
 export function whatsappUrlFromPhone(phone: string | null | undefined): string | null {
   if (!phone?.trim()) return null;
   const digits = phone.replace(/\D/g, "");

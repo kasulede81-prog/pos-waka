@@ -22,6 +22,8 @@ import {
   adminShopDeviceSetTrusted,
   adminShopForceLogoutDevices,
   adminShopOpenSupportMessage,
+  adminShopResetBackOfficePin,
+  adminShopSendOwnerPasswordReset,
   adminShopResetSync,
   adminSubscriptionMarkPayment,
   adminSubscriptionSetStatus,
@@ -581,6 +583,39 @@ export function InternalShopOpsPage({ lang }: Props) {
                   {detail.sync_health.last_error ? "yes" : "none"}
                 </p>
               ) : null}
+            </AdminCollapsible>
+          ) : null}
+
+          {canSupport ? (
+            <AdminCollapsible title="Account recovery" summary="Reset owner access">
+              <p className="mb-2 text-xs text-stone-600">
+                Use these tools if shop owner forgot login or back office PIN.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="min-h-[44px] rounded-xl border border-stone-300 bg-white px-4 text-xs font-black disabled:opacity-40"
+                  onClick={() =>
+                    void run(() => adminShopSendOwnerPasswordReset(detail.shop.id))
+                  }
+                >
+                  Send owner password reset
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="min-h-[44px] rounded-xl bg-rose-600 px-4 text-xs font-black text-white disabled:opacity-40"
+                  onClick={() =>
+                    void run(() => adminShopResetBackOfficePin(detail.shop.id))
+                  }
+                >
+                  Reset back office PIN
+                </button>
+              </div>
+              <p className="mt-2 text-[11px] text-stone-500">
+                Password reset sends a recovery link to shop owner account. Back office PIN reset clears local lock requirement.
+              </p>
             </AdminCollapsible>
           ) : null}
 
