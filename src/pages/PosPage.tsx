@@ -36,7 +36,13 @@ const MAX_RECENT_SEARCHES = 4;
 const MAX_RECENT_PRODUCTS = 14;
 const MAX_FAVORITE_PRODUCTS = 20;
 
-import { buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
+import {
+  buildReceiptDisplayData,
+  buildReceiptNumberForSale,
+  buildSaleReceiptHtml,
+  buildSaleReceiptText,
+  printReceiptText,
+} from "../lib/receiptPrint";
 const SEARCH_ALIASES: Record<string, string[]> = {
   blueband: ["margarine"],
   margarine: ["blueband"],
@@ -240,15 +246,66 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const receiptSale = useMemo(() => sales.find((s) => s.id === receiptSaleId) ?? null, [sales, receiptSaleId]);
 
-  const receiptPlain = useMemo(() => {
-    if (!receiptSale) return "";
+  const staffAccounts = preferences.staffAccounts ?? [];
+  const staffNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of staffAccounts) m.set(s.id, s.name);
+    return m;
+  }, [staffAccounts]);
+
+  const receiptCashierLabel = useCallback(
+    (sale: { soldByUserId?: string | null }) => {
+      const id = sale.soldByUserId ?? "";
+      if (id.startsWith("staff:")) return staffNameById.get(id.slice("staff:".length)) ?? t(lang, "role_cashier");
+      return actor.displayName ?? t(lang, "role_owner");
+    },
+    [actor.displayName, lang, staffNameById],
+  );
+
+  const receiptDisplay = useMemo(() => {
+    if (!receiptSale) return null;
     const shopName = (preferences.shopDisplayName ?? "").trim() || "Waka POS";
-    const cashier = (actor.displayName ?? actor.userId).trim();
+    const receiptNumber = buildReceiptNumberForSale(receiptSale, sales);
+    const productById = new Map(products.map((p) => [p.id, p] as const));
+    return buildReceiptDisplayData({
+      shopName,
+      shopAddress: preferences.shopAddressLine ?? null,
+      shopPhone: preferences.shopPhoneE164 ?? null,
+      cashier: receiptCashierLabel(receiptSale),
+      receiptNumber,
+      sale: receiptSale,
+      productById,
+      footerThanks: "Thank you for shopping with us",
+      footerPowered: "Powered by Waka POS",
+      returnPolicy: "Returns accepted with receipt within 24 hours.",
+    });
+  }, [
+    receiptSale,
+    preferences.shopDisplayName,
+    preferences.shopAddressLine,
+    preferences.shopPhoneE164,
+    sales,
+    products,
+    receiptCashierLabel,
+  ]);
+
+  const receiptPlain = useMemo(() => {
+    if (!receiptSale || !receiptDisplay) return "";
     const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
     return buildSaleReceiptText({
-      shopName,
-      cashier,
+      shopName: receiptDisplay.shopName,
+      shopAddress: receiptDisplay.shopAddress,
+      shopPhone: receiptDisplay.shopPhone,
+      cashier: receiptDisplay.cashier,
+      receiptNumber: receiptDisplay.receiptNumber,
       sale: receiptSale,
+      productById: new Map(products.map((p) => [p.id, p] as const)),
+      paymentMethodLabel: receiptDisplay.paymentMethodLabel,
+      amountPaidUgx: receiptDisplay.paidUgx,
+      changeUgx: receiptDisplay.changeUgx,
+      footerThanks: receiptDisplay.footerThanks,
+      footerPowered: receiptDisplay.footerPowered,
+      returnPolicy: receiptDisplay.returnPolicy,
       customerName: cust?.name ?? null,
       customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
       labels: {
@@ -261,7 +318,9 @@ export function PosPage({ lang }: { lang: Language }) {
         time: t(lang, "receiptTimeLabel"),
       },
     });
-  }, [receiptSale, preferences.shopDisplayName, actor.displayName, actor.userId, customers, lang]);
+  }, [receiptSale, receiptDisplay, customers, products, lang]);
+
+  const receiptHtmlPreview = useMemo(() => (receiptDisplay ? buildSaleReceiptHtml(receiptDisplay) : ""), [receiptDisplay]);
 
   const frequentToday = useMemo(
     () =>
@@ -535,6 +594,7 @@ export function PosPage({ lang }: { lang: Language }) {
     const r = finalizeDraftSale({
       debtUgx: debt,
       customerId,
+      paymentMethod,
     });
     if (!r.ok) {
       setToast(t(lang, r.errorKey ?? "saleError"));
@@ -1231,7 +1291,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {receiptSale && receiptPlain ? (
+      {receiptSale && receiptPlain && receiptDisplay ? (
         <div
           className="waka-overlay-clear-nav fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
           style={{ zIndex: "var(--waka-z-pos-receipt)" }}
@@ -1251,11 +1311,14 @@ export function PosPage({ lang }: { lang: Language }) {
               {t(lang, "receiptClose")}
             </button>
           </header>
-          <pre className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain whitespace-pre-wrap break-words px-5 py-5 text-base leading-relaxed text-slate-800 [-webkit-overflow-scrolling:touch]">
-            {receiptPlain}
-          </pre>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 [-webkit-overflow-scrolling:touch]">
+            <div
+              className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
+            />
+          </div>
           <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 className="min-h-[52px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white active:bg-slate-800"
@@ -1269,29 +1332,23 @@ export function PosPage({ lang }: { lang: Language }) {
               <button
                 type="button"
                 className="min-h-[52px] rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white active:bg-emerald-700"
-                onClick={() => {
+                onClick={async () => {
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({ title: "Waka POS Receipt", text: receiptPlain });
+                      return;
+                    } catch {
+                      // fallback below
+                    }
+                  }
                   window.open(`https://wa.me/?text=${encodeURIComponent(receiptPlain)}`, "_blank", "noopener,noreferrer");
                 }}
               >
-                {t(lang, "receiptWhatsApp")}
+                Share
               </button>
               <button
                 type="button"
-                className="min-h-[52px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-black text-slate-800 active:bg-slate-50"
-                onClick={() => {
-                  const a = document.createElement("a");
-                  const url = URL.createObjectURL(new Blob([receiptPlain], { type: "text/plain;charset=utf-8" }));
-                  a.href = url;
-                  a.download = `receipt-${receiptSale.id}.txt`;
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                {t(lang, "receiptDownload")}
-              </button>
-              <button
-                type="button"
-                className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white active:bg-waka-700 sm:col-span-1"
+                className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white active:bg-waka-700"
                 onClick={() => setReceiptSaleId(null)}
               >
                 {t(lang, "receiptClose")}

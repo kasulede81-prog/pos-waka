@@ -10,6 +10,7 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { PageHeader } from "../components/layout/PageHeader";
+import { computeTodayProfitBreakdown } from "../lib/homeProfit";
 
 type Range = "today" | "week" | "month";
 
@@ -17,6 +18,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const sales = usePosStore((s) => s.sales);
+  const returnRecords = usePosStore((s) => s.returnRecords);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const purchases = usePosStore((s) => s.purchases);
@@ -44,17 +46,32 @@ export function ReportsPage({ lang }: { lang: Language }) {
     });
   }, [sales, range]);
 
+  const filteredReturns = useMemo(() => {
+    const today = dateKeyKampala(new Date());
+    const weekCut = dateKeyDaysAgoKampala(6);
+    const monthPrefix = today.slice(0, 7);
+    return returnRecords.filter((r) => {
+      const k = dateKeyKampala(r.createdAt);
+      if (range === "today") return k === today;
+      if (range === "week") return k >= weekCut;
+      return k.startsWith(monthPrefix);
+    });
+  }, [returnRecords, range]);
+
   const totals = useMemo(() => {
+    const productById = new Map(products.map((p) => [p.id, p] as const));
+    const breakdown = computeTodayProfitBreakdown(filtered, productById, filteredReturns);
     const cash = filtered.reduce((a, s) => a + s.cashPaidUgx, 0);
-    const profit = filtered.reduce((a, s) => a + s.estimatedProfitUgx, 0);
+    const profit = breakdown.profitUgx;
     const debt = filtered.reduce((a, s) => a + s.debtUgx, 0);
     return { cash, profit, debt, count: filtered.length };
-  }, [filtered]);
+  }, [filtered, filteredReturns, products]);
 
   const topProducts = useMemo(() => {
     const map = new Map<string, { name: string; qty: number; revenue: number }>();
     for (const sale of filtered) {
       for (const line of sale.lines) {
+        if (line.voided) continue;
         const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
         map.set(line.productId, {
           name: line.name,
@@ -63,13 +80,22 @@ export function ReportsPage({ lang }: { lang: Language }) {
         });
       }
     }
+    for (const ret of filteredReturns) {
+      const cur = map.get(ret.productId) ?? { name: ret.productName, qty: 0, revenue: 0 };
+      map.set(ret.productId, {
+        name: ret.productName || cur.name,
+        qty: cur.qty - Math.max(0, ret.quantity),
+        revenue: cur.revenue - Math.max(0, ret.refundAmountUgx),
+      });
+    }
     return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [filtered]);
+  }, [filtered, filteredReturns]);
 
   const weakProducts = useMemo(() => {
     const map = new Map<string, { name: string; qty: number; revenue: number }>();
     for (const sale of filtered) {
       for (const line of sale.lines) {
+        if (line.voided) continue;
         const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
         map.set(line.productId, {
           name: line.name,
@@ -78,9 +104,17 @@ export function ReportsPage({ lang }: { lang: Language }) {
         });
       }
     }
+    for (const ret of filteredReturns) {
+      const cur = map.get(ret.productId) ?? { name: ret.productName, qty: 0, revenue: 0 };
+      map.set(ret.productId, {
+        name: ret.productName || cur.name,
+        qty: cur.qty - Math.max(0, ret.quantity),
+        revenue: cur.revenue - Math.max(0, ret.refundAmountUgx),
+      });
+    }
     const rows = [...map.values()].filter((r) => r.revenue > 0).sort((a, b) => a.revenue - b.revenue);
     return rows.slice(0, 8);
-  }, [filtered]);
+  }, [filtered, filteredReturns]);
 
   const last7DayBars = useMemo(() => {
     const keys: string[] = [];
@@ -121,6 +155,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
     const map = new Map<string, { name: string; revenue: number; profit: number }>();
     for (const sale of filtered) {
       for (const line of sale.lines) {
+        if (line.voided) continue;
         const lineProfit = Number.isFinite(line.estimatedProfitUgx)
           ? line.estimatedProfitUgx
           : line.lineTotalUgx - line.quantity * (line.unitCostUgx ?? 0);
@@ -132,6 +167,17 @@ export function ReportsPage({ lang }: { lang: Language }) {
         });
       }
     }
+    for (const ret of filteredReturns) {
+      const product = products.find((p) => p.id === ret.productId);
+      const returnCost = Math.round(Math.max(0, ret.quantity) * Math.max(0, product?.costPricePerUnitUgx ?? 0));
+      const returnProfitImpact = Math.max(0, ret.refundAmountUgx) - returnCost;
+      const cur = map.get(ret.productId) ?? { name: ret.productName, revenue: 0, profit: 0 };
+      map.set(ret.productId, {
+        name: ret.productName || cur.name,
+        revenue: cur.revenue - Math.max(0, ret.refundAmountUgx),
+        profit: cur.profit - returnProfitImpact,
+      });
+    }
     return [...map.values()]
       .map((v) => ({
         name: v.name,
@@ -142,7 +188,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
       .filter((r) => r.revenue > 0)
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 8);
-  }, [filtered]);
+  }, [filtered, filteredReturns, products]);
 
   return (
     <div className="space-y-5 pb-8">
@@ -173,7 +219,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
               onClick={() => {
                 const dk = dateKeyKampala(new Date());
-                const text = buildDailyReportText(lang, dk, sales);
+                const text = buildDailyReportText(lang, dk, sales, products, returnRecords);
                 void navigator.clipboard.writeText(text).then(
                   () => {
                     setReportHint(t(lang, "reportCopied"));
@@ -190,7 +236,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               className="rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
               onClick={async () => {
                 const dk = dateKeyKampala(new Date());
-                const text = buildDailyReportText(lang, dk, sales);
+                const text = buildDailyReportText(lang, dk, sales, products, returnRecords);
                 const ok = await shareText(text, t(lang, "appName"));
                 setReportHint(ok ? t(lang, "reportShared") : t(lang, "reportCopyInstead"));
                 window.setTimeout(() => setReportHint(null), 3500);

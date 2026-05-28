@@ -273,6 +273,7 @@ type PosState = {
   finalizeDraftSale: (opts: {
     debtUgx: number;
     customerId?: string | null;
+    paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit";
   }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
@@ -936,7 +937,7 @@ export const usePosStore = create<PosState>((set, get) => {
     void clearPersistedDraft();
   },
 
-  finalizeDraftSale: ({ debtUgx, customerId }) => {
+  finalizeDraftSale: ({ debtUgx, customerId, paymentMethod }) => {
     const state = get();
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
     const isFirstSale = state.sales.length === 0;
@@ -985,6 +986,7 @@ export const usePosStore = create<PosState>((set, get) => {
       lastSyncError: null,
       customerId: customerId ?? null,
       soldByUserId: actorId,
+      paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
     };
 
     let customers = state.customers;

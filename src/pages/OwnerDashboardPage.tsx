@@ -16,6 +16,7 @@ import {
   computeExtendedOwnerAlerts,
   formatVsYesterday,
 } from "../lib/ownerIntelligence";
+import { computeTodayProfitBreakdown } from "../lib/homeProfit";
 
 function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: string } {
   const title = a.titleVars ? tTemplate(lang, a.title, a.titleVars) : t(lang, a.title);
@@ -55,6 +56,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const voidRecords = usePosStore((s) => s.voidRecords);
+  const returnRecords = usePosStore((s) => s.returnRecords);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const [waCopied, setWaCopied] = useState(false);
@@ -67,6 +69,11 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const todayVoids = useMemo(
     () => voidRecords.filter((v) => dateKeyKampala(v.createdAt) === todayKey),
     [voidRecords, todayKey],
+  );
+
+  const todayReturns = useMemo(
+    () => returnRecords.filter((r) => dateKeyKampala(r.createdAt) === todayKey),
+    [returnRecords, todayKey],
   );
 
   const todayDiscountTotal = useMemo(
@@ -83,25 +90,37 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   );
 
   const stats = useMemo(() => {
-    const totalSalesUgx = today.reduce((a, s) => a + s.totalUgx, 0);
-    const expectedCashUgx = today.reduce((a, s) => a + s.cashPaidUgx, 0);
+    const productById = new Map(products.map((p) => [p.id, p] as const));
+    const netBreakdown = computeTodayProfitBreakdown(today, productById, todayReturns);
+    const totalSalesUgx = netBreakdown.salesUgx;
+    const voidsTotalUgx = todayVoids.reduce((a, v) => a + Math.max(0, v.amountUgx), 0);
+    const expectedCashUgx = Math.max(
+      0,
+      today.reduce((a, s) => a + s.cashPaidUgx, 0) -
+        todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
+    );
     const debtTodayUgx = today.reduce((a, s) => a + s.debtUgx, 0);
-    const estProfitUgx = today.reduce((a, s) => a + s.estimatedProfitUgx, 0);
+    const estProfitUgx = netBreakdown.profitUgx;
+    const returnsTotalUgx = todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0);
+    const grossSalesUgx = totalSalesUgx + voidsTotalUgx + returnsTotalUgx;
     const closeToday = dayCloses.find((d) => d.dateKey === todayKey);
     const countedCashUgx = closeToday?.countedCashUgx ?? null;
     const todayCloseDiff = closeToday?.differenceUgx ?? null;
     const shortageUgx = closeToday && closeToday.differenceUgx < 0 ? -closeToday.differenceUgx : null;
     return {
       totalSalesUgx,
+      grossSalesUgx,
+      voidsTotalUgx,
       expectedCashUgx,
       debtTodayUgx,
       estProfitUgx,
+      returnsTotalUgx,
       countedCashUgx,
       todayCloseDiff,
       shortageUgx,
       saleCount: today.length,
     };
-  }, [today, dayCloses, todayKey]);
+  }, [today, products, todayReturns, todayVoids, dayCloses, todayKey]);
 
   const yesterdaySalesUgx = useMemo(
     () => sales.filter((s) => dateKeyKampala(s.createdAt) === yesterdayKey).reduce((a, s) => a + s.totalUgx, 0),
@@ -114,6 +133,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     const map = new Map<string, { name: string; qty: number; revenue: number }>();
     for (const sale of today) {
       for (const line of sale.lines) {
+        if (line.voided) continue;
         const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
         map.set(line.productId, {
           name: line.name,
@@ -278,6 +298,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         <p className={`mt-2 text-sm font-medium ${pulse === "watch" ? "text-amber-950/80" : "text-white/85"}`}>
           UGX {stats.totalSalesUgx.toLocaleString()} · {stats.saleCount} {t(lang, "salesCount")}
         </p>
+        <p className={`mt-1 text-xs font-semibold ${pulse === "watch" ? "text-amber-950/80" : "text-white/80"}`}>
+          Net sales: UGX {stats.grossSalesUgx.toLocaleString()} - UGX {stats.voidsTotalUgx.toLocaleString()} - UGX{" "}
+          {stats.returnsTotalUgx.toLocaleString()} = UGX {stats.totalSalesUgx.toLocaleString()}
+        </p>
       </section>
 
       <section className="rounded-[1.75rem] border border-slate-200/90 bg-white p-5 shadow-sm">
@@ -426,7 +450,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         )}
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-3">
         <div className="rounded-[1.75rem] border border-rose-100 bg-rose-50/40 p-5 shadow-sm">
           <h2 className="text-lg font-black text-rose-950">{t(lang, "ownerVoidsToday")}</h2>
           {todayVoids.length === 0 ? (
@@ -470,6 +494,31 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50/60 p-5 shadow-sm">
+          <h2 className="text-lg font-black text-slate-900">{t(lang, "returnRefundLabel")}</h2>
+          {todayReturns.length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-slate-600">{t(lang, "noSalesYet")}</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <p className="rounded-2xl border border-slate-200 bg-white p-3 text-xl font-black text-slate-900">
+                UGX {stats.returnsTotalUgx.toLocaleString()}
+              </p>
+              <ul className="space-y-2">
+                {todayReturns.slice(0, 6).map((r) => (
+                  <li key={r.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <p className="font-black text-slate-900">
+                      {r.productName} · UGX {r.refundAmountUgx.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

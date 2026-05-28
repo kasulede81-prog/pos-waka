@@ -97,8 +97,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     () => resolveSessionActor({ mode: authMode, user, email, preferences, staffSession }),
     [authMode, user, email, preferences, staffSession],
   );
-  const isVip = resolveEffectivePlanTier(snapshot) === "waka_plus";
-  const canSwitchUser = isVip;
+  const tier = resolveEffectivePlanTier(snapshot);
+  const canSwitchUser = tier === "business" || tier === "waka_plus";
 
   useLayoutEffect(() => {
     usePosStore.getState().setSessionActor(actor);
@@ -368,6 +368,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
                   >
                     <option value="">{t(lang, "staffPickAccount")}</option>
+                    <option value="__owner__">{t(lang, "role_owner")}</option>
                     {(preferences.staffAccounts ?? [])
                       .filter((s) => s.active)
                       .map((s) => (
@@ -390,7 +391,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 type="button"
                 className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
                 onClick={() => {
-                  const staff = (preferences.staffAccounts ?? []).find((s) => s.id === lockStaffId && s.active);
+                  const selectingOwner = lockStaffId === "__owner__";
+                  const staff = selectingOwner
+                    ? null
+                    : (preferences.staffAccounts ?? []).find((s) => s.id === lockStaffId && s.active);
                   const secret = lockSecret.trim();
                   const secretPin = normalizePin(secret);
                   const secretHash = hashStaffSecret(secret);
@@ -405,7 +409,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       ),
                   );
                   const validBackOffice = Boolean((preferences.backOfficePin ?? "") && (preferences.backOfficePin ?? "") === secretPin);
-                  const canUnlock = validStaff || validBackOffice || (!staff && !(preferences.backOfficePin ?? "").length);
+                  const canUnlock = validStaff || validBackOffice || (selectingOwner && !(preferences.backOfficePin ?? "").length);
                   if (!canUnlock) {
                     setLockError(t(lang, "unlockWrongPin"));
                     return;

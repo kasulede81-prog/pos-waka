@@ -7,7 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "../lib/datesUg";
-import { buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
+import { buildReceiptNumberForSale, buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
 import type { VoidReason } from "../types";
@@ -68,15 +68,30 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
   const customers = usePosStore((s) => s.customers);
+  const staffAccounts = preferences.staffAccounts ?? [];
+
+  const staffNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const s of staffAccounts) {
+      map.set(s.id, s.name);
+    }
+    return map;
+  }, [staffAccounts]);
 
   const printSale = (sale: Sale) => {
     const shopName = shopLabel || "Waka POS";
-    const cashier = (actor.displayName ?? actor.userId).trim();
+    const cashier = soldByLabel(sale);
+    const receiptNumber = buildReceiptNumberForSale(sale, sales);
     const cust = sale.customerId ? customers.find((c) => c.id === sale.customerId) : null;
+    const productById = new Map(products.map((p) => [p.id, p] as const));
     const text = buildSaleReceiptText({
       shopName,
+      shopAddress: preferences.shopAddressLine ?? null,
+      shopPhone: preferences.shopPhoneE164 ?? null,
       cashier,
+      receiptNumber,
       sale,
+      productById,
       customerName: cust?.name ?? null,
       customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
       labels: {
@@ -100,6 +115,16 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   }, [sales, range, actor.role, actor.userId]);
 
   const byDay = useMemo(() => groupSalesByKampalaDay(filteredSales), [filteredSales]);
+
+  const soldByLabel = (sale: Sale): string => {
+    const id = sale.soldByUserId ?? "";
+    if (!id) return t(lang, "role_owner");
+    if (id.startsWith("staff:")) {
+      const staffId = id.slice("staff:".length);
+      return staffNameById.get(staffId) ?? t(lang, "role_cashier");
+    }
+    return t(lang, "role_owner");
+  };
 
   if (!hasPermission(actor.role, "receipts.view")) {
     return <Navigate to="/" replace />;
@@ -211,6 +236,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                     <p className="font-mono text-xs font-bold text-slate-500">#{sale.id.slice(0, 8)}</p>
                     <p className="text-xs font-medium text-slate-500">{new Date(sale.createdAt).toLocaleString()}</p>
                   </div>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {t(lang, "receiptCashier")}: {soldByLabel(sale)}
+                  </p>
                   <p className="mt-1 text-lg font-black text-slate-950">UGX {sale.totalUgx.toLocaleString()}</p>
                   <p className="text-xs font-medium text-slate-500">
                     {t(lang, "cashLabel")}: UGX {sale.cashPaidUgx.toLocaleString()}

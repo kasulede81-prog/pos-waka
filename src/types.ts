@@ -9,6 +9,7 @@ export type UserRole = "owner" | "manager" | "cashier" | "stock_keeper" | "super
  */
 export type Permission =
   | "pos.sell"
+  | "sale_void"
   | "stock.view"
   | "stock.adjust"
   | "products.add"
@@ -313,6 +314,8 @@ export type Sale = {
   customerId?: string | null;
   /** Staff who completed the sale (session actor); drives cashier performance on owner dashboard */
   soldByUserId?: string | null;
+  /** Payment mode selected at checkout. */
+  paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit";
 };
 
 export type DebtPayment = {

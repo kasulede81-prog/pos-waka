@@ -1,14 +1,24 @@
-import type { Language, Sale } from "../types";
+import type { Language, Product, ReturnRecord, Sale } from "../types";
 import { t } from "./i18n";
 import { dateKeyKampala } from "./datesUg";
+import { computeTodayProfitBreakdown } from "./homeProfit";
 
 /** Plain-text summary for WhatsApp / SMS / print */
-export function buildDailyReportText(lang: Language, dateKey: string, sales: Sale[]): string {
+export function buildDailyReportText(
+  lang: Language,
+  dateKey: string,
+  sales: Sale[],
+  products: Product[],
+  returnRecords: ReturnRecord[],
+): string {
   const daySales = sales.filter((s) => dateKeyKampala(s.createdAt) === dateKey);
-  const total = daySales.reduce((a, s) => a + s.totalUgx, 0);
+  const dayReturns = returnRecords.filter((r) => dateKeyKampala(r.createdAt) === dateKey);
+  const productById = new Map(products.map((p) => [p.id, p] as const));
+  const breakdown = computeTodayProfitBreakdown(daySales, productById, dayReturns);
+  const total = breakdown.salesUgx;
   const cash = daySales.reduce((a, s) => a + s.cashPaidUgx, 0);
   const debt = daySales.reduce((a, s) => a + s.debtUgx, 0);
-  const profit = daySales.reduce((a, s) => a + s.estimatedProfitUgx, 0);
+  const profit = breakdown.profitUgx;
   const lines: string[] = [];
   lines.push(`${t(lang, "appName")} — ${t(lang, "exportReportHeading")} ${dateKey}`);
   lines.push(`${t(lang, "salesCount")}: ${daySales.length}`);

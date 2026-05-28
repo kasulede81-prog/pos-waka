@@ -17,6 +17,7 @@ export function ProfitPage({ lang }: Props) {
   const actor = useSessionActor();
   const { authMode } = useSubscription();
   const sales = usePosStore((s) => s.sales);
+  const returnRecords = usePosStore((s) => s.returnRecords);
   const products = usePosStore((s) => s.products);
   const [range, setRange] = useState<Range>("today");
 
@@ -39,9 +40,21 @@ export function ProfitPage({ lang }: Props) {
     });
   }, [sales, range]);
 
+  const filteredReturns = useMemo(() => {
+    const today = dateKeyKampala(new Date());
+    const weekCut = dateKeyDaysAgoKampala(6);
+    const monthPrefix = today.slice(0, 7);
+    return returnRecords.filter((r) => {
+      const k = dateKeyKampala(r.createdAt);
+      if (range === "today") return k === today;
+      if (range === "week") return k >= weekCut;
+      return k.startsWith(monthPrefix);
+    });
+  }, [returnRecords, range]);
+
   const report = useMemo(
-    () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel),
-    [filteredSales, productById, generalLabel],
+    () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, filteredReturns),
+    [filteredSales, productById, generalLabel, filteredReturns],
   );
 
   const { groups, total } = report;

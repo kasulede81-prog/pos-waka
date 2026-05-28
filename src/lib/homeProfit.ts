@@ -1,4 +1,4 @@
-import type { Product, Sale, UserRole } from "../types";
+import type { Product, ReturnRecord, Sale, UserRole } from "../types";
 import { costPerBaseUnitUgx, estimatedProfitForLine } from "./sellingEngine";
 
 /** Profit reports in Back Office — owners/managers only (not cashiers). */
@@ -46,6 +46,7 @@ export type TodayProfitBreakdown = {
 export function computeTodayProfitBreakdown(
   todaySales: Sale[],
   productById: Map<string, Product>,
+  returnRecords: ReturnRecord[] = [],
 ): TodayProfitBreakdown {
   let salesUgx = 0;
   let costUgx = 0;
@@ -54,6 +55,7 @@ export function computeTodayProfitBreakdown(
 
   for (const sale of todaySales) {
     for (const line of sale.lines) {
+      if (line.voided) continue;
       salesUgx += line.lineTotalUgx;
       const product = productById.get(line.productId);
       const unitCost =
@@ -69,6 +71,19 @@ export function computeTodayProfitBreakdown(
         ? estimatedProfitForLine(product, line)
         : Math.round(line.lineTotalUgx - lineCost);
     }
+  }
+
+  for (const rec of returnRecords) {
+    const refundUgx = Math.max(0, Math.floor(rec.refundAmountUgx));
+    const qty = Math.max(0, rec.quantity);
+    if (refundUgx <= 0 || qty <= 0) continue;
+    const product = productById.get(rec.productId);
+    const returnUnitCost = product ? costPerBaseUnitUgx(product) : 0;
+    if (returnUnitCost <= 0) linesMissingCost += 1;
+    const returnCost = Math.round(qty * returnUnitCost);
+    salesUgx -= refundUgx;
+    costUgx -= returnCost;
+    profitUgx -= Math.round(refundUgx - returnCost);
   }
 
   return {
@@ -88,12 +103,14 @@ export function computeProfitGroupedByCategory(
   sales: Sale[],
   productById: Map<string, Product>,
   generalCategoryLabel: string,
+  returnRecords: ReturnRecord[] = [],
 ): ProfitGroupedReport {
-  const total = computeTodayProfitBreakdown(sales, productById);
+  const total = computeTodayProfitBreakdown(sales, productById, returnRecords);
   const byCategory = new Map<string, Map<string, ProfitProductRow>>();
 
   for (const sale of sales) {
     for (const line of sale.lines) {
+      if (line.voided) continue;
       const product = productById.get(line.productId);
       const unitCost =
         Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
@@ -131,6 +148,40 @@ export function computeProfitGroupedByCategory(
         profitUgx: cur.profitUgx + lineProfit,
       });
     }
+  }
+
+  for (const rec of returnRecords) {
+    const product = productById.get(rec.productId);
+    const qty = Math.max(0, rec.quantity);
+    const refundUgx = Math.max(0, Math.floor(rec.refundAmountUgx));
+    if (qty <= 0 || refundUgx <= 0) continue;
+    const returnUnitCost = product ? costPerBaseUnitUgx(product) : 0;
+    const returnCost = Math.round(qty * returnUnitCost);
+    const returnProfitImpact = Math.round(refundUgx - returnCost);
+    const catRaw = product?.category?.trim() ?? "";
+    const categoryKey = catRaw.length > 0 ? catRaw : uncategorizedLabel();
+    let catMap = byCategory.get(categoryKey);
+    if (!catMap) {
+      catMap = new Map();
+      byCategory.set(categoryKey, catMap);
+    }
+    const pid = rec.productId;
+    const cur = catMap.get(pid) ?? {
+      productId: rec.productId,
+      name: rec.productName,
+      qty: 0,
+      salesUgx: 0,
+      costUgx: 0,
+      profitUgx: 0,
+    };
+    catMap.set(pid, {
+      ...cur,
+      name: rec.productName || cur.name,
+      qty: cur.qty - qty,
+      salesUgx: cur.salesUgx - refundUgx,
+      costUgx: cur.costUgx - returnCost,
+      profitUgx: cur.profitUgx - returnProfitImpact,
+    });
   }
 
   const groups: ProfitCategoryGroup[] = [...byCategory.entries()].map(([categoryKey, prodMap]) => {

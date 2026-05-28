@@ -23,7 +23,6 @@ import {
   clearStaffAuth,
   listCachedShopsForStaffLogin,
   readRememberedStaffDevice,
-  readStaffSession,
   type CachedShop,
   type RememberedStaffDevice,
   type StaffLoginInput,
@@ -111,32 +110,6 @@ export function useAuth() {
   );
 
   const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
-
-  const restoreStaffSessionFromDisk = useCallback(async (): Promise<StaffSession | null> => {
-    const persisted = readStaffSession();
-    if (!persisted) return null;
-    applyAccountSwitchSync(persisted.accountKey);
-    await bootstrapPosFromDisk();
-    const store = usePosStore.getState();
-    const staffRow = (store.preferences.staffAccounts ?? []).find(
-      (s) => s.id === persisted.staffId && s.active,
-    );
-    if (!staffRow) {
-      clearStaffAuth();
-      applyAccountSwitchSync(null);
-      return null;
-    }
-    if (store.preferences.activeStaffId !== persisted.staffId) {
-      store.switchStaffAccount(persisted.staffId);
-    }
-    return {
-      accountKey: persisted.accountKey,
-      businessName: persisted.businessName,
-      staffId: persisted.staffId,
-      staffName: persisted.staffName,
-      role: persisted.role,
-    };
-  }, []);
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
@@ -249,16 +222,9 @@ export function useAuth() {
             applyAccountSwitchSync(null);
           }
         } else {
-          const staff = await restoreStaffSessionFromDisk();
-          if (cancelled) return;
-          if (staff) {
-            setStaffSession(staff);
-            setLocalEmail(null);
-            setSession(null);
-          } else {
-            applyAccountSwitchSync(null);
-            setStaffSession(null);
-          }
+          // Keep startup fast and deterministic: no background staff restore.
+          applyAccountSwitchSync(null);
+          setStaffSession(null);
         }
         if (!cancelled) setInitializing(false);
         return;
@@ -283,16 +249,8 @@ export function useAuth() {
         return;
       }
 
-      const staff = await restoreStaffSessionFromDisk();
-      if (cancelled) return;
-      if (staff) {
-        setStaffSession(staff);
-        setSession(null);
-        setLocalEmail(null);
-      } else {
-        applyAccountSwitchSync(null);
-        setStaffSession(null);
-      }
+      applyAccountSwitchSync(null);
+      setStaffSession(null);
       setInitializing(false);
     };
 
@@ -323,7 +281,7 @@ export function useAuth() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [restoreStaffSessionFromDisk, ensureWorkspaceForSession]);
+  }, [ensureWorkspaceForSession]);
 
   const signIn = useCallback(async (identifier: string, password: string) => {
     clearStaffAuth();

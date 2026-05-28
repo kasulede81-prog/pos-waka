@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
 import { fetchMarketingAgentMe } from "../lib/referralAgents";
@@ -36,7 +35,6 @@ import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const { email } = useAuth();
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
   const [showAgentPortal, setShowAgentPortal] = useState(false);
 
@@ -56,7 +54,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     return () => {
       cancelled = true;
     };
-  }, [email]);
+  }, [actor.userId]);
 
   const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
 
