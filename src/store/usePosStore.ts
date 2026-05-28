@@ -274,6 +274,8 @@ type PosState = {
     debtUgx: number;
     customerId?: string | null;
     paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit";
+    amountPaidUgx?: number;
+    changeGivenUgx?: number;
   }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
@@ -937,7 +939,7 @@ export const usePosStore = create<PosState>((set, get) => {
     void clearPersistedDraft();
   },
 
-  finalizeDraftSale: ({ debtUgx, customerId, paymentMethod }) => {
+  finalizeDraftSale: ({ debtUgx, customerId, paymentMethod, amountPaidUgx, changeGivenUgx }) => {
     const state = get();
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
     const isFirstSale = state.sales.length === 0;
@@ -971,8 +973,17 @@ export const usePosStore = create<PosState>((set, get) => {
     }, 0);
 
     const actorId = state.sessionActor?.userId ?? null;
+    const todayKey = dateKeyKampala(new Date());
+    const receiptSeq = state.sales.reduce(
+      (maxSeq, s) =>
+        dateKeyKampala(s.createdAt) === todayKey
+          ? Math.max(maxSeq, Number.isFinite(s.receiptSeq) ? Math.floor(s.receiptSeq ?? 0) : 0)
+          : maxSeq,
+      0,
+    ) + 1;
     const sale: Sale = {
       id: crypto.randomUUID(),
+      receiptSeq,
       lines: saleLines,
       subtotalUgx: listSubtotal,
       totalUgx: total,
@@ -987,6 +998,8 @@ export const usePosStore = create<PosState>((set, get) => {
       customerId: customerId ?? null,
       soldByUserId: actorId,
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
+      amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
+      changeGivenUgx: Number.isFinite(changeGivenUgx) ? Math.max(0, Math.floor(changeGivenUgx ?? 0)) : 0,
     };
 
     let customers = state.customers;

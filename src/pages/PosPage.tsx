@@ -31,7 +31,7 @@ import {
 } from "../lib/productCategories";
 import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
 
-const VIRTUAL_PRODUCT_THRESHOLD = 16;
+const VIRTUAL_PRODUCT_THRESHOLD = 10;
 const MAX_RECENT_SEARCHES = 4;
 const MAX_RECENT_PRODUCTS = 14;
 const MAX_FAVORITE_PRODUCTS = 20;
@@ -195,6 +195,8 @@ export function PosPage({ lang }: { lang: Language }) {
     }
     return byProduct;
   }, [sales]);
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p] as const)), [products]);
+  const favoriteIdSet = useMemo(() => new Set(preferences.favoriteProductIds ?? []), [preferences.favoriteProductIds]);
 
   const favoriteIds = preferences.favoriteProductIds ?? [];
   const recentIds = preferences.recentProductIds ?? [];
@@ -209,19 +211,19 @@ export function PosPage({ lang }: { lang: Language }) {
   const favoriteProducts = useMemo(
     () =>
       favoriteIds
-        .map((id) => products.find((p) => p.id === id))
+        .map((id) => productById.get(id))
         .filter((p): p is Product => p != null && productMatchesCategoryFilter(p, sellCategoryKey)),
-    [favoriteIds, products, sellCategoryKey],
+    [favoriteIds, productById, sellCategoryKey],
   );
 
   const recentProducts = useMemo(() => {
     const out: Product[] = [];
     for (const id of recentIds) {
-      const p = products.find((x) => x.id === id);
+      const p = productById.get(id);
       if (p && productMatchesCategoryFilter(p, sellCategoryKey)) out.push(p);
     }
     return out.slice(0, 8);
-  }, [recentIds, products, sellCategoryKey]);
+  }, [recentIds, productById, sellCategoryKey]);
 
   const bumpRecentProduct = useCallback(
     (productId: string) => {
@@ -266,7 +268,6 @@ export function PosPage({ lang }: { lang: Language }) {
     if (!receiptSale) return null;
     const shopName = (preferences.shopDisplayName ?? "").trim() || "Waka POS";
     const receiptNumber = buildReceiptNumberForSale(receiptSale, sales);
-    const productById = new Map(products.map((p) => [p.id, p] as const));
     return buildReceiptDisplayData({
       shopName,
       shopAddress: preferences.shopAddressLine ?? null,
@@ -285,7 +286,7 @@ export function PosPage({ lang }: { lang: Language }) {
     preferences.shopAddressLine,
     preferences.shopPhoneE164,
     sales,
-    products,
+    productById,
     receiptCashierLabel,
   ]);
 
@@ -299,7 +300,7 @@ export function PosPage({ lang }: { lang: Language }) {
       cashier: receiptDisplay.cashier,
       receiptNumber: receiptDisplay.receiptNumber,
       sale: receiptSale,
-      productById: new Map(products.map((p) => [p.id, p] as const)),
+      productById,
       paymentMethodLabel: receiptDisplay.paymentMethodLabel,
       amountPaidUgx: receiptDisplay.paidUgx,
       changeUgx: receiptDisplay.changeUgx,
@@ -318,7 +319,7 @@ export function PosPage({ lang }: { lang: Language }) {
         time: t(lang, "receiptTimeLabel"),
       },
     });
-  }, [receiptSale, receiptDisplay, customers, products, lang]);
+  }, [receiptSale, receiptDisplay, customers, productById, lang]);
 
   const receiptHtmlPreview = useMemo(() => (receiptDisplay ? buildSaleReceiptHtml(receiptDisplay) : ""), [receiptDisplay]);
 
@@ -385,33 +386,41 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
-    const favorites = new Set(favoriteIds);
     return products.filter((p) => {
       if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
       if (!productMatchesSellSearch(p, q, aliasTerms)) return false;
       if (sellCategoryKey === CATEGORY_FILTER_ALL) return true;
       return productMatchesCategoryFilter(p, sellCategoryKey);
     }).sort((a, b) => {
-      const favA = favorites.has(a.id) ? 0 : 1;
-      const favB = favorites.has(b.id) ? 0 : 1;
+      const favA = favoriteIdSet.has(a.id) ? 0 : 1;
+      const favB = favoriteIdSet.has(b.id) ? 0 : 1;
       if (favA !== favB) return favA - favB;
       return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
     });
-  }, [products, sellSearchContext, sellCategoryKey, favoriteIds]);
+  }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
   const shelfCards = useMemo(() => {
-    const countFor = (filter: string) => products.filter((p) => productMatchesCategoryFilter(p, filter)).length;
+    const categoryCounts = new Map<string, number>();
+    let uncategorizedCount = 0;
+    for (const p of products) {
+      const cat = (p.category ?? "").trim();
+      if (!cat) {
+        uncategorizedCount += 1;
+      } else {
+        categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
+      }
+    }
     const cards = sellCategoryOptions.map((cat) => ({
       key: cat,
       label: cat,
-      count: countFor(cat),
+      count: categoryCounts.get(cat) ?? 0,
       icon: shelfIconFor(cat),
     }));
     if (sellHasUncategorized) {
       cards.push({
         key: UNCATEGORIZED_SENTINEL,
         label: t(lang, "posNoShelf"),
-        count: countFor(UNCATEGORIZED_SENTINEL),
+        count: uncategorizedCount,
         icon: null,
       });
     }
@@ -475,11 +484,11 @@ export function PosPage({ lang }: { lang: Language }) {
   useEffect(() => {
     const id = (location.state as { preferProductId?: string } | null)?.preferProductId;
     if (!id || !products.length) return;
-    const p = products.find((x) => x.id === id);
+    const p = productById.get(id);
     if (!p) return;
     openProduct(p);
     navigate(location.pathname, { replace: true, state: {} });
-  }, [location.key, location.pathname, products, openProduct, navigate]);
+  }, [location.key, location.pathname, products.length, productById, openProduct, navigate]);
 
   useEffect(() => {
     if (!sheetOpen || !selected) return;
@@ -595,6 +604,8 @@ export function PosPage({ lang }: { lang: Language }) {
       debtUgx: debt,
       customerId,
       paymentMethod,
+      amountPaidUgx: totalPaidInput,
+      changeGivenUgx: changeDue,
     });
     if (!r.ok) {
       setToast(t(lang, r.errorKey ?? "saleError"));
@@ -920,13 +931,13 @@ export function PosPage({ lang }: { lang: Language }) {
                   <button
                     type="button"
                     className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
-                    aria-label={favoriteIds.includes(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
+                      aria-label={favoriteIdSet.has(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleFavoriteProduct(p.id);
                     }}
                   >
-                    {favoriteIds.includes(p.id) ? "★" : "☆"}
+                    {favoriteIdSet.has(p.id) ? "★" : "☆"}
                   </button>
                   <button type="button" onClick={() => openProduct(p)} className="text-left">
                     <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-slate-950">{p.name}</p>

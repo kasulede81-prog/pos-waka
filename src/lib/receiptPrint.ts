@@ -16,6 +16,7 @@ export type ReceiptDisplayLine = {
   quantityLabel: string;
   unitPriceUgx: number;
   lineTotalUgx: number;
+  showCalculation: boolean;
 };
 
 export type ReceiptDisplayData = {
@@ -57,6 +58,9 @@ function formatTimeUg(value: string): string {
 }
 
 export function buildReceiptNumberForSale(sale: Sale, allSales: Sale[]): string {
+  if (Number.isFinite(sale.receiptSeq) && (sale.receiptSeq ?? 0) > 0) {
+    return String(Math.floor(sale.receiptSeq ?? 0)).padStart(3, "0");
+  }
   const dayKey = dateKeyKampala(sale.createdAt);
   const daySales = allSales
     .filter((s) => dateKeyKampala(s.createdAt) === dayKey)
@@ -108,19 +112,49 @@ export function buildReceiptDisplayData(params: {
   const lines: ReceiptDisplayLine[] = sale.lines
     .filter((ln) => !ln.voided)
     .map((ln) => {
-      const baseUnit = productById?.get(ln.productId)?.baseUnit?.trim() || "item";
+      const product = productById?.get(ln.productId);
+      const baseUnit = product?.baseUnit?.trim() || "item";
+      const buyingUnit = product?.buyingUnit?.trim();
+      const conversionRate = Math.max(0, Number(product?.conversionRate ?? 0));
+      const canRenderAsPack =
+        !!buyingUnit &&
+        conversionRate > 1 &&
+        Number.isFinite(ln.quantity) &&
+        ln.quantity > 0 &&
+        Math.abs(Math.round((ln.quantity / conversionRate) * 1000) / 1000 - ln.quantity / conversionRate) < 0.0001;
+      if (canRenderAsPack) {
+        const packs = ln.quantity / conversionRate;
+        const whole = Math.abs(packs - Math.round(packs)) < 0.0001 ? Math.round(packs) : packs;
+        const label = `${whole.toLocaleString()} ${buyingUnit}${whole === 1 ? "" : "s"} of ${ln.name}`;
+        return {
+          name: ln.name,
+          quantityLabel: label,
+          unitPriceUgx: ln.unitPriceUgx,
+          lineTotalUgx: ln.lineTotalUgx,
+          showCalculation: false,
+        };
+      }
       const quantityLabel = `${ln.quantity.toLocaleString()} ${baseUnit}`;
       return {
         name: ln.name,
         quantityLabel,
         unitPriceUgx: ln.unitPriceUgx,
         lineTotalUgx: ln.lineTotalUgx,
+        showCalculation: true,
       };
     });
   const subtotalUgx = Math.max(0, sale.subtotalUgx);
   const discountUgx = Math.max(0, sale.discountTotalUgx ?? subtotalUgx - sale.totalUgx);
-  const paidUgx = Math.max(0, sale.cashPaidUgx);
-  const changeUgx = Math.max(0, paidUgx - sale.totalUgx);
+  const paidUgx = Math.max(
+    0,
+    Number.isFinite(sale.amountPaidUgx) ? Math.floor(sale.amountPaidUgx ?? 0) : sale.cashPaidUgx,
+  );
+  const changeUgx = Math.max(
+    0,
+    Number.isFinite(sale.changeGivenUgx)
+      ? Math.floor(sale.changeGivenUgx ?? 0)
+      : paidUgx - sale.totalUgx,
+  );
   return {
     shopName,
     shopAddress: shopAddress?.trim() || null,
@@ -202,8 +236,12 @@ export function buildSaleReceiptText(params: {
   lines.push("");
   lines.push("Items");
   for (const ln of display.lines) {
-    lines.push(ln.name);
-    lines.push(`${ln.quantityLabel} x ${ln.unitPriceUgx.toLocaleString()} UGX = ${ln.lineTotalUgx.toLocaleString()} UGX`);
+    if (ln.showCalculation) {
+      lines.push(ln.name);
+      lines.push(`${ln.quantityLabel} x ${ln.unitPriceUgx.toLocaleString()} UGX = ${ln.lineTotalUgx.toLocaleString()} UGX`);
+    } else {
+      lines.push(`${ln.quantityLabel} — ${ln.lineTotalUgx.toLocaleString()} UGX`);
+    }
   }
   lines.push("");
   lines.push(`Subtotal: UGX ${display.subtotalUgx.toLocaleString()}`);
@@ -234,8 +272,11 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
     .map(
       (ln) => `
         <div class="line">
-          <div class="line-name">${esc(ln.name)}</div>
-          <div class="line-meta">${esc(ln.quantityLabel)} x ${fmt(ln.unitPriceUgx)} = <strong>${fmt(ln.lineTotalUgx)}</strong></div>
+          ${
+            ln.showCalculation
+              ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta">${esc(ln.quantityLabel)} x ${fmt(ln.unitPriceUgx)} = <strong>${fmt(ln.lineTotalUgx)}</strong></div>`
+              : `<div class="line-name">${esc(ln.quantityLabel)} — <strong>${fmt(ln.lineTotalUgx)}</strong></div>`
+          }
         </div>`,
     )
     .join("");

@@ -296,6 +296,8 @@ export type SaleLine = {
 
 export type Sale = {
   id: string;
+  /** 1-based receipt sequence for this Kampala day (001, 002...). */
+  receiptSeq?: number;
   lines: SaleLine[];
   subtotalUgx: number;
   totalUgx: number;
@@ -316,6 +318,10 @@ export type Sale = {
   soldByUserId?: string | null;
   /** Payment mode selected at checkout. */
   paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit";
+  /** What customer actually handed over (when captured at checkout). */
+  amountPaidUgx?: number | null;
+  /** Change returned to customer at checkout (when captured). */
+  changeGivenUgx?: number | null;
 };
 
 export type DebtPayment = {
