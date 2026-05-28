@@ -2051,16 +2051,16 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   });
   await restoreDraftSaleFromDisk();
   usePosStore.getState().pruneExpiredSales();
+  const { readStaffSession } = await import("../lib/staffOfflineAuth");
+  if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
+    usePosStore.getState().switchStaffAccount(null);
+  }
 
   if (hasSupabaseConfig && key.startsWith("sb:")) {
     const { supabase: sb } = await import("../lib/supabase");
     if (!sb) return;
     const { data: sessionData } = await sb.auth.getSession();
     if (sessionData.session?.user) {
-      const { readStaffSession } = await import("../lib/staffOfflineAuth");
-      if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
-        usePosStore.getState().switchStaffAccount(null);
-      }
       const { hydrateLocalShopProfileFromCloud } = await import("../lib/businessProfile");
       await hydrateLocalShopProfileFromCloud().catch(() => undefined);
       const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");

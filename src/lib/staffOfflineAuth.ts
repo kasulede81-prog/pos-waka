@@ -132,13 +132,22 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
   const snap = (await db.get("kv", `${shop.accountKey}::snapshot`)) as SnapshotLike | undefined;
   const prefs = snap?.preferences;
   const staffRows = prefs?.staffAccounts ?? [];
-  const found = staffRows.find(
+  const foundForRole = staffRows.find(
     (s) =>
       s.active &&
       staffLoginRoleMatches(s.role, input.role) &&
       identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier) &&
       secretMatches({ pin: s.pin, password: s.password, pinHash: s.pinHash, passwordHash: s.passwordHash }, secret),
   );
+  // Keep role for fast selection, but don't block login when role is picked wrong.
+  const found =
+    foundForRole ??
+    staffRows.find(
+      (s) =>
+        s.active &&
+        identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier) &&
+        secretMatches({ pin: s.pin, password: s.password, pinHash: s.pinHash, passwordHash: s.passwordHash }, secret),
+    );
 
   if (!found) {
     throw new Error("Invalid staff credentials.");
@@ -165,13 +174,17 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
       PENDING_STAFF_KEY,
       JSON.stringify({ accountKey: result.accountKey, staffId: result.staffId }),
     );
-    writeStaffSession({
-      accountKey: result.accountKey,
-      businessName: result.businessName,
-      staffId: result.staffId,
-      staffName: result.staffName,
-      role: result.role,
-    });
+    if (input.rememberDevice) {
+      writeStaffSession({
+        accountKey: result.accountKey,
+        businessName: result.businessName,
+        staffId: result.staffId,
+        staffName: result.staffName,
+        role: result.role,
+      });
+    } else {
+      clearStaffSession();
+    }
   }
 
   return result;

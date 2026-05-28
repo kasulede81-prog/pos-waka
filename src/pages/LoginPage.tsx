@@ -314,6 +314,7 @@ export function LoginPage({
                   );
                 })}
               </div>
+              <p className="mt-1 text-xs font-medium text-stone-500">If role is wrong, we still try your name + PIN.</p>
             </div>
 
             <label className="block text-sm font-bold text-stone-800">
