@@ -3,7 +3,6 @@ import type { Permission } from "../types";
 import { hasPermission } from "../lib/permissions";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 
 type Props = {
   permission: Permission;
@@ -13,7 +12,7 @@ type Props = {
 export function RoleProtectedRoute({ permission, children }: Props) {
   const actor = useSessionActor();
   const location = useLocation();
-  const { snapshot, authMode, loading } = useSubscription();
+  const { authMode, loading } = useSubscription();
 
   if (!hasPermission(actor.role, permission)) {
     return <Navigate to="/" replace state={{ from: location.pathname }} />;
@@ -25,10 +24,6 @@ export function RoleProtectedRoute({ permission, children }: Props) {
         Loading…
       </div>
     );
-  }
-
-  if (!hasEffectivePermission(actor.role, permission, snapshot, authMode)) {
-    return <Navigate to="/upgrade" replace state={{ from: location.pathname, needsPlan: true }} />;
   }
 
   return <>{children}</>;

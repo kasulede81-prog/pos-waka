@@ -22,6 +22,7 @@ import { FloatingSupportFab } from "../support/FloatingSupportFab";
 import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { hashStaffSecret, normalizePin } from "../../lib/staffSecret";
+import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 
 type Props = {
   lang: Language;
@@ -60,7 +61,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
-  const { authMode: subAuthMode } = useSubscription();
+  const { authMode: subAuthMode, snapshot } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
   const beginShift = usePosStore((s) => s.beginShift);
@@ -96,6 +97,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     () => resolveSessionActor({ mode: authMode, user, email, preferences, staffSession }),
     [authMode, user, email, preferences, staffSession],
   );
+  const isVip = resolveEffectivePlanTier(snapshot) === "waka_plus";
+  const canSwitchUser = isVip;
 
   useLayoutEffect(() => {
     usePosStore.getState().setSessionActor(actor);
@@ -197,17 +200,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     >
                       {t(lang, "lockPos")}
                     </button>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
-                      onClick={() => {
-                        setPosLocked(true);
-                        setMenuOpen(false);
-                      }}
-                    >
-                      {t(lang, "switchUser")}
-                    </button>
+                    {canSwitchUser ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                        onClick={() => {
+                          setPosLocked(true);
+                          setMenuOpen(false);
+                        }}
+                      >
+                        {t(lang, "switchUser")}
+                      </button>
+                    ) : null}
                     {subAuthMode === "supabase" ? (
                       <button
                         type="button"
@@ -354,7 +359,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
               <p className="text-2xl font-black text-stone-900">{t(lang, "lockPosTitle")}</p>
               <p className="mt-1 text-sm text-stone-600">{t(lang, "lockPosSub")}</p>
-              {(preferences.staffAccounts ?? []).length > 0 ? (
+              {canSwitchUser && (preferences.staffAccounts ?? []).length > 0 ? (
                 <label className="mt-4 block text-sm font-bold text-slate-700">
                   {t(lang, "switchUser")}
                   <select

@@ -3,7 +3,7 @@ import { hasPermission } from "./permissions";
 
 export type SubscriptionPlanCode = "free" | "starter" | "business" | "waka_plus";
 
-export const FREE_PLAN_PRODUCT_LIMIT = 10;
+export const FREE_PLAN_PRODUCT_LIMIT = 5;
 
 /** Row shape returned from Supabase (plan joined separately). */
 export type RemoteSubscriptionRow = {
@@ -37,7 +37,6 @@ const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
   "owner.dashboard",
   "owner.activity",
   "owner.cash_history",
-  "reports.profit",
 ]);
 
 /** Permissions that need Waka Plus (reserved for branch / heavy analytics). */

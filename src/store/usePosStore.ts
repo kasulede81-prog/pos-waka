@@ -233,6 +233,7 @@ type PosState = {
     permissions?: Permission[];
   }) => { ok: boolean; errorKey?: string; id?: string };
   updateStaffAccount: (id: string, patch: { name?: string; username?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
+  removeStaffAccount: (id: string) => void;
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
   switchStaffAccount: (id: string | null) => void;
   setPosLocked: (locked: boolean) => void;
@@ -729,6 +730,16 @@ export const usePosStore = create<PosState>((set, get) => {
               }
             : a,
         ),
+      },
+    }));
+  },
+
+  removeStaffAccount: (id) => {
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        staffAccounts: (s.preferences.staffAccounts ?? []).filter((a) => a.id !== id),
+        activeStaffId: s.preferences.activeStaffId === id ? null : s.preferences.activeStaffId,
       },
     }));
   },

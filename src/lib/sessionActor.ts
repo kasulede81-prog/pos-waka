@@ -39,9 +39,13 @@ export function resolveSessionActor(params: {
   const override = params.preferences.devRoleOverride;
   const simulatedRole: UserRole =
     devAllowed && override && canUseDevRoleSimulator(authRole) ? override : authRole;
-  /** Owner switched to a staff profile on this device (lock screen / switch user). */
+  /**
+   * Owner switched to a staff profile on this device (lock screen / switch user).
+   * For Supabase-authenticated sessions, do NOT inherit activeStaffId automatically:
+   * stale local staff selections can block owner/admin Back Office access.
+   */
   const activeStaff =
-    authRole === "owner" && params.preferences.activeStaffId
+    authRole === "owner" && params.mode === "local" && params.preferences.activeStaffId
       ? (params.preferences.staffAccounts ?? []).find(
           (s) => s.id === params.preferences.activeStaffId && s.active,
         )

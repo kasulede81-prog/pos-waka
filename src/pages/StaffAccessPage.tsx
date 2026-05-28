@@ -20,6 +20,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const staff = usePosStore((s) => s.preferences.staffAccounts ?? []);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
   const updateStaffAccount = usePosStore((s) => s.updateStaffAccount);
+  const removeStaffAccount = usePosStore((s) => s.removeStaffAccount);
   const resetStaffSecret = usePosStore((s) => s.resetStaffSecret);
 
   const [name, setName] = useState("");
@@ -275,6 +276,17 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
                     }}
                   >
                     {t(lang, "staffResetPassword")}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border-2 border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700"
+                    onClick={() => {
+                      if (!window.confirm(t(lang, "staffDeleteConfirm"))) return;
+                      removeStaffAccount(s.id);
+                      if (manageId === s.id) setManageId(null);
+                    }}
+                  >
+                    {t(lang, "staffDelete")}
                   </button>
                 </div>
               ) : null}
