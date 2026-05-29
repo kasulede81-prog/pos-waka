@@ -965,7 +965,10 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {draftLines.length > 0 && !saleCheckoutMinimized ? (
         <div
-          className="waka-overlay-full waka-overlay-clear-nav fixed inset-0 flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
+          className="waka-overlay-full fixed inset-0 z-[55] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
+          style={{
+            paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
+          }}
           role="dialog"
           aria-modal
           aria-labelledby="pos-checkout-title"
@@ -1129,7 +1132,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </>
             ) : null}
           </div>
-          <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+          <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
             <button
               type="button"
               onClick={finishSale}
@@ -1161,12 +1164,10 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {sheetOpen && selected && (
         <div
-          className="waka-overlay-clear-nav fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
+          className="fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
           style={{
             paddingBottom:
-              keyboardInset > 0
-                ? `max(${keyboardInset}px, calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom)))`
-                : undefined,
+              keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
           }}
           role="dialog"
           aria-modal
@@ -1292,7 +1293,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
       {receiptSale && receiptPlain && receiptDisplay ? (
         <div
-          className="waka-overlay-clear-nav fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
+          className="fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
           style={{ zIndex: "var(--waka-z-pos-receipt)" }}
           role="dialog"
           aria-modal

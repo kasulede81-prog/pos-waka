@@ -43,6 +43,7 @@ import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { partitionForArchive } from "../lib/recordArchive";
+import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
 import type { PersistedSnapshot } from "../offline/localDb";
@@ -2122,28 +2123,111 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
 }
 
 const SALES_HYDRATE_BATCH = isNativeApp() ? 50 : 120;
+const SALES_RESTORE_BATCH = isNativeApp() ? 12 : 60;
+const ARCHIVED_RESTORE_BATCH = isNativeApp() ? 12 : 60;
 
-async function hydrateSalesBatched(raw: Sale[]): Promise<void> {
+/** Stop an in-progress backup restore (import / local copy). */
+export function cancelBackupRestoreInProgress(): void {
+  cancelBackupRestoreSession();
+}
+
+async function hydrateSalesBatched(
+  raw: Sale[],
+  opts?: { batchSize?: number; sessionId?: number; onProgress?: (percent: number) => void },
+): Promise<void> {
   if (raw.length === 0) {
     usePosStore.setState({ sales: [] });
+    opts?.onProgress?.(100);
     return;
   }
+  const batch = opts?.batchSize ?? SALES_HYDRATE_BATCH;
   const normalized: Sale[] = [];
-  for (let i = 0; i < raw.length; i += SALES_HYDRATE_BATCH) {
-    const chunk = raw.slice(i, i + SALES_HYDRATE_BATCH);
+  for (let i = 0; i < raw.length; i += batch) {
+    assertBackupRestoreNotAborted(opts?.sessionId);
+    const chunk = raw.slice(i, i + batch);
     normalized.push(...chunk.map((s) => normalizeSale(s as Sale)));
-    if (i + SALES_HYDRATE_BATCH < raw.length) {
+    opts?.onProgress?.(Math.min(100, Math.round(((i + chunk.length) / raw.length) * 100)));
+    if (i + batch < raw.length) {
       await yieldUiTick();
     }
   }
   usePosStore.setState({ sales: normalized });
 }
 
+async function hydrateArchivedSalesBatched(
+  raw: Sale[],
+  opts?: { batchSize?: number; sessionId?: number; onProgress?: (percent: number) => void },
+): Promise<void> {
+  if (raw.length === 0) {
+    usePosStore.setState({ archivedSales: [] });
+    opts?.onProgress?.(100);
+    return;
+  }
+  const batch = opts?.batchSize ?? ARCHIVED_RESTORE_BATCH;
+  const normalized: Sale[] = [];
+  for (let i = 0; i < raw.length; i += batch) {
+    assertBackupRestoreNotAborted(opts?.sessionId);
+    const chunk = raw.slice(i, i + batch);
+    normalized.push(...chunk.map((s) => normalizeSale(s as Sale)));
+    opts?.onProgress?.(Math.min(100, Math.round(((i + chunk.length) / raw.length) * 100)));
+    if (i + batch < raw.length) {
+      await yieldUiTick();
+    }
+  }
+  usePosStore.setState({ archivedSales: normalized });
+}
+
+function reportRestoreProgress(
+  onProgress: ((percent: number) => void) | undefined,
+  sliceStart: number,
+  sliceEnd: number,
+  innerPct: number,
+): void {
+  if (!onProgress) return;
+  const span = sliceEnd - sliceStart;
+  onProgress(sliceStart + Math.round((innerPct / 100) * span));
+}
+
+/** Write current in-memory store to IndexedDB after a restore (can run after UI unblocks). */
+export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise<void> {
+  assertBackupRestoreNotAborted(sessionId);
+  await yieldUiTick();
+  assertBackupRestoreNotAborted(sessionId);
+  const s = usePosStore.getState();
+  await writeSnapshot(
+    {
+      products: s.products,
+      customers: s.customers,
+      sales: s.sales,
+      preferences: s.preferences,
+      debtPayments: s.debtPayments,
+      dayCloses: s.dayCloses,
+      auditLogs: s.auditLogs,
+      suppliers: s.suppliers,
+      purchases: s.purchases,
+      supplierPayments: s.supplierPayments,
+      stockMovements: s.stockMovements,
+      voidRecords: s.voidRecords,
+      returnRecords: s.returnRecords,
+      archivedSales: s.archivedSales,
+      archivedAuditLogs: s.archivedAuditLogs,
+      archivedDayCloses: s.archivedDayCloses,
+      archivedVoidRecords: s.archivedVoidRecords,
+      archivedReturnRecords: s.archivedReturnRecords,
+    },
+    { skipLastGood: true },
+  );
+}
+
 /**
- * Restore a full backup without freezing the UI (batched sales + awaited disk write).
- * Used when importing a file from another device.
+ * Restore a full backup into memory without blocking the UI (batched sales).
+ * Call persistRestoredSnapshotToDisk() afterward to save to the phone.
  */
-export async function applyRestoredSnapshotFromBackup(snap: PersistedSnapshot): Promise<void> {
+export async function applyRestoredSnapshotFromBackup(
+  snap: PersistedSnapshot,
+  opts?: { sessionId?: number; onProgress?: (percent: number) => void },
+): Promise<void> {
+  const sessionId = opts?.sessionId;
   const release = suspendStorePersist();
   if (persistTimer) {
     clearTimeout(persistTimer);
@@ -2155,6 +2239,7 @@ export async function applyRestoredSnapshotFromBackup(snap: PersistedSnapshot): 
   }
 
   try {
+    assertBackupRestoreNotAborted(sessionId);
     const preferences = mergePreferencesFromPartial({ preferences: snap.preferences });
 
     usePosStore.getState().hydrateEssentials({
@@ -2162,8 +2247,10 @@ export async function applyRestoredSnapshotFromBackup(snap: PersistedSnapshot): 
       customers: (snap.customers ?? []).map(normalizeCustomer),
       preferences,
     });
+    reportRestoreProgress(opts?.onProgress, 0, 8, 100);
     await yieldUiTick();
 
+    assertBackupRestoreNotAborted(sessionId);
     usePosStore.getState().hydrateRemainder({
       debtPayments: snap.debtPayments ?? [],
       dayCloses: snap.dayCloses ?? [],
@@ -2174,42 +2261,30 @@ export async function applyRestoredSnapshotFromBackup(snap: PersistedSnapshot): 
       stockMovements: (snap.stockMovements ?? []).map(normalizeStockMovement),
       voidRecords: snap.voidRecords ?? [],
       returnRecords: snap.returnRecords ?? [],
-      archivedSales: (snap.archivedSales ?? []).map(normalizeSale),
+      archivedSales: [],
       archivedAuditLogs: snap.archivedAuditLogs ?? [],
       archivedDayCloses: snap.archivedDayCloses ?? [],
       archivedVoidRecords: snap.archivedVoidRecords ?? [],
       archivedReturnRecords: snap.archivedReturnRecords ?? [],
     });
+    reportRestoreProgress(opts?.onProgress, 8, 12, 100);
     await yieldUiTick();
 
-    await hydrateSalesBatched(snap.sales);
+    await hydrateSalesBatched(snap.sales, {
+      sessionId,
+      batchSize: SALES_RESTORE_BATCH,
+      onProgress: (p) => reportRestoreProgress(opts?.onProgress, 12, 82, p),
+    });
+
+    assertBackupRestoreNotAborted(sessionId);
+    await hydrateArchivedSalesBatched(snap.archivedSales ?? [], {
+      sessionId,
+      batchSize: ARCHIVED_RESTORE_BATCH,
+      onProgress: (p) => reportRestoreProgress(opts?.onProgress, 82, 100, p),
+    });
+
     void clearPersistedDraft();
     await yieldUiTick();
-
-    const s = usePosStore.getState();
-    await writeSnapshot(
-      {
-        products: s.products,
-        customers: s.customers,
-        sales: s.sales,
-        preferences: s.preferences,
-        debtPayments: s.debtPayments,
-        dayCloses: s.dayCloses,
-        auditLogs: s.auditLogs,
-        suppliers: s.suppliers,
-        purchases: s.purchases,
-        supplierPayments: s.supplierPayments,
-        stockMovements: s.stockMovements,
-        voidRecords: s.voidRecords,
-        returnRecords: s.returnRecords,
-        archivedSales: s.archivedSales,
-        archivedAuditLogs: s.archivedAuditLogs,
-        archivedDayCloses: s.archivedDayCloses,
-        archivedVoidRecords: s.archivedVoidRecords,
-        archivedReturnRecords: s.archivedReturnRecords,
-      },
-      { skipLastGood: true },
-    );
   } finally {
     release();
   }
@@ -2326,6 +2401,8 @@ async function runPostBootstrapTasks(): Promise<void> {
   const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
   scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
   scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
+  const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
+  void uploadShopCloudSnapshot().catch(() => false);
 }
 
 function hydrateEssentialsFromSnap(snap: Partial<PersistedSnapshot>): void {

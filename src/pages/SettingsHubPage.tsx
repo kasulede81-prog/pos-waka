@@ -1,5 +1,5 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -52,6 +52,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubPin")}
             subtitle={t(lang, "settingsHubPinSub")}
             Icon={KeyRound}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/password"
+            title={t(lang, "settingsHubPassword")}
+            subtitle={t(lang, "settingsHubPasswordSub")}
+            Icon={Lock}
           />
         ) : null}
         <OfficeNavCard

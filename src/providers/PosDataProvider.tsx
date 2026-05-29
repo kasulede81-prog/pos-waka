@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
 import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { hideNativeSplashWhenReady } from "../lib/nativeSplash";
+import { hasSupabaseConfig } from "../lib/supabase";
+import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { t } from "../lib/i18n";
 import type { Language } from "../types";
@@ -17,13 +19,15 @@ type Props = {
   accountKey: string | null;
 };
 
-function LoadingSkeleton({ lang }: { lang: Language }) {
+function LoadingSkeleton({ lang, cloudRestore }: { lang: Language; cloudRestore?: boolean }) {
   return (
     <div className="flex min-h-dvh flex-col items-center bg-[#fffaf5] px-5 pt-[max(2rem,env(safe-area-inset-top))]">
       <WakaPosLogo size="splash" className="mb-8 mt-4" />
       <div className="mx-auto w-full max-w-md space-y-6">
         <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
-        <p className="text-center text-xs font-medium text-stone-500">{t(lang, "openingShopLocalHint")}</p>
+        <p className="text-center text-xs font-medium text-stone-500">
+          {cloudRestore ? t(lang, "openingShopCloudHint") : t(lang, "openingShopLocalHint")}
+        </p>
         <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
         <div className="space-y-3 rounded-3xl border border-stone-100 bg-white/90 p-5 shadow-waka-sm">
           <div className="h-14 w-full rounded-2xl waka-skeleton-bar" />
@@ -42,6 +46,7 @@ function isStoreReadyForAccount(accountKey: string | null): boolean {
 export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
   const [ready, setReady] = useState(() => !accountKey || isStoreReadyForAccount(accountKey));
   const [error, setError] = useState<string | null>(null);
+  const [cloudRestore, setCloudRestore] = useState(false);
   const bootGenRef = useRef(0);
 
   useEffect(() => {
@@ -71,8 +76,16 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
       .catch(() => {
         if (bootGenRef.current === gen) setError("load");
       })
-      .finally(() => {
+      .finally(async () => {
         if (bootGenRef.current !== gen) return;
+        const shouldPullCloud =
+          hasSupabaseConfig && accountKey.startsWith("sb:") && isLocalShopDataEmpty();
+        if (shouldPullCloud) {
+          setCloudRestore(true);
+          const { hydrateAccountFromCloud } = await import("../lib/postAuthCloudHydrate");
+          await hydrateAccountFromCloud({ forcePull: true }).catch(() => undefined);
+          setCloudRestore(false);
+        }
         setReady(true);
         void hideNativeSplashWhenReady();
       });
@@ -95,7 +108,7 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
   }
 
   if (!ready) {
-    return <LoadingSkeleton lang={lang} />;
+    return <LoadingSkeleton lang={lang} cloudRestore={cloudRestore} />;
   }
 
   return <>{children}</>;

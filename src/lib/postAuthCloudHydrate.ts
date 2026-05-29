@@ -1,17 +1,56 @@
 import { Capacitor } from "@capacitor/core";
+import { getDeviceOnline } from "./deviceOnline";
 import { hasSupabaseConfig } from "./supabase";
+import { usePosStore } from "../store/usePosStore";
+import { isLocalShopDataEmpty, restoreShopFromCloudSnapshot, uploadShopCloudSnapshot } from "./cloudSnapshotSync";
 
-/** After sign-in on a new device, pull shop profile and inventory from Supabase. */
-export async function hydrateAccountFromCloud(opts?: { forcePull?: boolean }): Promise<void> {
+async function waitForPosStoreHydrated(timeoutMs = 30_000): Promise<boolean> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (usePosStore.getState()._hydrated) return true;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return usePosStore.getState()._hydrated;
+}
+
+/**
+ * After sign-in on a new device: wait for local bootstrap, restore full cloud snapshot when empty,
+ * then merge live rows (products/sales/customers) from Supabase tables.
+ */
+export async function hydrateAccountFromCloud(opts?: {
+  forcePull?: boolean;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
   if (!hasSupabaseConfig) return;
+
+  await waitForPosStoreHydrated();
 
   const { hydrateLocalShopProfileFromCloud } = await import("./businessProfile");
   await hydrateLocalShopProfileFromCloud().catch(() => undefined);
 
-  const { pullCloudAndMergeIntoStore, syncShopWithCloud } = await import("../offline/cloudSync");
-  if (opts?.forcePull || Capacitor.isNativePlatform()) {
+  const localEmpty = isLocalShopDataEmpty();
+
+  if (localEmpty) {
+    const restored = await restoreShopFromCloudSnapshot(opts?.onProgress).catch(() => false);
+    if (restored) {
+      const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
+      await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
+      return;
+    }
+  }
+
+  const { pullCloudAndMergeIntoStore, syncShopWithCloud, pushShopPendingToCloud } = await import(
+    "../offline/cloudSync",
+  );
+
+  if (opts?.forcePull || Capacitor.isNativePlatform() || localEmpty) {
     await pullCloudAndMergeIntoStore().catch(() => undefined);
   } else {
     await syncShopWithCloud({ pull: true }).catch(() => undefined);
+  }
+
+  if (getDeviceOnline()) {
+    await pushShopPendingToCloud().catch(() => undefined);
+    await uploadShopCloudSnapshot().catch(() => false);
   }
 }

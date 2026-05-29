@@ -108,6 +108,28 @@ set
 
 3. Re-sign-in if needed. The client calls `waka_internal_me()`; RLS and SECURITY DEFINER RPCs enforce access — **do not rely on env allowlists alone in production.**
 
+## Cloud shop backup (new phone restore)
+
+Migration **052** adds `shop_cloud_snapshots`: the app uploads a full shop snapshot after sync so owners can sign in on a **new phone** and recover products, sales, settings, and archived data from Waka storage (not only a JSON file).
+
+Requires migration **052** applied and the old phone to have synced while online recently.
+
+## Edge functions (support tools)
+
+Deploy after migrations **049–051** so internal admin can reset owner passwords and permanently delete shop accounts:
+
+```bash
+supabase link --project-ref <your-project-ref>
+npm run supabase:deploy:admin
+```
+
+Functions:
+
+| Function | Purpose |
+|----------|---------|
+| `admin-set-owner-password` | Support/super admin sets owner login password (no email link) |
+| `admin-permanently-delete-shop-account` | Super admin deletes org data + auth user |
+
 ## Troubleshooting
 
 - **“permission denied for table …”** after migrations: ensure **010_grants.sql** ran after RLS.

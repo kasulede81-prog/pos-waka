@@ -1,6 +1,6 @@
-import { useDeferredValue, useMemo, useState } from "react";
-import { useDeferredSales } from "../hooks/useDeferredSales";
-import { useReportingSales, useReportingAuditLogs } from "../hooks/useReportingSales";
+import { useMemo, useState } from "react";
+import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Link } from "react-router-dom";
 import { PageBackBar } from "../components/layout/PageBackBar";
@@ -54,17 +54,12 @@ function trustLabel(lang: Language, level: "good" | "warning" | "risky"): string
 
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
-  const salesDeferred = useDeferredSales();
-  const salesWithArchive = useReportingSales(includeArchived);
-  const sales = includeArchived ? salesWithArchive : salesDeferred;
-  const liveSales = usePosStore((s) => s.sales);
+  const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
-  const auditLogsActive = usePosStore((s) => s.auditLogs);
-  const auditLogsWithArchive = useReportingAuditLogs(includeArchived);
-  const auditLogs = includeArchived ? auditLogsWithArchive : auditLogsActive;
+  const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const voidRecords = usePosStore((s) => s.voidRecords);
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
   const returnRecords = usePosStore((s) => s.returnRecords);
@@ -72,9 +67,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const allVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
   const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
-
-  const deferredAuditLogs = useDeferredValue(auditLogs);
-  const metricsPending = liveSales !== sales || auditLogs !== deferredAuditLogs;
 
   const [waCopied, setWaCopied] = useState(false);
 
@@ -103,10 +95,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   const todayDiscountEvents = useMemo(
     () =>
-      deferredAuditLogs.filter(
+      auditLogs.filter(
         (e) => e.action === "discount_given" && dateKeyKampala(e.at) === todayKey,
       ),
-    [deferredAuditLogs, todayKey],
+    [auditLogs, todayKey],
   );
 
   const stats = useMemo(() => {
@@ -194,13 +186,13 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       computeExtendedOwnerAlerts({
         products,
         dayCloses,
-        auditLogs: deferredAuditLogs,
+        auditLogs: auditLogs,
         preferences,
         todayDebtUgx: stats.debtTodayUgx,
         sales,
         todayKey,
       }),
-    [products, dayCloses, deferredAuditLogs, preferences, stats.debtTodayUgx, sales, todayKey],
+    [products, dayCloses, auditLogs, preferences, stats.debtTodayUgx, sales, todayKey],
   );
 
   const dangerCount = ownerAlertsResolved.filter((a) => a.tone === "danger").length;
@@ -243,8 +235,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const waLine = useMemo(() => buildWhatsAppOwnerSummaryLine(lang, summaryInput), [lang, summaryInput]);
 
   const trustRows = useMemo(
-    () => computeCashierTrustRows(lang, today, deferredAuditLogs, todayKey),
-    [lang, today, deferredAuditLogs, todayKey],
+    () => computeCashierTrustRows(lang, today, auditLogs, todayKey),
+    [lang, today, auditLogs, todayKey],
   );
   const activeShift = useMemo(() => shifts.find((s) => !s.endAt) ?? null, [shifts]);
 
@@ -275,14 +267,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
-      {metricsPending ? (
-        <p
-          className="rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-center text-sm font-bold text-waka-900"
-          role="status"
-        >
-          {t(lang, "ownerDashboardUpdating")}
-        </p>
-      ) : null}
       <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
       <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-waka-50/40 p-6 shadow-sm">
         <div className="flex flex-wrap items-start gap-4">

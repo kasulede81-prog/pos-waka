@@ -468,22 +468,29 @@ export async function pullShopDataFromCloud(): Promise<{
     .map((r) => rowToCustomer(r as Record<string, unknown>))
     .filter((c): c is Customer => c != null);
 
-  const { data: saleRows, error: sErr } = await supabase
-    .from("sales")
-    .select("*, sale_line_items(*)")
-    .eq("shop_id", ctx.shopId)
-    .in("status", ["completed", "draft"])
-    .order("created_at", { ascending: false })
-    .limit(3000);
-  if (sErr) return null;
-
   const sales: Sale[] = [];
-  for (const raw of saleRows ?? []) {
-    const row = raw as Record<string, unknown>;
-    const items = (row.sale_line_items as Record<string, unknown>[] | null) ?? [];
-    const lines = items.map((ln) => rowToSaleLine(ln));
-    const sale = rowToSale(row, lines);
-    if (sale) sales.push(sale);
+  const pageSize = 800;
+  let offset = 0;
+  for (let page = 0; page < 20; page++) {
+    const { data: saleRows, error: sErr } = await supabase
+      .from("sales")
+      .select("*, sale_line_items(*)")
+      .eq("shop_id", ctx.shopId)
+      .in("status", ["completed", "draft"])
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (sErr) return null;
+    const batch = saleRows ?? [];
+    if (batch.length === 0) break;
+    for (const raw of batch) {
+      const row = raw as Record<string, unknown>;
+      const items = (row.sale_line_items as Record<string, unknown>[] | null) ?? [];
+      const lines = items.map((ln) => rowToSaleLine(ln));
+      const sale = rowToSale(row, lines);
+      if (sale) sales.push(sale);
+    }
+    if (batch.length < pageSize) break;
+    offset += pageSize;
   }
 
   void supabase
@@ -507,12 +514,49 @@ export async function pullShopDataFromCloud(): Promise<{
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
   const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
+  const { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk } = await import(
+    "../store/usePosStore",
+  );
   if (!hasSupabaseConfig) return false;
   const cloud = await pullShopDataFromCloud();
   if (!cloud) return false;
 
   const state = usePosStore.getState();
   if (!state._hydrated) return false;
+
+  const hasCloud =
+    cloud.products.length > 0 || cloud.sales.length > 0 || cloud.customers.length > 0;
+  const localEmpty =
+    state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
+
+  if (!hasCloud && localEmpty) return true;
+
+  if (localEmpty && hasCloud) {
+    await applyRestoredSnapshotFromBackup({
+      products: cloud.products,
+      customers: cloud.customers,
+      sales: cloud.sales,
+      preferences: state.preferences,
+      debtPayments: state.debtPayments,
+      dayCloses: state.dayCloses,
+      auditLogs: state.auditLogs,
+      suppliers: state.suppliers,
+      purchases: state.purchases,
+      supplierPayments: state.supplierPayments,
+      stockMovements: state.stockMovements,
+      voidRecords: state.voidRecords,
+      returnRecords: state.returnRecords,
+      archivedSales: state.archivedSales,
+      archivedAuditLogs: state.archivedAuditLogs,
+      archivedDayCloses: state.archivedDayCloses,
+      archivedVoidRecords: state.archivedVoidRecords,
+      archivedReturnRecords: state.archivedReturnRecords,
+      updatedAt: new Date().toISOString(),
+    });
+    await persistRestoredSnapshotToDisk();
+    await applyShopRecoverySignalsForCurrentShop();
+    return true;
+  }
 
   const products = mergeById(state.products, cloud.products, (a, b) =>
     newer({ ...a, updatedAt: a.updatedAt }, { ...b, updatedAt: b.updatedAt }),
@@ -523,13 +567,6 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
   const sales = mergeById(state.sales, cloud.sales, (a, b) =>
     newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
   );
-
-  const hasCloud =
-    cloud.products.length > 0 || cloud.sales.length > 0 || cloud.customers.length > 0;
-  const localEmpty =
-    state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
-
-  if (!hasCloud && localEmpty) return true;
 
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
@@ -551,6 +588,11 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
       stockMovements: next.stockMovements,
       voidRecords: next.voidRecords,
       returnRecords: next.returnRecords,
+      archivedSales: next.archivedSales,
+      archivedAuditLogs: next.archivedAuditLogs,
+      archivedDayCloses: next.archivedDayCloses,
+      archivedVoidRecords: next.archivedVoidRecords,
+      archivedReturnRecords: next.archivedReturnRecords,
     });
   } finally {
     release();
@@ -618,6 +660,10 @@ export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
     opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();
   const pulled = doPull ? await pullCloudAndMergeIntoStore() : false;
   const { push, queueFailed } = await pushShopPendingToCloud();
+  if (getDeviceOnline() && push.fail === 0) {
+    const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
+    void uploadShopCloudSnapshot().catch(() => false);
+  }
   return { pulled, push, queueFailed };
 }
 

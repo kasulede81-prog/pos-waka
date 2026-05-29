@@ -3,15 +3,16 @@ import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 type Props = ComponentPropsWithoutRef<"div"> & {
   children: ReactNode;
+  /** When false, do not reserve space for the bottom tab bar (full-screen sheets above nav). */
+  clearNav?: boolean;
 };
 
 /**
- * Fixed modal backdrop inside AppShell. Pads above the mobile bottom tab bar so
- * sheet footers and action buttons stay tappable (see waka-overlay-clear-nav).
+ * Fixed modal backdrop inside AppShell. Optionally pads above the mobile bottom tab bar.
  */
-export function AppModalOverlay({ className, children, ...rest }: Props) {
+export function AppModalOverlay({ className, children, clearNav = true, ...rest }: Props) {
   return (
-    <div className={clsx("fixed inset-0 waka-overlay-clear-nav", className)} {...rest}>
+    <div className={clsx("fixed inset-0", clearNav && "waka-overlay-clear-nav", className)} {...rest}>
       {children}
     </div>
   );

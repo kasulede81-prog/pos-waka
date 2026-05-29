@@ -79,12 +79,12 @@ body {
    */
   :root {
     --waka-safe-bottom: env(safe-area-inset-bottom, 0px);
-    --waka-bottom-nav-h: 5.75rem;
-    --waka-pos-checkout-strip-h: 4.75rem;
-    --waka-scroll-tail-default: calc(13rem + var(--waka-safe-bottom));
-    --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 1.5rem);
-    --waka-scroll-tail-pos: calc(16.5rem + var(--waka-safe-bottom));
-    --waka-scroll-tail-pos-sale: calc(16.5rem + var(--waka-safe-bottom));
+    --waka-bottom-nav-h: 4.25rem;
+    --waka-pos-checkout-strip-h: 4rem;
+    --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
+    --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
+    --waka-scroll-tail-pos: calc(var(--waka-bottom-nav-h) + var(--waka-pos-checkout-strip-h) + var(--waka-safe-bottom) + 0.5rem);
+    --waka-scroll-tail-pos-sale: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     /* Stacking: main scroll < FAB 35 < bottom nav 45 < POS sheets 52+ < receipt 65 */
     --waka-z-bottom-nav: 45;
     --waka-z-internal-admin: 60;
@@ -144,7 +144,18 @@ body {
 
   /** Extra tail room on long app pages (in addition to MobileScrollTail). */
   .page-content-pad {
-    padding-bottom: calc(1.5rem + var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
+    padding-bottom: calc(0.75rem + var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
+  }
+
+  /* Money fields — hide number spinners if a browser maps input to type=number */
+  .waka-money-input[type="number"]::-webkit-inner-spin-button,
+  .waka-money-input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .waka-money-input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
   }
 
   @media (min-width: 1024px) {

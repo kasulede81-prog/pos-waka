@@ -3,8 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { useDeferredSales } from "../hooks/useDeferredSales";
-import { useReportingSales } from "../hooks/useReportingSales";
+import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
@@ -57,9 +56,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
 
-  const salesDeferred = useDeferredSales();
-  const salesWithArchive = useReportingSales(includeArchived);
-  const sales = includeArchived ? salesWithArchive : salesDeferred;
+  const sales = useDeferredReportingSales(includeArchived);
   const salesCount = usePosStore((s) => s.sales.length);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);

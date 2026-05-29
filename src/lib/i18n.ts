@@ -286,6 +286,7 @@ const en: Dict = {
 
   openingShop: "Opening your shop…",
   openingShopLocalHint: "Opening from this phone. Online backup runs quietly when internet is on.",
+  openingShopCloudHint: "Downloading your shop from Waka cloud… stay on this screen with internet on.",
   loadingTrustLine: "Your sales stay on this phone first. Nothing is lost when the internet sleeps.",
   navHome: "Home",
   navStock: "Stock",
@@ -326,6 +327,12 @@ const en: Dict = {
   settingsHubSellingSub: "Quick sell, receipts",
   settingsHubPin: "Back Office PIN",
   settingsHubPinSub: "Protect sensitive areas",
+  settingsHubPassword: "Login password",
+  settingsHubPasswordSub: "Change the password you use to sign in",
+  settingsPasswordHint: "Choose a new password anytime. You stay signed in on this phone after saving.",
+  settingsPasswordSave: "Update password",
+  settingsPasswordFail: "Could not update password. Try again.",
+  settingsPasswordReauthHint: "Sign out, sign in again, then change your password.",
   settingsHubNotifications: "Sounds & feedback",
   settingsHubNotificationsSub: "Beeps and vibration",
   backupSyncPageSub: "Keep your shop data safe",
@@ -1697,7 +1704,14 @@ const en: Dict = {
   backupImportReading: "Reading backup file…",
   backupImportParsing: "Checking backup…",
   backupImportRestoring: "Restoring shop data… keep this screen open.",
-  backupImportOverlayHint: "Do not close the app — large shops can take a minute.",
+  backupImportSaving: "Saving to your phone… almost done.",
+  backupImportOverlayHint: "Large shops can take a minute. You can tap Stop to cancel.",
+  backupImportCancel: "Stop restore",
+  backupImportCancelled: "Restore stopped. Your previous data is unchanged.",
+  backupRestoreTip:
+    "Same account on a new phone: sign in with internet — your shop restores from Waka cloud automatically. On this phone, Save on phone + Use this copy is fastest. File import is for JSON copies from another device.",
+  backupListHint: "Restoring from this list is faster than picking a file.",
+  backupRestoreMemoryOk: "Data loaded — saving to your phone…",
   backupImportTooLarge: "That file is too large. Try exporting again from the other phone, or contact support.",
 
   retentionSettingsTitle: "Data retention",
@@ -1729,6 +1743,7 @@ const en: Dict = {
   archiveVoidsReturns: "Voids & returns",
 
   includeArchivedRecords: "Include archived records",
+  includeArchivedLoading: "Loading…",
 
   monthlyReportTitle: "Monthly business report",
   monthlyReportSub: "Download a full month summary for your records or accountant.",
@@ -2020,6 +2035,7 @@ const lg: Dict = {
 
   openingShop: "Tuggula dduuka lyo…",
   openingShopLocalHint: "Tuggula okuva ku ssimu eno. Okutereka ku mutimbagano kukola mu maaso nga intaneeti eriwo.",
+  openingShopCloudHint: "Twanula edduuka lyo okuva mu Waka cloud… sigala ku screen eno n'okozesa intaneeti.",
   loadingTrustLine: "Ebintu byo bitereddwa ku ssimu eno. Tekubula nga intaneeti teriwo.",
   navHome: "Awaka",
   navStock: "Sitoka",
@@ -2060,6 +2076,12 @@ const lg: Dict = {
   settingsHubSellingSub: "Quick sell, receipts",
   settingsHubPin: "PIN ya Back Office",
   settingsHubPinSub: "Kuuma ebifo eby'ekyama",
+  settingsHubPassword: "Password y'okuyingira",
+  settingsHubPasswordSub: "Kyusa password gy'okozesa okuyingira",
+  settingsPasswordHint: "Londa password empya essaawa yonna. Oluvannyuma osigala nga oyingidde ku ssimu eno.",
+  settingsPasswordSave: "Kyusa password",
+  settingsPasswordFail: "Password tekyusiddwa. Gezaako.",
+  settingsPasswordReauthHint: "Fuluma, ddamu okuyingira, oluvannyuma kyusa password.",
   settingsHubNotifications: "Ebiwulira & okukuba",
   settingsHubNotificationsSub: "Obubaka n'okukankana",
   backupSyncPageSub: "Kuuma data yo",
@@ -3432,7 +3454,14 @@ const lg: Dict = {
   backupImportReading: "Tusoma fayiro ya backup…",
   backupImportParsing: "Tukebera backup…",
   backupImportRestoring: "Tuzzaawo data y'adduuka… sigala ku screen eno.",
-  backupImportOverlayHint: "Toggalawo app — edduuka eddene lisobola okutwala eddakiika.",
+  backupImportSaving: "Tutereka ku ssimu yo… kituuse.",
+  backupImportOverlayHint: "Edduuka eddene lisobola okutwala eddakiika. Osobola okuyimirizawo.",
+  backupImportCancel: "Yimirizawo okuzzaawo",
+  backupImportCancelled: "Okuzzaawo kuyimiriziddwa. Data yo eyasigalawo tewakyusiddwa.",
+  backupRestoreTip:
+    "Ssimu empya: yingira n'akawunti yo n'intaneeti — edduuka lizzibwa okuva mu Waka cloud. Ku ssimu eno, Save on phone + Use this copy kisinga okwangu. Fayiro ya JSON kya ssimu endala.",
+  backupListHint: "Okuzzaawo okuva mu list eno kumangu okusinga okulonda fayiro.",
+  backupRestoreMemoryOk: "Data etadde — tutereka ku ssimu…",
   backupImportTooLarge: "Fayiro nnene nnyo. Geza okuddamu okufulumya okuva ku ssimu endala.",
 
   retentionSettingsTitle: "Okukuuma data",
@@ -3464,6 +3493,7 @@ const lg: Dict = {
   archiveVoidsReturns: "Okusazaamu & okuddiza",
 
   includeArchivedRecords: "Lingiza n'ebyali mu archive",
+  includeArchivedLoading: "Tukola…",
 
   monthlyReportTitle: "Alipoota y'omwezi",
   monthlyReportSub: "Tikula omwezi gwonna — PDF, Excel, CSV.",

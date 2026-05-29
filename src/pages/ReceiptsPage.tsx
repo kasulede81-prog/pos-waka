@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useReportingSales } from "../hooks/useReportingSales";
+import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Navigate } from "react-router-dom";
 import { CalendarDays, ChevronDown, FileDown, Printer } from "lucide-react";
@@ -55,7 +55,7 @@ const RECEIPT_FILTERS: { key: ReceiptDateRange; labelKey: "receiptsFilterToday" 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const [includeArchived, setIncludeArchived] = useState(false);
-  const sales = useReportingSales(includeArchived);
+  const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);

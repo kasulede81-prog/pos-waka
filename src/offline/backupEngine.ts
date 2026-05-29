@@ -1,4 +1,9 @@
 import { dateKeyKampala } from "../lib/datesUg";
+import {
+  assertBackupRestoreNotAborted,
+  clearBackupParseWorker,
+  registerBackupParseWorker,
+} from "../lib/backupRestoreSession";
 import { yieldUiTick } from "../lib/uiYield";
 import type { PersistedSnapshot } from "./localDb";
 import {
@@ -11,7 +16,7 @@ import {
 
 const MAX_BACKUPS = 28;
 
-function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSnapshot | null {
+export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSnapshot | null {
   if (!p || !Array.isArray(p.products) || !Array.isArray(p.sales) || !p.preferences) return null;
   return {
     products: p.products,
@@ -123,40 +128,53 @@ export function parseImportEnvelope(text: string): WakaExportEnvelope {
   return validateImportEnvelope(JSON.parse(text) as unknown);
 }
 
-async function parseImportBufferInWorker(buffer: ArrayBuffer): Promise<unknown> {
-  const WorkerCtor = (
-    await import("./backupParse.worker?worker")
-  ).default;
+async function parseImportBufferInWorker(buffer: ArrayBuffer, sessionId: number): Promise<unknown> {
+  const WorkerCtor = (await import("./backupParse.worker?worker")).default;
   return new Promise((resolve, reject) => {
     const worker = new WorkerCtor();
+    registerBackupParseWorker(() => {
+      worker.terminate();
+      clearBackupParseWorker();
+    });
     const fail = (err: unknown) => {
       worker.terminate();
+      clearBackupParseWorker();
       reject(err instanceof Error ? err : new Error(String(err)));
     };
     worker.onmessage = (event: MessageEvent<{ ok: boolean; data?: unknown; error?: string }>) => {
       worker.terminate();
+      clearBackupParseWorker();
       if (event.data.ok) resolve(event.data.data);
       else fail(new Error(event.data.error ?? "parse"));
     };
     worker.onerror = () => fail(new Error("worker"));
+    assertBackupRestoreNotAborted(sessionId);
     worker.postMessage(buffer, [buffer]);
   });
 }
 
-/** Read + parse a backup file without blocking the UI (worker + validation on main thread). */
-export async function parseImportEnvelopeFromFile(file: File): Promise<WakaExportEnvelope> {
+/** Read + parse a backup file (worker when possible). Checks sessionId for cancel. */
+export async function parseImportEnvelopeFromFile(file: File, sessionId: number): Promise<WakaExportEnvelope> {
+  assertBackupRestoreNotAborted(sessionId);
   const buffer = await file.arrayBuffer();
+  assertBackupRestoreNotAborted(sessionId);
   await yieldUiTick();
+
   if (typeof Worker !== "undefined") {
     try {
-      const data = await parseImportBufferInWorker(buffer);
+      const data = await parseImportBufferInWorker(buffer, sessionId);
+      assertBackupRestoreNotAborted(sessionId);
       return validateImportEnvelope(data);
-    } catch {
-      /* fall through — small files / worker unavailable */
+    } catch (err) {
+      if ((err as Error).message === "backup_restore_aborted") throw err;
+      /* fall through — worker unavailable on some WebViews */
     }
   }
+
+  assertBackupRestoreNotAborted(sessionId);
   const text = new TextDecoder().decode(buffer);
   await yieldUiTick();
+  assertBackupRestoreNotAborted(sessionId);
   return parseImportEnvelope(text);
 }
 

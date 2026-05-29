@@ -1,0 +1,9 @@
+# Linked Supabase project (production). Deploy edge functions with:
+#   npm run supabase:deploy:admin
+project_id = "ljaedextsenbkxzzgxcg"
+
+[functions.admin-set-owner-password]
+verify_jwt = true
+
+[functions.admin-permanently-delete-shop-account]
+verify_jwt = true

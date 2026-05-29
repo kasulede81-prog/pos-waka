@@ -1138,22 +1138,24 @@ export async function adminPermanentlyDeleteShopAccount(
   shopId: string,
   confirmation: string,
 ): Promise<{ ok: boolean; message?: string; partial?: boolean; sales_deleted?: number }> {
-  if (!supabase) return { ok: false, message: "Supabase is not configured." };
-
-  const { data, error } = await supabase.functions.invoke("admin-permanently-delete-shop-account", {
-    body: { shop_id: shopId, confirmation: confirmation.trim() },
+  const { invokeSupabaseEdgeFunction } = await import("./supabaseEdgeInvoke");
+  const r = await invokeSupabaseEdgeFunction<{
+    ok?: boolean;
+    error?: string;
+    detail?: string;
+    message?: string;
+    partial?: boolean;
+    sales_deleted?: number;
+  }>("admin-permanently-delete-shop-account", {
+    shop_id: shopId,
+    confirmation: confirmation.trim(),
   });
 
-  if (error) {
-    return {
-      ok: false,
-      message: error.message?.includes("Failed to send")
-        ? "Deploy the admin-permanently-delete-shop-account edge function on Supabase."
-        : error.message,
-    };
+  if (!r.ok) {
+    return { ok: false, message: r.message };
   }
 
-  const j = (data ?? {}) as {
+  const j = r.data as {
     ok?: boolean;
     error?: string;
     detail?: string;
@@ -1399,20 +1401,13 @@ export async function adminShopSetOwnerPasswordDirect(
   shopId: string,
   newPassword: string,
 ): Promise<{ ok: boolean; message?: string }> {
-  if (!supabase) return { ok: false, message: "Supabase is not configured." };
-  const { data, error } = await supabase.functions.invoke("admin-set-owner-password", {
-    body: { shop_id: shopId, new_password: newPassword },
-  });
-  if (error) {
-    return {
-      ok: false,
-      message:
-        error.message?.includes("Failed to send") || error.message?.includes("not found")
-          ? "Deploy the admin-set-owner-password edge function on Supabase, then retry."
-          : error.message,
-    };
-  }
-  const j = (data ?? {}) as { ok?: boolean; error?: string; detail?: string };
+  const { invokeSupabaseEdgeFunction } = await import("./supabaseEdgeInvoke");
+  const r = await invokeSupabaseEdgeFunction<{ ok?: boolean; error?: string; detail?: string }>(
+    "admin-set-owner-password",
+    { shop_id: shopId, new_password: newPassword },
+  );
+  if (!r.ok) return { ok: false, message: r.message };
+  const j = r.data;
   if (j.ok) return { ok: true };
   const err = j.error ?? "password_update_failed";
   if (err === "forbidden") return { ok: false, message: "Your admin role cannot set passwords." };

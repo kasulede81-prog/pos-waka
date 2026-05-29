@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useReportingAuditLogs } from "../hooks/useReportingSales";
+import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
@@ -11,7 +11,7 @@ const PAGE = 120;
 
 export function StaffActivityPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
-  const auditLogs = useReportingAuditLogs(includeArchived);
+  const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);

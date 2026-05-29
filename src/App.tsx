@@ -17,6 +17,7 @@ import { SettingsHubPage } from "./pages/SettingsHubPage";
 import { SettingsShopPage } from "./pages/SettingsShopPage";
 import { SettingsSellingPage } from "./pages/SettingsSellingPage";
 import { SettingsPinPage } from "./pages/SettingsPinPage";
+import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
@@ -412,6 +413,18 @@ function App() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsPinPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/password"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsPasswordPage
+                    lang={lang}
+                    authMode={auth.mode}
+                    updatePassword={auth.updatePassword}
+                  />
                 </RoleProtectedRoute>
               }
             />

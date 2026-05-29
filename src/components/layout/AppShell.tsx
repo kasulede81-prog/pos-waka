@@ -364,7 +364,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}
         >
           <div
-            className="mx-auto grid max-w-lg gap-0.5 px-1 py-2 pb-bottom-nav"
+            className="mx-auto grid max-w-lg gap-0.5 px-1 py-1 pb-bottom-nav"
             style={{ gridTemplateColumns: `repeat(${Math.min(navDefs.length, 5)}, minmax(0, 1fr))` }}
           >
             {navDefs.map(({ path, labelKey, Icon }) => {
@@ -376,12 +376,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => navigate(path, { preventScrollReset: true })}
-                  className={`touch-manipulation flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1.5 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
+                  className={`touch-manipulation flex min-h-[46px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
                     active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700"
-                  } ${isSell && !active ? "ring-2 ring-waka-200 ring-offset-1" : ""} ${isSell ? "sm:min-h-[56px]" : ""}`}
+                  } ${isSell && !active ? "ring-2 ring-waka-200 ring-offset-1" : ""} ${isSell ? "sm:min-h-[50px]" : ""}`}
                 >
                   <Icon
-                    className={isSell ? "h-9 w-9 shrink-0 sm:h-10 sm:w-10" : "h-6 w-6 shrink-0"}
+                    className={isSell ? "h-8 w-8 shrink-0 sm:h-9 sm:w-9" : "h-5 w-5 shrink-0 sm:h-6 sm:w-6"}
                     strokeWidth={isSell ? 2.6 : 2.25}
                     aria-hidden
                   />

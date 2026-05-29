@@ -43,13 +43,14 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
 
   return (
     <AppModalOverlay
-      className="z-[64] flex items-end justify-center bg-black/55 sm:items-center"
+      clearNav={false}
+      className="z-[64] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 shadow-2xl sm:rounded-3xl"
+        className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 pb-4 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-black text-slate-900">{t(lang, "discountTitle")}</h2>

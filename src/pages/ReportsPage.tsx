@@ -3,8 +3,7 @@ import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { useDeferredSales } from "../hooks/useDeferredSales";
-import { useReportingSales } from "../hooks/useReportingSales";
+import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -28,9 +27,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const [range, setRange] = useState<Range>("today");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [reportHint, setReportHint] = useState<string | null>(null);
-  const salesActive = useDeferredSales();
-  const salesWithArchive = useReportingSales(includeArchived);
-  const sales = includeArchived ? salesWithArchive : salesActive;
+  const sales = useDeferredReportingSales(includeArchived);
 
   if (!hasPermission(actor.role, "reports.view")) {
     return <Navigate to="/" replace />;

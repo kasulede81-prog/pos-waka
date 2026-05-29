@@ -6,7 +6,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { usePosStore } from "../store/usePosStore";
-import { useReportingSales } from "../hooks/useReportingSales";
+import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import {
   buildMonthlyBusinessReport,
@@ -38,7 +38,7 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
   const [monthKey, setMonthKey] = useState(currentMonthKey);
   const [busy, setBusy] = useState(false);
 
-  const sales = useReportingSales(includeArchived);
+  const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = usePosStore((s) =>
     includeArchived ? [...s.returnRecords, ...s.archivedReturnRecords] : s.returnRecords,
   );
