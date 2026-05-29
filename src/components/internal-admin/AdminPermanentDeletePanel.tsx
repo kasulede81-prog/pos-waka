@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ShopOpsDetail } from "../../lib/wakaInternalAdmin";
 import { adminPermanentlyDeleteShopAccount } from "../../lib/wakaInternalAdmin";
+import { formatWakaShopNumber } from "../../lib/shopNumber";
 
 type Props = {
   detail: ShopOpsDetail;
@@ -64,7 +65,9 @@ export function AdminPermanentDeletePanel({ detail, busy, previewMode, onBusy, o
         Removes the entire organization, all shops, sales history, products, and the owner&apos;s Supabase login.
         Super admin only. Cannot be recovered.
       </p>
-      <p className="mt-2 font-mono text-[11px] text-rose-800">Shop ID: {detail.shop.id}</p>
+      <p className="mt-2 font-mono text-[11px] text-rose-800">
+        Shop no. {formatWakaShopNumber(detail.shop.shop_number) ?? "—"} · ID {detail.shop.id}
+      </p>
 
       <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-rose-950">
         <input

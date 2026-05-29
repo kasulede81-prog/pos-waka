@@ -1,5 +1,5 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -7,6 +7,7 @@ import { hasPermission } from "../lib/permissions";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
+import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 
 export function SettingsHubPage({ lang }: { lang: Language }) {
   const [searchParams] = useSearchParams();
@@ -29,6 +30,8 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
       </div>
 
+      {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
+
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
         {canShop ? (
           <OfficeNavCard
@@ -36,6 +39,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubShop")}
             subtitle={t(lang, "settingsHubShopSub")}
             Icon={Store}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/receipt"
+            title={t(lang, "settingsHubReceipt")}
+            subtitle={t(lang, "settingsHubReceiptSub")}
+            Icon={ReceiptText}
           />
         ) : null}
         {canShop ? (

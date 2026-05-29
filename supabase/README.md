@@ -114,6 +114,14 @@ Migration **052** adds `shop_cloud_snapshots`: the app uploads a full shop snaps
 
 Requires migration **052** applied and the old phone to have synced while online recently.
 
+## Waka shop numbers (A001, A002, …)
+
+Migration **055** assigns every shop a **site-wide number** by signup order: first shop = **A001**, second = **A002**, etc. New shops get a number automatically on insert. Support can look up shops by **A001** instead of UUID.
+
+## Internal shop card (products & metrics)
+
+Migration **054** lets support see **product counts**, a **product list**, and **cloud backup** stats on the shop user card. Run after **045** (or if counts show 0 incorrectly).
+
 ## Edge functions (support tools)
 
 Deploy after migrations **049–051** so internal admin can reset owner passwords and permanently delete shop accounts:

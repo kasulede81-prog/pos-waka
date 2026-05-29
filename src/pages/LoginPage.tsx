@@ -24,8 +24,6 @@ type Props = {
   mode: "supabase" | "local";
 };
 
-type OwnerLoginMethod = "email" | "phone";
-
 const ownerInputClass =
   "mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
 
@@ -38,8 +36,7 @@ export function LoginPage({
   onGoogleLogin,
   mode,
 }: Props) {
-  const [ownerMethod, setOwnerMethod] = useState<OwnerLoginMethod>("phone");
-  const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -58,7 +55,7 @@ export function LoginPage({
     setBusy(true);
     setError(null);
     try {
-      await onLogin(identifier, password);
+      await onLogin(email, password);
     } catch (err) {
       setError(formatAuthError(err));
     } finally {
@@ -93,7 +90,7 @@ export function LoginPage({
     <AuthLayout lang={lang} setLang={setLang}>
       <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
         <h1 className="text-2xl font-black text-stone-900">Welcome to Waka POS</h1>
-        <p className="mt-2 text-sm font-medium text-stone-600">Sign in to your shop account.</p>
+        <p className="mt-2 text-sm font-medium text-stone-600">Sign in with your shop email.</p>
 
         {mode === "local" ? (
           <p className="mt-3 rounded-xl bg-stone-100 px-3 py-2 text-xs font-medium text-stone-700">{t(lang, "supabaseRegisterHint")}</p>
@@ -115,39 +112,16 @@ export function LoginPage({
             </>
           ) : null}
 
-          {mode === "supabase" && hasSupabaseConfig ? (
-            <div className="grid grid-cols-2 gap-2 rounded-xl bg-stone-100 p-1">
-              <button
-                type="button"
-                onClick={() => setOwnerMethod("phone")}
-                className={`min-h-[44px] rounded-lg text-sm font-black transition ${
-                  ownerMethod === "phone" ? "bg-white text-waka-900 shadow-sm" : "text-stone-600"
-                }`}
-              >
-                {t(lang, "loginOwnerMethodPhone")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setOwnerMethod("email")}
-                className={`min-h-[44px] rounded-lg text-sm font-black transition ${
-                  ownerMethod === "email" ? "bg-white text-waka-900 shadow-sm" : "text-stone-600"
-                }`}
-              >
-                {t(lang, "loginOwnerMethodEmail")}
-              </button>
-            </div>
-          ) : null}
-
           <label className="block text-sm font-bold text-stone-800">
-            {ownerMethod === "phone" && mode === "supabase" ? t(lang, "registerPhoneLabel") : t(lang, "email")}
+            {t(lang, "email")}
             <input
-              type={ownerMethod === "phone" && mode === "supabase" ? "tel" : "email"}
-              inputMode={ownerMethod === "phone" && mode === "supabase" ? "tel" : "email"}
-              autoComplete={ownerMethod === "phone" && mode === "supabase" ? "tel" : "email"}
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
-              placeholder={ownerMethod === "phone" && mode === "supabase" ? "07XXXXXXXX" : undefined}
+              placeholder={t(lang, "registerEmailPh")}
               className={ownerInputClass}
             />
           </label>
@@ -208,4 +182,3 @@ export function LoginPage({
     </AuthLayout>
   );
 }
-

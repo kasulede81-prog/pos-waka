@@ -215,6 +215,7 @@ export function AdminHeroV2({
 
 export function ShopCard({
   name,
+  shopNumber,
   district,
   planCode,
   isActive,
@@ -228,6 +229,7 @@ export function ShopCard({
   onOpen,
 }: {
   name: string;
+  shopNumber?: string | null;
   district: string;
   planCode: string;
   isActive: boolean;
@@ -269,7 +271,14 @@ export function ShopCard({
             />
           ) : null}
           <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
-            <p className="truncate text-base font-black text-stone-900">{name}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              {shopNumber ? (
+                <span className="rounded-md bg-stone-900 px-2 py-0.5 font-mono text-[11px] font-black text-white">
+                  {shopNumber}
+                </span>
+              ) : null}
+              <p className="truncate text-base font-black text-stone-900">{name}</p>
+            </div>
             {ownerLabel ? <p className="mt-0.5 truncate text-xs font-medium text-stone-500">{ownerLabel}</p> : null}
           </button>
         </div>

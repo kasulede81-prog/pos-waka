@@ -168,13 +168,19 @@ export function GlobalSearchBar({
         const owner = formatDisplayEmail(s.owner_email) ?? s.owner_label ?? "";
         return (
           s.name.toLowerCase().includes(needle) ||
+          (s.shop_number ?? "").toLowerCase().includes(needle) ||
           owner.toLowerCase().includes(needle) ||
           (s.district ?? "").toLowerCase().includes(needle) ||
           (s.phone_e164 ?? "").includes(needle)
         );
       })
       .slice(0, 6)
-      .map((s) => ({ type: "shop" as const, id: s.id, label: s.name, sub: s.district ?? "" }));
+      .map((s) => ({
+        type: "shop" as const,
+        id: s.id,
+        label: s.shop_number ? `${s.shop_number} · ${s.name}` : s.name,
+        sub: s.district ?? "",
+      }));
 
     const ticketHits = tickets
       .filter(

@@ -1,0 +1,97 @@
+import clsx from "clsx";
+import { Minus, Plus } from "lucide-react";
+import type { Language, Product, SaleLine } from "../../types";
+import { t } from "../../lib/i18n";
+import { formatDraftLineQty, formatDraftLineUnitPrice } from "../../lib/draftCart";
+import { lineDiscountUgx } from "../../lib/saleAdjustments";
+
+type Props = {
+  lang: Language;
+  line: SaleLine;
+  product: Product | undefined;
+  onIncrement: () => void;
+  onDecrement: () => void;
+  onQtyTap: () => void;
+  onDiscount: () => void;
+  onRemove: () => void;
+};
+
+export function DraftCartLineRow({
+  lang,
+  line,
+  product,
+  onIncrement,
+  onDecrement,
+  onQtyTap,
+  onDiscount,
+  onRemove,
+}: Props) {
+  const qtyLabel = product ? formatDraftLineQty(product, line) : String(line.quantity);
+  const unitHint = product ? formatDraftLineUnitPrice(product, line) : null;
+
+  return (
+    <li className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-slate-900">{line.name}</p>
+          {unitHint ? <p className="text-xs font-semibold text-slate-500">{unitHint}</p> : null}
+          {lineDiscountUgx(line) > 0 ? (
+            <p className="text-xs font-bold text-amber-800">
+              − UGX {lineDiscountUgx(line).toLocaleString()} {t(lang, "discountBtn").toLowerCase()}
+            </p>
+          ) : null}
+        </div>
+        <p className="shrink-0 text-lg font-black">UGX {line.lineTotalUgx.toLocaleString()}</p>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onDecrement}
+          aria-label={t(lang, "posQtyDecrease")}
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-200 bg-white text-slate-900 shadow-sm active:bg-slate-100"
+        >
+          <Minus className="h-7 w-7 stroke-[3]" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={onQtyTap}
+          className="flex min-h-[56px] min-w-0 flex-1 flex-col items-center justify-center rounded-2xl border-2 border-waka-300 bg-waka-50 px-2 active:bg-waka-100"
+        >
+          <span className="text-[10px] font-black uppercase tracking-wide text-waka-800">
+            {t(lang, "posQtyLabel")}
+          </span>
+          <span className="truncate text-xl font-black tabular-nums text-waka-950">{qtyLabel}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onIncrement}
+          aria-label={t(lang, "posQtyIncrease")}
+          className={clsx(
+            "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 shadow-sm active:brightness-95",
+            "border-waka-400 bg-waka-600 text-white",
+          )}
+        >
+          <Plus className="h-7 w-7 stroke-[3]" aria-hidden />
+        </button>
+      </div>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onDiscount}
+          className="min-h-[44px] flex-1 rounded-xl border-2 border-waka-200 bg-white px-3 text-sm font-black text-waka-900"
+        >
+          {t(lang, "discountBtn")}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="min-h-[44px] rounded-xl border-2 border-rose-200 bg-rose-50 px-4 text-sm font-black text-rose-800"
+        >
+          ✕
+        </button>
+      </div>
+    </li>
+  );
+}

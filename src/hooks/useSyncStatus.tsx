@@ -5,7 +5,7 @@ import { getDeviceOnline } from "../lib/deviceOnline";
 import { isNativeApp } from "../lib/nativeApp";
 import { nativeSyncResumeDelayMs, nativeVisibilitySyncDelayMs, runWhenIdle } from "../lib/uiYield";
 import { readSyncQueue } from "../offline/localDb";
-import { countUnsyncedSales, pushShopPendingToCloud, syncShopWithCloud } from "../offline/cloudSync";
+import { pushShopPendingToCloud, syncShopWithCloud } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
 import type { SyncOperationKind, SyncStatus } from "../types";
@@ -31,9 +31,10 @@ export type SyncStatusApi = {
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
-const QUEUE_POLL_MS = 12_000;
+const QUEUE_POLL_MS = isNativeApp() ? 45_000 : 20_000;
+const FLUSH_TIMEOUT_MS = 55_000;
 const MIN_PUSH_INTERVAL_MS = 8_000;
-const MIN_FULL_SYNC_INTERVAL_MS = isNativeApp() ? 180_000 : 90_000;
+const MIN_FULL_SYNC_INTERVAL_MS = isNativeApp() ? 300_000 : 90_000;
 
 function emptyBreakdown(): PendingBreakdown {
   return { sales: 0, stock: 0, returns: 0, expenses: 0, other: 0 };
@@ -54,8 +55,6 @@ async function pendingUploadStats(): Promise<{ total: number; breakdown: Pending
     const bucket = bucketForKind(op.kind);
     breakdown[bucket] += 1;
   }
-  const unsyncedSales = countUnsyncedSales();
-  breakdown.sales += unsyncedSales;
   const total = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
   return { total, breakdown };
 }
@@ -73,6 +72,7 @@ function useSyncStatusEngine(): SyncStatusApi {
   const pendingRef = useRef(0);
 
   const refreshQueue = useCallback(() => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
     void pendingUploadStats().then(({ total, breakdown }) => {
       pendingRef.current = total;
       setPendingCount(total);
@@ -100,30 +100,38 @@ function useSyncStatusEngine(): SyncStatusApi {
     writeSyncHealthMeta({ lastAttemptAt: attemptAt });
     setHealth(readSyncHealthMeta());
     try {
-      if (wantPull) {
-        const { push, queueFailed } = await syncShopWithCloud({ pull: true });
-        lastFullSyncAtRef.current = Date.now();
-        lastPushAtRef.current = lastFullSyncAtRef.current;
-        if (push.fail === 0 && queueFailed === 0) {
-          writeSyncHealthMeta({
-            lastSuccessAt: attemptAt,
-            lastIssueCode: "none",
-            lastIssueAt: null,
-          });
+      const work = (async () => {
+        if (wantPull) {
+          const { push, queueFailed } = await syncShopWithCloud({ pull: true });
+          lastFullSyncAtRef.current = Date.now();
+          lastPushAtRef.current = lastFullSyncAtRef.current;
+          if (push.fail === 0 && queueFailed === 0) {
+            writeSyncHealthMeta({
+              lastSuccessAt: attemptAt,
+              lastIssueCode: "none",
+              lastIssueAt: null,
+            });
+          } else {
+            writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
+          }
         } else {
-          writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
+          const { push, queueFailed } = await pushShopPendingToCloud();
+          lastPushAtRef.current = Date.now();
+          if (push.fail === 0 && queueFailed === 0 && push.ok > 0) {
+            writeSyncHealthMeta({
+              lastSuccessAt: attemptAt,
+              lastIssueCode: "none",
+              lastIssueAt: null,
+            });
+          }
         }
-      } else {
-        const { push, queueFailed } = await pushShopPendingToCloud();
-        lastPushAtRef.current = Date.now();
-        if (push.fail === 0 && queueFailed === 0 && push.ok > 0) {
-          writeSyncHealthMeta({
-            lastSuccessAt: attemptAt,
-            lastIssueCode: "none",
-            lastIssueAt: null,
-          });
-        }
-      }
+      })();
+      await Promise.race([
+        work,
+        new Promise<void>((_, reject) => {
+          window.setTimeout(() => reject(new Error("sync_timeout")), FLUSH_TIMEOUT_MS);
+        }),
+      ]);
     } catch {
       writeSyncHealthMeta({
         lastIssueAt: attemptAt,
@@ -174,9 +182,10 @@ function useSyncStatusEngine(): SyncStatusApi {
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (s) => {
       if (s.isActive && getDeviceOnline()) {
+        if (Date.now() - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS) return;
         window.setTimeout(() => {
           runWhenIdle(
-            () => void runFlush({ pull: Capacitor.isNativePlatform(), showSpinner: false }),
+            () => void runFlush({ pull: false, showSpinner: false }),
             nativeSyncResumeDelayMs(),
           );
         }, nativeSyncResumeDelayMs());

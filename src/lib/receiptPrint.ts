@@ -1,5 +1,6 @@
 import type { Product, ReceiptPaperSize, Sale } from "../types";
 import { dateKeyKampala } from "./datesUg";
+import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
 
 export type ReceiptLabels = {
   cashier: string;
@@ -23,6 +24,8 @@ export type ReceiptDisplayData = {
   shopName: string;
   shopAddress: string | null;
   shopPhone: string | null;
+  /** When set, replaces the default shop name / address / phone block. */
+  customHeaderLines: string[] | null;
   receiptNumber: string;
   dateText: string;
   timeText: string;
@@ -74,15 +77,16 @@ export function buildReceiptNumberForSale(sale: Sale, allSales: Sale[]): string 
 }
 
 function inferPaymentMethodLabel(
-  sale: Sale & { paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit" },
+  sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" },
 ): string {
-  if (sale.paymentMethod === "mobile_money") return "Mobile Money";
+  if (sale.paymentMethod === "atm") return "ATM";
+  if (sale.paymentMethod === "mobile_money") return "MOMO PAY";
   if (sale.paymentMethod === "mixed") return "Mixed";
-  if (sale.paymentMethod === "credit") return "Credit";
-  if (sale.paymentMethod === "cash") return "Cash";
+  if (sale.paymentMethod === "credit") return "DEBIT";
+  if (sale.paymentMethod === "cash") return "CASH";
   if (sale.debtUgx > 0 && sale.cashPaidUgx > 0) return "Mixed";
   if (sale.debtUgx > 0) return "Credit";
-  return "Cash";
+  return "CASH";
 }
 
 export function buildReceiptDisplayData(params: {
@@ -91,8 +95,9 @@ export function buildReceiptDisplayData(params: {
   shopPhone?: string | null;
   cashier: string;
   receiptNumber: string;
-  sale: Sale & { paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit" };
+  sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" };
   productById?: Map<string, Product>;
+  customHeaderLines?: string[] | null;
   footerThanks?: string;
   footerPowered?: string;
   returnPolicy?: string | null;
@@ -105,6 +110,7 @@ export function buildReceiptDisplayData(params: {
     receiptNumber,
     sale,
     productById,
+    customHeaderLines,
     footerThanks,
     footerPowered,
     returnPolicy,
@@ -113,34 +119,13 @@ export function buildReceiptDisplayData(params: {
     .filter((ln) => !ln.voided)
     .map((ln) => {
       const product = productById?.get(ln.productId);
-      const baseUnit = product?.baseUnit?.trim() || "item";
-      const buyingUnit = product?.buyingUnit?.trim();
-      const conversionRate = Math.max(0, Number(product?.conversionRate ?? 0));
-      const canRenderAsPack =
-        !!buyingUnit &&
-        conversionRate > 1 &&
-        Number.isFinite(ln.quantity) &&
-        ln.quantity > 0 &&
-        Math.abs(Math.round((ln.quantity / conversionRate) * 1000) / 1000 - ln.quantity / conversionRate) < 0.0001;
-      if (canRenderAsPack) {
-        const packs = ln.quantity / conversionRate;
-        const whole = Math.abs(packs - Math.round(packs)) < 0.0001 ? Math.round(packs) : packs;
-        const label = `${whole.toLocaleString()} ${buyingUnit}${whole === 1 ? "" : "s"} of ${ln.name}`;
-        return {
-          name: ln.name,
-          quantityLabel: label,
-          unitPriceUgx: ln.unitPriceUgx,
-          lineTotalUgx: ln.lineTotalUgx,
-          showCalculation: false,
-        };
-      }
-      const quantityLabel = `${ln.quantity.toLocaleString()} ${baseUnit}`;
+      const { quantityLabel, showCalculation } = buildReceiptLineQuantityDisplay(ln, product);
       return {
         name: ln.name,
         quantityLabel,
         unitPriceUgx: ln.unitPriceUgx,
         lineTotalUgx: ln.lineTotalUgx,
-        showCalculation: true,
+        showCalculation,
       };
     });
   const subtotalUgx = Math.max(0, sale.subtotalUgx);
@@ -159,6 +144,7 @@ export function buildReceiptDisplayData(params: {
     shopName,
     shopAddress: shopAddress?.trim() || null,
     shopPhone: shopPhone?.trim() || null,
+    customHeaderLines: customHeaderLines?.length ? customHeaderLines : null,
     receiptNumber,
     dateText: formatDateUg(sale.createdAt),
     timeText: formatTimeUg(sale.createdAt),
@@ -184,6 +170,7 @@ export function buildSaleReceiptText(params: {
   shopAddress?: string | null;
   shopPhone?: string | null;
   productById?: Map<string, Product>;
+  customHeaderLines?: string[] | null;
   paymentMethodLabel?: string;
   amountPaidUgx?: number;
   changeUgx?: number;
@@ -208,6 +195,7 @@ export function buildSaleReceiptText(params: {
     amountPaidUgx,
     changeUgx,
     paymentMethodLabel,
+    customHeaderLines,
     footerThanks,
     footerPowered,
     returnPolicy,
@@ -218,16 +206,21 @@ export function buildSaleReceiptText(params: {
     shopPhone,
     cashier,
     receiptNumber: receiptNumber ?? "001",
-    sale: { ...sale, paymentMethod: (sale as Sale & { paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit" }).paymentMethod },
+    sale: { ...sale, paymentMethod: (sale as Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" }).paymentMethod },
     productById,
+    customHeaderLines,
     footerThanks,
     footerPowered,
     returnPolicy,
   });
   const lines: string[] = [];
-  lines.push(display.shopName.toUpperCase());
-  if (display.shopAddress) lines.push(display.shopAddress);
-  if (display.shopPhone) lines.push(display.shopPhone);
+  if (display.customHeaderLines?.length) {
+    for (const line of display.customHeaderLines) lines.push(line);
+  } else {
+    lines.push(display.shopName.toUpperCase());
+    if (display.shopAddress) lines.push(display.shopAddress);
+    if (display.shopPhone) lines.push(display.shopPhone);
+  }
   lines.push("");
   lines.push(`Receipt No: ${display.receiptNumber}`);
   lines.push(`Date: ${display.dateText}`);
@@ -285,6 +278,11 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
       ? `<div class="row"><span>Discount</span><span>- ${fmt(display.discountUgx)}</span></div>`
       : "";
   const policyBlock = display.returnPolicy ? `<p class="policy">${esc(display.returnPolicy)}</p>` : "";
+  const headerBlock = display.customHeaderLines?.length
+    ? display.customHeaderLines.map((line) => `<p>${esc(line)}</p>`).join("")
+    : `<h2>${esc(display.shopName)}</h2>
+        ${display.shopAddress ? `<p>${esc(display.shopAddress)}</p>` : ""}
+        ${display.shopPhone ? `<p>${esc(display.shopPhone)}</p>` : ""}`;
   return `
     <style>
       .waka-receipt { font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; }
@@ -308,9 +306,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
     </style>
     <article class="waka-receipt">
       <header class="header">
-        <h2>${esc(display.shopName)}</h2>
-        ${display.shopAddress ? `<p>${esc(display.shopAddress)}</p>` : ""}
-        ${display.shopPhone ? `<p>${esc(display.shopPhone)}</p>` : ""}
+        ${headerBlock}
       </header>
       <section class="meta">
         <div><span>Receipt No:</span><strong>${esc(display.receiptNumber)}</strong></div>

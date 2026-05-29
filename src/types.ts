@@ -317,7 +317,7 @@ export type Sale = {
   /** Staff who completed the sale (session actor); drives cashier performance on owner dashboard */
   soldByUserId?: string | null;
   /** Payment mode selected at checkout. */
-  paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit";
+  paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit";
   /** What customer actually handed over (when captured at checkout). */
   amountPaidUgx?: number | null;
   /** Change returned to customer at checkout (when captured). */
@@ -452,8 +452,16 @@ export type ShopPreferences = {
   recentProductIds?: string[];
   /** Sell screen category chip: real category name, or `__waka_uncategorized__`; omit / null = All */
   posSellCategoryFilter?: string | null;
+  /** Waka public shop ID (A001, …) cached after first online load. */
+  wakaShopId?: string | null;
   /** Thermal / AirPrint receipt width (Settings → Receipts). */
   receiptPaperSize?: ReceiptPaperSize;
+  /** Multiline receipt header; blank = shop name, phone, and location from Shop info. */
+  receiptCustomHeaderText?: string | null;
+  /** Main thank-you line at the bottom of receipts. */
+  receiptCustomFooterText?: string | null;
+  /** Return policy line; empty string hides it; blank uses default 24h message. */
+  receiptReturnPolicyText?: string | null;
   /**
    * Archive sales, receipts, and activity after this window (never auto-delete).
    * Default: 3 months (90 days).

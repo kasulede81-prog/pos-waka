@@ -10,8 +10,8 @@ import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
 import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
+import { PosScreenPortal } from "../components/layout/PosScreenPortal";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
-import { MoneyInput } from "../components/ui/MoneyInput";
 import { useVisualViewportInset } from "../hooks/useVisualViewportInset";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
@@ -21,6 +21,7 @@ import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
+import { useDeferredSales } from "../hooks/useDeferredSales";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
@@ -30,6 +31,11 @@ import {
   shelfIconFor,
 } from "../lib/productCategories";
 import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
+import { computeDraftCartStats, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
+import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
+import { DraftCartSummary } from "../components/pos/DraftCartSummary";
+import { QuantityEditModal } from "../components/pos/QuantityEditModal";
+import { resolveReceiptBranding } from "../lib/receiptBranding";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 10;
 const MAX_RECENT_SEARCHES = 4;
@@ -50,7 +56,11 @@ const SEARCH_ALIASES: Record<string, string[]> = {
   sugar: ["kakira", "kinyara", "brown sugar", "sack"],
 };
 
-type PaymentMethod = "cash" | "mobile_money" | "mixed" | "credit";
+type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
+
+const POS_CHECKOUT_METHODS: PaymentMethod[] = ["cash", "atm", "mobile_money", "credit"];
+
+type CheckoutAmountField = "cash" | "mobile";
 
 const Numpad = memo(function Numpad({
   onDigit,
@@ -122,13 +132,15 @@ export function PosPage({ lang }: { lang: Language }) {
   const location = useLocation();
   const navigate = useNavigate();
   const products = usePosStore((s) => s.products);
-  const sales = usePosStore((s) => s.sales);
+  const sales = useDeferredSales();
   const customers = usePosStore((s) => s.customers);
   const preferences = usePosStore((s) => s.preferences);
   const draftLines = usePosStore((s) => s.draftLines);
   const setDraftInput = usePosStore((s) => s.setDraftInput);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
   const removeDraftLine = usePosStore((s) => s.removeDraftLine);
+  const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
+  const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
   const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const clearDraft = usePosStore((s) => s.clearDraft);
@@ -157,8 +169,11 @@ export function PosPage({ lang }: { lang: Language }) {
   const [display, setDisplay] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
 
-  const draftTotal = useMemo(() => draftLines.reduce((a, l) => a + l.lineTotalUgx, 0), [draftLines]);
+  const draftCartStats = useMemo(() => computeDraftCartStats(draftLines), [draftLines]);
+  const draftTotal = draftCartStats.totalUgx;
   const draftDiscountTotal = useMemo(() => draftLines.reduce((a, l) => a + lineDiscountUgx(l), 0), [draftLines]);
+  const [qtyEditLine, setQtyEditLine] = useState<SaleLine | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
     [preferences.shifts, actor.userId],
@@ -168,6 +183,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
+  const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutAmountField>("cash");
   const [saleCustomerId, setSaleCustomerId] = useState<string>("");
   const [saleCustomerName, setSaleCustomerName] = useState("");
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
@@ -254,6 +270,8 @@ export function PosPage({ lang }: { lang: Language }) {
     [actor.displayName, lang, staffNameById],
   );
 
+  const receiptBranding = useMemo(() => resolveReceiptBranding(preferences), [preferences]);
+
   const receiptDisplay = useMemo(() => {
     if (!receiptSale) return null;
     const shopName = (preferences.shopDisplayName ?? "").trim() || "Waka POS";
@@ -262,19 +280,21 @@ export function PosPage({ lang }: { lang: Language }) {
       shopName,
       shopAddress: preferences.shopAddressLine ?? null,
       shopPhone: preferences.shopPhoneE164 ?? null,
+      customHeaderLines: receiptBranding.customHeaderLines,
       cashier: receiptCashierLabel(receiptSale),
       receiptNumber,
       sale: receiptSale,
       productById,
-      footerThanks: "Thank you for shopping with us",
+      footerThanks: receiptBranding.footerThanks,
       footerPowered: "Powered by Waka POS",
-      returnPolicy: "Returns accepted with receipt within 24 hours.",
+      returnPolicy: receiptBranding.returnPolicy,
     });
   }, [
     receiptSale,
     preferences.shopDisplayName,
     preferences.shopAddressLine,
     preferences.shopPhoneE164,
+    receiptBranding,
     sales,
     productById,
     receiptCashierLabel,
@@ -452,7 +472,10 @@ export function PosPage({ lang }: { lang: Language }) {
         }
         bumpRecentProduct(p.id);
         if (hapticsOn) void hapticTap();
-        setSaleCheckoutMinimized(false);
+        setSaleCheckoutMinimized(true);
+        setToast(t(lang, "posAddedToCart"));
+        window.setTimeout(() => setToast(null), 1200);
+        searchInputRef.current?.focus();
         return;
       }
 
@@ -511,6 +534,24 @@ export function PosPage({ lang }: { lang: Language }) {
     [inputMode],
   );
 
+  const afterAddToCart = useCallback(
+    (productId: string, opts?: { closeSheet?: boolean }) => {
+      bumpRecentProduct(productId);
+      if (hapticsOn) void hapticTap();
+      setDisplay("");
+      setDraftInput(null);
+      setSaleCheckoutMinimized(true);
+      if (opts?.closeSheet !== false) {
+        setSheetOpen(false);
+        setSelected(null);
+      }
+      setToast(t(lang, "posAddedToCart"));
+      window.setTimeout(() => setToast(null), 1200);
+      window.requestAnimationFrame(() => searchInputRef.current?.focus());
+    },
+    [bumpRecentProduct, hapticsOn, setDraftInput, lang],
+  );
+
   const applyDraftInput = useCallback(() => {
     if (!selected) return;
     const val = inputMode === "money" ? parseDisplayMoney(display) : parseDisplayQty(display);
@@ -521,13 +562,8 @@ export function PosPage({ lang }: { lang: Language }) {
       window.setTimeout(() => setToast(null), 2200);
       return;
     }
-    if (selected) bumpRecentProduct(selected.id);
-    if (hapticsOn) void hapticTap();
-    setSheetOpen(false);
-    setSelected(null);
-    setDisplay("");
-    setSaleCheckoutMinimized(false);
-  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, hapticsOn, bumpRecentProduct]);
+    afterAddToCart(selected.id);
+  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, afterAddToCart]);
 
   const applyPreset = useCallback(
     (mode: LineInputMode, value: number) => {
@@ -539,34 +575,70 @@ export function PosPage({ lang }: { lang: Language }) {
         window.setTimeout(() => setToast(null), 2200);
         return;
       }
-      if (selected) bumpRecentProduct(selected.id);
-      if (hapticsOn) void hapticTap();
-      setSheetOpen(false);
-      setSelected(null);
-      setDisplay("");
-      setSaleCheckoutMinimized(false);
+      afterAddToCart(selected.id);
     },
-    [selected, setDraftInput, addDraftLineFromInput, lang, hapticsOn, bumpRecentProduct],
+    [selected, setDraftInput, addDraftLineFromInput, lang, afterAddToCart],
+  );
+
+  const handleDraftQtyStep = useCallback(
+    (line: SaleLine, backwards: boolean) => {
+      const product = productById.get(line.productId);
+      const delta = product ? draftLineQuantityStep(product, backwards) : backwards ? -1 : 1;
+      const res = adjustDraftLineQuantity(line.productId, delta);
+      if (!res.ok) {
+        setToast(t(lang, res.errorKey ?? "saleError"));
+        window.setTimeout(() => setToast(null), 2200);
+      } else if (hapticsOn) void hapticTap();
+    },
+    [productById, adjustDraftLineQuantity, lang, hapticsOn],
+  );
+
+  const handleDraftQtyConfirm = useCallback(
+    (productId: string, quantity: number) => {
+      const res = setDraftLineQuantity(productId, quantity);
+      if (!res.ok) {
+        setToast(t(lang, res.errorKey ?? "saleError"));
+        window.setTimeout(() => setToast(null), 2200);
+      } else if (hapticsOn) void hapticTap();
+    },
+    [setDraftLineQuantity, lang, hapticsOn],
   );
 
   const totalPaidInput = useMemo(() => {
     const cash = parseDisplayMoney(cashInput);
     const mobile = parseDisplayMoney(mobileMoneyInput);
     if (paymentMethod === "cash") return cash > 0 ? cash : draftTotal;
-    if (paymentMethod === "mobile_money") return draftTotal;
+    if (paymentMethod === "atm" || paymentMethod === "mobile_money") return draftTotal;
     if (paymentMethod === "credit") return cash + mobile;
     return cash + mobile;
   }, [paymentMethod, cashInput, mobileMoneyInput, draftTotal]);
 
   const changeDue = useMemo(() => {
-    if (paymentMethod === "mobile_money") return 0;
+    if (paymentMethod === "mobile_money" || paymentMethod === "atm") return 0;
     return Math.max(0, totalPaidInput - draftTotal);
   }, [paymentMethod, totalPaidInput, draftTotal]);
 
   const computedDebt = useMemo(() => {
-    if (paymentMethod === "cash" || paymentMethod === "mobile_money") return 0;
+    if (paymentMethod === "cash" || paymentMethod === "mobile_money" || paymentMethod === "atm") return 0;
     return Math.max(0, draftTotal - totalPaidInput);
   }, [paymentMethod, draftTotal, totalPaidInput]);
+
+  const appendCheckoutDigit = useCallback(
+    (d: string) => {
+      const apply = (prev: string) => {
+        if (d === "back") return prev.slice(0, -1);
+        return (prev + d).replace(/\D/g, "").slice(0, 10);
+      };
+      if (checkoutAmountField === "mobile") setMobileMoneyInput(apply);
+      else setCashInput(apply);
+    },
+    [checkoutAmountField],
+  );
+
+  const clearCheckoutAmount = useCallback(() => {
+    if (checkoutAmountField === "mobile") setMobileMoneyInput("");
+    else setCashInput("");
+  }, [checkoutAmountField]);
 
   const commitSearch = useCallback((raw: string) => {
     const q = raw.trim();
@@ -610,6 +682,7 @@ export function PosPage({ lang }: { lang: Language }) {
     setSaleCustomerId("");
     setSaleCustomerName("");
     setSaleCustomerPhone("");
+    setCheckoutAmountField("cash");
     setPaymentMethod("cash");
     if (r.saleId) {
       if (r.firstSale && !preferences.celebratedFirstSale) {
@@ -636,6 +709,8 @@ export function PosPage({ lang }: { lang: Language }) {
     saleCustomerName,
     saleCustomerPhone,
     addCustomer,
+    totalPaidInput,
+    changeDue,
     finalizeDraftSale,
     lang,
     hapticsOn,
@@ -704,6 +779,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
+              ref={searchInputRef}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onBlur={(e) => commitSearch(e.target.value)}
@@ -964,8 +1040,9 @@ export function PosPage({ lang }: { lang: Language }) {
       )}
 
       {draftLines.length > 0 && !saleCheckoutMinimized ? (
+        <PosScreenPortal>
         <div
-          className="waka-overlay-full fixed inset-0 z-[55] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
+          className="waka-overlay-full fixed inset-0 z-[80] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
           style={{
             paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
           }}
@@ -993,37 +1070,20 @@ export function PosPage({ lang }: { lang: Language }) {
             </button>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
-            <ul className="space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
+            <DraftCartSummary lang={lang} stats={draftCartStats} />
+            <ul className="mt-3 space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
               {draftLines.map((line) => (
-                <li key={line.productId} className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-bold text-slate-900">{line.name}</p>
-                      {lineDiscountUgx(line) > 0 ? (
-                        <p className="text-xs font-bold text-amber-800">
-                          − UGX {lineDiscountUgx(line).toLocaleString()} {t(lang, "discountBtn").toLowerCase()}
-                        </p>
-                      ) : null}
-                    </div>
-                    <p className="shrink-0 text-lg font-black">UGX {line.lineTotalUgx.toLocaleString()}</p>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setDiscountLine(line)}
-                      className="min-h-[40px] flex-1 rounded-xl border-2 border-waka-200 bg-white px-3 text-sm font-black text-waka-900"
-                    >
-                      {t(lang, "discountBtn")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeDraftLine(line.productId)}
-                      className="min-h-[40px] rounded-xl border-2 border-rose-200 bg-rose-50 px-3 text-sm font-black text-rose-800"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </li>
+                <DraftCartLineRow
+                  key={line.productId}
+                  lang={lang}
+                  line={line}
+                  product={productById.get(line.productId)}
+                  onIncrement={() => handleDraftQtyStep(line, false)}
+                  onDecrement={() => handleDraftQtyStep(line, true)}
+                  onQtyTap={() => setQtyEditLine(line)}
+                  onDiscount={() => setDiscountLine(line)}
+                  onRemove={() => removeDraftLine(line.productId)}
+                />
               ))}
             </ul>
             {draftDiscountTotal > 0 ? (
@@ -1039,11 +1099,14 @@ export function PosPage({ lang }: { lang: Language }) {
             <div className="mt-4">
               <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "paymentMethodLabel")}</p>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {(["cash", "mobile_money", "mixed", "credit"] as const).map((method) => (
+                {POS_CHECKOUT_METHODS.map((method) => (
                   <button
                     key={method}
                     type="button"
-                    onClick={() => setPaymentMethod(method)}
+                    onClick={() => {
+                      setPaymentMethod(method);
+                      if (method === "cash" || method === "credit") setCheckoutAmountField("cash");
+                    }}
                     className={clsx(
                       "min-h-[48px] rounded-2xl border text-sm font-black",
                       paymentMethod === method ? "border-waka-400 bg-waka-100 text-waka-950" : "border-stone-200 bg-white text-stone-700",
@@ -1055,38 +1118,53 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
 
-            {paymentMethod === "cash" || paymentMethod === "mixed" || paymentMethod === "credit" ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                <label className="block text-base font-semibold text-slate-800">
+            {paymentMethod === "cash" || paymentMethod === "credit" ? (
+              <div className="mt-4">
+                <p className="text-base font-semibold text-slate-800">
                   {paymentMethod === "cash" ? t(lang, "paymentCashReceivedLabel") : t(lang, "paymentCashLabel")}
-                  <MoneyInput
-                    value={cashInput}
-                    onChange={(e) => setCashInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
-                    placeholder="0"
-                  />
-                </label>
-                {paymentMethod === "mixed" || paymentMethod === "credit" ? (
-                  <label className="block text-base font-semibold text-slate-800">
-                    {t(lang, "paymentMobileMoneyLabel")}
-                    <MoneyInput
-                      value={mobileMoneyInput}
-                      onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
-                      placeholder="0"
-                    />
-                  </label>
-                ) : null}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCheckoutAmountField("cash")}
+                  className={clsx(
+                    "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black",
+                    checkoutAmountField === "cash" ? "border-waka-500 bg-waka-50 text-slate-900" : "border-slate-200 bg-white text-slate-900",
+                  )}
+                >
+                  UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                </button>
               </div>
             ) : null}
 
-            {(paymentMethod === "cash" || paymentMethod === "mixed" || paymentMethod === "credit") && (cashInput || changeDue > 0) ? (
+            {paymentMethod === "credit" ? (
+              <div className="mt-4">
+                <p className="text-base font-semibold text-slate-800">{t(lang, "paymentMobileMoneyLabel")}</p>
+                <button
+                  type="button"
+                  onClick={() => setCheckoutAmountField("mobile")}
+                  className={clsx(
+                    "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black",
+                    checkoutAmountField === "mobile" ? "border-waka-500 bg-waka-50 text-slate-900" : "border-slate-200 bg-white text-slate-900",
+                  )}
+                >
+                  UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                </button>
+              </div>
+            ) : null}
+
+            {(paymentMethod === "cash" || paymentMethod === "credit") && (
+              <div className="mt-4">
+                <Numpad allowDecimal={false} onDigit={appendCheckoutDigit} onClear={clearCheckoutAmount} />
+              </div>
+            )}
+
+            {(paymentMethod === "cash" || paymentMethod === "credit") && (cashInput || changeDue > 0) ? (
               <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base font-black text-emerald-900">
                 {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
               </p>
             ) : null}
 
-            {paymentMethod === "credit" || paymentMethod === "mixed" ? (
+            {paymentMethod === "credit" ? (
               <>
                 <p className="mt-3 rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-900">
                   {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
@@ -1108,6 +1186,7 @@ export function PosPage({ lang }: { lang: Language }) {
                       onChange={(e) => setSaleCustomerPhone(e.target.value)}
                       className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
                       placeholder={t(lang, "personPhonePh")}
+                      inputMode="tel"
                     />
                   </label>
                 </div>
@@ -1131,8 +1210,9 @@ export function PosPage({ lang }: { lang: Language }) {
                 ) : null}
               </>
             ) : null}
+            <div aria-hidden className="h-4 shrink-0" />
           </div>
-          <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 py-2 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+          <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
             <button
               type="button"
               onClick={finishSale}
@@ -1142,13 +1222,14 @@ export function PosPage({ lang }: { lang: Language }) {
             </button>
           </footer>
         </div>
+        </PosScreenPortal>
       ) : null}
 
       {draftLines.length > 0 && saleCheckoutMinimized ? (
         <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "totalLabel")}</p>
+              <DraftCartSummary lang={lang} stats={draftCartStats} compact />
               <p className="truncate text-xl font-black text-waka-700">UGX {draftTotal.toLocaleString()}</p>
             </div>
             <button
@@ -1194,7 +1275,9 @@ export function PosPage({ lang }: { lang: Language }) {
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 pb-4 [-webkit-overflow-scrolling:touch]">
             {(sellPresets.length > 0 || moneyPresets.length > 0 || qtyPresets.length > 0) && (
               <div className="space-y-3">
-                <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">{t(lang, "tapQuickAmount")}</p>
+                <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">
+                  {t(lang, "posWholesaleUnits")}
+                </p>
                 <div className="grid grid-cols-2 gap-2">
                   {sellPresets.map((preset, i) => (
                     <button
@@ -1292,9 +1375,9 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {receiptSale && receiptPlain && receiptDisplay ? (
+        <PosScreenPortal>
         <div
-          className="fixed inset-0 flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
-          style={{ zIndex: "var(--waka-z-pos-receipt)" }}
+          className="fixed inset-0 z-[80] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
           role="dialog"
           aria-modal
           aria-labelledby="pos-receipt-title"
@@ -1311,7 +1394,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {t(lang, "receiptClose")}
             </button>
           </header>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 [-webkit-overflow-scrolling:touch]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
             <div
               className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
               dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
@@ -1356,6 +1439,7 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           </footer>
         </div>
+        </PosScreenPortal>
       ) : null}
 
       <DiscountLineModal
@@ -1392,6 +1476,22 @@ export function PosPage({ lang }: { lang: Language }) {
           return { ok: true };
         }}
       />
+
+      {qtyEditLine ? (
+        <QuantityEditModal
+          lang={lang}
+          open
+          productName={qtyEditLine.name}
+          qtyLabel={
+            productById.get(qtyEditLine.productId)
+              ? formatDraftLineQty(productById.get(qtyEditLine.productId)!, qtyEditLine)
+              : String(qtyEditLine.quantity)
+          }
+          initialQuantity={qtyEditLine.quantity}
+          onClose={() => setQtyEditLine(null)}
+          onConfirm={(quantity) => handleDraftQtyConfirm(qtyEditLine.productId, quantity)}
+        />
+      ) : null}
 
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 

@@ -1,4 +1,5 @@
 import type { LineInputMode, Product, SaleLine } from "../types";
+import { formatFriendlyQuantity } from "./saleQuantityLabel";
 
 const MONEY_ROUND = 4;
 
@@ -115,7 +116,7 @@ export function getPosSellPresets(product: Product): PosSellPreset[] {
     presets.push({
       mode: "quantity",
       value: rate,
-      label: `Full ${packName}`,
+      label: `1 ${packName}`,
       priceLabel: `${packPrice.toLocaleString()} UGX`,
     });
   }
@@ -129,16 +130,21 @@ export function getPosSellPresets(product: Product): PosSellPreset[] {
       presets.push({
         mode: "quantity",
         value: qty,
-        label: `${qty} ${unit}`,
+        label: formatFriendlyQuantity(qty, unit, "receipt"),
         priceLabel: `${Math.round(qty * price).toLocaleString()} UGX`,
       });
     }
     if (money !== price && money !== Math.round(price * rate)) {
+      const moneyQty =
+        qty != null && qty > 0 ? qty : Math.round((money / price) * 10 ** MONEY_ROUND) / 10 ** MONEY_ROUND;
       presets.push({
         mode: "money",
         value: money,
-        label: `${money.toLocaleString()} UGX`,
-        priceLabel: qty != null && qty > 0 ? `${qty} ${unit}` : "",
+        label:
+          qty != null && qty > 0
+            ? formatFriendlyQuantity(qty, unit, "receipt")
+            : formatFriendlyQuantity(moneyQty, unit, "receipt"),
+        priceLabel: `${money.toLocaleString()} UGX`,
       });
     }
   }

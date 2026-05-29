@@ -189,7 +189,7 @@ export const PREVIEW_FLEET_DEVICES: FleetDeviceRow[] = [
     device_fingerprint: "fp-preview-2",
     label: "Owner phone",
     platform: "android",
-    app_version: "1.0.1",
+    app_version: "1.0.2",
     last_seen_at: daysAgo(2),
     is_active: true,
     trusted: false,
@@ -307,6 +307,7 @@ export const PREVIEW_INTERNAL_ADMINS: InternalAdminRow[] = [
 export const PREVIEW_SHOP_OPS_DETAIL: ShopOpsDetail = {
   shop: {
     id: PREVIEW_SHOP_ID,
+    shop_number: "A042",
     name: "Kampala Provisions (Preview)",
     district: "Kampala",
     district_id: null,

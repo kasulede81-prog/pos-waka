@@ -64,6 +64,7 @@ import {
   shiftExpectedCash,
   type DiscountMode,
 } from "../lib/saleAdjustments";
+import { mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
@@ -288,6 +289,8 @@ type PosState = {
   setDraftInput: (input: DraftLineInput | null) => void;
   addDraftLineFromInput: () => { ok: boolean; errorKey?: string };
   removeDraftLine: (productId: string) => void;
+  setDraftLineQuantity: (productId: string, quantity: number) => { ok: boolean; errorKey?: string };
+  adjustDraftLineQuantity: (productId: string, delta: number) => { ok: boolean; errorKey?: string };
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
   clearDraft: () => void;
   voidSaleLine: (input: {
@@ -308,7 +311,7 @@ type PosState = {
   finalizeDraftSale: (opts: {
     debtUgx: number;
     customerId?: string | null;
-    paymentMethod?: "cash" | "mobile_money" | "mixed" | "credit";
+    paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit";
     amountPaidUgx?: number;
     changeGivenUgx?: number;
   }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
@@ -444,7 +447,7 @@ function fireSnapshotWrite(): void {
       const cur = usePosStore.getState();
       if (!cur._hydrated || persistSuspended > 0) return;
 
-      await writeSnapshot(snapshotPayloadFromState(cur));
+      await writeSnapshot(snapshotPayloadFromState(cur), { skipLastGood: true });
 
       const after = usePosStore.getState();
       if (!after._hydrated || persistSuspended > 0) return;
@@ -1027,10 +1030,17 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!built.line || built.error) {
       return { ok: false, errorKey: built.error ?? "invalid" };
     }
-    set((state) => ({
-      draftLines: [...state.draftLines.filter((l) => l.productId !== built.line!.productId), built.line!],
-      draftInput: null,
-    }));
+    set((state) => {
+      const existing = state.draftLines.find((l) => l.productId === built.line!.productId);
+      const merged = mergeDraftSaleLine(existing, built.line!, d.product);
+      return {
+        draftLines: [
+          ...state.draftLines.filter((l) => l.productId !== built.line!.productId),
+          merged,
+        ],
+        draftInput: null,
+      };
+    });
     scheduleDraftPersist(get);
     return { ok: true };
   },
@@ -1038,6 +1048,34 @@ export const usePosStore = create<PosState>((set, get) => {
   removeDraftLine: (productId) => {
     set((s) => ({ draftLines: s.draftLines.filter((l) => l.productId !== productId) }));
     scheduleDraftPersist(get);
+  },
+
+  setDraftLineQuantity: (productId, quantity) => {
+    const state = get();
+    const line = state.draftLines.find((l) => l.productId === productId);
+    const product = state.products.find((p) => p.id === productId);
+    if (!line || !product) return { ok: false, errorKey: "noSelection" };
+    if (quantity <= 0) {
+      set((s) => ({ draftLines: s.draftLines.filter((l) => l.productId !== productId) }));
+      scheduleDraftPersist(get);
+      return { ok: true };
+    }
+    const next = rebuildDraftLineQuantity(product, quantity, line);
+    if (!next) return { ok: false, errorKey: "invalidQty" };
+    set((s) => ({
+      draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
+    }));
+    scheduleDraftPersist(get);
+    return { ok: true };
+  },
+
+  adjustDraftLineQuantity: (productId, delta) => {
+    const state = get();
+    const line = state.draftLines.find((l) => l.productId === productId);
+    const product = state.products.find((p) => p.id === productId);
+    if (!line || !product) return { ok: false, errorKey: "noSelection" };
+    const nextQty = Math.round((line.quantity + delta) * 10000) / 10000;
+    return get().setDraftLineQuantity(productId, nextQty);
   },
 
   applyDraftLineDiscount: (productId, mode, value) => {
@@ -1092,6 +1130,7 @@ export const usePosStore = create<PosState>((set, get) => {
     }, 0);
 
     const actorId = state.sessionActor?.userId ?? null;
+    const actor = state.sessionActor;
     const todayKey = dateKeyKampala(new Date());
     const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
     const sale: Sale = {
@@ -1136,6 +1175,57 @@ export const usePosStore = create<PosState>((set, get) => {
       supplierId: null,
     }));
 
+    const auditEntries: AuditLogEntry[] = [];
+    const buildAudit = (action: AuditAction, payloadSummary: string, payload: Record<string, unknown>): AuditLogEntry => ({
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      deviceId: getOrCreateDeviceId(),
+      actorUserId: actor?.userId ?? "unknown",
+      actorName: actor?.displayName,
+      role: actor?.role ?? "cashier",
+      action,
+      payloadSummary,
+      payload,
+    });
+    auditEntries.push(
+      buildAudit("sale_completed", `Sale UGX ${total.toLocaleString()}`, {
+        saleId: sale.id,
+        totalUgx: total,
+        debtUgx: debt,
+        customerId: customerId ?? null,
+        soldByUserId: actorId,
+        lineCount: sale.lines.length,
+        firstLineName: sale.lines[0]?.name ?? null,
+      }),
+    );
+    if (discountTotal > 0) {
+      auditEntries.push(
+        buildAudit("discount_given", `Discount UGX ${discountTotal.toLocaleString()}`, {
+          saleId: sale.id,
+          discountUgx: discountTotal,
+          soldByUserId: actorId,
+        }),
+      );
+    }
+
+    let nextPreferences = state.preferences;
+    if (actor) {
+      nextPreferences = {
+        ...state.preferences,
+        shifts: (state.preferences.shifts ?? []).map((sh) =>
+          !sh.endAt && sh.actorUserId === actor.userId
+            ? {
+                ...sh,
+                salesTotalUgx: sh.salesTotalUgx + total,
+                debtTotalUgx: sh.debtTotalUgx + debt,
+                estimatedCashUgx: sh.estimatedCashUgx + cashPaidUgx,
+                discountsTotalUgx: (sh.discountsTotalUgx ?? 0) + discountTotal,
+              }
+            : sh,
+        ),
+      };
+    }
+
     set({
       products,
       sales: [sale, ...state.sales],
@@ -1143,52 +1233,15 @@ export const usePosStore = create<PosState>((set, get) => {
       draftInput: null,
       customers,
       stockMovements: mergeStockMovements(saleMovements, state.stockMovements),
+      preferences: nextPreferences,
+      auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
     });
-
-    const actor = state.sessionActor;
-    if (actor) {
-      set((st) => ({
-        preferences: {
-          ...st.preferences,
-          shifts: (st.preferences.shifts ?? []).map((sh) =>
-            !sh.endAt && sh.actorUserId === actor.userId
-              ? {
-                  ...sh,
-                  salesTotalUgx: sh.salesTotalUgx + total,
-                  debtTotalUgx: sh.debtTotalUgx + debt,
-                  estimatedCashUgx: sh.estimatedCashUgx + cashPaidUgx,
-                  discountsTotalUgx: (sh.discountsTotalUgx ?? 0) + discountTotal,
-                }
-              : sh,
-          ),
-        },
-      }));
-    }
 
     void queueRemote("pending_sales", { saleId: sale.id });
-    if (hasSupabaseConfig) {
-      void import("../lib/deviceOnline").then(({ getDeviceOnline }) => {
-        if (!getDeviceOnline()) return;
-        void import("../offline/cloudSync").then((m) => m.syncSaleImmediately(sale.id));
-      });
+    for (const entry of auditEntries) {
+      void queueRemote("audit_log", { entry });
     }
     void clearPersistedDraft();
-    pushAudit("sale_completed", `Sale UGX ${total.toLocaleString()}`, {
-      saleId: sale.id,
-      totalUgx: total,
-      debtUgx: debt,
-      customerId: customerId ?? null,
-      soldByUserId: actorId,
-      lineCount: sale.lines.length,
-      firstLineName: sale.lines[0]?.name ?? null,
-    });
-    if (discountTotal > 0) {
-      pushAudit("discount_given", `Discount UGX ${discountTotal.toLocaleString()}`, {
-        saleId: sale.id,
-        discountUgx: discountTotal,
-        soldByUserId: actorId,
-      });
-    }
     return { ok: true, firstSale: isFirstSale, saleId: sale.id };
   },
 
@@ -2001,8 +2054,32 @@ export const usePosStore = create<PosState>((set, get) => {
 };
 });
 
-usePosStore.subscribe((state) => {
+function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
+  return (
+    a.products === b.products &&
+    a.customers === b.customers &&
+    a.sales === b.sales &&
+    a.preferences === b.preferences &&
+    a.debtPayments === b.debtPayments &&
+    a.dayCloses === b.dayCloses &&
+    a.auditLogs === b.auditLogs &&
+    a.suppliers === b.suppliers &&
+    a.purchases === b.purchases &&
+    a.supplierPayments === b.supplierPayments &&
+    a.stockMovements === b.stockMovements &&
+    a.voidRecords === b.voidRecords &&
+    a.returnRecords === b.returnRecords &&
+    a.archivedSales === b.archivedSales &&
+    a.archivedAuditLogs === b.archivedAuditLogs &&
+    a.archivedDayCloses === b.archivedDayCloses &&
+    a.archivedVoidRecords === b.archivedVoidRecords &&
+    a.archivedReturnRecords === b.archivedReturnRecords
+  );
+}
+
+usePosStore.subscribe((state, prev) => {
   if (!state._hydrated || persistSuspended > 0) return;
+  if (prev && persistRelevantUnchanged(prev, state)) return;
   schedulePersist(() => usePosStore.getState());
 });
 
@@ -2398,11 +2475,18 @@ async function runPostBootstrapTasks(): Promise<void> {
   const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   void hydrateLocalShopProfileFromCloud().catch(() => undefined);
   void applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
+  const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
   const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
-  scheduleBackgroundCloudSync({ pull: true, delayMs: 400 });
-  scheduleBackgroundCloudSync({ pull: false, delayMs: 12_000 });
-  const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
-  void uploadShopCloudSnapshot().catch(() => false);
+  const localEmpty = isLocalShopDataEmpty();
+  scheduleBackgroundCloudSync({
+    pull: localEmpty,
+    delayMs: isNativeApp() ? 12_000 : 400,
+  });
+  scheduleBackgroundCloudSync({ pull: false, delayMs: isNativeApp() ? 25_000 : 12_000 });
+  if (localEmpty) {
+    const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
+    void uploadShopCloudSnapshot().catch(() => false);
+  }
 }
 
 function hydrateEssentialsFromSnap(snap: Partial<PersistedSnapshot>): void {

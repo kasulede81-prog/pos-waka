@@ -1,7 +1,7 @@
 import { isNativeApp } from "./nativeApp";
 
-export const NATIVE_PERSIST_DEBOUNCE_MS = 750;
-export const WEB_PERSIST_DEBOUNCE_MS = 180;
+export const NATIVE_PERSIST_DEBOUNCE_MS = 3_500;
+export const WEB_PERSIST_DEBOUNCE_MS = 500;
 
 export function persistDebounceMs(): number {
   return isNativeApp() ? NATIVE_PERSIST_DEBOUNCE_MS : WEB_PERSIST_DEBOUNCE_MS;
@@ -10,8 +10,12 @@ export function persistDebounceMs(): number {
 /** Yield so React can paint (longer timeout on native WebView). */
 export function yieldUiTick(): Promise<void> {
   return new Promise((resolve) => {
+    if (isNativeApp()) {
+      setTimeout(resolve, 16);
+      return;
+    }
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      window.requestIdleCallback(() => resolve(), { timeout: isNativeApp() ? 64 : 32 });
+      window.requestIdleCallback(() => resolve(), { timeout: 32 });
     } else {
       setTimeout(resolve, 0);
     }

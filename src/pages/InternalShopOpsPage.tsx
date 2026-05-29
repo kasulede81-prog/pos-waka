@@ -6,6 +6,7 @@ import { adminPermissions } from "../components/internal-admin/v2/adminRoles";
 import { AccountRecoveryPanel } from "../components/internal-admin/AccountRecoveryPanel";
 import { AdminShopProfileOverridePanel } from "../components/internal-admin/AdminShopProfileOverridePanel";
 import { AdminPermanentDeletePanel } from "../components/internal-admin/AdminPermanentDeletePanel";
+import { AdminShopInventoryPanel } from "../components/internal-admin/AdminShopInventoryPanel";
 import { AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
 import { InternalNotesPanel, ShopTimelinePanel } from "../components/internal-admin/v2/ops/OpsWidgets";
 import {
@@ -16,6 +17,7 @@ import {
 import { fetchShopAuditTimeline, type OpsAuditRow } from "../lib/wakaInternalAdmin";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { formatWakaShopNumber } from "../lib/shopNumber";
 import { sendOwnerPasswordResetEmail } from "../lib/shopRecoverySignals";
 import {
   ADMIN_PLAN_CODES,
@@ -409,6 +411,12 @@ export function InternalShopOpsPage({ lang }: Props) {
               <p className="text-xs font-semibold text-stone-600">{detail.owner_label}</p>
             ) : null}
             <h1 className="mt-0.5 text-xl font-black text-stone-900">{detail.shop.name}</h1>
+            {formatWakaShopNumber(detail.shop.shop_number) ? (
+              <p className="mt-1 font-mono text-sm font-black text-orange-700">
+                Shop no. {formatWakaShopNumber(detail.shop.shop_number)}
+              </p>
+            ) : null}
+            <p className="mt-1 text-[11px] font-medium text-stone-500">ID {detail.shop.id}</p>
             <p className="mt-1 text-xs font-semibold text-stone-600">
               {[detail.shop.district, detail.shop.city].filter(Boolean).join(" · ") || "—"}
             </p>
@@ -454,6 +462,21 @@ export function InternalShopOpsPage({ lang }: Props) {
               </a>
             ) : null}
           </div>
+
+          {canSupport ? (
+            <AdminCollapsible
+              title="Shop products (cloud)"
+              summary={`${detail.product_count} products · ${detail.sale_count_30d} sales (30d)`}
+            >
+              <AdminShopInventoryPanel
+                products={detail.products_preview ?? []}
+                productCountTable={detail.product_count_table ?? detail.product_count}
+                productCountSnapshot={detail.product_count_snapshot ?? 0}
+                salesInSnapshot={detail.sales_in_snapshot ?? 0}
+                cloudSnapshotAt={detail.cloud_snapshot_at ?? null}
+              />
+            </AdminCollapsible>
+          ) : null}
 
           {canSupport ? (
             <AccountRecoveryPanel

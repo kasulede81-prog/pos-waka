@@ -11,7 +11,7 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
-import { isPhoneLoginEmail, phoneToLoginEmail } from "../lib/authPhoneEmail";
+import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
@@ -298,13 +298,12 @@ export function useAuth() {
   const signIn = useCallback(async (identifier: string, password: string) => {
     clearStaffAuth();
     setStaffSession(null);
-    const trimmed = identifier.trim();
+    const trimmed = identifier.trim().toLowerCase();
     if (hasSupabaseConfig && supabase) {
-      const phoneE164 = normalizeUgPhoneE164(trimmed);
-      const digitsOnly = trimmed.replace(/\D/g, "");
-      const usePhone = Boolean(phoneE164 && digitsOnly.length >= 9 && !trimmed.includes("@"));
-      const loginEmail = usePhone && phoneE164 ? phoneToLoginEmail(trimmed) : trimmed;
-      const { error } = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+      if (!trimmed.includes("@")) {
+        throw new Error("Sign in with your email address so you can reset your password later.");
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
       if (error) {
         reportAuthIssue("sign_in_failed", { status: error.status ?? 0 });
         throw error;
@@ -321,7 +320,7 @@ export function useAuth() {
     clearStaffAuth();
     setStaffSession(null);
     if (!isGoogleAuthUiEnabled()) {
-      throw new Error("Google sign-in is not available. Use your email or phone and password.");
+      throw new Error("Google sign-in is not available. Use your email and password.");
     }
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Supabase is not configured.");

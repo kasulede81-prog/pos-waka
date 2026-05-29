@@ -260,7 +260,8 @@ export async function writeSnapshot(
   const db = await getLocalDb();
   const tx = db.transaction("kv", "readwrite");
   const kv = tx.objectStore("kv");
-  if (!opts?.skipLastGood) {
+  const skipLastGood = opts?.skipLastGood === true;
+  if (!skipLastGood) {
     try {
       const prev = await kv.get(mainKey);
       if (prev && isSnapshotShape(prev)) {

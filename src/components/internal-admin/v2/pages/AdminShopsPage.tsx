@@ -53,6 +53,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
       const owner = formatDisplayEmail(s.owner_email) ?? s.owner_label ?? "";
       return (
         s.name.toLowerCase().includes(q) ||
+        (s.shop_number ?? "").toLowerCase().includes(q) ||
         owner.toLowerCase().includes(q) ||
         (s.district ?? "").toLowerCase().includes(q)
       );
@@ -193,6 +194,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
               <li key={s.id}>
                 <ShopCard
                   name={s.name}
+                  shopNumber={s.shop_number}
                   district={[s.district, s.city].filter(Boolean).join(" · ") || "—"}
                   planCode={s.plan_code ?? "—"}
                   isActive={s.is_active}

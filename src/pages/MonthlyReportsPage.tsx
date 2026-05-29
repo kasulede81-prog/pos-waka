@@ -7,6 +7,7 @@ import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import {
   buildMonthlyBusinessReport,
@@ -34,20 +35,17 @@ function monthOptions(count = 18): string[] {
 
 export function MonthlyReportsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const canView = hasPermission(actor.role, "reports.view");
   const [includeArchived, setIncludeArchived] = useState(true);
   const [monthKey, setMonthKey] = useState(currentMonthKey);
   const [busy, setBusy] = useState(false);
 
   const sales = useDeferredReportingSales(includeArchived);
-  const returnRecords = usePosStore((s) =>
-    includeArchived ? [...s.returnRecords, ...s.archivedReturnRecords] : s.returnRecords,
-  );
+  const returnRecords = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
 
-  if (!hasPermission(actor.role, "reports.view")) {
-    return <Navigate to="/office" replace />;
-  }
+  const months = useMemo(() => monthOptions(), []);
 
   const report = useMemo(
     () =>
@@ -62,7 +60,9 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
     [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products],
   );
 
-  const months = useMemo(() => monthOptions(), []);
+  if (!canView) {
+    return <Navigate to="/office" replace />;
+  }
 
   const downloadCsv = () => {
     downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report), "text/csv;charset=utf-8");
@@ -119,9 +119,7 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
 
       <section className="rounded-3xl border border-waka-100 bg-waka-50/50 p-5">
         <p className="text-sm font-bold text-stone-600">{t(lang, "monthlyReportPreview")}</p>
-        <p className="mt-2 text-2xl font-black text-waka-950">
-          UGX {report.totalSalesUgx.toLocaleString()}
-        </p>
+        <p className="mt-2 text-2xl font-black text-waka-950">UGX {report.totalSalesUgx.toLocaleString()}</p>
         <p className="text-sm font-semibold text-stone-700">
           {t(lang, "monthlyReportTransactions")}: {report.transactionCount} · {t(lang, "estimatedProfit")}: UGX{" "}
           {report.profitUgx.toLocaleString()}

@@ -6,6 +6,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { ShopProfileForm } from "../components/settings/ShopProfileForm";
+import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 
 type Props = {
   lang: Language;
@@ -32,6 +33,7 @@ export function SettingsShopPage({ lang, email, shopName, user, authMode }: Prop
         title={t(lang, "settingsHubShop")}
         subtitle={t(lang, "settingsHubShopSub")}
       />
+      <ShopSupportNumberCard lang={lang} />
       <ShopProfileForm
         lang={lang}
         authMode={authMode}

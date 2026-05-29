@@ -2,6 +2,7 @@ import type { Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, Supp
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
+import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { usePosStore } from "../store/usePosStore";
 import { writeSnapshot } from "./localDb";
@@ -491,6 +492,8 @@ export async function pullShopDataFromCloud(): Promise<{
     }
     if (batch.length < pageSize) break;
     offset += pageSize;
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
   }
 
   void supabase
@@ -571,6 +574,10 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
   try {
+    if (isNativeApp()) {
+      const { yieldUiTick } = await import("../lib/uiYield");
+      await yieldUiTick();
+    }
     usePosStore.setState({ products, customers, sales });
 
     const next = usePosStore.getState();

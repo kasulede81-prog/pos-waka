@@ -15,6 +15,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsHubPage } from "./pages/SettingsHubPage";
 import { SettingsShopPage } from "./pages/SettingsShopPage";
+import { SettingsReceiptPage } from "./pages/SettingsReceiptPage";
 import { SettingsSellingPage } from "./pages/SettingsSellingPage";
 import { SettingsPinPage } from "./pages/SettingsPinPage";
 import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
@@ -397,6 +398,14 @@ function App() {
                     user={auth.user}
                     authMode={auth.mode}
                   />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/receipt"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsReceiptPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

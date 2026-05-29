@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { adminShopSetOwnerPasswordDirect } from "../../lib/wakaInternalAdmin";
+import { adminShopSetOwnerPasswordDirect, resolveShopIdForAdmin } from "../../lib/wakaInternalAdmin";
+import { isWakaShopNumberInput } from "../../lib/shopNumber";
 
 type Props = {
   previewMode: boolean;
@@ -17,9 +18,17 @@ export function SupportPasswordResetPanel({ previewMode, onToast }: Props) {
       onToast({ kind: "err", text: "Preview mode — action blocked." });
       return;
     }
-    const id = shopId.trim();
-    if (!id) {
-      onToast({ kind: "err", text: "Enter the shop ID (from shop detail URL)." });
+    const idInput = shopId.trim();
+    let id = idInput;
+    if (isWakaShopNumberInput(idInput)) {
+      const resolved = await resolveShopIdForAdmin(idInput);
+      if (!resolved) {
+        onToast({ kind: "err", text: `No shop found for number ${idInput.toUpperCase()}.` });
+        return;
+      }
+      id = resolved;
+    } else if (!id) {
+      onToast({ kind: "err", text: "Enter shop number (e.g. A001) or shop UUID." });
       return;
     }
     if (password.length < 8) {
@@ -53,11 +62,11 @@ export function SupportPasswordResetPanel({ previewMode, onToast }: Props) {
         <span className="font-mono">admin-set-owner-password</span> edge function.
       </p>
       <label className="mt-3 block text-xs font-bold text-stone-800">
-        Shop ID (UUID)
+        Shop number or UUID
         <input
           value={shopId}
           onChange={(e) => setShopId(e.target.value)}
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+          placeholder="A001 or xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
           className="mt-1 w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 font-mono text-xs"
         />
       </label>

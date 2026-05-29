@@ -6,9 +6,8 @@ import type { Language, Permission, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { languageToggleLabel, nextLanguage } from "../../lib/language";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { useShopPresenceHeartbeat } from "../../hooks/useShopPresenceHeartbeat";
-import { useSyncStatus } from "../../hooks/useSyncStatus";
+import { AppShellSyncLabel } from "./AppShellSyncLabel";
 import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveSessionActor } from "../../lib/sessionActor";
@@ -43,13 +42,6 @@ type Props = {
 
 type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
 
-function syncStripLabel(lang: Language, status: ReturnType<typeof useSyncStatus>, online: boolean): string {
-  if (!online) return `${t(lang, "workingOfflineLabel")} · ${t(lang, "savedOffline")}`;
-  if (status.syncing) return t(lang, "syncingShort");
-  if (status.pendingCount > 0) return `${t(lang, "willSyncLater")} (${status.pendingCount})`;
-  return t(lang, "allSavedShort");
-}
-
 function navItemActive(path: string, pathname: string): boolean {
   if (path === "/office") {
     return pathname === "/office" || isBackOfficePath(pathname);
@@ -61,9 +53,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const location = useLocation();
   const navigate = useNavigate();
   useAndroidBackButton();
-  const { isOnline } = useOfflineStatus();
   useShopPresenceHeartbeat();
-  const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
   const { authMode: subAuthMode, snapshot } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
@@ -208,7 +198,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
               <div className="min-w-0">
-                <p className="truncate text-[11px] font-medium text-waka-800/90">{syncStripLabel(lang, sync, isOnline)}</p>
+                <AppShellSyncLabel lang={lang} />
               </div>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1.5">

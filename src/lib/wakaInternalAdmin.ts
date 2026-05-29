@@ -446,6 +446,7 @@ export type PlanTierMetrics = {
 
 export type RecentShopRow = {
   id: string;
+  shop_number?: string | null;
   name: string;
   district: string | null;
   city: string | null;
@@ -499,9 +500,20 @@ export async function internalOpsSetSubscriptionRequestStatus(
   return { ok: false, message: j.error ?? "Request could not be updated." };
 }
 
+export type AdminShopProductRow = {
+  id: string;
+  name: string;
+  category: string | null;
+  selling_price_ugx: number | null;
+  stock_quantity: number | null;
+  is_active: boolean;
+  updated_at: string | null;
+};
+
 export type ShopOpsDetail = {
   shop: {
     id: string;
+    shop_number?: string | null;
     name: string;
     district: string | null;
     district_id: string | null;
@@ -521,6 +533,12 @@ export type ShopOpsDetail = {
   owner_email: string | null;
   product_count: number;
   sale_count_30d: number;
+  product_count_table?: number;
+  product_count_snapshot?: number;
+  sales_in_snapshot?: number;
+  cloud_snapshot_at?: string | null;
+  cloud_snapshot_bytes?: number | null;
+  products_preview?: AdminShopProductRow[];
   last_sale_at: string | null;
   subscription: {
     id: string;
@@ -840,6 +858,7 @@ export async function deleteSubscriptionRequest(id: string): Promise<{ ok: boole
 
 type RecentShopDbRow = {
   id: string;
+  shop_number?: string | null;
   name: string;
   district: string | null;
   city: string | null;
@@ -882,6 +901,7 @@ async function enrichRecentShopRows(shops: RecentShopDbRow[]): Promise<RecentSho
     const trial_days_left = sub ? trialDaysLeft(sub.trial_ends_at, sub.status) : null;
     return {
       id: s.id,
+      shop_number: s.shop_number ?? null,
       name: s.name ?? "—",
       district: s.district ?? null,
       city: s.city ?? null,
@@ -906,6 +926,7 @@ function mapRecentShopRpcRow(row: Record<string, unknown>): RecentShopRow {
   const trialEnds = (row.trial_ends_at as string | null) ?? null;
   return {
     id: row.id as string,
+    shop_number: row.shop_number != null ? String(row.shop_number) : null,
     name: (row.name as string) ?? "—",
     district: (row.district as string) ?? null,
     city: (row.city as string) ?? null,
@@ -930,7 +951,7 @@ export async function fetchShopsBySignupDate(limit = 50): Promise<RecentShopRow[
   const cap = Math.min(Math.max(limit, 1), 100);
   const { data: shops, error } = await supabase
     .from("shops")
-    .select("id, name, district, city, is_active, created_at, organization_id, last_seen_at")
+    .select("id, shop_number, name, district, city, is_active, created_at, organization_id, last_seen_at")
     .order("created_at", { ascending: false })
     .limit(cap);
   if (error || !shops?.length) return [];
@@ -946,6 +967,95 @@ export async function fetchRecentShops(limit = 20): Promise<RecentShopRow[]> {
   }
 
   return fetchShopsBySignupDate(limit);
+}
+
+function mapProductsPreview(raw: unknown): AdminShopProductRow[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((row) => {
+      const p = row as Record<string, unknown>;
+      if (!p.id || !p.name) return null;
+      return {
+        id: String(p.id),
+        name: String(p.name),
+        category: p.category != null ? String(p.category) : null,
+        selling_price_ugx: p.selling_price_ugx != null ? Number(p.selling_price_ugx) : null,
+        stock_quantity: p.stock_quantity != null ? Number(p.stock_quantity) : null,
+        is_active: p.is_active !== false,
+        updated_at: p.updated_at != null ? String(p.updated_at) : null,
+      } satisfies AdminShopProductRow;
+    })
+    .filter((x): x is AdminShopProductRow => x != null);
+}
+
+async function fillShopOpsMetricsFallback(shopId: string, detail: ShopOpsDetail): Promise<ShopOpsDetail> {
+  if (!supabase) return detail;
+  const needsProducts = detail.product_count === 0 && (detail.products_preview?.length ?? 0) === 0;
+  const needsSales = detail.sale_count_30d === 0;
+  if (!needsProducts && !needsSales) return detail;
+
+  const since = new Date(Date.now() - 30 * 86400000).toISOString();
+  const [prodHead, salesHead] = await Promise.all([
+    needsProducts
+      ? supabase
+          .from("products")
+          .select("id", { count: "exact", head: true })
+          .eq("shop_id", shopId)
+          .eq("is_active", true)
+      : Promise.resolve({ count: detail.product_count, error: null }),
+    needsSales
+      ? supabase
+          .from("sales")
+          .select("id", { count: "exact", head: true })
+          .eq("shop_id", shopId)
+          .eq("status", "completed")
+          .gte("created_at", since)
+      : Promise.resolve({ count: detail.sale_count_30d, error: null }),
+  ]);
+
+  let products_preview = detail.products_preview ?? [];
+  if (needsProducts && !prodHead.error && (prodHead.count ?? 0) > 0 && products_preview.length === 0) {
+    const { data: rows } = await supabase
+      .from("products")
+      .select("id, name, selling_price_per_unit_ugx, stock_on_hand, is_active, updated_at, metadata, product_categories ( name )")
+      .eq("shop_id", shopId)
+      .order("updated_at", { ascending: false })
+      .limit(80);
+    products_preview = (rows ?? []).map((row) => {
+      const r = row as Record<string, unknown>;
+      const catJoin = r.product_categories as { name?: string } | { name?: string }[] | null;
+      const catName = Array.isArray(catJoin) ? catJoin[0]?.name : catJoin?.name;
+      const meta = r.metadata as Record<string, unknown> | null;
+      return {
+        id: String(r.id),
+        name: String(r.name ?? "—"),
+        category: catName ?? (meta?.category != null ? String(meta.category) : null),
+        selling_price_ugx: r.selling_price_per_unit_ugx != null ? Number(r.selling_price_per_unit_ugx) : null,
+        stock_quantity: r.stock_on_hand != null ? Number(r.stock_on_hand) : null,
+        is_active: r.is_active !== false,
+        updated_at: r.updated_at != null ? String(r.updated_at) : null,
+      } satisfies AdminShopProductRow;
+    });
+  }
+
+  return {
+    ...detail,
+    product_count: Math.max(detail.product_count, prodHead.count ?? 0),
+    product_count_table: prodHead.count ?? detail.product_count_table ?? detail.product_count,
+    sale_count_30d: Math.max(detail.sale_count_30d, salesHead.count ?? 0),
+    products_preview,
+  };
+}
+
+export async function resolveShopIdForAdmin(shopNumberOrUuid: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { normalizeShopLookupInput } = await import("./shopNumber");
+  const parsed = normalizeShopLookupInput(shopNumberOrUuid);
+  if (!parsed) return null;
+  if (parsed.kind === "uuid") return parsed.value;
+  const { data, error } = await supabase.rpc("resolve_shop_id_by_number", { p_shop_number: parsed.value });
+  if (error || !data) return null;
+  return String(data);
 }
 
 export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail | null> {
@@ -1008,9 +1118,10 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
           created_at: (p.created_at as string) ?? "",
         }))
       : [];
-    return {
+    return fillShopOpsMetricsFallback(shopId, {
       shop: {
         id: shopRaw.id as string,
+        shop_number: shopRaw.shop_number != null ? String(shopRaw.shop_number) : null,
         name: (shopRaw.name as string) ?? "—",
         district: (shopRaw.district as string) ?? null,
         district_id: (shopRaw.district_id as string) ?? null,
@@ -1030,13 +1141,19 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
       owner_email: formatDisplayEmail(j.owner_email as string),
       product_count: Number(j.product_count ?? 0),
       sale_count_30d: Number(j.sale_count_30d ?? 0),
+      product_count_table: j.product_count_table != null ? Number(j.product_count_table) : undefined,
+      product_count_snapshot: j.product_count_snapshot != null ? Number(j.product_count_snapshot) : undefined,
+      sales_in_snapshot: j.sales_in_snapshot != null ? Number(j.sales_in_snapshot) : undefined,
+      cloud_snapshot_at: (j.cloud_snapshot_at as string) ?? null,
+      cloud_snapshot_bytes: j.cloud_snapshot_bytes != null ? Number(j.cloud_snapshot_bytes) : null,
+      products_preview: mapProductsPreview(j.products_preview),
       last_sale_at: (j.last_sale_at as string) ?? null,
       subscription,
       plan_code: (j.plan_code as string) ?? null,
       devices,
       sync_health,
       subscriptionPaymentsRecent,
-    };
+    });
   }
 
   const { data: shop, error: shopErr } = await supabase
@@ -1090,9 +1207,10 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
 
   const devices = (devRows ?? []) as unknown as ShopDeviceRow[];
 
-  return {
+  return fillShopOpsMetricsFallback(shopId, {
     shop: {
       id: shop.id as string,
+      shop_number: (shop as { shop_number?: string }).shop_number ?? null,
       name: (shop.name as string) ?? "—",
       district: (shop.district as string) ?? null,
       district_id: (shop.district_id as string) ?? null,
@@ -1118,7 +1236,7 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
     devices,
     sync_health: null,
     subscriptionPaymentsRecent: [],
-  };
+  });
 }
 
 export type AdminShopProfileUpdateInput = {

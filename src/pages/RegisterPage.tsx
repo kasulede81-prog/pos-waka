@@ -55,7 +55,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
     e.preventDefault();
     setError(null);
     const emailNorm = email.trim().toLowerCase();
-    if (!shopName.trim() || !ownerName.trim() || !phone.trim() || !emailNorm) {
+    if (!shopName.trim() || !ownerName.trim() || !emailNorm) {
       setError(t(lang, "registerFieldRequired"));
       return;
     }
@@ -175,13 +175,13 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
               <input
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                required
                 inputMode="tel"
                 autoComplete="tel"
                 placeholder="07XXXXXXXX"
                 className={fieldClass}
               />
             </label>
+            <p className="text-xs font-medium text-stone-500">{t(lang, "registerPhoneOptionalHint")}</p>
 
             <label className="block text-sm font-bold text-stone-800">
               {t(lang, "password")}

@@ -10,6 +10,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "../lib/datesUg";
 import { buildReceiptNumberForSale, buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
+import { resolveReceiptBranding } from "../lib/receiptBranding";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
 import type { VoidReason } from "../types";
@@ -82,6 +83,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     const receiptNumber = buildReceiptNumberForSale(sale, sales);
     const cust = sale.customerId ? customers.find((c) => c.id === sale.customerId) : null;
     const productById = new Map(products.map((p) => [p.id, p] as const));
+    const branding = resolveReceiptBranding(preferences);
     const text = buildSaleReceiptText({
       shopName,
       shopAddress: preferences.shopAddressLine ?? null,
@@ -90,6 +92,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       receiptNumber,
       sale,
       productById,
+      customHeaderLines: branding.customHeaderLines,
+      footerThanks: branding.footerThanks,
+      returnPolicy: branding.returnPolicy,
       customerName: cust?.name ?? null,
       customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
       labels: {
