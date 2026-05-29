@@ -5,6 +5,10 @@ import { hasSupabaseConfig, supabase } from "./supabase";
 import { yieldUiTick } from "./uiYield";
 
 const MAX_CLOUD_SNAPSHOT_BYTES = 8 * 1024 * 1024;
+/** Avoid re-uploading a huge JSON blob on every sync (keeps the app responsive). */
+const MIN_UPLOAD_INTERVAL_MS = 5 * 60_000;
+let lastCloudSnapshotUploadAt = 0;
+let cloudSnapshotUploadInFlight: Promise<boolean> | null = null;
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -79,8 +83,15 @@ export function isLocalShopDataEmpty(): boolean {
   return s.products.length === 0 && s.sales.length === 0 && s.customers.length === 0;
 }
 
-/** Upload full local snapshot to Supabase (call after sales/products are synced when possible). */
-export async function uploadShopCloudSnapshot(): Promise<boolean> {
+/** Upload full local snapshot to Supabase (debounced; call after sales/products are synced when possible). */
+export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promise<boolean> {
+  const now = Date.now();
+  if (!opts?.force && now - lastCloudSnapshotUploadAt < MIN_UPLOAD_INTERVAL_MS) {
+    return false;
+  }
+  if (cloudSnapshotUploadInFlight) return cloudSnapshotUploadInFlight;
+
+  const run = async (): Promise<boolean> => {
   const ctx = await resolveShopCtx();
   if (!ctx || !supabase) return false;
 
@@ -104,7 +115,14 @@ export async function uploadShopCloudSnapshot(): Promise<boolean> {
     { onConflict: "shop_id" },
   );
 
+  if (!error) lastCloudSnapshotUploadAt = Date.now();
   return !error;
+  };
+
+  cloudSnapshotUploadInFlight = run().finally(() => {
+    cloudSnapshotUploadInFlight = null;
+  });
+  return cloudSnapshotUploadInFlight;
 }
 
 /** Download cloud snapshot and replace local store (new phone). */

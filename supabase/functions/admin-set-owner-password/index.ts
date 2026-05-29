@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { parseWakaInternalMeRow } from "../_shared/wakaInternalStaff.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -45,13 +46,13 @@ Deno.serve(async (req) => {
   });
 
   const { data: staffRow, error: staffErr } = await userClient.rpc("waka_internal_me");
-  if (staffErr || !staffRow) {
-    return json({ ok: false, error: "forbidden" }, 403);
+  const me = parseWakaInternalMeRow(staffRow);
+  if (staffErr || !me) {
+    return json({ ok: false, error: "forbidden", detail: staffErr?.message ?? "Not an active internal admin." }, 403);
   }
 
-  const role = String((staffRow as { role?: string }).role ?? "").toLowerCase();
-  if (role !== "super_admin" && role !== "support_admin") {
-    return json({ ok: false, error: "forbidden" }, 403);
+  if (me.role !== "super_admin" && me.role !== "support_admin") {
+    return json({ ok: false, error: "forbidden", detail: "Support or super admin only." }, 403);
   }
 
   const admin = createClient(supabaseUrl, serviceKey);

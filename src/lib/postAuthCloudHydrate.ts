@@ -1,4 +1,3 @@
-import { Capacitor } from "@capacitor/core";
 import { getDeviceOnline } from "./deviceOnline";
 import { hasSupabaseConfig } from "./supabase";
 import { usePosStore } from "../store/usePosStore";
@@ -30,23 +29,27 @@ export async function hydrateAccountFromCloud(opts?: {
 
   const localEmpty = isLocalShopDataEmpty();
 
+  const { pullCloudAndMergeIntoStore, syncShopWithCloud, pushShopPendingToCloud } = await import(
+    "../offline/cloudSync",
+  );
+
   if (localEmpty) {
     const restored = await restoreShopFromCloudSnapshot(opts?.onProgress).catch(() => false);
     if (restored) {
       const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
       await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
+      if (getDeviceOnline()) {
+        await pushShopPendingToCloud().catch(() => undefined);
+        await uploadShopCloudSnapshot().catch(() => false);
+      }
       return;
     }
-  }
-
-  const { pullCloudAndMergeIntoStore, syncShopWithCloud, pushShopPendingToCloud } = await import(
-    "../offline/cloudSync",
-  );
-
-  if (opts?.forcePull || Capacitor.isNativePlatform() || localEmpty) {
-    await pullCloudAndMergeIntoStore().catch(() => undefined);
-  } else {
-    await syncShopWithCloud({ pull: true }).catch(() => undefined);
+    if (opts?.forcePull || localEmpty) {
+      await pullCloudAndMergeIntoStore().catch(() => undefined);
+    }
+  } else if (getDeviceOnline()) {
+    // Shop already on device — push pending rows only; avoid heavy full cloud merge on every open.
+    await syncShopWithCloud({ pull: false }).catch(() => undefined);
   }
 
   if (getDeviceOnline()) {

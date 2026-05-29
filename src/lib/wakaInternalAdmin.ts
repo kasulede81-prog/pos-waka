@@ -1410,7 +1410,9 @@ export async function adminShopSetOwnerPasswordDirect(
   const j = r.data;
   if (j.ok) return { ok: true };
   const err = j.error ?? "password_update_failed";
-  if (err === "forbidden") return { ok: false, message: "Your admin role cannot set passwords." };
+  if (err === "forbidden") {
+    return { ok: false, message: j.detail ?? "Your admin role cannot set passwords." };
+  }
   if (err === "owner_not_found") return { ok: false, message: "Shop owner account not found." };
   if (err === "password_too_short") return { ok: false, message: "Password must be at least 8 characters." };
   return { ok: false, message: j.detail ?? err };

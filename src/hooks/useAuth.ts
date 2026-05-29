@@ -134,7 +134,7 @@ export function useAuth() {
     if (!next?.user || !supabase) return;
     if (bootstrappedUserIds[next.user.id] || isWorkspaceBootstrapped(next.user.id)) {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
-      void hydrateAccountFromCloud({ forcePull: Capacitor.isNativePlatform() });
+      void hydrateAccountFromCloud();
       return;
     }
 
@@ -204,7 +204,7 @@ export function useAuth() {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
       markWorkspaceBootstrapped(next.user.id);
       await tryApplyPendingReferral(next);
-      void hydrateAccountFromCloud({ forcePull: Capacitor.isNativePlatform() });
+      void hydrateAccountFromCloud({ forcePull: true });
     } catch (e) {
       console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
       throw new Error("Could not finish creating your shop. Please try again.");
