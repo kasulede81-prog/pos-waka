@@ -2,16 +2,24 @@ import { isPhoneLoginEmail } from "./authPhoneEmail";
 import { supabase } from "./supabase";
 import type { FieldMapPin } from "./wakaInternalAdmin";
 
+export type MarketingAgentRole = "trial_agent" | "vip_agent" | "field_agent";
+
+export const MARKETING_AGENT_ROLES: MarketingAgentRole[] = ["trial_agent", "vip_agent", "field_agent"];
+
 export type MarketingAgentMe = {
   referralCode: string;
   fullName: string | null;
   referralCount: number;
+  roles: MarketingAgentRole[];
+  canActivateTrial: boolean;
+  canActivateVip: boolean;
 };
 
 export type AgentReferralRow = {
   id: string;
   shopName: string | null;
   ownerEmail: string | null;
+  ownerPhone: string | null;
   createdAt: string;
   shopId?: string | null;
   district?: string | null;
@@ -31,6 +39,7 @@ export type InternalMarketingAgentRow = {
   shopId: string | null;
   shopName: string | null;
   active: boolean;
+  roles: MarketingAgentRole[];
   referralCount: number;
   createdAt: string;
 };
@@ -50,25 +59,51 @@ export function normalizeReferralCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
-/** Hide synthetic phone-login emails in admin UI. */
+/** Hide synthetic phone-login emails; show phone and email when both exist. */
 export function formatOwnerContactLabel(email: string | null, phoneE164: string | null): string {
-  if (phoneE164?.trim()) return phoneE164.trim();
-  if (email && !isPhoneLoginEmail(email)) return email.trim();
-  return "—";
+  const parts: string[] = [];
+  if (phoneE164?.trim()) parts.push(phoneE164.trim());
+  if (email?.trim() && !isPhoneLoginEmail(email)) parts.push(email.trim());
+  return parts.length > 0 ? parts.join(" · ") : "—";
 }
 
 export async function fetchMarketingAgentMe(): Promise<MarketingAgentMe | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.rpc("marketing_agent_me");
   if (error || !data || typeof data !== "object") return null;
-  const row = data as { ok?: boolean; error?: string; referral_code?: string; full_name?: string | null; referral_count?: number };
+  const row = data as {
+    ok?: boolean;
+    error?: string;
+    referral_code?: string;
+    full_name?: string | null;
+    referral_count?: number;
+    roles?: unknown;
+    can_activate_trial?: boolean;
+    can_activate_vip?: boolean;
+  };
   if (!row.ok || row.error === "not_agent") return null;
   if (!row.referral_code) return null;
+  const roles = parseAgentRoles(row.roles);
   return {
     referralCode: normalizeReferralCode(row.referral_code),
     fullName: row.full_name ?? null,
     referralCount: row.referral_count ?? 0,
+    roles,
+    canActivateTrial: Boolean(row.can_activate_trial) || roles.includes("trial_agent") || roles.includes("vip_agent"),
+    canActivateVip: Boolean(row.can_activate_vip) || roles.includes("vip_agent"),
   };
+}
+
+function parseAgentRoles(raw: unknown): MarketingAgentRole[] {
+  if (!Array.isArray(raw)) return ["field_agent"];
+  const out: MarketingAgentRole[] = [];
+  for (const r of raw) {
+    const s = String(r);
+    if (s === "trial_agent" || s === "vip_agent" || s === "field_agent") {
+      if (!out.includes(s)) out.push(s);
+    }
+  }
+  return out.length ? out : ["field_agent"];
 }
 
 export async function applyReferralCode(code: string): Promise<{ ok: boolean; error?: string }> {
@@ -94,6 +129,7 @@ export async function listAgentReferrals(agentId?: string): Promise<AgentReferra
       id: String(x.id ?? ""),
       shopName: x.shop_name != null ? String(x.shop_name) : null,
       ownerEmail: x.owner_email != null ? String(x.owner_email) : null,
+      ownerPhone: x.owner_phone != null ? String(x.owner_phone) : null,
       createdAt: String(x.created_at ?? ""),
       shopId: x.shop_id != null ? String(x.shop_id) : null,
       district: x.district != null ? String(x.district) : null,
@@ -150,7 +186,7 @@ export function referralRowToMapPin(row: AgentReferralRow): FieldMapPin | null {
     city: row.city ?? null,
     is_active: (row.subscriptionStatus ?? "").toLowerCase() !== "inactive",
     district_id: null,
-    owner_label: row.ownerEmail ?? null,
+    owner_label: formatOwnerContactLabel(row.ownerEmail, row.ownerPhone),
     plan_code: row.planCode ?? null,
     subscription_status: row.subscriptionStatus ?? null,
     last_seen_at: row.createdAt ?? null,
@@ -172,6 +208,7 @@ export async function internalListMarketingAgents(): Promise<InternalMarketingAg
       shopId: x.shop_id != null ? String(x.shop_id) : null,
       shopName: x.shop_name != null ? String(x.shop_name) : null,
       active: Boolean(x.active),
+      roles: parseAgentRoles(x.roles),
       referralCount: Number(x.referral_count ?? 0),
       createdAt: String(x.created_at ?? ""),
     };
@@ -190,7 +227,10 @@ export async function internalGrantMarketingAgentByShop(shopId: string): Promise
   if (!supabase) return { ok: false, error: "offline" };
   const trimmed = shopId.trim();
   if (!trimmed) return { ok: false, error: "shop_required" };
-  const { data, error } = await supabase.rpc("internal_grant_marketing_agent_by_shop", { p_shop_id: trimmed });
+  const { data, error } = await supabase.rpc("internal_grant_marketing_agent_by_shop", {
+    p_shop_id: trimmed,
+    p_roles: ["trial_agent", "field_agent"],
+  });
   if (error) return { ok: false, error: error.message };
   const row = (data ?? {}) as {
     ok?: boolean;
@@ -208,6 +248,75 @@ export async function internalGrantMarketingAgentByShop(shopId: string): Promise
     shopName: row.shop_name,
     alreadyAgent: row.already_agent,
   };
+}
+
+export async function internalSetMarketingAgentRoles(
+  agentId: string,
+  roles: MarketingAgentRole[],
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const { data, error } = await supabase.rpc("internal_set_marketing_agent_roles", {
+    p_agent_id: agentId,
+    p_roles: roles,
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as { ok?: boolean; error?: string };
+  if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
+  return { ok: true };
+}
+
+export async function internalGrantMarketingAgentByShopWithRoles(
+  shopId: string,
+  roles: MarketingAgentRole[],
+): Promise<{
+  ok: boolean;
+  id?: string;
+  referralCode?: string;
+  shopName?: string;
+  error?: string;
+  alreadyAgent?: boolean;
+}> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const trimmed = shopId.trim();
+  if (!trimmed) return { ok: false, error: "shop_required" };
+  const { data, error } = await supabase.rpc("internal_grant_marketing_agent_by_shop", {
+    p_shop_id: trimmed,
+    p_roles: roles.length ? roles : ["field_agent"],
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as {
+    ok?: boolean;
+    id?: string;
+    referral_code?: string;
+    shop_name?: string;
+    error?: string;
+    already_agent?: boolean;
+  };
+  if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
+  return {
+    ok: true,
+    id: row.id,
+    referralCode: row.referral_code ? normalizeReferralCode(row.referral_code) : undefined,
+    shopName: row.shop_name,
+    alreadyAgent: row.already_agent,
+  };
+}
+
+export async function marketingAgentUpgradeReferralPlan(input: {
+  referralId: string;
+  planCode: "starter" | "business" | "waka_plus";
+  days?: number;
+}): Promise<{ ok: boolean; error?: string; planCode?: string }> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const { data, error } = await supabase.rpc("marketing_agent_upgrade_referral_plan", {
+    p_referral_id: input.referralId,
+    p_plan_code: input.planCode,
+    p_days: input.days ?? 30,
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as { ok?: boolean; error?: string; plan_code?: string };
+  if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
+  return { ok: true, planCode: row.plan_code };
 }
 
 export async function internalCreateMarketingAgent(input: {

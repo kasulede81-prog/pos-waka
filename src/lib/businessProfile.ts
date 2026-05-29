@@ -1,5 +1,5 @@
 import type { BusinessType, Language } from "../types";
-import { fetchOwnerOnboardingStatus } from "./ownerOnboarding";
+import { fetchOwnerOnboardingStatus, writeCachedOwnerOnboardingComplete } from "./ownerOnboarding";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { usePosStore } from "../store/usePosStore";
@@ -95,6 +95,8 @@ export type BusinessProfileInput = {
 export type PrimaryShopLocationSnapshot = {
   shopId: string;
   organizationId: string;
+  shopName: string | null;
+  phoneE164: string | null;
   districtId: string | null;
   city: string | null;
   area: string | null;
@@ -122,6 +124,21 @@ export function messageForProfileSaveError(codeOrMessage: string, lang: Language
     return lang === "lg" ? "Ennamba ya Uganda si ntuufu." : "Enter a valid Uganda mobile number.";
   }
   return codeOrMessage;
+}
+
+/** After cloud profile save: sync auth email, cache onboarding complete, update local prefs. */
+export async function finalizeOwnerOnboardingAfterCloudSave(userId: string): Promise<void> {
+  if (supabase) {
+    const { data: authData } = await supabase.auth.getUser();
+    const email = authData.user?.email?.trim().toLowerCase();
+    if (email && email.includes("@") && !email.endsWith("@login.waka.ug")) {
+      await supabase.from("profiles").update({ email }).eq("id", userId);
+    }
+  }
+  writeCachedOwnerOnboardingComplete(userId, true);
+  const store = usePosStore.getState();
+  store.completeBusinessOnboarding(store.preferences.businessType);
+  window.dispatchEvent(new CustomEvent("waka:onboarding-updated"));
 }
 
 export function normalizeUgPhoneE164(raw: string): string | null {
@@ -204,6 +221,8 @@ export async function loadPrimaryShopLocationFromCloud(): Promise<PrimaryShopLoc
   const s = primary.shop as {
     id: string;
     organization_id: string;
+    name: string | null;
+    phone_e164: string | null;
     district_id: string | null;
     city: string | null;
     area: string | null;
@@ -213,6 +232,8 @@ export async function loadPrimaryShopLocationFromCloud(): Promise<PrimaryShopLoc
   return {
     shopId: s.id,
     organizationId: s.organization_id,
+    shopName: (s.name as string | null) ?? null,
+    phoneE164: (s.phone_e164 as string | null) ?? null,
     districtId: s.district_id,
     city: s.city,
     area: s.area,

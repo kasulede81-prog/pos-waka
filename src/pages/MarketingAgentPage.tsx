@@ -5,7 +5,9 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
   fetchMarketingAgentMe,
+  formatOwnerContactLabel,
   listAgentReferrals,
+  marketingAgentUpgradeReferralPlan,
   referralRowToMapPin,
   type AgentReferralRow,
   type MarketingAgentMe,
@@ -20,6 +22,8 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
   const [agent, setAgent] = useState<MarketingAgentMe | null>(null);
   const [referrals, setReferrals] = useState<AgentReferralRow[]>([]);
   const [copyHint, setCopyHint] = useState<string | null>(null);
+  const [upgradeBusyId, setUpgradeBusyId] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +71,27 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
 
   const mapPins = referrals.map(referralRowToMapPin).filter((x): x is NonNullable<typeof x> => x !== null);
   const activeReferrals = referrals.filter((r) => (r.subscriptionStatus ?? "").toLowerCase() === "active").length;
+
+  const upgradeReferral = async (referralId: string, planCode: "starter" | "business" | "waka_plus") => {
+    setUpgradeBusyId(referralId);
+    setActionMsg(null);
+    const res = await marketingAgentUpgradeReferralPlan({ referralId, planCode, days: 30 });
+    setUpgradeBusyId(null);
+    if (!res.ok) {
+      const key =
+        res.error === "vip_role_required"
+          ? t(lang, "agentUpgradeVipRequired")
+          : res.error === "role_forbidden"
+            ? t(lang, "agentUpgradeNotAllowed")
+            : res.error ?? t(lang, "agentUpgradeFailed");
+      setActionMsg(key);
+      return;
+    }
+    setActionMsg(t(lang, "agentUpgradeOk").replace("{{plan}}", planCode));
+    const rows = await listAgentReferrals();
+    setReferrals(rows);
+    window.setTimeout(() => setActionMsg(null), 3000);
+  };
 
   if (loading) {
     return (
@@ -116,6 +141,11 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
           </button>
         </div>
         {copyHint ? <p className="mt-2 text-xs font-bold text-emerald-700">{copyHint}</p> : null}
+        {agent.roles.length > 0 ? (
+          <p className="mt-2 text-xs font-semibold text-stone-600">
+            {t(lang, "agentRolesLabel")}: {agent.roles.join(" · ")}
+          </p>
+        ) : null}
         <p className="mt-3 break-all text-xs font-medium text-stone-500">{shareLink}</p>
       </article>
 
@@ -140,17 +170,62 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
         {referrals.length === 0 ? (
           <p className="mt-4 text-sm font-semibold text-stone-500">{t(lang, "agentReferralsEmpty")}</p>
         ) : (
+          <>
+          {actionMsg ? <p className="mt-3 text-sm font-bold text-waka-800">{actionMsg}</p> : null}
           <ul className="mt-4 space-y-2">
             {referrals.map((r) => (
               <li key={r.id} className="rounded-2xl border border-stone-100 bg-stone-50 px-4 py-3">
                 <p className="font-bold text-stone-900">{r.shopName ?? t(lang, "agentReferralShopPending")}</p>
-                <p className="text-xs font-medium text-stone-500">{r.ownerEmail ?? "—"}</p>
+                <p className="text-xs font-medium text-stone-600">
+                  {formatOwnerContactLabel(r.ownerEmail, r.ownerPhone)}
+                </p>
+                {r.planCode ? (
+                  <p className="text-xs font-bold text-waka-800">
+                    {t(lang, "agentPlanLabel")}: {r.planCode}
+                    {r.subscriptionStatus ? ` (${r.subscriptionStatus})` : ""}
+                  </p>
+                ) : null}
                 <p className="mt-1 text-xs text-stone-400">
                   {r.createdAt ? new Date(r.createdAt).toLocaleString() : "—"}
                 </p>
+                {r.shopId && (agent.canActivateTrial || agent.canActivateVip) ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {agent.canActivateTrial ? (
+                      <button
+                        type="button"
+                        disabled={upgradeBusyId === r.id}
+                        onClick={() => void upgradeReferral(r.id, "starter")}
+                        className="rounded-lg bg-amber-600 px-2.5 py-1 text-[11px] font-black text-white disabled:opacity-50"
+                      >
+                        {t(lang, "agentUpgradeStarter")}
+                      </button>
+                    ) : null}
+                    {agent.canActivateVip ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={upgradeBusyId === r.id}
+                          onClick={() => void upgradeReferral(r.id, "business")}
+                          className="rounded-lg bg-waka-600 px-2.5 py-1 text-[11px] font-black text-white disabled:opacity-50"
+                        >
+                          {t(lang, "agentUpgradeBusiness")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={upgradeBusyId === r.id}
+                          onClick={() => void upgradeReferral(r.id, "waka_plus")}
+                          className="rounded-lg border border-waka-400 bg-white px-2.5 py-1 text-[11px] font-black text-waka-800 disabled:opacity-50"
+                        >
+                          {t(lang, "agentUpgradeVip")}
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>
+          </>
         )}
       </article>
 

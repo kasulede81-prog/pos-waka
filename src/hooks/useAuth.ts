@@ -10,10 +10,10 @@ import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription"
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
-import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
-import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
+import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { applyReferralCode } from "../lib/referralAgents";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
@@ -143,6 +143,10 @@ export function useAuth() {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
       markWorkspaceBootstrapped(next.user.id);
       await tryApplyPendingReferral(next);
+      const onboarding = await fetchOwnerOnboardingStatus();
+      if (onboarding?.complete) {
+        await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
+      }
       void hydrateAccountFromCloud({ forcePull: true });
       return;
     }
@@ -204,6 +208,10 @@ export function useAuth() {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
       markWorkspaceBootstrapped(next.user.id);
       await tryApplyPendingReferral(next);
+      const onboarding = await fetchOwnerOnboardingStatus();
+      if (onboarding?.complete) {
+        await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
+      }
       void hydrateAccountFromCloud({ forcePull: true });
     } catch (e) {
       console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
@@ -457,6 +465,7 @@ export function useAuth() {
       ownerName: string;
       email: string;
       phone: string;
+      districtId: string;
       password: string;
       referralCode?: string;
     }): Promise<SignUpResult> => {
@@ -464,9 +473,14 @@ export function useAuth() {
       if (!loginEmail.includes("@")) {
         throw new Error("Enter a valid email address for your account and password recovery.");
       }
+      const phoneNorm = normalizeUgPhoneE164(input.phone);
+      if (!phoneNorm) {
+        throw new Error("Enter a valid Uganda mobile number for your shop.");
+      }
       return signUp(loginEmail, input.password, input.shopName.trim(), "kiosk_duka", {
         fullName: input.ownerName.trim(),
-        phone: input.phone,
+        phone: phoneNorm,
+        districtId: input.districtId,
         organizationName: input.shopName.trim(),
         shopDisplayName: input.shopName.trim(),
         defaultCurrency: "UGX",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
@@ -9,6 +9,8 @@ import { formatAuthError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpResult } from "../hooks/useAuth";
+import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 
 type Props = {
   lang: Language;
@@ -19,6 +21,7 @@ type Props = {
     ownerName: string;
     email: string;
     phone: string;
+    districtId: string;
     password: string;
     referralCode?: string;
   }) => Promise<SignUpResult>;
@@ -35,6 +38,9 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const [ownerName, setOwnerName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [districtId, setDistrictId] = useState("");
+  const [districts, setDistricts] = useState<DistrictRow[]>([]);
+  const [districtsError, setDistrictsError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.trim().toUpperCase() ?? "");
   const [agentOpen, setAgentOpen] = useState(Boolean(searchParams.get("ref")));
@@ -43,6 +49,13 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const [googleBusy, setGoogleBusy] = useState(false);
   const showGoogle = hasSupabaseConfig && isGoogleAuthUiAvailable();
 
+  const loadDistricts = useCallback(async () => {
+    setDistrictsError(null);
+    const { districts: d, error: err } = await fetchDistricts();
+    setDistricts(d);
+    if (err) setDistrictsError(err);
+  }, []);
+
   useEffect(() => {
     const ref = searchParams.get("ref")?.trim();
     if (ref) {
@@ -50,6 +63,10 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
       setAgentOpen(true);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (hasSupabaseConfig) void loadDistricts();
+  }, [loadDistricts]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -67,6 +84,14 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
       setError(t(lang, "passwordTooShort"));
       return;
     }
+    if (!normalizeUgPhoneE164(phone)) {
+      setError(t(lang, "registerPhoneInvalid"));
+      return;
+    }
+    if (!districtId) {
+      setError(t(lang, "businessProfileDistrictRequired"));
+      return;
+    }
     setBusy(true);
     try {
       const result = await signUpQuick({
@@ -74,6 +99,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
         ownerName: ownerName.trim(),
         email: emailNorm,
         phone: phone.trim(),
+        districtId,
         password,
         referralCode: referralCode.trim() || undefined,
       });
@@ -177,11 +203,39 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
                 onChange={(e) => setPhone(e.target.value)}
                 inputMode="tel"
                 autoComplete="tel"
+                required
                 placeholder="07XXXXXXXX"
                 className={fieldClass}
               />
             </label>
-            <p className="text-xs font-medium text-stone-500">{t(lang, "registerPhoneOptionalHint")}</p>
+
+            <label className="block text-sm font-bold text-stone-800">
+              {t(lang, "registerDistrictLabel")}
+              <select
+                value={districtId}
+                onChange={(e) => setDistrictId(e.target.value)}
+                required
+                className={fieldClass}
+              >
+                <option value="">—</option>
+                {districts.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {districts.length === 0 ? (
+              <p className="text-xs font-semibold text-stone-600">
+                {districtsError
+                  ? `${t(lang, "registerDistrictsLoadFailed")} ${districtsError}`
+                  : t(lang, "registerDistrictsLoading")}
+                {" "}
+                <button type="button" className="font-bold text-waka-700 underline" onClick={() => void loadDistricts()}>
+                  {t(lang, "registerDistrictsRetry")}
+                </button>
+              </p>
+            ) : null}
 
             <label className="block text-sm font-bold text-stone-800">
               {t(lang, "password")}

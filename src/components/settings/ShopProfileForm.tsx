@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Language } from "../../types";
 import { supabase } from "../../lib/supabase";
@@ -11,13 +11,13 @@ import {
   type OwnerOnboardingStatus,
 } from "../../lib/ownerOnboarding";
 import {
+  finalizeOwnerOnboardingAfterCloudSave,
   loadPrimaryShopLocationFromCloud,
   messageForProfileSaveError,
   normalizeUgPhoneE164,
   saveBusinessProfileToCloud,
   saveOwnerBusinessProfileBundleRpc,
 } from "../../lib/businessProfile";
-import { useOfflineStatus } from "../../hooks/useOfflineStatus";
 import { fetchDistricts, type DistrictRow } from "../../lib/shopDistricts";
 import { DeviceLocationRequestError, getDevicePosition } from "../../lib/deviceLocation";
 import { SHOP_CURRENCY } from "../../lib/shopCurrency";
@@ -33,7 +33,6 @@ type Props = {
 };
 
 export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnboardGate, onSaved }: Props) {
-  const { isOnline } = useOfflineStatus();
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
@@ -53,7 +52,6 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   const [gpsHint, setGpsHint] = useState<string | null>(null);
   const [recordGpsSnapshot, setRecordGpsSnapshot] = useState(false);
   const [onboardingStatus, setOnboardingStatus] = useState<OwnerOnboardingStatus | null>(null);
-  const wasOfflineRef = useRef(false);
 
   const profileLocked = authMode === "supabase" && onboardingStatus?.complete === true;
   const needsRecoveryEmail =
@@ -125,6 +123,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           longitude: shopLng,
         });
         if (!rpc.ok) throw new Error(messageForProfileSaveError(rpc.message ?? "save_failed", lang));
+        if (user?.id) await finalizeOwnerOnboardingAfterCloudSave(user.id);
         if (recordGpsSnapshot && shopLat != null && shopLng != null && supabase && rpc.shopId) {
           const { error: locErr } = await supabase.from("shop_locations").insert({
             shop_id: rpc.shopId,
@@ -158,7 +157,9 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
       setRecordGpsSnapshot(false);
       setProfileSaveError(null);
       setProfileFeedback(t(lang, "businessProfileSaved"));
-      window.dispatchEvent(new CustomEvent("waka:onboarding-updated"));
+      if (authMode === "supabase") {
+        setOnboardingStatus({ complete: true, missing: [] });
+      }
       onSaved?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -212,6 +213,8 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
       setDistricts(d);
       const loc = await loadPrimaryShopLocationFromCloud();
       if (cancelled || !loc) return;
+      if (loc.shopName?.trim()) setShopNameInput(loc.shopName.trim());
+      if (loc.phoneE164?.trim()) setShopPhoneInput(loc.phoneE164.trim());
       setDistrictIdSel(loc.districtId ?? "");
       setShopCityField(loc.city ?? "");
       setShopAreaField(loc.area ?? "");
@@ -224,20 +227,14 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   }, [authMode, actor.role]);
 
   useEffect(() => {
-    if (!isOnline) wasOfflineRef.current = true;
-  }, [isOnline]);
-
-  useEffect(() => {
-    if (!isOnline || authMode !== "supabase" || profileBusy) return;
-    if (!wasOfflineRef.current) return;
-    if (!profileSaveError) return;
-    const net = /failed to fetch|networkerror|network request failed|load failed|offline|timed out|timeout/i.test(
-      profileSaveError,
-    );
-    if (!net) return;
-    wasOfflineRef.current = false;
-    void saveBusinessProfileClick();
-  }, [isOnline, authMode, profileBusy, profileSaveError, saveBusinessProfileClick]);
+    if (authMode !== "supabase" || !user) return;
+    const meta = user.user_metadata as Record<string, unknown> | undefined;
+    const metaShop =
+      String(meta?.shop_display_name ?? meta?.shop_name ?? meta?.business_name ?? "").trim();
+    const metaPhone = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
+    if (metaShop && !shopNameInput.trim()) setShopNameInput(metaShop);
+    if (metaPhone && !shopPhoneInput.trim()) setShopPhoneInput(metaPhone);
+  }, [authMode, user, shopNameInput, shopPhoneInput]);
 
   if (!hasPermission(actor.role, "settings.shop")) return null;
 

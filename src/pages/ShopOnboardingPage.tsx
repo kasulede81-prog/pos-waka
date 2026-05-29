@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import type { BusinessType, Language, ShopSellingStyle, UserRole } from "../types";
@@ -16,6 +16,8 @@ import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLocation";
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { PinInput } from "../components/ui/PinInput";
+import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
+import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
@@ -50,6 +52,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [lat, setLat] = useState<number | undefined>();
   const [lng, setLng] = useState<number | undefined>();
   const [gpsSkipped, setGpsSkipped] = useState(true);
+  const [districts, setDistricts] = useState<DistrictRow[]>([]);
+  const [districtId, setDistrictId] = useState("");
+
+  useEffect(() => {
+    void fetchDistricts().then(({ districts: d }) => setDistricts(d));
+  }, []);
 
   const [staffOpen, setStaffOpen] = useState(false);
   const [staffName, setStaffName] = useState("");
@@ -65,11 +73,23 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     setBusy(true);
     setErr(null);
     try {
+      const ph = normalizeUgPhoneE164(preferences.shopPhoneE164 ?? "");
+      if (!ph) {
+        setErr(t(lang, "registerPhoneInvalid"));
+        setBusy(false);
+        return false;
+      }
+      if (!districtId) {
+        setErr(t(lang, "businessProfileDistrictRequired"));
+        setBusy(false);
+        return false;
+      }
       await persistOnboardingChoices({
         shopName,
         businessType,
         sellingStyle,
-        phone: preferences.shopPhoneE164 ?? undefined,
+        phone: ph,
+        districtId,
         latitude: opts.lat,
         longitude: opts.lng,
         gpsSkipped: opts.gpsSkipped,
@@ -215,6 +235,20 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             </button>
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardLocTitle")}</h2>
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardLocSub")}</p>
+            <label className="block text-sm font-bold text-stone-800">{t(lang, "registerDistrictLabel")}</label>
+            <select
+              value={districtId}
+              onChange={(e) => setDistrictId(e.target.value)}
+              className={fieldClass}
+              required
+            >
+              <option value="">—</option>
+              {districts.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
             {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
             {!gpsSkipped && lat != null ? (
               <p className="rounded-xl bg-stone-50 px-3 py-2 text-xs font-mono text-stone-700">

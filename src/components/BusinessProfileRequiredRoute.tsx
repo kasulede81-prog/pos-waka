@@ -31,7 +31,7 @@ export function BusinessProfileRequiredRoute({ authMode, userId }: Props) {
   const [status, setStatus] = useState<{ complete: boolean }>(() => {
     if (authMode !== "supabase") return { complete: true };
     const cached = readCachedOwnerOnboardingComplete(userId ?? undefined);
-    return { complete: cached ?? true };
+    return { complete: cached === true };
   });
 
   // Only depend on auth mode / user — not on every pathname. Including pathname caused

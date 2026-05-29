@@ -6,17 +6,18 @@ import { t } from "../../lib/i18n";
 import {
   formatOwnerContactLabel,
   internalSearchAgentUserCandidates,
-  internalGrantMarketingAgentByShop,
+  internalGrantMarketingAgentByShopWithRoles,
   internalListMarketingAgents,
+  internalSetMarketingAgentRoles,
   listAgentReferrals,
+  MARKETING_AGENT_ROLES,
   type AgentUserCandidate,
   type AgentReferralRow,
   type InternalMarketingAgentRow,
+  type MarketingAgentRole,
 } from "../../lib/referralAgents";
 
 type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
-type AgentRole = "trial_agent" | "vip_agent" | "field_agent";
-const AGENT_ROLE_KEY = "waka:internal-agent-roles";
 
 const PREVIEW_AGENTS: InternalMarketingAgentRow[] = [
   {
@@ -28,6 +29,7 @@ const PREVIEW_AGENTS: InternalMarketingAgentRow[] = [
     shopId: "preview-shop-1",
     shopName: "Nakawa Mini Mart",
     active: true,
+    roles: ["trial_agent", "field_agent"],
     referralCount: 3,
     createdAt: new Date().toISOString(),
   },
@@ -38,26 +40,19 @@ const PREVIEW_REFERRALS: AgentReferralRow[] = [
     id: "preview-ref-1",
     shopName: "Nakawa Mini Mart",
     ownerEmail: "owner1@example.com",
+    ownerPhone: "+256700000002",
     createdAt: new Date().toISOString(),
   },
 ];
 
-function readAgentRoles(): Record<string, AgentRole> {
-  try {
-    const raw = localStorage.getItem(AGENT_ROLE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as Record<string, AgentRole>;
-  } catch {
-    return {};
-  }
+function roleLabel(role: MarketingAgentRole): string {
+  if (role === "vip_agent") return "VIP upgrades";
+  if (role === "trial_agent") return "Trial activations";
+  return "Field tracking";
 }
 
-function writeAgentRoles(next: Record<string, AgentRole>): void {
-  try {
-    localStorage.setItem(AGENT_ROLE_KEY, JSON.stringify(next));
-  } catch {
-    // ignore
-  }
+function toggleRole(list: MarketingAgentRole[], role: MarketingAgentRole): MarketingAgentRole[] {
+  return list.includes(role) ? list.filter((r) => r !== role) : [...list, role];
 }
 
 function Modal({
@@ -95,11 +90,11 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   const [createBusy, setCreateBusy] = useState(false);
   const [grantShopId, setGrantShopId] = useState("");
   const [grantShopName, setGrantShopName] = useState("");
-  const [grantRole, setGrantRole] = useState<AgentRole>("trial_agent");
+  const [grantRoles, setGrantRoles] = useState<MarketingAgentRole[]>(["trial_agent", "field_agent"]);
+  const [roleEdits, setRoleEdits] = useState<Record<string, MarketingAgentRole[]>>({});
   const [candidateQuery, setCandidateQuery] = useState("");
   const [candidateLoading, setCandidateLoading] = useState(false);
   const [candidates, setCandidates] = useState<AgentUserCandidate[]>([]);
-  const [agentRoles, setAgentRoles] = useState<Record<string, AgentRole>>(() => readAgentRoles());
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [detailAgentId, setDetailAgentId] = useState<string | null>(null);
   const [detailRows, setDetailRows] = useState<AgentReferralRow[]>([]);
@@ -115,6 +110,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     }
     const rows = await internalListMarketingAgents();
     setAgents(rows);
+    setRoleEdits(Object.fromEntries(rows.map((a) => [a.id, [...a.roles]])));
     setLoading(false);
   }, [previewMode]);
 
@@ -159,7 +155,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
       setCreateMsg(t(lang, "internalAgentsShopRequired"));
       return;
     }
-    const res = await internalGrantMarketingAgentByShop(grantShopId);
+    const res = await internalGrantMarketingAgentByShopWithRoles(grantShopId, grantRoles);
     setCreateBusy(false);
     if (!res.ok) {
       const key =
@@ -170,11 +166,6 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             : res.error ?? t(lang, "internalAgentsCreateFail");
       setCreateMsg(key);
       return;
-    }
-    if (res.id) {
-      const nextRoles = { ...agentRoles, [res.id]: grantRole };
-      setAgentRoles(nextRoles);
-      writeAgentRoles(nextRoles);
     }
     setCreateOpen(false);
     setGrantShopId("");
@@ -187,13 +178,21 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     await load();
   };
 
-  const updateAgentRole = async (agentId: string, label: string, role: AgentRole) => {
+  const saveAgentRoles = async (agentId: string, label: string) => {
+    const roles = roleEdits[agentId] ?? ["field_agent"];
+    if (roles.length === 0) {
+      setCreateMsg(t(lang, "internalAgentsRoleRequired"));
+      return;
+    }
     setRoleBusyKey(agentId);
-    const nextRoles = { ...agentRoles, [agentId]: role };
-    setAgentRoles(nextRoles);
-    writeAgentRoles(nextRoles);
+    const res = await internalSetMarketingAgentRoles(agentId, roles);
     setRoleBusyKey(null);
-    setCreateMsg(`Role updated: ${label} → ${role}`);
+    if (!res.ok) {
+      setCreateMsg(res.error ?? t(lang, "internalAgentsCreateFail"));
+      return;
+    }
+    setCreateMsg(t(lang, "internalAgentsRolesSaved").replace("{{name}}", label));
+    await load();
   };
 
   const loadCandidates = useCallback(async () => {
@@ -271,7 +270,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                     {a.fullName && a.shopName ? ` · ${a.fullName}` : ""}
                   </p>
                   <p className="text-[11px] font-bold uppercase text-stone-400">
-                    {agentRoles[a.id] || "trial_agent"}
+                    {(roleEdits[a.id] ?? a.roles).join(" · ")}
                   </p>
                 </div>
                 <div className="text-right">
@@ -282,39 +281,42 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   <p className="mt-1 text-[11px] font-bold uppercase text-stone-400">{a.active ? "Active" : "Inactive"}</p>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <label className="text-xs font-bold text-stone-600">
-                  Role
-                  <select
-                    value={agentRoles[a.id] || "trial_agent"}
-                    onChange={(e) => {
-                      setAgentRoles((prev) => ({ ...prev, [a.id]: e.target.value as AgentRole }));
-                    }}
-                    className="ml-2 rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs"
-                  >
-                    <option value="trial_agent">trial_agent</option>
-                    <option value="vip_agent">vip_agent</option>
-                    <option value="field_agent">field_agent</option>
-                  </select>
-                </label>
+              <div className="mt-3 space-y-2">
+                <p className="text-xs font-bold text-stone-600">{t(lang, "internalAgentsRolesLabel")}</p>
+                <div className="flex flex-wrap gap-2">
+                  {MARKETING_AGENT_ROLES.map((role) => {
+                    const checked = (roleEdits[a.id] ?? a.roles).includes(role);
+                    return (
+                      <label
+                        key={role}
+                        className={clsx(
+                          "inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold",
+                          checked ? "border-orange-400 bg-orange-50 text-orange-950" : "border-stone-200 bg-white",
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          className="h-4 w-4"
+                          onChange={() =>
+                            setRoleEdits((prev) => ({
+                              ...prev,
+                              [a.id]: toggleRole(prev[a.id] ?? a.roles, role),
+                            }))
+                          }
+                        />
+                        {roleLabel(role)}
+                      </label>
+                    );
+                  })}
+                </div>
                 <button
                   type="button"
                   disabled={roleBusyKey === a.id}
-                  onClick={() => {
-                    const role = agentRoles[a.id] ?? "trial_agent";
-                    void updateAgentRole(a.id, a.shopName ?? a.referralCode, role);
-                  }}
+                  onClick={() => void saveAgentRoles(a.id, a.shopName ?? a.referralCode)}
                   className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-black text-stone-800 disabled:opacity-50"
                 >
-                  Save role
-                </button>
-                <button
-                  type="button"
-                  disabled={roleBusyKey === a.id}
-                  onClick={() => void updateAgentRole(a.id, a.shopName ?? a.referralCode, "trial_agent")}
-                  className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-900 disabled:opacity-50"
-                >
-                  Downgrade to trial
+                  {roleBusyKey === a.id ? "…" : t(lang, "internalAgentsSaveRoles")}
                 </button>
               </div>
               <button
@@ -386,21 +388,30 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
               {grantShopName || t(lang, "internalAgentsShopRequired")}
             </p>
           </div>
-          <label className="block text-sm font-bold">
-            Agent role
-            <select
-              value={grantRole}
-              onChange={(e) => setGrantRole(e.target.value as AgentRole)}
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2"
-            >
-              <option value="trial_agent">Trial activations</option>
-              <option value="vip_agent">VIP/Business plan activations</option>
-              <option value="field_agent">Field tracking agent</option>
-            </select>
-          </label>
-          <p className="text-xs font-medium text-stone-500">
-            Role controls what this agent should handle in operations (trial activations, VIP upgrades, field tracking).
-          </p>
+          <p className="text-sm font-bold text-stone-800">{t(lang, "internalAgentsRolesLabel")}</p>
+          <div className="flex flex-wrap gap-2">
+            {MARKETING_AGENT_ROLES.map((role) => {
+              const checked = grantRoles.includes(role);
+              return (
+                <label
+                  key={role}
+                  className={clsx(
+                    "inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold",
+                    checked ? "border-orange-400 bg-orange-50" : "border-stone-200 bg-white",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    className="h-4 w-4"
+                    onChange={() => setGrantRoles((prev) => toggleRole(prev, role))}
+                  />
+                  {roleLabel(role)}
+                </label>
+              );
+            })}
+          </div>
+          <p className="text-xs font-medium text-stone-500">{t(lang, "internalAgentsRolesHint")}</p>
           {createMsg ? <p className="text-sm font-bold text-rose-700">{createMsg}</p> : null}
           <button
             type="button"
@@ -430,7 +441,10 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             {detailRows.map((r) => (
               <li key={r.id} className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
                 <p className="font-bold text-stone-900">{r.shopName ?? "—"}</p>
-                <p className="text-xs text-stone-500">{formatOwnerContactLabel(r.ownerEmail, null)}</p>
+                <p className="text-xs text-stone-500">
+                  {formatOwnerContactLabel(r.ownerEmail, r.ownerPhone)}
+                  {r.planCode ? ` · ${r.planCode}` : ""}
+                </p>
                 <p className="text-[11px] text-stone-400">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "—"}</p>
               </li>
             ))}

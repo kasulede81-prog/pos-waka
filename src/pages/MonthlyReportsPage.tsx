@@ -12,9 +12,11 @@ import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilte
 import {
   buildMonthlyBusinessReport,
   downloadMonthlyReportPdf,
+  downloadMonthlyReportWord,
   downloadTextFile,
   formatMonthlyReportPlain,
   monthlyReportToCsv,
+  printMonthlyReport,
 } from "../lib/monthlyBusinessReport";
 import { dateKeyKampala } from "../lib/datesUg";
 
@@ -39,6 +41,7 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(true);
   const [monthKey, setMonthKey] = useState(currentMonthKey);
   const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = useReportingReturnRecords(includeArchived);
@@ -60,34 +63,59 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
     [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products],
   );
 
+  const showToast = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2800);
+  };
+
   if (!canView) {
     return <Navigate to="/office" replace />;
   }
 
   const downloadCsv = () => {
-    downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report), "text/csv;charset=utf-8");
+    const ok = downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report), "text/csv;charset=utf-8");
+    showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
   };
 
   const downloadExcel = () => {
-    downloadTextFile(
-      `waka-monthly-${monthKey}.csv`,
+    const ok = downloadTextFile(
+      `waka-monthly-${monthKey}.xls`,
       monthlyReportToCsv(report),
       "application/vnd.ms-excel;charset=utf-8",
     );
+    showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+  };
+
+  const downloadWord = () => {
+    const ok = downloadMonthlyReportWord(lang, report);
+    showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
   };
 
   const downloadPdf = async () => {
     setBusy(true);
     try {
-      await downloadMonthlyReportPdf(lang, report);
+      const ok = await downloadMonthlyReportPdf(lang, report);
+      showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+    } catch {
+      showToast(t(lang, "monthlyReportDownloadFail"));
     } finally {
       setBusy(false);
     }
   };
 
-  const shareText = () => {
+  const printReport = () => {
+    const ok = printMonthlyReport(lang, report);
+    showToast(ok ? t(lang, "monthlyReportPrintOk") : t(lang, "monthlyReportPrintFail"));
+  };
+
+  const shareText = async () => {
     const body = formatMonthlyReportPlain(lang, report);
-    void navigator.clipboard?.writeText(body);
+    try {
+      await navigator.clipboard.writeText(body);
+      showToast(t(lang, "monthlyReportCopyOk"));
+    } catch {
+      showToast(t(lang, "monthlyReportCopyFail"));
+    }
   };
 
   return (
@@ -126,14 +154,21 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
         </p>
       </section>
 
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-2">
         <button
           type="button"
           disabled={busy}
           onClick={() => void downloadPdf()}
           className="min-h-[48px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white disabled:opacity-50"
         >
-          {t(lang, "monthlyReportDownloadPdf")}
+          {busy ? "…" : t(lang, "monthlyReportDownloadPdf")}
+        </button>
+        <button
+          type="button"
+          onClick={printReport}
+          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white py-3 text-sm font-black text-waka-900"
+        >
+          {t(lang, "monthlyReportPrint")}
         </button>
         <button
           type="button"
@@ -144,8 +179,15 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
         </button>
         <button
           type="button"
-          onClick={downloadCsv}
+          onClick={downloadWord}
           className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800"
+        >
+          {t(lang, "monthlyReportDownloadWord")}
+        </button>
+        <button
+          type="button"
+          onClick={downloadCsv}
+          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 sm:col-span-2"
         >
           {t(lang, "monthlyReportDownloadCsv")}
         </button>
@@ -153,11 +195,17 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
 
       <button
         type="button"
-        onClick={shareText}
+        onClick={() => void shareText()}
         className="min-h-[44px] w-full rounded-2xl border border-stone-200 py-2.5 text-sm font-bold text-stone-700"
       >
         {t(lang, "monthlyReportCopyText")}
       </button>
+
+      {toast ? (
+        <p className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-4 right-4 z-50 rounded-2xl bg-stone-900 px-4 py-3 text-center text-sm font-semibold text-white shadow-lg">
+          {toast}
+        </p>
+      ) : null}
     </div>
   );
 }

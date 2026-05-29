@@ -1,6 +1,7 @@
 import type { Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { computeTodayProfitBreakdown } from "./homeProfit";
+import { downloadBlobFile } from "./fileDownload";
 import { t } from "./i18n";
 
 export type MonthlyBusinessReport = {
@@ -158,20 +159,97 @@ export function monthlyReportToCsv(report: MonthlyBusinessReport): string {
   return "\uFEFF" + rows.join("\n");
 }
 
-export function downloadTextFile(filename: string, body: string, mime: string) {
-  const blob = new Blob([body], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+export function downloadTextFile(filename: string, body: string, mime: string): boolean {
+  return downloadBlobFile(filename, body, mime);
 }
 
-export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBusinessReport): Promise<void> {
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function buildMonthlyReportHtml(lang: Language, report: MonthlyBusinessReport): string {
+  const rows = [
+    [t(lang, "totalSales"), `UGX ${report.totalSalesUgx.toLocaleString()}`],
+    [t(lang, "monthlyReportTransactions"), String(report.transactionCount)],
+    [t(lang, "cashInHand"), `UGX ${report.cashUgx.toLocaleString()}`],
+    [t(lang, "creditLabel"), `UGX ${report.debtUgx.toLocaleString()}`],
+    [t(lang, "monthlyReportDiscounts"), `UGX ${report.discountsUgx.toLocaleString()}`],
+    [t(lang, "monthlyReportRefunds"), `UGX ${report.refundsUgx.toLocaleString()}`],
+    [t(lang, "estimatedProfit"), `UGX ${report.profitUgx.toLocaleString()}`],
+  ];
+  const productRows = report.topProducts
+    .slice(0, 15)
+    .map((p) => `<tr><td>${escapeHtml(p.name)}</td><td>${p.qty}</td><td>UGX ${p.revenueUgx.toLocaleString()}</td></tr>`)
+    .join("");
+  const cashierRows = report.byCashier
+    .map((c) => `<tr><td>${escapeHtml(c.label)}</td><td>${c.count}</td><td>UGX ${c.revenueUgx.toLocaleString()}</td></tr>`)
+    .join("");
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(report.shopName)} ${report.monthKey}</title>
+<style>
+body{font-family:system-ui,sans-serif;padding:24px;color:#111}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:20px 0 8px}
+table{border-collapse:collapse;width:100%;margin-top:8px}
+th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:13px}
+th{background:#f5f5f5}
+.summary td:first-child{font-weight:700;width:45%}
+@media print{body{padding:12px}}
+</style></head><body>
+<h1>${escapeHtml(report.shopName)}</h1>
+<p><strong>${escapeHtml(t(lang, "monthlyReportTitle"))}</strong> ${escapeHtml(report.monthKey)}<br>
+${escapeHtml(t(lang, "monthlyReportGenerated"))}: ${escapeHtml(new Date(report.generatedAt).toLocaleString())}</p>
+<table class="summary">${rows.map(([a, b]) => `<tr><td>${escapeHtml(a)}</td><td>${escapeHtml(b)}</td></tr>`).join("")}</table>
+<h2>${escapeHtml(t(lang, "monthlyReportTopProducts"))}</h2>
+<table><thead><tr><th>Product</th><th>Qty</th><th>Revenue</th></tr></thead><tbody>${productRows}</tbody></table>
+<h2>${escapeHtml(t(lang, "monthlyReportByCashier"))}</h2>
+<table><thead><tr><th>Cashier</th><th>Sales</th><th>Revenue</th></tr></thead><tbody>${cashierRows}</tbody></table>
+<h2>${escapeHtml(t(lang, "monthlyReportInventory"))}</h2>
+<p>${escapeHtml(t(lang, "monthlyReportProductCount"))}: ${report.inventorySummary.productCount} · 
+${escapeHtml(t(lang, "monthlyReportStockValue"))}: UGX ${report.inventorySummary.stockValueAtCostUgx.toLocaleString()} · 
+${escapeHtml(t(lang, "monthlyReportLowStock"))}: ${report.inventorySummary.lowStockCount}</p>
+</body></html>`;
+}
+
+export function printMonthlyReport(lang: Language, report: MonthlyBusinessReport): boolean {
+  const html = buildMonthlyReportHtml(lang, report);
+  const frame = document.createElement("iframe");
+  frame.style.position = "fixed";
+  frame.style.right = "0";
+  frame.style.bottom = "0";
+  frame.style.width = "0";
+  frame.style.height = "0";
+  frame.style.border = "0";
+  document.body.appendChild(frame);
+  const doc = frame.contentWindow?.document;
+  if (!doc) {
+    frame.remove();
+    const popup = window.open("", "_blank");
+    if (!popup) return false;
+    popup.document.write(html);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+    return true;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  frame.contentWindow?.focus();
+  frame.contentWindow?.print();
+  window.setTimeout(() => frame.remove(), 2000);
+  return true;
+}
+
+export function downloadMonthlyReportWord(lang: Language, report: MonthlyBusinessReport): boolean {
+  const html = buildMonthlyReportHtml(lang, report);
+  return downloadBlobFile(`waka-monthly-${report.monthKey}.doc`, html, "application/msword;charset=utf-8");
+}
+
+export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBusinessReport): Promise<boolean> {
+  try {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const margin = 48;
@@ -210,5 +288,9 @@ export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBu
   for (const c of report.byCashier) {
     line(`  ${c.label} — ${c.count} sales — UGX ${c.revenueUgx.toLocaleString()}`);
   }
-  doc.save(`waka-monthly-${report.monthKey}.pdf`);
+  const pdfBlob = doc.output("blob");
+  return downloadBlobFile(`waka-monthly-${report.monthKey}.pdf`, pdfBlob, "application/pdf");
+  } catch {
+    return false;
+  }
 }
