@@ -1,4 +1,4 @@
-import type { BusinessType } from "../types";
+import type { BusinessType, Language } from "../types";
 import { fetchOwnerOnboardingStatus } from "./ownerOnboarding";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
@@ -101,6 +101,28 @@ export type PrimaryShopLocationSnapshot = {
   latitude: number | null;
   longitude: number | null;
 };
+
+/** User-facing message for save_owner_business_profile_bundle errors. */
+export function messageForProfileSaveError(codeOrMessage: string, lang: Language = "en"): string {
+  const raw = codeOrMessage.toLowerCase();
+  if (raw.includes("phone_in_use") || raw.includes("profiles_phone_e164")) {
+    return lang === "lg"
+      ? "Ennamba eno esangiddwa ku akawunti endala. Kebera oba wewandiise oba tuukirira support."
+      : "This phone number is already on another Waka account. Check the number or contact support.";
+  }
+  if (raw.includes("profile_locked")) {
+    return lang === "lg"
+      ? "Ebikwata ku dduuka tebikyusibwa. Tuukirira Waka support okukyusa."
+      : "Shop details are locked. Contact Waka support to request changes.";
+  }
+  if (raw.includes("district_required")) {
+    return lang === "lg" ? "Londa ssaza." : "Choose a district before saving.";
+  }
+  if (raw.includes("invalid_phone")) {
+    return lang === "lg" ? "Ennamba ya Uganda si ntuufu." : "Enter a valid Uganda mobile number.";
+  }
+  return codeOrMessage;
+}
 
 export function normalizeUgPhoneE164(raw: string): string | null {
   const v = raw.trim();
@@ -295,6 +317,18 @@ export async function saveBusinessProfileToCloud(input: BusinessProfileInput, al
 
   const { error: orgErr } = await supabase.from("organizations").update({ default_currency: safeCurrency }).eq("id", orgId);
   if (orgErr) throw orgErr;
+
+  if (safePhone) {
+    const { data: conflict } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("phone_e164", safePhone)
+      .neq("id", user.id)
+      .maybeSingle();
+    if (conflict?.id) {
+      throw new Error("phone_in_use");
+    }
+  }
 
   const profilePatch = {
     id: user.id,

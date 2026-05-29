@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useLocation, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AdminShell } from "../components/internal-admin/v2/AdminShell";
 import { BottomSheet } from "../components/internal-admin/v2/primitives";
 import { adminPermissions } from "../components/internal-admin/v2/adminRoles";
 import { AccountRecoveryPanel } from "../components/internal-admin/AccountRecoveryPanel";
+import { AdminShopProfileOverridePanel } from "../components/internal-admin/AdminShopProfileOverridePanel";
+import { AdminPermanentDeletePanel } from "../components/internal-admin/AdminPermanentDeletePanel";
 import { AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
 import { InternalNotesPanel, ShopTimelinePanel } from "../components/internal-admin/v2/ops/OpsWidgets";
 import {
@@ -77,6 +79,7 @@ function vipCountdownLabel(currentPeriodEnd: string | null | undefined): string 
 export function InternalShopOpsPage({ lang }: Props) {
   const { shopId } = useParams<{ shopId: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const previewMode = isInternalAdminPreviewActive(location.search);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(true);
@@ -460,6 +463,28 @@ export function InternalShopOpsPage({ lang }: Props) {
               previewMode={previewMode}
               onBusy={setBusy}
               onToast={setToast}
+            />
+          ) : null}
+
+          {perms.canEditShopProfile ? (
+            <AdminShopProfileOverridePanel
+              detail={detail}
+              busy={busy}
+              previewMode={previewMode}
+              onBusy={setBusy}
+              onToast={setToast}
+              onSaved={() => void loadShop()}
+            />
+          ) : null}
+
+          {perms.canPermanentlyDeleteShopAccount ? (
+            <AdminPermanentDeletePanel
+              detail={detail}
+              busy={busy}
+              previewMode={previewMode}
+              onBusy={setBusy}
+              onToast={setToast}
+              onDeleted={() => navigate("/internal/waka/shops")}
             />
           ) : null}
 

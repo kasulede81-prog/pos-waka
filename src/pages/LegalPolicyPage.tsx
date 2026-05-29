@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
+import { publicBrandHref, useAuthShellForPublicPage } from "../lib/nativeApp";
 import { AuthLayout } from "../components/AuthLayout";
 import { MarketingLayout } from "../components/marketing/MarketingLayout";
 import { SeoHead } from "../components/marketing/SeoHead";
@@ -189,7 +190,7 @@ const SEO_PATH: Record<LegalKind, string> = {
 
 export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props) {
   const content = policyContent[kind];
-  const brandHref = isAuthenticated ? "/" : "/home";
+  const brandHref = publicBrandHref(isAuthenticated);
   const body = (
     <>
       <SeoHead title={content.title} description={content.intro} path={SEO_PATH[kind]} structuredData="legal" />
@@ -231,7 +232,7 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
     </>
   );
 
-  if (isAuthenticated) {
+  if (useAuthShellForPublicPage(isAuthenticated)) {
     return (
       <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
         {body}

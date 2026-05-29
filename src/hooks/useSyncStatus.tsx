@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { getDeviceOnline } from "../lib/deviceOnline";
+import { isNativeApp } from "../lib/nativeApp";
+import { nativeSyncResumeDelayMs, nativeVisibilitySyncDelayMs, runWhenIdle } from "../lib/uiYield";
 import { readSyncQueue } from "../offline/localDb";
 import { countUnsyncedSales, pushShopPendingToCloud, syncShopWithCloud } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
@@ -30,7 +33,7 @@ const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
 const QUEUE_POLL_MS = 12_000;
 const MIN_PUSH_INTERVAL_MS = 8_000;
-const MIN_FULL_SYNC_INTERVAL_MS = 90_000;
+const MIN_FULL_SYNC_INTERVAL_MS = isNativeApp() ? 180_000 : 90_000;
 
 function emptyBreakdown(): PendingBreakdown {
   return { sales: 0, stock: 0, returns: 0, expenses: 0, other: 0 };
@@ -79,7 +82,7 @@ function useSyncStatusEngine(): SyncStatusApi {
   }, []);
 
   const runFlush = useCallback(async (opts?: { pull?: boolean; showSpinner?: boolean }) => {
-    if (!navigator.onLine || syncingRef.current) return;
+    if (!getDeviceOnline() || syncingRef.current) return;
     const now = Date.now();
     const wantPull = opts?.pull === true;
     const showSpinner = opts?.showSpinner ?? wantPull;
@@ -145,17 +148,20 @@ function useSyncStatusEngine(): SyncStatusApi {
 
   useEffect(() => {
     if (isOnline) {
-      window.setTimeout(() => void runFlush({ pull: false }), 1200);
+      const delay = isNativeApp() ? 2800 : 1200;
+      window.setTimeout(() => {
+        runWhenIdle(() => void runFlush({ pull: false }), isNativeApp() ? 4000 : 1500);
+      }, delay);
     }
   }, [isOnline, runFlush]);
 
   useEffect(() => {
     const onVis = () => {
-      if (document.visibilityState !== "visible" || !navigator.onLine) return;
+      if (document.visibilityState !== "visible" || !getDeviceOnline()) return;
       if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
       visTimerRef.current = window.setTimeout(() => {
-        void runFlush({ pull: false });
-      }, 2500);
+        runWhenIdle(() => void runFlush({ pull: false }), nativeVisibilitySyncDelayMs());
+      }, nativeVisibilitySyncDelayMs());
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
@@ -167,8 +173,13 @@ function useSyncStatusEngine(): SyncStatusApi {
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (s) => {
-      if (s.isActive && navigator.onLine) {
-        window.setTimeout(() => void runFlush({ pull: false }), 2000);
+      if (s.isActive && getDeviceOnline()) {
+        window.setTimeout(() => {
+          runWhenIdle(
+            () => void runFlush({ pull: Capacitor.isNativePlatform(), showSpinner: false }),
+            nativeSyncResumeDelayMs(),
+          );
+        }, nativeSyncResumeDelayMs());
       }
     });
     return () => {

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
+import { PinInput } from "../ui/PinInput";
 
 type Props = { lang: Language };
 
@@ -21,10 +22,8 @@ export function BackOfficePinForm({ lang }: Props) {
       )}
       {boPinFeedback ? <p className="mt-2 text-sm font-bold text-waka-900">{boPinFeedback}</p> : null}
       <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "settingsBackOfficePinNew")}</label>
-      <input
-        type="password"
-        inputMode="numeric"
-        autoComplete="new-password"
+      <PinInput
+        autoComplete="off"
         maxLength={6}
         value={boPinNew}
         onChange={(e) => {
@@ -34,10 +33,8 @@ export function BackOfficePinForm({ lang }: Props) {
         className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
       />
       <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "settingsBackOfficePinConfirm")}</label>
-      <input
-        type="password"
-        inputMode="numeric"
-        autoComplete="new-password"
+      <PinInput
+        autoComplete="off"
         maxLength={6}
         value={boPinConfirm}
         onChange={(e) => {

@@ -96,7 +96,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
 
       <article className="rounded-3xl border-2 border-waka-100 bg-gradient-to-br from-waka-50 to-white p-5 shadow-waka-sm">
         <p className="text-xs font-black uppercase tracking-widest text-waka-700">{t(lang, "agentYourCode")}</p>
-        <p className="mt-2 font-mono text-3xl font-black tracking-wide text-stone-950">{agent.referralCode}</p>
+        <p className="mt-2 font-mono text-3xl font-black uppercase tracking-widest text-stone-950">{agent.referralCode}</p>
         {agent.fullName ? <p className="mt-1 text-sm font-semibold text-stone-600">{agent.fullName}</p> : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <button

@@ -79,6 +79,17 @@ export function registerNativeOAuthDeepLinkHandler(): void {
   void App.addListener("appUrlOpen", ({ url }) => {
     void (async () => {
       try {
+        if (url.includes("/auth/recovery")) {
+          try {
+            await Browser.close();
+          } catch {
+            /* already closed */
+          }
+          const parsed = new URL(url);
+          window.location.href = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+          return;
+        }
+
         const handled = await finishOAuthFromUrl(url);
         if (handled && pendingOAuth) {
           pendingOAuth.resolve();

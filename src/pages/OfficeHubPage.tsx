@@ -124,6 +124,14 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   Icon={BarChart3}
                 />
               ) : null}
+              {can("reports.view") ? (
+                <OfficeNavCard
+                  to="/office/monthly-reports"
+                  title={t(lang, "officeCardMonthlyReport")}
+                  subtitle={t(lang, "officeCardMonthlyReportSub")}
+                  Icon={BarChart3}
+                />
+              ) : null}
               {canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") ? (
                 <OfficeNavCard
                   to="/office/profit"

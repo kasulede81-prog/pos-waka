@@ -385,6 +385,9 @@ export type StaffAccount = {
 /** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */
 export type ReceiptPaperSize = "58mm" | "80mm" | "a4";
 
+/** How long sales / activity stay in active lists before moving to archive. */
+export type DataRetentionPolicy = "forever" | "3m" | "6m" | "12m";
+
 export type ShopPreferences = {
   businessType: BusinessType;
   /** Giant one-hand sell screen */
@@ -451,6 +454,17 @@ export type ShopPreferences = {
   posSellCategoryFilter?: string | null;
   /** Thermal / AirPrint receipt width (Settings → Receipts). */
   receiptPaperSize?: ReceiptPaperSize;
+  /**
+   * Archive sales, receipts, and activity after this window (never auto-delete).
+   * Default: 3 months (90 days).
+   */
+  dataRetentionPolicy?: DataRetentionPolicy;
+  /** Closed shifts moved out of active shift list (cash drawer history). */
+  archivedShifts?: ShiftRecord[];
+  /** Kampala YYYY-MM of last month owner was prompted about monthly report download. */
+  lastMonthlyReportPromptMonth?: string | null;
+  /** ISO time of last automatic archive job on this device. */
+  lastArchiveRunAt?: string | null;
 };
 
 export type SyncOperationKind =

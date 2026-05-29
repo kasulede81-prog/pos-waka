@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Capacitor } from "@capacitor/core";
-import { SplashScreen } from "@capacitor/splash-screen";
 import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
 import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
+import { hideNativeSplashWhenReady } from "../lib/nativeSplash";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { t } from "../lib/i18n";
 import type { Language } from "../types";
@@ -20,7 +19,7 @@ type Props = {
 
 function LoadingSkeleton({ lang }: { lang: Language }) {
   return (
-    <div className="flex min-h-dvh flex-col items-center bg-white px-5 pt-[max(2rem,env(safe-area-inset-top))]">
+    <div className="flex min-h-dvh flex-col items-center bg-[#fffaf5] px-5 pt-[max(2rem,env(safe-area-inset-top))]">
       <WakaPosLogo size="splash" className="mb-8 mt-4" />
       <div className="mx-auto w-full max-w-md space-y-6">
         <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
@@ -34,12 +33,6 @@ function LoadingSkeleton({ lang }: { lang: Language }) {
       </div>
     </div>
   );
-}
-
-function hideNativeSplash(): void {
-  if (Capacitor.isNativePlatform()) {
-    void SplashScreen.hide({ fadeOutDuration: 220 }).catch(() => undefined);
-  }
 }
 
 function isStoreReadyForAccount(accountKey: string | null): boolean {
@@ -68,7 +61,7 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
 
     if (isStoreReadyForAccount(accountKey)) {
       setReady(true);
-      hideNativeSplash();
+      hideNativeSplashWhenReady();
       return;
     }
 
@@ -81,7 +74,7 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
       .finally(() => {
         if (bootGenRef.current !== gen) return;
         setReady(true);
-        hideNativeSplash();
+        void hideNativeSplashWhenReady();
       });
 
     return () => {

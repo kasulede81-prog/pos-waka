@@ -18,6 +18,9 @@ import { SettingsShopPage } from "./pages/SettingsShopPage";
 import { SettingsSellingPage } from "./pages/SettingsSellingPage";
 import { SettingsPinPage } from "./pages/SettingsPinPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
+import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
+import { ArchiveDataPage } from "./pages/ArchiveDataPage";
+import { MonthlyReportsPage } from "./pages/MonthlyReportsPage";
 import { BackupSyncPage } from "./pages/BackupSyncPage";
 import { AccountPage } from "./pages/AccountPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
@@ -29,6 +32,7 @@ import { CompanyPage } from "./pages/public/CompanyPage";
 import { DemoExperiencePage } from "./pages/DemoExperiencePage";
 import { BusinessActivationPage } from "./pages/BusinessActivationPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
+import { NativeSplashGate } from "./components/NativeSplashGate";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
 import { ProfitPage } from "./pages/ProfitPage";
@@ -45,6 +49,9 @@ import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
 import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
+import { NativeMarketingGuard } from "./components/NativeMarketingGuard";
+import { NativePublicGuard } from "./components/NativePublicGuard";
+import { unauthenticatedEntryPath } from "./lib/nativeApp";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import type { Language } from "./types";
 
@@ -77,7 +84,9 @@ function App() {
 
   return (
     <BrowserRouter>
+      <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
       <Routes>
+        <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         <Route
@@ -160,13 +169,16 @@ function App() {
           element={<LegalPolicyPage kind="acceptable-use" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
         />
 
-        <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
-        <Route path="/about" element={<AboutPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
-        <Route path="/contact" element={<ContactPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
-        <Route path="/founder" element={<FounderPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
-        <Route path="/about/founder" element={<Navigate to="/founder" replace />} />
-        <Route path="/company" element={<CompanyPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
-        <Route path="/demo" element={<DemoExperiencePage lang={lang} isAuthenticated={auth.isAuthenticated} />} />
+        <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>
+          <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/about" element={<AboutPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/contact" element={<ContactPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/founder" element={<FounderPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/about/founder" element={<Navigate to="/founder" replace />} />
+          <Route path="/company" element={<CompanyPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/demo" element={<DemoExperiencePage lang={lang} isAuthenticated={auth.isAuthenticated} />} />
+        </Route>
+        </Route>
 
         <Route element={<ProtectedRoute initializing={auth.initializing} isAuthenticated={auth.isAuthenticated} />}>
           <Route element={<BusinessProfileRequiredRoute authMode={auth.mode} userId={auth.user?.id} />}>
@@ -411,6 +423,30 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
+            <Route
+              path="settings/retention"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsDataRetentionPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/archive"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <ArchiveDataPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/monthly-reports"
+              element={
+                <RoleProtectedRoute permission="reports.view">
+                  <MonthlyReportsPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
             <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/shops" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
             <Route path="internal/waka/devices" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
@@ -427,7 +463,7 @@ function App() {
           </Route>
         </Route>
 
-        <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : "/home"} replace />} />
+        <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />
       </Routes>
     </BrowserRouter>
   );

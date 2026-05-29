@@ -40,6 +40,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
         <h1 className="text-2xl font-bold">{t(lang, "forgotTitle")}</h1>
         <p className="mt-2 text-sm text-slate-600">{t(lang, "forgotSubtitle")}</p>
+        <p className="mt-2 text-xs font-medium text-stone-500">{t(lang, "forgotEmailOrPhoneHint")}</p>
 
         {!hasSupabaseConfig ? (
           <p className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">{t(lang, "supabaseMissing")}</p>

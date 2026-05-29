@@ -7,6 +7,7 @@ import { t } from "../../lib/i18n";
 import { languageToggleLabel, nextLanguage } from "../../lib/language";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { useOfflineStatus } from "../../hooks/useOfflineStatus";
+import { useShopPresenceHeartbeat } from "../../hooks/useShopPresenceHeartbeat";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
 import { usePosStore } from "../../store/usePosStore";
@@ -14,7 +15,7 @@ import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
-import { WakaPosLogo } from "../brand/WakaLogo";
+import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
@@ -24,6 +25,7 @@ import { AppModalOverlay } from "./AppModalOverlay";
 import { hashStaffSecret, normalizePin } from "../../lib/staffSecret";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
+import { PinInput } from "../ui/PinInput";
 
 type Props = {
   lang: Language;
@@ -60,6 +62,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const navigate = useNavigate();
   useAndroidBackButton();
   const { isOnline } = useOfflineStatus();
+  useShopPresenceHeartbeat();
   const sync = useSyncStatus();
   const preferences = usePosStore((s) => s.preferences);
   const { authMode: subAuthMode, snapshot } = useSubscription();
@@ -203,7 +206,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <header className="relative z-20 shrink-0 overflow-visible border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4">
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <WakaPosLogo size="xs" className="max-w-[7.5rem] shrink-0" aria-hidden />
+              <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
               <div className="min-w-0">
                 <p className="truncate text-[11px] font-medium text-waka-800/90">{syncStripLabel(lang, sync, isOnline)}</p>
               </div>
@@ -420,15 +423,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               <p className="mt-2 text-xs font-medium text-slate-500">
                 Pick a user or enter a matching PIN/password directly.
               </p>
-              <input
+              <PinInput
                 value={lockSecret}
                 onChange={(e) => {
                   setLockSecret(e.target.value);
                   setLockError(null);
                 }}
-                type="password"
+                maxLength={32}
                 placeholder={t(lang, "unlockPinPlaceholder")}
-                className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-lg font-black tracking-[0.15em]"
               />
               {lockError ? <p className="mt-2 text-sm font-bold text-rose-700">{lockError}</p> : null}
               {!isBackOfficePinConfigured(preferences.backOfficePin) &&

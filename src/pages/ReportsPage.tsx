@@ -3,6 +3,9 @@ import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { useDeferredSales } from "../hooks/useDeferredSales";
+import { useReportingSales } from "../hooks/useReportingSales";
+import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
@@ -17,14 +20,17 @@ type Range = "today" | "week" | "month";
 export function ReportsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const sales = usePosStore((s) => s.sales);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const purchases = usePosStore((s) => s.purchases);
   const suppliers = usePosStore((s) => s.suppliers);
   const [range, setRange] = useState<Range>("today");
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [reportHint, setReportHint] = useState<string | null>(null);
+  const salesActive = useDeferredSales();
+  const salesWithArchive = useReportingSales(includeArchived);
+  const sales = includeArchived ? salesWithArchive : salesActive;
 
   if (!hasPermission(actor.role, "reports.view")) {
     return <Navigate to="/" replace />;
@@ -193,6 +199,8 @@ export function ReportsPage({ lang }: { lang: Language }) {
   return (
     <div className="space-y-5 pb-8">
       <PageHeader lang={lang} title={t(lang, "reports")} backLabel={t(lang, "officeBackToHub")} />
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       <div className="flex gap-2">
         {(["today", "week", "month"] as const).map((r) => (

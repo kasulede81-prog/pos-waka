@@ -1,6 +1,7 @@
 import type { Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, SupplierPayment } from "../types";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
+import { getDeviceOnline } from "../lib/deviceOnline";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { usePosStore } from "../store/usePosStore";
 import { writeSnapshot } from "./localDb";
@@ -359,7 +360,7 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
 /** Push one sale to Supabase as soon as possible (after checkout). */
 export async function syncSaleImmediately(saleId: string): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
-  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+  if (!getDeviceOnline()) return false;
   const sale = usePosStore.getState().sales.find((s) => s.id === saleId);
   if (!sale) return false;
   const ctx = await resolveShopCtx();
@@ -530,22 +531,30 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
 
   if (!hasCloud && localEmpty) return true;
 
-  usePosStore.setState({ products, customers, sales });
+  const { suspendStorePersist } = await import("../store/usePosStore");
+  const release = suspendStorePersist();
+  try {
+    usePosStore.setState({ products, customers, sales });
 
-  const next = usePosStore.getState();
-  await writeSnapshot({
-    products: next.products,
-    customers: next.customers,
-    sales: next.sales,
-    preferences: next.preferences,
-    debtPayments: next.debtPayments,
-    dayCloses: next.dayCloses,
-    auditLogs: next.auditLogs,
-    suppliers: next.suppliers,
-    purchases: next.purchases,
-    supplierPayments: next.supplierPayments,
-    stockMovements: next.stockMovements,
-  });
+    const next = usePosStore.getState();
+    await writeSnapshot({
+      products: next.products,
+      customers: next.customers,
+      sales: next.sales,
+      preferences: next.preferences,
+      debtPayments: next.debtPayments,
+      dayCloses: next.dayCloses,
+      auditLogs: next.auditLogs,
+      suppliers: next.suppliers,
+      purchases: next.purchases,
+      supplierPayments: next.supplierPayments,
+      stockMovements: next.stockMovements,
+      voidRecords: next.voidRecords,
+      returnRecords: next.returnRecords,
+    });
+  } finally {
+    release();
+  }
 
   await applyShopRecoverySignalsForCurrentShop();
   return true;
@@ -585,11 +594,16 @@ export async function pushShopPendingToCloud(): Promise<{
 }> {
   let push = { ok: 0, fail: 0 };
   let queueFailed = 0;
-  if (typeof navigator === "undefined" || navigator.onLine) {
+  if (getDeviceOnline()) {
     push = await pushAllPendingToCloud();
     const { flushSyncQueue } = await import("./syncEngine");
     const result = await flushSyncQueue();
     queueFailed = result.failed;
+    const ctx = await resolveShopCtx();
+    if (ctx) {
+      const { sendShopPresenceHeartbeat } = await import("../lib/shopPresence");
+      void sendShopPresenceHeartbeat(ctx.shopId);
+    }
   }
   return { push, queueFailed };
 }

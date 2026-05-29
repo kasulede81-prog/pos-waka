@@ -12,6 +12,7 @@ import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, SupportTicketCard } from "../primitives";
+import { SupportPasswordResetPanel } from "../../SupportPasswordResetPanel";
 
 type Props = {
   lang: Language;
@@ -38,10 +39,21 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
         <p className="text-sm text-stone-500">Helpdesk inbox</p>
         {perms.canShopSupport ? (
           <p className="mt-1 text-xs font-semibold text-amber-900">
-            Reset owner login or back office PIN: Shops → open shop → <strong>Account recovery</strong> card.
+            Reset owner login or back office PIN: Shops → open shop → <strong>Account recovery</strong> card, or use the
+            tool below.
           </p>
         ) : null}
       </div>
+
+      {perms.canShopSupport && (perms.role === "super_admin" || perms.role === "support_admin") ? (
+        <SupportPasswordResetPanel
+          previewMode={previewMode}
+          onToast={(toast) => {
+            if (toast.kind === "ok") window.alert(toast.text);
+            else window.alert(toast.text);
+          }}
+        />
+      ) : null}
 
       <div className="flex gap-2">
         {(["open", "all"] as const).map((f) => (

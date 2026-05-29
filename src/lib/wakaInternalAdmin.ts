@@ -46,8 +46,10 @@ export type InternalDashboardStats = {
   lapsedTrials: number;
   /** Trials ending within the next 7 days. */
   expiringTrialsNext7d: number;
-  /** Active rows in shop_devices. */
+  /** Devices seen in the last 15 minutes. */
   activeDevices: number;
+  /** Shops with last_seen in the last 15 minutes (real-time). */
+  shopsOnlineNow: number;
   /** Support requests in open or in_progress. */
   openSupportTickets: number;
   salesTotalUgx: number | null;
@@ -207,6 +209,7 @@ function parseMetricsRpcPayload(raw: unknown): InternalDashboardStats | null {
     lapsedTrials: Number(j.lapsed_trials ?? 0),
     expiringTrialsNext7d: Number(j.expiring_trials_7d ?? 0),
     activeDevices: Number(j.active_devices ?? 0),
+    shopsOnlineNow: Number(j.shops_online_now ?? j.active_today ?? 0),
     openSupportTickets: Number(j.open_support ?? 0),
     salesTotalUgx: j.sales_total_ugx === null || j.sales_total_ugx === undefined ? null : Number(j.sales_total_ugx),
     shopsByDistrict,
@@ -230,10 +233,12 @@ export async function fetchInternalDashboardStats(): Promise<FetchInternalDashbo
   const rpcFailMsg = rpcError?.message?.trim();
 
   const dayStart = kampalaDayStartIso();
+  const onlineCutoff = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
   const [
     shopsAll,
     shopsActive,
+    shopsOnlineNow,
     subsTrial,
     subsPaid,
     subsExpired,
@@ -242,10 +247,12 @@ export async function fetchInternalDashboardStats(): Promise<FetchInternalDashbo
     lapsed,
     exp7,
     devCount,
+    devOnlineCount,
     supOpen,
   ] = await Promise.all([
     supabase.from("shops").select("id", { count: "exact", head: true }),
     supabase.from("shops").select("id", { count: "exact", head: true }).gte("last_seen_at", dayStart),
+    supabase.from("shops").select("id", { count: "exact", head: true }).gte("last_seen_at", onlineCutoff),
     supabase
       .from("subscriptions")
       .select("id", { count: "exact", head: true })
@@ -267,6 +274,11 @@ export async function fetchInternalDashboardStats(): Promise<FetchInternalDashbo
       .gte("trial_ends_at", new Date().toISOString())
       .lte("trial_ends_at", new Date(Date.now() + 7 * 86400000).toISOString()),
     supabase.from("shop_devices").select("id", { count: "exact", head: true }).eq("is_active", true),
+    supabase
+      .from("shop_devices")
+      .select("id", { count: "exact", head: true })
+      .eq("is_active", true)
+      .gte("last_seen_at", onlineCutoff),
     supabase.from("support_requests").select("id", { count: "exact", head: true }).in("status", ["open", "in_progress"]),
   ]);
 
@@ -302,17 +314,20 @@ export async function fetchInternalDashboardStats(): Promise<FetchInternalDashbo
   const salesTotalUgx =
     salesRpc.error || salesRpc.data === null || salesRpc.data === undefined ? null : Number(salesRpc.data);
 
-  const devFallback = devCount.error ? await supabase.from("shops").select("active_device_count") : null;
+  const devFallback = devOnlineCount.error ? await supabase.from("shops").select("active_device_count") : null;
   const activeDevices =
-    devCount.error || devCount.count === null
-      ? (devFallback?.data ?? []).reduce((s, r) => s + (Number((r as { active_device_count?: number }).active_device_count) || 0), 0)
-      : (devCount.count ?? 0);
+    devOnlineCount.error || devOnlineCount.count === null
+      ? devCount.error || devCount.count === null
+        ? (devFallback?.data ?? []).reduce((s, r) => s + (Number((r as { active_device_count?: number }).active_device_count) || 0), 0)
+        : (devCount.count ?? 0)
+      : (devOnlineCount.count ?? 0);
 
   return {
     ok: true,
     stats: {
       totalShops: shopsAll.count ?? 0,
       activeToday: shopsActive.count ?? 0,
+      shopsOnlineNow: shopsOnlineNow.error ? (shopsActive.count ?? 0) : (shopsOnlineNow.count ?? 0),
       trialSubscriptions: subsTrial.count ?? 0,
       paidSubscriptions: subsPaid.count ?? 0,
       expiredSubscriptions: subsExpired.count ?? 0,
@@ -489,7 +504,11 @@ export type ShopOpsDetail = {
     id: string;
     name: string;
     district: string | null;
+    district_id: string | null;
     city: string | null;
+    area: string | null;
+    address_line: string | null;
+    business_type: string | null;
     is_active: boolean;
     organization_id: string;
     last_seen_at: string | null;
@@ -994,7 +1013,11 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
         id: shopRaw.id as string,
         name: (shopRaw.name as string) ?? "—",
         district: (shopRaw.district as string) ?? null,
+        district_id: (shopRaw.district_id as string) ?? null,
         city: (shopRaw.city as string) ?? null,
+        area: (shopRaw.area as string) ?? null,
+        address_line: (shopRaw.address_line as string) ?? null,
+        business_type: (shopRaw.business_type as string) ?? null,
         is_active: Boolean(shopRaw.is_active),
         organization_id: shopRaw.organization_id as string,
         last_seen_at: (shopRaw.last_seen_at as string) ?? null,
@@ -1018,7 +1041,9 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
 
   const { data: shop, error: shopErr } = await supabase
     .from("shops")
-    .select("id, name, district, city, is_active, organization_id, last_seen_at, phone_e164, created_at, latitude, longitude")
+    .select(
+      "id, name, district, district_id, city, area, address_line, business_type, is_active, organization_id, last_seen_at, phone_e164, created_at, latitude, longitude",
+    )
     .eq("id", shopId)
     .maybeSingle();
   if (shopErr || !shop) return null;
@@ -1070,7 +1095,11 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
       id: shop.id as string,
       name: (shop.name as string) ?? "—",
       district: (shop.district as string) ?? null,
+      district_id: (shop.district_id as string) ?? null,
       city: (shop.city as string) ?? null,
+      area: (shop.area as string) ?? null,
+      address_line: (shop.address_line as string) ?? null,
+      business_type: (shop.business_type as string) ?? null,
       is_active: Boolean(shop.is_active),
       organization_id: orgId,
       last_seen_at: (shop.last_seen_at as string) ?? null,
@@ -1090,6 +1119,114 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
     sync_health: null,
     subscriptionPaymentsRecent: [],
   };
+}
+
+export type AdminShopProfileUpdateInput = {
+  shopId: string;
+  shopName: string;
+  phoneE164?: string | null;
+  ownerEmail?: string | null;
+  districtId?: string | null;
+  addressLine?: string | null;
+  city?: string | null;
+  area?: string | null;
+  businessType?: string | null;
+  note?: string | null;
+};
+
+export async function adminPermanentlyDeleteShopAccount(
+  shopId: string,
+  confirmation: string,
+): Promise<{ ok: boolean; message?: string; partial?: boolean; sales_deleted?: number }> {
+  if (!supabase) return { ok: false, message: "Supabase is not configured." };
+
+  const { data, error } = await supabase.functions.invoke("admin-permanently-delete-shop-account", {
+    body: { shop_id: shopId, confirmation: confirmation.trim() },
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      message: error.message?.includes("Failed to send")
+        ? "Deploy the admin-permanently-delete-shop-account edge function on Supabase."
+        : error.message,
+    };
+  }
+
+  const j = (data ?? {}) as {
+    ok?: boolean;
+    error?: string;
+    detail?: string;
+    message?: string;
+    partial?: boolean;
+    sales_deleted?: number;
+  };
+
+  if (j.ok) {
+    return {
+      ok: true,
+      message: j.message ?? "Account permanently deleted.",
+      sales_deleted: j.sales_deleted,
+    };
+  }
+
+  if (j.error === "forbidden") return { ok: false, message: j.detail ?? "Super admin only." };
+  if (j.error === "confirmation_required") {
+    return { ok: false, message: j.detail ?? "Confirmation text did not match." };
+  }
+  if (j.error === "cannot_delete_self") return { ok: false, message: "You cannot delete your own account." };
+  if (j.error === "cannot_delete_internal_admin") {
+    return { ok: false, message: "Cannot delete a Waka internal admin account." };
+  }
+
+  return {
+    ok: false,
+    message: j.detail ?? j.message ?? j.error ?? "Permanent delete failed.",
+    partial: j.partial,
+  };
+}
+
+export async function adminShopUpdateProfile(
+  input: AdminShopProfileUpdateInput,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Supabase is not configured." };
+
+  const { normalizeUgPhoneE164 } = await import("./businessProfile");
+  let phone: string | null = null;
+  if (input.phoneE164?.trim()) {
+    phone = normalizeUgPhoneE164(input.phoneE164);
+    if (!phone) return { ok: false, message: "Invalid Uganda phone number." };
+  }
+
+  const { data, error } = await supabase.rpc("admin_shop_update_profile", {
+    p_shop_id: input.shopId,
+    p_shop_name: input.shopName.trim(),
+    p_phone_e164: phone,
+    p_owner_email: input.ownerEmail?.trim().toLowerCase() || null,
+    p_district_id: input.districtId || null,
+    p_address_line: input.addressLine?.trim() || null,
+    p_city: input.city?.trim() || null,
+    p_area: input.area?.trim() || null,
+    p_business_type: input.businessType || null,
+    p_note: input.note?.trim() || null,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      message: error.message.includes("admin_shop_update_profile")
+        ? "Apply migration 050_admin_shop_profile_override.sql on Supabase."
+        : error.message,
+    };
+  }
+
+  const j = (data ?? {}) as { ok?: boolean; error?: string; detail?: string };
+  if (j.ok) return { ok: true };
+  if (j.error === "phone_in_use") return { ok: false, message: j.detail ?? "Phone already on another account." };
+  if (j.error === "email_in_use") return { ok: false, message: j.detail ?? "Email already on another account." };
+  if (j.error === "invalid_phone") return { ok: false, message: "Invalid Uganda phone number." };
+  if (j.error === "invalid_email") return { ok: false, message: "Enter a valid owner email (not phone-login)." };
+  return { ok: false, message: j.detail ?? j.error ?? "Could not update shop profile." };
 }
 
 export async function adminSetShopActive(shopId: string, active: boolean): Promise<{ ok: boolean; message?: string }> {
@@ -1255,6 +1392,33 @@ export async function adminShopResetBackOfficePin(shopId: string): Promise<{ ok:
   const j = (data ?? {}) as { ok?: boolean; error?: string };
   if (j.ok === true) return { ok: true };
   return { ok: false, message: j.error ?? "Could not reset back office PIN." };
+}
+
+/** Support: set owner auth password directly (edge function + service role). */
+export async function adminShopSetOwnerPasswordDirect(
+  shopId: string,
+  newPassword: string,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Supabase is not configured." };
+  const { data, error } = await supabase.functions.invoke("admin-set-owner-password", {
+    body: { shop_id: shopId, new_password: newPassword },
+  });
+  if (error) {
+    return {
+      ok: false,
+      message:
+        error.message?.includes("Failed to send") || error.message?.includes("not found")
+          ? "Deploy the admin-set-owner-password edge function on Supabase, then retry."
+          : error.message,
+    };
+  }
+  const j = (data ?? {}) as { ok?: boolean; error?: string; detail?: string };
+  if (j.ok) return { ok: true };
+  const err = j.error ?? "password_update_failed";
+  if (err === "forbidden") return { ok: false, message: "Your admin role cannot set passwords." };
+  if (err === "owner_not_found") return { ok: false, message: "Shop owner account not found." };
+  if (err === "password_too_short") return { ok: false, message: "Password must be at least 8 characters." };
+  return { ok: false, message: j.detail ?? err };
 }
 
 export async function adminShopSendOwnerPasswordReset(

@@ -1,8 +1,9 @@
 import type { AuditLogEntry, DayCloseSummary, Language, Product, Sale, ShopPreferences } from "../types";
-import { dateKeyKampala, dateKeyDaysAgoKampala } from "./datesUg";
+import { dateKeyKampala } from "./datesUg";
 import { computeOwnerAlerts, type OwnerAlert } from "./ownerAlerts";
 import { t, tTemplate } from "./i18n";
 import { actorDisplayLabel } from "./activityNarrative";
+import { avgDailyUnitsFromIndex, buildSalesDayIndex, salesForDay, sumRevenueForDay } from "./salesDayIndex";
 
 export type BusinessPulse = "strong" | "steady" | "watch";
 
@@ -37,41 +38,6 @@ function yesterdayKey(): string {
   return dateKeyKampala(d);
 }
 
-function sumSalesUgxForDay(sales: Sale[], dateKey: string): number {
-  return sales.filter((s) => dateKeyKampala(s.createdAt) === dateKey).reduce((a, s) => a + s.totalUgx, 0);
-}
-
-/** Units sold per product for a given day key. */
-function unitsSoldByProductOnDay(sales: Sale[], dateKey: string): Map<string, number> {
-  const m = new Map<string, number>();
-  for (const s of sales) {
-    if (dateKeyKampala(s.createdAt) !== dateKey) continue;
-    for (const line of s.lines) {
-      m.set(line.productId, (m.get(line.productId) ?? 0) + line.quantity);
-    }
-  }
-  return m;
-}
-
-/** Average daily units over last `days` calendar days excluding `excludeKey`. */
-function avgDailyUnits(
-  sales: Sale[],
-  productId: string,
-  excludeKey: string,
-  days: number,
-): number {
-  let sum = 0;
-  let n = 0;
-  for (let i = 1; i <= days; i++) {
-    const dk = dateKeyDaysAgoKampala(i);
-    if (dk === excludeKey) continue;
-    const u = unitsSoldByProductOnDay(sales, dk).get(productId) ?? 0;
-    sum += u;
-    n += 1;
-  }
-  return n > 0 ? sum / n : 0;
-}
-
 function trustLevelFromScore(score: number): CashierTrustLevel {
   if (score >= 72) return "good";
   if (score >= 45) return "warning";
@@ -80,11 +46,10 @@ function trustLevelFromScore(score: number): CashierTrustLevel {
 
 export function computeCashierTrustRows(
   lang: Language,
-  sales: Sale[],
+  todaySales: Sale[],
   auditLogs: AuditLogEntry[],
   todayKey: string,
 ): CashierTrustRow[] {
-  const todaySales = sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey);
   const byUser = new Map<
     string,
     { sales: number; debt: number; refunds: number; stock: number }
@@ -212,6 +177,7 @@ export function computeExtendedOwnerAlerts(params: {
   todayKey: string;
 }): OwnerAlert[] {
   const { products, dayCloses, auditLogs, preferences, todayDebtUgx, sales, todayKey } = params;
+  const salesIndex = buildSalesDayIndex(sales);
   const base = computeOwnerAlerts({
     products,
     dayCloses,
@@ -240,8 +206,8 @@ export function computeExtendedOwnerAlerts(params: {
   }
 
   const yKey = yesterdayKey();
-  const todayRev = sumSalesUgxForDay(sales, todayKey);
-  const yRev = sumSalesUgxForDay(sales, yKey);
+  const todayRev = sumRevenueForDay(salesIndex, todayKey);
+  const yRev = sumRevenueForDay(salesIndex, yKey);
   if (yRev >= 60_000 && todayRev < yRev * 0.55 && todayRev < yRev - 40_000) {
     extra.push({
       id: "sales-soft-today",
@@ -255,7 +221,7 @@ export function computeExtendedOwnerAlerts(params: {
     });
   }
 
-  const refundsToday = sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey && s.totalUgx < 0).length;
+  const refundsToday = salesForDay(salesIndex, todayKey).filter((s) => s.totalUgx < 0).length;
   if (refundsToday >= 2) {
     extra.push({
       id: "refunds-many",
@@ -280,10 +246,11 @@ export function computeExtendedOwnerAlerts(params: {
     });
   }
 
-  const todayUnits = unitsSoldByProductOnDay(sales, todayKey);
+  const todayUnits = salesIndex.unitsByDayProduct.get(todayKey);
+  if (todayUnits) {
   for (const [pid, qtyToday] of todayUnits) {
     if (qtyToday < 4) continue;
-    const avg = avgDailyUnits(sales, pid, todayKey, 7);
+    const avg = avgDailyUnitsFromIndex(salesIndex, pid, todayKey, 7);
     if (avg >= 0.35 && qtyToday > avg * 2.4) {
       const name = products.find((p) => p.id === pid)?.name ?? pid;
       extra.push({
@@ -295,6 +262,7 @@ export function computeExtendedOwnerAlerts(params: {
       });
       break;
     }
+  }
   }
 
   const weekMs = Date.now() - 7 * 86400000;

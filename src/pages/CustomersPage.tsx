@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { useDeferredSales } from "../hooks/useDeferredSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 
@@ -11,7 +12,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const canView = hasPermission(actor.role, "customers.view");
   const canDebt = hasPermission(actor.role, "customers.debt");
   const customers = usePosStore((s) => s.customers);
-  const sales = usePosStore((s) => s.sales);
+  const sales = useDeferredSales();
   const debtPayments = usePosStore((s) => s.debtPayments);
   const addCustomer = usePosStore((s) => s.addCustomer);
   const addDebtPayment = usePosStore((s) => s.addDebtPayment);

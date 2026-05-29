@@ -33,9 +33,10 @@ const STATUS_STYLES = {
 
 export function SystemStatusCenter({ health }: { health: SystemHealthSnapshot }) {
   const items = [
-    { label: "Devices online", value: health.activeDevices },
-    { label: "Shops active today", value: health.shopsOnline },
-    { label: "Offline shops", value: health.offlineShops },
+    { label: "Devices online (15m)", value: health.activeDevices },
+    { label: "Shops online now", value: health.shopsOnline },
+    { label: "Active today", value: health.shopsActiveToday },
+    { label: "Offline now", value: health.offlineShops },
     { label: "Sync issues", value: health.failedSyncs },
     { label: "Queue load", value: health.queueDelays },
     { label: "Open support", value: health.openSupport },

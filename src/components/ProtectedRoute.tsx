@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { unauthenticatedEntryPath } from "../lib/nativeApp";
 
 type Props = {
   initializing: boolean;
@@ -18,7 +19,7 @@ export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
 
   if (!isAuthenticated) {
     const p = location.pathname.split("?")[0] || "/";
-    const to = p === "/" || p === "" ? "/home" : "/login";
+    const to = p === "/" || p === "" ? unauthenticatedEntryPath() : "/login";
     return <Navigate to={to} replace state={{ from: location.pathname }} />;
   }
 

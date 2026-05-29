@@ -31,6 +31,7 @@ export type SystemHealthSnapshot = {
   label: string;
   activeDevices: number;
   shopsOnline: number;
+  shopsActiveToday: number;
   offlineShops: number;
   failedSyncs: number;
   queueDelays: number;
@@ -124,8 +125,9 @@ export function computeSystemHealth(
   versionBuckets: { version: string; count: number }[],
 ): SystemHealthSnapshot {
   const total = stats?.totalShops ?? shops.length;
-  const activeToday = stats?.activeToday ?? 0;
-  const offlineShops = Math.max(0, total - activeToday);
+  const shopsOnline = stats?.shopsOnlineNow ?? stats?.activeToday ?? 0;
+  const shopsActiveToday = stats?.activeToday ?? 0;
+  const offlineShops = Math.max(0, total - shopsOnline);
   const failedSyncs = fleetPendingSync;
   const queueDelays =
     (stats?.pendingAnnualRequests ?? 0) +
@@ -144,7 +146,8 @@ export function computeSystemHealth(
     status,
     label: status === "healthy" ? "Healthy" : status === "warning" ? "Warning" : "Critical",
     activeDevices: stats?.activeDevices ?? 0,
-    shopsOnline: activeToday,
+    shopsOnline,
+    shopsActiveToday,
     offlineShops,
     failedSyncs,
     queueDelays,

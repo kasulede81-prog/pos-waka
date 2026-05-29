@@ -33,6 +33,16 @@ export function canShopSupport(role: string): boolean {
   return canResolveSupport(role) || role === "operations_admin";
 }
 
+/** Edit locked shop profile (support override). */
+export function canEditShopProfile(role: string): boolean {
+  return role === "super_admin" || role === "support_admin" || role === "operations_admin";
+}
+
+/** Permanent delete shop + owner login (destructive). */
+export function canPermanentlyDeleteShopAccount(role: string): boolean {
+  return role === "super_admin";
+}
+
 export function canShopSubs(role: string): boolean {
   return canManageTrials(role);
 }
@@ -59,6 +69,8 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canShopSupport: canShopSupport(role),
     canShopSubs: canShopSubs(role),
     canFieldOps: canFieldOps(role),
+    canEditShopProfile: canEditShopProfile(role),
+    canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,
   };
 }

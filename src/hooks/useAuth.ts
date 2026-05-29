@@ -11,7 +11,7 @@ import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
-import { phoneToLoginEmail } from "../lib/authPhoneEmail";
+import { isPhoneLoginEmail, phoneToLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
@@ -456,12 +456,16 @@ export function useAuth() {
     async (input: {
       shopName: string;
       ownerName: string;
+      email: string;
       phone: string;
       password: string;
       referralCode?: string;
     }): Promise<SignUpResult> => {
-      const email = phoneToLoginEmail(input.phone);
-      return signUp(email, input.password, input.shopName.trim(), "kiosk_duka", {
+      const loginEmail = input.email.trim().toLowerCase();
+      if (!loginEmail.includes("@")) {
+        throw new Error("Enter a valid email address for your account and password recovery.");
+      }
+      return signUp(loginEmail, input.password, input.shopName.trim(), "kiosk_duka", {
         fullName: input.ownerName.trim(),
         phone: input.phone,
         organizationName: input.shopName.trim(),
@@ -487,9 +491,28 @@ export function useAuth() {
     }
   }, []);
 
-  const requestPasswordReset = useCallback(async (email: string) => {
+  const requestPasswordReset = useCallback(async (identifier: string) => {
     if (!hasSupabaseConfig || !supabase) throw new Error("Supabase is not configured.");
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    let targetEmail = identifier.trim().toLowerCase();
+    if (!targetEmail.includes("@")) {
+      const phoneE164 = normalizeUgPhoneE164(identifier);
+      if (!phoneE164) throw new Error("Enter your email or a valid Uganda mobile number.");
+      const { data, error: lookupErr } = await supabase.rpc("lookup_password_reset_email", {
+        p_phone_e164: phoneE164,
+      });
+      if (lookupErr) throw lookupErr;
+      const j = (data ?? {}) as { ok?: boolean; email?: string; error?: string };
+      if (!j.ok || !j.email) {
+        throw new Error(
+          "No recovery email on file for this phone. Contact Waka support or use the email you registered with.",
+        );
+      }
+      targetEmail = j.email;
+    }
+    if (isPhoneLoginEmail(targetEmail)) {
+      throw new Error("This account uses phone-only login. Contact Waka support to reset your password.");
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
       redirectTo: getAuthRecoveryUrl(),
     });
     if (error) {

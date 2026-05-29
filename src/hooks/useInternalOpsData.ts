@@ -260,7 +260,7 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
 
   useEffect(() => {
     if (previewMode || !adminRow) return;
-    const id = window.setInterval(() => void loadAll(), 30_000);
+    const id = window.setInterval(() => void loadAll({ silent: true }), 15_000);
     return () => window.clearInterval(id);
   }, [adminRow, previewMode, loadAll]);
 

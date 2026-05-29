@@ -38,7 +38,8 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
             <Link to="/terms">Terms</Link>
             <Link to="/privacy">Privacy</Link>
             <Link to="/refund-policy">Refund Policy</Link>
-            <Link to="/support">Contact Support</Link>
+            <Link to="/acceptable-use">Acceptable use</Link>
+            <Link to="/support">Support</Link>
           </nav>
         </footer>
       </div>

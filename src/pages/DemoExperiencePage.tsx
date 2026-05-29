@@ -12,6 +12,7 @@ import { SyncStatusProvider } from "../hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "../context/BackOfficeSessionContext";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import { setActiveAccountKey, getActiveAccountKey } from "../offline/accountScope";
+import { unauthenticatedEntryPath } from "../lib/nativeApp";
 
 type Props = {
   lang: Language;
@@ -41,7 +42,7 @@ export function DemoExperiencePage({ lang, isAuthenticated = false }: Props) {
     };
   }, [demoKey]);
 
-  const exitTo = isAuthenticated ? "/" : "/home";
+  const exitTo = isAuthenticated ? "/" : unauthenticatedEntryPath();
   const exitLabel = t(lang, "activationDemoExit");
 
   const wrap = (children: ReactNode) => (

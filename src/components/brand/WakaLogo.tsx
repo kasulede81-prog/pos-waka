@@ -6,6 +6,8 @@ const LOGO_SRC = "/waka-logo.png";
 type LogoProps = ImgHTMLAttributes<HTMLImageElement> & {
   /** Tailwind height class, e.g. `h-12` */
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "splash";
+  /** Cream-backed app icon (default) vs transparent W-only mark */
+  variant?: "app" | "symbol";
 };
 
 const SIZE_CLASS: Record<NonNullable<LogoProps["size"]>, string> = {
@@ -17,11 +19,27 @@ const SIZE_CLASS: Record<NonNullable<LogoProps["size"]>, string> = {
   splash: "h-[min(52vh,320px)]",
 };
 
+const SYMBOL_BY_SIZE: Record<NonNullable<LogoProps["size"]>, string> = {
+  xs: "/brand/w-icon-32-cream.png",
+  sm: "/brand/w-icon-48-cream.png",
+  md: "/brand/w-icon-64-cream.png",
+  lg: "/brand/w-icon-96-cream.png",
+  xl: "/brand/w-icon-128-cream.png",
+  splash: LOGO_SRC,
+};
+
 /** Full Waka POS logo (PNG) — use in app shell, auth, and marketing headers */
-export function WakaPosLogo({ size = "md", className, alt = "Waka POS", ...rest }: LogoProps) {
+export function WakaPosLogo({
+  size = "md",
+  variant = "app",
+  className,
+  alt = "Waka POS",
+  ...rest
+}: LogoProps) {
+  const src = variant === "symbol" ? SYMBOL_BY_SIZE[size] : LOGO_SRC;
   return (
     <img
-      src={LOGO_SRC}
+      src={src}
       alt={alt}
       width={512}
       height={512}
@@ -32,9 +50,20 @@ export function WakaPosLogo({ size = "md", className, alt = "Waka POS", ...rest 
   );
 }
 
-/** @deprecated Use WakaPosLogo for the official brand mark */
+/** Compact W mark for nav, sidebar, and tight UI (optimized small PNGs). */
+export function WakaSymbolIcon({
+  className,
+  size = "sm",
+}: {
+  className?: string;
+  size?: "xs" | "sm" | "md";
+}) {
+  return <WakaPosLogo size={size} variant="symbol" className={className} aria-hidden alt="" />;
+}
+
+/** @deprecated Use WakaSymbolIcon or WakaPosLogo */
 export function WakaMarkIcon({ className }: { className?: string }) {
-  return <WakaPosLogo size="sm" className={className} aria-hidden />;
+  return <WakaSymbolIcon className={className} size="sm" />;
 }
 
 /** Marketing header wordmark */

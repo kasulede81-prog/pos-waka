@@ -17,6 +17,7 @@ type Props = {
   signUpQuick: (input: {
     shopName: string;
     ownerName: string;
+    email: string;
     phone: string;
     password: string;
     referralCode?: string;
@@ -32,6 +33,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const [searchParams] = useSearchParams();
   const [shopName, setShopName] = useState("");
   const [ownerName, setOwnerName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.trim().toUpperCase() ?? "");
@@ -52,8 +54,13 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!shopName.trim() || !ownerName.trim() || !phone.trim()) {
+    const emailNorm = email.trim().toLowerCase();
+    if (!shopName.trim() || !ownerName.trim() || !phone.trim() || !emailNorm) {
       setError(t(lang, "registerFieldRequired"));
+      return;
+    }
+    if (!emailNorm.includes("@") || !emailNorm.includes(".")) {
+      setError(t(lang, "registerEmailInvalid"));
       return;
     }
     if (password.length < 8) {
@@ -65,6 +72,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
       const result = await signUpQuick({
         shopName: shopName.trim(),
         ownerName: ownerName.trim(),
+        email: emailNorm,
         phone: phone.trim(),
         password,
         referralCode: referralCode.trim() || undefined,
@@ -147,6 +155,20 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
                 className={fieldClass}
               />
             </label>
+
+            <label className="block text-sm font-bold text-stone-800">
+              {t(lang, "registerEmailLabel")}
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                placeholder={t(lang, "registerEmailPh")}
+                className={fieldClass}
+              />
+            </label>
+            <p className="text-xs font-medium text-stone-500">{t(lang, "registerEmailRequiredHint")}</p>
 
             <label className="block text-sm font-bold text-stone-800">
               {t(lang, "registerPhoneLabel")}

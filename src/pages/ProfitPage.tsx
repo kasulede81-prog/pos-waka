@@ -3,6 +3,9 @@ import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { useDeferredSales } from "../hooks/useDeferredSales";
+import { useReportingSales } from "../hooks/useReportingSales";
+import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -16,10 +19,15 @@ type Props = { lang: Language };
 export function ProfitPage({ lang }: Props) {
   const actor = useSessionActor();
   const { authMode } = useSubscription();
-  const sales = usePosStore((s) => s.sales);
-  const returnRecords = usePosStore((s) => s.returnRecords);
-  const products = usePosStore((s) => s.products);
+  const [includeArchived, setIncludeArchived] = useState(false);
   const [range, setRange] = useState<Range>("today");
+  const salesDeferred = useDeferredSales();
+  const salesWithArchive = useReportingSales(includeArchived);
+  const sales = includeArchived ? salesWithArchive : salesDeferred;
+  const returnRecords = usePosStore((s) => s.returnRecords);
+  const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
+  const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+  const products = usePosStore((s) => s.products);
 
   if (!canSeeOfficeProfit(actor.role, authMode)) {
     return <Navigate to="/" replace />;
@@ -44,13 +52,13 @@ export function ProfitPage({ lang }: Props) {
     const today = dateKeyKampala(new Date());
     const weekCut = dateKeyDaysAgoKampala(6);
     const monthPrefix = today.slice(0, 7);
-    return returnRecords.filter((r) => {
+    return allReturnRecords.filter((r) => {
       const k = dateKeyKampala(r.createdAt);
       if (range === "today") return k === today;
       if (range === "week") return k >= weekCut;
       return k.startsWith(monthPrefix);
     });
-  }, [returnRecords, range]);
+  }, [allReturnRecords, range]);
 
   const report = useMemo(
     () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, filteredReturns),
@@ -82,6 +90,8 @@ export function ProfitPage({ lang }: Props) {
           </button>
         ))}
       </div>
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       <section className="rounded-3xl border-2 border-waka-200 bg-gradient-to-br from-waka-50 to-white p-5 shadow-waka-sm">
         <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "profitPageTotalLabel")}</p>

@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useReportingSales } from "../hooks/useReportingSales";
+import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Navigate } from "react-router-dom";
 import { CalendarDays, ChevronDown, FileDown, Printer } from "lucide-react";
 import type { Language, Sale, SaleLine } from "../types";
@@ -52,19 +54,15 @@ const RECEIPT_FILTERS: { key: ReceiptDateRange; labelKey: "receiptsFilterToday" 
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const sales = usePosStore((s) => s.sales);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const sales = useReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
   const preferences = usePosStore((s) => s.preferences);
-  const pruneExpiredSales = usePosStore((s) => s.pruneExpiredSales);
   const [range, setRange] = useState<ReceiptDateRange>("today");
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
-
-  useEffect(() => {
-    pruneExpiredSales();
-  }, [pruneExpiredSales]);
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
   const customers = usePosStore((s) => s.customers);
@@ -168,6 +166,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           </button>
         ) : null}
       </div>
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {sales.length > 0 ? (
         <div className="flex gap-2 overflow-x-auto pb-1">

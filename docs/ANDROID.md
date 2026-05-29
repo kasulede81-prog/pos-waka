@@ -2,6 +2,24 @@
 
 Native shell for the same web app in `dist/`. **Do not run `npx cap init`** — this project already uses `capacitor.config.ts`.
 
+On Android/iOS, the app opens on **Sign in** (`/login`), not the public marketing landing (`/home`). **Register** is at `/register`. Before sign-in, only auth and legal/support pages are reachable (Terms, Privacy, Refund, Acceptable use, Support) — linked from the footer on login/register, same layout as sign-in (no marketing site chrome).
+
+### Cloud sync on Android
+
+Sync uses the same Supabase + offline queue as the web app, with native-specific behavior:
+
+| When | What happens |
+|------|----------------|
+| After sign-in | Full cloud pull (`hydrateAccountFromCloud` with `forcePull`) |
+| After local DB loads | Background pull (~400ms) then push (~12s) |
+| Sale completed | Immediate push when online |
+| App returns to foreground | Push + pull (throttled; uses Capacitor **Network** plugin, not only `navigator.onLine`) |
+| While selling | `SyncStatusProvider` pushes pending rows when connectivity returns |
+
+**Verify on a device:** sign in → confirm products/sales appear → make a sale offline → reconnect → pending count clears in the header. Settings → backup/sync shows last sync time if configured.
+
+Rebuild after code changes: `npm run android`.
+
 | Setting | Value |
 |---------|--------|
 | App name | Waka POS |
@@ -24,42 +42,47 @@ Native shell for the same web app in `dist/`. **Do not run `npx cap init`** — 
 
 ---
 
-## Daily workflow
+## Daily workflow (one command)
 
-### 1. Build the web app (production env)
+### 1. Production env (once)
 
-Set `VITE_*` in `.env.production.local` (see `.env.production.example`), then:
+Copy `.env.production.example` → `.env.production.local` and set:
 
-```bash
-npm run build
-```
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_APP_URL=https://pos.waka.ug`
 
-Supabase URL, anon key, and `VITE_APP_URL` are **baked into** `dist/` at build time.
+Supabase URL, anon key, and app URL are **baked into** `dist/` at build time.
 
-### 2. Sync into the Android project
-
-```bash
-npx cap sync android
-```
-
-Or one command:
+### 2. Build, sync, and open Android Studio
 
 ```bash
-npm run cap:build
+npm run android
 ```
 
-### 3. Open in Android Studio
+Same as `npm run cap:open:android`. This runs:
+
+1. `npm run build` (production web app → `dist/`)
+2. `npx cap sync android` (copy `dist/` + native plugins into `android/`)
+3. `npx cap open android` (Android Studio)
+
+Wait for Gradle sync in Android Studio, then press **Run** (▶) on a device or emulator.
+
+**Fast re-open** (web already built): `SKIP_ANDROID_BUILD=1 npm run android`
+
+**Plain Capacitor** (no build/sync — only if you already ran the command above):
 
 ```bash
-npm run cap:open:android
+npx cap open android
 ```
 
-Opens the `android/` folder. Wait for Gradle sync to finish.
+### 3. Run from CLI (optional)
 
-### 4. Run on a device or emulator
+```bash
+npm run cap:run:android
+```
 
-- Android Studio: **Run** (green play) with a device selected, **or**
-- CLI: `npm run cap:run:android` (build + sync + install debug).
+Build + sync + install debug APK on a connected device/emulator.
 
 ---
 
@@ -123,6 +146,19 @@ Edit `android/app/build.gradle`:
 
 - `versionCode` — integer, **must increase** every Play upload.
 - `versionName` — user-visible string (e.g. `1.0.1`).
+
+---
+
+## App icon & splash artwork
+
+Official W cart mark: `resources/w-symbol-source.png`. Regenerate all exports:
+
+```bash
+npm run brand:assets   # resources/brand/* + logo.png + splash.png + public icons
+npm run cap:assets     # Android mipmaps + PWA (includes brand:assets)
+```
+
+Play Store icon: `resources/brand/icon-1024-cream.png` (1024×1024).
 
 ---
 

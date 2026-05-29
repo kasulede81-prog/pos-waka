@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useReportingAuditLogs } from "../hooks/useReportingSales";
+import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -8,7 +10,8 @@ import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 const PAGE = 120;
 
 export function StaffActivityPage({ lang }: { lang: Language }) {
-  const auditLogs = usePosStore((s) => s.auditLogs);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const auditLogs = useReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
@@ -45,6 +48,8 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
         subtitle={t(lang, "staffActivitySub")}
         backLabel={t(lang, "officeBackToHub")}
       />
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {groups.length === 0 ? (
         <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>

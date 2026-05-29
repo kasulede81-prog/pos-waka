@@ -6,6 +6,7 @@ import { MarketingLayout } from "../components/marketing/MarketingLayout";
 import { SeoHead } from "../components/marketing/SeoHead";
 import { WakaSupportCard } from "../components/support/WakaSupportCard";
 import { t } from "../lib/i18n";
+import { publicBrandHref, useAuthShellForPublicPage } from "../lib/nativeApp";
 import { WAKA_SUPPORT_EMAILS, wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
 
 const TOPIC_KEYS = [
@@ -26,7 +27,7 @@ type Props = {
 };
 
 export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
-  const brandHref = isAuthenticated ? "/" : "/home";
+  const brandHref = publicBrandHref(isAuthenticated);
 
   const content = (
     <>
@@ -88,8 +89,8 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
               ← {t(lang, "upgradeBack")}
             </Link>
           ) : (
-            <Link to="/home" className="text-center text-sm font-bold text-waka-800 underline">
-              ← Home
+            <Link to={brandHref} className="text-center text-sm font-bold text-waka-800 underline">
+              ← {brandHref === "/home" ? "Home" : t(lang, "marketingCtaLogin")}
             </Link>
           )}
         </div>
@@ -97,7 +98,7 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
     </>
   );
 
-  if (isAuthenticated) {
+  if (useAuthShellForPublicPage(isAuthenticated)) {
     return (
       <AuthLayout lang={lang} setLang={setLang} brandHref={brandHref}>
         {content}

@@ -59,6 +59,11 @@ export type PersistedSnapshot = {
   stockMovements?: StockMovement[];
   voidRecords?: VoidRecord[];
   returnRecords?: ReturnRecord[];
+  archivedSales?: Sale[];
+  archivedAuditLogs?: AuditLogEntry[];
+  archivedDayCloses?: DayCloseSummary[];
+  archivedVoidRecords?: VoidRecord[];
+  archivedReturnRecords?: ReturnRecord[];
   updatedAt: string;
 };
 
@@ -240,20 +245,30 @@ export async function claimLegacySnapshotForCurrentAccount(): Promise<Partial<Pe
   }
 }
 
-export async function writeSnapshot(data: Omit<PersistedSnapshot, "updatedAt">): Promise<void> {
+export type WriteSnapshotOptions = {
+  /** Skip rotating the previous snapshot into last-good (faster full restore). */
+  skipLastGood?: boolean;
+};
+
+export async function writeSnapshot(
+  data: Omit<PersistedSnapshot, "updatedAt">,
+  opts?: WriteSnapshotOptions,
+): Promise<void> {
   const mainKey = scopedKey(LEGACY_SNAPSHOT_KEY);
   const fbKey = scopedKey(LEGACY_LAST_GOOD_KEY);
   if (!mainKey || !fbKey) return;
   const db = await getLocalDb();
   const tx = db.transaction("kv", "readwrite");
   const kv = tx.objectStore("kv");
-  try {
-    const prev = await kv.get(mainKey);
-    if (prev && isSnapshotShape(prev)) {
-      await kv.put(prev, fbKey);
+  if (!opts?.skipLastGood) {
+    try {
+      const prev = await kv.get(mainKey);
+      if (prev && isSnapshotShape(prev)) {
+        await kv.put(prev, fbKey);
+      }
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
   const next: PersistedSnapshot = {
     ...data,

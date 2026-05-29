@@ -3,14 +3,16 @@ import type { FormEvent } from "react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { useDeferredSales } from "../hooks/useDeferredSales";
 import { dateKeyKampala } from "../lib/datesUg";
+import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 
 export function CloseDayPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const sales = usePosStore((s) => s.sales);
+  const sales = useDeferredSales();
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const recordDayClose = usePosStore((s) => s.recordDayClose);
@@ -20,7 +22,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const [doneMsg, setDoneMsg] = useState(false);
 
   const summary = useMemo(() => {
-    const daySales = sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey);
+    const daySales = scanTodaySalesHead(sales, todayKey).todaySales;
     const cash = daySales.reduce((a, s) => a + s.cashPaidUgx, 0);
     const debt = daySales.reduce((a, s) => a + s.debtUgx, 0);
     const total = daySales.reduce((a, s) => a + s.totalUgx, 0);

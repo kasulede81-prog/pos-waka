@@ -26,6 +26,10 @@ export function createDefaultPreferences(): ShopPreferences {
     posLocked: false,
     shifts: [],
     receiptPaperSize: "80mm",
+    dataRetentionPolicy: "3m",
+    archivedShifts: [],
+    lastMonthlyReportPromptMonth: null,
+    lastArchiveRunAt: null,
   };
 }
 

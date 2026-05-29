@@ -38,6 +38,11 @@ import { inferFromProductName } from "../lib/smartProductGuess";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
 import { getActiveAccountKey } from "../offline/accountScope";
+import { isNativeApp } from "../lib/nativeApp";
+import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
+import { scanTodaySalesHead } from "../lib/salesDayIndex";
+import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
+import { partitionForArchive } from "../lib/recordArchive";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
 import type { PersistedSnapshot } from "../offline/localDb";
@@ -73,14 +78,6 @@ import {
 
 const MAX_AUDIT_LOGS = 5000;
 const MAX_STOCK_MOVEMENTS = 4000;
-
-/**
- * Local Past-sales / snapshot retention: completed sale rows older than this
- * (rolling wall-clock, not Kampala calendar) are dropped from memory + the next
- * IndexedDB write. Does not remove server-side history if sync already uploaded;
- * stock movements stay for inventory audit.
- */
-const LOCAL_SALE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
 function mergeAuditLogs(existing: AuditLogEntry[], incoming: AuditLogEntry[]): AuditLogEntry[] {
   const byId = new Map<string, AuditLogEntry>();
@@ -185,6 +182,11 @@ type PosState = {
   stockMovements: StockMovement[];
   voidRecords: VoidRecord[];
   returnRecords: ReturnRecord[];
+  archivedSales: Sale[];
+  archivedAuditLogs: AuditLogEntry[];
+  archivedDayCloses: DayCloseSummary[];
+  archivedVoidRecords: VoidRecord[];
+  archivedReturnRecords: ReturnRecord[];
   /** Current signed-in actor (not persisted); synced from App shell / auth. */
   sessionActor: SessionActor | null;
   draftLines: SaleLine[];
@@ -205,6 +207,11 @@ type PosState = {
       stockMovements?: StockMovement[];
       voidRecords?: VoidRecord[];
       returnRecords?: ReturnRecord[];
+      archivedSales?: Sale[];
+      archivedAuditLogs?: AuditLogEntry[];
+      archivedDayCloses?: DayCloseSummary[];
+      archivedVoidRecords?: VoidRecord[];
+      archivedReturnRecords?: ReturnRecord[];
     },
     opts?: { replaceAudit?: boolean },
   ) => void;
@@ -228,9 +235,14 @@ type PosState = {
     stockMovements?: StockMovement[];
     voidRecords?: VoidRecord[];
     returnRecords?: ReturnRecord[];
+    archivedSales?: Sale[];
+    archivedAuditLogs?: AuditLogEntry[];
+    archivedDayCloses?: DayCloseSummary[];
+    archivedVoidRecords?: VoidRecord[];
+    archivedReturnRecords?: ReturnRecord[];
   }) => void;
 
-  /** Replace local state + disk from a full backup (owner only in UI). */
+  /** Replace local state + disk from a full backup (owner only in UI). Prefer await applyRestoredSnapshotFromBackup. */
   applyRestoredSnapshot: (snap: PersistedSnapshot) => void;
 
   /**
@@ -371,37 +383,94 @@ type PosState = {
     notes?: string;
   }) => { ok: boolean; errorKey?: string };
 
-  /** Trim `sales` to the last 30 days (local device only); triggers persist via subscribe. */
-  pruneExpiredSales: () => void;
+  /** Move old sales / activity to archive per retention policy (never auto-deletes). */
+  runDataArchive: () => {
+    moved: { sales: number; auditLogs: number; dayCloses: number; voidRecords: number; returnRecords: number; shifts: number };
+  };
+  /** Owner-only permanent removal of archived buckets on this device. */
+  permanentlyDeleteArchived: () => void;
 };
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let draftPersistTimer: ReturnType<typeof setTimeout> | null = null;
+/** While > 0, auto-persist is paused (restore, cloud merge, etc.). */
+let persistSuspended = 0;
+let snapshotWriteInFlight = false;
+let snapshotWriteQueued = false;
 
-function fireSnapshotWrite(s: PosState): void {
+/** Pause debounced snapshot writes during heavy store mutations. */
+export function suspendStorePersist(): () => void {
+  persistSuspended += 1;
+  return () => {
+    persistSuspended = Math.max(0, persistSuspended - 1);
+  };
+}
+
+function snapshotPayloadFromState(s: PosState): Omit<PersistedSnapshot, "updatedAt"> {
+  return {
+    products: s.products,
+    customers: s.customers,
+    sales: s.sales,
+    preferences: s.preferences,
+    debtPayments: s.debtPayments,
+    dayCloses: s.dayCloses,
+    auditLogs: s.auditLogs,
+    suppliers: s.suppliers,
+    purchases: s.purchases,
+    supplierPayments: s.supplierPayments,
+    stockMovements: s.stockMovements,
+    voidRecords: s.voidRecords,
+    returnRecords: s.returnRecords,
+    archivedSales: s.archivedSales,
+    archivedAuditLogs: s.archivedAuditLogs,
+    archivedDayCloses: s.archivedDayCloses,
+    archivedVoidRecords: s.archivedVoidRecords,
+    archivedReturnRecords: s.archivedReturnRecords,
+  };
+}
+
+function fireSnapshotWrite(): void {
+  if (snapshotWriteInFlight) {
+    snapshotWriteQueued = true;
+    return;
+  }
+  snapshotWriteInFlight = true;
   void (async () => {
-    await writeSnapshot({
-      products: s.products,
-      customers: s.customers,
-      sales: s.sales,
-      preferences: s.preferences,
-      debtPayments: s.debtPayments,
-      dayCloses: s.dayCloses,
-      auditLogs: s.auditLogs,
-      suppliers: s.suppliers,
-      purchases: s.purchases,
-      supplierPayments: s.supplierPayments,
-      stockMovements: s.stockMovements,
-      voidRecords: s.voidRecords,
-      returnRecords: s.returnRecords,
-    });
-    const cur = usePosStore.getState();
-    if (!cur._hydrated) return;
-    const nextKey = await maybeAppendDailyAutoBackup(cur.preferences.lastAutoBackupDateKey);
-    if (nextKey && nextKey !== cur.preferences.lastAutoBackupDateKey) {
-      usePosStore.setState((st) => ({
-        preferences: { ...st.preferences, lastAutoBackupDateKey: nextKey },
-      }));
+    try {
+      if (isNativeApp()) {
+        await yieldUiTick();
+      }
+      const cur = usePosStore.getState();
+      if (!cur._hydrated || persistSuspended > 0) return;
+
+      await writeSnapshot(snapshotPayloadFromState(cur));
+
+      const after = usePosStore.getState();
+      if (!after._hydrated || persistSuspended > 0) return;
+
+      const runBackup = () => {
+        void (async () => {
+          const latest = usePosStore.getState();
+          if (!latest._hydrated) return;
+          const nextKey = await maybeAppendDailyAutoBackup(latest.preferences.lastAutoBackupDateKey);
+          if (nextKey && nextKey !== latest.preferences.lastAutoBackupDateKey) {
+            usePosStore.setState((st) => ({
+              preferences: { ...st.preferences, lastAutoBackupDateKey: nextKey },
+            }));
+          }
+        })();
+      };
+      if (isNativeApp()) {
+        runWhenIdle(runBackup, 4000);
+      } else {
+        runBackup();
+      }
+    } finally {
+      snapshotWriteInFlight = false;
+      if (snapshotWriteQueued) {
+        snapshotWriteQueued = false;
+        fireSnapshotWrite();
+      }
     }
   })();
 }
@@ -414,12 +483,12 @@ function fireDraftWrite(s: PosState): void {
 }
 
 function schedulePersist(get: () => PosState) {
-  if (!get()._hydrated) return;
+  if (!get()._hydrated || persistSuspended > 0) return;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     persistTimer = null;
-    fireSnapshotWrite(get());
-  }, 180);
+    fireSnapshotWrite();
+  }, persistDebounceMs());
 }
 
 function scheduleDraftPersist(get: () => PosState) {
@@ -443,7 +512,7 @@ export function flushPendingPersist(): void {
     clearTimeout(persistTimer);
     persistTimer = null;
     const s = usePosStore.getState();
-    if (s._hydrated) fireSnapshotWrite(s);
+    if (s._hydrated && persistSuspended === 0) fireSnapshotWrite();
   }
   if (draftPersistTimer) {
     clearTimeout(draftPersistTimer);
@@ -588,6 +657,11 @@ export const usePosStore = create<PosState>((set, get) => {
   stockMovements: [],
   voidRecords: [],
   returnRecords: [],
+  archivedSales: [],
+  archivedAuditLogs: [],
+  archivedDayCloses: [],
+  archivedVoidRecords: [],
+  archivedReturnRecords: [],
   sessionActor: null,
   draftLines: [],
   draftInput: null,
@@ -609,6 +683,11 @@ export const usePosStore = create<PosState>((set, get) => {
       ),
       voidRecords: data.voidRecords ?? [],
       returnRecords: data.returnRecords ?? [],
+      archivedSales: (data.archivedSales ?? []).map(normalizeSale),
+      archivedAuditLogs: data.archivedAuditLogs ?? [],
+      archivedDayCloses: data.archivedDayCloses ?? [],
+      archivedVoidRecords: data.archivedVoidRecords ?? [],
+      archivedReturnRecords: data.archivedReturnRecords ?? [],
       _hydrated: true,
       draftLines: [],
       draftInput: null,
@@ -629,6 +708,11 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: [],
       voidRecords: [],
       returnRecords: [],
+      archivedSales: [],
+      archivedAuditLogs: [],
+      archivedDayCloses: [],
+      archivedVoidRecords: [],
+      archivedReturnRecords: [],
       _hydrated: true,
       draftLines: [],
       draftInput: null,
@@ -646,45 +730,15 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: mergeStockMovements(data.stockMovements ?? [], s.stockMovements).map(normalizeStockMovement),
       voidRecords: data.voidRecords ?? s.voidRecords,
       returnRecords: data.returnRecords ?? s.returnRecords,
+      archivedSales: data.archivedSales ? data.archivedSales.map(normalizeSale) : s.archivedSales,
+      archivedAuditLogs: data.archivedAuditLogs ?? s.archivedAuditLogs,
+      archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
+      archivedVoidRecords: data.archivedVoidRecords ?? s.archivedVoidRecords,
+      archivedReturnRecords: data.archivedReturnRecords ?? s.archivedReturnRecords,
     })),
 
   applyRestoredSnapshot: (snap) => {
-    const preferences = mergePreferencesFromPartial({ preferences: snap.preferences });
-    get().hydrate(
-      {
-        products: snap.products.map(normalizeProduct),
-        customers: (snap.customers ?? []).map(normalizeCustomer),
-        sales: snap.sales.map(normalizeSale),
-        preferences,
-        debtPayments: snap.debtPayments ?? [],
-        dayCloses: snap.dayCloses ?? [],
-        auditLogs: snap.auditLogs ?? [],
-        suppliers: snap.suppliers ?? [],
-        purchases: snap.purchases ?? [],
-        supplierPayments: snap.supplierPayments ?? [],
-        stockMovements: snap.stockMovements ?? [],
-        voidRecords: snap.voidRecords ?? [],
-        returnRecords: snap.returnRecords ?? [],
-      },
-      { replaceAudit: true },
-    );
-    const s = get();
-    void writeSnapshot({
-      products: s.products,
-      customers: s.customers,
-      sales: s.sales,
-      preferences: s.preferences,
-      debtPayments: s.debtPayments,
-      dayCloses: s.dayCloses,
-      auditLogs: s.auditLogs,
-      suppliers: s.suppliers,
-      purchases: s.purchases,
-      supplierPayments: s.supplierPayments,
-      stockMovements: s.stockMovements,
-      voidRecords: s.voidRecords,
-      returnRecords: s.returnRecords,
-    });
-    void clearPersistedDraft();
+    void applyRestoredSnapshotFromBackup(snap);
   },
 
   resetForSignOut: () => {
@@ -711,6 +765,11 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: [],
       voidRecords: [],
       returnRecords: [],
+      archivedSales: [],
+      archivedAuditLogs: [],
+      archivedDayCloses: [],
+      archivedVoidRecords: [],
+      archivedReturnRecords: [],
       sessionActor: null,
       draftLines: [],
       draftInput: null,
@@ -1033,13 +1092,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const actorId = state.sessionActor?.userId ?? null;
     const todayKey = dateKeyKampala(new Date());
-    const receiptSeq = state.sales.reduce(
-      (maxSeq, s) =>
-        dateKeyKampala(s.createdAt) === todayKey
-          ? Math.max(maxSeq, Number.isFinite(s.receiptSeq) ? Math.floor(s.receiptSeq ?? 0) : 0)
-          : maxSeq,
-      0,
-    ) + 1;
+    const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
     const sale: Sale = {
       id: crypto.randomUUID(),
       receiptSeq,
@@ -1112,8 +1165,11 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     void queueRemote("pending_sales", { saleId: sale.id });
-    if (hasSupabaseConfig && typeof navigator !== "undefined" && navigator.onLine) {
-      void import("../offline/cloudSync").then((m) => m.syncSaleImmediately(sale.id));
+    if (hasSupabaseConfig) {
+      void import("../lib/deviceOnline").then(({ getDeviceOnline }) => {
+        if (!getDeviceOnline()) return;
+        void import("../offline/cloudSync").then((m) => m.syncSaleImmediately(sale.id));
+      });
     }
     void clearPersistedDraft();
     pushAudit("sale_completed", `Sale UGX ${total.toLocaleString()}`, {
@@ -1847,15 +1903,67 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  pruneExpiredSales: () => {
-    const cutoff = Date.now() - LOCAL_SALE_RETENTION_MS;
-    set((s) => {
-      const next = s.sales.filter((sale) => {
-        const ts = new Date(sale.createdAt).getTime();
-        return !Number.isNaN(ts) && ts >= cutoff;
-      });
-      if (next.length === s.sales.length) return s;
-      return { sales: next };
+  runDataArchive: () => {
+    const s = get();
+    const policy = normalizeDataRetentionPolicy(s.preferences.dataRetentionPolicy);
+    const shifts = s.preferences.shifts ?? [];
+    const archivedShifts = s.preferences.archivedShifts ?? [];
+    const result = partitionForArchive(policy, {
+      sales: s.sales,
+      archivedSales: s.archivedSales,
+      auditLogs: s.auditLogs,
+      archivedAuditLogs: s.archivedAuditLogs,
+      dayCloses: s.dayCloses,
+      archivedDayCloses: s.archivedDayCloses,
+      voidRecords: s.voidRecords,
+      archivedVoidRecords: s.archivedVoidRecords,
+      returnRecords: s.returnRecords,
+      archivedReturnRecords: s.archivedReturnRecords,
+      shifts,
+      archivedShifts,
+    });
+    const movedTotal =
+      result.moved.sales +
+      result.moved.auditLogs +
+      result.moved.dayCloses +
+      result.moved.voidRecords +
+      result.moved.returnRecords +
+      result.moved.shifts;
+    if (movedTotal === 0) {
+      return { moved: result.moved };
+    }
+    set({
+      sales: result.sales,
+      archivedSales: result.archivedSales,
+      auditLogs: result.auditLogs,
+      archivedAuditLogs: result.archivedAuditLogs,
+      dayCloses: result.dayCloses,
+      archivedDayCloses: result.archivedDayCloses,
+      voidRecords: result.voidRecords,
+      archivedVoidRecords: result.archivedVoidRecords,
+      returnRecords: result.returnRecords,
+      archivedReturnRecords: result.archivedReturnRecords,
+      preferences: {
+        ...s.preferences,
+        shifts: result.shifts,
+        archivedShifts: result.archivedShifts,
+        lastArchiveRunAt: new Date().toISOString(),
+      },
+    });
+    return { moved: result.moved };
+  },
+
+  permanentlyDeleteArchived: () => {
+    set({
+      archivedSales: [],
+      archivedAuditLogs: [],
+      archivedDayCloses: [],
+      archivedVoidRecords: [],
+      archivedReturnRecords: [],
+      preferences: {
+        ...get().preferences,
+        archivedShifts: [],
+      },
     });
   },
 
@@ -1893,7 +2001,7 @@ export const usePosStore = create<PosState>((set, get) => {
 });
 
 usePosStore.subscribe((state) => {
-  if (!state._hydrated) return;
+  if (!state._hydrated || persistSuspended > 0) return;
   schedulePersist(() => usePosStore.getState());
 });
 
@@ -1990,6 +2098,16 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       p.receiptPaperSize === "58mm" || p.receiptPaperSize === "80mm" || p.receiptPaperSize === "a4"
         ? p.receiptPaperSize
         : base.receiptPaperSize ?? "80mm",
+    dataRetentionPolicy: normalizeDataRetentionPolicy(p.dataRetentionPolicy ?? base.dataRetentionPolicy),
+    archivedShifts: normalizeShifts(p.archivedShifts ?? base.archivedShifts),
+    lastMonthlyReportPromptMonth:
+      p.lastMonthlyReportPromptMonth === undefined
+        ? (base.lastMonthlyReportPromptMonth ?? null)
+        : p.lastMonthlyReportPromptMonth === null
+          ? null
+          : String(p.lastMonthlyReportPromptMonth).slice(0, 7) || null,
+    lastArchiveRunAt:
+      p.lastArchiveRunAt === undefined ? (base.lastArchiveRunAt ?? null) : p.lastArchiveRunAt === null ? null : String(p.lastArchiveRunAt),
   };
 }
 
@@ -2003,21 +2121,98 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
   }
 }
 
-const SALES_HYDRATE_BATCH = 120;
+const SALES_HYDRATE_BATCH = isNativeApp() ? 50 : 120;
 
 async function hydrateSalesBatched(raw: Sale[]): Promise<void> {
-  if (raw.length === 0) return;
+  if (raw.length === 0) {
+    usePosStore.setState({ sales: [] });
+    return;
+  }
   const normalized: Sale[] = [];
   for (let i = 0; i < raw.length; i += SALES_HYDRATE_BATCH) {
     const chunk = raw.slice(i, i + SALES_HYDRATE_BATCH);
     normalized.push(...chunk.map((s) => normalizeSale(s as Sale)));
     if (i + SALES_HYDRATE_BATCH < raw.length) {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
+      await yieldUiTick();
     }
   }
   usePosStore.setState({ sales: normalized });
+}
+
+/**
+ * Restore a full backup without freezing the UI (batched sales + awaited disk write).
+ * Used when importing a file from another device.
+ */
+export async function applyRestoredSnapshotFromBackup(snap: PersistedSnapshot): Promise<void> {
+  const release = suspendStorePersist();
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  if (draftPersistTimer) {
+    clearTimeout(draftPersistTimer);
+    draftPersistTimer = null;
+  }
+
+  try {
+    const preferences = mergePreferencesFromPartial({ preferences: snap.preferences });
+
+    usePosStore.getState().hydrateEssentials({
+      products: snap.products.map(normalizeProduct),
+      customers: (snap.customers ?? []).map(normalizeCustomer),
+      preferences,
+    });
+    await yieldUiTick();
+
+    usePosStore.getState().hydrateRemainder({
+      debtPayments: snap.debtPayments ?? [],
+      dayCloses: snap.dayCloses ?? [],
+      auditLogs: snap.auditLogs ?? [],
+      suppliers: (snap.suppliers ?? []).map(normalizeSupplier),
+      purchases: (snap.purchases ?? []).map(normalizePurchase),
+      supplierPayments: (snap.supplierPayments ?? []).map(normalizeSupplierPayment),
+      stockMovements: (snap.stockMovements ?? []).map(normalizeStockMovement),
+      voidRecords: snap.voidRecords ?? [],
+      returnRecords: snap.returnRecords ?? [],
+      archivedSales: (snap.archivedSales ?? []).map(normalizeSale),
+      archivedAuditLogs: snap.archivedAuditLogs ?? [],
+      archivedDayCloses: snap.archivedDayCloses ?? [],
+      archivedVoidRecords: snap.archivedVoidRecords ?? [],
+      archivedReturnRecords: snap.archivedReturnRecords ?? [],
+    });
+    await yieldUiTick();
+
+    await hydrateSalesBatched(snap.sales);
+    void clearPersistedDraft();
+    await yieldUiTick();
+
+    const s = usePosStore.getState();
+    await writeSnapshot(
+      {
+        products: s.products,
+        customers: s.customers,
+        sales: s.sales,
+        preferences: s.preferences,
+        debtPayments: s.debtPayments,
+        dayCloses: s.dayCloses,
+        auditLogs: s.auditLogs,
+        suppliers: s.suppliers,
+        purchases: s.purchases,
+        supplierPayments: s.supplierPayments,
+        stockMovements: s.stockMovements,
+        voidRecords: s.voidRecords,
+        returnRecords: s.returnRecords,
+        archivedSales: s.archivedSales,
+        archivedAuditLogs: s.archivedAuditLogs,
+        archivedDayCloses: s.archivedDayCloses,
+        archivedVoidRecords: s.archivedVoidRecords,
+        archivedReturnRecords: s.archivedReturnRecords,
+      },
+      { skipLastGood: true },
+    );
+  } finally {
+    release();
+  }
 }
 
 function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): void {
@@ -2036,6 +2231,11 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
         voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
         returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
+        archivedSales: (snap.archivedSales ?? []).map(normalizeSale),
+        archivedAuditLogs: snap.archivedAuditLogs ?? [],
+        archivedDayCloses: snap.archivedDayCloses ?? [],
+        archivedVoidRecords: snap.archivedVoidRecords ?? [],
+        archivedReturnRecords: snap.archivedReturnRecords ?? [],
       });
     })();
   };
@@ -2105,7 +2305,7 @@ function schedulePostBootstrapTasks(): void {
 async function runPostBootstrapTasks(): Promise<void> {
   if (!usePosStore.getState()._hydrated) return;
   void restoreDraftSaleFromDisk();
-  usePosStore.getState().pruneExpiredSales();
+  runWhenIdle(() => usePosStore.getState().runDataArchive(), 4000);
 
   if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
     usePosStore.getState().switchStaffAccount(null);

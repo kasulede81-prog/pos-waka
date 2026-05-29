@@ -4,8 +4,9 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
+  formatOwnerContactLabel,
   internalSearchAgentUserCandidates,
-  internalGrantMarketingAgent,
+  internalGrantMarketingAgentByShop,
   internalListMarketingAgents,
   listAgentReferrals,
   type AgentUserCandidate,
@@ -22,8 +23,10 @@ const PREVIEW_AGENTS: InternalMarketingAgentRow[] = [
     id: "preview-agent-1",
     referralCode: "WAKA-KLA",
     fullName: "Preview Agent Kampala",
-    email: "agent@waka.ug",
+    email: null,
     phoneE164: "+256700000001",
+    shopId: "preview-shop-1",
+    shopName: "Nakawa Mini Mart",
     active: true,
     referralCount: 3,
     createdAt: new Date().toISOString(),
@@ -90,7 +93,8 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   const [search, setSearch] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createBusy, setCreateBusy] = useState(false);
-  const [grantEmail, setGrantEmail] = useState("");
+  const [grantShopId, setGrantShopId] = useState("");
+  const [grantShopName, setGrantShopName] = useState("");
   const [grantRole, setGrantRole] = useState<AgentRole>("trial_agent");
   const [candidateQuery, setCandidateQuery] = useState("");
   const [candidateLoading, setCandidateLoading] = useState(false);
@@ -125,7 +129,8 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
       (a) =>
         a.referralCode.toLowerCase().includes(q) ||
         (a.fullName ?? "").toLowerCase().includes(q) ||
-        (a.email ?? "").toLowerCase().includes(q),
+        (a.shopName ?? "").toLowerCase().includes(q) ||
+        (a.phoneE164 ?? "").toLowerCase().includes(q),
     );
   }, [agents, search]);
 
@@ -149,26 +154,31 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     }
     setCreateBusy(true);
     setCreateMsg(null);
-    const res = await internalGrantMarketingAgent(grantEmail);
+    if (!grantShopId.trim()) {
+      setCreateBusy(false);
+      setCreateMsg(t(lang, "internalAgentsShopRequired"));
+      return;
+    }
+    const res = await internalGrantMarketingAgentByShop(grantShopId);
     setCreateBusy(false);
     if (!res.ok) {
       const key =
-        res.error === "user_not_found"
-          ? t(lang, "internalAgentsUserNotFound")
-          : res.error === "invalid_email"
-            ? t(lang, "internalAgentsInvalidEmail")
+        res.error === "shop_not_found" || res.error === "no_owner"
+          ? t(lang, "internalAgentsShopNotFound")
+          : res.error === "shop_required"
+            ? t(lang, "internalAgentsShopRequired")
             : res.error ?? t(lang, "internalAgentsCreateFail");
       setCreateMsg(key);
       return;
     }
-    if (grantEmail.trim()) {
-      const key = grantEmail.trim().toLowerCase();
-      const nextRoles = { ...agentRoles, [key]: grantRole };
+    if (res.id) {
+      const nextRoles = { ...agentRoles, [res.id]: grantRole };
       setAgentRoles(nextRoles);
       writeAgentRoles(nextRoles);
     }
     setCreateOpen(false);
-    setGrantEmail("");
+    setGrantShopId("");
+    setGrantShopName("");
     setCreateMsg(
       res.alreadyAgent
         ? t(lang, "internalAgentsAlreadyAgent").replace("{{code}}", res.referralCode ?? "")
@@ -177,15 +187,13 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     await load();
   };
 
-  const updateAgentRole = async (email: string | null, role: AgentRole) => {
-    if (!email) return;
-    const key = email.trim().toLowerCase();
-    setRoleBusyKey(key);
-    const nextRoles = { ...agentRoles, [key]: role };
+  const updateAgentRole = async (agentId: string, label: string, role: AgentRole) => {
+    setRoleBusyKey(agentId);
+    const nextRoles = { ...agentRoles, [agentId]: role };
     setAgentRoles(nextRoles);
     writeAgentRoles(nextRoles);
     setRoleBusyKey(null);
-    setCreateMsg(`Role updated: ${email} → ${role}`);
+    setCreateMsg(`Role updated: ${label} → ${role}`);
   };
 
   const loadCandidates = useCallback(async () => {
@@ -193,11 +201,12 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     if (previewMode) {
       setCandidates([
         {
-          key: "agent@waka.ug",
-          email: "agent@waka.ug",
+          key: "preview-shop-1",
+          shopId: "preview-shop-1",
+          shopName: "Nakawa Mini Mart",
           fullName: "Preview Agent Kampala",
           phoneE164: "+256700000001",
-          shopName: "Nakawa Mini Mart",
+          email: null,
           district: "Kampala",
         },
       ]);
@@ -255,11 +264,14 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             <li key={a.id} className={clsx(cardCls, "p-4")}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="font-mono text-lg font-black text-stone-950">{a.referralCode}</p>
-                  <p className="text-sm font-semibold text-stone-700">{a.fullName ?? "—"}</p>
-                  <p className="text-xs text-stone-500">{a.email ?? "—"} · {a.phoneE164 ?? "—"}</p>
+                  <p className="font-mono text-lg font-black uppercase tracking-wide text-stone-950">{a.referralCode}</p>
+                  <p className="text-sm font-semibold text-stone-700">{a.shopName ?? a.fullName ?? "—"}</p>
+                  <p className="text-xs text-stone-500">
+                    {formatOwnerContactLabel(a.email, a.phoneE164)}
+                    {a.fullName && a.shopName ? ` · ${a.fullName}` : ""}
+                  </p>
                   <p className="text-[11px] font-bold uppercase text-stone-400">
-                    {(a.email && agentRoles[a.email.toLowerCase()]) || "trial_agent"}
+                    {agentRoles[a.id] || "trial_agent"}
                   </p>
                 </div>
                 <div className="text-right">
@@ -274,11 +286,9 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                 <label className="text-xs font-bold text-stone-600">
                   Role
                   <select
-                    value={(a.email && agentRoles[a.email.toLowerCase()]) || "trial_agent"}
+                    value={agentRoles[a.id] || "trial_agent"}
                     onChange={(e) => {
-                      if (!a.email) return;
-                      const key = a.email.toLowerCase();
-                      setAgentRoles((prev) => ({ ...prev, [key]: e.target.value as AgentRole }));
+                      setAgentRoles((prev) => ({ ...prev, [a.id]: e.target.value as AgentRole }));
                     }}
                     className="ml-2 rounded-lg border border-stone-200 bg-white px-2 py-1 text-xs"
                   >
@@ -289,11 +299,10 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                 </label>
                 <button
                   type="button"
-                  disabled={!a.email || roleBusyKey === a.email?.toLowerCase()}
+                  disabled={roleBusyKey === a.id}
                   onClick={() => {
-                    if (!a.email) return;
-                    const role = agentRoles[a.email.toLowerCase()] ?? "trial_agent";
-                    void updateAgentRole(a.email, role);
+                    const role = agentRoles[a.id] ?? "trial_agent";
+                    void updateAgentRole(a.id, a.shopName ?? a.referralCode, role);
                   }}
                   className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-black text-stone-800 disabled:opacity-50"
                 >
@@ -301,8 +310,8 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                 </button>
                 <button
                   type="button"
-                  disabled={!a.email || roleBusyKey === a.email?.toLowerCase()}
-                  onClick={() => void updateAgentRole(a.email, "trial_agent")}
+                  disabled={roleBusyKey === a.id}
+                  onClick={() => void updateAgentRole(a.id, a.shopName ?? a.referralCode, "trial_agent")}
                   className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-900 disabled:opacity-50"
                 >
                   Downgrade to trial
@@ -329,7 +338,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                 value={candidateQuery}
                 onChange={(e) => setCandidateQuery(e.target.value)}
                 className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
-                placeholder="Search existing users: email, name, phone, shop"
+                placeholder={t(lang, "internalAgentsCandidateSearchPh")}
               />
               <button
                 type="button"
@@ -342,19 +351,28 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             {candidateLoading ? (
               <p className="text-xs font-semibold text-stone-500">Loading users…</p>
             ) : candidates.length === 0 ? (
-              <p className="text-xs font-semibold text-stone-500">No users found. You can still type email below.</p>
+              <p className="text-xs font-semibold text-stone-500">{t(lang, "internalAgentsCandidatesEmpty")}</p>
             ) : (
               <ul className="max-h-40 space-y-1 overflow-y-auto">
                 {candidates.map((c) => (
                   <li key={c.key}>
                     <button
                       type="button"
-                      onClick={() => setGrantEmail(c.email)}
-                      className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-left text-xs hover:border-orange-300"
+                      onClick={() => {
+                        setGrantShopId(c.shopId);
+                        setGrantShopName(c.shopName);
+                      }}
+                      className={clsx(
+                        "w-full rounded-lg border px-3 py-2 text-left text-xs",
+                        grantShopId === c.shopId
+                          ? "border-orange-400 bg-orange-50"
+                          : "border-stone-200 bg-white hover:border-orange-300",
+                      )}
                     >
-                      <p className="font-black text-stone-900">{c.fullName ?? c.email}</p>
+                      <p className="font-black text-stone-900">{c.shopName}</p>
                       <p className="font-semibold text-stone-500">
-                        {c.email} · {c.phoneE164 ?? "—"} · {c.shopName ?? "—"} {c.district ? `(${c.district})` : ""}
+                        {c.fullName ?? "—"} · {formatOwnerContactLabel(c.email, c.phoneE164)}
+                        {c.district ? ` · ${c.district}` : ""}
                       </p>
                     </button>
                   </li>
@@ -362,16 +380,12 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
               </ul>
             )}
           </div>
-          <label className="block text-sm font-bold">
-            {t(lang, "internalAgentsGrantEmailLabel")}
-            <input
-              type="email"
-              value={grantEmail}
-              onChange={(e) => setGrantEmail(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-stone-200 px-3 py-2"
-              placeholder="owner@example.com"
-            />
-          </label>
+          <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "internalAgentsGrantShopLabel")}</p>
+            <p className="mt-1 text-base font-black uppercase tracking-wide text-stone-900">
+              {grantShopName || t(lang, "internalAgentsShopRequired")}
+            </p>
+          </div>
           <label className="block text-sm font-bold">
             Agent role
             <select
@@ -390,7 +404,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
           {createMsg ? <p className="text-sm font-bold text-rose-700">{createMsg}</p> : null}
           <button
             type="button"
-            disabled={createBusy}
+            disabled={createBusy || !grantShopId.trim()}
             onClick={() => void submitGrant()}
             className="w-full rounded-2xl bg-orange-600 py-3 text-sm font-black text-white disabled:opacity-60"
           >
@@ -416,7 +430,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             {detailRows.map((r) => (
               <li key={r.id} className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2">
                 <p className="font-bold text-stone-900">{r.shopName ?? "—"}</p>
-                <p className="text-xs text-stone-500">{r.ownerEmail ?? "—"}</p>
+                <p className="text-xs text-stone-500">{formatOwnerContactLabel(r.ownerEmail, null)}</p>
                 <p className="text-[11px] text-stone-400">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "—"}</p>
               </li>
             ))}

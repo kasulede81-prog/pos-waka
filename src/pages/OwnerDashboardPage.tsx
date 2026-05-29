@@ -1,4 +1,7 @@
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
+import { useDeferredSales } from "../hooks/useDeferredSales";
+import { useReportingSales, useReportingAuditLogs } from "../hooks/useReportingSales";
+import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Link } from "react-router-dom";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { Building2, ClipboardList, Sparkles } from "lucide-react";
@@ -6,6 +9,7 @@ import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
+import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { isLowStock } from "../lib/sellingEngine";
 import type { OwnerAlert } from "../lib/ownerAlerts";
 import {
@@ -49,31 +53,47 @@ function trustLabel(lang: Language, level: "good" | "warning" | "risky"): string
 }
 
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
-  const sales = usePosStore((s) => s.sales);
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const salesDeferred = useDeferredSales();
+  const salesWithArchive = useReportingSales(includeArchived);
+  const sales = includeArchived ? salesWithArchive : salesDeferred;
+  const liveSales = usePosStore((s) => s.sales);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
-  const auditLogs = usePosStore((s) => s.auditLogs);
+  const auditLogsActive = usePosStore((s) => s.auditLogs);
+  const auditLogsWithArchive = useReportingAuditLogs(includeArchived);
+  const auditLogs = includeArchived ? auditLogsWithArchive : auditLogsActive;
   const voidRecords = usePosStore((s) => s.voidRecords);
+  const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
   const returnRecords = usePosStore((s) => s.returnRecords);
+  const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
+  const allVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
+  const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+
+  const deferredAuditLogs = useDeferredValue(auditLogs);
+  const metricsPending = liveSales !== sales || auditLogs !== deferredAuditLogs;
 
   const [waCopied, setWaCopied] = useState(false);
 
   const todayKey = dateKeyKampala(new Date());
   const yesterdayKey = dateKeyDaysAgoKampala(1);
 
-  const today = useMemo(() => sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey), [sales, todayKey]);
+  const today = useMemo(
+    () => scanTodaySalesHead(sales, todayKey).todaySales,
+    [sales, todayKey],
+  );
 
   const todayVoids = useMemo(
-    () => voidRecords.filter((v) => dateKeyKampala(v.createdAt) === todayKey),
-    [voidRecords, todayKey],
+    () => allVoidRecords.filter((v) => dateKeyKampala(v.createdAt) === todayKey),
+    [allVoidRecords, todayKey],
   );
 
   const todayReturns = useMemo(
-    () => returnRecords.filter((r) => dateKeyKampala(r.createdAt) === todayKey),
-    [returnRecords, todayKey],
+    () => allReturnRecords.filter((r) => dateKeyKampala(r.createdAt) === todayKey),
+    [allReturnRecords, todayKey],
   );
 
   const todayDiscountTotal = useMemo(
@@ -83,10 +103,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   const todayDiscountEvents = useMemo(
     () =>
-      auditLogs.filter(
+      deferredAuditLogs.filter(
         (e) => e.action === "discount_given" && dateKeyKampala(e.at) === todayKey,
       ),
-    [auditLogs, todayKey],
+    [deferredAuditLogs, todayKey],
   );
 
   const stats = useMemo(() => {
@@ -123,7 +143,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   }, [today, products, todayReturns, todayVoids, dayCloses, todayKey]);
 
   const yesterdaySalesUgx = useMemo(
-    () => sales.filter((s) => dateKeyKampala(s.createdAt) === yesterdayKey).reduce((a, s) => a + s.totalUgx, 0),
+    () =>
+      sales
+        .filter((s) => dateKeyKampala(s.createdAt) === yesterdayKey)
+        .reduce((a, s) => a + s.totalUgx, 0),
     [sales, yesterdayKey],
   );
 
@@ -171,13 +194,13 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       computeExtendedOwnerAlerts({
         products,
         dayCloses,
-        auditLogs,
+        auditLogs: deferredAuditLogs,
         preferences,
         todayDebtUgx: stats.debtTodayUgx,
         sales,
         todayKey,
       }),
-    [products, dayCloses, auditLogs, preferences, stats.debtTodayUgx, sales, todayKey],
+    [products, dayCloses, deferredAuditLogs, preferences, stats.debtTodayUgx, sales, todayKey],
   );
 
   const dangerCount = ownerAlertsResolved.filter((a) => a.tone === "danger").length;
@@ -219,7 +242,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const summaryLines = useMemo(() => buildDailyOwnerSummaryLines(lang, summaryInput), [lang, summaryInput]);
   const waLine = useMemo(() => buildWhatsAppOwnerSummaryLine(lang, summaryInput), [lang, summaryInput]);
 
-  const trustRows = useMemo(() => computeCashierTrustRows(lang, sales, auditLogs, todayKey), [lang, sales, auditLogs, todayKey]);
+  const trustRows = useMemo(
+    () => computeCashierTrustRows(lang, today, deferredAuditLogs, todayKey),
+    [lang, today, deferredAuditLogs, todayKey],
+  );
   const activeShift = useMemo(() => shifts.find((s) => !s.endAt) ?? null, [shifts]);
 
   const trendLine = useMemo(
@@ -249,6 +275,14 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-12">
+      {metricsPending ? (
+        <p
+          className="rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-center text-sm font-bold text-waka-900"
+          role="status"
+        >
+          {t(lang, "ownerDashboardUpdating")}
+        </p>
+      ) : null}
       <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
       <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-waka-50/40 p-6 shadow-sm">
         <div className="flex flex-wrap items-start gap-4">
@@ -262,6 +296,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           </div>
         </div>
       </header>
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       <div className="flex flex-wrap gap-2">
         <Link

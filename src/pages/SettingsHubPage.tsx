@@ -1,5 +1,5 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -69,6 +69,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
           subtitle={t(lang, "settingsHubNotificationsSub")}
           Icon={Bell}
         />
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/retention"
+            title={t(lang, "settingsHubRetention")}
+            subtitle={t(lang, "settingsHubRetentionSub")}
+            Icon={Archive}
+          />
+        ) : null}
       </OfficeNavSection>
     </div>
   );

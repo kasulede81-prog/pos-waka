@@ -6,6 +6,7 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
+import { PinInput } from "../components/ui/PinInput";
 
 const ROLE_OPTIONS: UserRole[] = ["cashier", "manager", "stock_keeper"];
 
@@ -154,15 +155,13 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
           <label className="mt-4 block">
             <span className="text-sm font-bold text-slate-600">{t(lang, "staffPinLabel")}</span>
-            <input
+            <PinInput
               value={pin}
               onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
               placeholder={t(lang, "staffPinPh")}
-              inputMode="numeric"
-              pattern="[0-9]*"
               maxLength={4}
-              className={`${fieldClass} mt-1 text-center font-mono text-2xl tracking-[0.4em]`}
               autoComplete="off"
+              className={`${fieldClass} mt-1 text-center font-mono text-2xl tracking-[0.4em]`}
             />
             <p className="mt-1 text-xs font-semibold text-slate-500">{t(lang, "staffPinHint")}</p>
           </label>

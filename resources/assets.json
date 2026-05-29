@@ -1,13 +1,13 @@
 {
   "android": {
-    "iconBackgroundColor": "#ffffff",
-    "splashBackgroundColor": "#ffffff"
+    "iconBackgroundColor": "#fffaf5",
+    "splashBackgroundColor": "#fffaf5"
   },
   "ios": {
-    "iconBackgroundColor": "#ffffff",
-    "splashBackgroundColor": "#ffffff"
+    "iconBackgroundColor": "#fffaf5",
+    "splashBackgroundColor": "#fffaf5"
   },
   "pwa": {
-    "iconBackgroundColor": "#ffffff"
+    "iconBackgroundColor": "#fffaf5"
   }
 }

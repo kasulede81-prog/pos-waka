@@ -1,7 +1,8 @@
 import { useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { WakaSymbolIcon } from "../../brand/WakaLogo";
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
@@ -109,8 +110,8 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
               <ArrowLeft className="h-5 w-5" />
             </button>
           ) : (
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15" aria-hidden>
-              <ShieldCheck className="h-5 w-5" />
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm" aria-hidden>
+              <WakaSymbolIcon size="sm" className="h-full w-full" />
             </span>
           )}
           <div className="min-w-0 flex-1">

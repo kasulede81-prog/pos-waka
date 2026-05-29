@@ -3,6 +3,10 @@ import { Link, useLocation } from "react-router-dom";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { useDeferredSales } from "../hooks/useDeferredSales";
+import { useReportingSales } from "../hooks/useReportingSales";
+import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
+import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { isLowStock } from "../lib/sellingEngine";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
@@ -11,7 +15,6 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { useSyncStatus } from "../hooks/useSyncStatus";
-import { supabase } from "../lib/supabase";
 
 function formatDashboardSaleItems(sale: Sale, maxNames = 4): string {
   const names = sale.lines.map((l) => {
@@ -31,6 +34,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const location = useLocation();
   const sync = useSyncStatus();
   const [deniedBanner, setDeniedBanner] = useState(false);
+  const [includeArchived, setIncludeArchived] = useState(false);
 
   useEffect(() => {
     if ((location.state as { backOfficeDenied?: boolean } | null)?.backOfficeDenied) {
@@ -40,8 +44,10 @@ export function DashboardPage({ lang }: { lang: Language }) {
   }, [location.state]);
 
   useEffect(() => {
-    if (authMode !== "supabase" || snapshot.kind !== "remote" || !snapshot.row.shop_id || !supabase) return;
-    void supabase.rpc("shop_record_last_seen", { p_shop_id: snapshot.row.shop_id });
+    if (authMode !== "supabase" || snapshot.kind !== "remote" || !snapshot.row.shop_id) return;
+    void import("../lib/shopPresence").then(({ sendShopPresenceHeartbeat }) =>
+      sendShopPresenceHeartbeat(snapshot.row.shop_id!),
+    );
   }, [authMode, snapshot]);
 
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
@@ -51,7 +57,10 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
 
-  const sales = usePosStore((s) => s.sales);
+  const salesDeferred = useDeferredSales();
+  const salesWithArchive = useReportingSales(includeArchived);
+  const sales = includeArchived ? salesWithArchive : salesDeferred;
+  const salesCount = usePosStore((s) => s.sales.length);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
@@ -67,10 +76,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const todayKey = dateKeyKampala(new Date());
 
-  const todaySales = useMemo(
-    () => sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey),
-    [sales, todayKey],
-  );
+  const todaySales = useMemo(() => scanTodaySalesHead(sales, todayKey).todaySales, [sales, todayKey]);
 
   const cashToday = useMemo(() => todaySales.reduce((a, s) => a + s.cashPaidUgx, 0), [todaySales]);
   const debtToday = useMemo(() => todaySales.reduce((a, s) => a + s.debtUgx, 0), [todaySales]);
@@ -117,7 +123,9 @@ export function DashboardPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {preferences.onboardingDone && (products.length === 0 || sales.length === 0) ? (
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+
+      {preferences.onboardingDone && (products.length === 0 || salesCount === 0) ? (
         <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-6 shadow-sm">
           <h2 className="text-xl font-black text-waka-950">{t(lang, "setupChecklistTitle")}</h2>
           <p className="mt-1 text-base text-waka-900">{t(lang, "setupChecklistSub")}</p>
@@ -135,9 +143,9 @@ export function DashboardPage({ lang }: { lang: Language }) {
               ) : null}
             </li>
             <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-              <span className={sales.length > 0 ? "text-waka-600" : "text-stone-400"}>{sales.length > 0 ? "✓" : "②"}</span>
+              <span className={salesCount > 0 ? "text-waka-600" : "text-stone-400"}>{salesCount > 0 ? "✓" : "②"}</span>
               {t(lang, "setupStep2")}
-              {sales.length === 0 && canSell ? (
+              {salesCount === 0 && canSell ? (
                 <Link to="/pos" className="rounded-full bg-stone-900 px-4 py-2 text-sm font-black text-white">
                   {t(lang, "sellTitle")}
                 </Link>

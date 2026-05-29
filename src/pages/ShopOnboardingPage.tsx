@@ -15,6 +15,7 @@ import { usePosStore } from "../store/usePosStore";
 import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLocation";
 import { inferFromProductName } from "../lib/smartProductGuess";
+import { PinInput } from "../components/ui/PinInput";
 
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
@@ -282,12 +283,13 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                     </option>
                   ))}
                 </select>
-                <input
+                <PinInput
                   value={staffPin}
                   onChange={(e) => setStaffPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                   placeholder={t(lang, "staffPinPh")}
+                  maxLength={6}
+                  autoComplete="off"
                   className={fieldClass}
-                  inputMode="numeric"
                 />
                 <button
                   type="button"

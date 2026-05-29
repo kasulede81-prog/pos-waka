@@ -4,6 +4,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
 import { AppModalOverlay } from "./AppModalOverlay";
+import { PinInput } from "../ui/PinInput";
 
 type Props = { lang: Language };
 
@@ -35,10 +36,7 @@ export function BackOfficeUnlockModal({ lang }: Props) {
         <p className="text-xl font-black text-stone-900">{t(lang, "unlockModalTitle")}</p>
         <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "unlockModalHint")}</p>
         <form onSubmit={submit} className="mt-5 space-y-3">
-          <input
-            type="password"
-            inputMode="numeric"
-            autoComplete="one-time-code"
+          <PinInput
             maxLength={6}
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}

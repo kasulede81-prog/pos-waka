@@ -9,9 +9,9 @@ import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid
 import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
-import type { DiscountMode } from "../lib/saleAdjustments";
 import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
+import { MoneyInput } from "../components/ui/MoneyInput";
 import { useVisualViewportInset } from "../hooks/useVisualViewportInset";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
@@ -20,7 +20,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
-import { dateKeyKampala } from "../lib/datesUg";
+import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
@@ -184,17 +184,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(products), [products]);
   const sellHasUncategorized = useMemo(() => products.some((p) => !(p.category ?? "").trim()), [products]);
 
-  const soldTodayByProduct = useMemo(() => {
-    const todayKey = dateKeyKampala(new Date());
-    const byProduct = new Map<string, number>();
-    for (const sale of sales) {
-      if (dateKeyKampala(sale.createdAt) !== todayKey) continue;
-      for (const line of sale.lines) {
-        byProduct.set(line.productId, (byProduct.get(line.productId) ?? 0) + line.quantity);
-      }
-    }
-    return byProduct;
-  }, [sales]);
+  const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p] as const)), [products]);
   const favoriteIdSet = useMemo(() => new Set(preferences.favoriteProductIds ?? []), [preferences.favoriteProductIds]);
 
@@ -1066,10 +1056,9 @@ export function PosPage({ lang }: { lang: Language }) {
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <label className="block text-base font-semibold text-slate-800">
                   {paymentMethod === "cash" ? t(lang, "paymentCashReceivedLabel") : t(lang, "paymentCashLabel")}
-                  <input
+                  <MoneyInput
                     value={cashInput}
                     onChange={(e) => setCashInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    inputMode="numeric"
                     className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
                     placeholder="0"
                   />
@@ -1077,10 +1066,9 @@ export function PosPage({ lang }: { lang: Language }) {
                 {paymentMethod === "mixed" || paymentMethod === "credit" ? (
                   <label className="block text-base font-semibold text-slate-800">
                     {t(lang, "paymentMobileMoneyLabel")}
-                    <input
+                    <MoneyInput
                       value={mobileMoneyInput}
                       onChange={(e) => setMobileMoneyInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      inputMode="numeric"
                       className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xl font-black"
                       placeholder="0"
                     />
@@ -1374,9 +1362,9 @@ export function PosPage({ lang }: { lang: Language }) {
         open={discountLine !== null}
         line={discountLine}
         onClose={() => setDiscountLine(null)}
-        onApply={(mode: DiscountMode, value: number) => {
+        onApply={(newSellingPriceUgx) => {
           if (!discountLine) return;
-          const r = applyDraftLineDiscount(discountLine.productId, mode, value);
+          const r = applyDraftLineDiscount(discountLine.productId, "final", newSellingPriceUgx);
           if (!r.ok) {
             setToast(t(lang, "saleError"));
             window.setTimeout(() => setToast(null), 2200);

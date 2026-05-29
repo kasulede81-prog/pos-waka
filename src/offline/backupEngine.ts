@@ -1,4 +1,5 @@
 import { dateKeyKampala } from "../lib/datesUg";
+import { yieldUiTick } from "../lib/uiYield";
 import type { PersistedSnapshot } from "./localDb";
 import {
   appendBackupRecord,
@@ -24,6 +25,11 @@ function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSnapshot |
     purchases: p.purchases ?? [],
     supplierPayments: p.supplierPayments ?? [],
     stockMovements: p.stockMovements ?? [],
+    archivedSales: p.archivedSales ?? [],
+    archivedAuditLogs: p.archivedAuditLogs ?? [],
+    archivedDayCloses: p.archivedDayCloses ?? [],
+    archivedVoidRecords: p.archivedVoidRecords ?? [],
+    archivedReturnRecords: p.archivedReturnRecords ?? [],
     updatedAt: p.updatedAt ?? new Date().toISOString(),
   };
 }
@@ -98,14 +104,66 @@ export function buildExportEnvelope(snapshot: PersistedSnapshot): WakaExportEnve
   };
 }
 
-export function parseImportEnvelope(text: string): WakaExportEnvelope {
-  const data = JSON.parse(text) as unknown;
+export const MAX_BACKUP_IMPORT_BYTES = 40 * 1024 * 1024;
+
+export function validateImportEnvelope(data: unknown): WakaExportEnvelope {
   if (!data || typeof data !== "object") throw new Error("invalid");
   const o = data as Record<string, unknown>;
   if (o.wakaBackupVersion !== WAKA_BACKUP_FILE_VERSION) throw new Error("version");
   const snap = o.snapshot as PersistedSnapshot | undefined;
   if (!snap || !Array.isArray(snap.products) || !Array.isArray(snap.sales) || !snap.preferences) throw new Error("snapshot");
-  return { wakaBackupVersion: 1, exportedAt: typeof o.exportedAt === "string" ? o.exportedAt : new Date().toISOString(), snapshot: snap };
+  return {
+    wakaBackupVersion: 1,
+    exportedAt: typeof o.exportedAt === "string" ? o.exportedAt : new Date().toISOString(),
+    snapshot: snap,
+  };
+}
+
+export function parseImportEnvelope(text: string): WakaExportEnvelope {
+  return validateImportEnvelope(JSON.parse(text) as unknown);
+}
+
+async function parseImportBufferInWorker(buffer: ArrayBuffer): Promise<unknown> {
+  const WorkerCtor = (
+    await import("./backupParse.worker?worker")
+  ).default;
+  return new Promise((resolve, reject) => {
+    const worker = new WorkerCtor();
+    const fail = (err: unknown) => {
+      worker.terminate();
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    worker.onmessage = (event: MessageEvent<{ ok: boolean; data?: unknown; error?: string }>) => {
+      worker.terminate();
+      if (event.data.ok) resolve(event.data.data);
+      else fail(new Error(event.data.error ?? "parse"));
+    };
+    worker.onerror = () => fail(new Error("worker"));
+    worker.postMessage(buffer, [buffer]);
+  });
+}
+
+/** Read + parse a backup file without blocking the UI (worker + validation on main thread). */
+export async function parseImportEnvelopeFromFile(file: File): Promise<WakaExportEnvelope> {
+  const buffer = await file.arrayBuffer();
+  await yieldUiTick();
+  if (typeof Worker !== "undefined") {
+    try {
+      const data = await parseImportBufferInWorker(buffer);
+      return validateImportEnvelope(data);
+    } catch {
+      /* fall through — small files / worker unavailable */
+    }
+  }
+  const text = new TextDecoder().decode(buffer);
+  await yieldUiTick();
+  return parseImportEnvelope(text);
+}
+
+/** Parse on a later tick so the UI can show a spinner before a large JSON.parse blocks. */
+export async function parseImportEnvelopeAsync(text: string): Promise<WakaExportEnvelope> {
+  await yieldUiTick();
+  return parseImportEnvelope(text);
 }
 
 export async function listBackupMeta(): Promise<Array<{ id: string; kind: LocalBackupRecord["kind"]; createdAt: string; dateKey?: string }>> {

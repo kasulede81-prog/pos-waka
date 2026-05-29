@@ -7,7 +7,12 @@ import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
 import {
+  fetchOwnerOnboardingStatus,
+  type OwnerOnboardingStatus,
+} from "../../lib/ownerOnboarding";
+import {
   loadPrimaryShopLocationFromCloud,
+  messageForProfileSaveError,
   normalizeUgPhoneE164,
   saveBusinessProfileToCloud,
   saveOwnerBusinessProfileBundleRpc,
@@ -47,7 +52,16 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   const [shopLng, setShopLng] = useState<number | null>(null);
   const [gpsHint, setGpsHint] = useState<string | null>(null);
   const [recordGpsSnapshot, setRecordGpsSnapshot] = useState(false);
+  const [onboardingStatus, setOnboardingStatus] = useState<OwnerOnboardingStatus | null>(null);
   const wasOfflineRef = useRef(false);
+
+  const profileLocked = authMode === "supabase" && onboardingStatus?.complete === true;
+  const needsRecoveryEmail =
+    authMode === "supabase" && !profileLocked && onboardingStatus?.missing.includes("email");
+  const [recoveryEmailInput, setRecoveryEmailInput] = useState(() => {
+    const e = (email ?? user?.email ?? "").trim().toLowerCase();
+    return e.includes("@") && !e.endsWith("@login.waka.ug") ? e : "";
+  });
 
   const ownerDisplayName =
     String((user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? "").trim() ||
@@ -56,6 +70,10 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   const saveBusinessProfileClick = useCallback(async () => {
     setProfileFeedback(null);
     setProfileSaveError(null);
+    if (profileLocked) {
+      setProfileFeedback(t(lang, "shopProfileLockedMessage"));
+      return;
+    }
     if (!shopNameInput.trim()) {
       setProfileFeedback(t(lang, "shopNameRequired"));
       return;
@@ -70,6 +88,13 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
         setProfileFeedback(t(lang, "registerPhoneInvalid"));
         return;
       }
+      if (needsRecoveryEmail) {
+        const em = recoveryEmailInput.trim().toLowerCase();
+        if (!em.includes("@") || em.endsWith("@login.waka.ug")) {
+          setProfileFeedback(t(lang, "registerEmailInvalid"));
+          return;
+        }
+      }
     }
     setProfileBusy(true);
     try {
@@ -82,6 +107,11 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
       if (authMode === "supabase") {
         const ph = normalizeUgPhoneE164(shopPhoneInput);
         if (!ph || !districtIdSel) throw new Error(t(lang, "registerFieldRequired"));
+        if (needsRecoveryEmail && user?.id && supabase) {
+          const em = recoveryEmailInput.trim().toLowerCase();
+          const { error: emErr } = await supabase.from("profiles").update({ email: em }).eq("id", user.id);
+          if (emErr) throw emErr;
+        }
         const rpc = await saveOwnerBusinessProfileBundleRpc({
           shopName: shopNameInput.trim(),
           businessType: preferences.businessType,
@@ -94,7 +124,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           latitude: shopLat,
           longitude: shopLng,
         });
-        if (!rpc.ok) throw new Error(rpc.message ?? t(lang, "businessProfileSaveFailed"));
+        if (!rpc.ok) throw new Error(messageForProfileSaveError(rpc.message ?? "save_failed", lang));
         if (recordGpsSnapshot && shopLat != null && shopLng != null && supabase && rpc.shopId) {
           const { error: locErr } = await supabase.from("shop_locations").insert({
             shop_id: rpc.shopId,
@@ -133,8 +163,9 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.error("[waka-settings] business profile save failed", e);
-      setProfileSaveError(msg || t(lang, "businessProfileSaveFailed"));
-      setProfileFeedback(t(lang, "businessProfileSaveFailed"));
+      const friendly = messageForProfileSaveError(msg, lang);
+      setProfileSaveError(friendly || t(lang, "businessProfileSaveFailed"));
+      setProfileFeedback(friendly || t(lang, "businessProfileSaveFailed"));
     } finally {
       setProfileBusy(false);
     }
@@ -154,8 +185,23 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
     shopLng,
     shopNameInput,
     shopPhoneInput,
+    profileLocked,
+    needsRecoveryEmail,
+    recoveryEmailInput,
+    user?.id,
     user?.user_metadata,
   ]);
+
+  useEffect(() => {
+    if (authMode !== "supabase") return;
+    let cancelled = false;
+    void fetchOwnerOnboardingStatus().then((s) => {
+      if (!cancelled && s) setOnboardingStatus(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authMode]);
 
   useEffect(() => {
     if (authMode !== "supabase" || !hasPermission(actor.role, "settings.shop")) return;
@@ -202,23 +248,47 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           {t(lang, "onboardingUrlGateTitle")}
         </p>
       ) : null}
+      {profileLocked ? (
+        <p className="mb-4 rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 text-sm font-semibold text-stone-800">
+          {t(lang, "shopProfileLockedMessage")}
+        </p>
+      ) : null}
+      {needsRecoveryEmail ? (
+        <>
+          <label className="block text-sm font-bold text-slate-800">{t(lang, "registerEmailLabel")}</label>
+          <input
+            type="email"
+            value={recoveryEmailInput}
+            onChange={(e) => setRecoveryEmailInput(e.target.value)}
+            autoComplete="email"
+            className="mt-1 w-full rounded-2xl border-2 border-orange-300 bg-orange-50/50 px-4 py-3 text-lg"
+          />
+          <p className="mt-1 text-xs font-semibold text-orange-900">{t(lang, "registerEmailRequiredHint")}</p>
+        </>
+      ) : null}
       <label className="block text-sm font-bold text-slate-800">{t(lang, "businessName")}</label>
       <input
         value={shopNameInput}
         onChange={(e) => setShopNameInput(e.target.value)}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+        readOnly={profileLocked}
+        disabled={profileLocked}
+        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg disabled:bg-stone-100"
       />
       <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "personPhonePh")}</label>
       <input
         value={shopPhoneInput}
         onChange={(e) => setShopPhoneInput(e.target.value)}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+        readOnly={profileLocked}
+        disabled={profileLocked}
+        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg disabled:bg-stone-100"
       />
       <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopAddress")}</label>
       <input
         value={shopAddressInput}
         onChange={(e) => setShopAddressInput(e.target.value)}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+        readOnly={profileLocked}
+        disabled={profileLocked}
+        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg disabled:bg-stone-100"
       />
 
       {authMode === "supabase" ? (
@@ -228,7 +298,8 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           <select
             value={districtIdSel}
             onChange={(e) => setDistrictIdSel(e.target.value)}
-            className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
+            disabled={profileLocked}
+            className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold disabled:bg-stone-100"
           >
             <option value="">—</option>
             {districts.map((d) => (
@@ -305,14 +376,16 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           {profileSaveError}
         </p>
       ) : null}
-      <button
-        type="button"
-        disabled={profileBusy}
-        onClick={() => void saveBusinessProfileClick()}
-        className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white disabled:opacity-50"
-      >
-        {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
-      </button>
+      {!profileLocked ? (
+        <button
+          type="button"
+          disabled={profileBusy}
+          onClick={() => void saveBusinessProfileClick()}
+          className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white disabled:opacity-50"
+        >
+          {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
+        </button>
+      ) : null}
     </article>
   );
 }
