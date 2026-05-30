@@ -1,5 +1,17 @@
 import type { IncrementalPersistResult } from "../offline/incrementalPersist";
 
+type CloudPullDiagnostics = {
+  mode: "full" | "incremental";
+  products: number;
+  customers: number;
+  sales: number;
+  deletedProducts: number;
+  voidedSales: number;
+  expenses: number;
+  payloadBytes: number;
+  durationMs: number;
+};
+
 type NetworkBucket = { minuteKey: string; count: number };
 
 let networkBuckets: NetworkBucket[] = [];
@@ -14,6 +26,11 @@ let lastFullBytes = 0;
 let lastFullDurationMs = 0;
 let lastMergeMs: number | null = null;
 let lastSyncMs: number | null = null;
+let incrementalCloudPullCount = 0;
+let fullCloudPullCount = 0;
+let lastCloudPull: CloudPullDiagnostics | null = null;
+let totalCloudRecordsPulled = 0;
+let totalCloudPayloadBytes = 0;
 let longTaskCount = 0;
 let fetchPatched = false;
 let longTaskObserver: PerformanceObserver | null = null;
@@ -55,6 +72,37 @@ export function recordCloudMergeDuration(ms: number): void {
 
 export function recordSyncDuration(ms: number): void {
   lastSyncMs = ms;
+}
+
+export function recordCloudPullStats(stats: CloudPullDiagnostics): void {
+  lastCloudPull = stats;
+  const records =
+    stats.products +
+    stats.customers +
+    stats.sales +
+    stats.deletedProducts +
+    stats.voidedSales +
+    stats.expenses;
+  totalCloudRecordsPulled += records;
+  totalCloudPayloadBytes += stats.payloadBytes;
+  if (stats.mode === "full") fullCloudPullCount += 1;
+  else incrementalCloudPullCount += 1;
+}
+
+export function getCloudPullStats(): {
+  incrementalPulls: number;
+  fullPulls: number;
+  lastPull: CloudPullDiagnostics | null;
+  totalRecords: number;
+  totalPayloadBytes: number;
+} {
+  return {
+    incrementalPulls: incrementalCloudPullCount,
+    fullPulls: fullCloudPullCount,
+    lastPull: lastCloudPull,
+    totalRecords: totalCloudRecordsPulled,
+    totalPayloadBytes: totalCloudPayloadBytes,
+  };
 }
 
 export function networkRequestsLastMinute(): number {

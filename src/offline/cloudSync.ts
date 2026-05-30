@@ -5,6 +5,12 @@ import { getDeviceOnline } from "../lib/deviceOnline";
 import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
+import {
+  markBootstrapSyncComplete,
+  needsBootstrapPull,
+  readSyncCheckpoints,
+  updateCheckpointsAfterIncrementalPull,
+} from "../lib/syncCheckpoints";
 import { usePosStore } from "../store/usePosStore";
 import type { SyncOperation } from "../types";
 
@@ -102,6 +108,7 @@ function rowToCustomer(row: Record<string, unknown>): Customer | null {
     phone: String(row.phone_e164 ?? meta.phone ?? ""),
     location: String(meta.location ?? row.notes ?? ""),
     createdAt: String(row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updated_at ?? row.created_at ?? new Date().toISOString()),
     version: Math.max(1, Math.floor(Number(meta.version ?? 1))),
     debtBalanceUgx: Math.max(0, Math.floor(Number(meta.debtBalanceUgx ?? 0))),
   };
@@ -129,6 +136,8 @@ function rowToSaleLine(row: Record<string, unknown>): SaleLine {
 function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null {
   const id = String(row.id ?? "");
   if (!isUuid(id)) return null;
+  const status = String(row.status ?? "completed");
+  if (status === "void" || status === "refunded") return null;
   return {
     id,
     lines,
@@ -473,62 +482,258 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
   }
 }
 
-export async function pullShopDataFromCloud(): Promise<{
+export type CloudPullMode = "full" | "incremental";
+
+export type CloudPullStats = {
+  mode: CloudPullMode;
+  products: number;
+  customers: number;
+  sales: number;
+  deletedProducts: number;
+  voidedSales: number;
+  expenses: number;
+  payloadBytes: number;
+  durationMs: number;
+};
+
+export type CloudPullResult = {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
-} | null> {
-  const ctx = await resolveShopCtx();
-  if (!ctx || !supabase) return null;
+  deletedProductIds: string[];
+  voidedSaleIds: string[];
+  stats: CloudPullStats;
+};
 
-  const { data: productRows, error: pErr } = await supabase
+const FULL_SALES_PAGE = 800;
+const FULL_SALES_MAX_PAGES = 20;
+const INCREMENTAL_SALES_LIMIT = 500;
+const INCREMENTAL_PRODUCTS_LIMIT = 500;
+const INCREMENTAL_CUSTOMERS_LIMIT = 500;
+const INCREMENTAL_EXPENSES_LIMIT = 200;
+
+function estimatePayloadBytes(rows: unknown[]): number {
+  try {
+    return rows.reduce<number>((n, r) => n + JSON.stringify(r).length, 0);
+  } catch {
+    return 0;
+  }
+}
+
+function parseSaleRows(rawRows: Record<string, unknown>[]): { sales: Sale[]; voidedIds: string[] } {
+  const sales: Sale[] = [];
+  const voidedIds: string[] = [];
+  for (const raw of rawRows) {
+    const status = String(raw.status ?? "completed");
+    const id = String(raw.id ?? "");
+    if (status === "void" || status === "refunded") {
+      if (isUuid(id)) voidedIds.push(id);
+      continue;
+    }
+    const items = (raw.sale_line_items as Record<string, unknown>[] | null) ?? [];
+    const lines = items.map((ln) => rowToSaleLine(ln));
+    const sale = rowToSale(raw, lines);
+    if (sale) sales.push(sale);
+  }
+  return { sales, voidedIds };
+}
+
+async function pullSalesFull(ctx: ShopCtx): Promise<{ sales: Sale[]; voidedIds: string[]; bytes: number }> {
+  const sales: Sale[] = [];
+  const voidedIds: string[] = [];
+  let bytes = 0;
+  let offset = 0;
+  for (let page = 0; page < FULL_SALES_MAX_PAGES; page++) {
+    const { data: saleRows, error: sErr } = await supabase!
+      .from("sales")
+      .select("*, sale_line_items(*)")
+      .eq("shop_id", ctx.shopId)
+      .in("status", ["completed", "draft"])
+      .order("created_at", { ascending: false })
+      .range(offset, offset + FULL_SALES_PAGE - 1);
+    if (sErr) throw sErr;
+    const batch = (saleRows ?? []) as Record<string, unknown>[];
+    bytes += estimatePayloadBytes(batch);
+    if (batch.length === 0) break;
+    const parsed = parseSaleRows(batch);
+    sales.push(...parsed.sales);
+    voidedIds.push(...parsed.voidedIds);
+    if (batch.length < FULL_SALES_PAGE) break;
+    offset += FULL_SALES_PAGE;
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
+  }
+  return { sales, voidedIds, bytes };
+}
+
+async function pullSalesIncremental(ctx: ShopCtx, since: string): Promise<{ sales: Sale[]; voidedIds: string[]; bytes: number }> {
+  const { data: saleRows, error: sErr } = await supabase!
+    .from("sales")
+    .select("*, sale_line_items(*)")
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_SALES_LIMIT);
+  if (sErr) throw sErr;
+  const batch = (saleRows ?? []) as Record<string, unknown>[];
+  const parsed = parseSaleRows(batch);
+  return { sales: parsed.sales, voidedIds: parsed.voidedIds, bytes: estimatePayloadBytes(batch) };
+}
+
+async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
+  const { data: productRows, error: pErr } = await supabase!
     .from("products")
     .select("*")
     .eq("shop_id", ctx.shopId)
     .eq("is_active", true)
     .order("updated_at", { ascending: false })
     .limit(5000);
-  if (pErr) return null;
+  if (pErr) throw pErr;
+  const rows = productRows ?? [];
+  const products = rows.map((r) => rowToProduct(r as Record<string, unknown>)).filter((p): p is Product => p != null);
+  return { products, deletedIds: [], bytes: estimatePayloadBytes(rows) };
+}
 
-  const products = (productRows ?? []).map((r) => rowToProduct(r as Record<string, unknown>)).filter((p): p is Product => p != null);
+async function pullProductsIncremental(
+  ctx: ShopCtx,
+  since: string,
+): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
+  const { data: productRows, error: pErr } = await supabase!
+    .from("products")
+    .select("*")
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_PRODUCTS_LIMIT);
+  if (pErr) throw pErr;
+  const rows = productRows ?? [];
+  const products: Product[] = [];
+  const deletedIds: string[] = [];
+  for (const r of rows) {
+    const row = r as Record<string, unknown>;
+    const active = row.is_active !== false;
+    if (!active) {
+      const id = String(row.id ?? "");
+      if (isUuid(id)) deletedIds.push(id);
+      continue;
+    }
+    const p = rowToProduct(row);
+    if (p) products.push(p);
+  }
+  return { products, deletedIds, bytes: estimatePayloadBytes(rows) };
+}
 
-  const { data: customerRows, error: cErr } = await supabase
+async function pullCustomersFull(ctx: ShopCtx): Promise<{ customers: Customer[]; bytes: number }> {
+  const { data: customerRows, error: cErr } = await supabase!
     .from("customers")
     .select("*")
     .eq("shop_id", ctx.shopId)
     .order("updated_at", { ascending: false })
     .limit(2000);
-  if (cErr) return null;
+  if (cErr) throw cErr;
+  const rows = customerRows ?? [];
+  const customers = rows.map((r) => rowToCustomer(r as Record<string, unknown>)).filter((c): c is Customer => c != null);
+  return { customers, bytes: estimatePayloadBytes(rows) };
+}
 
-  const customers = (customerRows ?? [])
-    .map((r) => rowToCustomer(r as Record<string, unknown>))
-    .filter((c): c is Customer => c != null);
+async function pullCustomersIncremental(ctx: ShopCtx, since: string): Promise<{ customers: Customer[]; bytes: number }> {
+  const { data: customerRows, error: cErr } = await supabase!
+    .from("customers")
+    .select("*")
+    .eq("shop_id", ctx.shopId)
+    .gt("updated_at", since)
+    .order("updated_at", { ascending: true })
+    .limit(INCREMENTAL_CUSTOMERS_LIMIT);
+  if (cErr) throw cErr;
+  const rows = customerRows ?? [];
+  const customers = rows.map((r) => rowToCustomer(r as Record<string, unknown>)).filter((c): c is Customer => c != null);
+  return { customers, bytes: estimatePayloadBytes(rows) };
+}
 
-  const sales: Sale[] = [];
-  const pageSize = 800;
-  let offset = 0;
-  for (let page = 0; page < 20; page++) {
-    const { data: saleRows, error: sErr } = await supabase
-      .from("sales")
-      .select("*, sale_line_items(*)")
+/** Expenses use created_at (no updated_at column). Count only for checkpoint/diagnostics. */
+async function pullExpensesIncremental(ctx: ShopCtx, since: string): Promise<{ count: number; bytes: number }> {
+  try {
+    const { data, error } = await supabase!
+      .from("expenses")
+      .select("id, created_at")
       .eq("shop_id", ctx.shopId)
-      .in("status", ["completed", "draft"])
-      .order("created_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-    if (sErr) return null;
-    const batch = saleRows ?? [];
-    if (batch.length === 0) break;
-    for (const raw of batch) {
-      const row = raw as Record<string, unknown>;
-      const items = (row.sale_line_items as Record<string, unknown>[] | null) ?? [];
-      const lines = items.map((ln) => rowToSaleLine(ln));
-      const sale = rowToSale(row, lines);
-      if (sale) sales.push(sale);
+      .gt("created_at", since)
+      .order("created_at", { ascending: true })
+      .limit(INCREMENTAL_EXPENSES_LIMIT);
+    if (error) {
+      if (isMissingTableError(error)) return { count: 0, bytes: 0 };
+      throw error;
     }
-    if (batch.length < pageSize) break;
-    offset += pageSize;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
+    const rows = data ?? [];
+    return { count: rows.length, bytes: estimatePayloadBytes(rows) };
+  } catch {
+    return { count: 0, bytes: 0 };
+  }
+}
+
+export async function pullShopDataFromCloud(opts?: {
+  mode?: CloudPullMode;
+  forceFull?: boolean;
+}): Promise<CloudPullResult | null> {
+  const started = performance.now();
+  const ctx = await resolveShopCtx();
+  if (!ctx || !supabase) return null;
+
+  const state = usePosStore.getState();
+  const localEmpty = state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
+  const mode: CloudPullMode =
+    opts?.forceFull === true || opts?.mode === "full" || needsBootstrapPull(localEmpty) ? "full" : "incremental";
+
+  const cp = readSyncCheckpoints();
+  let products: Product[] = [];
+  let customers: Customer[] = [];
+  let sales: Sale[] = [];
+  let deletedProductIds: string[] = [];
+  let voidedSaleIds: string[] = [];
+  let expenseCount = 0;
+  let payloadBytes = 0;
+
+  try {
+    if (mode === "full") {
+      const p = await pullProductsFull(ctx);
+      products = p.products;
+      deletedProductIds = p.deletedIds;
+      payloadBytes += p.bytes;
+
+      const c = await pullCustomersFull(ctx);
+      customers = c.customers;
+      payloadBytes += c.bytes;
+
+      const s = await pullSalesFull(ctx);
+      sales = s.sales;
+      voidedSaleIds = s.voidedIds;
+      payloadBytes += s.bytes;
+    } else {
+      const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
+      const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
+      const sinceSales = cp.lastSalesSyncAt ?? new Date(0).toISOString();
+      const sinceExpenses = cp.lastExpensesSyncAt ?? new Date(0).toISOString();
+
+      const p = await pullProductsIncremental(ctx, sinceProducts);
+      products = p.products;
+      deletedProductIds = p.deletedIds;
+      payloadBytes += p.bytes;
+
+      const c = await pullCustomersIncremental(ctx, sinceCustomers);
+      customers = c.customers;
+      payloadBytes += c.bytes;
+
+      const s = await pullSalesIncremental(ctx, sinceSales);
+      sales = s.sales;
+      voidedSaleIds = s.voidedIds;
+      payloadBytes += s.bytes;
+
+      const ex = await pullExpensesIncremental(ctx, sinceExpenses);
+      expenseCount = ex.count;
+      payloadBytes += ex.bytes;
+    }
+  } catch {
+    return null;
   }
 
   void supabase
@@ -546,29 +751,62 @@ export async function pullShopDataFromCloud(): Promise<{
   const pulledAt = new Date().toISOString();
   writeSyncHealthMeta({ lastSuccessAt: pulledAt, lastPullAt: pulledAt, lastIssueCode: "none", lastIssueAt: null });
 
-  return { products, customers, sales };
+  const stats: CloudPullStats = {
+    mode,
+    products: products.length,
+    customers: customers.length,
+    sales: sales.length,
+    deletedProducts: deletedProductIds.length,
+    voidedSales: voidedSaleIds.length,
+    expenses: expenseCount,
+    payloadBytes,
+    durationMs: Math.round(performance.now() - started),
+  };
+
+  const { isDiagnosticsEnabled, recordCloudPullStats } = await import("../lib/stabilityDiagnostics");
+  if (isDiagnosticsEnabled()) recordCloudPullStats(stats);
+
+  return { products, customers, sales, deletedProductIds, voidedSaleIds, stats };
 }
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
-export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
+export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean }): Promise<boolean> {
   const mergeStarted = Date.now();
   const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   const { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk } = await import(
     "../store/usePosStore",
   );
   if (!hasSupabaseConfig) return false;
-  const cloud = await pullShopDataFromCloud();
+  const cloud = await pullShopDataFromCloud({ forceFull: opts?.forceFull });
   if (!cloud) return false;
 
   const state = usePosStore.getState();
   if (!state._hydrated) return false;
 
   const hasCloud =
-    cloud.products.length > 0 || cloud.sales.length > 0 || cloud.customers.length > 0;
+    cloud.products.length > 0 ||
+    cloud.sales.length > 0 ||
+    cloud.customers.length > 0 ||
+    cloud.deletedProductIds.length > 0 ||
+    cloud.voidedSaleIds.length > 0;
   const localEmpty =
     state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
 
-  if (!hasCloud && localEmpty) return true;
+  if (!hasCloud) {
+    if (cloud.stats.mode === "full") markBootstrapSyncComplete();
+    else {
+      updateCheckpointsAfterIncrementalPull({
+        sales: true,
+        products: true,
+        customers: true,
+        debts: true,
+        expenses: true,
+      });
+    }
+    const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
+    if (isDiagnosticsEnabled()) recordSyncDuration(cloud.stats.durationMs);
+    return true;
+  }
 
   if (localEmpty && hasCloud) {
     await applyRestoredSnapshotFromBackup({
@@ -593,26 +831,41 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
       updatedAt: new Date().toISOString(),
     });
     await persistRestoredSnapshotToDisk();
+    markBootstrapSyncComplete();
     await applyShopRecoverySignalsForCurrentShop();
+    const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
+      "../lib/stabilityDiagnostics",
+    );
+    if (isDiagnosticsEnabled()) {
+      recordCloudMergeDuration(Date.now() - mergeStarted);
+      recordSyncDuration(cloud.stats.durationMs);
+    }
     return true;
   }
 
   const { readProductTombstones } = await import("./entityStore");
+  const { markProductDeleted } = await import("./incrementalPersist");
   const tombstones = await readProductTombstones();
   const tombstoneIds = new Set(Object.keys(tombstones));
+  for (const id of cloud.deletedProductIds) tombstoneIds.add(id);
 
-  const products = await mergeByIdChunked(
-    state.products.filter((p) => !tombstoneIds.has(p.id)),
-    cloud.products,
-    (a, b) => newer({ ...a, updatedAt: a.updatedAt }, { ...b, updatedAt: b.updatedAt }),
-    tombstoneIds,
-  );
-  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
+  const deletedProductSet = new Set(cloud.deletedProductIds);
+  const voidedSaleSet = new Set(cloud.voidedSaleIds);
+
+  const products = (
+    await mergeByIdChunked(
+      state.products.filter((p) => !tombstoneIds.has(p.id) && !deletedProductSet.has(p.id)),
+      cloud.products,
+      (a, b) => newer(a, b),
+      tombstoneIds,
+    )
+  ).filter((p) => !deletedProductSet.has(p.id));
+
+  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) => newer(a, b));
+  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (a, b) =>
     newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
   );
-  const sales = await mergeByIdChunked(state.sales, cloud.sales, (a, b) =>
-    newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
-  );
+  const sales = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
@@ -632,10 +885,36 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
     release();
   }
 
+  for (const id of cloud.deletedProductIds) {
+    await markProductDeleted(id);
+  }
+
+  if (cloud.stats.mode === "full") {
+    markBootstrapSyncComplete();
+  } else {
+    updateCheckpointsAfterIncrementalPull({
+      sales: true,
+      products: true,
+      customers: true,
+      debts: true,
+      expenses: cloud.stats.expenses > 0,
+    });
+  }
+
   await applyShopRecoverySignalsForCurrentShop();
-  const { isDiagnosticsEnabled, recordCloudMergeDuration } = await import("../lib/stabilityDiagnostics");
-  if (isDiagnosticsEnabled()) recordCloudMergeDuration(Date.now() - mergeStarted);
+  const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
+    "../lib/stabilityDiagnostics",
+  );
+  if (isDiagnosticsEnabled()) {
+    recordCloudMergeDuration(Date.now() - mergeStarted);
+    recordSyncDuration(cloud.stats.durationMs);
+  }
   return true;
+}
+
+/** Disaster recovery: re-download full catalog and sales history. */
+export async function forceFullCloudSync(): Promise<boolean> {
+  return pullCloudAndMergeIntoStore({ forceFull: true });
 }
 
 /** Push local rows still marked pendingSync to cloud (recovery / new device). */
@@ -687,7 +966,10 @@ export async function pushShopPendingToCloud(): Promise<{
 }
 
 /** Pull cloud data, push pending local rows, then drain the offline queue. */
-export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
+export async function syncShopWithCloud(opts?: {
+  pull?: boolean;
+  forceFull?: boolean;
+}): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
   queueFailed: number;
@@ -697,7 +979,7 @@ export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
   }
   const doPull =
     opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();
-  const pulled = doPull ? await pullCloudAndMergeIntoStore() : false;
+  const pulled = doPull ? await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull }) : false;
   const { push, queueFailed } = await pushShopPendingToCloud();
   if (getDeviceOnline() && push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");

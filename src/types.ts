@@ -195,6 +195,8 @@ export type Customer = {
   location: string;
   createdAt: string;
   version: number;
+  /** Cloud `updated_at` for incremental sync merge. */
+  updatedAt?: string;
   /** Running “mpa mpaka” balance in UGX */
   debtBalanceUgx: number;
 };

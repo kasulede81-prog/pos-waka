@@ -29,6 +29,7 @@ export type SyncStatusApi = {
   health: SyncHealthMeta;
   refreshQueue: () => void;
   flush: () => Promise<void>;
+  flushFull: () => Promise<void>;
 };
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
@@ -84,16 +85,17 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     setHealth(readSyncHealthMeta());
   }, []);
 
-  const runFlush = useCallback(async (opts?: { pull?: boolean; showSpinner?: boolean }) => {
+  const runFlush = useCallback(async (opts?: { pull?: boolean; forceFull?: boolean; showSpinner?: boolean }) => {
     if (paused || !getDeviceOnline() || syncingRef.current) return;
     const now = Date.now();
     const wantPull = opts?.pull === true;
+    const forceFull = opts?.forceFull === true;
     const showSpinner = opts?.showSpinner ?? wantPull;
 
     if (!wantPull && now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && pendingRef.current === 0) {
       return;
     }
-    if (wantPull && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
+    if (wantPull && !forceFull && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
       if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS) return;
     }
 
@@ -105,7 +107,7 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     try {
       const work = (async () => {
         if (wantPull) {
-          const { push, queueFailed } = await syncShopWithCloud({ pull: true });
+          const { push, queueFailed } = await syncShopWithCloud({ pull: true, forceFull });
           lastFullSyncAtRef.current = Date.now();
           lastPushAtRef.current = lastFullSyncAtRef.current;
           if (push.fail === 0 && queueFailed === 0) {
@@ -218,6 +220,7 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     health,
     refreshQueue,
     flush: () => runFlush({ pull: true, showSpinner: true }),
+    flushFull: () => runFlush({ pull: true, forceFull: true, showSpinner: true }),
   };
 }
 

@@ -102,6 +102,34 @@ export async function fetchMarketingAgentMe(): Promise<MarketingAgentMe | null> 
   };
 }
 
+function parseRpcJsonArray(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) {
+    return data.filter((x) => x && typeof x === "object") as Record<string, unknown>[];
+  }
+  if (typeof data === "string") {
+    try {
+      const parsed = JSON.parse(data) as unknown;
+      if (Array.isArray(parsed)) {
+        return parsed.filter((x) => x && typeof x === "object") as Record<string, unknown>[];
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return [];
+}
+
+function rpcForbiddenMessage(error: string | undefined): string | null {
+  const msg = (error ?? "").toLowerCase();
+  if (msg.includes("forbidden") || msg.includes("not allowed")) {
+    return "You do not have permission for this action.";
+  }
+  if (msg.includes("does not exist") || msg.includes("could not find the function")) {
+    return "Database migration required. Apply migrations 057–060 in Supabase SQL editor, then retry.";
+  }
+  return null;
+}
+
 function parseAgentRoles(raw: unknown): MarketingAgentRole[] {
   if (!Array.isArray(raw)) return ["field_agent"];
   const out: MarketingAgentRole[] = [];
@@ -225,9 +253,9 @@ export function referralRowToMapPin(row: AgentReferralRow): FieldMapPin | null {
 export async function internalListMarketingAgents(): Promise<InternalMarketingAgentRow[]> {
   if (!supabase) return [];
   const { data, error } = await supabase.rpc("internal_list_marketing_agents");
-  if (error || !Array.isArray(data)) return [];
-  return data.map((r) => {
-    const x = r as Record<string, unknown>;
+  if (error) return [];
+  const rows = parseRpcJsonArray(data);
+  return rows.map((x) => {
     return {
       id: String(x.id ?? ""),
       referralCode: normalizeReferralCode(String(x.referral_code ?? "")),
@@ -288,7 +316,9 @@ export async function internalSetMarketingAgentRoles(
     p_agent_id: agentId,
     p_roles: roles,
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: rpcForbiddenMessage(error.message) ?? error.message };
+  }
   const row = (data ?? {}) as { ok?: boolean; error?: string };
   if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
   return { ok: true };
@@ -308,11 +338,22 @@ export async function internalGrantMarketingAgentByShopWithRoles(
   if (!supabase) return { ok: false, error: "offline" };
   const trimmed = shopId.trim();
   if (!trimmed) return { ok: false, error: "shop_required" };
-  const { data, error } = await supabase.rpc("internal_grant_marketing_agent_by_shop", {
+
+  const roleList = roles.length ? roles : (["field_agent"] as MarketingAgentRole[]);
+  let { data, error } = await supabase.rpc("internal_grant_marketing_agent_by_shop", {
     p_shop_id: trimmed,
-    p_roles: roles.length ? roles : ["field_agent"],
+    p_roles: roleList,
   });
-  if (error) return { ok: false, error: error.message };
+
+  if (error?.message?.includes("Could not find the function")) {
+    ({ data, error } = await supabase.rpc("internal_grant_marketing_agent_by_shop", {
+      p_shop_id: trimmed,
+    }));
+  }
+
+  if (error) {
+    return { ok: false, error: rpcForbiddenMessage(error.message) ?? error.message };
+  }
   const row = (data ?? {}) as {
     ok?: boolean;
     id?: string;
@@ -378,6 +419,41 @@ export async function internalDeleteMarketingAgent(
   agentId: string,
   deleteLogin: boolean,
 ): Promise<{ ok: boolean; message?: string; partial?: boolean }> {
+  if (!supabase) return { ok: false, message: "Supabase is not configured." };
+
+  const { data, error } = await supabase.rpc("internal_delete_marketing_agent", {
+    p_agent_id: agentId,
+    p_delete_login: deleteLogin,
+  });
+
+  if (error) {
+    return {
+      ok: false,
+      message: rpcForbiddenMessage(error.message) ?? error.message ?? "Could not remove agent.",
+    };
+  }
+
+  const j = (data ?? {}) as {
+    ok?: boolean;
+    error?: string;
+    user_id?: string | null;
+    referral_code?: string;
+  };
+
+  if (!j.ok) {
+    if (j.error === "forbidden") {
+      return { ok: false, message: "You do not have permission to remove agents." };
+    }
+    if (j.error === "agent_not_found") {
+      return { ok: false, message: "Agent not found (may already be removed)." };
+    }
+    return { ok: false, message: j.error ?? "Could not remove agent." };
+  }
+
+  if (!deleteLogin || !j.user_id) {
+    return { ok: true, message: "Agent removed from marketing panel." };
+  }
+
   const { invokeSupabaseEdgeFunction } = await import("./supabaseEdgeInvoke");
   const r = await invokeSupabaseEdgeFunction<{
     ok?: boolean;
@@ -386,36 +462,27 @@ export async function internalDeleteMarketingAgent(
     message?: string;
     partial?: boolean;
   }>("admin-delete-marketing-agent", {
+    auth_only: true,
+    user_id: j.user_id,
     agent_id: agentId,
-    delete_login: deleteLogin,
+    delete_login: true,
   });
 
-  if (!r.ok) {
-    return { ok: false, message: r.message };
-  }
-
-  const j = r.data as {
-    ok?: boolean;
-    error?: string;
-    detail?: string;
-    message?: string;
-    partial?: boolean;
-  };
-
-  if (j.ok) {
-    return { ok: true, message: j.message ?? "Agent removed." };
-  }
-
-  if (j.error === "auth_delete_failed" || j.partial) {
+  if (r.ok && r.data.ok) {
     return {
-      ok: false,
-      partial: true,
+      ok: true,
       message:
-        j.message ??
-        j.detail ??
-        "Agent removed from list but login still exists. Delete the user in Supabase Auth → Users to allow re-registration.",
+        r.data.message ??
+        "Agent removed and login account deleted. They can register again with the same email.",
     };
   }
 
-  return { ok: false, message: j.detail ?? j.message ?? j.error ?? "Could not remove agent." };
+  return {
+    ok: false,
+    partial: true,
+    message:
+      r.ok === false
+        ? `${r.message} Agent was removed from the panel; delete their login in Supabase Auth → Users if needed.`
+        : "Agent removed from panel but login could not be deleted. Remove the user in Supabase Auth → Users.",
+  };
 }

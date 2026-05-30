@@ -29,16 +29,17 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "unauthorized" }, 401);
   }
 
-  let body: { agent_id?: string; delete_login?: boolean };
+  let body: { agent_id?: string; delete_login?: boolean; auth_only?: boolean; user_id?: string };
   try {
     body = await req.json();
   } catch {
     return json({ ok: false, error: "invalid_body" }, 400);
   }
 
-  const agentId = String(body.agent_id ?? "").trim();
-  if (!agentId) return json({ ok: false, error: "agent_id_required" }, 400);
+  const authOnly = body.auth_only === true;
   const deleteLogin = body.delete_login === true;
+  const agentId = String(body.agent_id ?? "").trim();
+  const directUserId = String(body.user_id ?? "").trim();
 
   const userClient = createClient(supabaseUrl, anonKey, {
     global: { headers: { Authorization: authHeader } },
@@ -50,37 +51,49 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "forbidden", detail: staffErr?.message ?? "Not internal staff." }, 403);
   }
 
-  const { data: prep, error: prepErr } = await userClient.rpc("internal_delete_marketing_agent", {
-    p_agent_id: agentId,
-    p_delete_login: deleteLogin,
-  });
+  let userId: string | null = directUserId || null;
 
-  if (prepErr) {
-    return json({ ok: false, error: "delete_failed", detail: prepErr.message }, 500);
-  }
+  if (!authOnly) {
+    if (!agentId) return json({ ok: false, error: "agent_id_required" }, 400);
 
-  const j = (prep ?? {}) as {
-    ok?: boolean;
-    error?: string;
-    user_id?: string | null;
-    delete_login?: boolean;
-    referral_code?: string;
-  };
-
-  if (!j.ok) {
-    return json({ ok: false, error: j.error ?? "delete_failed" }, 400);
-  }
-
-  if (!deleteLogin || !j.user_id) {
-    return json({
-      ok: true,
-      message: "Agent removed from marketing panel.",
-      referral_code: j.referral_code,
+    const { data: prep, error: prepErr } = await userClient.rpc("internal_delete_marketing_agent", {
+      p_agent_id: agentId,
+      p_delete_login: deleteLogin,
     });
+
+    if (prepErr) {
+      return json({ ok: false, error: "delete_failed", detail: prepErr.message }, 500);
+    }
+
+    const j = (prep ?? {}) as {
+      ok?: boolean;
+      error?: string;
+      user_id?: string | null;
+      delete_login?: boolean;
+      referral_code?: string;
+    };
+
+    if (!j.ok) {
+      return json({ ok: false, error: j.error ?? "delete_failed" }, 400);
+    }
+
+    if (!deleteLogin || !j.user_id) {
+      return json({
+        ok: true,
+        message: "Agent removed from marketing panel.",
+        referral_code: j.referral_code,
+      });
+    }
+
+    userId = j.user_id;
+  } else {
+    if (!deleteLogin || !userId) {
+      return json({ ok: false, error: "user_id_required" }, 400);
+    }
   }
 
   const admin = createClient(supabaseUrl, serviceKey);
-  const { error: authDelErr } = await admin.auth.admin.deleteUser(j.user_id);
+  const { error: authDelErr } = await admin.auth.admin.deleteUser(userId!);
 
   if (authDelErr) {
     return json({

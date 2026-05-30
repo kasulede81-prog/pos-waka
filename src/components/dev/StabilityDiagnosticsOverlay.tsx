@@ -3,6 +3,7 @@ import { readSyncQueue } from "../../offline/localDb";
 import { estimateEntityStoreBytes } from "../../offline/entityStore";
 import { usePosStore } from "../../store/usePosStore";
 import {
+  getCloudPullStats,
   getLastMergeMs,
   getLastSyncMs,
   getLongTaskCount,
@@ -10,6 +11,7 @@ import {
   networkRequestsLastMinute,
   readJsHeapMb,
 } from "../../lib/stabilityDiagnostics";
+import { readSyncCheckpoints } from "../../lib/syncCheckpoints";
 
 export function StabilityDiagnosticsOverlay() {
   const [tick, setTick] = useState(0);
@@ -32,6 +34,8 @@ export function StabilityDiagnosticsOverlay() {
 
   const heap = readJsHeapMb();
   const persist = getPersistStats();
+  const cloudPull = getCloudPullStats();
+  const checkpoints = readSyncCheckpoints();
   const mergeMs = getLastMergeMs();
   const syncMs = getLastSyncMs();
   const netMin = networkRequestsLastMinute();
@@ -56,6 +60,20 @@ export function StabilityDiagnosticsOverlay() {
       <p>
         Full snapshots {persist.fullCount} ({persist.lastFullDurationMs}ms) · merge {mergeMs ?? "—"}ms · sync{" "}
         {syncMs ?? "—"}ms
+      </p>
+      <p>
+        Cloud pulls incr {cloudPull.incrementalPulls} · full {cloudPull.fullPulls} · records {cloudPull.totalRecords}{" "}
+        · payload ~{(cloudPull.totalPayloadBytes / 1024).toFixed(0)} KB
+      </p>
+      {cloudPull.lastPull ? (
+        <p>
+          Last pull {cloudPull.lastPull.mode} · {cloudPull.lastPull.sales} sales · {cloudPull.lastPull.products} prod ·{" "}
+          {cloudPull.lastPull.durationMs}ms · {(cloudPull.lastPull.payloadBytes / 1024).toFixed(1)} KB
+        </p>
+      ) : null}
+      <p className="text-stone-500">
+        Checkpoints bootstrap {checkpoints.bootstrapComplete ? "yes" : "no"} · sales{" "}
+        {checkpoints.lastSalesSyncAt?.slice(11, 19) ?? "—"}
       </p>
       <p className={longTasks > 0 ? "text-rose-400" : "text-stone-500"}>
         Long tasks {longTasks} · listeners 0 realtime · tick {tick}

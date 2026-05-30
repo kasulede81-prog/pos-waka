@@ -103,6 +103,25 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
       >
         {sync.syncing ? t(lang, "syncingShort") : t(lang, "backupSyncUploadNow")}
       </button>
+
+      {!simple ? (
+        <>
+          <p className="mt-2 text-xs text-stone-500">{t(lang, "backupSyncForceFullHint")}</p>
+          <button
+            type="button"
+            disabled={!isOnline || sync.syncing}
+            onClick={async () => {
+              setMsg(null);
+              await sync.flushFull();
+              setMsg(t(lang, "backupSyncForceFullDone"));
+              window.setTimeout(() => setMsg(null), 5000);
+            }}
+            className="mt-2 w-full rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 disabled:opacity-50"
+          >
+            {sync.syncing ? t(lang, "syncingShort") : t(lang, "backupSyncForceFull")}
+          </button>
+        </>
+      ) : null}
     </article>
   );
 }

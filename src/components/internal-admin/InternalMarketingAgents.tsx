@@ -227,7 +227,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     setCreateMsg(null);
     const res = await internalDeleteMarketingAgent(agent.id, deleteLogin);
     setRemoveBusyKey(null);
-    if (res.ok) {
+    if (res.ok || res.partial) {
       setCreateMsg(res.message ?? t(lang, "internalAgentsRemoved"));
       await load();
       return;
