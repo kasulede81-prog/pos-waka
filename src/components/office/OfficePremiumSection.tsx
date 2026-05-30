@@ -17,7 +17,10 @@ function formatRenewalLine(lang: Language, snapshot: SubscriptionSnapshot, nowMs
   if (r.plan === "waka_plus") {
     return t(lang, "officePremiumRenewalVip").replace("{{d}}", String(r.days)).replace("{{h}}", String(r.hours));
   }
-  return t(lang, "officePremiumRenewalBusiness").replace("{{d}}", String(r.days)).replace("{{h}}", String(r.hours));
+  if (r.plan === "starter") {
+    return t(lang, "officePremiumRenewalStarter").replace("{{d}}", String(r.days));
+  }
+  return t(lang, "officePremiumRenewalBusiness").replace("{{d}}", String(r.days));
 }
 
 function planName(lang: Language, plan: SubscriptionPlanCode): string {
@@ -37,7 +40,7 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
     snapshot.kind === "remote" ? resolveEffectivePlanTier(snapshot) : "free";
   const planLabel = planName(lang, effectivePlan);
   const renewalLine = formatRenewalLine(lang, snapshot, Date.now());
-  const isFree = effectivePlan === "free" || effectivePlan === "starter";
+  const isFreeOnly = effectivePlan === "free";
 
   return (
     <section className="flex items-center justify-between gap-3 rounded-2xl border border-orange-200/80 bg-orange-50/90 px-3.5 py-2.5">
@@ -48,7 +51,7 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
         <div className="min-w-0">
           <p className="truncate text-sm font-black text-orange-950">{planLabel}</p>
           <p className="truncate text-xs font-semibold text-orange-800/90">
-            {renewalLine ?? (isFree ? t(lang, "officePremiumFreeModeHint") : t(lang, "officePremiumNoTrial"))}
+            {renewalLine ?? (isFreeOnly ? t(lang, "officePremiumFreeModeHint") : t(lang, "officePremiumNoTrial"))}
           </p>
         </div>
       </div>

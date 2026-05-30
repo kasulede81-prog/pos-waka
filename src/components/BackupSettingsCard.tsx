@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
@@ -24,7 +25,7 @@ import {
 import { yieldUiTick } from "../lib/uiYield";
 import type { PersistedSnapshot } from "../offline/localDb";
 
-type Props = { lang: Language; compact?: boolean };
+type Props = { lang: Language; compact?: boolean; /** When false, show upgrade hint instead of backup actions. */ actionsEnabled?: boolean };
 
 type RestorePhase = "reading" | "parsing" | "restoring" | "saving" | null;
 
@@ -90,7 +91,7 @@ function RestoreProgressOverlay({
   );
 }
 
-export function BackupSettingsCard({ lang, compact }: Props) {
+export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Props) {
   const [meta, setMeta] = useState<Array<{ id: string; kind: string; createdAt: string; dateKey?: string }>>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -283,7 +284,21 @@ export function BackupSettingsCard({ lang, compact }: Props) {
         ) : null}
         {msg ? <p className="mt-2 rounded-xl bg-stone-50 px-3 py-2 text-sm font-semibold text-slate-800">{msg}</p> : null}
 
-        <div className={compact ? "mt-2 flex flex-col gap-2" : "mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap"}>
+        {!actionsEnabled ? (
+          <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">
+            <p className="text-sm font-semibold text-orange-950">{t(lang, "backupUpgradeRequired")}</p>
+            <Link to="/upgrade" className="mt-2 inline-block text-sm font-black text-orange-800 underline">
+              {t(lang, "backupUpgradeCta")} →
+            </Link>
+          </div>
+        ) : null}
+
+        <div
+          className={
+            compact ? "mt-2 flex flex-col gap-2" : "mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
+          }
+          style={actionsEnabled ? undefined : { pointerEvents: "none", opacity: 0.45 }}
+        >
           <button
             type="button"
             disabled={busy}

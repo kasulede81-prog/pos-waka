@@ -11,7 +11,7 @@ function Page() {
   return <WakaAdminShell activeTab=""><ShopOps /></WakaAdminShell>;
 }
 
-const PLAN_PRICES: Record<string, number> = { starter: 25000, business: 56000, waka_plus: 110000 };
+const PLAN_PRICES: Record<string, number> = { starter: 25000, business: 49000, waka_plus: 99000 };
 
 function ShopOps() {
   const { shopId } = Route.useParams();

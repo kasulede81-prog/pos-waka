@@ -18,8 +18,8 @@ import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
-import { applyPendingReferralForSession } from "../lib/referralAgents";
-import { hasPendingReferralCode, storePendingReferralCode } from "../lib/pendingReferral";
+import { ensureReferralAttributionForSession } from "../lib/referralAgents";
+import { storePendingReferralCode } from "../lib/pendingReferral";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
@@ -123,12 +123,11 @@ export function useAuth() {
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
     const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-    if (!hasPendingReferralCode(String(meta?.referral_code ?? ""))) return;
-    const res = await applyPendingReferralForSession(String(meta?.referral_code ?? ""));
+    const res = await ensureReferralAttributionForSession(String(meta?.referral_code ?? ""));
     if (!res.ok && res.error && res.error !== "invalid_code") {
       reportAuthIssue("referral_apply_failed", { error: res.error });
     } else if (!res.ok && import.meta.env.DEV) {
-      console.warn("[waka-auth] apply_referral_code", res.error);
+      console.warn("[waka-auth] ensure_referral_attribution", res.error);
     }
   }, []);
 
@@ -145,10 +144,7 @@ export function useAuth() {
     if (alreadyEnsured) {
       workspaceEnsuredForUserRef.current = uid;
       bootstrappedUserIdsRef.current[uid] = true;
-      const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-      if (hasPendingReferralCode(String(meta?.referral_code ?? ""))) {
-        await tryApplyPendingReferral(next);
-      }
+      await tryApplyPendingReferral(next);
       if (!backgroundSyncScheduledRef.current[uid]) {
         backgroundSyncScheduledRef.current[uid] = true;
         scheduleBackgroundCloudSync({
@@ -367,7 +363,7 @@ export function useAuth() {
   }, []);
 
   const signInWithGoogle = useCallback(async (opts?: { referralCode?: string }) => {
-    const ref = opts?.referralCode?.trim();
+    const ref = opts?.referralCode?.trim().toUpperCase();
     if (ref && ref.length >= 3) {
       storePendingReferralCode(ref);
     }
@@ -386,6 +382,12 @@ export function useAuth() {
       const { data } = await supabase.auth.getSession();
       if (!data.session) {
         throw new Error("Sign-in did not complete. Please try again.");
+      }
+      if (ref && ref.length >= 3) {
+        await supabase.auth.updateUser({ data: { referral_code: ref } }).catch(() => undefined);
+        void ensureWorkspaceRef.current(data.session).catch((e) => {
+          console.error("[waka-auth] referral after Google native sign-in failed", e);
+        });
       }
       void hydrateAccountFromCloud({ forcePull: true });
       return;
@@ -407,6 +409,15 @@ export function useAuth() {
       });
       reportAuthIssue("google_oauth_failed", { status: error.status ?? 0 });
       throw new Error(formatAuthError(error));
+    }
+    if (ref && ref.length >= 3) {
+      await supabase.auth.updateUser({ data: { referral_code: ref } }).catch(() => undefined);
+      const { data: sess } = await supabase.auth.getSession();
+      if (sess.session) {
+        void ensureWorkspaceRef.current(sess.session).catch((e) => {
+          console.error("[waka-auth] referral after Google sign-in failed", e);
+        });
+      }
     }
     void hydrateAccountFromCloud();
   }, []);

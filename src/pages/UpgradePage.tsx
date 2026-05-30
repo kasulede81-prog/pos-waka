@@ -12,9 +12,14 @@ import {
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
-import { requestAnnualPlanSupport } from "../lib/shopRequests";
 
 const PLAN_ORDER: SubscriptionPlanCode[] = ["free", "starter", "business", "waka_plus"];
+
+const PAID_ANNUAL: { plan: SubscriptionPlanCode; annualKey: string; saveKey: string }[] = [
+  { plan: "starter", annualKey: "planStarterAnnual", saveKey: "planStarterAnnualSave" },
+  { plan: "business", annualKey: "planBusinessAnnual", saveKey: "planBusinessAnnualSave" },
+  { plan: "waka_plus", annualKey: "planWakaPlusAnnual", saveKey: "planWakaPlusAnnualSave" },
+];
 
 function planLabelKey(plan: SubscriptionPlanCode): string {
   if (plan === "free") return "planFreeName";
@@ -35,13 +40,17 @@ function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | 
   return `${prefix}_${suffix}`;
 }
 
+function usersHintForPlan(plan: SubscriptionPlanCode): number {
+  if (plan === "free" || plan === "starter") return 1;
+  if (plan === "business") return 3;
+  return 10;
+}
+
 export function UpgradePage({ lang }: { lang: Language }) {
   const { snapshot, authMode, loading, refetch } = useSubscription();
   const current = resolveEffectivePlanTier(snapshot);
   const renewalCountdown = getPaidPlanRenewalCountdown(snapshot);
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
-  const [annualRequestBusy, setAnnualRequestBusy] = useState(false);
-  const [annualRequestMsg, setAnnualRequestMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (authMode !== "supabase") return;
@@ -55,15 +64,13 @@ export function UpgradePage({ lang }: { lang: Language }) {
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [authMode, refetch]);
 
-  const requestAnnual = async () => {
-    if (authMode !== "supabase") return;
-    setAnnualRequestBusy(true);
-    setAnnualRequestMsg(null);
-    const r = await requestAnnualPlanSupport();
-    setAnnualRequestBusy(false);
-    setAnnualRequestMsg(r.ok ? t(lang, "officePremiumRequestOk") : r.message || t(lang, "officePremiumRequestFail"));
-    if (r.ok) window.dispatchEvent(new Event("waka:subscription-updated"));
-  };
+  const whyRows: { q: string; plan: string }[] = [
+    { q: t(lang, "upgradeWhyMoreProducts"), plan: t(lang, "upgradeWhyMoreProductsPlan") },
+    { q: t(lang, "upgradeWhyBackup"), plan: t(lang, "upgradeWhyBackupPlan") },
+    { q: t(lang, "upgradeWhyStaff"), plan: t(lang, "upgradeWhyStaffPlan") },
+    { q: t(lang, "upgradeWhyDevices"), plan: t(lang, "upgradeWhyDevicesPlan") },
+    { q: t(lang, "upgradeWhyPlus"), plan: t(lang, "upgradeWhyPlusPlan") },
+  ];
 
   return (
     <div className="space-y-6 pb-10">
@@ -86,7 +93,13 @@ export function UpgradePage({ lang }: { lang: Language }) {
           <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
           {renewalCountdown ? (
             <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
-              VIP countdown: {renewalCountdown.days} days {renewalCountdown.hours} hours left
+              {renewalCountdown.plan === "waka_plus"
+                ? t(lang, "officePremiumRenewalVip")
+                    .replace("{{d}}", String(renewalCountdown.days))
+                    .replace("{{h}}", String(renewalCountdown.hours))
+                : renewalCountdown.plan === "starter"
+                  ? t(lang, "officePremiumRenewalStarter").replace("{{d}}", String(renewalCountdown.days))
+                  : t(lang, "officePremiumRenewalBusiness").replace("{{d}}", String(renewalCountdown.days))}
             </p>
           ) : null}
           <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
@@ -109,9 +122,21 @@ export function UpgradePage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
+      <section className="rounded-3xl border border-stone-200 bg-stone-50 p-5 shadow-sm">
+        <h2 className="text-lg font-black text-stone-900">{t(lang, "upgradeWhyTitle")}</h2>
+        <ul className="mt-4 space-y-3">
+          {whyRows.map((row) => (
+            <li key={row.q} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+              <span className="font-semibold text-stone-700">{row.q}</span>
+              <span className="font-black text-waka-800">→ {row.plan}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
       <section className="space-y-4">
         <p className="text-lg font-black text-slate-900">{t(lang, "upgradePickTitle")}</p>
-        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {PLAN_ORDER.map((plan) => {
             const isCurrent = plan === current;
             const productLimit = maxProductsForTier(plan);
@@ -154,14 +179,15 @@ export function UpgradePage({ lang }: { lang: Language }) {
                       {tTemplate(lang, "upgradeFreeProductLimit", { count: String(productLimit) })}
                     </p>
                   ) : null}
-                  {isPaid ? (
-                    <p className="mt-1 text-xs font-bold text-stone-500">
-                      {tTemplate(lang, "upgradePlanSimpleLimit", {
-                        devices: String(maxDevicesHintForTier(plan)),
-                        staff: String(maxStaffAccountsForTier(plan)),
-                      })}
-                    </p>
-                  ) : null}
+                  <p className="mt-1 text-xs font-bold text-stone-500">
+                    {tTemplate(lang, "upgradePlanSimpleLimit", {
+                      devices: String(maxDevicesHintForTier(plan)),
+                      staff: String(maxStaffAccountsForTier(plan)),
+                    })}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-stone-500">
+                    {tTemplate(lang, "upgradePlanUsersLimit", { users: String(usersHintForPlan(plan)) })}
+                  </p>
                 </div>
                 {isPaid && !isCurrent ? (
                   <Link
@@ -176,51 +202,27 @@ export function UpgradePage({ lang }: { lang: Language }) {
               </li>
             );
           })}
-          <li className="flex flex-col rounded-[1.75rem] border-2 border-dashed border-orange-300 bg-orange-50/80 p-5 shadow-sm">
-            <div>
-              <p className="text-xl font-black text-orange-950">{t(lang, "officeAnnualTitle")}</p>
-              <p className="mt-1 text-2xl font-black text-waka-700">{t(lang, "upgradeAnnualPrice")}</p>
-              <p className="mt-2 text-sm font-semibold text-orange-950">{t(lang, "officeAnnualBody")}</p>
-            </div>
-            <ul className="mt-4 space-y-2 text-sm font-semibold text-orange-950">
-              <li className="flex gap-2">
-                <span className="text-waka-700">✓</span>
-                <span>{t(lang, "upgradeAnnualFeatureInvoice")}</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-waka-700">✓</span>
-                <span>{t(lang, "upgradeAnnualFeatureTeamPrice")}</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-waka-700">✓</span>
-                <span>{t(lang, "upgradeAnnualFeatureAdminQueue")}</span>
-              </li>
-            </ul>
-            <div className="mt-4 rounded-2xl bg-white/80 px-4 py-3 text-sm font-semibold text-orange-950">
-              {t(lang, "officeEnterpriseHint")}
-            </div>
-            {authMode === "supabase" ? (
-              <button
-                type="button"
-                disabled={annualRequestBusy}
-                onClick={() => void requestAnnual()}
-                className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
-              >
-                {annualRequestBusy ? "..." : t(lang, "officeAnnualRequest")}
-              </button>
-            ) : (
-              <Link
-                to="/support"
-                className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-4 py-3 text-sm font-black text-white"
-              >
-                {t(lang, "officeAnnualRequest")}
-              </Link>
-            )}
-            {annualRequestMsg ? (
-              <p className="mt-3 rounded-xl bg-white/90 px-3 py-2 text-xs font-black text-orange-950">{annualRequestMsg}</p>
-            ) : null}
-          </li>
         </ul>
+      </section>
+
+      <section className="rounded-3xl border-2 border-orange-200 bg-orange-50/90 p-5 shadow-sm">
+        <h2 className="text-lg font-black text-orange-950">{t(lang, "upgradeYearlyTitle")}</h2>
+        <p className="mt-2 text-sm font-semibold text-orange-900">{t(lang, "upgradeYearlySub")}</p>
+        <ul className="mt-4 grid gap-3 sm:grid-cols-3">
+          {PAID_ANNUAL.map(({ plan, annualKey, saveKey }) => (
+            <li key={plan} className="rounded-2xl border border-orange-200 bg-white px-4 py-3">
+              <p className="text-sm font-black text-stone-900">{t(lang, planLabelKey(plan))}</p>
+              <p className="mt-1 text-lg font-black text-waka-800">{t(lang, annualKey)}</p>
+              <p className="mt-1 text-xs font-bold text-emerald-800">{t(lang, saveKey)}</p>
+            </li>
+          ))}
+        </ul>
+        <Link
+          to="/support"
+          className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white"
+        >
+          {t(lang, "upgradePaySoon")} →
+        </Link>
       </section>
 
       <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-950">{t(lang, "upgradePaymentPrep")}</p>

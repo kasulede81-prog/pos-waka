@@ -804,7 +804,7 @@ export function PosPage({ lang }: { lang: Language }) {
         <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950">
           {t(lang, "freePlanLockedProductsNotice")
             .replace("{{locked}}", String(lockedProductCount))
-            .replace("{{limit}}", String(productLimit ?? 10))}
+            .replace("{{limit}}", String(productLimit ?? 7))}
         </div>
       ) : null}
 

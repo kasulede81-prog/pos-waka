@@ -194,6 +194,47 @@ export async function applyPendingReferralForSession(metaReferralCode?: string |
   return res;
 }
 
+/** Client storage + signup metadata; then server reads auth.users metadata if still unattributed. */
+export async function ensureReferralAttributionForSession(metaReferralCode?: string | null): Promise<{
+  ok: boolean;
+  error?: string;
+  alreadyApplied?: boolean;
+}> {
+  if (!supabase) return { ok: false, error: "offline" };
+
+  const pending = await applyPendingReferralForSession(metaReferralCode ?? "");
+  if (pending.alreadyApplied) return pending;
+
+  try {
+    const { data, error } = await supabase.rpc("ensure_referral_attribution");
+    if (error) return pending.ok ? pending : { ok: false, error: error.message };
+    const row = (data ?? {}) as { ok?: boolean; error?: string; already_applied?: boolean; skipped?: string };
+    if (!row.ok) return pending.ok ? pending : { ok: false, error: row.error ?? "unknown" };
+    if (row.skipped === "no_code") return pending.ok ? pending : { ok: true };
+    const { clearPendingReferralCode } = await import("./pendingReferral");
+    clearPendingReferralCode();
+    await syncAgentReferralShopContext();
+    return { ok: true, alreadyApplied: Boolean(row.already_applied) };
+  } catch {
+    return pending;
+  }
+}
+
+export async function internalAttachShopReferral(
+  shopId: string,
+  referralCode: string,
+): Promise<{ ok: boolean; error?: string; referralId?: string }> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const { data, error } = await supabase.rpc("internal_attach_shop_referral", {
+    p_shop_id: shopId.trim(),
+    p_referral_code: normalizeReferralCode(referralCode),
+  });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as { ok?: boolean; error?: string; referral_id?: string };
+  if (!row.ok) return { ok: false, error: row.error ?? "unknown" };
+  return { ok: true, referralId: row.referral_id };
+}
+
 /** Backfill shop/org on referral row after workspace bootstrap. */
 export async function syncAgentReferralShopContext(): Promise<void> {
   if (!supabase) return;

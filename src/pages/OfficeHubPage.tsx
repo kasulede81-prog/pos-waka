@@ -26,7 +26,7 @@ import type { Language, Permission } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { canUseBackupRestore, hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
@@ -57,16 +57,17 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   }, [actor.userId]);
 
   const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
+  const canBackup = canUseBackupRestore(snapshot, authMode);
 
   const hasDaily =
     can("stock.view") || can("purchases.record") || can("suppliers.view") || can("day.close");
   const hasInsights =
     can("reports.view") ||
-    (canSeeOfficeProfit(actor.role, authMode) && can("back_office.access")) ||
+    (canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit")) ||
     can("owner.dashboard") ||
     can("owner.activity");
   const hasShopControl = can("settings.view") || can("settings.shop");
-  const hasData = can("settings.view");
+  const hasData = can("settings.view") && canBackup;
   const hasHelp = true;
 
   const empty = !hasDaily && !hasInsights && !hasShopControl && !hasData && !hasHelp;

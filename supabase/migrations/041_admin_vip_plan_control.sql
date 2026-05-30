@@ -26,7 +26,7 @@ values (
   0,
   1,
   1,
-  '{"tier":"free","devices":1,"staff":0,"products":10}'::jsonb,
+  '{"tier":"free","devices":1,"staff":0,"users":1,"products":7}'::jsonb,
   true
 )
 on conflict (code) do update

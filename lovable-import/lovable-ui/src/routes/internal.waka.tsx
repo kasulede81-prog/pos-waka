@@ -270,7 +270,7 @@ function Empty({ children }: { children: React.ReactNode }) {
 function PlanCard({ code, shops }: { code: string; shops: any[] }) {
   const active = shops.filter((s) => s.plan_code === code && s.subscription_status === "active").length;
   const trial = shops.filter((s) => s.plan_code === code && (s.subscription_status === "trial" || s.subscription_status === "trialing")).length;
-  const prices: Record<string, number> = { starter: 25000, business: 56000, waka_plus: 110000 };
+  const prices: Record<string, number> = { starter: 25000, business: 49000, waka_plus: 99000 };
   return (
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="text-xs font-bold uppercase text-muted-foreground">{code.replace("_", " ")}</div>

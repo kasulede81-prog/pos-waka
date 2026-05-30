@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language, UserRole } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { useSubscription } from "../context/SubscriptionContext";
+import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { usePosStore } from "../store/usePosStore";
 import { PinInput } from "../components/ui/PinInput";
 
@@ -17,7 +19,10 @@ type CreatedStaff = { name: string; role: UserRole; pin: string };
 
 export function StaffAccessPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
   const canManage = hasPermission(actor.role, "settings.shop");
+  const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
+  const maxStaff = maxStaffAccountsForTier(planTier);
   const staff = usePosStore((s) => s.preferences.staffAccounts ?? []);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
   const updateStaffAccount = usePosStore((s) => s.updateStaffAccount);
@@ -50,6 +55,10 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
   const handleCreate = () => {
     setMsg(null);
+    if (maxStaff > 0 && staff.length >= maxStaff) {
+      setMsg(tTemplate(lang, "staffLimitPlan", { max: String(maxStaff) }));
+      return;
+    }
     const res = addStaffAccount({
       name,
       role,
@@ -68,6 +77,25 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   };
 
   if (!canManage) return <Navigate to="/" replace />;
+
+  if (maxStaff <= 0) {
+    return (
+      <div className="space-y-4 pb-8">
+        <PageHeader
+          lang={lang}
+          title={t(lang, "staffAccessTitle")}
+          subtitle={t(lang, "staffAccessSub")}
+          backLabel={t(lang, "officeBackToHub")}
+        />
+        <p className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4 text-sm font-semibold text-orange-950">
+          {t(lang, "upgradeWhyStaff")} → {t(lang, "upgradeWhyStaffPlan")}
+        </p>
+        <Link to="/upgrade" className="inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-3 text-sm font-black text-white">
+          {t(lang, "officePremiumUpgrade")} →
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 pb-8">

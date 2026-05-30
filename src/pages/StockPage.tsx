@@ -419,13 +419,13 @@ export function StockPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
           <p className="text-lg font-black text-orange-950">{t(lang, "freeLimitProductsTitle")}</p>
           <p className="mt-1 text-sm font-semibold text-orange-950/80">
-            {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 10) })}
+            {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 7) })}
           </p>
           {lockedProductCount > 0 ? (
             <p className="mt-2 text-sm font-bold text-orange-950">
               {t(lang, "freePlanLockedProductsNotice")
                 .replace("{{locked}}", String(lockedProductCount))
-                .replace("{{limit}}", String(productLimit ?? 10))}
+                .replace("{{limit}}", String(productLimit ?? 7))}
             </p>
           ) : null}
           <div className="mt-4 flex flex-col gap-2 sm:flex-row">

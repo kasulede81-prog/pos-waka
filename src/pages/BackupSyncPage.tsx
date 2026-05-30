@@ -1,19 +1,22 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
+import { canUseBackupRestore } from "../lib/subscriptionEntitlements";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
 
 export function BackupSyncPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const { authMode } = useSubscription();
+  const { authMode, snapshot } = useSubscription();
   const canView = hasPermission(actor.role, "settings.view");
-  const canBackup = hasPermission(actor.role, "settings.shop");
+  const canBackupRole = hasPermission(actor.role, "settings.shop");
+  const canBackupPlan = canUseBackupRestore(snapshot, authMode);
+  const canBackup = canBackupRole && canBackupPlan;
 
   if (!canView) {
     return <Navigate to="/office" replace />;
@@ -42,7 +45,15 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
       {canBackup ? (
         <section className="space-y-3">
           <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "backupSyncPhoneTitle")}</h2>
-          <BackupSettingsCard lang={lang} compact />
+          <BackupSettingsCard lang={lang} compact actionsEnabled />
+        </section>
+      ) : canBackupRole ? (
+        <section className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4">
+          <p className="text-sm font-semibold text-orange-950">{t(lang, "backupUpgradeRequired")}</p>
+          <p className="mt-2 text-xs font-medium text-orange-900">{t(lang, "planStarterName")}</p>
+          <Link to="/upgrade" className="mt-3 inline-flex min-h-[44px] items-center rounded-2xl bg-orange-600 px-4 py-2 text-sm font-black text-white">
+            {t(lang, "backupUpgradeCta")} →
+          </Link>
         </section>
       ) : null}
 

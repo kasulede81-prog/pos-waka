@@ -3,7 +3,7 @@ import { hasPermission } from "./permissions";
 
 export type SubscriptionPlanCode = "free" | "starter" | "business" | "waka_plus";
 
-export const FREE_PLAN_PRODUCT_LIMIT = 5;
+export const FREE_PLAN_PRODUCT_LIMIT = 7;
 
 /** Row shape returned from Supabase (plan joined separately). */
 export type RemoteSubscriptionRow = {
@@ -31,6 +31,9 @@ const TIER_RANK: Record<SubscriptionPlanCode, number> = {
   waka_plus: 3,
 };
 
+/** Permissions that need at least Starter (profit, backup marketing alignment). */
+const STARTER_PLUS: ReadonlySet<Permission> = new Set(["reports.profit"]);
+
 /** Permissions that need at least Business. */
 const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
   "settings.shop",
@@ -39,7 +42,7 @@ const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
   "owner.cash_history",
 ]);
 
-/** Permissions that need Waka Plus (reserved for branch / heavy analytics). */
+/** Permissions that need Waka Plus (reserved). */
 const WAKA_PLUS_ONLY: ReadonlySet<Permission> = new Set([] as Permission[]);
 
 export function normalizePlanCode(raw: string | undefined | null): SubscriptionPlanCode {
@@ -76,20 +79,31 @@ export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): Subscr
   return normalizePlanCode(row.plan_code);
 }
 
+export function tierMeetsMinimum(tier: SubscriptionPlanCode, minimum: SubscriptionPlanCode): boolean {
+  return TIER_RANK[tier] >= TIER_RANK[minimum];
+}
+
+export function canUseBackupRestore(
+  snapshot: SubscriptionSnapshot,
+  authMode: "supabase" | "local",
+): boolean {
+  if (authMode === "local") return true;
+  return tierMeetsMinimum(resolveEffectivePlanTier(snapshot), "starter");
+}
+
 const MS_DAY = 86400000;
 const MS_HOUR = 3600000;
 
-/** Paid Business / VIP — starter “active” is not treated as a paid commercial plan here. */
+/** Paid commercial plans (Starter, Business, Waka Plus). */
 export function hasActivePaidSubscription(row: RemoteSubscriptionRow, _nowMs: number = Date.now()): boolean {
   const st = (row.status ?? "").trim().toLowerCase();
   if (st !== "active") return false;
   const tier = normalizePlanCode(row.plan_code);
-  return tier === "business" || tier === "waka_plus";
+  return tier === "starter" || tier === "business" || tier === "waka_plus";
 }
 
 /**
  * Countdown to `current_period_end` for paid subscriptions.
- * VIP (Waka Plus) and other paid tiers use this for renewals.
  */
 export function getPaidPlanRenewalCountdown(
   snapshot: SubscriptionSnapshot,
@@ -100,7 +114,7 @@ export function getPaidPlanRenewalCountdown(
   const st = (row.status ?? "").trim().toLowerCase();
   if (st !== "active") return null;
   const plan = normalizePlanCode(row.plan_code);
-  if (plan === "free" || plan === "starter") return null;
+  if (plan === "free") return null;
   if (!row.current_period_end) return null;
   const end = new Date(row.current_period_end).getTime();
   const totalMs = end - nowMs;
@@ -111,17 +125,15 @@ export function getPaidPlanRenewalCountdown(
 }
 
 export function maxStaffAccountsForTier(tier: SubscriptionPlanCode): number {
-  if (tier === "free") return 0;
-  if (tier === "starter") return 0;
-  if (tier === "business") return 5;
+  if (tier === "free" || tier === "starter") return 0;
+  if (tier === "business") return 3;
   return 10;
 }
 
 export function maxDevicesHintForTier(tier: SubscriptionPlanCode): number {
-  if (tier === "free") return 1;
-  if (tier === "starter") return 1;
+  if (tier === "free" || tier === "starter") return 1;
   if (tier === "business") return 3;
-  return 8;
+  return 10;
 }
 
 export function maxProductsForTier(tier: SubscriptionPlanCode): number | null {
@@ -131,6 +143,7 @@ export function maxProductsForTier(tier: SubscriptionPlanCode): number | null {
 function minTierForPermission(permission: Permission): SubscriptionPlanCode | null {
   if (WAKA_PLUS_ONLY.has(permission)) return "waka_plus";
   if (BUSINESS_PLUS.has(permission)) return "business";
+  if (STARTER_PLUS.has(permission)) return "starter";
   return null;
 }
 

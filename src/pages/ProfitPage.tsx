@@ -9,6 +9,7 @@ import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canSeeOfficeProfit, computeProfitGroupedByCategory } from "../lib/homeProfit";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { PageHeader } from "../components/layout/PageHeader";
 
 type Range = "today" | "week" | "month";
@@ -17,7 +18,7 @@ type Props = { lang: Language };
 
 export function ProfitPage({ lang }: Props) {
   const actor = useSessionActor();
-  const { authMode } = useSubscription();
+  const { authMode, snapshot } = useSubscription();
   const [includeArchived, setIncludeArchived] = useState(false);
   const [range, setRange] = useState<Range>("today");
   const sales = useDeferredReportingSales(includeArchived);
@@ -26,8 +27,8 @@ export function ProfitPage({ lang }: Props) {
   const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const products = usePosStore((s) => s.products);
 
-  if (!canSeeOfficeProfit(actor.role, authMode)) {
-    return <Navigate to="/" replace />;
+  if (!canSeeOfficeProfit(actor.role, authMode) || !hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode)) {
+    return <Navigate to="/upgrade" replace />;
   }
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
