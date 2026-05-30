@@ -8,6 +8,7 @@ import {
   getLastSyncMs,
   getLongTaskCount,
   getPersistStats,
+  getReportQueryStats,
   networkRequestsLastMinute,
   readJsHeapMb,
 } from "../../lib/stabilityDiagnostics";
@@ -35,6 +36,7 @@ export function StabilityDiagnosticsOverlay() {
   const heap = readJsHeapMb();
   const persist = getPersistStats();
   const cloudPull = getCloudPullStats();
+  const reportQueries = getReportQueryStats();
   const checkpoints = readSyncCheckpoints();
   const mergeMs = getLastMergeMs();
   const syncMs = getLastSyncMs();
@@ -75,6 +77,12 @@ export function StabilityDiagnosticsOverlay() {
         Checkpoints bootstrap {checkpoints.bootstrapComplete ? "yes" : "no"} · sales{" "}
         {checkpoints.lastSalesSyncAt?.slice(11, 19) ?? "—"}
       </p>
+      {reportQueries.last ? (
+        <p className="text-stone-500">
+          Report {reportQueries.last.rpcName} · {reportQueries.last.source} · {reportQueries.last.durationMs}ms ·{" "}
+          {reportQueries.last.recordsReturned} rows · {(reportQueries.last.payloadBytes / 1024).toFixed(1)} KB
+        </p>
+      ) : null}
       <p className={longTasks > 0 ? "text-rose-400" : "text-stone-500"}>
         Long tasks {longTasks} · listeners 0 realtime · tick {tick}
       </p>

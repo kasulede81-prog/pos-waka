@@ -31,6 +31,14 @@ let fullCloudPullCount = 0;
 let lastCloudPull: CloudPullDiagnostics | null = null;
 let totalCloudRecordsPulled = 0;
 let totalCloudPayloadBytes = 0;
+let reportQueryCount = 0;
+let lastReportQuery: {
+  rpcName: string;
+  source: string;
+  durationMs: number;
+  payloadBytes: number;
+  recordsReturned: number;
+} | null = null;
 let longTaskCount = 0;
 let fetchPatched = false;
 let longTaskObserver: PerformanceObserver | null = null;
@@ -103,6 +111,24 @@ export function getCloudPullStats(): {
     totalRecords: totalCloudRecordsPulled,
     totalPayloadBytes: totalCloudPayloadBytes,
   };
+}
+
+export function recordReportQueryStats(meta: {
+  rpcName: string;
+  source: string;
+  durationMs: number;
+  payloadBytes: number;
+  recordsReturned: number;
+}): void {
+  reportQueryCount += 1;
+  lastReportQuery = meta;
+}
+
+export function getReportQueryStats(): {
+  count: number;
+  last: typeof lastReportQuery;
+} {
+  return { count: reportQueryCount, last: lastReportQuery };
 }
 
 export function networkRequestsLastMinute(): number {

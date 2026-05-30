@@ -4,15 +4,15 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useShopReportBundle } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
+import { dateKeyKampala } from "../lib/datesUg";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { PageHeader } from "../components/layout/PageHeader";
-import { computeTodayProfitBreakdown } from "../lib/homeProfit";
 
 type Range = "today" | "week" | "month";
 
@@ -21,13 +21,12 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const { snapshot, authMode } = useSubscription();
   const returnRecords = usePosStore((s) => s.returnRecords);
   const products = usePosStore((s) => s.products);
-  const customers = usePosStore((s) => s.customers);
   const purchases = usePosStore((s) => s.purchases);
-  const suppliers = usePosStore((s) => s.suppliers);
   const [range, setRange] = useState<Range>("today");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [reportHint, setReportHint] = useState<string | null>(null);
   const sales = useDeferredReportingSales(includeArchived);
+  const report = useShopReportBundle(range, includeArchived);
 
   if (!hasPermission(actor.role, "reports.view")) {
     return <Navigate to="/" replace />;
@@ -37,161 +36,24 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const canPurchasesView = hasPermission(actor.role, "purchases.view");
   const canSuppliersView = hasPermission(actor.role, "suppliers.view");
 
-  const filtered = useMemo(() => {
-    const today = dateKeyKampala(new Date());
-    const weekCut = dateKeyDaysAgoKampala(6);
-    const monthPrefix = today.slice(0, 7);
-    return sales.filter((s) => {
-      const k = dateKeyKampala(s.createdAt);
-      if (range === "today") return k === today;
-      if (range === "week") return k >= weekCut;
-      return k.startsWith(monthPrefix);
-    });
-  }, [sales, range]);
-
-  const filteredReturns = useMemo(() => {
-    const today = dateKeyKampala(new Date());
-    const weekCut = dateKeyDaysAgoKampala(6);
-    const monthPrefix = today.slice(0, 7);
-    return returnRecords.filter((r) => {
-      const k = dateKeyKampala(r.createdAt);
-      if (range === "today") return k === today;
-      if (range === "week") return k >= weekCut;
-      return k.startsWith(monthPrefix);
-    });
-  }, [returnRecords, range]);
-
-  const totals = useMemo(() => {
-    const productById = new Map(products.map((p) => [p.id, p] as const));
-    const breakdown = computeTodayProfitBreakdown(filtered, productById, filteredReturns);
-    const cash = filtered.reduce((a, s) => a + s.cashPaidUgx, 0);
-    const profit = breakdown.profitUgx;
-    const debt = filtered.reduce((a, s) => a + s.debtUgx, 0);
-    return { cash, profit, debt, count: filtered.length };
-  }, [filtered, filteredReturns, products]);
-
-  const topProducts = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; revenue: number }>();
-    for (const sale of filtered) {
-      for (const line of sale.lines) {
-        if (line.voided) continue;
-        const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
-        map.set(line.productId, {
-          name: line.name,
-          qty: cur.qty + line.quantity,
-          revenue: cur.revenue + line.lineTotalUgx,
-        });
-      }
-    }
-    for (const ret of filteredReturns) {
-      const cur = map.get(ret.productId) ?? { name: ret.productName, qty: 0, revenue: 0 };
-      map.set(ret.productId, {
-        name: ret.productName || cur.name,
-        qty: cur.qty - Math.max(0, ret.quantity),
-        revenue: cur.revenue - Math.max(0, ret.refundAmountUgx),
-      });
-    }
-    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 10);
-  }, [filtered, filteredReturns]);
-
-  const weakProducts = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; revenue: number }>();
-    for (const sale of filtered) {
-      for (const line of sale.lines) {
-        if (line.voided) continue;
-        const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
-        map.set(line.productId, {
-          name: line.name,
-          qty: cur.qty + line.quantity,
-          revenue: cur.revenue + line.lineTotalUgx,
-        });
-      }
-    }
-    for (const ret of filteredReturns) {
-      const cur = map.get(ret.productId) ?? { name: ret.productName, qty: 0, revenue: 0 };
-      map.set(ret.productId, {
-        name: ret.productName || cur.name,
-        qty: cur.qty - Math.max(0, ret.quantity),
-        revenue: cur.revenue - Math.max(0, ret.refundAmountUgx),
-      });
-    }
-    const rows = [...map.values()].filter((r) => r.revenue > 0).sort((a, b) => a.revenue - b.revenue);
-    return rows.slice(0, 8);
-  }, [filtered, filteredReturns]);
-
-  const last7DayBars = useMemo(() => {
-    const keys: string[] = [];
-    for (let i = 6; i >= 0; i--) keys.push(dateKeyDaysAgoKampala(i));
-    const totalsUgx = keys.map((k) =>
-      sales.filter((s) => dateKeyKampala(s.createdAt) === k).reduce((a, s) => a + s.totalUgx, 0),
-    );
-    const max = Math.max(1, ...totalsUgx);
-    return keys.map((k, i) => {
-      const total = totalsUgx[i] ?? 0;
-      return {
-        key: k,
-        label: k.slice(5).replace("-", "/"),
-        total,
-        barPx: Math.max(6, Math.round((total / max) * 88)),
-      };
-    });
-  }, [sales]);
-
-  const debtOutstanding = useMemo(() => customers.reduce((a, c) => a + c.debtBalanceUgx, 0), [customers]);
-
   const purchasesTodayUgx = useMemo(() => {
     const dk = dateKeyKampala(new Date());
     return purchases.filter((p) => dateKeyKampala(p.createdAt) === dk).reduce((a, p) => a + p.totalCostUgx, 0);
   }, [purchases]);
 
-  const supplierDebtTotal = useMemo(
-    () => suppliers.reduce((a, s) => a + Math.max(0, s.balanceOwedUgx), 0),
-    [suppliers],
-  );
-
-  const stockValueAtCost = useMemo(
-    () => products.reduce((a, p) => a + Math.max(0, p.stockOnHand) * Math.max(0, p.costPricePerUnitUgx), 0),
-    [products],
-  );
-
-  const marginLeaders = useMemo(() => {
-    const map = new Map<string, { name: string; revenue: number; profit: number }>();
-    for (const sale of filtered) {
-      for (const line of sale.lines) {
-        if (line.voided) continue;
-        const lineProfit = Number.isFinite(line.estimatedProfitUgx)
-          ? line.estimatedProfitUgx
-          : line.lineTotalUgx - line.quantity * (line.unitCostUgx ?? 0);
-        const cur = map.get(line.productId) ?? { name: line.name, revenue: 0, profit: 0 };
-        map.set(line.productId, {
-          name: line.name,
-          revenue: cur.revenue + line.lineTotalUgx,
-          profit: cur.profit + lineProfit,
-        });
-      }
-    }
-    for (const ret of filteredReturns) {
-      const product = products.find((p) => p.id === ret.productId);
-      const returnCost = Math.round(Math.max(0, ret.quantity) * Math.max(0, product?.costPricePerUnitUgx ?? 0));
-      const returnProfitImpact = Math.max(0, ret.refundAmountUgx) - returnCost;
-      const cur = map.get(ret.productId) ?? { name: ret.productName, revenue: 0, profit: 0 };
-      map.set(ret.productId, {
-        name: ret.productName || cur.name,
-        revenue: cur.revenue - Math.max(0, ret.refundAmountUgx),
-        profit: cur.profit - returnProfitImpact,
-      });
-    }
-    return [...map.values()]
-      .map((v) => ({
-        name: v.name,
-        revenue: v.revenue,
-        profit: v.profit,
-        pct: v.revenue > 0 ? v.profit / v.revenue : 0,
-      }))
-      .filter((r) => r.revenue > 0)
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, 8);
-  }, [filtered, filteredReturns, products]);
+  const totals = { cash: report.cash, profit: report.profit, debt: report.debt, count: report.count };
+  const topProducts = report.topProducts;
+  const weakProducts = report.slowProducts;
+  const last7DayBars = report.dailyTrend;
+  const debtOutstanding = report.debtOutstanding;
+  const supplierDebtTotal = report.supplierDebtTotal;
+  const stockValueAtCost = report.stockValueAtCost;
+  const marginLeaders = report.marginLeaders.map((r) => ({
+    name: r.name,
+    revenue: r.revenueUgx,
+    profit: r.profitUgx,
+    pct: r.revenueUgx > 0 ? r.profitUgx / r.revenueUgx : 0,
+  }));
 
   return (
     <div className="space-y-5 pb-8">
@@ -284,7 +146,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
         <p className="text-sm font-semibold text-slate-800">{t(lang, "reportsWeekTrend")}</p>
         <div className="mt-4 flex h-28 items-end justify-between gap-1 px-1">
           {last7DayBars.map((b) => (
-            <div key={b.key} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
+            <div key={b.day} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
               <div
                 className="w-full max-w-[2.25rem] rounded-t-lg bg-gradient-to-t from-slate-800 to-slate-600"
                 style={{ height: b.barPx }}
@@ -356,9 +218,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
         ) : (
           <ul className="mt-3 space-y-2">
             {topProducts.map((p) => (
-              <li key={p.name} className="flex justify-between text-sm">
+              <li key={p.productId || p.name} className="flex justify-between text-sm">
                 <span className="font-medium">{p.name}</span>
-                <span className="text-slate-600">UGX {p.revenue.toLocaleString()}</span>
+                <span className="text-slate-600">UGX {p.revenueUgx.toLocaleString()}</span>
               </li>
             ))}
           </ul>
@@ -370,9 +232,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
           <p className="font-semibold text-slate-800">{t(lang, "reportsWeakSellers")}</p>
           <ul className="mt-3 space-y-2">
             {weakProducts.map((p) => (
-              <li key={p.name} className="flex justify-between text-sm">
+              <li key={p.productId || p.name} className="flex justify-between text-sm">
                 <span className="font-medium text-slate-700">{p.name}</span>
-                <span className="text-slate-500">UGX {p.revenue.toLocaleString()}</span>
+                <span className="text-slate-500">UGX {p.revenueUgx.toLocaleString()}</span>
               </li>
             ))}
           </ul>

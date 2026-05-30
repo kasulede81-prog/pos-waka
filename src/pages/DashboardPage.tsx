@@ -4,9 +4,10 @@ import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useDashboardAnalytics } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
-import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
+import { dateKeyKampala } from "../lib/datesUg";
 import { isLowStock } from "../lib/sellingEngine";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -57,6 +58,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
 
   const sales = useDeferredReportingSales(includeArchived);
+  const analytics = useDashboardAnalytics(includeArchived);
   const salesCount = usePosStore((s) => s.sales.length);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
@@ -75,36 +77,20 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const todaySales = useMemo(() => scanTodaySalesHead(sales, todayKey).todaySales, [sales, todayKey]);
 
-  const cashToday = useMemo(() => todaySales.reduce((a, s) => a + s.cashPaidUgx, 0), [todaySales]);
-  const debtToday = useMemo(() => todaySales.reduce((a, s) => a + s.debtUgx, 0), [todaySales]);
+  const cashToday = analytics.cashToday;
+  const debtToday = analytics.debtToday;
   const lowStockProducts = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
 
-  const fastMovers = useMemo(() => {
-    const map = new Map<string, { id: string; name: string; qty: number; revenue: number }>();
-    for (const sale of todaySales) {
-      for (const line of sale.lines) {
-        const cur = map.get(line.productId) ?? { id: line.productId, name: line.name, qty: 0, revenue: 0 };
-        map.set(line.productId, {
-          id: line.productId,
-          name: line.name,
-          qty: cur.qty + line.quantity,
-          revenue: cur.revenue + line.lineTotalUgx,
-        });
-      }
-    }
-    return [...map.values()]
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 8);
-  }, [todaySales]);
+  const fastMovers = analytics.fastMovers.map((p) => ({
+    id: p.productId,
+    name: p.name,
+    qty: p.quantity,
+    revenue: p.revenueUgx,
+  }));
 
   const recentSales = useMemo(() => todaySales.slice(0, 8), [todaySales]);
 
-  const weekCut = dateKeyDaysAgoKampala(6);
-  const weekSales = useMemo(
-    () => sales.filter((s) => dateKeyKampala(s.createdAt) >= weekCut),
-    [sales, weekCut],
-  );
-  const cashWeek = weekSales.reduce((a, s) => a + s.cashPaidUgx, 0);
+  const cashWeek = analytics.cashWeek;
 
   const quickTiles = useMemo(() => products.slice(0, 10), [products]);
 
