@@ -587,7 +587,7 @@ export function useAuth() {
     });
     if (error) {
       reportAuthIssue("password_reset_request_failed", { status: error.status ?? 0 });
-      throw error;
+      throw new Error(formatAuthError(error));
     }
   }, []);
 
@@ -596,7 +596,7 @@ export function useAuth() {
     const { error } = await supabase.auth.updateUser({ password });
     if (error) {
       reportAuthIssue("password_update_failed", { status: error.status ?? 0 });
-      throw error;
+      throw new Error(formatAuthError(error));
     }
   }, []);
 

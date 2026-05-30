@@ -105,12 +105,17 @@ The Android app routes authorize through `https://pos.waka.ug/auth/v1/...` when 
 
 ```
 https://pos.waka.ug/auth/callback
+https://pos.waka.ug/reset-password
 https://pos.waka.ug/auth/recovery
 https://waka.ug/auth/callback
+https://waka.ug/reset-password
 https://waka.ug/auth/recovery
 https://localhost/auth/callback
+https://localhost/reset-password
 https://localhost/auth/recovery
 http://localhost:5173/auth/callback
+http://localhost:5173/reset-password
+http://localhost:5173/auth/recovery
 ```
 
 ---

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Language } from "../../types";
 import { supabase } from "../../lib/supabase";
 import { t } from "../../lib/i18n";
+import { wakaSupportWhatsAppUrl } from "../../config/company";
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
@@ -31,6 +32,27 @@ type Props = {
   showOnboardGate?: boolean;
   onSaved?: () => void;
 };
+
+const fieldClass =
+  "mt-1.5 w-full min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2 disabled:bg-stone-50 disabled:text-stone-600";
+
+function ProfileSection({
+  title,
+  hint,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-stone-200/90 bg-white px-4 py-3.5 shadow-sm">
+      <h2 className="text-sm font-black text-stone-900">{title}</h2>
+      {hint ? <p className="mt-0.5 text-xs font-medium text-stone-500">{hint}</p> : null}
+      <div className="mt-2.5 space-y-2.5">{children}</div>
+    </section>
+  );
+}
 
 export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnboardGate, onSaved }: Props) {
   const actor = useSessionActor();
@@ -64,6 +86,10 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   const ownerDisplayName =
     String((user?.user_metadata as Record<string, unknown> | undefined)?.full_name ?? "").trim() ||
     (email ? email.split("@")[0] : "");
+
+  const supportWhatsApp = wakaSupportWhatsAppUrl(
+    "Hello Waka, I need to update my shop business profile (name, phone, or location).",
+  );
 
   const saveBusinessProfileClick = useCallback(async () => {
     setProfileFeedback(null);
@@ -239,64 +265,73 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   if (!hasPermission(actor.role, "settings.shop")) return null;
 
   return (
-    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+    <div className="space-y-3">
       {showOnboardGate ? (
-        <p className="mb-4 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-950">
+        <p className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-950">
           {t(lang, "onboardingUrlGateTitle")}
         </p>
       ) : null}
+
       {profileLocked ? (
-        <p className="mb-4 rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 text-sm font-semibold text-stone-800">
-          {t(lang, "shopProfileLockedMessage")}
-        </p>
+        <div className="rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-3 text-sm text-stone-800">
+          <p className="font-semibold text-stone-900">{t(lang, "shopProfileProtectedTitle")}</p>
+          <p className="mt-1 text-xs font-medium leading-relaxed text-stone-600">
+            {t(lang, "shopProfileProtectedBody")}
+          </p>
+          <a
+            href={supportWhatsApp}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex min-h-[40px] items-center rounded-lg bg-emerald-600 px-3 text-xs font-black text-white"
+          >
+            {t(lang, "shopProfileContactSupport")}
+          </a>
+        </div>
       ) : null}
+
       {needsRecoveryEmail ? (
-        <>
-          <label className="block text-sm font-bold text-slate-800">{t(lang, "registerEmailLabel")}</label>
+        <ProfileSection title={t(lang, "registerEmailLabel")} hint={t(lang, "registerEmailRequiredHint")}>
           <input
             type="email"
             value={recoveryEmailInput}
             onChange={(e) => setRecoveryEmailInput(e.target.value)}
             autoComplete="email"
-            className="mt-1 w-full rounded-2xl border-2 border-orange-300 bg-orange-50/50 px-4 py-3 text-lg"
+            className={fieldClass}
           />
-          <p className="mt-1 text-xs font-semibold text-orange-900">{t(lang, "registerEmailRequiredHint")}</p>
-        </>
+        </ProfileSection>
       ) : null}
-      <label className="block text-sm font-bold text-slate-800">{t(lang, "businessName")}</label>
-      <input
-        value={shopNameInput}
-        onChange={(e) => setShopNameInput(e.target.value)}
-        readOnly={profileLocked}
-        disabled={profileLocked}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg disabled:bg-stone-100"
-      />
-      <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "personPhonePh")}</label>
-      <input
-        value={shopPhoneInput}
-        onChange={(e) => setShopPhoneInput(e.target.value)}
-        readOnly={profileLocked}
-        disabled={profileLocked}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg disabled:bg-stone-100"
-      />
-      <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopAddress")}</label>
-      <input
-        value={shopAddressInput}
-        onChange={(e) => setShopAddressInput(e.target.value)}
-        readOnly={profileLocked}
-        disabled={profileLocked}
-        className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg disabled:bg-stone-100"
-      />
+
+      <ProfileSection title={t(lang, "shopProfileShopNameLabel")}>
+        <input
+          value={shopNameInput}
+          onChange={(e) => setShopNameInput(e.target.value)}
+          readOnly={profileLocked}
+          disabled={profileLocked}
+          className={fieldClass}
+          autoComplete="organization"
+        />
+      </ProfileSection>
+
+      <ProfileSection title={t(lang, "shopProfilePhoneLabel")} hint={t(lang, "shopProfilePhoneHint")}>
+        <input
+          value={shopPhoneInput}
+          onChange={(e) => setShopPhoneInput(e.target.value)}
+          readOnly={profileLocked}
+          disabled={profileLocked}
+          inputMode="tel"
+          autoComplete="tel"
+          className={fieldClass}
+        />
+      </ProfileSection>
 
       {authMode === "supabase" ? (
-        <div className="mt-4 rounded-2xl border border-orange-100 bg-orange-50/50 p-3">
-          <p className="text-sm font-black text-orange-950">{t(lang, "shopLocationSectionTitle")}</p>
-          <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopDistrictLabel")}</label>
+        <ProfileSection title={t(lang, "shopProfileLocationTitle")} hint={t(lang, "shopLocationSectionHelp")}>
+          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopDistrictLabel")}</label>
           <select
             value={districtIdSel}
             onChange={(e) => setDistrictIdSel(e.target.value)}
             disabled={profileLocked}
-            className="mt-1 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold disabled:bg-stone-100"
+            className={fieldClass}
           >
             <option value="">—</option>
             {districts.map((d) => (
@@ -305,84 +340,117 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
               </option>
             ))}
           </select>
-          <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopCityLabel")}</label>
+          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopCityLabel")}</label>
           <input
             value={shopCityField}
             onChange={(e) => setShopCityField(e.target.value)}
-            className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            readOnly={profileLocked}
+            disabled={profileLocked}
+            className={fieldClass}
           />
-          <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "shopAreaLabel")}</label>
+          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopAreaLabel")}</label>
           <input
             value={shopAreaField}
             onChange={(e) => setShopAreaField(e.target.value)}
-            className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+            readOnly={profileLocked}
+            disabled={profileLocked}
+            className={fieldClass}
           />
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className="min-h-[44px] rounded-2xl bg-waka-600 py-2.5 text-sm font-black text-white"
-              onClick={() => {
-                setGpsHint(null);
-                setRecordGpsSnapshot(false);
-                void (async () => {
-                  try {
-                    const pos = await getDevicePosition();
-                    setShopLat(pos.latitude);
-                    setShopLng(pos.longitude);
-                    setRecordGpsSnapshot(true);
-                    setGpsHint(t(lang, "shopGpsSaved"));
-                  } catch (err) {
-                    if (err instanceof DeviceLocationRequestError && err.reason === "unsupported") {
-                      setGpsHint(t(lang, "shopGpsNotSupported"));
-                    } else {
-                      setGpsHint(t(lang, "shopGpsDenied"));
+          <label className="block text-xs font-bold text-stone-700">{t(lang, "shopProfileLandmarkLabel")}</label>
+          <input
+            value={shopAddressInput}
+            onChange={(e) => setShopAddressInput(e.target.value)}
+            readOnly={profileLocked}
+            disabled={profileLocked}
+            placeholder={t(lang, "shopProfileLandmarkPh")}
+            className={fieldClass}
+          />
+          {!profileLocked ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                className="min-h-[40px] flex-1 rounded-xl bg-waka-600 px-3 text-xs font-black text-white"
+                onClick={() => {
+                  setGpsHint(null);
+                  setRecordGpsSnapshot(false);
+                  void (async () => {
+                    try {
+                      const pos = await getDevicePosition();
+                      setShopLat(pos.latitude);
+                      setShopLng(pos.longitude);
+                      setRecordGpsSnapshot(true);
+                      setGpsHint(t(lang, "shopGpsSaved"));
+                    } catch (err) {
+                      if (err instanceof DeviceLocationRequestError && err.reason === "unsupported") {
+                        setGpsHint(t(lang, "shopGpsNotSupported"));
+                      } else {
+                        setGpsHint(t(lang, "shopGpsDenied"));
+                      }
                     }
-                  }
-                })();
-              }}
-            >
-              {t(lang, "shopUseGps")}
-            </button>
-            <button
-              type="button"
-              className="min-h-[44px] rounded-2xl border-2 border-stone-300 bg-white py-2.5 text-sm font-black text-stone-800"
-              onClick={() => {
-                setShopLat(null);
-                setShopLng(null);
-                setRecordGpsSnapshot(false);
-                setGpsHint(null);
-              }}
-            >
-              {t(lang, "shopSkipGps")}
-            </button>
-          </div>
-          {gpsHint ? <p className="mt-2 text-sm font-semibold text-stone-700">{gpsHint}</p> : null}
-        </div>
+                  })();
+                }}
+              >
+                {t(lang, "shopUseGps")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[40px] rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
+                onClick={() => {
+                  setShopLat(null);
+                  setShopLng(null);
+                  setRecordGpsSnapshot(false);
+                  setGpsHint(null);
+                }}
+              >
+                {t(lang, "shopSkipGps")}
+              </button>
+            </div>
+          ) : null}
+          {gpsHint ? <p className="text-xs font-semibold text-stone-600">{gpsHint}</p> : null}
+        </ProfileSection>
+      ) : (
+        <ProfileSection title={t(lang, "shopProfileLocationTitle")}>
+          <input
+            value={shopAddressInput}
+            onChange={(e) => setShopAddressInput(e.target.value)}
+            readOnly={profileLocked}
+            disabled={profileLocked}
+            className={fieldClass}
+          />
+        </ProfileSection>
+      )}
+
+      <ProfileSection title={t(lang, "shopProfileBusinessTypeLabel")} hint={t(lang, "businessTypeLockedMessage")}>
+        <p className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5 text-sm font-semibold text-stone-800">
+          {t(lang, `businessType_${preferences.businessType}`)}
+        </p>
+      </ProfileSection>
+
+      <ProfileSection title={t(lang, "businessCurrency")}>
+        <p className="rounded-xl border border-stone-100 bg-stone-50 px-3 py-2.5 text-sm font-black text-stone-800">
+          {t(lang, "currencyUgxOnly")} ({shopCurrencyLabel})
+        </p>
+      </ProfileSection>
+
+      {profileFeedback ? (
+        <p className="text-sm font-semibold text-waka-900">{profileFeedback}</p>
       ) : null}
-
-      <p className="mt-3 text-sm font-bold text-slate-800">{t(lang, "businessCurrency")}</p>
-      <p className="mt-1 rounded-2xl border-2 border-slate-100 bg-slate-50 px-4 py-3 text-lg font-black text-slate-800">
-        {t(lang, "currencyUgxOnly")} ({shopCurrencyLabel})
-      </p>
-      <p className="mt-3 text-xs font-bold text-stone-500">{t(lang, "businessTypeLockedMessage")}</p>
-      <p className="text-sm font-semibold text-stone-700">{t(lang, `businessType_${preferences.businessType}`)}</p>
-
-      {profileFeedback ? <p className="mt-3 text-sm font-bold text-waka-900">{profileFeedback}</p> : null}
       {profileSaveError ? (
-        <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-900">
+        <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-900">
           {profileSaveError}
         </p>
       ) : null}
+
       {!profileLocked ? (
         <button
           type="button"
           disabled={profileBusy}
           onClick={() => void saveBusinessProfileClick()}
-          className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white disabled:opacity-50"
+          className="min-h-[48px] w-full rounded-xl bg-orange-600 py-3 text-base font-black text-white disabled:opacity-50"
         >
           {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
         </button>
       ) : null}
-    </article>
+    </div>
   );
 }

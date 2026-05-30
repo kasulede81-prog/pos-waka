@@ -184,9 +184,12 @@ The **website** uses Google Identity Services (popup). **Android/iOS** use the *
 **Authentication → URL configuration → Redirect URLs** — add:
 
 - `https://localhost/auth/callback`
-- `https://localhost/auth/recovery`
+- `https://localhost/reset-password`
+- `https://localhost/auth/recovery` (legacy reset emails)
 
-(Keep your production URLs too: `https://pos.waka.ug/auth/callback`, etc.)
+(Keep your production URLs too: `https://pos.waka.ug/auth/callback`, `https://pos.waka.ug/reset-password`, etc. See [PASSWORD_RESET_BRANDED_FLOW.md](./PASSWORD_RESET_BRANDED_FLOW.md).)
+
+`AndroidManifest.xml` includes intent filters for `/auth/callback`, `/auth/recovery`, and `/reset-password` on `https://localhost` (Capacitor WebView origin).
 
 ### Google Cloud
 

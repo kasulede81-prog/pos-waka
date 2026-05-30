@@ -9,7 +9,10 @@ import { WAKA_POS_URL } from "../config/company";
 export const CANONICAL_APP_URL = WAKA_POS_URL.replace(/\/$/, "");
 
 const AUTH_CALLBACK_PATH = "/auth/callback";
-const AUTH_RECOVERY_PATH = "/auth/recovery";
+/** Branded password reset landing (Supabase `redirectTo` for recovery emails). */
+const AUTH_RECOVERY_PATH = "/reset-password";
+/** Legacy path — keep in Supabase redirect allowlist until old emails expire. */
+export const AUTH_RECOVERY_LEGACY_PATH = "/auth/recovery";
 
 function parseHost(url: string): string | null {
   try {
@@ -112,13 +115,17 @@ export function getGoogleOAuthJavaScriptOrigins(): string[] {
 export function getSupabaseAuthRedirectUrls(): string[] {
   return [
     `${CANONICAL_APP_URL}/auth/callback`,
-    `${CANONICAL_APP_URL}/auth/recovery`,
+    `${CANONICAL_APP_URL}${AUTH_RECOVERY_PATH}`,
+    `${CANONICAL_APP_URL}${AUTH_RECOVERY_LEGACY_PATH}`,
     "https://waka.ug/auth/callback",
-    "https://waka.ug/auth/recovery",
+    `https://waka.ug${AUTH_RECOVERY_PATH}`,
+    `https://waka.ug${AUTH_RECOVERY_LEGACY_PATH}`,
     "https://localhost/auth/callback",
-    "https://localhost/auth/recovery",
+    `https://localhost${AUTH_RECOVERY_PATH}`,
+    `https://localhost${AUTH_RECOVERY_LEGACY_PATH}`,
     "http://localhost:5173/auth/callback",
-    "http://localhost:5173/auth/recovery",
+    `http://localhost:5173${AUTH_RECOVERY_PATH}`,
+    `http://localhost:5173${AUTH_RECOVERY_LEGACY_PATH}`,
   ];
 }
 

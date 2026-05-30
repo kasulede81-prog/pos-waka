@@ -79,7 +79,7 @@ export function registerNativeOAuthDeepLinkHandler(): void {
   void App.addListener("appUrlOpen", ({ url }) => {
     void (async () => {
       try {
-        if (url.includes("/auth/recovery")) {
+        if (url.includes("/auth/recovery") || url.includes("/reset-password")) {
           try {
             await Browser.close();
           } catch {

@@ -28,6 +28,7 @@ export const NATIVE_PUBLIC_PATHS = new Set([
   "/verify-email",
   "/auth/callback",
   "/auth/recovery",
+  "/reset-password",
   "/terms",
   "/privacy",
   "/refund-policy",

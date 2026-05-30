@@ -9,6 +9,7 @@ import { ActivationProvider } from "./context/ActivationContext";
 import { useAuth } from "./hooks/useAuth";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { AuthRecoveryPage } from "./pages/AuthRecoveryPage";
+import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { CustomersPage } from "./pages/CustomersPage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -156,9 +157,18 @@ function App() {
           }
         />
 
+        <Route path="/auth/recovery" element={<AuthRecoveryPage />} />
         <Route
-          path="/auth/recovery"
-          element={<AuthRecoveryPage lang={lang} setLang={setLang} mode={auth.mode} updatePassword={auth.updatePassword} />}
+          path="/reset-password"
+          element={
+            <ResetPasswordPage
+              lang={lang}
+              setLang={setLang}
+              mode={auth.mode}
+              updatePassword={auth.updatePassword}
+              signOut={auth.signOut}
+            />
+          }
         />
 
         <Route

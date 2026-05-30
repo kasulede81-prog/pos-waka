@@ -57,15 +57,19 @@ Copy examples:
    - **Redirect URLs** (add every surface you use), for example:
      - `http://localhost:5173/**`
      - `http://localhost:5173/auth/callback`
-     - `http://localhost:5173/auth/recovery`
+     - `http://localhost:5173/reset-password`
+     - `http://localhost:5173/auth/recovery` (legacy emails)
      - `https://your-staging.vercel.app/**`
      - `https://your-staging.vercel.app/auth/callback`
+     - `https://your-staging.vercel.app/reset-password`
      - `https://your-staging.vercel.app/auth/recovery`
      - `https://pos.waka.ug/**`
      - `https://pos.waka.ug/auth/callback`
+     - `https://pos.waka.ug/reset-password`
      - `https://pos.waka.ug/auth/recovery`
      - `https://waka.ug/**`
      - `https://waka.ug/auth/callback`
+     - `https://waka.ug/reset-password`
      - `https://waka.ug/auth/recovery`
 4. **Email templates** — ensure links use the redirect host Supabase generates (tied to `emailRedirectTo` / `redirectTo` in `src/hooks/useAuth.ts`, which use `authRedirectOrigin()` from `VITE_APP_URL` or `window.location.origin`).
 5. **Secrets:** service role key only in Edge Functions / backend jobs — **not** in this SPA.
@@ -153,7 +157,7 @@ Hooks today:
 ### Auth flows
 
 - [ ] Register → verify email → lands on `/auth/callback`  
-- [ ] Forgot password → email → `/auth/recovery` updates password  
+- [ ] Forgot password → email → `/reset-password` updates password (see [PASSWORD_RESET_BRANDED_FLOW.md](./PASSWORD_RESET_BRANDED_FLOW.md))  
 - [ ] Sign out clears session; local-only mode still works without env  
 
 ### PWA

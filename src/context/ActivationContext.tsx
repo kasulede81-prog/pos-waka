@@ -65,6 +65,7 @@ const LOCKED_ALLOWED_EXACT = new Set([
   "/support",
   "/auth/callback",
   "/auth/recovery",
+  "/reset-password",
   "/verify-email",
   "/login",
   "/register",

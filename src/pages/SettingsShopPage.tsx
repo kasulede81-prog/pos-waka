@@ -27,13 +27,12 @@ export function SettingsShopPage({ lang, email, shopName, user, authMode }: Prop
   }
 
   return (
-    <div className="space-y-5 pb-8">
+    <div className="space-y-4 pb-8">
       <SettingsPageHeader
         lang={lang}
-        title={t(lang, "settingsHubShop")}
-        subtitle={t(lang, "settingsHubShopSub")}
+        title={t(lang, "shopProfilePageTitle")}
+        subtitle={t(lang, "shopProfilePageSubtitle")}
       />
-      <ShopSupportNumberCard lang={lang} />
       <ShopProfileForm
         lang={lang}
         authMode={authMode}
@@ -43,6 +42,7 @@ export function SettingsShopPage({ lang, email, shopName, user, authMode }: Prop
         showOnboardGate={showOnboardGate}
         onSaved={() => navigate(showOnboardGate ? "/" : "/settings/shop", { replace: true })}
       />
+      <ShopSupportNumberCard lang={lang} />
     </div>
   );
 }
