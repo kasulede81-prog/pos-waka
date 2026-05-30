@@ -50,7 +50,7 @@ function snapshotFromStore(): PersistedSnapshot | null {
 }
 
 /** Trim snapshot JSON size for cloud upload by dropping oldest archived sales if needed. */
-function trimSnapshotForUpload(snap: PersistedSnapshot): PersistedSnapshot {
+async function trimSnapshotForUpload(snap: PersistedSnapshot): Promise<PersistedSnapshot> {
   let env = buildExportEnvelope(snap);
   let json = JSON.stringify(env);
   if (json.length <= MAX_CLOUD_SNAPSHOT_BYTES) return snap;
@@ -68,8 +68,11 @@ function trimSnapshotForUpload(snap: PersistedSnapshot): PersistedSnapshot {
   if (json.length <= MAX_CLOUD_SNAPSHOT_BYTES) return trimmed;
 
   const sales = [...snap.sales].sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  let trimmedCount = 0;
   while (sales.length > 500 && json.length > MAX_CLOUD_SNAPSHOT_BYTES) {
     sales.shift();
+    trimmedCount += 1;
+    if (trimmedCount % 40 === 0) await yieldUiTick();
   }
   const smaller = { ...trimmed, sales };
   json = JSON.stringify(buildExportEnvelope(smaller));
@@ -99,7 +102,7 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
   if (!snap) return false;
   if (snap.products.length === 0 && snap.sales.length === 0) return false;
 
-  const payload = trimSnapshotForUpload(snap);
+  const payload = await trimSnapshotForUpload(snap);
   const envelope = buildExportEnvelope(payload);
   const json = JSON.stringify(envelope);
 

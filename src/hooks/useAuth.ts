@@ -6,6 +6,8 @@ import { isGoogleAuthUiEnabled } from "../lib/authFeatureFlags";
 import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
 import { signInWithGoogleNative } from "../lib/nativeGoogleAuth";
 import { hydrateAccountFromCloud } from "../lib/postAuthCloudHydrate";
+import { isNativeApp } from "../lib/nativeApp";
+import { scheduleBackgroundCloudSync } from "../offline/cloudSync";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
@@ -134,7 +136,10 @@ export function useAuth() {
     if (!next?.user || !supabase) return;
     if (bootstrappedUserIds[next.user.id] || isWorkspaceBootstrapped(next.user.id)) {
       setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
-      void hydrateAccountFromCloud();
+      scheduleBackgroundCloudSync({
+        pull: false,
+        delayMs: isNativeApp() ? 10_000 : 4000,
+      });
       return;
     }
 
@@ -279,16 +284,22 @@ export function useAuth() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, next) => {
       if (next?.user) {
+        if (event === "TOKEN_REFRESHED") {
+          setSession((prev) => (prev?.user?.id === next.user.id ? prev : next));
+          return;
+        }
         clearStaffAuth();
         setStaffSession(null);
         applyAccountSwitchSync(
           computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
         );
         applySignupProfileToLocalStore(next);
-        void ensureWorkspaceForSession(next).catch((e) => {
-          console.error("[waka-auth] bootstrap on auth state change failed", e);
-        });
-        setSession(next);
+        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+          void ensureWorkspaceForSession(next).catch((e) => {
+            console.error("[waka-auth] bootstrap on auth state change failed", e);
+          });
+        }
+        setSession((prev) => (prev?.user?.id === next.user.id ? prev : next));
         return;
       }
       if (event === "SIGNED_OUT") {

@@ -72,23 +72,38 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
     return <Navigate to="/office" replace />;
   }
 
-  const downloadCsv = () => {
-    const ok = downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report), "text/csv;charset=utf-8");
-    showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+  const downloadCsv = async () => {
+    setBusy(true);
+    try {
+      const ok = await downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report), "text/csv;charset=utf-8");
+      showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const downloadExcel = () => {
-    const ok = downloadTextFile(
-      `waka-monthly-${monthKey}.xls`,
-      monthlyReportToCsv(report),
-      "application/vnd.ms-excel;charset=utf-8",
-    );
-    showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+  const downloadExcel = async () => {
+    setBusy(true);
+    try {
+      const ok = await downloadTextFile(
+        `waka-monthly-${monthKey}.xls`,
+        monthlyReportToCsv(report),
+        "application/vnd.ms-excel;charset=utf-8",
+      );
+      showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const downloadWord = () => {
-    const ok = downloadMonthlyReportWord(lang, report);
-    showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+  const downloadWord = async () => {
+    setBusy(true);
+    try {
+      const ok = await downloadMonthlyReportWord(lang, report);
+      showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
+    } finally {
+      setBusy(false);
+    }
   };
 
   const downloadPdf = async () => {
@@ -172,22 +187,25 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
         </button>
         <button
           type="button"
-          onClick={downloadExcel}
-          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white py-3 text-sm font-black text-waka-900"
+          disabled={busy}
+          onClick={() => void downloadExcel()}
+          className="min-h-[48px] rounded-2xl border-2 border-waka-600 bg-white py-3 text-sm font-black text-waka-900 disabled:opacity-50"
         >
           {t(lang, "monthlyReportDownloadExcel")}
         </button>
         <button
           type="button"
-          onClick={downloadWord}
-          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800"
+          disabled={busy}
+          onClick={() => void downloadWord()}
+          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 disabled:opacity-50"
         >
           {t(lang, "monthlyReportDownloadWord")}
         </button>
         <button
           type="button"
-          onClick={downloadCsv}
-          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 sm:col-span-2"
+          disabled={busy}
+          onClick={() => void downloadCsv()}
+          className="min-h-[48px] rounded-2xl border-2 border-stone-300 bg-white py-3 text-sm font-black text-stone-800 sm:col-span-2 disabled:opacity-50"
         >
           {t(lang, "monthlyReportDownloadCsv")}
         </button>

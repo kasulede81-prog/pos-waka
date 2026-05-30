@@ -1,7 +1,8 @@
 import type { Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { computeTodayProfitBreakdown } from "./homeProfit";
-import { downloadBlobFile } from "./fileDownload";
+import { Capacitor } from "@capacitor/core";
+import { saveExportedFile } from "./fileDownload";
 import { t } from "./i18n";
 
 export type MonthlyBusinessReport = {
@@ -159,8 +160,8 @@ export function monthlyReportToCsv(report: MonthlyBusinessReport): string {
   return "\uFEFF" + rows.join("\n");
 }
 
-export function downloadTextFile(filename: string, body: string, mime: string): boolean {
-  return downloadBlobFile(filename, body, mime);
+export async function downloadTextFile(filename: string, body: string, mime: string): Promise<boolean> {
+  return saveExportedFile(filename, body, mime);
 }
 
 function escapeHtml(s: string): string {
@@ -243,9 +244,9 @@ export function printMonthlyReport(lang: Language, report: MonthlyBusinessReport
   return true;
 }
 
-export function downloadMonthlyReportWord(lang: Language, report: MonthlyBusinessReport): boolean {
+export async function downloadMonthlyReportWord(lang: Language, report: MonthlyBusinessReport): Promise<boolean> {
   const html = buildMonthlyReportHtml(lang, report);
-  return downloadBlobFile(`waka-monthly-${report.monthKey}.doc`, html, "application/msword;charset=utf-8");
+  return saveExportedFile(`waka-monthly-${report.monthKey}.doc`, html, "application/msword;charset=utf-8");
 }
 
 export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBusinessReport): Promise<boolean> {
@@ -288,8 +289,13 @@ export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBu
   for (const c of report.byCashier) {
     line(`  ${c.label} — ${c.count} sales — UGX ${c.revenueUgx.toLocaleString()}`);
   }
+  const filename = `waka-monthly-${report.monthKey}.pdf`;
+  if (Capacitor.isNativePlatform()) {
+    doc.save(filename);
+    return true;
+  }
   const pdfBlob = doc.output("blob");
-  return downloadBlobFile(`waka-monthly-${report.monthKey}.pdf`, pdfBlob, "application/pdf");
+  return saveExportedFile(filename, pdfBlob, "application/pdf");
   } catch {
     return false;
   }

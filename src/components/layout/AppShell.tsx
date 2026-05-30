@@ -9,7 +9,9 @@ import { useSubscription } from "../../context/SubscriptionContext";
 import { useShopPresenceHeartbeat } from "../../hooks/useShopPresenceHeartbeat";
 import { AppShellSyncLabel } from "./AppShellSyncLabel";
 import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
+import { useShallow } from "zustand/react/shallow";
 import { usePosStore } from "../../store/usePosStore";
+import type { ShopPreferences } from "../../types";
 import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
@@ -54,7 +56,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const navigate = useNavigate();
   useAndroidBackButton();
   useShopPresenceHeartbeat();
-  const preferences = usePosStore((s) => s.preferences);
+  const preferences = usePosStore(
+    useShallow((s) => ({
+      devRoleOverride: s.preferences.devRoleOverride,
+      activeStaffId: s.preferences.activeStaffId,
+      staffAccounts: s.preferences.staffAccounts,
+      posLocked: s.preferences.posLocked,
+      backOfficePin: s.preferences.backOfficePin,
+    })),
+  );
   const { authMode: subAuthMode, snapshot } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
@@ -89,7 +99,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   }, [user?.id]);
 
   const actor = useMemo(
-    () => resolveSessionActor({ mode: authMode, user, email, preferences, staffSession }),
+    () =>
+      resolveSessionActor({
+        mode: authMode,
+        user,
+        email,
+        preferences: preferences as ShopPreferences,
+        staffSession,
+      }),
     [authMode, user, email, preferences, staffSession],
   );
   const tier = resolveEffectivePlanTier(snapshot);

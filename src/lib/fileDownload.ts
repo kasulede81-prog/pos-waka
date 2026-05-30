@@ -1,4 +1,27 @@
 import { Capacitor } from "@capacitor/core";
+import { Directory, Filesystem } from "@capacitor/filesystem";
+import { Share } from "@capacitor/share";
+
+function sanitizeFilename(name: string): string {
+  return name.replace(/[/\\?%*:|"<>]/g, "_").trim() || "waka-export";
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      if (typeof dataUrl !== "string") {
+        reject(new Error("read_failed"));
+        return;
+      }
+      const comma = dataUrl.indexOf(",");
+      resolve(comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("read_failed"));
+    reader.readAsDataURL(blob);
+  });
+}
 
 function triggerAnchorDownload(url: string, filename: string): boolean {
   try {
@@ -16,34 +39,87 @@ function triggerAnchorDownload(url: string, filename: string): boolean {
   }
 }
 
-/** Reliable browser download for PDF/CSV/Word exports (works on mobile WebView when triggered from click). */
-export function downloadBlobFile(filename: string, body: string | Blob, mime: string): boolean {
-  try {
-    const blob = body instanceof Blob ? body : new Blob([body], { type: mime });
-    const file = new File([blob], filename, { type: mime });
+async function saveViaNativeShare(filename: string, blob: Blob): Promise<boolean> {
+  const safeName = sanitizeFilename(filename);
+  const path = `WakaReports/${safeName}`;
+  const base64 = await blobToBase64(blob);
 
-    if (typeof navigator !== "undefined" && navigator.share && navigator.canShare?.({ files: [file] })) {
-      void navigator.share({ files: [file], title: filename }).catch(() => {
+  await Filesystem.writeFile({
+    path,
+    data: base64,
+    directory: Directory.Cache,
+    recursive: true,
+  });
+
+  const { uri } = await Filesystem.getUri({
+    path,
+    directory: Directory.Cache,
+  });
+
+  await Share.share({
+    title: safeName,
+    url: uri,
+    dialogTitle: "Save monthly report",
+  });
+  return true;
+}
+
+function isUserShareCancel(err: unknown): boolean {
+  const name = (err as { name?: string })?.name ?? "";
+  const msg = String((err as { message?: string })?.message ?? "").toLowerCase();
+  return name === "AbortError" || msg.includes("cancel") || msg.includes("dismiss");
+}
+
+/**
+ * Save export file — awaits share/download so success toasts match real outcomes.
+ * On Android/iOS opens the system share sheet (pick Files, Drive, WhatsApp, etc.).
+ */
+export async function saveExportedFile(filename: string, body: string | Blob, mime: string): Promise<boolean> {
+  const blob = body instanceof Blob ? body : new Blob([body], { type: mime });
+  const safeName = sanitizeFilename(filename);
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      return await saveViaNativeShare(safeName, blob);
+    } catch (err) {
+      if (isUserShareCancel(err)) return false;
+      try {
         const url = URL.createObjectURL(blob);
-        triggerAnchorDownload(url, filename);
-        window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      });
-      return true;
+        const opened = window.open(url, "_blank");
+        if (opened) {
+          window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
+          return true;
+        }
+        URL.revokeObjectURL(url);
+      } catch {
+        /* fall through */
+      }
+      return false;
     }
+  }
 
+  const file = new File([blob], safeName, { type: mime });
+  if (typeof navigator !== "undefined" && navigator.share && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: safeName });
+      return true;
+    } catch (err) {
+      if (isUserShareCancel(err)) return false;
+    }
+  }
+
+  try {
     const url = URL.createObjectURL(blob);
-
-    if (Capacitor.isNativePlatform()) {
-      const opened = window.open(url, "_blank");
-      if (!opened) triggerAnchorDownload(url, filename);
-      window.setTimeout(() => URL.revokeObjectURL(url), 120_000);
-      return true;
-    }
-
-    const ok = triggerAnchorDownload(url, filename);
-    window.setTimeout(() => URL.revokeObjectURL(url), 400);
+    const ok = triggerAnchorDownload(url, safeName);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
     return ok;
   } catch {
     return false;
   }
+}
+
+/** @deprecated Use saveExportedFile (async). */
+export function downloadBlobFile(filename: string, body: string | Blob, mime: string): boolean {
+  void saveExportedFile(filename, body, mime);
+  return false;
 }
