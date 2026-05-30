@@ -11,7 +11,9 @@ import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpResult } from "../hooks/useAuth";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { storePendingReferralCode } from "../lib/pendingReferral";
+import { normalizeReferralCode, validateReferralCode } from "../lib/referralAgents";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
+import { tTemplate } from "../lib/i18n";
 
 type Props = {
   lang: Language;
@@ -44,7 +46,8 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const [districtsError, setDistrictsError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.trim().toUpperCase() ?? "");
-  const [agentOpen, setAgentOpen] = useState(Boolean(searchParams.get("ref")));
+  const [referralHint, setReferralHint] = useState<string | null>(null);
+  const [referralValidating, setReferralValidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
@@ -62,10 +65,32 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
     if (ref) {
       const code = ref.toUpperCase();
       setReferralCode(code);
-      setAgentOpen(true);
       storePendingReferralCode(code);
     }
   }, [searchParams]);
+
+  const validateReferralField = useCallback(
+    async (raw: string): Promise<boolean> => {
+      const trimmed = normalizeReferralCode(raw);
+      if (!trimmed) {
+        setReferralHint(null);
+        return true;
+      }
+      setReferralValidating(true);
+      const res = await validateReferralCode(trimmed);
+      setReferralValidating(false);
+      if (!res.ok) {
+        setReferralHint(t(lang, "registerReferralInvalid"));
+        return false;
+      }
+      setReferralHint(
+        res.agentName ? tTemplate(lang, "registerReferralValid", { name: res.agentName }) : null,
+      );
+      if (res.referralCode) setReferralCode(res.referralCode);
+      return true;
+    },
+    [lang],
+  );
 
   useEffect(() => {
     if (hasSupabaseConfig) void loadDistricts();
@@ -94,6 +119,13 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
     if (!districtId) {
       setError(t(lang, "businessProfileDistrictRequired"));
       return;
+    }
+    if (referralCode.trim()) {
+      const ok = await validateReferralField(referralCode);
+      if (!ok) {
+        setError(t(lang, "registerReferralInvalid"));
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -255,21 +287,29 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
               />
             </label>
 
-            <details
-              className="rounded-xl border border-stone-100 bg-stone-50/60"
-              open={agentOpen}
-              onToggle={(e) => setAgentOpen(e.currentTarget.open)}
-            >
-              <summary className="cursor-pointer px-3 py-2.5 text-sm font-black text-stone-700">{t(lang, "registerAgentToggle")}</summary>
-              <div className="border-t border-stone-100 px-3 pb-3 pt-2">
-                <input
-                  value={referralCode}
-                  onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
-                  placeholder={t(lang, "registerAgentPh")}
-                  className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 font-mono text-sm uppercase outline-none ring-waka-200 focus:ring-2"
-                />
-              </div>
-            </details>
+            <label className="block text-sm font-bold text-stone-800">
+              {t(lang, "registerReferralLabel")}
+              <input
+                value={referralCode}
+                onChange={(e) => {
+                  setReferralCode(e.target.value.toUpperCase());
+                  setReferralHint(null);
+                }}
+                onBlur={() => void validateReferralField(referralCode)}
+                placeholder={t(lang, "registerReferralPh")}
+                autoComplete="off"
+                className="mt-1.5 w-full rounded-xl border border-stone-200 px-4 py-3 font-mono text-base uppercase outline-none ring-waka-200 focus:border-waka-400 focus:ring-2"
+              />
+            </label>
+            <p className="text-xs font-medium text-stone-500">{t(lang, "registerReferralHint")}</p>
+            {referralValidating ? <p className="text-xs font-semibold text-stone-500">…</p> : null}
+            {referralHint ? (
+              <p
+                className={`text-xs font-semibold ${referralHint === t(lang, "registerReferralInvalid") ? "text-red-600" : "text-emerald-800"}`}
+              >
+                {referralHint}
+              </p>
+            ) : null}
 
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
 

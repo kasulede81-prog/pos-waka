@@ -194,6 +194,8 @@ export type PosState = {
   sessionActor: SessionActor | null;
   draftLines: SaleLine[];
   draftInput: DraftLineInput | null;
+  /** Whole-cart discount in UGX (applied at checkout, not per line). */
+  draftCartDiscountUgx: number;
 
   hydrate: (
     data: {
@@ -293,6 +295,7 @@ export type PosState = {
   setDraftLineQuantity: (productId: string, quantity: number) => { ok: boolean; errorKey?: string };
   adjustDraftLineQuantity: (productId: string, delta: number) => { ok: boolean; errorKey?: string };
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
+  setDraftCartDiscount: (amountUgx: number) => void;
   clearDraft: () => void;
   voidSaleLine: (input: {
     saleId: string;
@@ -480,7 +483,7 @@ function fireDraftWrite(s: PosState): void {
   const input = s.draftInput
     ? { productId: s.draftInput.product.id, inputMode: s.draftInput.inputMode, value: s.draftInput.value }
     : null;
-  void writePersistedDraft(s.draftLines, input);
+  void writePersistedDraft(s.draftLines, input, s.draftCartDiscountUgx);
 }
 
 function schedulePersist(prev: PosState, next: PosState) {
@@ -673,6 +676,7 @@ export const usePosStore = create<PosState>((set, get) => {
   sessionActor: null,
   draftLines: [],
   draftInput: null,
+  draftCartDiscountUgx: 0,
 
   hydrate: (data, opts) =>
     set({
@@ -699,6 +703,7 @@ export const usePosStore = create<PosState>((set, get) => {
       _hydrated: true,
       draftLines: [],
       draftInput: null,
+      draftCartDiscountUgx: 0,
     }),
 
   hydrateEssentials: (data) =>
@@ -724,6 +729,7 @@ export const usePosStore = create<PosState>((set, get) => {
       _hydrated: true,
       draftLines: [],
       draftInput: null,
+      draftCartDiscountUgx: 0,
     }),
 
   hydrateRemainder: (data) =>
@@ -781,6 +787,7 @@ export const usePosStore = create<PosState>((set, get) => {
       sessionActor: null,
       draftLines: [],
       draftInput: null,
+      draftCartDiscountUgx: 0,
     });
   },
 
@@ -1095,8 +1102,14 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
+  setDraftCartDiscount: (amountUgx) => {
+    const capped = Math.max(0, Math.floor(amountUgx));
+    set({ draftCartDiscountUgx: capped });
+    scheduleDraftPersist(get);
+  },
+
   clearDraft: () => {
-    set({ draftLines: [], draftInput: null });
+    set({ draftLines: [], draftInput: null, draftCartDiscountUgx: 0 });
     void clearPersistedDraft();
   },
 
@@ -1107,9 +1120,10 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const saleLines = state.draftLines.map((line) => normalizeSaleLine(line));
     const listSubtotal = saleLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
-    const subtotal = saleLines.reduce((a, l) => a + l.lineTotalUgx, 0);
-    const total = subtotal;
-    const discountTotal = Math.max(0, listSubtotal - subtotal);
+    const lineSubtotal = saleLines.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const cartDiscount = Math.min(Math.max(0, Math.floor(state.draftCartDiscountUgx)), lineSubtotal);
+    const total = Math.max(0, lineSubtotal - cartDiscount);
+    const discountTotal = Math.max(0, listSubtotal - total);
     const debt = Math.min(Math.max(0, Math.floor(debtUgx)), total);
     const cashPaidUgx = total - debt;
 
@@ -1235,6 +1249,7 @@ export const usePosStore = create<PosState>((set, get) => {
       sales: [sale, ...state.sales],
       draftLines: [],
       draftInput: null,
+      draftCartDiscountUgx: 0,
       customers,
       stockMovements: mergeStockMovements(saleMovements, state.stockMovements),
       preferences: nextPreferences,
@@ -2219,8 +2234,12 @@ async function restoreDraftSaleFromDisk(): Promise<void> {
   if (!draft) return;
   const products = usePosStore.getState().products;
   const { draftLines, draftInput } = resolveDraftFromPersisted(draft, products);
-  if (draftLines.length > 0 || draftInput) {
-    usePosStore.setState({ draftLines, draftInput });
+  if (draftLines.length > 0 || draftInput || (draft.draftCartDiscountUgx ?? 0) > 0) {
+    usePosStore.setState({
+      draftLines,
+      draftInput,
+      draftCartDiscountUgx: Math.max(0, Math.floor(draft.draftCartDiscountUgx ?? 0)),
+    });
   }
 }
 

@@ -18,13 +18,8 @@ import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
-import { applyReferralCode, syncAgentReferralShopContext } from "../lib/referralAgents";
-import {
-  clearPendingReferralCode,
-  hasPendingReferralCode,
-  readPendingReferralCode,
-  storePendingReferralCode,
-} from "../lib/pendingReferral";
+import { applyPendingReferralForSession } from "../lib/referralAgents";
+import { hasPendingReferralCode, storePendingReferralCode } from "../lib/pendingReferral";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
@@ -128,13 +123,11 @@ export function useAuth() {
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
     const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-    const code = readPendingReferralCode(String(meta?.referral_code ?? ""));
-    if (!code) return;
-    const res = await applyReferralCode(code);
-    if (res.ok) {
-      clearPendingReferralCode();
-      await syncAgentReferralShopContext();
-    } else if (import.meta.env.DEV) {
+    if (!hasPendingReferralCode(String(meta?.referral_code ?? ""))) return;
+    const res = await applyPendingReferralForSession(String(meta?.referral_code ?? ""));
+    if (!res.ok && res.error && res.error !== "invalid_code") {
+      reportAuthIssue("referral_apply_failed", { error: res.error });
+    } else if (!res.ok && import.meta.env.DEV) {
       console.warn("[waka-auth] apply_referral_code", res.error);
     }
   }, []);

@@ -27,15 +27,15 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
   const [upgradeBusyId, setUpgradeBusyId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setLoadError(null);
     const me = await fetchMarketingAgentMe();
     setAgent(me);
     if (me) {
       const { rows, error } = await listAgentReferrals();
       setReferrals(rows);
-      if (error && import.meta.env.DEV) setLoadError(error);
+      if (error) setLoadError(error);
     } else {
       setReferrals([]);
     }
@@ -44,6 +44,19 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") void load({ silent: true });
+    };
+    const onFocus = () => void load({ silent: true });
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [load]);
 
   const shareLink = agent ? buildAgentReferralRegisterUrl(agent.referralCode) : "";
@@ -142,7 +155,12 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
           </button>
         </div>
         {copyHint ? <p className="mt-2 text-xs font-bold text-emerald-700">{copyHint}</p> : null}
-        {loadError ? <p className="mt-2 text-xs font-bold text-rose-700">{loadError}</p> : null}
+        {loadError ? (
+          <p className="mt-2 text-xs font-bold text-rose-700">
+            {t(lang, "agentReferralsLoadError")}
+            {import.meta.env.DEV ? ` (${loadError})` : null}
+          </p>
+        ) : null}
         {agent.roles.length > 0 ? (
           <p className="mt-2 text-xs font-semibold text-stone-600">
             {t(lang, "agentRolesLabel")}: {agent.roles.join(" · ")}

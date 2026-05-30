@@ -142,15 +142,56 @@ function parseAgentRoles(raw: unknown): MarketingAgentRole[] {
   return out.length ? out : ["field_agent"];
 }
 
+export async function validateReferralCode(
+  code: string,
+): Promise<{ ok: boolean; error?: string; agentName?: string; referralCode?: string }> {
+  if (!supabase) return { ok: false, error: "offline" };
+  const trimmed = normalizeReferralCode(code);
+  if (trimmed.length < 3) return { ok: false, error: "invalid_code" };
+  const { data, error } = await supabase.rpc("validate_referral_code", { p_code: trimmed });
+  if (error) return { ok: false, error: error.message };
+  const row = (data ?? {}) as {
+    ok?: boolean;
+    error?: string;
+    agent_name?: string;
+    referral_code?: string;
+  };
+  if (!row.ok) return { ok: false, error: row.error ?? "invalid_code" };
+  return {
+    ok: true,
+    agentName: row.agent_name ?? undefined,
+    referralCode: row.referral_code ? normalizeReferralCode(row.referral_code) : trimmed,
+  };
+}
+
 export async function applyReferralCode(code: string): Promise<{ ok: boolean; error?: string; alreadyApplied?: boolean }> {
   if (!supabase) return { ok: false, error: "offline" };
   const trimmed = normalizeReferralCode(code);
   if (trimmed.length < 3) return { ok: false, error: "invalid_code" };
   const { data, error } = await supabase.rpc("apply_referral_code", { p_code: trimmed });
   if (error) return { ok: false, error: error.message };
-  const row = (data ?? {}) as { ok?: boolean; error?: string; already_applied?: boolean };
-  if (row.ok) return { ok: true, alreadyApplied: Boolean(row.already_applied) };
+  const row = (data ?? {}) as { ok?: boolean; error?: string; already_applied?: boolean; referral_id?: string };
+  if (row.ok) {
+    return { ok: true, alreadyApplied: Boolean(row.already_applied) };
+  }
   return { ok: false, error: row.error ?? "unknown" };
+}
+
+/** Apply pending referral + backfill shop on referred row (call after workspace bootstrap). */
+export async function applyPendingReferralForSession(metaReferralCode?: string | null): Promise<{
+  ok: boolean;
+  error?: string;
+  alreadyApplied?: boolean;
+}> {
+  const { readPendingReferralCode, clearPendingReferralCode } = await import("./pendingReferral");
+  const code = readPendingReferralCode(metaReferralCode ?? "");
+  if (!code) return { ok: true };
+  const res = await applyReferralCode(code);
+  if (res.ok) {
+    clearPendingReferralCode();
+    await syncAgentReferralShopContext();
+  }
+  return res;
 }
 
 /** Backfill shop/org on referral row after workspace bootstrap. */

@@ -32,7 +32,8 @@ import {
   shelfIconFor,
 } from "../lib/productCategories";
 import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
-import { computeDraftCartStats, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
+import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
+import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
 import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
 import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
@@ -160,6 +161,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
   const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
   const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
+  const draftCartDiscountUgx = usePosStore((s) => s.draftCartDiscountUgx);
+  const setDraftCartDiscount = usePosStore((s) => s.setDraftCartDiscount);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const clearDraft = usePosStore((s) => s.clearDraft);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
@@ -188,9 +191,14 @@ export function PosPage({ lang }: { lang: Language }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const draftCartStats = useMemo(() => computeDraftCartStats(draftLines), [draftLines]);
-  const draftTotal = draftCartStats.totalUgx;
+  const checkoutTotals = useMemo(
+    () => computeDraftCheckoutTotals(draftLines, draftCartDiscountUgx),
+    [draftLines, draftCartDiscountUgx],
+  );
+  const draftPayable = checkoutTotals.payableUgx;
   const draftDiscountTotal = useMemo(() => draftLines.reduce((a, l) => a + lineDiscountUgx(l), 0), [draftLines]);
   const [qtyEditLine, setQtyEditLine] = useState<SaleLine | null>(null);
+  const [cartSaleDiscountOpen, setCartSaleDiscountOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
@@ -633,21 +641,21 @@ export function PosPage({ lang }: { lang: Language }) {
   const totalPaidInput = useMemo(() => {
     const cash = parseDisplayMoney(cashInput);
     const mobile = parseDisplayMoney(mobileMoneyInput);
-    if (paymentMethod === "cash") return cash > 0 ? cash : draftTotal;
-    if (paymentMethod === "atm" || paymentMethod === "mobile_money") return draftTotal;
+    if (paymentMethod === "cash") return cash > 0 ? cash : draftPayable;
+    if (paymentMethod === "atm" || paymentMethod === "mobile_money") return draftPayable;
     if (paymentMethod === "credit") return cash + mobile;
     return cash + mobile;
-  }, [paymentMethod, cashInput, mobileMoneyInput, draftTotal]);
+  }, [paymentMethod, cashInput, mobileMoneyInput, draftPayable]);
 
   const changeDue = useMemo(() => {
     if (paymentMethod === "mobile_money" || paymentMethod === "atm") return 0;
-    return Math.max(0, totalPaidInput - draftTotal);
-  }, [paymentMethod, totalPaidInput, draftTotal]);
+    return Math.max(0, totalPaidInput - draftPayable);
+  }, [paymentMethod, totalPaidInput, draftPayable]);
 
   const computedDebt = useMemo(() => {
     if (paymentMethod === "cash" || paymentMethod === "mobile_money" || paymentMethod === "atm") return 0;
-    return Math.max(0, draftTotal - totalPaidInput);
-  }, [paymentMethod, draftTotal, totalPaidInput]);
+    return Math.max(0, draftPayable - totalPaidInput);
+  }, [paymentMethod, draftPayable, totalPaidInput]);
 
   const appendCheckoutDigit = useCallback(
     (d: string) => {
@@ -673,7 +681,7 @@ export function PosPage({ lang }: { lang: Language }) {
   }, []);
 
   const finishSale = useCallback(() => {
-    if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftTotal) {
+    if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftPayable) {
       setToast(t(lang, "paymentCashTooLow"));
       window.setTimeout(() => setToast(null), 2200);
       return;
@@ -729,7 +737,7 @@ export function PosPage({ lang }: { lang: Language }) {
   }, [
     paymentMethod,
     cashInput,
-    draftTotal,
+    draftPayable,
     computedDebt,
     saleCustomerId,
     saleCustomerName,
@@ -1117,9 +1125,31 @@ export function PosPage({ lang }: { lang: Language }) {
                 {t(lang, "ownerDiscountsToday")}: UGX {draftDiscountTotal.toLocaleString()}
               </p>
             ) : null}
+            <div className="mt-4 rounded-2xl border border-waka-200 bg-waka-50/80 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-black text-slate-800">{t(lang, "cartDiscountApplied")}</p>
+                <button
+                  type="button"
+                  onClick={() => setCartSaleDiscountOpen(true)}
+                  className="min-h-[44px] shrink-0 rounded-2xl border-2 border-waka-400 bg-white px-4 text-sm font-black text-waka-900 active:bg-waka-100"
+                >
+                  {t(lang, "cartDiscountBtn")}
+                </button>
+              </div>
+              {checkoutTotals.cartDiscountUgx > 0 ? (
+                <p className="mt-2 text-sm font-bold text-emerald-900">
+                  − UGX {checkoutTotals.cartDiscountUgx.toLocaleString()}
+                </p>
+              ) : null}
+            </div>
+            {checkoutTotals.cartDiscountUgx > 0 ? (
+              <p className="mt-3 text-sm font-semibold text-slate-600">
+                {t(lang, "cartDiscountOriginal")}: UGX {checkoutTotals.lineSubtotalUgx.toLocaleString()}
+              </p>
+            ) : null}
             <p className="mt-4 text-3xl font-black text-slate-900">
-              {t(lang, "totalLabel")}{" "}
-              <span className="text-waka-700">UGX {draftTotal.toLocaleString()}</span>
+              {checkoutTotals.cartDiscountUgx > 0 ? t(lang, "payableTotalLabel") : t(lang, "totalLabel")}{" "}
+              <span className="text-waka-700">UGX {draftPayable.toLocaleString()}</span>
             </p>
 
             <div className="mt-4">
@@ -1256,7 +1286,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">
               <DraftCartSummary lang={lang} stats={draftCartStats} compact />
-              <p className="truncate text-xl font-black text-waka-700">UGX {draftTotal.toLocaleString()}</p>
+              <p className="truncate text-xl font-black text-waka-700">UGX {draftPayable.toLocaleString()}</p>
             </div>
             <button
               type="button"
@@ -1483,6 +1513,15 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           setDiscountLine(null);
         }}
+      />
+
+      <CartSaleDiscountModal
+        lang={lang}
+        open={cartSaleDiscountOpen}
+        lineSubtotalUgx={checkoutTotals.lineSubtotalUgx}
+        currentDiscountUgx={checkoutTotals.cartDiscountUgx}
+        onClose={() => setCartSaleDiscountOpen(false)}
+        onApply={(discountUgx) => setDraftCartDiscount(discountUgx)}
       />
 
       <ShiftCloseModal

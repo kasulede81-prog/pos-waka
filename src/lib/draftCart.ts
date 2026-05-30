@@ -15,6 +15,31 @@ export type DraftCartStats = {
   totalUgx: number;
 };
 
+export type DraftCheckoutTotals = {
+  lineSubtotalUgx: number;
+  lineDiscountUgx: number;
+  cartDiscountUgx: number;
+  payableUgx: number;
+};
+
+/** Line subtotal, line discounts, optional cart discount, final payable. */
+export function computeDraftCheckoutTotals(lines: SaleLine[], cartDiscountUgx = 0): DraftCheckoutTotals {
+  let lineSubtotalUgx = 0;
+  let lineDiscountUgx = 0;
+  for (const line of lines) {
+    const list = line.originalLineTotalUgx ?? line.lineTotalUgx;
+    lineSubtotalUgx += line.lineTotalUgx;
+    lineDiscountUgx += Math.max(0, list - line.lineTotalUgx);
+  }
+  const cartDiscount = Math.min(Math.max(0, Math.floor(cartDiscountUgx)), lineSubtotalUgx);
+  return {
+    lineSubtotalUgx,
+    lineDiscountUgx,
+    cartDiscountUgx: cartDiscount,
+    payableUgx: Math.max(0, lineSubtotalUgx - cartDiscount),
+  };
+}
+
 export function computeDraftCartStats(lines: SaleLine[]): DraftCartStats {
   let unitCount = 0;
   let totalUgx = 0;
@@ -27,6 +52,11 @@ export function computeDraftCartStats(lines: SaleLine[]): DraftCartStats {
     unitCount: Math.round(unitCount * 10000) / 10000,
     totalUgx,
   };
+}
+
+/** @deprecated Prefer computeDraftCheckoutTotals for checkout display. */
+export function draftPayableTotal(lines: SaleLine[], cartDiscountUgx = 0): number {
+  return computeDraftCheckoutTotals(lines, cartDiscountUgx).payableUgx;
 }
 
 /** Human-readable quantity on a cart line (pieces vs full packs). */

@@ -8,6 +8,8 @@ export type PersistedDraftV1 = {
   v: typeof VERSION;
   draftLines: SaleLine[];
   draftInput: { productId: string; inputMode: LineInputMode; value: number } | null;
+  /** Cart-wide discount in UGX (after line-level discounts). */
+  draftCartDiscountUgx?: number;
 };
 
 export async function readPersistedDraft(): Promise<PersistedDraftV1 | null> {
@@ -16,8 +18,12 @@ export async function readPersistedDraft(): Promise<PersistedDraftV1 | null> {
   return row;
 }
 
-export async function writePersistedDraft(lines: SaleLine[], input: PersistedDraftV1["draftInput"]): Promise<void> {
-  if (!lines.length && !input) {
+export async function writePersistedDraft(
+  lines: SaleLine[],
+  input: PersistedDraftV1["draftInput"],
+  cartDiscountUgx = 0,
+): Promise<void> {
+  if (!lines.length && !input && cartDiscountUgx <= 0) {
     await deleteKv(KEY);
     return;
   }
@@ -25,6 +31,7 @@ export async function writePersistedDraft(lines: SaleLine[], input: PersistedDra
     v: VERSION,
     draftLines: lines,
     draftInput: input,
+    draftCartDiscountUgx: cartDiscountUgx > 0 ? cartDiscountUgx : undefined,
   };
   await writeKv(KEY, payload);
 }
