@@ -38,7 +38,7 @@ import { getActiveAccountKey } from "./accountScope";
  */
 
 const DB_NAME = "waka-pos-offline";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const LEGACY_SNAPSHOT_KEY = "snapshot";
 const LEGACY_LAST_GOOD_KEY = "last_good_snapshot";
@@ -94,6 +94,10 @@ type WakaDB = DBSchema & {
     value: LocalBackupRecord;
     indexes: { byCreated: string };
   };
+  records: {
+    key: string;
+    value: import("./entityStore").EntityRow;
+  };
 };
 
 let dbPromise: Promise<IDBPDatabase<WakaDB>> | null = null;
@@ -130,6 +134,9 @@ export function getLocalDb(): Promise<IDBPDatabase<WakaDB>> {
         if (oldVersion < 2 && !database.objectStoreNames.contains("backups")) {
           const b = database.createObjectStore("backups", { keyPath: "id" });
           b.createIndex("byCreated", "createdAt");
+        }
+        if (oldVersion < 3 && !database.objectStoreNames.contains("records")) {
+          database.createObjectStore("records", { keyPath: "key" });
         }
       },
     });

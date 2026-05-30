@@ -6,7 +6,6 @@ import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { usePosStore } from "../store/usePosStore";
-import { writeSnapshot } from "./localDb";
 import type { SyncOperation } from "../types";
 
 type ShopCtx = { shopId: string; userId: string };
@@ -173,12 +172,43 @@ function newer<T extends { updatedAt?: string; createdAt?: string; version?: num
   return (a.version ?? 0) >= (b.version ?? 0) ? a : b;
 }
 
+const MERGE_CHUNK_SIZE = 200;
+
 function mergeById<T extends { id: string }>(local: T[], remote: T[], pick: (a: T, b: T) => T): T[] {
   const map = new Map<string, T>();
   for (const r of remote) map.set(r.id, r);
   for (const l of local) {
     const existing = map.get(l.id);
     map.set(l.id, existing ? pick(l, existing) : l);
+  }
+  return [...map.values()];
+}
+
+async function mergeByIdChunked<T extends { id: string }>(
+  local: T[],
+  remote: T[],
+  pick: (a: T, b: T) => T,
+  tombstoneIds?: Set<string>,
+): Promise<T[]> {
+  const filteredRemote = tombstoneIds?.size ? remote.filter((r) => !tombstoneIds.has(r.id)) : remote;
+  if (filteredRemote.length + local.length <= MERGE_CHUNK_SIZE) {
+    return mergeById(local, filteredRemote, pick);
+  }
+  const map = new Map<string, T>();
+  for (let i = 0; i < filteredRemote.length; i += MERGE_CHUNK_SIZE) {
+    const chunk = filteredRemote.slice(i, i + MERGE_CHUNK_SIZE);
+    for (const r of chunk) map.set(r.id, r);
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
+  }
+  for (let i = 0; i < local.length; i += MERGE_CHUNK_SIZE) {
+    const chunk = local.slice(i, i + MERGE_CHUNK_SIZE);
+    for (const l of chunk) {
+      const existing = map.get(l.id);
+      map.set(l.id, existing ? pick(l, existing) : l);
+    }
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
   }
   return [...map.values()];
 }
@@ -386,6 +416,10 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
           .update({ is_active: false })
           .eq("id", productId)
           .eq("shop_id", ctx.shopId);
+        if (!error) {
+          const { clearProductTombstone } = await import("./entityStore");
+          await clearProductTombstone(productId);
+        }
         return !error;
       }
       const product = usePosStore.getState().products.find((p) => p.id === productId);
@@ -563,13 +597,20 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
     return true;
   }
 
-  const products = mergeById(state.products, cloud.products, (a, b) =>
-    newer({ ...a, updatedAt: a.updatedAt }, { ...b, updatedAt: b.updatedAt }),
+  const { readProductTombstones } = await import("./entityStore");
+  const tombstones = await readProductTombstones();
+  const tombstoneIds = new Set(Object.keys(tombstones));
+
+  const products = await mergeByIdChunked(
+    state.products.filter((p) => !tombstoneIds.has(p.id)),
+    cloud.products,
+    (a, b) => newer({ ...a, updatedAt: a.updatedAt }, { ...b, updatedAt: b.updatedAt }),
+    tombstoneIds,
   );
-  const customers = mergeById(state.customers, cloud.customers, (a, b) =>
+  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
     newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
   );
-  const sales = mergeById(state.sales, cloud.sales, (a, b) =>
+  const sales = await mergeByIdChunked(state.sales, cloud.sales, (a, b) =>
     newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
   );
 
@@ -585,26 +626,8 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
     usePosStore.setState({ sales });
 
     const next = usePosStore.getState();
-    await writeSnapshot({
-      products: next.products,
-      customers: next.customers,
-      sales: next.sales,
-      preferences: next.preferences,
-      debtPayments: next.debtPayments,
-      dayCloses: next.dayCloses,
-      auditLogs: next.auditLogs,
-      suppliers: next.suppliers,
-      purchases: next.purchases,
-      supplierPayments: next.supplierPayments,
-      stockMovements: next.stockMovements,
-      voidRecords: next.voidRecords,
-      returnRecords: next.returnRecords,
-      archivedSales: next.archivedSales,
-      archivedAuditLogs: next.archivedAuditLogs,
-      archivedDayCloses: next.archivedDayCloses,
-      archivedVoidRecords: next.archivedVoidRecords,
-      archivedReturnRecords: next.archivedReturnRecords,
-    });
+    const { flushFullSnapshotPersist } = await import("./incrementalPersist");
+    await flushFullSnapshotPersist(next, { skipLastGood: true });
   } finally {
     release();
   }

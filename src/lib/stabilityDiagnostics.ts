@@ -1,12 +1,22 @@
-/** Dev-only runtime probes for production stability investigation. */
+import type { IncrementalPersistResult } from "../offline/incrementalPersist";
 
 type NetworkBucket = { minuteKey: string; count: number };
 
 let networkBuckets: NetworkBucket[] = [];
-let persistWriteCount = 0;
-let lastPersistAt: number | null = null;
+let fullPersistCount = 0;
+let incrementalPersistCount = 0;
+let lastFullPersistAt: number | null = null;
+let lastIncrementalPersistAt: number | null = null;
+let lastIncrementalBytes = 0;
+let lastIncrementalEntityWrites = 0;
+let lastIncrementalDurationMs = 0;
+let lastFullBytes = 0;
+let lastFullDurationMs = 0;
 let lastMergeMs: number | null = null;
+let lastSyncMs: number | null = null;
+let longTaskCount = 0;
 let fetchPatched = false;
+let longTaskObserver: PerformanceObserver | null = null;
 
 function minuteKey(now = Date.now()): string {
   return String(Math.floor(now / 60_000));
@@ -23,13 +33,28 @@ export function recordNetworkRequest(): void {
   if (networkBuckets.length > 10) networkBuckets = networkBuckets.slice(-10);
 }
 
-export function recordPersistWrite(): void {
-  persistWriteCount += 1;
-  lastPersistAt = Date.now();
+/** Legacy full snapshot write (backups / merge). */
+export function recordPersistWrite(bytesWritten?: number, durationMs?: number): void {
+  fullPersistCount += 1;
+  lastFullPersistAt = Date.now();
+  if (bytesWritten != null) lastFullBytes = bytesWritten;
+  if (durationMs != null) lastFullDurationMs = durationMs;
+}
+
+export function recordIncrementalPersist(result: IncrementalPersistResult): void {
+  incrementalPersistCount += 1;
+  lastIncrementalPersistAt = Date.now();
+  lastIncrementalBytes = result.bytesWritten;
+  lastIncrementalEntityWrites = result.entityWrites;
+  lastIncrementalDurationMs = result.durationMs;
 }
 
 export function recordCloudMergeDuration(ms: number): void {
   lastMergeMs = ms;
+}
+
+export function recordSyncDuration(ms: number): void {
+  lastSyncMs = ms;
 }
 
 export function networkRequestsLastMinute(): number {
@@ -38,12 +63,40 @@ export function networkRequestsLastMinute(): number {
   return bucket?.count ?? 0;
 }
 
-export function getPersistStats(): { total: number; lastAt: number | null } {
-  return { total: persistWriteCount, lastAt: lastPersistAt };
+export function getPersistStats(): {
+  fullCount: number;
+  incrementalCount: number;
+  lastFullAt: number | null;
+  lastIncrementalAt: number | null;
+  lastIncrementalBytes: number;
+  lastIncrementalEntityWrites: number;
+  lastIncrementalDurationMs: number;
+  lastFullBytes: number;
+  lastFullDurationMs: number;
+} {
+  return {
+    fullCount: fullPersistCount,
+    incrementalCount: incrementalPersistCount,
+    lastFullAt: lastFullPersistAt,
+    lastIncrementalAt: lastIncrementalPersistAt,
+    lastIncrementalBytes,
+    lastIncrementalEntityWrites,
+    lastIncrementalDurationMs,
+    lastFullBytes,
+    lastFullDurationMs,
+  };
 }
 
 export function getLastMergeMs(): number | null {
   return lastMergeMs;
+}
+
+export function getLastSyncMs(): number | null {
+  return lastSyncMs;
+}
+
+export function getLongTaskCount(): number {
+  return longTaskCount;
 }
 
 export function readJsHeapMb(): number | null {
@@ -62,7 +115,6 @@ export function isDiagnosticsEnabled(): boolean {
   }
 }
 
-/** Patch global fetch once to count Supabase/API traffic. */
 export function installNetworkDiagnosticsProbe(): void {
   if (fetchPatched || typeof window === "undefined") return;
   fetchPatched = true;
@@ -71,4 +123,20 @@ export function installNetworkDiagnosticsProbe(): void {
     recordNetworkRequest();
     return nativeFetch(...args);
   };
+
+  if ("PerformanceObserver" in window) {
+    try {
+      longTaskObserver = new PerformanceObserver((list) => {
+        longTaskCount += list.getEntries().length;
+      });
+      longTaskObserver.observe({ type: "longtask", buffered: true });
+    } catch {
+      /* unsupported */
+    }
+  }
+}
+
+export function disposeDiagnosticsProbes(): void {
+  longTaskObserver?.disconnect();
+  longTaskObserver = null;
 }

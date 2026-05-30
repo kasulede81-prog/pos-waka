@@ -42,6 +42,7 @@ import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
+import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
@@ -169,7 +170,7 @@ type DraftLineInput = {
   value: number;
 };
 
-type PosState = {
+export type PosState = {
   _hydrated: boolean;
   products: Product[];
   customers: Customer[];
@@ -397,6 +398,9 @@ type PosState = {
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 let draftPersistTimer: ReturnType<typeof setTimeout> | null = null;
+/** Debounced incremental persist: accumulate prev/next across rapid mutations. */
+let pendingPersistPrev: PosState | null = null;
+let pendingPersistNext: PosState | null = null;
 /** While > 0, auto-persist is paused (restore, cloud merge, etc.). */
 let persistSuspended = 0;
 let snapshotWriteInFlight = false;
@@ -410,30 +414,7 @@ export function suspendStorePersist(): () => void {
   };
 }
 
-function snapshotPayloadFromState(s: PosState): Omit<PersistedSnapshot, "updatedAt"> {
-  return {
-    products: s.products,
-    customers: s.customers,
-    sales: s.sales,
-    preferences: s.preferences,
-    debtPayments: s.debtPayments,
-    dayCloses: s.dayCloses,
-    auditLogs: s.auditLogs,
-    suppliers: s.suppliers,
-    purchases: s.purchases,
-    supplierPayments: s.supplierPayments,
-    stockMovements: s.stockMovements,
-    voidRecords: s.voidRecords,
-    returnRecords: s.returnRecords,
-    archivedSales: s.archivedSales,
-    archivedAuditLogs: s.archivedAuditLogs,
-    archivedDayCloses: s.archivedDayCloses,
-    archivedVoidRecords: s.archivedVoidRecords,
-    archivedReturnRecords: s.archivedReturnRecords,
-  };
-}
-
-function fireSnapshotWrite(): void {
+function fireSnapshotWrite(forceFull = false): void {
   if (snapshotWriteInFlight) {
     snapshotWriteQueued = true;
     return;
@@ -447,9 +428,23 @@ function fireSnapshotWrite(): void {
       const cur = usePosStore.getState();
       if (!cur._hydrated || persistSuspended > 0) return;
 
-      await writeSnapshot(snapshotPayloadFromState(cur), { skipLastGood: true });
-      const { isDiagnosticsEnabled, recordPersistWrite } = await import("../lib/stabilityDiagnostics");
-      if (isDiagnosticsEnabled()) recordPersistWrite();
+      const prev = pendingPersistPrev ?? cur;
+      const next = pendingPersistNext ?? cur;
+      pendingPersistPrev = null;
+      pendingPersistNext = null;
+
+      const { flushIncrementalPersist, flushFullSnapshotPersist } = await import("../offline/incrementalPersist");
+      const result = forceFull
+        ? await flushFullSnapshotPersist(next, { skipLastGood: true })
+        : await flushIncrementalPersist(prev, next);
+
+      const { isDiagnosticsEnabled, recordPersistWrite, recordIncrementalPersist } = await import(
+        "../lib/stabilityDiagnostics",
+      );
+      if (isDiagnosticsEnabled()) {
+        if (result.mode === "full") recordPersistWrite(result.bytesWritten, result.durationMs);
+        else recordIncrementalPersist(result);
+      }
 
       const after = usePosStore.getState();
       if (!after._hydrated || persistSuspended > 0) return;
@@ -475,7 +470,7 @@ function fireSnapshotWrite(): void {
       snapshotWriteInFlight = false;
       if (snapshotWriteQueued) {
         snapshotWriteQueued = false;
-        fireSnapshotWrite();
+        fireSnapshotWrite(false);
       }
     }
   })();
@@ -488,12 +483,14 @@ function fireDraftWrite(s: PosState): void {
   void writePersistedDraft(s.draftLines, input);
 }
 
-function schedulePersist(get: () => PosState) {
-  if (!get()._hydrated || persistSuspended > 0) return;
+function schedulePersist(prev: PosState, next: PosState) {
+  if (!next._hydrated || persistSuspended > 0) return;
+  if (!pendingPersistPrev) pendingPersistPrev = prev;
+  pendingPersistNext = next;
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     persistTimer = null;
-    fireSnapshotWrite();
+    fireSnapshotWrite(false);
   }, persistDebounceMs());
 }
 
@@ -517,8 +514,13 @@ export function flushPendingPersist(): void {
   if (persistTimer) {
     clearTimeout(persistTimer);
     persistTimer = null;
-    const s = usePosStore.getState();
-    if (s._hydrated && persistSuspended === 0) fireSnapshotWrite();
+    const next = pendingPersistNext ?? usePosStore.getState();
+    const prev = pendingPersistPrev ?? next;
+    pendingPersistPrev = null;
+    pendingPersistNext = null;
+    if (next._hydrated && persistSuspended === 0) {
+      void import("../offline/incrementalPersist").then((m) => m.flushIncrementalPersist(prev, next));
+    }
   }
   if (draftPersistTimer) {
     clearTimeout(draftPersistTimer);
@@ -1578,6 +1580,7 @@ export const usePosStore = create<PosState>((set, get) => {
   removeProduct: (productId) => {
     const p = get().products.find((x) => x.id === productId);
     set((s) => ({ products: s.products.filter((x) => x.id !== productId) }));
+    void import("../offline/incrementalPersist").then((m) => m.markProductDeleted(productId));
     void queueRemote("product", { id: productId, deleted: true });
     pushAudit("product_remove", p?.name ?? productId, { productId, name: p?.name });
   },
@@ -1961,12 +1964,13 @@ export const usePosStore = create<PosState>((set, get) => {
 
   runDataArchive: () => {
     const s = get();
+    const windowed = archiveSalesBeyondActiveWindow(s.sales, s.archivedSales);
     const policy = normalizeDataRetentionPolicy(s.preferences.dataRetentionPolicy);
     const shifts = s.preferences.shifts ?? [];
     const archivedShifts = s.preferences.archivedShifts ?? [];
     const result = partitionForArchive(policy, {
-      sales: s.sales,
-      archivedSales: s.archivedSales,
+      sales: windowed.sales,
+      archivedSales: windowed.archivedSales,
       auditLogs: s.auditLogs,
       archivedAuditLogs: s.archivedAuditLogs,
       dayCloses: s.dayCloses,
@@ -1979,6 +1983,7 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedShifts,
     });
     const movedTotal =
+      windowed.moved +
       result.moved.sales +
       result.moved.auditLogs +
       result.moved.dayCloses +
@@ -2082,7 +2087,7 @@ function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
 usePosStore.subscribe((state, prev) => {
   if (!state._hydrated || persistSuspended > 0) return;
   if (prev && persistRelevantUnchanged(prev, state)) return;
-  schedulePersist(() => usePosStore.getState());
+  schedulePersist(prev ?? state, state);
 });
 
 function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreferences }>): ShopPreferences {
@@ -2273,29 +2278,8 @@ export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise
   await yieldUiTick();
   assertBackupRestoreNotAborted(sessionId);
   const s = usePosStore.getState();
-  await writeSnapshot(
-    {
-      products: s.products,
-      customers: s.customers,
-      sales: s.sales,
-      preferences: s.preferences,
-      debtPayments: s.debtPayments,
-      dayCloses: s.dayCloses,
-      auditLogs: s.auditLogs,
-      suppliers: s.suppliers,
-      purchases: s.purchases,
-      supplierPayments: s.supplierPayments,
-      stockMovements: s.stockMovements,
-      voidRecords: s.voidRecords,
-      returnRecords: s.returnRecords,
-      archivedSales: s.archivedSales,
-      archivedAuditLogs: s.archivedAuditLogs,
-      archivedDayCloses: s.archivedDayCloses,
-      archivedVoidRecords: s.archivedVoidRecords,
-      archivedReturnRecords: s.archivedReturnRecords,
-    },
-    { skipLastGood: true },
-  );
+  const { flushFullSnapshotPersist } = await import("../offline/incrementalPersist");
+  await flushFullSnapshotPersist(s, { skipLastGood: true });
 }
 
 /**
@@ -2373,8 +2357,10 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
   const run = () => {
     void (async () => {
       if (!usePosStore.getState()._hydrated) return;
-      const sales = (snap.sales ?? []) as Sale[];
-      await hydrateSalesBatched(sales);
+      const allSales = (snap.sales ?? []) as Sale[];
+      const head = allSales.slice(0, INITIAL_SALES_LOAD_COUNT);
+      const tail = allSales.slice(INITIAL_SALES_LOAD_COUNT);
+      await hydrateSalesBatched(head);
       usePosStore.getState().hydrateRemainder({
         debtPayments: snap.debtPayments ?? [],
         dayCloses: snap.dayCloses ?? [],
@@ -2391,12 +2377,78 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         archivedVoidRecords: snap.archivedVoidRecords ?? [],
         archivedReturnRecords: snap.archivedReturnRecords ?? [],
       });
+      if (tail.length > 0) {
+        scheduleBackgroundSalesHydrate(tail);
+      }
     })();
   };
   if (typeof window !== "undefined" && "requestIdleCallback" in window) {
     window.requestIdleCallback(run, { timeout: 800 });
   } else {
     setTimeout(run, 0);
+  }
+}
+
+/** Load remaining sales from entity store in background pages. */
+function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
+  void (async () => {
+    const { getEntitiesByIds } = await import("../offline/entityStore");
+    for (let i = 0; i < ids.length; i += SALES_PAGE_LOAD_SIZE) {
+      await yieldUiTick();
+      const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
+      usePosStore.setState((s) => {
+        const have = new Set(s.sales.map((x) => x.id));
+        const merged = [...s.sales];
+        for (const row of batch) {
+          if (!have.has(row.id)) merged.push(row);
+        }
+        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+        return { sales: merged };
+      });
+    }
+  })();
+}
+
+/** Load remaining sales in background without blocking checkout. */
+function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
+  void (async () => {
+    for (let i = 0; i < sales.length; i += SALES_PAGE_LOAD_SIZE) {
+      await yieldUiTick();
+      const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
+      usePosStore.setState((s) => {
+        const have = new Set(s.sales.map((x) => x.id));
+        const merged = [...s.sales];
+        for (const row of chunk) {
+          if (!have.has(row.id)) merged.push(normalizeSale(row));
+        }
+        merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+        return { sales: merged };
+      });
+    }
+  })();
+}
+
+/** Load any sales not yet in RAM (reports/search). */
+export async function ensureAllActiveSalesLoaded(): Promise<void> {
+  const { readEntityManifest, getEntitiesByIds } = await import("../offline/entityStore");
+  const manifest = await readEntityManifest();
+  if (!manifest) return;
+  const state = usePosStore.getState();
+  const have = new Set(state.sales.map((s) => s.id));
+  const missingIds = manifest.salesOrder.filter((id) => !have.has(id));
+  if (missingIds.length === 0) return;
+  for (let i = 0; i < missingIds.length; i += SALES_PAGE_LOAD_SIZE) {
+    await yieldUiTick();
+    const batch = await getEntitiesByIds<Sale>("sale", missingIds.slice(i, i + SALES_PAGE_LOAD_SIZE));
+    usePosStore.setState((s) => {
+      const ids = new Set(s.sales.map((x) => x.id));
+      const merged = [...s.sales];
+      for (const row of batch) {
+        if (!ids.has(row.id)) merged.push(normalizeSale(row));
+      }
+      merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+      return { sales: merged };
+    });
   }
 }
 
@@ -2562,7 +2614,49 @@ export async function bootstrapPosFromDisk(): Promise<void> {
   }
 
   const load = async () => {
+    const { readEntityManifest, getEntitiesByBucket, getEntitiesByIds, migrateSnapshotToEntities } = await import(
+      "../offline/entityStore",
+    );
+    const manifest = await readEntityManifest();
+    if (manifest) {
+      const products = (await getEntitiesByBucket<Product>("product")).map(normalizeProduct);
+      const customers = (await getEntitiesByBucket<Customer>("customer")).map(normalizeCustomer);
+      const tombstones = manifest.tombstones ?? {};
+      const filteredProducts = products.filter((p) => !tombstones[p.id]);
+      usePosStore.getState().hydrateEssentials({
+        products: filteredProducts,
+        customers,
+        preferences: manifest.preferences,
+      });
+      const headIds = manifest.salesOrder.slice(0, INITIAL_SALES_LOAD_COUNT);
+      const headSales = (await getEntitiesByIds<Sale>("sale", headIds)).map(normalizeSale);
+      await hydrateSalesBatched(headSales);
+      if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
+        scheduleBackgroundSalesHydrateByIds(manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT));
+      }
+      usePosStore.getState().hydrateRemainder({
+        debtPayments: await getEntitiesByBucket("debtPayment"),
+        dayCloses: await getEntitiesByBucket("dayClose"),
+        auditLogs: await getEntitiesByBucket("auditLog"),
+        suppliers: (await getEntitiesByBucket<Supplier>("supplier")).map(normalizeSupplier),
+        purchases: (await getEntitiesByBucket<Purchase>("purchase")).map(normalizePurchase),
+        supplierPayments: (await getEntitiesByBucket<SupplierPayment>("supplierPayment")).map(normalizeSupplierPayment),
+        stockMovements: (await getEntitiesByBucket<StockMovement>("stockMovement")).map(normalizeStockMovement),
+        voidRecords: await getEntitiesByBucket("voidRecord"),
+        returnRecords: await getEntitiesByBucket("returnRecord"),
+        archivedSales: (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale),
+        archivedAuditLogs: await getEntitiesByBucket("archivedAuditLog"),
+        archivedDayCloses: await getEntitiesByBucket("archivedDayClose"),
+        archivedVoidRecords: await getEntitiesByBucket("archivedVoidRecord"),
+        archivedReturnRecords: await getEntitiesByBucket("archivedReturnRecord"),
+      });
+      return;
+    }
+
     const snap = await readSnapshotWithFallback();
+    if (snap) {
+      void migrateSnapshotToEntities(snap as PersistedSnapshot);
+    }
     if (snapshotHasInventoryOrSales(snap)) {
       hydrateEssentialsFromSnap(snap!);
       scheduleHydrateRemainderFromSnap(snap!);

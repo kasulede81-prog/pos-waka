@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ScanLine, Search, X } from "lucide-react";
@@ -131,10 +132,27 @@ export function PosPage({ lang }: { lang: Language }) {
   const { snapshot } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
-  const products = usePosStore((s) => s.products);
+  const products = usePosStore(useShallow((s) => s.products));
   const sales = useDeferredSales();
-  const customers = usePosStore((s) => s.customers);
-  const preferences = usePosStore((s) => s.preferences);
+  const customers = usePosStore(useShallow((s) => s.customers));
+  const preferences = usePosStore(
+    useShallow((s) => ({
+      kioskQuickSell: s.preferences.kioskQuickSell,
+      hapticsOn: s.preferences.hapticsOn,
+      saleSoundOn: s.preferences.saleSoundOn,
+      shifts: s.preferences.shifts,
+      posLocked: s.preferences.posLocked,
+      posSellCategoryFilter: s.preferences.posSellCategoryFilter,
+      favoriteProductIds: s.preferences.favoriteProductIds,
+      recentProductIds: s.preferences.recentProductIds,
+      staffAccounts: s.preferences.staffAccounts,
+      shopDisplayName: s.preferences.shopDisplayName,
+      shopAddressLine: s.preferences.shopAddressLine,
+      shopPhoneE164: s.preferences.shopPhoneE164,
+      celebratedFirstSale: s.preferences.celebratedFirstSale,
+      receiptPaperSize: s.preferences.receiptPaperSize,
+    })),
+  );
   const draftLines = usePosStore((s) => s.draftLines);
   const setDraftInput = usePosStore((s) => s.setDraftInput);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
@@ -270,7 +288,15 @@ export function PosPage({ lang }: { lang: Language }) {
     [actor.displayName, lang, staffNameById],
   );
 
-  const receiptBranding = useMemo(() => resolveReceiptBranding(preferences), [preferences]);
+  const receiptBranding = useMemo(
+    () => resolveReceiptBranding(usePosStore.getState().preferences),
+    [
+      preferences.shopDisplayName,
+      preferences.shopAddressLine,
+      preferences.shopPhoneE164,
+      preferences.receiptPaperSize,
+    ],
+  );
 
   const receiptDisplay = useMemo(() => {
     if (!receiptSale) return null;
