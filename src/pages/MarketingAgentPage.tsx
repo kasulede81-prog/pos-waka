@@ -4,6 +4,7 @@ import { Copy, MapPin, Users } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
+  buildAgentReferralRegisterUrl,
   fetchMarketingAgentMe,
   formatOwnerContactLabel,
   listAgentReferrals,
@@ -22,16 +23,19 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
   const [agent, setAgent] = useState<MarketingAgentMe | null>(null);
   const [referrals, setReferrals] = useState<AgentReferralRow[]>([]);
   const [copyHint, setCopyHint] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [upgradeBusyId, setUpgradeBusyId] = useState<string | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     const me = await fetchMarketingAgentMe();
     setAgent(me);
     if (me) {
-      const rows = await listAgentReferrals();
+      const { rows, error } = await listAgentReferrals();
       setReferrals(rows);
+      if (error && import.meta.env.DEV) setLoadError(error);
     } else {
       setReferrals([]);
     }
@@ -42,10 +46,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
     void load();
   }, [load]);
 
-  const shareLink =
-    typeof window !== "undefined" && agent
-      ? `${window.location.origin}/register?ref=${encodeURIComponent(agent.referralCode)}`
-      : "";
+  const shareLink = agent ? buildAgentReferralRegisterUrl(agent.referralCode) : "";
 
   const copyCode = async () => {
     if (!agent?.referralCode) return;
@@ -88,7 +89,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
       return;
     }
     setActionMsg(t(lang, "agentUpgradeOk").replace("{{plan}}", planCode));
-    const rows = await listAgentReferrals();
+    const { rows } = await listAgentReferrals();
     setReferrals(rows);
     window.setTimeout(() => setActionMsg(null), 3000);
   };
@@ -141,6 +142,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
           </button>
         </div>
         {copyHint ? <p className="mt-2 text-xs font-bold text-emerald-700">{copyHint}</p> : null}
+        {loadError ? <p className="mt-2 text-xs font-bold text-rose-700">{loadError}</p> : null}
         {agent.roles.length > 0 ? (
           <p className="mt-2 text-xs font-semibold text-stone-600">
             {t(lang, "agentRolesLabel")}: {agent.roles.join(" · ")}

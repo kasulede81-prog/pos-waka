@@ -7,3 +7,6 @@ verify_jwt = true
 
 [functions.admin-permanently-delete-shop-account]
 verify_jwt = true
+
+[functions.admin-delete-marketing-agent]
+verify_jwt = true

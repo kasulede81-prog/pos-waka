@@ -17,7 +17,13 @@ import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
-import { applyReferralCode } from "../lib/referralAgents";
+import { applyReferralCode, syncAgentReferralShopContext } from "../lib/referralAgents";
+import {
+  clearPendingReferralCode,
+  hasPendingReferralCode,
+  readPendingReferralCode,
+  storePendingReferralCode,
+} from "../lib/pendingReferral";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
@@ -41,8 +47,6 @@ type StaffSession = {
 };
 
 const LOCAL_AUTH_KEY = "waka-pos-local-session";
-const PENDING_REFERRAL_KEY = "waka-pending-referral";
-
 const AUTH_MODE: "supabase" | "local" = hasSupabaseConfig ? "supabase" : "local";
 
 /**
@@ -123,13 +127,15 @@ export function useAuth() {
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
     const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-    const fromMeta = String(meta?.referral_code ?? "").trim();
-    const fromStorage = sessionStorage.getItem(PENDING_REFERRAL_KEY)?.trim() ?? "";
-    const code = fromMeta || fromStorage;
+    const code = readPendingReferralCode(String(meta?.referral_code ?? ""));
     if (!code) return;
     const res = await applyReferralCode(code);
-    if (res.ok) sessionStorage.removeItem(PENDING_REFERRAL_KEY);
-    else if (import.meta.env.DEV) console.warn("[waka-auth] apply_referral_code", res.error);
+    if (res.ok) {
+      clearPendingReferralCode();
+      await syncAgentReferralShopContext();
+    } else if (import.meta.env.DEV) {
+      console.warn("[waka-auth] apply_referral_code", res.error);
+    }
   }, []);
 
   const ensureWorkspaceForSession = useCallback(async (next: Session | null) => {
@@ -145,6 +151,10 @@ export function useAuth() {
     if (alreadyEnsured) {
       workspaceEnsuredForUserRef.current = uid;
       bootstrappedUserIdsRef.current[uid] = true;
+      const meta = next.user.user_metadata as Record<string, unknown> | undefined;
+      if (hasPendingReferralCode(String(meta?.referral_code ?? ""))) {
+        await tryApplyPendingReferral(next);
+      }
       if (!backgroundSyncScheduledRef.current[uid]) {
         backgroundSyncScheduledRef.current[uid] = true;
         scheduleBackgroundCloudSync({
@@ -362,7 +372,11 @@ export function useAuth() {
     setLocalEmail(trimmed);
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
+  const signInWithGoogle = useCallback(async (opts?: { referralCode?: string }) => {
+    const ref = opts?.referralCode?.trim();
+    if (ref && ref.length >= 3) {
+      storePendingReferralCode(ref);
+    }
     clearStaffAuth();
     setStaffSession(null);
     if (!isGoogleAuthUiEnabled()) {
@@ -438,7 +452,7 @@ export function useAuth() {
     const refCode = profile?.referralCode?.trim().toUpperCase();
     if (refCode && refCode.length >= 3) {
       meta.referral_code = refCode;
-      sessionStorage.setItem(PENDING_REFERRAL_KEY, refCode);
+      storePendingReferralCode(refCode);
     }
 
     const firstAttempt = await supabase.auth.signUp({

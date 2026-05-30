@@ -1298,6 +1298,16 @@ export async function adminPermanentlyDeleteShopAccount(
   if (j.error === "cannot_delete_internal_admin") {
     return { ok: false, message: "Cannot delete a Waka internal admin account." };
   }
+  if (j.error === "auth_delete_failed" || j.partial) {
+    return {
+      ok: false,
+      partial: true,
+      message:
+        j.message ??
+        j.detail ??
+        "Shop data was removed but the login user still exists. They cannot register again until you delete them in Supabase Auth → Users (or retry permanent delete).",
+    };
+  }
 
   return {
     ok: false,

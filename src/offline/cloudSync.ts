@@ -517,6 +517,7 @@ export async function pullShopDataFromCloud(): Promise<{
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
+  const mergeStarted = Date.now();
   const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   const { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk } = await import(
     "../store/usePosStore",
@@ -609,6 +610,8 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
   }
 
   await applyShopRecoverySignalsForCurrentShop();
+  const { isDiagnosticsEnabled, recordCloudMergeDuration } = await import("../lib/stabilityDiagnostics");
+  if (isDiagnosticsEnabled()) recordCloudMergeDuration(Date.now() - mergeStarted);
   return true;
 }
 

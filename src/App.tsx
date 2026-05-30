@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -57,6 +57,8 @@ import { NativePublicGuard } from "./components/NativePublicGuard";
 import { unauthenticatedEntryPath } from "./lib/nativeApp";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import type { Language } from "./types";
+import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
+import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
 
 const OwnerDashboardPage = lazy(() =>
   import("./pages/OwnerDashboardPage").then((m) => ({ default: m.OwnerDashboardPage })),
@@ -84,9 +86,15 @@ function LazyWait() {
 function App() {
   const auth = useAuth();
   const [lang, setLang] = useState<Language>("en");
+  const showDiagnostics = isDiagnosticsEnabled();
+
+  useEffect(() => {
+    if (showDiagnostics) installNetworkDiagnosticsProbe();
+  }, [showDiagnostics]);
 
   return (
     <BrowserRouter>
+      {showDiagnostics ? <StabilityDiagnosticsOverlay /> : null}
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
       <Routes>
         <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>

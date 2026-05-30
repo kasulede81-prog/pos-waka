@@ -448,6 +448,8 @@ function fireSnapshotWrite(): void {
       if (!cur._hydrated || persistSuspended > 0) return;
 
       await writeSnapshot(snapshotPayloadFromState(cur), { skipLastGood: true });
+      const { isDiagnosticsEnabled, recordPersistWrite } = await import("../lib/stabilityDiagnostics");
+      if (isDiagnosticsEnabled()) recordPersistWrite();
 
       const after = usePosStore.getState();
       if (!after._hydrated || persistSuspended > 0) return;

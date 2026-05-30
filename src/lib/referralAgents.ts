@@ -1,3 +1,4 @@
+import { authRedirectOrigin } from "./authConfig";
 import { isPhoneLoginEmail } from "./authPhoneEmail";
 import { supabase } from "./supabase";
 import type { FieldMapPin } from "./wakaInternalAdmin";
@@ -59,6 +60,13 @@ export function normalizeReferralCode(code: string): string {
   return code.trim().toUpperCase();
 }
 
+/** Public web registration URL with referral code pre-filled (works from native app copy). */
+export function buildAgentReferralRegisterUrl(referralCode: string): string {
+  const code = normalizeReferralCode(referralCode);
+  const origin = authRedirectOrigin().replace(/\/$/, "");
+  return `${origin}/register?ref=${encodeURIComponent(code)}`;
+}
+
 /** Hide synthetic phone-login emails; show phone and email when both exist. */
 export function formatOwnerContactLabel(email: string | null, phoneE164: string | null): string {
   const parts: string[] = [];
@@ -106,24 +114,38 @@ function parseAgentRoles(raw: unknown): MarketingAgentRole[] {
   return out.length ? out : ["field_agent"];
 }
 
-export async function applyReferralCode(code: string): Promise<{ ok: boolean; error?: string }> {
+export async function applyReferralCode(code: string): Promise<{ ok: boolean; error?: string; alreadyApplied?: boolean }> {
   if (!supabase) return { ok: false, error: "offline" };
   const trimmed = normalizeReferralCode(code);
   if (trimmed.length < 3) return { ok: false, error: "invalid_code" };
   const { data, error } = await supabase.rpc("apply_referral_code", { p_code: trimmed });
   if (error) return { ok: false, error: error.message };
   const row = (data ?? {}) as { ok?: boolean; error?: string; already_applied?: boolean };
-  if (row.ok) return { ok: true };
+  if (row.ok) return { ok: true, alreadyApplied: Boolean(row.already_applied) };
   return { ok: false, error: row.error ?? "unknown" };
 }
 
-export async function listAgentReferrals(agentId?: string): Promise<AgentReferralRow[]> {
-  if (!supabase) return [];
+/** Backfill shop/org on referral row after workspace bootstrap. */
+export async function syncAgentReferralShopContext(): Promise<void> {
+  if (!supabase) return;
+  try {
+    await supabase.rpc("sync_agent_referral_shop_context");
+  } catch {
+    /* migration may not be applied yet */
+  }
+}
+
+export async function listAgentReferrals(
+  agentId?: string,
+): Promise<{ rows: AgentReferralRow[]; error?: string }> {
+  if (!supabase) return { rows: [], error: "offline" };
   const { data, error } = await supabase.rpc("list_agent_referrals", { p_agent_id: agentId ?? null });
-  if (error || !data || typeof data !== "object") return [];
-  const row = data as { ok?: boolean; rows?: unknown[] };
-  if (!row.ok || !Array.isArray(row.rows)) return [];
-  return row.rows.map((r) => {
+  if (error) return { rows: [], error: error.message };
+  if (!data || typeof data !== "object") return { rows: [], error: "empty_response" };
+  const row = data as { ok?: boolean; rows?: unknown[]; error?: string };
+  if (!row.ok) return { rows: [], error: row.error ?? "forbidden" };
+  if (!Array.isArray(row.rows)) return { rows: [] };
+  const mapped = row.rows.map((r) => {
     const x = r as Record<string, unknown>;
     return {
       id: String(x.id ?? ""),
@@ -140,6 +162,13 @@ export async function listAgentReferrals(agentId?: string): Promise<AgentReferra
       subscriptionStatus: x.subscription_status != null ? String(x.subscription_status) : null,
     };
   });
+  return { rows: mapped };
+}
+
+/** @deprecated Use listAgentReferrals() — returns { rows, error }. */
+export async function listAgentReferralsRows(agentId?: string): Promise<AgentReferralRow[]> {
+  const { rows } = await listAgentReferrals(agentId);
+  return rows;
 }
 
 export async function internalSearchAgentUserCandidates(query: string, limit = 120): Promise<AgentUserCandidate[]> {
@@ -342,4 +371,51 @@ export async function internalCreateMarketingAgent(input: {
     id: row.id,
     referralCode: row.referral_code ? normalizeReferralCode(row.referral_code) : undefined,
   };
+}
+
+/** Remove agent from panel; optionally delete their Supabase login (super_admin). */
+export async function internalDeleteMarketingAgent(
+  agentId: string,
+  deleteLogin: boolean,
+): Promise<{ ok: boolean; message?: string; partial?: boolean }> {
+  const { invokeSupabaseEdgeFunction } = await import("./supabaseEdgeInvoke");
+  const r = await invokeSupabaseEdgeFunction<{
+    ok?: boolean;
+    error?: string;
+    detail?: string;
+    message?: string;
+    partial?: boolean;
+  }>("admin-delete-marketing-agent", {
+    agent_id: agentId,
+    delete_login: deleteLogin,
+  });
+
+  if (!r.ok) {
+    return { ok: false, message: r.message };
+  }
+
+  const j = r.data as {
+    ok?: boolean;
+    error?: string;
+    detail?: string;
+    message?: string;
+    partial?: boolean;
+  };
+
+  if (j.ok) {
+    return { ok: true, message: j.message ?? "Agent removed." };
+  }
+
+  if (j.error === "auth_delete_failed" || j.partial) {
+    return {
+      ok: false,
+      partial: true,
+      message:
+        j.message ??
+        j.detail ??
+        "Agent removed from list but login still exists. Delete the user in Supabase Auth → Users to allow re-registration.",
+    };
+  }
+
+  return { ok: false, message: j.detail ?? j.message ?? j.error ?? "Could not remove agent." };
 }

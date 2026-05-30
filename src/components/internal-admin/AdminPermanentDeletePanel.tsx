@@ -53,7 +53,14 @@ export function AdminPermanentDeletePanel({ detail, busy, previewMode, onBusy, o
       });
       onDeleted?.();
     } else {
-      onToast({ kind: "err", text: r.message ?? "Permanent delete failed." });
+      onToast({
+        kind: r.partial ? "err" : "err",
+        text:
+          r.message ??
+          (r.partial
+            ? "Shop data was removed but login still exists. Delete the user in Supabase Auth → Users, then they can register again."
+            : "Permanent delete failed."),
+      });
     }
   };
 

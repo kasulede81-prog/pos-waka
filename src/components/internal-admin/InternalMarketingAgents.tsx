@@ -4,11 +4,13 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
+  buildAgentReferralRegisterUrl,
   formatOwnerContactLabel,
   internalSearchAgentUserCandidates,
   internalGrantMarketingAgentByShopWithRoles,
   internalListMarketingAgents,
   internalSetMarketingAgentRoles,
+  internalDeleteMarketingAgent,
   listAgentReferrals,
   MARKETING_AGENT_ROLES,
   type AgentUserCandidate,
@@ -99,7 +101,9 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   const [detailAgentId, setDetailAgentId] = useState<string | null>(null);
   const [detailRows, setDetailRows] = useState<AgentReferralRow[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [roleBusyKey, setRoleBusyKey] = useState<string | null>(null);
+  const [removeBusyKey, setRemoveBusyKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,14 +137,27 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   const openDetail = async (agentId: string) => {
     setDetailAgentId(agentId);
     setDetailLoading(true);
+    setDetailError(null);
     if (previewMode) {
       setDetailRows(PREVIEW_REFERRALS);
       setDetailLoading(false);
       return;
     }
-    const rows = await listAgentReferrals(agentId);
+    const { rows, error } = await listAgentReferrals(agentId);
     setDetailRows(rows);
+    if (error) setDetailError(error);
     setDetailLoading(false);
+  };
+
+  const copyAgentLink = async (code: string) => {
+    const url = buildAgentReferralRegisterUrl(code);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCreateMsg(t(lang, "agentLinkCopied"));
+    } catch {
+      setCreateMsg(url);
+    }
+    window.setTimeout(() => setCreateMsg(null), 3000);
   };
 
   const submitGrant = async () => {
@@ -193,6 +210,29 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     }
     setCreateMsg(t(lang, "internalAgentsRolesSaved").replace("{{name}}", label));
     await load();
+  };
+
+  const removeAgent = async (agent: InternalMarketingAgentRow, deleteLogin: boolean) => {
+    if (previewMode) {
+      setCreateMsg("Preview mode — no changes saved.");
+      return;
+    }
+    const label = agent.shopName ?? agent.referralCode;
+    const msg = deleteLogin
+      ? `Remove agent "${label}" and delete their login?\n\nThey can register again with the same email/phone. Their shop (if any) is not deleted.`
+      : `Remove agent "${label}" from the panel?\n\nTheir login stays; only agent access is removed.`;
+    if (!window.confirm(msg)) return;
+
+    setRemoveBusyKey(agent.id);
+    setCreateMsg(null);
+    const res = await internalDeleteMarketingAgent(agent.id, deleteLogin);
+    setRemoveBusyKey(null);
+    if (res.ok) {
+      setCreateMsg(res.message ?? t(lang, "internalAgentsRemoved"));
+      await load();
+      return;
+    }
+    setCreateMsg(res.message ?? t(lang, "internalAgentsRemoveFail"));
   };
 
   const loadCandidates = useCallback(async () => {
@@ -318,14 +358,39 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                 >
                   {roleBusyKey === a.id ? "…" : t(lang, "internalAgentsSaveRoles")}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void copyAgentLink(a.referralCode)}
+                  className="mt-2 text-sm font-black text-waka-800 underline"
+                >
+                  {t(lang, "agentCopyLink")}
+                </button>
               </div>
               <button
                 type="button"
                 onClick={() => void openDetail(a.id)}
-                className="mt-3 text-sm font-black text-orange-700 underline"
+                className="mt-1 text-sm font-black text-orange-700 underline"
               >
                 {t(lang, "internalAgentsViewReferrals")}
               </button>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={removeBusyKey === a.id}
+                  onClick={() => void removeAgent(a, false)}
+                  className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-black text-stone-800 disabled:opacity-50"
+                >
+                  {removeBusyKey === a.id ? "…" : t(lang, "internalAgentsRemove")}
+                </button>
+                <button
+                  type="button"
+                  disabled={removeBusyKey === a.id}
+                  onClick={() => void removeAgent(a, true)}
+                  className="rounded-lg border border-rose-300 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-900 disabled:opacity-50"
+                >
+                  {removeBusyKey === a.id ? "…" : t(lang, "internalAgentsRemoveAndLogin")}
+                </button>
+              </div>
             </li>
           ))}
         </ul>
@@ -434,6 +499,8 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
       >
         {detailLoading ? (
           <p className="text-sm text-stone-500">…</p>
+        ) : detailError ? (
+          <p className="text-sm font-bold text-rose-700">{detailError}</p>
         ) : detailRows.length === 0 ? (
           <p className="text-sm font-semibold text-stone-500">{t(lang, "internalAgentsReferralsEmpty")}</p>
         ) : (

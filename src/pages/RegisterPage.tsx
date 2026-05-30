@@ -10,6 +10,7 @@ import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { SignUpResult } from "../hooks/useAuth";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { storePendingReferralCode } from "../lib/pendingReferral";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 
 type Props = {
@@ -25,7 +26,7 @@ type Props = {
     password: string;
     referralCode?: string;
   }) => Promise<SignUpResult>;
-  onGoogleSignIn: () => Promise<void>;
+  onGoogleSignIn: (opts?: { referralCode?: string }) => Promise<void>;
 };
 
 const fieldClass =
@@ -59,8 +60,10 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   useEffect(() => {
     const ref = searchParams.get("ref")?.trim();
     if (ref) {
-      setReferralCode(ref.toUpperCase());
+      const code = ref.toUpperCase();
+      setReferralCode(code);
       setAgentOpen(true);
+      storePendingReferralCode(code);
     }
   }, [searchParams]);
 
@@ -103,6 +106,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
         password,
         referralCode: referralCode.trim() || undefined,
       });
+      if (referralCode.trim()) storePendingReferralCode(referralCode.trim());
       if (result.needsEmailVerification) {
         navigate("/login", { replace: true, state: { registeredPhone: phone } });
         return;
@@ -124,7 +128,8 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
     setGoogleBusy(true);
     setError(null);
     try {
-      await onGoogleSignIn();
+      const code = referralCode.trim() || searchParams.get("ref")?.trim();
+      await onGoogleSignIn(code ? { referralCode: code } : undefined);
     } catch (err) {
       setError(formatAuthError(err));
     } finally {
