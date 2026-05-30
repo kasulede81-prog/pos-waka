@@ -11,6 +11,7 @@ import { scheduleBackgroundCloudSync } from "../offline/cloudSync";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
+import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
@@ -662,6 +663,25 @@ export function useAuth() {
       userId: user?.id ?? null,
       email,
     }) ?? getActiveAccountKey();
+
+  useEffect(() => {
+    if (!user?.id) {
+      setCrashReportingUser({});
+      return;
+    }
+    let cancelled = false;
+    void resolvePrimaryOrganizationForUser(user.id).then((org) => {
+      if (cancelled) return;
+      setCrashReportingUser({
+        userId: user.id,
+        email: user.email ?? null,
+        shopId: org?.shopId ?? null,
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, user?.email]);
 
   return useMemo(
     () => ({

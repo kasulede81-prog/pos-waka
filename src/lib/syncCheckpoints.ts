@@ -89,18 +89,24 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   customers?: boolean;
   debts?: boolean;
   expenses?: boolean;
+  /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
+  salesAt?: string;
+  productsAt?: string;
+  customersAt?: string;
+  debtsAt?: string;
+  expensesAt?: string;
 }): SyncCheckpoints {
-  const at = partial.at ?? new Date().toISOString();
+  const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
-  if (partial.sales) patch.lastSalesSyncAt = at;
-  if (partial.products) patch.lastProductsSyncAt = at;
+  if (partial.sales) patch.lastSalesSyncAt = partial.salesAt ?? fallback;
+  if (partial.products) patch.lastProductsSyncAt = partial.productsAt ?? fallback;
   if (partial.customers) {
-    patch.lastCustomersSyncAt = at;
-    if (partial.debts !== false) patch.lastDebtsSyncAt = at;
+    patch.lastCustomersSyncAt = partial.customersAt ?? fallback;
+    if (partial.debts !== false) patch.lastDebtsSyncAt = partial.debtsAt ?? partial.customersAt ?? fallback;
   }
-  if (partial.debts) patch.lastDebtsSyncAt = at;
-  if (partial.expenses) patch.lastExpensesSyncAt = at;
+  if (partial.debts) patch.lastDebtsSyncAt = partial.debtsAt ?? fallback;
+  if (partial.expenses) patch.lastExpensesSyncAt = partial.expensesAt ?? fallback;
   return writeSyncCheckpoints(patch);
 }
 

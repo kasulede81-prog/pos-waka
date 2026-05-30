@@ -1,10 +1,13 @@
 /**
  * Production-safe diagnostics: never show raw errors to shop staff in the UI.
  * Optional: send minimal events to your own ingest endpoint (no PII, no secrets).
+ * Also forwards to Sentry when VITE_SENTRY_DSN is configured (see crashReporting.ts).
  *
  * Set `VITE_MONITORING_INGEST_URL` to an HTTPS endpoint that accepts POST JSON.
  * Service role keys must never appear in the browser — only anon keys in Vite env.
  */
+
+import { captureAppMessage } from "./crashReporting";
 
 export type MonitoringCategory = "sync" | "auth" | "pwa" | "app";
 
@@ -32,6 +35,12 @@ export function reportMonitoringEvent(payload: MonitoringPayload): void {
   if (import.meta.env.DEV) {
     console.warn("[waka-monitoring]", safe.category, safe.code, safe.meta ?? {});
   }
+
+  captureAppMessage(`[${safe.category}] ${safe.code}`, "warning", {
+    category: safe.category,
+    code: safe.code,
+    ...(safe.meta ?? {}),
+  });
 
   const url = import.meta.env.VITE_MONITORING_INGEST_URL?.trim();
   if (!url || typeof fetch === "undefined") return;

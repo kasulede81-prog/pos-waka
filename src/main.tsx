@@ -5,9 +5,12 @@ import { registerSW } from "virtual:pwa-register";
 import "./index.css";
 import App from "./App";
 import { initCapacitorShell } from "./lib/capacitorInit";
+import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
 import { reportPwaIssue } from "./lib/monitoring";
 import { warmupLocalDb } from "./offline/localDb";
 
+initCrashReporting();
+installGlobalErrorHandlers();
 warmupLocalDb();
 
 registerSW({

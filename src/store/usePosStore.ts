@@ -1246,6 +1246,24 @@ export const usePosStore = create<PosState>((set, get) => {
       void queueRemote("audit_log", { entry });
     }
     void clearPersistedDraft();
+    void import("../offline/entityStore").then(({ putEntity, putEntitiesBatch }) => {
+      void putEntity("sale", sale.id, sale, sale.createdAt);
+      const stockChanged = products.filter((p) => {
+        const old = state.products.find((x) => x.id === p.id);
+        return old != null && old.stockOnHand !== p.stockOnHand;
+      });
+      if (stockChanged.length > 0) {
+        void putEntitiesBatch(
+          "product",
+          stockChanged.map((p) => ({ id: p.id, data: p, sortKey: p.updatedAt })),
+        );
+      }
+      if (customerId && debt > 0) {
+        const c = customers.find((x) => x.id === customerId);
+        if (c) void putEntity("customer", c.id, c, c.createdAt);
+      }
+    });
+    flushPendingPersist();
     return { ok: true, firstSale: isFirstSale, saleId: sale.id };
   },
 

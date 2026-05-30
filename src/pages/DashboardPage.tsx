@@ -6,8 +6,8 @@ import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDashboardAnalytics } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { dateKeyKampala } from "../lib/datesUg";
+import { localGetDailySalesSummary, localGetWeeklySalesSummary } from "../lib/localReporting";
 import { isLowStock } from "../lib/sellingEngine";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -64,6 +64,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const customers = usePosStore((s) => s.customers);
+  const returnRecords = usePosStore((s) => s.returnRecords);
   const showActivityFeed = hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -75,10 +76,25 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const todayKey = dateKeyKampala(new Date());
 
-  const todaySales = useMemo(() => scanTodaySalesHead(sales, todayKey).todaySales, [sales, todayKey]);
+  /** Local totals — must match the sales list (server lags when offline / pending sync). */
+  const localToday = useMemo(
+    () => localGetDailySalesSummary(sales, products, returnRecords, todayKey),
+    [sales, products, returnRecords, todayKey],
+  );
+  const localWeek = useMemo(
+    () => localGetWeeklySalesSummary(sales, products, returnRecords),
+    [sales, products, returnRecords],
+  );
 
-  const cashToday = analytics.cashToday;
-  const debtToday = analytics.debtToday;
+  const todaySales = useMemo(
+    () => sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey),
+    [sales, todayKey],
+  );
+
+  const salesTodayTotal = localToday.totalRevenueUgx;
+  const cashToday = localToday.cashCollectedUgx;
+  const debtToday = localToday.debtIssuedUgx;
+  const cashWeekDisplay = localWeek.cashCollectedUgx;
   const lowStockProducts = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
 
   const fastMovers = analytics.fastMovers.map((p) => ({
@@ -89,8 +105,6 @@ export function DashboardPage({ lang }: { lang: Language }) {
   }));
 
   const recentSales = useMemo(() => todaySales.slice(0, 8), [todaySales]);
-
-  const cashWeek = analytics.cashWeek;
 
   const quickTiles = useMemo(() => products.slice(0, 10), [products]);
 
@@ -254,7 +268,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
       <section className={`grid grid-cols-2 gap-3 ${gridCols}`}>
         <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
           <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "todaySection")}</p>
-          <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {cashToday.toLocaleString()}</p>
+          <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {salesTodayTotal.toLocaleString()}</p>
           <p className="mt-1 text-xs font-semibold text-white/80">
             {t(lang, "dashboardSalesMeta")
               .replace("{{count}}", String(todaySales.length))
@@ -276,7 +290,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
       </section>
 
       <p className="text-center text-sm font-medium text-stone-500">
-        {t(lang, "weekCashHint")}: <span className="font-bold text-stone-800">UGX {cashWeek.toLocaleString()}</span>
+        {t(lang, "weekCashHint")}: <span className="font-bold text-stone-800">UGX {cashWeekDisplay.toLocaleString()}</span>
       </p>
 
       <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">

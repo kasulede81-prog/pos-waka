@@ -7,7 +7,7 @@ import { getDeviceOnline } from "../lib/deviceOnline";
 import { isNativeApp } from "../lib/nativeApp";
 import { nativeSyncResumeDelayMs, nativeVisibilitySyncDelayMs, runWhenIdle } from "../lib/uiYield";
 import { readSyncQueue } from "../offline/localDb";
-import { pushShopPendingToCloud, syncShopWithCloud } from "../offline/cloudSync";
+import { pushShopPendingToCloud, syncShopWithCloud, countUnsyncedSales } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
 import type { SyncOperationKind, SyncStatus } from "../types";
@@ -92,7 +92,7 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     const forceFull = opts?.forceFull === true;
     const showSpinner = opts?.showSpinner ?? wantPull;
 
-    if (!wantPull && now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && pendingRef.current === 0) {
+    if (!wantPull && now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && pendingRef.current === 0 && countUnsyncedSales() === 0) {
       return;
     }
     if (wantPull && !forceFull && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
@@ -165,7 +165,7 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     if (isOnline) {
       const delay = isNativeApp() ? 12_000 : 1200;
       window.setTimeout(() => {
-        if (pendingRef.current === 0 && isNativeApp()) return;
+        if (pendingRef.current === 0 && countUnsyncedSales() === 0 && isNativeApp()) return;
         runWhenIdle(() => void runFlush({ pull: false, showSpinner: false }), isNativeApp() ? 8000 : 1500);
       }, delay);
     }

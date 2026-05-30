@@ -25,7 +25,10 @@
     "cap:bundle:release": "npm run cap:build && cd android && gradlew.bat bundleRelease",
     "supabase:deploy:admin": "supabase functions deploy admin-set-owner-password --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy admin-permanently-delete-shop-account --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy admin-delete-marketing-agent --project-ref ljaedextsenbkxzzgxcg",
     "stress:stability": "node scripts/stability-stress.mjs",
-    "stress:reporting": "node scripts/reporting-stress.mjs"
+    "stress:reporting": "node scripts/reporting-stress.mjs",
+    "verify:transactional-sync": "node scripts/verify-transactional-sync.mjs",
+    "verify:multi-device": "node scripts/multi-device-consistency.mjs",
+    "soak:android": "node scripts/android-soak-harness.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -42,6 +45,7 @@
     "@capacitor/share": "^8.0.1",
     "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
+    "@sentry/react": "^10.55.0",
     "@supabase/supabase-js": "^2.105.4",
     "@tanstack/react-query": "^5.100.9",
     "@tanstack/react-virtual": "^3.13.24",
