@@ -2480,13 +2480,8 @@ async function runPostBootstrapTasks(): Promise<void> {
   const localEmpty = isLocalShopDataEmpty();
   scheduleBackgroundCloudSync({
     pull: localEmpty,
-    delayMs: isNativeApp() ? 12_000 : 400,
+    delayMs: isNativeApp() ? 22_000 : 3000,
   });
-  scheduleBackgroundCloudSync({ pull: false, delayMs: isNativeApp() ? 25_000 : 12_000 });
-  if (localEmpty) {
-    const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
-    void uploadShopCloudSnapshot().catch(() => false);
-  }
 }
 
 function hydrateEssentialsFromSnap(snap: Partial<PersistedSnapshot>): void {

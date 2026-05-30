@@ -578,7 +578,12 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
       const { yieldUiTick } = await import("../lib/uiYield");
       await yieldUiTick();
     }
-    usePosStore.setState({ products, customers, sales });
+    usePosStore.setState({ products, customers });
+    if (isNativeApp() && sales.length > 400) {
+      const { yieldUiTick } = await import("../lib/uiYield");
+      await yieldUiTick();
+    }
+    usePosStore.setState({ sales });
 
     const next = usePosStore.getState();
     await writeSnapshot({
@@ -669,7 +674,8 @@ export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
   const { push, queueFailed } = await pushShopPendingToCloud();
   if (getDeviceOnline() && push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
-    void uploadShopCloudSnapshot().catch(() => false);
+    const { runWhenIdle } = await import("../lib/uiYield");
+    runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 15_000 : 4000);
   }
   return { pulled, push, queueFailed };
 }

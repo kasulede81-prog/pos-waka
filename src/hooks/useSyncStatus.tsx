@@ -31,9 +31,9 @@ export type SyncStatusApi = {
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
-const QUEUE_POLL_MS = isNativeApp() ? 45_000 : 20_000;
+const QUEUE_POLL_MS = isNativeApp() ? 90_000 : 20_000;
 const FLUSH_TIMEOUT_MS = 55_000;
-const MIN_PUSH_INTERVAL_MS = 8_000;
+const MIN_PUSH_INTERVAL_MS = isNativeApp() ? 20_000 : 8_000;
 const MIN_FULL_SYNC_INTERVAL_MS = isNativeApp() ? 300_000 : 90_000;
 
 function emptyBreakdown(): PendingBreakdown {
@@ -156,9 +156,10 @@ function useSyncStatusEngine(): SyncStatusApi {
 
   useEffect(() => {
     if (isOnline) {
-      const delay = isNativeApp() ? 2800 : 1200;
+      const delay = isNativeApp() ? 12_000 : 1200;
       window.setTimeout(() => {
-        runWhenIdle(() => void runFlush({ pull: false }), isNativeApp() ? 4000 : 1500);
+        if (pendingRef.current === 0 && isNativeApp()) return;
+        runWhenIdle(() => void runFlush({ pull: false, showSpinner: false }), isNativeApp() ? 8000 : 1500);
       }, delay);
     }
   }, [isOnline, runFlush]);

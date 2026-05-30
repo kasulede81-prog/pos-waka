@@ -1,5 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl } from "../lib/authConfig";
 import { Capacitor } from "@capacitor/core";
 import { isGoogleAuthUiEnabled } from "../lib/authFeatureFlags";
@@ -119,6 +119,8 @@ export function useAuth() {
   );
 
   const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
+  const workspaceEnsureInFlightRef = useRef<string | null>(null);
+  const workspaceEnsuredForUserRef = useRef<string | null>(null);
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
@@ -134,25 +136,43 @@ export function useAuth() {
 
   const ensureWorkspaceForSession = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
-    if (bootstrappedUserIds[next.user.id] || isWorkspaceBootstrapped(next.user.id)) {
-      setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+    const uid = next.user.id;
+    if (workspaceEnsureInFlightRef.current === uid) return;
+
+    const alreadyEnsured =
+      workspaceEnsuredForUserRef.current === uid ||
+      bootstrappedUserIds[uid] ||
+      isWorkspaceBootstrapped(uid);
+
+    if (alreadyEnsured) {
+      setBootstrappedUserIds((prev) => ({ ...prev, [uid]: true }));
       scheduleBackgroundCloudSync({
         pull: false,
-        delayMs: isNativeApp() ? 10_000 : 4000,
+        delayMs: isNativeApp() ? 18_000 : 6000,
       });
       return;
     }
 
-    const existing = await resolvePrimaryOrganizationForUser(next.user.id);
+    workspaceEnsureInFlightRef.current = uid;
+    try {
+    const existing = await resolvePrimaryOrganizationForUser(uid);
     if (existing?.shopId) {
-      setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
-      markWorkspaceBootstrapped(next.user.id);
+      setBootstrappedUserIds((prev) => ({ ...prev, [uid]: true }));
+      markWorkspaceBootstrapped(uid);
       await tryApplyPendingReferral(next);
       const onboarding = await fetchOwnerOnboardingStatus();
       if (onboarding?.complete) {
-        await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
+        await finalizeOwnerOnboardingAfterCloudSave(uid);
       }
-      void hydrateAccountFromCloud({ forcePull: true });
+      const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
+      if (isLocalShopDataEmpty()) {
+        void hydrateAccountFromCloud({ forcePull: true });
+      } else {
+        scheduleBackgroundCloudSync({
+          pull: false,
+          delayMs: isNativeApp() ? 15_000 : 5000,
+        });
+      }
       return;
     }
 
@@ -182,7 +202,6 @@ export function useAuth() {
       longitude != null &&
       !Number.isNaN(latitude) &&
       !Number.isNaN(longitude);
-    try {
       await bootstrapOwnerWorkspace(next.user, {
         organizationName: orgFromMeta,
         shopDisplayName: shopFromMeta,
@@ -221,6 +240,9 @@ export function useAuth() {
     } catch (e) {
       console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
       throw new Error("Could not finish creating your shop. Please try again.");
+    } finally {
+      workspaceEnsureInFlightRef.current = null;
+      workspaceEnsuredForUserRef.current = uid;
     }
   }, [bootstrappedUserIds, tryApplyPendingReferral]);
 
@@ -294,7 +316,7 @@ export function useAuth() {
           computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
         );
         applySignupProfileToLocalStore(next);
-        if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        if (event === "SIGNED_IN") {
           void ensureWorkspaceForSession(next).catch((e) => {
             console.error("[waka-auth] bootstrap on auth state change failed", e);
           });

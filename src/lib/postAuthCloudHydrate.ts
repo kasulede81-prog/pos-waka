@@ -1,7 +1,15 @@
 import { getDeviceOnline } from "./deviceOnline";
+import { isNativeApp } from "./nativeApp";
+import { runWhenIdle } from "./uiYield";
 import { hasSupabaseConfig } from "./supabase";
 import { usePosStore } from "../store/usePosStore";
 import { isLocalShopDataEmpty, restoreShopFromCloudSnapshot, uploadShopCloudSnapshot } from "./cloudSnapshotSync";
+
+const HYDRATE_COOLDOWN_MS = 120_000;
+const HYDRATE_FORCE_COOLDOWN_MS = 30_000;
+
+let hydrateInFlight: Promise<void> | null = null;
+let lastHydrateFinishedAt = 0;
 
 async function waitForPosStoreHydrated(timeoutMs = 30_000): Promise<boolean> {
   const start = Date.now();
@@ -12,11 +20,7 @@ async function waitForPosStoreHydrated(timeoutMs = 30_000): Promise<boolean> {
   return usePosStore.getState()._hydrated;
 }
 
-/**
- * After sign-in on a new device: wait for local bootstrap, restore full cloud snapshot when empty,
- * then merge live rows (products/sales/customers) from Supabase tables.
- */
-export async function hydrateAccountFromCloud(opts?: {
+async function runHydrateAccountFromCloud(opts?: {
   forcePull?: boolean;
   onProgress?: (percent: number) => void;
 }): Promise<void> {
@@ -28,6 +32,7 @@ export async function hydrateAccountFromCloud(opts?: {
   await hydrateLocalShopProfileFromCloud().catch(() => undefined);
 
   const localEmpty = isLocalShopDataEmpty();
+  const force = opts?.forcePull === true;
 
   const { pullCloudAndMergeIntoStore, syncShopWithCloud, pushShopPendingToCloud } = await import(
     "../offline/cloudSync",
@@ -40,20 +45,44 @@ export async function hydrateAccountFromCloud(opts?: {
       await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
       if (getDeviceOnline()) {
         await pushShopPendingToCloud().catch(() => undefined);
-        await uploadShopCloudSnapshot().catch(() => false);
+        runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 12_000 : 3000);
       }
       return;
     }
-    if (opts?.forcePull || localEmpty) {
+    if (force || localEmpty) {
       await pullCloudAndMergeIntoStore().catch(() => undefined);
     }
   } else if (getDeviceOnline()) {
-    // Shop already on device — push pending rows only; avoid heavy full cloud merge on every open.
     await syncShopWithCloud({ pull: false }).catch(() => undefined);
   }
 
-  if (getDeviceOnline()) {
+  if (getDeviceOnline() && (force || localEmpty)) {
     await pushShopPendingToCloud().catch(() => undefined);
-    await uploadShopCloudSnapshot().catch(() => false);
+    runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 12_000 : 3000);
   }
+}
+
+/**
+ * After sign-in: restore cloud snapshot when local data is empty, else light push-only sync.
+ * Debounced so duplicate auth callbacks do not stack heavy work and freeze the UI.
+ */
+export async function hydrateAccountFromCloud(opts?: {
+  forcePull?: boolean;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
+  if (!hasSupabaseConfig) return;
+
+  const force = opts?.forcePull === true;
+  const minGap = force ? HYDRATE_FORCE_COOLDOWN_MS : HYDRATE_COOLDOWN_MS;
+  if (!force && Date.now() - lastHydrateFinishedAt < minGap) return;
+  if (hydrateInFlight) return hydrateInFlight;
+
+  hydrateInFlight = runHydrateAccountFromCloud(opts)
+    .catch(() => undefined)
+    .finally(() => {
+      lastHydrateFinishedAt = Date.now();
+      hydrateInFlight = null;
+    });
+
+  return hydrateInFlight;
 }
