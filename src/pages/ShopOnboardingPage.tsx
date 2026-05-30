@@ -18,6 +18,9 @@ import { inferFromProductName } from "../lib/smartProductGuess";
 import { PinInput } from "../components/ui/PinInput";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { useSubscription } from "../context/SubscriptionContext";
+import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
+import { supabase } from "../lib/supabase";
 
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
@@ -41,8 +44,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
+  const { snapshot, authMode } = useSubscription();
 
   const shopName = preferences.shopDisplayName?.trim() || "My Shop";
+  const planTier =
+    authMode === "local" ? ("waka_plus" as const) : resolveEffectivePlanTier(snapshot);
+  const showStaffStep = maxStaffAccountsForTier(planTier) > 0;
 
   const [step, setStep] = useState<Step>("welcome");
   const [businessType, setBusinessType] = useState<BusinessType>("kiosk_duka");
@@ -54,26 +61,74 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [gpsSkipped, setGpsSkipped] = useState(true);
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
   const [districtId, setDistrictId] = useState("");
+  const [phoneFallback, setPhoneFallback] = useState("");
 
   useEffect(() => {
     void fetchDistricts().then(({ districts: d }) => setDistricts(d));
   }, []);
+
+  useEffect(() => {
+    if (districtId) return;
+    void (async () => {
+      if (!supabase) return;
+      const { data } = await supabase.auth.getUser();
+      const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
+      const fromMeta = typeof meta?.district_id === "string" ? meta.district_id : "";
+      if (fromMeta) setDistrictId(fromMeta);
+    })();
+  }, [districtId]);
+
+  useEffect(() => {
+    const fromPrefs = preferences.shopPhoneE164?.trim() ?? "";
+    if (fromPrefs && !phoneFallback) setPhoneFallback(fromPrefs);
+  }, [preferences.shopPhoneE164, phoneFallback]);
 
   const [staffOpen, setStaffOpen] = useState(false);
   const [staffName, setStaffName] = useState("");
   const [staffRole, setStaffRole] = useState<OnboardingStaffRole>("cashier");
   const [staffPin, setStaffPin] = useState("");
 
-  const stepIndex = useMemo(() => {
-    const order: Step[] = ["welcome", "business", "selling", "location", "staff", "products"];
-    return order.indexOf(step);
-  }, [step]);
+  const stepOrder = useMemo(() => {
+    const order: Step[] = ["welcome", "business", "selling", "location"];
+    if (showStaffStep) order.push("staff");
+    order.push("products");
+    return order;
+  }, [showStaffStep]);
+
+  const stepIndex = useMemo(() => stepOrder.indexOf(step), [stepOrder, step]);
+  const progressTotal = Math.max(stepOrder.length - 1, 1);
+
+  const resolveOnboardingPhone = async (): Promise<string | null> => {
+    const candidates = [
+      phoneFallback,
+      preferences.shopPhoneE164 ?? "",
+    ];
+    if (supabase) {
+      const { data } = await supabase.auth.getUser();
+      const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
+      candidates.push(String(meta?.phone_e164 ?? meta?.phone ?? ""));
+    }
+    for (const raw of candidates) {
+      const ph = normalizeUgPhoneE164(raw);
+      if (ph) return ph;
+    }
+    return null;
+  };
+
+  const advanceAfterLocation = async () => {
+    if (showStaffStep) {
+      setStep("staff");
+      return;
+    }
+    const ok = await finishCore({ gpsSkipped, lat, lng });
+    if (ok) setStep("products");
+  };
 
   const finishCore = async (opts: { gpsSkipped: boolean; lat?: number; lng?: number }) => {
     setBusy(true);
     setErr(null);
     try {
-      const ph = normalizeUgPhoneE164(preferences.shopPhoneE164 ?? "");
+      const ph = await resolveOnboardingPhone();
       if (!ph) {
         setErr(t(lang, "registerPhoneInvalid"));
         setBusy(false);
@@ -145,7 +200,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   return (
     <AuthLayout lang={lang} setLang={setLang}>
       <div className="mx-auto max-w-md rounded-3xl border border-stone-200/80 bg-white p-5 shadow-waka-sm sm:p-6">
-        {step !== "welcome" ? <ProgressDots step={stepIndex} total={5} /> : null}
+        {step !== "welcome" ? <ProgressDots step={stepIndex} total={progressTotal} /> : null}
 
         {step === "welcome" ? (
           <div className="space-y-5 py-2 text-center">
@@ -249,6 +304,20 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 </option>
               ))}
             </select>
+            {!normalizeUgPhoneE164(preferences.shopPhoneE164 ?? "") ? (
+              <>
+                <label className="block text-sm font-bold text-stone-800">{t(lang, "registerPhoneLabel")}</label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phoneFallback}
+                  onChange={(e) => setPhoneFallback(e.target.value)}
+                  placeholder="07XXXXXXXX"
+                  className={fieldClass}
+                />
+              </>
+            ) : null}
             {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
             {!gpsSkipped && lat != null ? (
               <p className="rounded-xl bg-stone-50 px-3 py-2 text-xs font-mono text-stone-700">
@@ -266,13 +335,13 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 setGpsSkipped(true);
                 setLat(undefined);
                 setLng(undefined);
-                setStep("staff");
+                void advanceAfterLocation();
               }}
             >
               {t(lang, "onboardLocSkip")}
             </button>
             {!gpsSkipped && lat != null ? (
-              <button type="button" className={primaryBtn} disabled={busy} onClick={() => setStep("staff")}>
+              <button type="button" className={primaryBtn} disabled={busy} onClick={() => void advanceAfterLocation()}>
                 {t(lang, "onboardContinue")}
               </button>
             ) : null}

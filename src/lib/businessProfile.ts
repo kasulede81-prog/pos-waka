@@ -147,7 +147,9 @@ export function normalizeUgPhoneE164(raw: string): string | null {
   const digits = v.replace(/\D/g, "");
   if (digits.startsWith("256") && digits.length === 12) return `+${digits}`;
   if (digits.startsWith("0") && digits.length === 10) return `+256${digits.slice(1)}`;
-  if (v.startsWith("+256") && /^\+256[0-9]{9}$/.test(v)) return v;
+  if (digits.length === 9 && digits.startsWith("7")) return `+256${digits}`;
+  const compact = v.replace(/\s/g, "");
+  if (compact.startsWith("+256") && /^\+256[0-9]{9}$/.test(compact)) return compact;
   return null;
 }
 
