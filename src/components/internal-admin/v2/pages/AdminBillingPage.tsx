@@ -21,7 +21,7 @@ function planNameKey(code: string): string {
 
 export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
   const perms = adminPermissions(adminRow);
-  const data = useInternalOpsData(adminRow, previewMode);
+  const data = useInternalOpsData(adminRow, previewMode, "billing");
   const [sheet, setSheet] = useState<"annual" | null>(null);
   const [trialBusyId, setTrialBusyId] = useState<string | null>(null);
   const [annualBusyId, setAnnualBusyId] = useState<string | null>(null);

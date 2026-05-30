@@ -2,6 +2,7 @@ import type { Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, Supp
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
+import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { usePosStore } from "../store/usePosStore";
@@ -574,13 +575,10 @@ export async function pullCloudAndMergeIntoStore(): Promise<boolean> {
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
   try {
-    if (isNativeApp()) {
-      const { yieldUiTick } = await import("../lib/uiYield");
-      await yieldUiTick();
-    }
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
     usePosStore.setState({ products, customers });
-    if (isNativeApp() && sales.length > 400) {
-      const { yieldUiTick } = await import("../lib/uiYield");
+    if (sales.length > 200) {
       await yieldUiTick();
     }
     usePosStore.setState({ sales });
@@ -668,6 +666,9 @@ export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
+  if (shouldPausePosBackgroundWork()) {
+    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
+  }
   const doPull =
     opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();
   const pulled = doPull ? await pullCloudAndMergeIntoStore() : false;
@@ -681,14 +682,17 @@ export async function syncShopWithCloud(opts?: { pull?: boolean }): Promise<{
 }
 
 /** Fire-and-forget cloud sync after local hydrate (does not block UI). */
+let backgroundSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
 export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: number }): void {
   if (!hasSupabaseConfig) return;
+  if (shouldPausePosBackgroundWork()) return;
+  if (backgroundSyncTimer != null) return;
   const delay = opts?.delayMs ?? 0;
-  const run = () => {
+  backgroundSyncTimer = window.setTimeout(() => {
+    backgroundSyncTimer = null;
     void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
-  };
-  if (delay > 0) window.setTimeout(run, delay);
-  else window.setTimeout(run, 0);
+  }, delay);
 }
 
 export function countUnsyncedSales(): number {

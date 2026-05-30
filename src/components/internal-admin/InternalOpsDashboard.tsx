@@ -347,7 +347,11 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
 
   useEffect(() => {
     if (previewMode || !adminRow) return;
-    const id = window.setInterval(() => void loadAll(), 30_000);
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void loadAll();
+    };
+    const id = window.setInterval(tick, 60_000);
     return () => window.clearInterval(id);
   }, [adminRow, previewMode, loadAll]);
 

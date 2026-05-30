@@ -2465,6 +2465,8 @@ async function runPostBootstrapTasks(): Promise<void> {
 
   const key = getActiveAccountKey();
   if (!hasSupabaseConfig || !key?.startsWith("sb:")) return;
+  const { shouldPausePosBackgroundWork } = await import("../lib/backgroundWorkPolicy");
+  if (shouldPausePosBackgroundWork()) return;
 
   const { supabase: sb } = await import("../lib/supabase");
   if (!sb) return;

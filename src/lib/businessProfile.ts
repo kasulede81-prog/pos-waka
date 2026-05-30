@@ -153,6 +153,44 @@ export function normalizeUgPhoneE164(raw: string): string | null {
   return null;
 }
 
+export type RegistrationProfileSnapshot = {
+  shopDisplayName: string;
+  ownerFullName: string;
+  phoneE164: string | null;
+  districtId: string;
+};
+
+export function parseRegistrationProfileFromMeta(
+  meta: Record<string, unknown> | undefined | null,
+): RegistrationProfileSnapshot {
+  const m = meta ?? {};
+  const shopDisplayName =
+    String(m.shop_display_name ?? "").trim() ||
+    String(m.business_name ?? m.organization_name ?? m.shop_name ?? "").trim();
+  return {
+    shopDisplayName,
+    ownerFullName: String(m.full_name ?? "").trim(),
+    phoneE164: normalizeUgPhoneE164(String(m.phone_e164 ?? m.phone ?? "")),
+    districtId: typeof m.district_id === "string" ? m.district_id : "",
+  };
+}
+
+export async function loadRegistrationProfileFromAuth(): Promise<RegistrationProfileSnapshot | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getUser();
+  if (!data.user) return null;
+  return parseRegistrationProfileFromMeta(data.user.user_metadata as Record<string, unknown>);
+}
+
+export function applyRegistrationProfileToLocalStore(profile: RegistrationProfileSnapshot): void {
+  const store = usePosStore.getState();
+  store.setPreferences({
+    shopDisplayName: profile.shopDisplayName || store.preferences.shopDisplayName,
+    shopPhoneE164: profile.phoneE164 ?? store.preferences.shopPhoneE164,
+    shopCurrency: "UGX",
+  });
+}
+
 async function getPrimaryShopForUser(userId: string) {
   if (!supabase) return null;
   const { data: member, error: memberErr } = await supabase

@@ -1,4 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { useLocation } from "react-router-dom";
+import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { getDeviceOnline } from "../lib/deviceOnline";
@@ -59,7 +61,8 @@ async function pendingUploadStats(): Promise<{ total: number; breakdown: Pending
   return { total, breakdown };
 }
 
-function useSyncStatusEngine(): SyncStatusApi {
+function useSyncStatusEngine(opts?: { paused?: boolean }) {
+  const paused = opts?.paused === true;
   const { isOnline } = useOfflineStatus();
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingBreakdown, setPendingBreakdown] = useState<PendingBreakdown>(() => emptyBreakdown());
@@ -82,7 +85,7 @@ function useSyncStatusEngine(): SyncStatusApi {
   }, []);
 
   const runFlush = useCallback(async (opts?: { pull?: boolean; showSpinner?: boolean }) => {
-    if (!getDeviceOnline() || syncingRef.current) return;
+    if (paused || !getDeviceOnline() || syncingRef.current) return;
     const now = Date.now();
     const wantPull = opts?.pull === true;
     const showSpinner = opts?.showSpinner ?? wantPull;
@@ -146,15 +149,17 @@ function useSyncStatusEngine(): SyncStatusApi {
       setPendingCount(total);
       setPendingBreakdown(breakdown);
     }
-  }, []);
+  }, [paused]);
 
   useEffect(() => {
+    if (paused) return;
     refreshQueue();
     const id = window.setInterval(refreshQueue, QUEUE_POLL_MS);
     return () => window.clearInterval(id);
-  }, [refreshQueue]);
+  }, [paused, refreshQueue]);
 
   useEffect(() => {
+    if (paused) return;
     if (isOnline) {
       const delay = isNativeApp() ? 12_000 : 1200;
       window.setTimeout(() => {
@@ -162,9 +167,10 @@ function useSyncStatusEngine(): SyncStatusApi {
         runWhenIdle(() => void runFlush({ pull: false, showSpinner: false }), isNativeApp() ? 8000 : 1500);
       }, delay);
     }
-  }, [isOnline, runFlush]);
+  }, [isOnline, paused, runFlush]);
 
   useEffect(() => {
+    if (paused) return;
     const onVis = () => {
       if (document.visibilityState !== "visible" || !getDeviceOnline()) return;
       if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
@@ -177,9 +183,10 @@ function useSyncStatusEngine(): SyncStatusApi {
       document.removeEventListener("visibilitychange", onVis);
       if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
     };
-  }, [runFlush]);
+  }, [paused, runFlush]);
 
   useEffect(() => {
+    if (paused) return;
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (s) => {
       if (s.isActive && getDeviceOnline()) {
@@ -195,7 +202,7 @@ function useSyncStatusEngine(): SyncStatusApi {
     return () => {
       void sub.then((h) => h.remove());
     };
-  }, [runFlush]);
+  }, [paused, runFlush]);
 
   let status: SyncStatus = "offline";
   if (isOnline) {
@@ -215,7 +222,9 @@ function useSyncStatusEngine(): SyncStatusApi {
 }
 
 export function SyncStatusProvider({ children }: { children: ReactNode }) {
-  const value = useSyncStatusEngine();
+  const location = useLocation();
+  const paused = shouldPausePosBackgroundWork(location.pathname);
+  const value = useSyncStatusEngine({ paused });
   return <SyncStatusContext.Provider value={value}>{children}</SyncStatusContext.Provider>;
 }
 

@@ -23,7 +23,7 @@ type Props = {
 export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
   const navigate = useNavigate();
   const perms = adminPermissions(adminRow);
-  const data = useInternalOpsData(adminRow, previewMode);
+  const data = useInternalOpsData(adminRow, previewMode, "support");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"open" | "all">("open");
 

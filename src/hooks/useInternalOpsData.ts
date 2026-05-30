@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   PREVIEW_BIZ_TYPES,
   PREVIEW_DASHBOARD_STATS,
@@ -97,7 +97,13 @@ export function greetingKey(hour: number): string {
 
 export type OpsSheetId = "trials" | "annual" | "support" | "visits" | "billing" | "charts" | "map" | null;
 
-export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previewMode: boolean) {
+export type InternalOpsLoadScope = "full" | "overview" | "shops" | "devices" | "support" | "billing" | "analytics";
+
+export function useInternalOpsData(
+  adminRow: WakaInternalAdminRow | null,
+  previewMode: boolean,
+  loadScope: InternalOpsLoadScope = "full",
+) {
   const [opsLoading, setOpsLoading] = useState(!previewMode && Boolean(adminRow));
   const [stats, setStats] = useState<InternalDashboardStats | null>(null);
   const [statsError, setStatsError] = useState(false);
@@ -159,12 +165,38 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
     setAuditFeed(cache.auditFeed);
   }, []);
 
+  const loadInFlightRef = useRef(false);
+
+  const loadChartBuckets = useCallback(async () => {
+    const charts = await fetchInternalOpsCharts7d();
+    if (charts?.signups?.length) {
+      return {
+        signups7: charts.signups,
+        subs7: charts.subscriptions,
+        sales7: charts.sales,
+      };
+    }
+    const [su7, sub7, sa7] = await Promise.all([
+      fetchShopSignupBuckets7d(),
+      fetchSubscriptionGrowthBuckets7d(),
+      fetchSalesVolumeBuckets7d(),
+    ]);
+    const empty = Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 }));
+    return {
+      signups7: su7.length ? su7 : empty,
+      subs7: sub7.length ? sub7 : empty,
+      sales7: sa7.length ? sa7 : empty,
+    };
+  }, []);
+
   const loadAll = useCallback(async (opts?: { silent?: boolean }) => {
     if (previewMode) {
       seedPreview();
       return;
     }
     if (!adminRow) return;
+    if (loadInFlightRef.current) return;
+    loadInFlightRef.current = true;
     if (!opts?.silent) setOpsLoading(true);
     setStatsError(false);
     setStatsErrorMessage("");
@@ -178,20 +210,194 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
         setStats(dash.stats);
       }
 
-      const charts = await fetchInternalOpsCharts7d();
-      if (charts?.signups?.length) {
-        setSignups7(charts.signups);
-        setSubs7(charts.subscriptions);
-        setSales7(charts.sales);
-      } else {
-        const [su7, sub7, sa7] = await Promise.all([
-          fetchShopSignupBuckets7d(),
-          fetchSubscriptionGrowthBuckets7d(),
-          fetchSalesVolumeBuckets7d(),
+      const cacheBase = {
+        at: Date.now(),
+        stats: dash.ok ? dash.stats : null,
+        statsError: !dash.ok,
+        statsErrorMessage: dash.ok ? "" : dash.message,
+      };
+
+      if (loadScope === "shops") {
+        const r = await fetchShopsBySignupDate(100);
+        setRecent(r);
+        INTERNAL_OPS_CACHE = {
+          ...cacheBase,
+          plans: [],
+          recent: r,
+          tickets: [],
+          districts: [],
+          bizTypes: [],
+          signups7: [],
+          subs7: [],
+          sales7: [],
+          visits: [],
+          pendingTrials: [],
+          billingOfferRows: [],
+          fleetDevices: [],
+          auditFeed: [],
+        };
+        return;
+      }
+
+      if (loadScope === "devices") {
+        const [p, fleet] = await Promise.all([fetchPlanTierMetrics(), fetchFleetDevices(120)]);
+        setPlans(p);
+        setFleetDevices(fleet);
+        INTERNAL_OPS_CACHE = {
+          ...cacheBase,
+          plans: p,
+          recent: [],
+          tickets: [],
+          districts: [],
+          bizTypes: [],
+          signups7: [],
+          subs7: [],
+          sales7: [],
+          visits: [],
+          pendingTrials: [],
+          billingOfferRows: [],
+          fleetDevices: fleet,
+          auditFeed: [],
+        };
+        return;
+      }
+
+      if (loadScope === "support") {
+        const [tk, v] = await Promise.all([fetchSupportTickets(80), fetchFieldVisitsOpen()]);
+        setTickets(tk);
+        setVisits(v);
+        INTERNAL_OPS_CACHE = {
+          ...cacheBase,
+          plans: [],
+          recent: [],
+          tickets: tk,
+          districts: [],
+          bizTypes: [],
+          signups7: [],
+          subs7: [],
+          sales7: [],
+          visits: v,
+          pendingTrials: [],
+          billingOfferRows: [],
+          fleetDevices: [],
+          auditFeed: [],
+        };
+        return;
+      }
+
+      if (loadScope === "billing") {
+        const [p, pend, offers, tk, v] = await Promise.all([
+          fetchPlanTierMetrics(),
+          fetchPendingSubscriptionRequests(40),
+          fetchOrgBillingOffersForQueue(60),
+          fetchSupportTickets(80),
+          fetchFieldVisitsOpen(),
         ]);
-        setSignups7(su7.length ? su7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
-        setSubs7(sub7.length ? sub7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
-        setSales7(sa7.length ? sa7 : Array.from({ length: 7 }, (_, i) => ({ label: `${i + 1}`, count: 0 })));
+        setPlans(p);
+        setPendingTrials(pend);
+        setBillingOfferRows(offers);
+        setTickets(tk);
+        setVisits(v);
+        INTERNAL_OPS_CACHE = {
+          ...cacheBase,
+          plans: p,
+          recent: [],
+          tickets: tk,
+          districts: [],
+          bizTypes: [],
+          signups7: [],
+          subs7: [],
+          sales7: [],
+          visits: v,
+          pendingTrials: pend,
+          billingOfferRows: offers,
+          fleetDevices: [],
+          auditFeed: [],
+        };
+        return;
+      }
+
+      if (loadScope === "analytics") {
+        const charts = await loadChartBuckets();
+        setSignups7(charts.signups7);
+        setSubs7(charts.subs7);
+        setSales7(charts.sales7);
+        const [d, b, fleet, p] = await Promise.all([
+          fetchDistrictOpsTable(),
+          fetchBusinessTypeSlices(),
+          fetchFleetDevices(120),
+          fetchPlanTierMetrics(),
+        ]);
+        setDistricts(d);
+        setBizTypes(b);
+        setFleetDevices(fleet);
+        setPlans(p);
+        INTERNAL_OPS_CACHE = {
+          ...cacheBase,
+          plans: p,
+          recent: [],
+          tickets: [],
+          districts: d,
+          bizTypes: b,
+          signups7: charts.signups7,
+          subs7: charts.subs7,
+          sales7: charts.sales7,
+          visits: [],
+          pendingTrials: [],
+          billingOfferRows: [],
+          fleetDevices: fleet,
+          auditFeed: [],
+        };
+        return;
+      }
+
+      const charts = loadScope === "overview" || loadScope === "full" ? await loadChartBuckets() : null;
+      if (charts) {
+        setSignups7(charts.signups7);
+        setSubs7(charts.subs7);
+        setSales7(charts.sales7);
+      }
+
+      if (loadScope === "overview") {
+        const [p, r, tk, d, b, v, pend, offers, fleet, audit] = await Promise.all([
+          fetchPlanTierMetrics(),
+          fetchShopsBySignupDate(100),
+          fetchSupportTickets(80),
+          fetchDistrictOpsTable(),
+          fetchBusinessTypeSlices(),
+          fetchFieldVisitsOpen(),
+          fetchPendingSubscriptionRequests(40),
+          fetchOrgBillingOffersForQueue(60),
+          fetchFleetDevices(120),
+          fetchOpsAuditFeed(25),
+        ]);
+        setPlans(p);
+        setRecent(r);
+        setTickets(tk);
+        setDistricts(d);
+        setBizTypes(b);
+        setVisits(v);
+        setPendingTrials(pend);
+        setBillingOfferRows(offers);
+        setFleetDevices(fleet);
+        setAuditFeed(audit);
+        INTERNAL_OPS_CACHE = {
+          ...cacheBase,
+          plans: p,
+          recent: r,
+          tickets: tk,
+          districts: d,
+          bizTypes: b,
+          signups7: charts?.signups7 ?? [],
+          subs7: charts?.subs7 ?? [],
+          sales7: charts?.sales7 ?? [],
+          visits: v,
+          pendingTrials: pend,
+          billingOfferRows: offers,
+          fleetDevices: fleet,
+          auditFeed: audit,
+        };
+        return;
       }
 
       const [p, r, tk, d, b, v, pins, pend, offers, fleet, audit] = await Promise.all([
@@ -219,18 +425,15 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
       setFleetDevices(fleet);
       setAuditFeed(audit);
       INTERNAL_OPS_CACHE = {
-        at: Date.now(),
-        stats: dash.ok ? dash.stats : null,
-        statsError: !dash.ok,
-        statsErrorMessage: dash.ok ? "" : dash.message,
+        ...cacheBase,
         plans: p,
         recent: r,
         tickets: tk,
         districts: d,
         bizTypes: b,
-        signups7: charts?.signups?.length ? charts.signups : signups7.length ? signups7 : [],
-        subs7: charts?.subscriptions?.length ? charts.subscriptions : subs7.length ? subs7 : [],
-        sales7: charts?.sales?.length ? charts.sales : sales7.length ? sales7 : [],
+        signups7: charts?.signups7 ?? [],
+        subs7: charts?.subs7 ?? [],
+        sales7: charts?.sales7 ?? [],
         visits: v,
         pendingTrials: pend,
         billingOfferRows: offers,
@@ -238,9 +441,10 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
         auditFeed: audit,
       };
     } finally {
+      loadInFlightRef.current = false;
       setOpsLoading(false);
     }
-  }, [adminRow, mapDistrictId, previewMode, seedPreview, signups7, subs7, sales7]);
+  }, [adminRow, loadChartBuckets, loadScope, mapDistrictId, previewMode, seedPreview]);
 
   useEffect(() => {
     if (previewMode) {
@@ -256,18 +460,24 @@ export function useInternalOpsData(adminRow: WakaInternalAdminRow | null, previe
       return;
     }
     void loadAll();
-  }, [adminRow, previewMode, loadAll, seedPreview, hydrateFromCache]);
+  }, [adminRow?.id, previewMode, loadScope]);
 
   useEffect(() => {
     if (previewMode || !adminRow) return;
-    const id = window.setInterval(() => void loadAll({ silent: true }), 15_000);
+    const pollMs =
+      loadScope === "shops" || loadScope === "devices" || loadScope === "support" ? 60_000 : 45_000;
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      void loadAll({ silent: true });
+    };
+    const id = window.setInterval(tick, pollMs);
     return () => window.clearInterval(id);
-  }, [adminRow, previewMode, loadAll]);
+  }, [adminRow?.id, previewMode, loadScope, loadAll]);
 
   useEffect(() => {
-    if (previewMode || !adminRow) return;
+    if (previewMode || !adminRow || loadScope !== "full") return;
     void fetchFieldMapPins({ districtId: mapDistrictId || null, limit: 400 }).then(setMapPins);
-  }, [adminRow, mapDistrictId, previewMode]);
+  }, [adminRow?.id, mapDistrictId, previewMode, loadScope]);
 
   const shopOpenings = useMemo(() => {
     const byId = new Map<string, RecentShopRow>();

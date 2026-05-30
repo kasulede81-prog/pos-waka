@@ -12,7 +12,7 @@ import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription"
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
 import type { BusinessType, UserRole } from "../types";
-import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
@@ -67,21 +67,18 @@ function applyAccountSwitchSync(nextKey: string | null): void {
 
 function applySignupProfileToLocalStore(next: Session | null): void {
   if (!next?.user) return;
-  const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-  const shopName =
-    String(meta?.shop_display_name ?? "").trim() ||
-    String(meta?.business_name ?? meta?.organization_name ?? meta?.shop_name ?? "").trim();
+  const profile = parseRegistrationProfileFromMeta(next.user.user_metadata as Record<string, unknown>);
   const store = usePosStore.getState();
   const existingOwner =
     isWorkspaceBootstrapped(next.user.id) || readCachedOwnerOnboardingComplete(next.user.id) === true;
-  store.setPreferences({
-    shopDisplayName: shopName || store.preferences.shopDisplayName,
-    shopPhoneE164: String(meta?.phone_e164 ?? "").trim() || store.preferences.shopPhoneE164,
-    shopCurrency: "UGX",
-    ...(existingOwner
-      ? { onboardingDone: true, onboardingWizardDone: true, schemaVersion: 2 as const }
-      : {}),
-  });
+  applyRegistrationProfileToLocalStore(profile);
+  if (existingOwner) {
+    store.setPreferences({
+      onboardingDone: true,
+      onboardingWizardDone: true,
+      schemaVersion: 2 as const,
+    });
+  }
 }
 
 export type SignUpResult =
@@ -118,9 +115,10 @@ export function useAuth() {
     () => readRememberedStaffDevice(),
   );
 
-  const [bootstrappedUserIds, setBootstrappedUserIds] = useState<Record<string, true>>({});
+  const bootstrappedUserIdsRef = useRef<Record<string, true>>({});
   const workspaceEnsureInFlightRef = useRef<string | null>(null);
   const workspaceEnsuredForUserRef = useRef<string | null>(null);
+  const backgroundSyncScheduledRef = useRef<Record<string, true>>({});
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
@@ -141,15 +139,19 @@ export function useAuth() {
 
     const alreadyEnsured =
       workspaceEnsuredForUserRef.current === uid ||
-      bootstrappedUserIds[uid] ||
+      bootstrappedUserIdsRef.current[uid] ||
       isWorkspaceBootstrapped(uid);
 
     if (alreadyEnsured) {
-      setBootstrappedUserIds((prev) => ({ ...prev, [uid]: true }));
-      scheduleBackgroundCloudSync({
-        pull: false,
-        delayMs: isNativeApp() ? 18_000 : 6000,
-      });
+      workspaceEnsuredForUserRef.current = uid;
+      bootstrappedUserIdsRef.current[uid] = true;
+      if (!backgroundSyncScheduledRef.current[uid]) {
+        backgroundSyncScheduledRef.current[uid] = true;
+        scheduleBackgroundCloudSync({
+          pull: false,
+          delayMs: isNativeApp() ? 18_000 : 6000,
+        });
+      }
       return;
     }
 
@@ -157,7 +159,7 @@ export function useAuth() {
     try {
     const existing = await resolvePrimaryOrganizationForUser(uid);
     if (existing?.shopId) {
-      setBootstrappedUserIds((prev) => ({ ...prev, [uid]: true }));
+      bootstrappedUserIdsRef.current[uid] = true;
       markWorkspaceBootstrapped(uid);
       await tryApplyPendingReferral(next);
       const onboarding = await fetchOwnerOnboardingStatus();
@@ -229,7 +231,7 @@ export function useAuth() {
           if (curErr) console.error("[waka-auth] default_currency update failed", curErr);
         }
       }
-      setBootstrappedUserIds((prev) => ({ ...prev, [next.user.id]: true }));
+      bootstrappedUserIdsRef.current[next.user.id] = true;
       markWorkspaceBootstrapped(next.user.id);
       await tryApplyPendingReferral(next);
       const onboarding = await fetchOwnerOnboardingStatus();
@@ -244,7 +246,10 @@ export function useAuth() {
       workspaceEnsureInFlightRef.current = null;
       workspaceEnsuredForUserRef.current = uid;
     }
-  }, [bootstrappedUserIds, tryApplyPendingReferral]);
+  }, [tryApplyPendingReferral]);
+
+  const ensureWorkspaceRef = useRef(ensureWorkspaceForSession);
+  ensureWorkspaceRef.current = ensureWorkspaceForSession;
 
   useEffect(() => {
     let cancelled = false;
@@ -285,7 +290,7 @@ export function useAuth() {
         setStaffSession(null);
         setLocalEmail(null);
         setInitializing(false);
-        void ensureWorkspaceForSession(next).catch((e) => {
+        void ensureWorkspaceRef.current(next).catch((e) => {
           console.error("[waka-auth] bootstrap on initial session failed", e);
         });
         return;
@@ -317,7 +322,7 @@ export function useAuth() {
         );
         applySignupProfileToLocalStore(next);
         if (event === "SIGNED_IN") {
-          void ensureWorkspaceForSession(next).catch((e) => {
+          void ensureWorkspaceRef.current(next).catch((e) => {
             console.error("[waka-auth] bootstrap on auth state change failed", e);
           });
         }
@@ -334,7 +339,7 @@ export function useAuth() {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [ensureWorkspaceForSession]);
+  }, []);
 
   const signIn = useCallback(async (identifier: string, password: string) => {
     clearStaffAuth();
@@ -374,7 +379,7 @@ export function useAuth() {
       if (!data.session) {
         throw new Error("Sign-in did not complete. Please try again.");
       }
-      await hydrateAccountFromCloud({ forcePull: true });
+      void hydrateAccountFromCloud({ forcePull: true });
       return;
     }
 
@@ -395,7 +400,7 @@ export function useAuth() {
       reportAuthIssue("google_oauth_failed", { status: error.status ?? 0 });
       throw new Error(formatAuthError(error));
     }
-    await hydrateAccountFromCloud();
+    void hydrateAccountFromCloud();
   }, []);
 
   const signUp = useCallback(

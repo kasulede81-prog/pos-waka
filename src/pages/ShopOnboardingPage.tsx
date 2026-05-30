@@ -17,7 +17,7 @@ import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLoca
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { PinInput } from "../components/ui/PinInput";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
-import { normalizeUgPhoneE164 } from "../lib/businessProfile";
+import { normalizeUgPhoneE164, loadRegistrationProfileFromAuth, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { supabase } from "../lib/supabase";
@@ -51,6 +51,10 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     authMode === "local" ? ("waka_plus" as const) : resolveEffectivePlanTier(snapshot);
   const showStaffStep = maxStaffAccountsForTier(planTier) > 0;
 
+  const [booting, setBooting] = useState(true);
+  const [ownerName, setOwnerName] = useState("");
+  const [registrationDistrictId, setRegistrationDistrictId] = useState("");
+  const [skippedWelcome, setSkippedWelcome] = useState(false);
   const [step, setStep] = useState<Step>("welcome");
   const [businessType, setBusinessType] = useState<BusinessType>("kiosk_duka");
   const [sellingStyle, setSellingStyle] = useState<ShopSellingStyle>("piece");
@@ -68,15 +72,27 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   }, []);
 
   useEffect(() => {
-    if (districtId) return;
     void (async () => {
-      if (!supabase) return;
-      const { data } = await supabase.auth.getUser();
-      const meta = data.user?.user_metadata as Record<string, unknown> | undefined;
-      const fromMeta = typeof meta?.district_id === "string" ? meta.district_id : "";
-      if (fromMeta) setDistrictId(fromMeta);
+      try {
+        const profile = await loadRegistrationProfileFromAuth();
+        if (profile) {
+          applyRegistrationProfileToLocalStore(profile);
+          if (profile.ownerFullName) setOwnerName(profile.ownerFullName);
+          if (profile.districtId) {
+            setDistrictId(profile.districtId);
+            setRegistrationDistrictId(profile.districtId);
+          }
+          if (profile.phoneE164) setPhoneFallback(profile.phoneE164);
+          if (profile.shopDisplayName) {
+            setStep("business");
+            setSkippedWelcome(true);
+          }
+        }
+      } finally {
+        setBooting(false);
+      }
     })();
-  }, [districtId]);
+  }, []);
 
   useEffect(() => {
     const fromPrefs = preferences.shopPhoneE164?.trim() ?? "";
@@ -97,6 +113,13 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
   const stepIndex = useMemo(() => stepOrder.indexOf(step), [stepOrder, step]);
   const progressTotal = Math.max(stepOrder.length - 1, 1);
+  const districtLabel = useMemo(
+    () => districts.find((d) => d.id === districtId)?.name ?? "",
+    [districts, districtId],
+  );
+  const contactFromSignup = Boolean(
+    registrationDistrictId && (normalizeUgPhoneE164(phoneFallback) || normalizeUgPhoneE164(preferences.shopPhoneE164 ?? "")),
+  );
 
   const resolveOnboardingPhone = async (): Promise<string | null> => {
     const candidates = [
@@ -200,13 +223,22 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   return (
     <AuthLayout lang={lang} setLang={setLang}>
       <div className="mx-auto max-w-md rounded-3xl border border-stone-200/80 bg-white p-5 shadow-waka-sm sm:p-6">
-        {step !== "welcome" ? <ProgressDots step={stepIndex} total={progressTotal} /> : null}
+        {booting ? (
+          <p className="py-16 text-center text-sm font-semibold text-stone-500">…</p>
+        ) : null}
+        {!booting && step !== "welcome" ? <ProgressDots step={stepIndex} total={progressTotal} /> : null}
 
-        {step === "welcome" ? (
+        {!booting && step === "welcome" ? (
           <div className="space-y-5 py-2 text-center">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-waka-700">{t(lang, "onboardWelcomeKicker")}</p>
             <h1 className="text-2xl font-black text-stone-900">{t(lang, "onboardWelcomeTitle")}</h1>
             <p className="text-base font-medium text-stone-600">{t(lang, "onboardWelcomeSub")}</p>
+            {ownerName ? (
+              <p className="text-sm font-bold text-stone-700">
+                {t(lang, "registerOwnerFullNameLabel")}: {ownerName}
+              </p>
+            ) : null}
+            <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "registerShopNameLabel")}</p>
             <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-waka-900">{shopName}</p>
             <button type="button" className={primaryBtn} onClick={() => setStep("business")}>
               {t(lang, "onboardLetsGo")}
@@ -221,12 +253,14 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           </div>
         ) : null}
 
-        {step === "business" ? (
+        {!booting && step === "business" ? (
           <div className="space-y-4">
-            <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("welcome")}>
-              <ChevronLeft className="mr-1 inline h-4 w-4" />
-              {t(lang, "onboardBack")}
-            </button>
+            {!skippedWelcome ? (
+              <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("welcome")}>
+                <ChevronLeft className="mr-1 inline h-4 w-4" />
+                {t(lang, "onboardBack")}
+              </button>
+            ) : null}
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardBizTitle")}</h2>
             <div className="grid gap-2">
               {ONBOARDING_BUSINESS_CARDS.map((card) => (
@@ -249,7 +283,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           </div>
         ) : null}
 
-        {step === "selling" ? (
+        {!booting && step === "selling" ? (
           <div className="space-y-4">
             <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("business")}>
               <ChevronLeft className="mr-1 inline h-4 w-4" />
@@ -282,42 +316,38 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           </div>
         ) : null}
 
-        {step === "location" ? (
+        {!booting && step === "location" ? (
           <div className="space-y-4">
             <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("selling")}>
               <ChevronLeft className="mr-1 inline h-4 w-4" />
               {t(lang, "onboardBack")}
             </button>
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardLocTitle")}</h2>
-            <p className="text-sm font-medium text-stone-600">{t(lang, "onboardLocSub")}</p>
-            <label className="block text-sm font-bold text-stone-800">{t(lang, "registerDistrictLabel")}</label>
-            <select
-              value={districtId}
-              onChange={(e) => setDistrictId(e.target.value)}
-              className={fieldClass}
-              required
-            >
-              <option value="">—</option>
-              {districts.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-            {!normalizeUgPhoneE164(preferences.shopPhoneE164 ?? "") ? (
+            <p className="text-sm font-medium text-stone-600">
+              {contactFromSignup ? t(lang, "onboardLocGpsOnlySub") : t(lang, "onboardLocSub")}
+            </p>
+            {contactFromSignup && districtLabel ? (
+              <p className="rounded-xl bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-800">
+                {t(lang, "registerDistrictLabel")}: {districtLabel}
+              </p>
+            ) : (
               <>
-                <label className="block text-sm font-bold text-stone-800">{t(lang, "registerPhoneLabel")}</label>
-                <input
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={phoneFallback}
-                  onChange={(e) => setPhoneFallback(e.target.value)}
-                  placeholder="07XXXXXXXX"
+                <label className="block text-sm font-bold text-stone-800">{t(lang, "registerDistrictLabel")}</label>
+                <select
+                  value={districtId}
+                  onChange={(e) => setDistrictId(e.target.value)}
                   className={fieldClass}
-                />
+                  required
+                >
+                  <option value="">—</option>
+                  {districts.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
               </>
-            ) : null}
+            )}
             {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
             {!gpsSkipped && lat != null ? (
               <p className="rounded-xl bg-stone-50 px-3 py-2 text-xs font-mono text-stone-700">
@@ -348,7 +378,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           </div>
         ) : null}
 
-        {step === "staff" ? (
+        {!booting && step === "staff" ? (
           <div className="space-y-4">
             <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("location")}>
               <ChevronLeft className="mr-1 inline h-4 w-4" />
@@ -420,7 +450,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           </div>
         ) : null}
 
-        {step === "products" ? (
+        {!booting && step === "products" ? (
           <div className="space-y-4">
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardProductsTitle")}</h2>
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardProductsSub")}</p>

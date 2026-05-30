@@ -20,7 +20,7 @@ type Props = {
 export function AdminDevicesPage({ adminRow, previewMode }: Props) {
   const navigate = useNavigate();
   const perms = adminPermissions(adminRow);
-  const data = useInternalOpsData(adminRow, previewMode);
+  const data = useInternalOpsData(adminRow, previewMode, "devices");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "offline" | "risk">("all");
 

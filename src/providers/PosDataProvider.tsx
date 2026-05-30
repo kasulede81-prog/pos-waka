@@ -80,14 +80,17 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
         if (bootGenRef.current !== gen) return;
         const shouldPullCloud =
           hasSupabaseConfig && accountKey.startsWith("sb:") && isLocalShopDataEmpty();
+        setReady(true);
+        void hideNativeSplashWhenReady();
         if (shouldPullCloud) {
           setCloudRestore(true);
           const { hydrateAccountFromCloud } = await import("../lib/postAuthCloudHydrate");
-          await hydrateAccountFromCloud({ forcePull: true }).catch(() => undefined);
-          setCloudRestore(false);
+          void hydrateAccountFromCloud({ forcePull: true })
+            .catch(() => undefined)
+            .finally(() => {
+              if (bootGenRef.current === gen) setCloudRestore(false);
+            });
         }
-        setReady(true);
-        void hideNativeSplashWhenReady();
       });
 
     return () => {

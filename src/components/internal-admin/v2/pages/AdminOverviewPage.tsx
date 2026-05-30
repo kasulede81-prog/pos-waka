@@ -27,7 +27,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
   const navigate = useNavigate();
   const { hour, dateStr } = kampalaNowParts();
   const perms = adminPermissions(adminRow);
-  const data = useInternalOpsData(adminRow, previewMode);
+  const data = useInternalOpsData(adminRow, previewMode, "overview");
 
   const [activeSheet, setActiveSheet] = useState<OpsSheetId>(null);
   const [announceOpen, setAnnounceOpen] = useState(false);

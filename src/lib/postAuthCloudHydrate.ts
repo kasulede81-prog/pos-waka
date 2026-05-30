@@ -1,4 +1,5 @@
 import { getDeviceOnline } from "./deviceOnline";
+import { shouldPausePosBackgroundWork } from "./backgroundWorkPolicy";
 import { isNativeApp } from "./nativeApp";
 import { runWhenIdle } from "./uiYield";
 import { hasSupabaseConfig } from "./supabase";
@@ -12,12 +13,21 @@ let hydrateInFlight: Promise<void> | null = null;
 let lastHydrateFinishedAt = 0;
 
 async function waitForPosStoreHydrated(timeoutMs = 30_000): Promise<boolean> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (usePosStore.getState()._hydrated) return true;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  return usePosStore.getState()._hydrated;
+  if (usePosStore.getState()._hydrated) return true;
+  return new Promise((resolve) => {
+    let unsub: (() => void) | null = null;
+    const timeoutId = window.setTimeout(() => {
+      unsub?.();
+      resolve(usePosStore.getState()._hydrated);
+    }, timeoutMs);
+    unsub = usePosStore.subscribe((state) => {
+      if (state._hydrated) {
+        window.clearTimeout(timeoutId);
+        unsub?.();
+        resolve(true);
+      }
+    });
+  });
 }
 
 async function runHydrateAccountFromCloud(opts?: {
@@ -71,6 +81,7 @@ export async function hydrateAccountFromCloud(opts?: {
   onProgress?: (percent: number) => void;
 }): Promise<void> {
   if (!hasSupabaseConfig) return;
+  if (shouldPausePosBackgroundWork()) return;
 
   const force = opts?.forcePull === true;
   const minGap = force ? HYDRATE_FORCE_COOLDOWN_MS : HYDRATE_COOLDOWN_MS;

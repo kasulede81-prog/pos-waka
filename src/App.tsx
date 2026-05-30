@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
@@ -48,6 +48,7 @@ import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
 import { LegalPolicyPage } from "./pages/LegalPolicyPage";
 import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
+import { InternalAdminOutlet } from "./components/routing/InternalAdminOutlet";
 import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
 import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
@@ -195,6 +196,24 @@ function App() {
               <Route
                 element={
                   <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+                    <Outlet />
+                  </SubscriptionProvider>
+                }
+              >
+                <Route element={<InternalAdminOutlet />}>
+                  <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/shops" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/devices" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/analytics" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/support" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/billing" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/agents" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
+                </Route>
+                <Route
+                  element={
                     <PosDataProvider lang={lang} accountKey={auth.accountKey}>
                       <OnboardingRouteGate
                         authMode={auth.mode}
@@ -203,9 +222,8 @@ function App() {
                         staffSession={auth.staffSession}
                       />
                     </PosDataProvider>
-                  </SubscriptionProvider>
-                }
-              >
+                  }
+                >
                 <Route path="onboarding" element={<ShopOnboardingPage lang={lang} setLang={setLang} onSignOut={auth.signOut} />} />
                 <Route
                   element={
@@ -469,20 +487,11 @@ function App() {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/shops" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/devices" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/analytics" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/support" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/billing" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/agents" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
-            <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
+                </Route>
               </Route>
             </Route>
           </Route>
-          </Route>
+        </Route>
         </Route>
 
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />

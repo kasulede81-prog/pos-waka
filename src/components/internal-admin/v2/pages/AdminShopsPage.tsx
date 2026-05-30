@@ -17,7 +17,7 @@ type Props = {
 export function AdminShopsPage({ adminRow, previewMode }: Props) {
   const navigate = useNavigate();
   const perms = adminPermissions(adminRow);
-  const data = useInternalOpsData(adminRow, previewMode);
+  const data = useInternalOpsData(adminRow, previewMode, "shops");
   const [search, setSearch] = useState("");
   const [district, setDistrict] = useState("");
   const [plan, setPlan] = useState("");

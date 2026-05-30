@@ -9,7 +9,7 @@ type Props = {
 };
 
 export function AdminAnalyticsPage({ adminRow, previewMode }: Props) {
-  const data = useInternalOpsData(adminRow, previewMode);
+  const data = useInternalOpsData(adminRow, previewMode, "analytics");
 
   const churnHint =
     data.stats && data.stats.totalShops > 0

@@ -96,6 +96,7 @@ const en: Dict = {
   onboardSellMixedNote: "Great — we'll help with crates, sacks, and piece sales.",
   onboardLocTitle: "Add your shop location?",
   onboardLocSub: "Optional — helps field support find you.",
+  onboardLocGpsOnlySub: "Your district and mobile number are already saved. GPS is optional.",
   onboardLocUse: "Use my location",
   onboardLocSkip: "Skip for now",
   onboardStaffTitle: "Add workers now?",
