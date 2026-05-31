@@ -32,6 +32,7 @@ import { AboutPage } from "./pages/public/AboutPage";
 import { ContactPage } from "./pages/public/ContactPage";
 import { FounderPage } from "./pages/public/FounderPage";
 import { CompanyPage } from "./pages/public/CompanyPage";
+import { VerifyAgentPage } from "./pages/public/VerifyAgentPage";
 import { DemoExperiencePage } from "./pages/DemoExperiencePage";
 import { BusinessActivationPage } from "./pages/BusinessActivationPage";
 import { PosDataProvider } from "./providers/PosDataProvider";
@@ -190,6 +191,7 @@ function App() {
           path="/acceptable-use"
           element={<LegalPolicyPage kind="acceptable-use" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
         />
+        <Route path="/verify-agent/:agentId" element={<VerifyAgentPage lang={lang} />} />
 
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>
           <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />

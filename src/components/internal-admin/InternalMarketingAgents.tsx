@@ -5,6 +5,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
   buildAgentReferralRegisterUrl,
+  buildAgentVerificationUrl,
   formatOwnerContactLabel,
   internalSearchAgentUserCandidates,
   internalGrantMarketingAgentByShopWithRoles,
@@ -18,6 +19,7 @@ import {
   type InternalMarketingAgentRow,
   type MarketingAgentRole,
 } from "../../lib/referralAgents";
+import { AgentVerificationQr } from "../agents/AgentVerificationQr";
 
 type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
 
@@ -154,6 +156,17 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     try {
       await navigator.clipboard.writeText(url);
       setCreateMsg(t(lang, "agentLinkCopied"));
+    } catch {
+      setCreateMsg(url);
+    }
+    window.setTimeout(() => setCreateMsg(null), 3000);
+  };
+
+  const copyVerifyLink = async (code: string) => {
+    const url = buildAgentVerificationUrl(code);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCreateMsg(t(lang, "agentVerifyLinkCopied"));
     } catch {
       setCreateMsg(url);
     }
@@ -321,6 +334,25 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   <p className="mt-1 text-[11px] font-bold uppercase text-stone-400">{a.active ? "Active" : "Inactive"}</p>
                 </div>
               </div>
+              <div className="mt-3 flex flex-wrap items-start gap-4 border-t border-stone-100 pt-3">
+                <AgentVerificationQr referralCode={a.referralCode} size={120} />
+                <div className="flex min-w-[10rem] flex-1 flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void copyVerifyLink(a.referralCode)}
+                    className="text-left text-sm font-black text-waka-800 underline"
+                  >
+                    {t(lang, "agentCopyVerifyLink")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void copyAgentLink(a.referralCode)}
+                    className="text-left text-sm font-black text-stone-700 underline"
+                  >
+                    {t(lang, "agentCopyLink")}
+                  </button>
+                </div>
+              </div>
               <div className="mt-3 space-y-2">
                 <p className="text-xs font-bold text-stone-600">{t(lang, "internalAgentsRolesLabel")}</p>
                 <div className="flex flex-wrap gap-2">
@@ -357,13 +389,6 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   className="rounded-lg border border-stone-300 bg-white px-3 py-1.5 text-xs font-black text-stone-800 disabled:opacity-50"
                 >
                   {roleBusyKey === a.id ? "…" : t(lang, "internalAgentsSaveRoles")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void copyAgentLink(a.referralCode)}
-                  className="mt-2 text-sm font-black text-waka-800 underline"
-                >
-                  {t(lang, "agentCopyLink")}
                 </button>
               </div>
               <button

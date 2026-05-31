@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { isNativeApp, NATIVE_PUBLIC_PATHS, unauthenticatedEntryPath } from "../lib/nativeApp";
+import { isNativeApp, isVerifyAgentPath, NATIVE_PUBLIC_PATHS, unauthenticatedEntryPath } from "../lib/nativeApp";
 
 type Props = {
   isAuthenticated: boolean;
@@ -17,7 +17,7 @@ export function NativePublicGuard({ isAuthenticated }: Props) {
   }
 
   const path = pathname.split("?")[0] || "/";
-  if (NATIVE_PUBLIC_PATHS.has(path)) {
+  if (NATIVE_PUBLIC_PATHS.has(path) || isVerifyAgentPath(path)) {
     return <Outlet />;
   }
 

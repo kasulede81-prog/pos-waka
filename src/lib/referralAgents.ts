@@ -1,6 +1,7 @@
 import { authRedirectOrigin } from "./authConfig";
 import { isPhoneLoginEmail } from "./authPhoneEmail";
 import { supabase } from "./supabase";
+import { posCanonical } from "../config/company";
 import type { FieldMapPin } from "./wakaInternalAdmin";
 
 export type MarketingAgentRole = "trial_agent" | "vip_agent" | "field_agent";
@@ -65,6 +66,58 @@ export function buildAgentReferralRegisterUrl(referralCode: string): string {
   const code = normalizeReferralCode(referralCode);
   const origin = authRedirectOrigin().replace(/\/$/, "");
   return `${origin}/register?ref=${encodeURIComponent(code)}`;
+}
+
+/** Public agent verification URL for QR codes (always pos.waka.ug in production). */
+export function buildAgentVerificationUrl(referralCode: string): string {
+  const code = normalizeReferralCode(referralCode);
+  return posCanonical(`/verify-agent/${encodeURIComponent(code)}`);
+}
+
+export type AgentVerificationStatus = "active" | "suspended" | "expired";
+
+export type AgentVerificationResult = {
+  referralCode: string;
+  agentName: string;
+  status: AgentVerificationStatus;
+  isActive: boolean;
+  issuedAt: string;
+  expiresAt: string;
+  phoneE164: string | null;
+};
+
+/** Public lookup for /verify-agent/:code — no login required. */
+export async function fetchAgentVerification(agentId: string): Promise<AgentVerificationResult | null> {
+  if (!supabase) return null;
+  const code = normalizeReferralCode(agentId);
+  if (code.length < 3) return null;
+  const { data, error } = await supabase.rpc("public_verify_marketing_agent", { p_code: code });
+  if (error || !data || typeof data !== "object") return null;
+  const row = data as {
+    ok?: boolean;
+    error?: string;
+    referral_code?: string;
+    agent_name?: string;
+    status?: string;
+    is_active?: boolean;
+    issued_at?: string;
+    expires_at?: string;
+    phone_e164?: string | null;
+  };
+  if (!row.ok || row.error === "not_found" || row.error === "invalid_code") return null;
+  const status =
+    row.status === "active" || row.status === "suspended" || row.status === "expired"
+      ? row.status
+      : "suspended";
+  return {
+    referralCode: normalizeReferralCode(row.referral_code ?? code),
+    agentName: row.agent_name?.trim() || "Waka Agent",
+    status,
+    isActive: Boolean(row.is_active),
+    issuedAt: String(row.issued_at ?? ""),
+    expiresAt: String(row.expires_at ?? ""),
+    phoneE164: row.phone_e164?.trim() || null,
+  };
 }
 
 /** Hide synthetic phone-login emails; show phone and email when both exist. */

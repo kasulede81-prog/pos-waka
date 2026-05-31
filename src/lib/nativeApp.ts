@@ -20,6 +20,11 @@ export function useAuthShellForPublicPage(isAuthenticated: boolean): boolean {
   return isAuthenticated || isNativeApp();
 }
 
+export function isVerifyAgentPath(pathname: string): boolean {
+  const p = pathname.split("?")[0] || "/";
+  return p === "/verify-agent" || p.startsWith("/verify-agent/");
+}
+
 /** Paths reachable before sign-in on Android/iOS (auth + legal footer links). */
 export const NATIVE_PUBLIC_PATHS = new Set([
   "/login",
