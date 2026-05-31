@@ -17,6 +17,7 @@ export function buildSalesDayIndex(sales: Sale[], lookbackDays = DEFAULT_LOOKBAC
   const revenueByDay = new Map<string, number>();
 
   for (const s of sales) {
+    if (s.status === "pending" || s.status === "cancelled") continue;
     const dk = dateKeyKampala(s.createdAt);
     if (dk < minKey) continue;
 
@@ -90,6 +91,7 @@ export function scanTodaySalesHead(
   const unitsByProduct = new Map<string, number>();
 
   for (const sale of sales) {
+    if (sale.status === "pending" || sale.status === "cancelled") continue;
     if (dateKeyKampala(sale.createdAt) !== todayKey) break;
     todaySales.push(sale);
     if (Number.isFinite(sale.receiptSeq)) {

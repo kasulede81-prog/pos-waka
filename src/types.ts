@@ -1,7 +1,7 @@
 export type Language = "en" | "lg" | "sw";
 
 /** POS staff role — persisted in snapshot + Supabase `shop_members` / user metadata when configured. */
-export type UserRole = "owner" | "manager" | "cashier" | "stock_keeper" | "supervisor";
+export type UserRole = "owner" | "manager" | "cashier" | "stock_keeper" | "supervisor" | "waiter";
 
 /**
  * Fine-grained capabilities for UI and mutations.
@@ -44,7 +44,15 @@ export type Permission =
   /** Edit cash expense entries */
   | "expenses.edit"
   /** Remove / void cash expense entries */
-  | "expenses.delete";
+  | "expenses.delete"
+  /** Restaurant/bar floor plan and table service */
+  | "hospitality.floor"
+  | "hospitality.order"
+  | "hospitality.settle"
+  | "hospitality.transfer"
+  | "hospitality.kitchen"
+  /** Hold cart / open table bill without completing */
+  | "pending_sales.manage";
 
 export type AuditAction =
   | "sale_completed"
@@ -156,6 +164,9 @@ export type BusinessType =
   | "mini_supermarket"
   | "hardware"
   | "restaurant"
+  | "bar"
+  | "restaurant_bar"
+  | "hotel"
   | "salon"
   | "pharmacy"
   | "boutique"
@@ -163,6 +174,94 @@ export type BusinessType =
   | "produce_market"
   | "mobile_money_agent"
   | "other";
+
+/** Client sale lifecycle — pending maps to DB draft */
+export type SaleStatus = "completed" | "pending" | "cancelled";
+
+export type TableDisplayStatus = "available" | "occupied" | "payment_pending" | "reserved" | "disabled";
+
+export type TableSessionStatus = "open" | "payment_pending" | "closed" | "cancelled" | "merged";
+
+export type KitchenStationType = "kitchen" | "bar" | "grill" | "coffee" | "other";
+
+export type DiningArea = {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+export type DiningTable = {
+  id: string;
+  areaId: string;
+  label: string;
+  capacity?: number;
+  sortOrder: number;
+  displayStatus: TableDisplayStatus;
+  isActive: boolean;
+};
+
+export type KitchenStation = {
+  id: string;
+  name: string;
+  stationType: KitchenStationType;
+  sortOrder: number;
+  isActive: boolean;
+};
+
+export type TableSession = {
+  id: string;
+  tableId: string;
+  saleId: string;
+  guestCount: number;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  waiterStaffId?: string | null;
+  waiterLabel?: string | null;
+  status: TableSessionStatus;
+  openedAt: string;
+  closedAt?: string | null;
+  pendingSync?: boolean;
+};
+
+export type HospitalityFloorState = {
+  areas: DiningArea[];
+  tables: DiningTable[];
+  sessions: TableSession[];
+  stations: KitchenStation[];
+  kitchenTickets?: KitchenTicket[];
+};
+
+export type KitchenTicketStatus = "queued" | "preparing" | "ready" | "served" | "cancelled";
+
+export type KitchenTicketItem = {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  notes?: string | null;
+};
+
+export type KitchenTicket = {
+  id: string;
+  tableSessionId: string;
+  saleId: string;
+  stationId: string;
+  stationType: KitchenStationType;
+  status: KitchenTicketStatus;
+  ticketNumber: number;
+  firedAt: string;
+  tableLabel: string;
+  areaName?: string | null;
+  waiterLabel?: string | null;
+  items: KitchenTicketItem[];
+  pendingSync?: boolean;
+};
+
+export type BillSplitLine = {
+  label: string;
+  amountUgx: number;
+};
 
 /** How the product is counted and priced at the kiosk */
 export type SellingMode = "unit" | "weighted" | "portion";
@@ -306,6 +405,14 @@ export type SaleLine = {
 
 export type Sale = {
   id: string;
+  /** completed (default for legacy rows) · pending (open table / held cart) · cancelled */
+  status?: SaleStatus;
+  /** Cashier label: Table 5, customer name, etc. */
+  referenceLabel?: string | null;
+  /** Linked hospitality table session when applicable */
+  tableSessionId?: string | null;
+  /** Last cart update — used for sync merge */
+  updatedAt?: string | null;
   /** 1-based receipt sequence for this Kampala day (001, 002...). */
   receiptSeq?: number;
   lines: SaleLine[];
@@ -326,6 +433,8 @@ export type Sale = {
   customerId?: string | null;
   /** Staff who completed the sale (session actor); drives cashier performance on owner dashboard */
   soldByUserId?: string | null;
+  /** Optional split-bill breakdown shown on receipt (hospitality) */
+  splitBreakdown?: BillSplitLine[] | null;
   /** Payment mode selected at checkout. */
   paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit";
   /** What customer actually handed over (when captured at checkout). */
@@ -502,6 +611,15 @@ export type ShopPreferences = {
   lastMonthlyReportPromptMonth?: string | null;
   /** ISO time of last automatic archive job on this device. */
   lastArchiveRunAt?: string | null;
+  /** Restaurant/bar floor layout — persisted locally for offline-first service */
+  hospitalityFloor?: HospitalityFloorState;
+  /** Kill switch — when false, fall back to retail Sell even for hospitality business types */
+  hospitalityModeEnabled?: boolean;
+  /** Resume table order after refresh */
+  activeTableSessionId?: string | null;
+  /** Auto-remove pending sales after TTL (future) */
+  pendingSalesTtl?: "24h" | "3d" | "7d" | "never";
+  staffCanManagePendingSales?: boolean;
 };
 
 export type SyncOperationKind =

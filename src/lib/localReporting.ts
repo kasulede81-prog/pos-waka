@@ -3,6 +3,7 @@
 import type { Customer, Product, ReturnRecord, Sale, Supplier } from "../types";
 import { dateKeyKampala, dateKeyDaysAgoKampala, monthKeyKampala } from "./datesUg";
 import { computeTodayProfitBreakdown } from "./homeProfit";
+import { isCompletedSale } from "./saleStatus";
 import { isLowStock } from "./sellingEngine";
 
 export type ProductRank = {
@@ -83,6 +84,7 @@ function salesInRange(sales: Sale[], range: ReportRange): Sale[] {
   const weekCut = dateKeyDaysAgoKampala(6);
   const monthPrefix = today.slice(0, 7);
   return sales.filter((s) => {
+    if (!isCompletedSale(s)) return false;
     const k = dateKeyKampala(s.createdAt);
     if (range === "today") return k === today;
     if (range === "week") return k >= weekCut;

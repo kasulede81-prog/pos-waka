@@ -106,15 +106,24 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
   const [detailError, setDetailError] = useState<string | null>(null);
   const [roleBusyKey, setRoleBusyKey] = useState<string | null>(null);
   const [removeBusyKey, setRemoveBusyKey] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     if (previewMode) {
       setAgents(PREVIEW_AGENTS);
       setLoading(false);
       return;
     }
-    const rows = await internalListMarketingAgents();
+    const { rows, error } = await internalListMarketingAgents();
+    if (error) {
+      setLoadError(error);
+      setAgents([]);
+      setRoleEdits({});
+      setLoading(false);
+      return;
+    }
     setAgents(rows);
     setRoleEdits(Object.fromEntries(rows.map((a) => [a.id, [...a.roles]])));
     setLoading(false);
@@ -306,9 +315,13 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
         className="w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm font-semibold"
       />
 
+      {loadError ? (
+        <p className={clsx(cardCls, "border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-900")}>{loadError}</p>
+      ) : null}
+
       {loading ? (
         <p className="text-sm font-semibold text-stone-500">…</p>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && !loadError ? (
         <p className={clsx(cardCls, "px-4 py-8 text-center text-sm font-bold text-stone-500")}>{t(lang, "internalAgentsEmpty")}</p>
       ) : (
         <ul className="space-y-2">
@@ -318,6 +331,11 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                 <div>
                   <p className="font-mono text-lg font-black uppercase tracking-wide text-stone-950">{a.referralCode}</p>
                   <p className="text-sm font-semibold text-stone-700">{a.shopName ?? a.fullName ?? "—"}</p>
+                  {!a.active ? (
+                    <p className="mt-1 inline-block rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-900">
+                      Inactive
+                    </p>
+                  ) : null}
                   <p className="text-xs text-stone-500">
                     {formatOwnerContactLabel(a.email, a.phoneE164)}
                     {a.fullName && a.shopName ? ` · ${a.fullName}` : ""}

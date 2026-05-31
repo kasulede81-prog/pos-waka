@@ -7,7 +7,7 @@ import type { Permission, UserRole } from "../types";
  * - Local/offline sign-in: **owner** (single-device shop).
  * - Constrained accounts: set `pos_role` in Supabase user metadata to `cashier`, `manager`, or `stock_keeper`.
  */
-const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper", "supervisor"];
+const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper", "supervisor", "waiter"];
 
 function isUserRole(v: string): v is UserRole {
   return (ALL_ROLES as string[]).includes(v);
@@ -41,7 +41,16 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 8;
+const PERM_MATRIX_VERSION = 9;
+
+const HOSPITALITY_OWNER: Permission[] = [
+  "hospitality.floor",
+  "hospitality.order",
+  "hospitality.settle",
+  "hospitality.transfer",
+  "hospitality.kitchen",
+  "pending_sales.manage",
+];
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
@@ -73,6 +82,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "expenses.record",
     "expenses.edit",
     "expenses.delete",
+    ...HOSPITALITY_OWNER,
   ],
   manager: [
     "pos.sell",
@@ -98,9 +108,21 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "expenses.record",
     "expenses.edit",
     "expenses.delete",
+    ...HOSPITALITY_OWNER,
   ],
   /** Sell-first: can sell, void, receipts, and record drawer expenses. */
-  cashier: ["pos.sell", "sale_void", "receipts.view", "customers.view", "expenses.record"],
+  cashier: [
+    "pos.sell",
+    "sale_void",
+    "receipts.view",
+    "customers.view",
+    "expenses.record",
+    "hospitality.floor",
+    "hospitality.order",
+    "hospitality.settle",
+    "hospitality.transfer",
+    "pending_sales.manage",
+  ],
   stock_keeper: [
     "receipts.view",
     "stock.view",
@@ -136,6 +158,16 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.view",
     "expenses.record",
     "expenses.edit",
+    ...HOSPITALITY_OWNER,
+  ],
+  /** Table service — order and settle assigned tables; no back office. */
+  waiter: [
+    "pos.sell",
+    "receipts.view",
+    "hospitality.floor",
+    "hospitality.order",
+    "hospitality.settle",
+    "pending_sales.manage",
   ],
 };
 
@@ -144,7 +176,7 @@ const cache = new Map<string, Set<Permission>>();
 function permSet(role: UserRole): Set<Permission> {
   const key = `${PERM_MATRIX_VERSION}:${role}`;
   if (!cache.has(key)) {
-    cache.set(key, new Set(ROLE_PERMISSIONS[role]));
+    cache.set(key, new Set(ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.cashier));
   }
   return cache.get(key)!;
 }

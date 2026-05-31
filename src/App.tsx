@@ -79,6 +79,11 @@ const DashboardPage = lazy(() => import("./pages/DashboardPage").then((m) => ({ 
 const PosPage = lazy(() => import("./pages/PosPage").then((m) => ({ default: m.PosPage })));
 const OfficeHubPage = lazy(() => import("./pages/OfficeHubPage").then((m) => ({ default: m.OfficeHubPage })));
 const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage").then((m) => ({ default: m.ReceiptsPage })));
+const FloorPlanPage = lazy(() => import("./pages/FloorPlanPage").then((m) => ({ default: m.FloorPlanPage })));
+const TableOrderPage = lazy(() => import("./pages/TableOrderPage").then((m) => ({ default: m.TableOrderPage })));
+const SettingsFloorPage = lazy(() => import("./pages/SettingsFloorPage").then((m) => ({ default: m.SettingsFloorPage })));
+const KitchenDisplayPage = lazy(() => import("./pages/KitchenDisplayPage").then((m) => ({ default: m.KitchenDisplayPage })));
+const PendingSalesPage = lazy(() => import("./pages/PendingSalesPage").then((m) => ({ default: m.PendingSalesPage })));
 
 function LazyWait() {
   return (
@@ -365,6 +370,46 @@ function App() {
               }
             />
             <Route
+              path="floor"
+              element={
+                <RoleProtectedRoute permission="hospitality.floor">
+                  <Suspense fallback={<LazyWait />}>
+                    <FloorPlanPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="floor/order/:sessionId"
+              element={
+                <RoleProtectedRoute permission="hospitality.order">
+                  <Suspense fallback={<LazyWait />}>
+                    <TableOrderPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="kitchen"
+              element={
+                <RoleProtectedRoute permission="hospitality.kitchen">
+                  <Suspense fallback={<LazyWait />}>
+                    <KitchenDisplayPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="pending-sales"
+              element={
+                <RoleProtectedRoute permission="pending_sales.manage">
+                  <Suspense fallback={<LazyWait />}>
+                    <PendingSalesPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="reports"
               element={
                 <RoleProtectedRoute permission="reports.view">
@@ -461,6 +506,16 @@ function App() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsSellingPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/floor"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <Suspense fallback={<LazyWait />}>
+                    <SettingsFloorPage lang={lang} />
+                  </Suspense>
                 </RoleProtectedRoute>
               }
             />

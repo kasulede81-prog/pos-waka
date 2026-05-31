@@ -42,6 +42,20 @@ import { getActiveAccountKey } from "../offline/accountScope";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
+import {
+  buildPendingSaleFromDraft,
+  closeTableSession,
+  ensureHospitalityFloor,
+  openTableSessionOnFloor,
+  syncTableDisplayStatuses,
+} from "../lib/hospitality";
+import {
+  fireKitchenTicketsForLines,
+  mergeSaleLines,
+  mergeSessionsOnFloor,
+  transferSessionToTable,
+  updateKitchenTicketStatus,
+} from "../lib/hospitalityOps";
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
@@ -69,6 +83,7 @@ import {
 import { mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
+import { defaultHospitalityFloor, isHospitalityBusinessType } from "../lib/hospitality";
 import { dateKeyKampala } from "../lib/datesUg";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { normalizeShopCurrency } from "../lib/shopCurrency";
@@ -198,6 +213,8 @@ export type PosState = {
   draftInput: DraftLineInput | null;
   /** Whole-cart discount in UGX (applied at checkout, not per line). */
   draftCartDiscountUgx: number;
+  /** When set, draft cart belongs to an open table / pending sale */
+  activePendingSaleId: string | null;
 
   hydrate: (
     data: {
@@ -301,6 +318,23 @@ export type PosState = {
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
   setDraftCartDiscount: (amountUgx: number) => void;
   clearDraft: () => void;
+  ensureHospitalityFloor: () => void;
+  openTable: (input: {
+    tableId: string;
+    guestCount: number;
+    customerName?: string;
+    customerPhone?: string;
+  }) => { ok: boolean; errorKey?: string; sessionId?: string };
+  resumeTableSession: (sessionId: string) => { ok: boolean; errorKey?: string };
+  saveTableBill: () => { ok: boolean; errorKey?: string };
+  requestTableBill: (sessionId: string) => void;
+  clearActiveTableOrder: () => void;
+  transferTableSession: (sessionId: string, toTableId: string) => { ok: boolean; errorKey?: string };
+  mergeTableSessions: (sourceSessionId: string, targetSessionId: string) => { ok: boolean; errorKey?: string };
+  updateKitchenTicketStatus: (ticketId: string, status: import("../types").KitchenTicketStatus) => void;
+  savePendingSale: (referenceLabel?: string | null) => { ok: boolean; errorKey?: string; saleId?: string };
+  resumePendingSale: (saleId: string) => { ok: boolean; errorKey?: string };
+  cancelPendingSale: (saleId: string) => { ok: boolean; errorKey?: string };
   voidSaleLine: (input: {
     saleId: string;
     lineIndex: number;
@@ -322,6 +356,7 @@ export type PosState = {
     paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit";
     amountPaidUgx?: number;
     changeGivenUgx?: number;
+    splitBreakdown?: import("../types").BillSplitLine[] | null;
   }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
@@ -609,7 +644,16 @@ function normalizeSale(s: Sale): Sale {
   const estimatedProfitUgx = Number.isFinite(s.estimatedProfitUgx)
     ? Math.round(s.estimatedProfitUgx)
     : lines.reduce((sum, line) => sum + line.estimatedProfitUgx, 0);
-  return { ...s, lines, estimatedProfitUgx, customerId: s.customerId ?? null, soldByUserId: s.soldByUserId ?? null };
+  return {
+    ...s,
+    status: s.status ?? "completed",
+    lines,
+    estimatedProfitUgx,
+    customerId: s.customerId ?? null,
+    soldByUserId: s.soldByUserId ?? null,
+    referenceLabel: s.referenceLabel ?? null,
+    tableSessionId: s.tableSessionId ?? null,
+  };
 }
 
 function normalizeSupplier(s: Supplier): Supplier {
@@ -694,6 +738,7 @@ export const usePosStore = create<PosState>((set, get) => {
   draftLines: [],
   draftInput: null,
   draftCartDiscountUgx: 0,
+  activePendingSaleId: null,
 
   hydrate: (data, opts) =>
     set({
@@ -1018,6 +1063,10 @@ export const usePosStore = create<PosState>((set, get) => {
         onboardingDone: true,
         onboardingWizardDone: true,
         schemaVersion: 2,
+        hospitalityModeEnabled: isHospitalityBusinessType(businessType) ? true : s.preferences.hospitalityModeEnabled,
+        hospitalityFloor: isHospitalityBusinessType(businessType)
+          ? (s.preferences.hospitalityFloor ?? defaultHospitalityFloor())
+          : s.preferences.hospitalityFloor,
       },
     }));
   },
@@ -1130,11 +1179,291 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   clearDraft: () => {
-    set({ draftLines: [], draftInput: null, draftCartDiscountUgx: 0 });
+    set({ draftLines: [], draftInput: null, draftCartDiscountUgx: 0, activePendingSaleId: null });
     void clearPersistedDraft();
   },
 
-  finalizeDraftSale: ({ debtUgx, customerId, paymentMethod, amountPaidUgx, changeGivenUgx }) => {
+  ensureHospitalityFloor: () => {
+    const state = get();
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor);
+    if (floor === state.preferences.hospitalityFloor) return;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: floor,
+        hospitalityModeEnabled: state.preferences.hospitalityModeEnabled ?? true,
+      },
+    });
+    flushPendingPersist();
+  },
+
+  openTable: ({ tableId, guestCount, customerName, customerPhone }) => {
+    const state = get();
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const table = floor.tables.find((t) => t.id === tableId);
+    if (!table || !table.isActive) return { ok: false, errorKey: "invalid" };
+    if (floor.sessions.some((s) => s.tableId === tableId && (s.status === "open" || s.status === "payment_pending"))) {
+      return { ok: false, errorKey: "tableOccupied" };
+    }
+    const area = floor.areas.find((a) => a.id === table.areaId);
+    const saleId = crypto.randomUUID();
+    const sessionId = crypto.randomUUID();
+    const actor = state.sessionActor;
+    const referenceLabel = `${table.label}${area ? ` · ${area.name}` : ""}`;
+    const pendingSale = buildPendingSaleFromDraft({
+      saleId,
+      lines: [],
+      cartDiscountUgx: 0,
+      tableSessionId: sessionId,
+      referenceLabel,
+      soldByUserId: actor?.userId ?? null,
+    });
+    const nextFloor = openTableSessionOnFloor({
+      floor,
+      tableId,
+      saleId,
+      sessionId,
+      guestCount: Math.max(1, guestCount),
+      customerName,
+      customerPhone,
+      waiterStaffId: actor?.userId ?? null,
+      waiterLabel: actor?.displayName ?? null,
+    });
+    set({
+      sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: nextFloor,
+        activeTableSessionId: sessionId,
+      },
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
+      activePendingSaleId: saleId,
+    });
+    void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
+    flushPendingPersist();
+    return { ok: true, sessionId };
+  },
+
+  resumeTableSession: (sessionId) => {
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const session = floor.sessions.find((s) => s.id === sessionId);
+    if (!session || (session.status !== "open" && session.status !== "payment_pending")) {
+      return { ok: false, errorKey: "invalid" };
+    }
+    const sale = state.sales.find((s) => s.id === session.saleId);
+    if (!sale) return { ok: false, errorKey: "missingProduct" };
+    set({
+      draftLines: sale.lines.map((l) => ({ ...l })),
+      draftCartDiscountUgx: 0,
+      activePendingSaleId: sale.id,
+      preferences: { ...state.preferences, activeTableSessionId: sessionId },
+      draftInput: null,
+    });
+    return { ok: true };
+  },
+
+  saveTableBill: () => {
+    const state = get();
+    const saleId = state.activePendingSaleId;
+    if (!saleId) return { ok: false, errorKey: "invalid" };
+    const sessionId = state.preferences.activeTableSessionId;
+    const existing = state.sales.find((s) => s.id === saleId);
+    const pendingSale = buildPendingSaleFromDraft({
+      saleId,
+      lines: state.draftLines,
+      cartDiscountUgx: state.draftCartDiscountUgx,
+      tableSessionId: sessionId ?? existing?.tableSessionId ?? null,
+      referenceLabel: existing?.referenceLabel ?? null,
+      soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      existing: existing ?? null,
+    });
+    let nextFloor = state.preferences.hospitalityFloor;
+    if (nextFloor && sessionId) {
+      const session = nextFloor.sessions.find((s) => s.id === sessionId);
+      const table = session ? nextFloor.tables.find((t) => t.id === session.tableId) : undefined;
+      const area = table ? nextFloor.areas.find((a) => a.id === table.areaId) : undefined;
+      if (session && table) {
+        nextFloor = fireKitchenTicketsForLines({
+          floor: nextFloor,
+          session,
+          previousLines: existing?.lines ?? [],
+          newLines: pendingSale.lines,
+          products: state.products,
+          tableLabel: table.label,
+          areaName: area?.name ?? null,
+        });
+      }
+    }
+    set({
+      sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
+      preferences: nextFloor ? { ...state.preferences, hospitalityFloor: nextFloor } : state.preferences,
+    });
+    void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  requestTableBill: (sessionId) => {
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const sessions = floor.sessions.map((s) =>
+      s.id === sessionId && s.status === "open" ? { ...s, status: "payment_pending" as const } : s,
+    );
+    const nextFloor = syncTableDisplayStatuses({ ...floor, sessions });
+    set({ preferences: { ...state.preferences, hospitalityFloor: nextFloor } });
+    flushPendingPersist();
+  },
+
+  clearActiveTableOrder: () => {
+    set({
+      activePendingSaleId: null,
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
+      preferences: { ...get().preferences, activeTableSessionId: null },
+    });
+    void clearPersistedDraft();
+  },
+
+  transferTableSession: (sessionId, toTableId) => {
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const session = floor.sessions.find((s) => s.id === sessionId);
+    if (!session) return { ok: false, errorKey: "invalid" };
+    const { floor: nextFloor, saleReference } = transferSessionToTable(floor, sessionId, toTableId);
+    if (!saleReference) return { ok: false, errorKey: "tableOccupied" };
+    const sales = state.sales.map((s) =>
+      s.id === session.saleId ? { ...s, referenceLabel: saleReference, updatedAt: new Date().toISOString(), pendingSync: true } : s,
+    );
+    set({ preferences: { ...state.preferences, hospitalityFloor: nextFloor }, sales });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  mergeTableSessions: (sourceSessionId, targetSessionId) => {
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const source = floor.sessions.find((s) => s.id === sourceSessionId);
+    const target = floor.sessions.find((s) => s.id === targetSessionId);
+    if (!source || !target) return { ok: false, errorKey: "invalid" };
+    const sourceSale = state.sales.find((s) => s.id === source.saleId);
+    const targetSale = state.sales.find((s) => s.id === target.saleId);
+    if (!sourceSale || !targetSale) return { ok: false, errorKey: "missingProduct" };
+    const mergedLines = mergeSaleLines(targetSale.lines, sourceSale.lines);
+    const updatedTarget = buildPendingSaleFromDraft({
+      saleId: targetSale.id,
+      lines: mergedLines,
+      cartDiscountUgx: 0,
+      tableSessionId: target.id,
+      referenceLabel: targetSale.referenceLabel,
+      soldByUserId: targetSale.soldByUserId ?? null,
+      existing: targetSale,
+    });
+    const cancelledSource: Sale = { ...sourceSale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
+    const nextFloor = mergeSessionsOnFloor(floor, sourceSessionId, targetSessionId);
+    set({
+      sales: [updatedTarget, cancelledSource, ...state.sales.filter((s) => s.id !== targetSale.id && s.id !== sourceSale.id)],
+      preferences: { ...state.preferences, hospitalityFloor: nextFloor, activeTableSessionId: targetSessionId },
+      draftLines: mergedLines.map((l) => ({ ...l })),
+      activePendingSaleId: targetSale.id,
+    });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  updateKitchenTicketStatus: (ticketId, status) => {
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: updateKitchenTicketStatus(floor, ticketId, status),
+      },
+    });
+    flushPendingPersist();
+  },
+
+  savePendingSale: (referenceLabel) => {
+    const state = get();
+    if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
+    const saleId = state.activePendingSaleId ?? crypto.randomUUID();
+    const existing = state.sales.find((s) => s.id === saleId);
+    const pendingSale = buildPendingSaleFromDraft({
+      saleId,
+      lines: state.draftLines,
+      cartDiscountUgx: state.draftCartDiscountUgx,
+      referenceLabel: referenceLabel?.trim() || existing?.referenceLabel || null,
+      soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      existing: existing ?? null,
+    });
+    set({
+      sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
+      activePendingSaleId: saleId,
+      draftLines: [],
+      draftInput: null,
+      draftCartDiscountUgx: 0,
+    });
+    void clearPersistedDraft();
+    void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
+    flushPendingPersist();
+    return { ok: true, saleId };
+  },
+
+  resumePendingSale: (saleId) => {
+    const state = get();
+    if (state.draftLines.length && !state.activePendingSaleId) {
+      return { ok: false, errorKey: "invalid" };
+    }
+    const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
+    if (!sale) return { ok: false, errorKey: "invalid" };
+    set({
+      draftLines: sale.lines.map((l) => ({ ...l })),
+      draftCartDiscountUgx: 0,
+      activePendingSaleId: sale.id,
+      draftInput: null,
+      preferences: {
+        ...state.preferences,
+        activeTableSessionId: sale.tableSessionId ?? null,
+      },
+    });
+    return { ok: true };
+  },
+
+  cancelPendingSale: (saleId) => {
+    const state = get();
+    const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
+    if (!sale) return { ok: false, errorKey: "invalid" };
+    const cancelled: Sale = { ...sale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
+    let nextPrefs = state.preferences;
+    if (sale.tableSessionId && nextPrefs.hospitalityFloor) {
+      nextPrefs = {
+        ...nextPrefs,
+        hospitalityFloor: closeTableSession(nextPrefs.hospitalityFloor, sale.tableSessionId, "cancelled"),
+        activeTableSessionId:
+          nextPrefs.activeTableSessionId === sale.tableSessionId ? null : nextPrefs.activeTableSessionId,
+      };
+    }
+    set({
+      sales: [cancelled, ...state.sales.filter((s) => s.id !== saleId)],
+      preferences: nextPrefs,
+      ...(state.activePendingSaleId === saleId
+        ? { activePendingSaleId: null, draftLines: [], draftInput: null, draftCartDiscountUgx: 0 }
+        : {}),
+    });
+    void queueRemote("pending_sales", { saleId, kind: "pending_cancel" });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  finalizeDraftSale: ({ debtUgx, customerId, paymentMethod, amountPaidUgx, changeGivenUgx, splitBreakdown }) => {
     const state = get();
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
     const isFirstSale = state.sales.length === 0;
@@ -1172,8 +1501,14 @@ export const usePosStore = create<PosState>((set, get) => {
     const actor = state.sessionActor;
     const todayKey = dateKeyKampala(new Date());
     const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
+    const pendingId = state.activePendingSaleId;
+    const existingPending = pendingId ? state.sales.find((s) => s.id === pendingId && s.status === "pending") : null;
     const sale: Sale = {
-      id: crypto.randomUUID(),
+      id: existingPending?.id ?? crypto.randomUUID(),
+      status: "completed",
+      referenceLabel: existingPending?.referenceLabel ?? null,
+      tableSessionId: existingPending?.tableSessionId ?? null,
+      updatedAt: new Date().toISOString(),
       receiptSeq,
       lines: saleLines,
       subtotalUgx: listSubtotal,
@@ -1183,11 +1518,12 @@ export const usePosStore = create<PosState>((set, get) => {
       discountTotalUgx: discountTotal,
       voidedTotalUgx: 0,
       estimatedProfitUgx,
-      createdAt: new Date().toISOString(),
+      createdAt: existingPending?.createdAt ?? new Date().toISOString(),
       pendingSync: true,
       lastSyncError: null,
       customerId: customerId ?? null,
       soldByUserId: actorId,
+      splitBreakdown: splitBreakdown ?? null,
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
       amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
       changeGivenUgx: Number.isFinite(changeGivenUgx) ? Math.max(0, Math.floor(changeGivenUgx ?? 0)) : 0,
@@ -1248,10 +1584,17 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     let nextPreferences = state.preferences;
+    if (existingPending?.tableSessionId && nextPreferences.hospitalityFloor) {
+      nextPreferences = {
+        ...nextPreferences,
+        hospitalityFloor: closeTableSession(nextPreferences.hospitalityFloor, existingPending.tableSessionId),
+        activeTableSessionId: null,
+      };
+    }
     if (actor) {
       nextPreferences = {
-        ...state.preferences,
-        shifts: (state.preferences.shifts ?? []).map((sh) =>
+        ...nextPreferences,
+        shifts: (nextPreferences.shifts ?? []).map((sh) =>
           !sh.endAt && sh.actorUserId === actor.userId
             ? {
                 ...sh,
@@ -1267,10 +1610,11 @@ export const usePosStore = create<PosState>((set, get) => {
 
     set({
       products,
-      sales: [sale, ...state.sales],
+      sales: [sale, ...state.sales.filter((s) => s.id !== sale.id)],
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
+      activePendingSaleId: null,
       customers,
       stockMovements: mergeStockMovements(saleMovements, state.stockMovements),
       preferences: nextPreferences,

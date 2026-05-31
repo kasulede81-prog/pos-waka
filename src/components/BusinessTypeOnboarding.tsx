@@ -13,6 +13,9 @@ const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
 function featureKeyForBusinessType(type: BusinessType): string {
   if (type === "boutique") return "businessTypeFeatures_boutique";
   if (type === "restaurant") return "businessTypeFeatures_restaurant";
+  if (type === "bar") return "businessTypeFeatures_bar";
+  if (type === "restaurant_bar") return "businessTypeFeatures_restaurant_bar";
+  if (type === "hotel") return "businessTypeFeatures_hotel";
   if (type === "pharmacy") return "businessTypeFeatures_pharmacy";
   if (type === "hardware") return "businessTypeFeatures_hardware";
   if (type === "electronics") return "businessTypeFeatures_electronics";

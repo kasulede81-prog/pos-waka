@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, ShoppingCart, Receipt, Briefcase } from "lucide-react";
+import { Home, ShoppingCart, Receipt, Briefcase, LayoutGrid } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -18,6 +18,7 @@ import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
+import { isHospitalityMode } from "../../lib/hospitality";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { FloatingSupportFab } from "../support/FloatingSupportFab";
@@ -48,6 +49,9 @@ type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permis
 const MOBILE_NAV_ORDER = ["/", "/pos", "/receipts", "/office"] as const;
 
 function navItemActive(path: string, pathname: string): boolean {
+  if (path === "/floor") {
+    return pathname === "/floor" || pathname.startsWith("/floor/");
+  }
   if (path === "/office") {
     return pathname === "/office" || isBackOfficePath(pathname);
   }
@@ -66,6 +70,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       staffAccounts: s.preferences.staffAccounts,
       posLocked: s.preferences.posLocked,
       backOfficePin: s.preferences.backOfficePin,
+      businessType: s.preferences.businessType,
+      hospitalityModeEnabled: s.preferences.hospitalityModeEnabled,
     })),
   );
   const { authMode: subAuthMode, snapshot } = useSubscription();
@@ -184,9 +190,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
 
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
 
+  const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+
   const navDefs = useMemo((): NavDef[] => {
     const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
-    if (hasPermission(actor.role, "pos.sell")) {
+    if (hospitalityNav && hasPermission(actor.role, "hospitality.floor")) {
+      items.push({ path: "/floor", labelKey: "navFloor", Icon: LayoutGrid, perm: "hospitality.floor" });
+    } else if (hasPermission(actor.role, "pos.sell")) {
       items.push({ path: "/pos", labelKey: "navSell", Icon: ShoppingCart, perm: "pos.sell" });
     }
     if (hasPermission(actor.role, "receipts.view")) {
@@ -196,12 +206,15 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
     }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role]);
+  }, [actor.role, hospitalityNav]);
 
   const mobileNavDefs = useMemo(() => {
+    const order = hospitalityNav
+      ? (["/", "/floor", "/receipts", "/office"] as const)
+      : MOBILE_NAV_ORDER;
     const byPath = new Map(navDefs.map((item) => [item.path, item]));
-    return MOBILE_NAV_ORDER.map((path) => byPath.get(path)).filter((item): item is NavDef => Boolean(item));
-  }, [navDefs]);
+    return order.map((path) => byPath.get(path)).filter((item): item is NavDef => Boolean(item));
+  }, [navDefs, hospitalityNav]);
 
   return (
     <SessionActorProvider value={actor}>

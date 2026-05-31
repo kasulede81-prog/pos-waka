@@ -385,12 +385,21 @@ export function referralRowToMapPin(row: AgentReferralRow): FieldMapPin | null {
   };
 }
 
-export async function internalListMarketingAgents(): Promise<InternalMarketingAgentRow[]> {
-  if (!supabase) return [];
+export async function internalListMarketingAgents(): Promise<{
+  rows: InternalMarketingAgentRow[];
+  error: string | null;
+}> {
+  if (!supabase) return { rows: [], error: "offline" };
   const { data, error } = await supabase.rpc("internal_list_marketing_agents");
-  if (error) return [];
+  if (error) {
+    return {
+      rows: [],
+      error: rpcForbiddenMessage(error.message) ?? error.message,
+    };
+  }
   const rows = parseRpcJsonArray(data);
-  return rows.map((x) => {
+  return {
+    rows: rows.map((x) => {
     return {
       id: String(x.id ?? ""),
       referralCode: normalizeReferralCode(String(x.referral_code ?? "")),
@@ -404,7 +413,9 @@ export async function internalListMarketingAgents(): Promise<InternalMarketingAg
       referralCount: Number(x.referral_count ?? 0),
       createdAt: String(x.created_at ?? ""),
     };
-  });
+  }),
+    error: null,
+  };
 }
 
 /** Grant field-agent access to the owner of an existing shop (phone sign-up friendly). */

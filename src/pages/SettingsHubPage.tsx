@@ -1,26 +1,32 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { isHospitalityMode } from "../lib/hospitality";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
+import { usePosStore } from "../store/usePosStore";
 
 export function SettingsHubPage({ lang }: { lang: Language }) {
   const [searchParams] = useSearchParams();
+  const actor = useSessionActor();
+  const businessType = usePosStore((s) => s.preferences.businessType);
+  const hospitalityModeEnabled = usePosStore((s) => s.preferences.hospitalityModeEnabled);
+
   if (searchParams.get("onboard") === "1") {
     return <Navigate to="/settings/shop?onboard=1" replace />;
   }
 
-  const actor = useSessionActor();
   if (!hasPermission(actor.role, "settings.view")) {
     return <Navigate to="/" replace />;
   }
 
   const canShop = hasPermission(actor.role, "settings.shop");
+  const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
 
   return (
     <div className="space-y-6 pb-8">
@@ -55,6 +61,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubSelling")}
             subtitle={t(lang, "settingsHubSellingSub")}
             Icon={Sliders}
+          />
+        ) : null}
+        {showFloorSetup ? (
+          <OfficeNavCard
+            to="/settings/floor"
+            title={t(lang, "floorSetupTitle")}
+            subtitle={t(lang, "floorSetupSub")}
+            Icon={LayoutGrid}
           />
         ) : null}
         {canShop ? (

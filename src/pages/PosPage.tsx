@@ -22,6 +22,7 @@ import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
+import { pendingSales } from "../lib/saleStatus";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import {
   CATEGORY_FILTER_ALL,
@@ -131,12 +132,14 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const canSavePending = hasPermission(actor.role, "pending_sales.manage");
   const shopPreferences = usePosStore((s) => s.preferences);
   const { snapshot } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
   const products = usePosStore(useShallow((s) => s.products));
   const sales = useDeferredSales();
+  const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
   const customers = usePosStore(useShallow((s) => s.customers));
   const preferences = usePosStore(
     useShallow((s) => ({
@@ -168,6 +171,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const clearDraft = usePosStore((s) => s.clearDraft);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
+  const savePendingSale = usePosStore((s) => s.savePendingSale);
   const addCustomer = usePosStore((s) => s.addCustomer);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
@@ -754,6 +758,26 @@ export function PosPage({ lang }: { lang: Language }) {
     preferences.celebratedFirstSale,
   ]);
 
+  const handleSavePending = useCallback(() => {
+    if (!canSavePending || draftLines.length === 0) return;
+    const label = saleCustomerName.trim() || undefined;
+    const res = savePendingSale(label);
+    if (!res.ok) {
+      setToast(t(lang, res.errorKey ?? "saleError"));
+      window.setTimeout(() => setToast(null), 2200);
+      return;
+    }
+    setSaleCheckoutMinimized(false);
+    setCashInput("");
+    setMobileMoneyInput("");
+    setSaleCustomerId("");
+    setSaleCustomerName("");
+    setSaleCustomerPhone("");
+    setPaymentMethod("cash");
+    setToast(t(lang, "pendingSaved"));
+    window.setTimeout(() => setToast(null), 1600);
+  }, [canSavePending, draftLines.length, saleCustomerName, savePendingSale, lang]);
+
   const dismissFirstSale = useCallback(() => {
     setPreferences({ celebratedFirstSale: true });
     setFirstSaleOpen(false);
@@ -792,6 +816,17 @@ export function PosPage({ lang }: { lang: Language }) {
           </button>
         )}
         <div className="flex flex-wrap items-center gap-2">
+          {canSavePending ? (
+            <Link
+              to="/pending-sales"
+              className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm active:bg-slate-50"
+            >
+              {t(lang, "pendingSalesLink")}
+              {pendingCount > 0 ? (
+                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-black text-white">{pendingCount}</span>
+              ) : null}
+            </Link>
+          ) : null}
           {canRecordCashExpenses(actor.role, shopPreferences) ? (
             <Link
               to="/cash-expenses"
@@ -1282,6 +1317,15 @@ export function PosPage({ lang }: { lang: Language }) {
             <div aria-hidden className="h-4 shrink-0" />
           </div>
           <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+            {canSavePending && paymentMethod !== "credit" ? (
+              <button
+                type="button"
+                onClick={handleSavePending}
+                className="mb-2 min-h-[48px] w-full rounded-2xl border-2 border-amber-300 bg-amber-50 text-lg font-black text-amber-950 active:bg-amber-100"
+              >
+                {t(lang, "saveAsPending")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={finishSale}
