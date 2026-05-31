@@ -19,7 +19,6 @@ import {
   type InternalMarketingAgentRow,
   type MarketingAgentRole,
 } from "../../lib/referralAgents";
-import { AgentVerificationQr } from "../agents/AgentVerificationQr";
 
 type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
 
@@ -116,17 +115,24 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
       setLoading(false);
       return;
     }
-    const { rows, error } = await internalListMarketingAgents();
-    if (error) {
-      setLoadError(error);
+    try {
+      const { rows, error } = await internalListMarketingAgents();
+      if (error) {
+        setLoadError(error);
+        setAgents([]);
+        setRoleEdits({});
+        setLoading(false);
+        return;
+      }
+      setAgents(rows);
+      setRoleEdits(Object.fromEntries(rows.map((a) => [a.id, [...(a.roles ?? [])]])));
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Failed to load agents");
       setAgents([]);
       setRoleEdits({});
+    } finally {
       setLoading(false);
-      return;
     }
-    setAgents(rows);
-    setRoleEdits(Object.fromEntries(rows.map((a) => [a.id, [...a.roles]])));
-    setLoading(false);
   }, [previewMode]);
 
   useEffect(() => {
@@ -341,7 +347,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                     {a.fullName && a.shopName ? ` · ${a.fullName}` : ""}
                   </p>
                   <p className="text-[11px] font-bold uppercase text-stone-400">
-                    {(roleEdits[a.id] ?? a.roles).join(" · ")}
+                    {(roleEdits[a.id] ?? a.roles ?? []).join(" · ")}
                   </p>
                 </div>
                 <div className="text-right">
@@ -352,20 +358,25 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   <p className="mt-1 text-[11px] font-bold uppercase text-stone-400">{a.active ? "Active" : "Inactive"}</p>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap items-start gap-4 border-t border-stone-100 pt-3">
-                <AgentVerificationQr referralCode={a.referralCode} size={120} />
-                <div className="flex min-w-[10rem] flex-1 flex-col gap-2">
+              <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
+                <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+                  {t(lang, "agentVerifyQrTitle")}
+                </p>
+                <p className="break-all font-mono text-xs font-semibold text-stone-600">
+                  {buildAgentVerificationUrl(a.referralCode)}
+                </p>
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={() => void copyVerifyLink(a.referralCode)}
-                    className="text-left text-sm font-black text-waka-800 underline"
+                    className="text-sm font-black text-waka-800 underline"
                   >
                     {t(lang, "agentCopyVerifyLink")}
                   </button>
                   <button
                     type="button"
                     onClick={() => void copyAgentLink(a.referralCode)}
-                    className="text-left text-sm font-black text-stone-700 underline"
+                    className="text-sm font-black text-stone-700 underline"
                   >
                     {t(lang, "agentCopyLink")}
                   </button>

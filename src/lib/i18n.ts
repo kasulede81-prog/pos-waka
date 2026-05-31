@@ -1316,7 +1316,7 @@ const en: Dict = {
   agentCodeCopied: "Code copied.",
   agentLinkCopied: "Signup link copied.",
   agentVerifyQrTitle: "Verification QR",
-  agentVerifyQrSub: "Shops scan this to confirm you are an active Waka agent.",
+  agentVerifyQrSub: "Copy this link into any QR generator or print it on the agent card. Shops scan it to verify the agent.",
   agentCopyVerifyLink: "Copy verification link",
   agentVerifyLinkCopied: "Verification link copied.",
   agentVerifyPageTitle: "Agent verification",

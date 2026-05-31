@@ -14,7 +14,6 @@ import {
   type AgentReferralRow,
   type MarketingAgentMe,
 } from "../lib/referralAgents";
-import { AgentVerificationQr } from "../components/agents/AgentVerificationQr";
 const LovableFieldMap = lazy(async () => {
   const m = await import("../components/internal-admin/LovableFieldMap");
   return { default: m.LovableFieldMap };
@@ -193,9 +192,15 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
       <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         <p className="text-xs font-black uppercase tracking-widest text-stone-500">{t(lang, "agentVerifyQrTitle")}</p>
         <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "agentVerifyQrSub")}</p>
-        <div className="mt-4 flex justify-center">
-          <AgentVerificationQr referralCode={agent.referralCode} size={180} />
-        </div>
+        <p className="mt-3 break-all font-mono text-sm font-bold text-stone-800">{verifyLink}</p>
+        <button
+          type="button"
+          onClick={() => void copyVerifyLink()}
+          className="mt-3 inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-stone-200 bg-white px-4 py-2 text-sm font-black text-stone-800"
+        >
+          <Copy className="h-4 w-4" aria-hidden />
+          {t(lang, "agentCopyVerifyLink")}
+        </button>
       </article>
 
       <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
