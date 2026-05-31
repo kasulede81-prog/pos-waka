@@ -44,6 +44,9 @@ type Props = {
 
 type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
 
+/** Mobile tab order: flank items + raised Sell in the center. */
+const MOBILE_NAV_ORDER = ["/", "/receipts", "/pos", "/office"] as const;
+
 function navItemActive(path: string, pathname: string): boolean {
   if (path === "/office") {
     return pathname === "/office" || isBackOfficePath(pathname);
@@ -194,6 +197,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
   }, [actor.role]);
+
+  const mobileNavDefs = useMemo(() => {
+    const byPath = new Map(navDefs.map((item) => [item.path, item]));
+    return MOBILE_NAV_ORDER.map((path) => byPath.get(path)).filter((item): item is NavDef => Boolean(item));
+  }, [navDefs]);
 
   return (
     <SessionActorProvider value={actor}>
@@ -369,30 +377,53 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <nav
           className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden"
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}
+          aria-label="Main navigation"
         >
           <div
-            className="mx-auto grid max-w-lg gap-0.5 px-1 py-1 pb-bottom-nav"
-            style={{ gridTemplateColumns: `repeat(${Math.min(navDefs.length, 5)}, minmax(0, 1fr))` }}
+            className="mx-auto grid max-w-lg items-end gap-0 px-1.5 pt-1 pb-bottom-nav"
+            style={{ gridTemplateColumns: `repeat(${Math.min(mobileNavDefs.length, 5)}, minmax(0, 1fr))` }}
           >
-            {navDefs.map(({ path, labelKey, Icon }) => {
+            {mobileNavDefs.map(({ path, labelKey, Icon }) => {
               const active = navItemActive(path, location.pathname);
               const isSell = path === "/pos";
+              if (isSell) {
+                return (
+                  <div key={path} className="flex flex-col items-center justify-end">
+                    <button
+                      type="button"
+                      aria-current={active ? "page" : undefined}
+                      aria-label={t(lang, labelKey)}
+                      onClick={() => navigate(path, { preventScrollReset: true })}
+                      className={`touch-manipulation -mt-3 flex min-h-[52px] min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-full px-2 py-1.5 text-[10px] font-black leading-tight text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[56px] sm:min-w-[56px] sm:text-[11px] ${
+                        active
+                          ? "bg-waka-700 ring-2 ring-waka-300 ring-offset-2 ring-offset-white"
+                          : "bg-waka-600 hover:bg-waka-700"
+                      }`}
+                    >
+                      <Icon className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" strokeWidth={2.75} aria-hidden />
+                      <span className="max-w-[4.25rem] truncate text-center">{t(lang, labelKey)}</span>
+                    </button>
+                  </div>
+                );
+              }
               return (
                 <button
                   key={path}
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => navigate(path, { preventScrollReset: true })}
-                  className={`touch-manipulation flex min-h-[46px] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-1 text-[10px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:text-[11px] ${
-                    active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700"
-                  } ${isSell && !active ? "ring-2 ring-waka-200 ring-offset-1" : ""} ${isSell ? "sm:min-h-[50px]" : ""}`}
+                  className={`touch-manipulation flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-semibold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[46px] sm:text-[11px] ${
+                    active
+                      ? "bg-stone-100 text-waka-800 ring-1 ring-stone-200/80"
+                      : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
+                  }`}
                 >
                   <Icon
-                    className={isSell ? "h-8 w-8 shrink-0 sm:h-9 sm:w-9" : "h-5 w-5 shrink-0 sm:h-6 sm:w-6"}
-                    strokeWidth={isSell ? 2.6 : 2.25}
+                    className={`h-5 w-5 shrink-0 sm:h-[1.35rem] sm:w-[1.35rem] ${active ? "text-waka-700" : ""}`}
+                    strokeWidth={active ? 2.4 : 2}
                     aria-hidden
                   />
-                  <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
+                  <span className="max-w-[4.25rem] truncate text-center">{t(lang, labelKey)}</span>
                 </button>
               );
             })}
