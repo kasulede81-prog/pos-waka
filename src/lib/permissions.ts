@@ -41,7 +41,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 7;
+const PERM_MATRIX_VERSION = 8;
 
 const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
@@ -70,6 +70,9 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "suppliers.manage",
     "purchases.record",
     "purchases.view",
+    "expenses.record",
+    "expenses.edit",
+    "expenses.delete",
   ],
   manager: [
     "pos.sell",
@@ -92,9 +95,12 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "suppliers.manage",
     "purchases.record",
     "purchases.view",
+    "expenses.record",
+    "expenses.edit",
+    "expenses.delete",
   ],
-  /** Sell-first: can sell, void mistakes, print receipts, returns, and see own receipt history. */
-  cashier: ["pos.sell", "sale_void", "receipts.view", "customers.view"],
+  /** Sell-first: can sell, void, receipts, and record drawer expenses. */
+  cashier: ["pos.sell", "sale_void", "receipts.view", "customers.view", "expenses.record"],
   stock_keeper: [
     "receipts.view",
     "stock.view",
@@ -128,6 +134,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "suppliers.manage",
     "purchases.record",
     "purchases.view",
+    "expenses.record",
+    "expenses.edit",
   ],
 };
 

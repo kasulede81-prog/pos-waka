@@ -20,6 +20,7 @@ import {
   CreditCard,
   HelpCircle,
   User,
+  Banknote,
 } from "lucide-react";
 import { canSeeOfficeProfit } from "../lib/homeProfit";
 import type { Language, Permission } from "../types";
@@ -27,13 +28,16 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canUseBackupRestore, hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { canRecordCashExpenses } from "../lib/cashExpenses";
 import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
+import { usePosStore } from "../store/usePosStore";
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const preferences = usePosStore((s) => s.preferences);
   const { snapshot, authMode } = useSubscription();
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
   const [showAgentPortal, setShowAgentPortal] = useState(false);
@@ -59,8 +63,13 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
   const canBackup = canUseBackupRestore(snapshot, authMode);
 
+  const canRecordExpense = canRecordCashExpenses(actor.role, preferences);
   const hasDaily =
-    can("stock.view") || can("purchases.record") || can("suppliers.view") || can("day.close");
+    can("stock.view") ||
+    can("purchases.record") ||
+    can("suppliers.view") ||
+    can("day.close") ||
+    canRecordExpense;
   const hasInsights =
     can("reports.view") ||
     (canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit")) ||
@@ -109,6 +118,14 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   title={t(lang, "officeCardSuppliers")}
                   subtitle={t(lang, "officeCardSuppliersSub")}
                   Icon={Users}
+                />
+              ) : null}
+              {canRecordExpense ? (
+                <OfficeNavCard
+                  to="/cash-expenses"
+                  title={t(lang, "officeCardCashExpenses")}
+                  subtitle={t(lang, "officeCardCashExpensesSub")}
+                  Icon={Banknote}
                 />
               ) : null}
               {can("day.close") ? <OfficeCloseDayCard lang={lang} /> : null}

@@ -7,6 +7,7 @@ import type {
   Product,
   Purchase,
   ReturnRecord,
+  CashExpense,
   Sale,
   ShopPreferences,
   StockMovement,
@@ -59,6 +60,7 @@ export type PersistedSnapshot = {
   stockMovements?: StockMovement[];
   voidRecords?: VoidRecord[];
   returnRecords?: ReturnRecord[];
+  cashExpenses?: CashExpense[];
   archivedSales?: Sale[];
   archivedAuditLogs?: AuditLogEntry[];
   archivedDayCloses?: DayCloseSummary[];

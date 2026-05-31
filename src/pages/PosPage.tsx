@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowLeft, ScanLine, Search, X } from "lucide-react";
+import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
@@ -38,6 +38,7 @@ import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
 import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { resolveReceiptBranding } from "../lib/receiptBranding";
+import { canRecordCashExpenses } from "../lib/cashExpenses";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 10;
 const MAX_RECENT_SEARCHES = 4;
@@ -130,6 +131,7 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const shopPreferences = usePosStore((s) => s.preferences);
   const { snapshot } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
@@ -789,15 +791,26 @@ export function PosPage({ lang }: { lang: Language }) {
             {t(lang, "clearSale")}
           </button>
         )}
-        {activeShift ? (
-          <button
-            type="button"
-            onClick={() => setShiftCloseOpen(true)}
-            className="min-h-[48px] rounded-full border border-waka-300 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900 shadow-sm active:bg-waka-100"
-          >
-            {t(lang, "shiftCloseBtn")}
-          </button>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          {canRecordCashExpenses(actor.role, shopPreferences) ? (
+            <Link
+              to="/cash-expenses"
+              className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-950 shadow-sm active:bg-amber-100"
+            >
+              <Banknote className="h-4 w-4 shrink-0" aria-hidden />
+              {t(lang, "posCashExpenseBtn")}
+            </Link>
+          ) : null}
+          {activeShift ? (
+            <button
+              type="button"
+              onClick={() => setShiftCloseOpen(true)}
+              className="min-h-[48px] rounded-full border border-waka-300 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900 shadow-sm active:bg-waka-100"
+            >
+              {t(lang, "shiftCloseBtn")}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {lockedProductCount > 0 ? (

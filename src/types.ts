@@ -38,7 +38,13 @@ export type Permission =
   /** Stock, suppliers, reports, settings hub — not for cashiers */
   | "back_office.access"
   /** View / print receipts (today’s slips) without full reports */
-  | "receipts.view";
+  | "receipts.view"
+  /** Record cash taken from the drawer (lunch, transport, etc.) */
+  | "expenses.record"
+  /** Edit cash expense entries */
+  | "expenses.edit"
+  /** Remove / void cash expense entries */
+  | "expenses.delete";
 
 export type AuditAction =
   | "sale_completed"
@@ -62,7 +68,9 @@ export type AuditAction =
   | "supplier_add"
   | "supplier_edit"
   | "purchase_saved"
-  | "supplier_payment";
+  | "supplier_payment"
+  | "cash_expense_created"
+  | "cash_expense_voided";
 
 export type AuditLogEntry = {
   id: string;
@@ -357,6 +365,7 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
+/** @deprecated Use CashExpense */
 export type Expense = {
   id: string;
   category: ExpenseCategory;
@@ -364,6 +373,22 @@ export type Expense = {
   note: string;
   paidAt: string;
   pendingSync: boolean;
+};
+
+/** Money removed from the cash drawer (operational expenses). */
+export type CashExpense = {
+  id: string;
+  category: string;
+  amountUgx: number;
+  description: string;
+  /** Kampala calendar date YYYY-MM-DD */
+  paidOn: string;
+  createdAt: string;
+  createdByUserId: string;
+  createdByLabel?: string;
+  pendingSync: boolean;
+  lastSyncError?: string | null;
+  deletedAt?: string | null;
 };
 
 export type StaffAccount = {
@@ -441,6 +466,8 @@ export type ShopPreferences = {
   shopPhoneE164?: string | null;
   shopAddressLine?: string | null;
   shopCurrency?: string | null;
+  /** When false, cashiers cannot record drawer expenses (owners/managers always can). */
+  staffCanRecordCashExpenses?: boolean;
   /** Local multi-user profiles for fast shared-device switch. */
   staffAccounts?: StaffAccount[];
   /** Active staff profile on this device; null = auth role session. */
@@ -483,6 +510,7 @@ export type SyncOperationKind =
   | "pending_stock_updates"
   | "pending_returns"
   | "pending_expenses"
+  | "pending_cash_expenses"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"
   | "product"

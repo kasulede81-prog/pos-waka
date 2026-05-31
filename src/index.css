@@ -79,7 +79,7 @@ body {
    */
   :root {
     --waka-safe-bottom: env(safe-area-inset-bottom, 0px);
-    --waka-bottom-nav-h: 4.5rem;
+    --waka-bottom-nav-h: 4.75rem;
     --waka-pos-checkout-strip-h: 4rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);

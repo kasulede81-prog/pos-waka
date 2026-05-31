@@ -35,6 +35,7 @@ export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSna
     archivedDayCloses: p.archivedDayCloses ?? [],
     archivedVoidRecords: p.archivedVoidRecords ?? [],
     archivedReturnRecords: p.archivedReturnRecords ?? [],
+    cashExpenses: p.cashExpenses ?? [],
     updatedAt: p.updatedAt ?? new Date().toISOString(),
   };
 }

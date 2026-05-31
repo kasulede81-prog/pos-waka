@@ -28,6 +28,7 @@ import type {
   UserRole,
   VoidReason,
   VoidRecord,
+  CashExpense,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
 import { getOrCreateDeviceId } from "../lib/deviceId";
@@ -185,6 +186,7 @@ export type PosState = {
   stockMovements: StockMovement[];
   voidRecords: VoidRecord[];
   returnRecords: ReturnRecord[];
+  cashExpenses: CashExpense[];
   archivedSales: Sale[];
   archivedAuditLogs: AuditLogEntry[];
   archivedDayCloses: DayCloseSummary[];
@@ -212,6 +214,7 @@ export type PosState = {
       stockMovements?: StockMovement[];
       voidRecords?: VoidRecord[];
       returnRecords?: ReturnRecord[];
+      cashExpenses?: CashExpense[];
       archivedSales?: Sale[];
       archivedAuditLogs?: AuditLogEntry[];
       archivedDayCloses?: DayCloseSummary[];
@@ -240,6 +243,7 @@ export type PosState = {
     stockMovements?: StockMovement[];
     voidRecords?: VoidRecord[];
     returnRecords?: ReturnRecord[];
+    cashExpenses?: CashExpense[];
     archivedSales?: Sale[];
     archivedAuditLogs?: AuditLogEntry[];
     archivedDayCloses?: DayCloseSummary[];
@@ -379,6 +383,8 @@ export type PosState = {
   addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
   addDebtPayment: (customerId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
   recordDayClose: (opts: { dateKey: string; countedCashUgx: number }) => void;
+  addCashExpense: (input: { amountUgx: number; category: string; description?: string }) => { ok: boolean; errorKey?: string };
+  voidCashExpense: (id: string) => { ok: boolean };
 
   addSupplier: (input: { name: string; phone?: string; location?: string; notes?: string }) => void;
   addSupplierPayment: (supplierId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
@@ -635,6 +641,16 @@ function normalizeStockMovement(m: StockMovement): StockMovement {
   return { ...m, supplierId: m.supplierId ?? null };
 }
 
+function normalizeCashExpense(e: CashExpense): CashExpense {
+  return {
+    ...e,
+    description: e.description ?? "",
+    pendingSync: e.pendingSync !== false,
+    lastSyncError: e.lastSyncError ?? null,
+    deletedAt: e.deletedAt ?? null,
+  };
+}
+
 export const usePosStore = create<PosState>((set, get) => {
   const pushAudit = (action: AuditAction, payloadSummary: string, payload: Record<string, unknown>) => {
     const actor = get().sessionActor;
@@ -668,6 +684,7 @@ export const usePosStore = create<PosState>((set, get) => {
   stockMovements: [],
   voidRecords: [],
   returnRecords: [],
+  cashExpenses: [],
   archivedSales: [],
   archivedAuditLogs: [],
   archivedDayCloses: [],
@@ -695,6 +712,7 @@ export const usePosStore = create<PosState>((set, get) => {
       ),
       voidRecords: data.voidRecords ?? [],
       returnRecords: data.returnRecords ?? [],
+      cashExpenses: (data.cashExpenses ?? []).map(normalizeCashExpense),
       archivedSales: (data.archivedSales ?? []).map(normalizeSale),
       archivedAuditLogs: data.archivedAuditLogs ?? [],
       archivedDayCloses: data.archivedDayCloses ?? [],
@@ -721,6 +739,7 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: [],
       voidRecords: [],
       returnRecords: [],
+      cashExpenses: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
@@ -744,6 +763,7 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: mergeStockMovements(data.stockMovements ?? [], s.stockMovements).map(normalizeStockMovement),
       voidRecords: data.voidRecords ?? s.voidRecords,
       returnRecords: data.returnRecords ?? s.returnRecords,
+      cashExpenses: data.cashExpenses ? data.cashExpenses.map(normalizeCashExpense) : s.cashExpenses,
       archivedSales: data.archivedSales ? data.archivedSales.map(normalizeSale) : s.archivedSales,
       archivedAuditLogs: data.archivedAuditLogs ?? s.archivedAuditLogs,
       archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
@@ -779,6 +799,7 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: [],
       voidRecords: [],
       returnRecords: [],
+      cashExpenses: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
@@ -2061,10 +2082,66 @@ export const usePosStore = create<PosState>((set, get) => {
     });
   },
 
+  addCashExpense: (input) => {
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const amountUgx = Math.floor(input.amountUgx);
+    if (amountUgx <= 0) return { ok: false, errorKey: "cashExpenseAmountRequired" };
+    const category = input.category.trim().slice(0, 64);
+    if (!category) return { ok: false, errorKey: "cashExpenseCategoryRequired" };
+    const now = new Date().toISOString();
+    const paidOn = dateKeyKampala(new Date());
+    const row: CashExpense = {
+      id: crypto.randomUUID(),
+      category,
+      amountUgx,
+      description: (input.description ?? "").trim(),
+      paidOn,
+      createdAt: now,
+      createdByUserId: actor.userId,
+      createdByLabel: actor.displayName,
+      pendingSync: true,
+      lastSyncError: null,
+      deletedAt: null,
+    };
+    set((s) => ({ cashExpenses: [row, ...s.cashExpenses] }));
+    pushAudit("cash_expense_created", `${category} UGX ${amountUgx.toLocaleString()}`, {
+      expenseId: row.id,
+      amountUgx,
+      category,
+    });
+    void queueRemote("pending_cash_expenses", { expenseId: row.id });
+    if (hasSupabaseConfig) {
+      void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(row.id));
+    }
+    return { ok: true };
+  },
+
+  voidCashExpense: (id) => {
+    const state = get();
+    const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
+    if (!row) return { ok: false };
+    const now = new Date().toISOString();
+    set((s) => ({
+      cashExpenses: s.cashExpenses.map((e) =>
+        e.id === id ? { ...e, deletedAt: now, pendingSync: true } : e,
+      ),
+    }));
+    pushAudit("cash_expense_voided", `Removed ${row.category} UGX ${row.amountUgx.toLocaleString()}`, {
+      expenseId: id,
+    });
+    void queueRemote("pending_cash_expenses", { expenseId: id, void: true });
+    return { ok: true };
+  },
+
   recordDayClose: ({ dateKey, countedCashUgx }) => {
     const state = get();
     const daySales = state.sales.filter((s) => dateKeyKampala(s.createdAt) === dateKey);
-    const expectedCashUgx = daySales.reduce((a, s) => a + s.cashPaidUgx, 0);
+    const expenseUgx = state.cashExpenses
+      .filter((e) => !e.deletedAt && e.paidOn === dateKey)
+      .reduce((a, e) => a + e.amountUgx, 0);
+    const expectedCashUgx = Math.max(0, daySales.reduce((a, s) => a + s.cashPaidUgx, 0) - expenseUgx);
     const totalSalesUgx = daySales.reduce((a, s) => a + s.totalUgx, 0);
     const totalDebtUgx = daySales.reduce((a, s) => a + s.debtUgx, 0);
     const profitEstimateUgx = daySales.reduce((a, s) => a + s.estimatedProfitUgx, 0);
@@ -2109,6 +2186,7 @@ function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
     a.stockMovements === b.stockMovements &&
     a.voidRecords === b.voidRecords &&
     a.returnRecords === b.returnRecords &&
+    a.cashExpenses === b.cashExpenses &&
     a.archivedSales === b.archivedSales &&
     a.archivedAuditLogs === b.archivedAuditLogs &&
     a.archivedDayCloses === b.archivedDayCloses &&
@@ -2361,6 +2439,7 @@ export async function applyRestoredSnapshotFromBackup(
       stockMovements: (snap.stockMovements ?? []).map(normalizeStockMovement),
       voidRecords: snap.voidRecords ?? [],
       returnRecords: snap.returnRecords ?? [],
+      cashExpenses: (snap.cashExpenses ?? []).map(normalizeCashExpense),
       archivedSales: [],
       archivedAuditLogs: snap.archivedAuditLogs ?? [],
       archivedDayCloses: snap.archivedDayCloses ?? [],
@@ -2408,6 +2487,7 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         stockMovements: (snap as { stockMovements?: StockMovement[] }).stockMovements ?? [],
         voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
         returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
+        cashExpenses: ((snap as { cashExpenses?: CashExpense[] }).cashExpenses ?? []).map(normalizeCashExpense),
         archivedSales: (snap.archivedSales ?? []).map(normalizeSale),
         archivedAuditLogs: snap.archivedAuditLogs ?? [],
         archivedDayCloses: snap.archivedDayCloses ?? [],

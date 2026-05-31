@@ -47,7 +47,7 @@ function bucketForKind(kind: SyncOperationKind): keyof PendingBreakdown {
   if (kind === "pending_sales" || kind === "sale") return "sales";
   if (kind === "pending_stock_updates" || kind === "stock_move" || kind === "product" || kind === "purchase") return "stock";
   if (kind === "pending_returns") return "returns";
-  if (kind === "pending_expenses") return "expenses";
+  if (kind === "pending_expenses" || kind === "pending_cash_expenses") return "expenses";
   return "other";
 }
 

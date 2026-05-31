@@ -1,4 +1,4 @@
-import type { Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, SupplierPayment } from "../types";
+import type { CashExpense, Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, SupplierPayment } from "../types";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
@@ -400,6 +400,85 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
   return result?.ok === true;
 }
 
+function rowToCashExpense(raw: Record<string, unknown>): CashExpense | null {
+  const id = String(raw.id ?? "").trim();
+  if (!id) return null;
+  const deletedAt = raw.deleted_at != null ? String(raw.deleted_at) : null;
+  return {
+    id,
+    category: String(raw.category ?? "Miscellaneous"),
+    amountUgx: Number(raw.amount_ugx ?? 0),
+    description: raw.description != null ? String(raw.description) : "",
+    paidOn: String(raw.paid_on ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+    createdAt: String(raw.created_at ?? new Date().toISOString()),
+    createdByUserId: String(raw.created_by ?? ""),
+    createdByLabel:
+      raw.recorded_by_label != null
+        ? String(raw.recorded_by_label)
+        : raw.metadata && typeof raw.metadata === "object"
+          ? String((raw.metadata as Record<string, unknown>).actorName ?? "")
+          : undefined,
+    pendingSync: false,
+    lastSyncError: null,
+    deletedAt,
+  };
+}
+
+async function pushCashExpenseToCloud(expense: CashExpense, ctx: ShopCtx, voided = false): Promise<boolean> {
+  if (!supabase || !isUuid(expense.id)) return false;
+  if (voided || expense.deletedAt) {
+    const { data, error } = await supabase.rpc("shop_void_cash_expense", {
+      p_shop_id: ctx.shopId,
+      p_expense_id: expense.id,
+    });
+    if (error) {
+      if (isMissingTableError(error)) return true;
+      return false;
+    }
+    const result = data as { ok?: boolean } | null;
+    return result?.ok === true;
+  }
+  const payload = {
+    id: expense.id,
+    category: expense.category,
+    amount_ugx: expense.amountUgx,
+    description: expense.description || null,
+    paid_on: expense.paidOn,
+    created_at: expense.createdAt,
+    recorded_by_staff_id: expense.createdByUserId.startsWith("staff:") ? expense.createdByUserId : null,
+    recorded_by_label: expense.createdByLabel ?? null,
+    metadata: { wakaClient: true },
+  };
+  const { data, error } = await supabase.rpc("shop_push_cash_expense", {
+    p_shop_id: ctx.shopId,
+    p_payload: payload,
+  });
+  if (error) {
+    if (isMissingTableError(error)) return true;
+    return false;
+  }
+  const result = data as { ok?: boolean } | null;
+  return result?.ok === true;
+}
+
+export async function syncCashExpenseImmediately(expenseId: string): Promise<boolean> {
+  if (!hasSupabaseConfig) return false;
+  if (!getDeviceOnline()) return false;
+  const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);
+  if (!row) return false;
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
+  const ok = await pushCashExpenseToCloud(row, ctx, Boolean(row.deletedAt));
+  if (ok) {
+    usePosStore.setState((s) => ({
+      cashExpenses: s.cashExpenses.map((e) =>
+        e.id === expenseId ? { ...e, pendingSync: false, lastSyncError: null } : e,
+      ),
+    }));
+  }
+  return ok;
+}
+
 async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx): Promise<boolean> {
   if (!supabase) return false;
   const payload = {
@@ -490,6 +569,21 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
         return pushSupplierPaymentToCloud(payment, ctx);
       }
       return true;
+    case "pending_cash_expenses": {
+      const expenseId = String(payload.expenseId ?? "");
+      const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);
+      if (!row) return true;
+      const voided = Boolean(payload.void);
+      const ok = await pushCashExpenseToCloud(row, ctx, voided);
+      if (ok) {
+        usePosStore.setState((s) => ({
+          cashExpenses: s.cashExpenses.map((e) =>
+            e.id === expenseId ? { ...e, pendingSync: false, lastSyncError: null } : e,
+          ),
+        }));
+      }
+      return ok;
+    }
     case "customer": {
       const customerId = String(payload.id ?? "");
       const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
@@ -526,6 +620,7 @@ export type CloudPullResult = {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
+  cashExpenses: CashExpense[];
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
@@ -740,40 +835,75 @@ async function pullCustomersIncremental(
   return { customers, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
 }
 
-/** Expenses use created_at (no updated_at column). Count only for checkpoint/diagnostics. */
+const CASH_EXPENSE_SELECT =
+  "id, category, amount_ugx, description, paid_on, created_at, created_by, recorded_by_label, metadata, deleted_at, updated_at";
+
+async function pullCashExpensesPage(
+  ctx: ShopCtx,
+  filter: { since?: string; full?: boolean },
+): Promise<{ rows: CashExpense[]; bytes: number; checkpointAt: string }> {
+  let q = supabase!
+    .from("expenses")
+    .select(CASH_EXPENSE_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .eq("expense_type", "cash_drawer");
+  if (!filter.full && filter.since) {
+    q = q.or(`created_at.gt.${filter.since},updated_at.gt.${filter.since}`);
+  }
+  const { data, error } = await q.order("updated_at", { ascending: true }).limit(INCREMENTAL_EXPENSES_LIMIT);
+  if (error) {
+    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: filter.since ?? new Date(0).toISOString() };
+    throw error;
+  }
+  const raw = (data ?? []) as Record<string, unknown>[];
+  const rows = raw.map(rowToCashExpense).filter((e): e is CashExpense => e != null);
+  const checkpointAt = maxRowUpdatedAt(raw, filter.since ?? new Date(0).toISOString());
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+}
+
+/** Cash drawer expenses (created_at / updated_at). */
 async function pullExpensesIncremental(
   ctx: ShopCtx,
   since: string,
-): Promise<{ count: number; bytes: number; checkpointAt: string }> {
+): Promise<{ cashExpenses: CashExpense[]; count: number; bytes: number; checkpointAt: string }> {
   try {
+    let cashExpenses: CashExpense[] = [];
     let count = 0;
     let bytes = 0;
     let cursor = since;
     let checkpointAt = since;
     for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-      const { data, error } = await supabase!
-        .from("expenses")
-        .select("id, created_at")
-        .eq("shop_id", ctx.shopId)
-        .gt("created_at", cursor)
-        .order("created_at", { ascending: true })
-        .limit(INCREMENTAL_EXPENSES_LIMIT);
-      if (error) {
-        if (isMissingTableError(error)) return { count: 0, bytes: 0, checkpointAt: since };
-        throw error;
-      }
-      const rows = data ?? [];
-      bytes += estimatePayloadBytes(rows);
-      if (rows.length === 0) break;
-      checkpointAt = maxRowUpdatedAt(rows as Record<string, unknown>[], checkpointAt);
-      count += rows.length;
-      if (rows.length < INCREMENTAL_EXPENSES_LIMIT) break;
+      const pageResult = await pullCashExpensesPage(ctx, { since: cursor });
+      bytes += pageResult.bytes;
+      if (pageResult.rows.length === 0) break;
+      cashExpenses = cashExpenses.concat(pageResult.rows);
+      checkpointAt = pageResult.checkpointAt;
+      count += pageResult.rows.length;
+      if (pageResult.rows.length < INCREMENTAL_EXPENSES_LIMIT) break;
       cursor = checkpointAt;
     }
-    return { count, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
+    return {
+      cashExpenses,
+      count,
+      bytes,
+      checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+    };
   } catch {
-    return { count: 0, bytes: 0, checkpointAt: since };
+    return { cashExpenses: [], count: 0, bytes: 0, checkpointAt: since };
   }
+}
+
+async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashExpense[]; bytes: number }> {
+  const all: CashExpense[] = [];
+  let bytes = 0;
+  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
+    const { rows, bytes: b } = await pullCashExpensesPage(ctx, { full: true });
+    bytes += b;
+    if (rows.length === 0) break;
+    all.push(...rows);
+    if (rows.length < INCREMENTAL_EXPENSES_LIMIT) break;
+  }
+  return { cashExpenses: all, bytes };
 }
 
 export async function pullShopDataFromCloud(opts?: {
@@ -795,6 +925,7 @@ export async function pullShopDataFromCloud(opts?: {
   let sales: Sale[] = [];
   let deletedProductIds: string[] = [];
   let voidedSaleIds: string[] = [];
+  let cashExpenses: CashExpense[] = [];
   let expenseCount = 0;
   let payloadBytes = 0;
   let pullCheckpoints: CloudPullCheckpoints | undefined;
@@ -814,6 +945,11 @@ export async function pullShopDataFromCloud(opts?: {
       sales = s.sales;
       voidedSaleIds = s.voidedIds;
       payloadBytes += s.bytes;
+
+      const exFull = await pullCashExpensesFull(ctx);
+      cashExpenses = exFull.cashExpenses;
+      expenseCount = exFull.cashExpenses.length;
+      payloadBytes += exFull.bytes;
     } else {
       const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
       const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
@@ -835,6 +971,7 @@ export async function pullShopDataFromCloud(opts?: {
       payloadBytes += s.bytes;
 
       const ex = await pullExpensesIncremental(ctx, sinceExpenses);
+      cashExpenses = ex.cashExpenses;
       expenseCount = ex.count;
       payloadBytes += ex.bytes;
 
@@ -879,7 +1016,7 @@ export async function pullShopDataFromCloud(opts?: {
   const { isDiagnosticsEnabled, recordCloudPullStats } = await import("../lib/stabilityDiagnostics");
   if (isDiagnosticsEnabled()) recordCloudPullStats(stats);
 
-  return { products, customers, sales, deletedProductIds, voidedSaleIds, stats, checkpoints: pullCheckpoints };
+  return { products, customers, sales, cashExpenses, deletedProductIds, voidedSaleIds, stats, checkpoints: pullCheckpoints };
 }
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
@@ -941,6 +1078,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       stockMovements: state.stockMovements,
       voidRecords: state.voidRecords,
       returnRecords: state.returnRecords,
+      cashExpenses: state.cashExpenses,
       archivedSales: state.archivedSales,
       archivedAuditLogs: state.archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
@@ -985,6 +1123,13 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
   );
   const sales = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
+  const mergedCashExpenses =
+    cloud.cashExpenses.length > 0
+      ? await mergeByIdChunked(state.cashExpenses, cloud.cashExpenses, (a, b) =>
+          newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
+        )
+      : state.cashExpenses;
+
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
   try {
@@ -994,7 +1139,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     if (sales.length > 200) {
       await yieldUiTick();
     }
-    usePosStore.setState({ sales });
+    usePosStore.setState({ sales, cashExpenses: mergedCashExpenses });
 
     const next = usePosStore.getState();
     const { flushFullSnapshotPersist } = await import("./incrementalPersist");

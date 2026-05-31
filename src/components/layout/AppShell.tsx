@@ -44,8 +44,8 @@ type Props = {
 
 type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
 
-/** Mobile tab order: flank items + raised Sell in the center. */
-const MOBILE_NAV_ORDER = ["/", "/receipts", "/pos", "/office"] as const;
+/** Mobile tab order: Home and Sell adjacent (cashier primary pair). */
+const MOBILE_NAV_ORDER = ["/", "/pos", "/receipts", "/office"] as const;
 
 function navItemActive(path: string, pathname: string): boolean {
   if (path === "/office") {
@@ -386,6 +386,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             {mobileNavDefs.map(({ path, labelKey, Icon }) => {
               const active = navItemActive(path, location.pathname);
               const isSell = path === "/pos";
+              const isHome = path === "/";
               if (isSell) {
                 return (
                   <div key={path} className="flex flex-col items-center justify-end">
@@ -394,16 +395,38 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       aria-current={active ? "page" : undefined}
                       aria-label={t(lang, labelKey)}
                       onClick={() => navigate(path, { preventScrollReset: true })}
-                      className={`touch-manipulation -mt-3 flex min-h-[52px] min-w-[52px] flex-col items-center justify-center gap-0.5 rounded-full px-2 py-1.5 text-[10px] font-black leading-tight text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[56px] sm:min-w-[56px] sm:text-[11px] ${
+                      className={`touch-manipulation -mt-1.5 flex min-h-[56px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 py-2 text-[11px] font-black leading-tight text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[60px] sm:min-w-[60px] sm:text-xs ${
                         active
                           ? "bg-waka-700 ring-2 ring-waka-300 ring-offset-2 ring-offset-white"
                           : "bg-waka-600 hover:bg-waka-700"
                       }`}
                     >
-                      <Icon className="h-7 w-7 shrink-0 sm:h-8 sm:w-8" strokeWidth={2.75} aria-hidden />
-                      <span className="max-w-[4.25rem] truncate text-center">{t(lang, labelKey)}</span>
+                      <Icon className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" strokeWidth={2.75} aria-hidden />
+                      <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
                     </button>
                   </div>
+                );
+              }
+              if (isHome) {
+                return (
+                  <button
+                    key={path}
+                    type="button"
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => navigate(path, { preventScrollReset: true })}
+                    className={`touch-manipulation flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 text-[11px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[52px] sm:text-xs ${
+                      active
+                        ? "bg-waka-50 text-waka-900 ring-1 ring-waka-200/90"
+                        : "text-stone-600 hover:bg-stone-50 hover:text-stone-800"
+                    }`}
+                  >
+                    <Icon
+                      className={`h-6 w-6 shrink-0 sm:h-7 sm:w-7 ${active ? "text-waka-700" : ""}`}
+                      strokeWidth={active ? 2.5 : 2.25}
+                      aria-hidden
+                    />
+                    <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
+                  </button>
                 );
               }
               return (

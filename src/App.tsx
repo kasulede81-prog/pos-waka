@@ -44,6 +44,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
+import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
@@ -374,6 +375,14 @@ function App() {
               element={
                 <RoleProtectedRoute permission="day.close">
                   <CloseDayPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="cash-expenses"
+              element={
+                <RoleProtectedRoute permission="expenses.record">
+                  <CashExpensesPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

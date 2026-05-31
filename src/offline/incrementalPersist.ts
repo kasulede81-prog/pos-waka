@@ -147,6 +147,7 @@ export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLas
     stockMovements: state.stockMovements,
     voidRecords: state.voidRecords,
     returnRecords: state.returnRecords,
+    cashExpenses: state.cashExpenses,
     archivedSales: state.archivedSales,
     archivedAuditLogs: state.archivedAuditLogs,
     archivedDayCloses: state.archivedDayCloses,
