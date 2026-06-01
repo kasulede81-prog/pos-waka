@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -17,12 +17,11 @@ import {
   type SupportTag,
 } from "../../../../lib/internalOpsIntelligence";
 import {
-  addShopInternalNote,
   createAnnouncement,
   listAnnouncements,
-  listShopInternalNotes,
   type OpsAnnouncement,
 } from "../../../../lib/internalOpsLocal";
+import { addShopInternalNote, fetchShopInternalNotes, type SharedInternalNote } from "../../../../lib/internalOpsHardening";
 import { BottomSheet } from "../primitives";
 
 const STATUS_STYLES = {
@@ -483,25 +482,30 @@ export function ShopTimelinePanel({ events }: { events: OpsFeedEvent[] }) {
   );
 }
 
-export function InternalNotesPanel({
-  shopId,
-  author,
-}: {
-  shopId: string;
-  author: string;
-}) {
-  const [notes, setNotes] = useState(() => listShopInternalNotes(shopId));
+export function InternalNotesPanel({ shopId }: { shopId: string; author?: string }) {
+  const [notes, setNotes] = useState<SharedInternalNote[]>([]);
   const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    void fetchShopInternalNotes(shopId).then(setNotes);
+  }, [shopId]);
 
   const add = () => {
-    if (!body.trim()) return;
-    addShopInternalNote(shopId, body, author);
-    setNotes(listShopInternalNotes(shopId));
-    setBody("");
+    if (!body.trim() || busy) return;
+    setBusy(true);
+    void addShopInternalNote(shopId, body).then((r) => {
+      setBusy(false);
+      if (r.ok) {
+        setBody("");
+        void fetchShopInternalNotes(shopId).then(setNotes);
+      }
+    });
   };
 
   return (
     <div className="space-y-3">
+      <p className="text-xs font-semibold text-violet-900">Shared across all internal admins (cloud).</p>
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -509,18 +513,27 @@ export function InternalNotesPanel({
         placeholder="Private staff note (VIP, fraud, extension…) "
         className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold"
       />
-      <button type="button" onClick={add} className="min-h-[44px] w-full rounded-xl bg-violet-600 text-sm font-black text-white">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={add}
+        className="min-h-[44px] w-full rounded-xl bg-violet-600 text-sm font-black text-white disabled:opacity-50"
+      >
         Save note
       </button>
       <ul className="space-y-2">
-        {notes.map((n) => (
-          <li key={n.id} className="rounded-xl bg-violet-50/80 p-3 text-sm">
-            <p className="font-semibold text-stone-900">{n.body}</p>
-            <p className="mt-1 text-[10px] text-stone-500">
-              {n.author} · {new Date(n.createdAt).toLocaleString("en-GB")}
-            </p>
-          </li>
-        ))}
+        {notes.length === 0 ? (
+          <li className="text-sm font-semibold text-stone-500">No notes yet.</li>
+        ) : (
+          notes.map((n) => (
+            <li key={n.id} className="rounded-xl bg-violet-50/80 p-3 text-sm">
+              <p className="font-semibold text-stone-900">{n.body}</p>
+              <p className="mt-1 text-[10px] text-stone-500">
+                {n.author} · {new Date(n.created_at).toLocaleString("en-GB")}
+              </p>
+            </li>
+          ))
+        )}
       </ul>
     </div>
   );

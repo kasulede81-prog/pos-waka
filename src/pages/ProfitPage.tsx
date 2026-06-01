@@ -5,7 +5,8 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
+import { dateKeyKampala, dateKeyDaysAgoKampala, saleReportingDayKey } from "../lib/datesUg";
+import { isCompletedSale } from "../lib/saleStatus";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canSeeOfficeProfit, computeProfitGroupedByCategory } from "../lib/homeProfit";
@@ -39,7 +40,8 @@ export function ProfitPage({ lang }: Props) {
     const weekCut = dateKeyDaysAgoKampala(6);
     const monthPrefix = today.slice(0, 7);
     return sales.filter((s) => {
-      const k = dateKeyKampala(s.createdAt);
+      if (!isCompletedSale(s)) return false;
+      const k = saleReportingDayKey(s);
       if (range === "today") return k === today;
       if (range === "week") return k >= weekCut;
       return k.startsWith(monthPrefix);

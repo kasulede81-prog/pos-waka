@@ -14,6 +14,11 @@ export type SyncCheckpoints = {
   lastDebtsSyncAt: string | null;
   /** Shop expenses table (created_at cursor). */
   lastExpensesSyncAt: string | null;
+  /** sale_returns table (updated_at cursor). */
+  lastReturnsSyncAt: string | null;
+  lastPurchasesSyncAt: string | null;
+  lastSuppliersSyncAt: string | null;
+  lastSupplierPaymentsSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -23,6 +28,10 @@ const empty: SyncCheckpoints = {
   lastCustomersSyncAt: null,
   lastDebtsSyncAt: null,
   lastExpensesSyncAt: null,
+  lastReturnsSyncAt: null,
+  lastPurchasesSyncAt: null,
+  lastSuppliersSyncAt: null,
+  lastSupplierPaymentsSyncAt: null,
 };
 
 function scopedKey(): string | null {
@@ -45,6 +54,11 @@ export function readSyncCheckpoints(): SyncCheckpoints {
       lastCustomersSyncAt: typeof o.lastCustomersSyncAt === "string" ? o.lastCustomersSyncAt : null,
       lastDebtsSyncAt: typeof o.lastDebtsSyncAt === "string" ? o.lastDebtsSyncAt : null,
       lastExpensesSyncAt: typeof o.lastExpensesSyncAt === "string" ? o.lastExpensesSyncAt : null,
+      lastReturnsSyncAt: typeof o.lastReturnsSyncAt === "string" ? o.lastReturnsSyncAt : null,
+      lastPurchasesSyncAt: typeof o.lastPurchasesSyncAt === "string" ? o.lastPurchasesSyncAt : null,
+      lastSuppliersSyncAt: typeof o.lastSuppliersSyncAt === "string" ? o.lastSuppliersSyncAt : null,
+      lastSupplierPaymentsSyncAt:
+        typeof o.lastSupplierPaymentsSyncAt === "string" ? o.lastSupplierPaymentsSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -80,6 +94,10 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastCustomersSyncAt: at,
     lastDebtsSyncAt: at,
     lastExpensesSyncAt: at,
+    lastReturnsSyncAt: at,
+    lastPurchasesSyncAt: at,
+    lastSuppliersSyncAt: at,
+    lastSupplierPaymentsSyncAt: at,
   });
 }
 
@@ -89,6 +107,10 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   customers?: boolean;
   debts?: boolean;
   expenses?: boolean;
+  returns?: boolean;
+  purchases?: boolean;
+  suppliers?: boolean;
+  supplierPayments?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -96,6 +118,10 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   customersAt?: string;
   debtsAt?: string;
   expensesAt?: string;
+  returnsAt?: string;
+  purchasesAt?: string;
+  suppliersAt?: string;
+  supplierPaymentsAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -107,6 +133,10 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   }
   if (partial.debts) patch.lastDebtsSyncAt = partial.debtsAt ?? fallback;
   if (partial.expenses) patch.lastExpensesSyncAt = partial.expensesAt ?? fallback;
+  if (partial.returns) patch.lastReturnsSyncAt = partial.returnsAt ?? fallback;
+  if (partial.purchases) patch.lastPurchasesSyncAt = partial.purchasesAt ?? fallback;
+  if (partial.suppliers) patch.lastSuppliersSyncAt = partial.suppliersAt ?? fallback;
+  if (partial.supplierPayments) patch.lastSupplierPaymentsSyncAt = partial.supplierPaymentsAt ?? fallback;
   return writeSyncCheckpoints(patch);
 }
 

@@ -107,7 +107,7 @@ import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
-import { getDrawerCashForDay } from "../lib/cashReconciliation";
+import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { normalizeShopCurrency } from "../lib/shopCurrency";
@@ -2745,7 +2745,9 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: mergeStockMovements(movements, state.stockMovements),
     });
 
+    void queueRemote("pending_purchases", { purchaseId: purchase.id });
     void queueRemote("pending_stock_updates", { kind: "purchase", purchaseId: purchase.id });
+    if (!walkIn) void queueRemote("supplier", { id: supplierId });
     pushAudit("purchase_saved", `Restock UGX ${totalCostUgx.toLocaleString()} · ${supplierName}`, {
       purchaseId: purchase.id,
       supplierId,
@@ -2882,17 +2884,14 @@ export const usePosStore = create<PosState>((set, get) => {
 
   recordDayClose: ({ dateKey, countedCashUgx }) => {
     const state = get();
-    const expenseUgx = state.cashExpenses
-      .filter((e) => !e.deletedAt && e.paidOn === dateKey)
-      .reduce((a, e) => a + e.amountUgx, 0);
-    const drawer = getDrawerCashForDay(
-      state.sales,
-      state.returnRecords,
-      state.products,
-      state.debtPayments,
-      dateKey,
-      expenseUgx,
-    );
+    const drawer = getDrawerCashForDayInput({
+      sales: state.sales,
+      returns: state.returnRecords,
+      products: state.products,
+      debtPayments: state.debtPayments,
+      cashExpenses: state.cashExpenses,
+      day: dateKey,
+    });
     const fin = getCompletedFinancials(state.sales, state.returnRecords, state.products, { day: dateKey });
     const expectedCashUgx = drawer.expectedDrawerCashUgx;
     const totalSalesUgx = fin.revenueUgx;

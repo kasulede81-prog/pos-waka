@@ -223,6 +223,8 @@ export const PREVIEW_SUPPORT_TICKETS: SupportTicketRow[] = [
     device_fingerprint: null,
     app_version: "1.0.0",
     sync_health_snapshot: null,
+    diagnostics_json: null,
+    screenshot_meta: null,
     assigned_internal_admin_id: null,
     assigned_admin_email: null,
   },

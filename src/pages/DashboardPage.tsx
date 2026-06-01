@@ -14,8 +14,9 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
-import { useSyncStatus } from "../hooks/useSyncStatus";
 import { isHospitalityMode } from "../lib/hospitality";
+import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
+import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
 import { PharmacyDashboardPage } from "./PharmacyDashboardPage";
@@ -36,7 +37,6 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const location = useLocation();
-  const sync = useSyncStatus();
   const [deniedBanner, setDeniedBanner] = useState(false);
   const [includeArchived, setIncludeArchived] = useState(false);
 
@@ -142,7 +142,16 @@ export function DashboardPage({ lang }: { lang: Language }) {
           <p className="mt-1 text-base text-waka-900">{t(lang, "setupChecklistSub")}</p>
           <ol className="mt-4 space-y-3 text-lg">
             <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-              <span className={products.length > 0 ? "text-waka-600" : "text-stone-400"}>{products.length > 0 ? "✓" : "①"}</span>
+              <span className={salesCount > 0 ? "text-waka-600" : "text-stone-400"}>{salesCount > 0 ? "✓" : "①"}</span>
+              {t(lang, "setupStep2")}
+              {salesCount === 0 && canSell ? (
+                <Link to="/pos" className="rounded-full bg-stone-900 px-4 py-2 text-sm font-black text-white">
+                  {t(lang, "sellTitle")}
+                </Link>
+              ) : null}
+            </li>
+            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
+              <span className={products.length > 0 ? "text-waka-600" : "text-stone-400"}>{products.length > 0 ? "✓" : "②"}</span>
               {t(lang, "setupStep1")}
               {products.length === 0 && canBackOffice ? (
                 <Link to="/office" className="rounded-full bg-waka-600 px-4 py-2 text-sm font-black text-white">
@@ -151,15 +160,6 @@ export function DashboardPage({ lang }: { lang: Language }) {
               ) : null}
               {products.length === 0 && !canBackOffice ? (
                 <span className="text-sm font-semibold text-stone-600">{t(lang, "setupAskOwnerProducts")}</span>
-              ) : null}
-            </li>
-            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-              <span className={salesCount > 0 ? "text-waka-600" : "text-stone-400"}>{salesCount > 0 ? "✓" : "②"}</span>
-              {t(lang, "setupStep2")}
-              {salesCount === 0 && canSell ? (
-                <Link to="/pos" className="rounded-full bg-stone-900 px-4 py-2 text-sm font-black text-white">
-                  {t(lang, "sellTitle")}
-                </Link>
               ) : null}
             </li>
             <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
@@ -208,18 +208,8 @@ export function DashboardPage({ lang }: { lang: Language }) {
         </div>
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-3.5 shadow-waka-sm">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "dashboardSyncTitle")}</p>
-        <p className="mt-1 text-sm font-semibold text-stone-800">
-          {sync.syncing
-            ? t(lang, "syncingShort")
-            : !sync.isOnline
-              ? t(lang, "workingOfflineLabel")
-              : sync.pendingCount > 0
-                ? `${t(lang, "willSyncLater")} (${sync.pendingCount})`
-                : t(lang, "allSavedShort")}
-        </p>
-      </section>
+      <HomeTrustBanner lang={lang} />
+      <SupportQuickStrip lang={lang} compact />
 
       {canSell && quickTiles.length > 0 ? (
         <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
@@ -283,6 +273,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
         <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
           <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "todaySection")}</p>
           <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {salesTodayTotal.toLocaleString()}</p>
+          <p className="mt-1 text-xs font-semibold text-white/70">{t(lang, "dashboardTodaySalesHint")}</p>
           <p className="mt-1 text-xs font-semibold text-white/80">
             {t(lang, "dashboardSalesMeta")
               .replace("{{count}}", String(todaySales.length))
@@ -299,12 +290,13 @@ export function DashboardPage({ lang }: { lang: Language }) {
         <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
           <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">{t(lang, "cardDebtToday")}</p>
           <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
-          <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtShortNote")}</p>
+          <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtTodayHint")}</p>
         </article>
       </section>
 
       <p className="text-center text-sm font-medium text-stone-500">
         {t(lang, "weekCashHint")}: <span className="font-bold text-stone-800">UGX {cashWeekDisplay.toLocaleString()}</span>
+        <span className="mt-0.5 block text-xs font-medium text-stone-400">{t(lang, "dashboardCashInSalesHint")}</span>
       </p>
 
       <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">

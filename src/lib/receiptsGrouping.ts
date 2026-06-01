@@ -1,5 +1,5 @@
 import type { Sale } from "../types";
-import { dateKeyKampala } from "./datesUg";
+import { saleReportingDayKey } from "./datesUg";
 import { getCompletedRevenue } from "./financialMetrics";
 import type { Product, ReturnRecord } from "../types";
 import { isCompletedSale, isPendingSale, saleStatusOf } from "./saleStatus";
@@ -38,7 +38,7 @@ export function groupCompletedSalesByKampalaDay(
   const completed = sales.filter(isCompletedSale);
   const map = new Map<string, Sale[]>();
   for (const sale of completed) {
-    const key = dateKeyKampala(sale.createdAt);
+    const key = saleReportingDayKey(sale);
     const arr = map.get(key);
     if (arr) arr.push(sale);
     else map.set(key, [sale]);
@@ -58,7 +58,7 @@ export function groupPendingSalesByKampalaDay(sales: Sale[]): { dateKey: string;
   const pending = sales.filter(isPendingSale);
   const map = new Map<string, Sale[]>();
   for (const sale of pending) {
-    const key = dateKeyKampala(sale.createdAt);
+    const key = saleReportingDayKey(sale);
     const arr = map.get(key);
     if (arr) arr.push(sale);
     else map.set(key, [sale]);

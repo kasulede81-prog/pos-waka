@@ -46,6 +46,7 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
+  const cashExpenses = usePosStore((s) => s.cashExpenses);
   const preferences = usePosStore((s) => s.preferences);
 
   const months = useMemo(() => monthOptions(), []);
@@ -59,8 +60,9 @@ export function MonthlyReportsPage({ lang }: { lang: Language }) {
         returnRecords,
         products,
         staffAccounts: preferences.staffAccounts ?? [],
+        cashExpenses,
       }),
-    [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products],
+    [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products, cashExpenses],
   );
 
   const showToast = (msg: string) => {

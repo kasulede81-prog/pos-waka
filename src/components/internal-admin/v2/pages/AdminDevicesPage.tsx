@@ -11,6 +11,7 @@ import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { AppVersionPanel, DeviceFleetCard } from "../ops/OpsWidgets";
 import { EmptyState } from "../primitives";
+import { AdminDeviceForensicsPanel } from "../../ops/AdminDeviceForensicsPanel";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -46,6 +47,8 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
         <h1 className="text-xl font-black text-stone-900">Devices</h1>
         <p className="text-sm text-stone-500">{list.length} devices · fleet diagnostics</p>
       </div>
+
+      <AdminDeviceForensicsPanel previewMode={previewMode} />
 
       <AppVersionPanel versions={data.appVersions} />
 

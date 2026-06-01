@@ -21,7 +21,7 @@ import {
   formatVsYesterday,
 } from "../lib/ownerIntelligence";
 import { getCompletedFinancials } from "../lib/financialMetrics";
-import { sumDebtPaymentsOnDay } from "../lib/cashReconciliation";
+import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
@@ -62,7 +62,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
-  const debtPayments = usePosStore((s) => s.debtPayments);
   const customers = usePosStore((s) => s.customers);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
@@ -79,6 +78,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const allVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
   const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const drawerToday = useDrawerCashForToday();
 
   const [waCopied, setWaCopied] = useState(false);
 
@@ -127,11 +127,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     const fin = getCompletedFinancials(sales, allReturnRecords, products, { day: todayKey });
     const totalSalesUgx = fin.revenueUgx;
     const voidsTotalUgx = todayVoids.reduce((a, v) => a + Math.max(0, v.amountUgx), 0);
-    const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, todayKey);
-    const expectedCashUgx = Math.max(
-      0,
-      fin.cashCollectedUgx + debtCollectedUgx - todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
-    );
+    const debtCollectedUgx = drawerToday.debtCollectedUgx;
+    const expectedCashUgx = drawerToday.expectedDrawerCashUgx;
     const debtTodayUgx = fin.debtIssuedUgx;
     const estProfitUgx = fin.profitUgx;
     const returnsTotalUgx = todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0);
@@ -154,7 +151,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       shortageUgx,
       saleCount: fin.transactionCount,
     };
-  }, [sales, allReturnRecords, products, todayReturns, todayVoids, dayCloses, todayKey, debtPayments]);
+  }, [sales, allReturnRecords, products, todayReturns, todayVoids, dayCloses, todayKey, drawerToday]);
 
   const yesterdaySalesUgx = useMemo(
     () => getCompletedFinancials(sales, allReturnRecords, products, { day: yesterdayKey }).revenueUgx,

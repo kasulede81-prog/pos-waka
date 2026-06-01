@@ -89,8 +89,8 @@ export function LoginPage({
   return (
     <AuthLayout lang={lang} setLang={setLang}>
       <div className="rounded-3xl border border-stone-200/80 bg-white p-6 shadow-waka-sm">
-        <h1 className="text-2xl font-black text-stone-900">Welcome to Waka POS</h1>
-        <p className="mt-2 text-sm font-medium text-stone-600">Sign in with your shop email.</p>
+        <h1 className="text-2xl font-black text-stone-900">{t(lang, "loginWelcomeTitle")}</h1>
+        <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "loginWelcomeSub")}</p>
 
         {mode === "local" ? (
           <p className="mt-3 rounded-xl bg-stone-100 px-3 py-2 text-xs font-medium text-stone-700">{t(lang, "supabaseRegisterHint")}</p>

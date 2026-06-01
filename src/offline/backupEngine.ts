@@ -16,6 +16,10 @@ import {
 
 const MAX_BACKUPS = 28;
 
+/**
+ * Canonical normalizer for every backup/export path. All optional PersistedSnapshot
+ * arrays default to [] so exports match the live store shape.
+ */
 export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSnapshot | null {
   if (!p || !Array.isArray(p.products) || !Array.isArray(p.sales) || !p.preferences) return null;
   return {
@@ -30,6 +34,8 @@ export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSna
     purchases: p.purchases ?? [],
     supplierPayments: p.supplierPayments ?? [],
     stockMovements: p.stockMovements ?? [],
+    voidRecords: p.voidRecords ?? [],
+    returnRecords: p.returnRecords ?? [],
     archivedSales: p.archivedSales ?? [],
     archivedAuditLogs: p.archivedAuditLogs ?? [],
     archivedDayCloses: p.archivedDayCloses ?? [],

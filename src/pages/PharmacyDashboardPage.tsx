@@ -15,18 +15,19 @@ import { computePharmacyDashboardStats, expiryBucketLabelKey } from "../lib/phar
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
 import { expiryTilePresentation } from "../lib/pharmacyExpiry";
 import { ExpiryStatusBadge } from "../components/pharmacy/ExpiryStatusBadge";
-import { useSyncStatus } from "../hooks/useSyncStatus";
 import { useShallow } from "zustand/react/shallow";
+import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
+import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 
 export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const sync = useSyncStatus();
   const sales = useDeferredReportingSales(false);
-  const { preferences, products } = usePosStore(
+  const { preferences, products, returnRecords } = usePosStore(
     useShallow((s) => ({
       preferences: s.preferences,
       products: s.products,
+      returnRecords: s.returnRecords,
     })),
   );
 
@@ -38,8 +39,8 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
 
   const stats = useMemo(
-    () => computePharmacyDashboardStats(products, sales, todayKey),
-    [products, sales, todayKey],
+    () => computePharmacyDashboardStats(products, sales, returnRecords, todayKey),
+    [products, sales, returnRecords, todayKey],
   );
 
   if (!pharmacy) return null;
@@ -90,18 +91,8 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
         </div>
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-3.5 shadow-waka-sm">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "dashboardSyncTitle")}</p>
-        <p className="mt-1 text-sm font-semibold text-stone-800">
-          {sync.syncing
-            ? t(lang, "syncingShort")
-            : !sync.isOnline
-              ? t(lang, "workingOfflineLabel")
-              : sync.pendingCount > 0
-                ? `${t(lang, "willSyncLater")} (${sync.pendingCount})`
-                : t(lang, "allSavedShort")}
-        </p>
-      </section>
+      <HomeTrustBanner lang={lang} />
+      <SupportQuickStrip lang={lang} compact />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">

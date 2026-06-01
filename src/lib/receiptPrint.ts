@@ -82,7 +82,7 @@ function inferPaymentMethodLabel(
   if (sale.paymentMethod === "atm") return "ATM";
   if (sale.paymentMethod === "mobile_money") return "MOMO PAY";
   if (sale.paymentMethod === "mixed") return "Mixed";
-  if (sale.paymentMethod === "credit") return "DEBIT";
+  if (sale.paymentMethod === "credit") return "Pay later";
   if (sale.paymentMethod === "cash") return "CASH";
   if (sale.debtUgx > 0 && sale.cashPaidUgx > 0) return "Mixed";
   if (sale.debtUgx > 0) return "Credit";

@@ -4,7 +4,7 @@
  */
 
 import type { Product, ReturnRecord, Sale } from "../types";
-import { dateKeyKampala } from "./datesUg";
+import { dateKeyKampala, saleReportingDayKey } from "./datesUg";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 
@@ -18,11 +18,11 @@ export function revenueSales(sales: Sale[]): Sale[] {
 }
 
 export function revenueSalesOnDay(sales: Sale[], day: string): Sale[] {
-  return revenueSales(sales).filter((s) => dateKeyKampala(s.createdAt) === day);
+  return revenueSales(sales).filter((s) => saleReportingDayKey(s) === day);
 }
 
 export function revenueSalesInMonth(sales: Sale[], monthKey: string): Sale[] {
-  return revenueSales(sales).filter((s) => dateKeyKampala(s.createdAt).startsWith(monthKey));
+  return revenueSales(sales).filter((s) => saleReportingDayKey(s).startsWith(monthKey));
 }
 
 export type CompletedFinancialSnapshot = {
@@ -43,9 +43,9 @@ export function getCompletedFinancials(
 ): CompletedFinancialSnapshot {
   let scoped = revenueSales(sales);
   if (opts?.day) {
-    scoped = scoped.filter((s) => dateKeyKampala(s.createdAt) === opts.day);
+    scoped = scoped.filter((s) => saleReportingDayKey(s) === opts.day);
   } else if (opts?.monthKey) {
-    scoped = scoped.filter((s) => dateKeyKampala(s.createdAt).startsWith(opts.monthKey!));
+    scoped = scoped.filter((s) => saleReportingDayKey(s).startsWith(opts.monthKey!));
   }
 
   const returnScoped = opts?.day

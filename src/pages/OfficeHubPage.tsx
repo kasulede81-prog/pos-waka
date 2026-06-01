@@ -42,6 +42,7 @@ import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
+import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
@@ -150,6 +151,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         </div>
       </header>
 
+      <SupportQuickStrip lang={lang} />
       <PilotSupportCard lang={lang} userId={userId} />
       <SyncHealthCard lang={lang} variant="simple" />
 

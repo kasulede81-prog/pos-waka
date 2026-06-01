@@ -11,11 +11,13 @@ import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
+import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { PilotModeToggle } from "../components/pilot/PilotModeToggle";
 import { canTogglePilotMode, isPilotModeActive } from "../lib/pilotMode";
 import { usePosStore } from "../store/usePosStore";
 import { useSubscription } from "../context/SubscriptionContext";
+import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 
 export function SettingsHubPage({ lang }: { lang: Language }) {
   const [searchParams] = useSearchParams();
@@ -23,7 +25,9 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const businessType = usePosStore((s) => s.preferences.businessType);
   const hospitalityModeEnabled = usePosStore((s) => s.preferences.hospitalityModeEnabled);
   const pharmacyModeEnabled = usePosStore((s) => s.preferences.pharmacyModeEnabled);
-  const { userId } = useSubscription();
+  const { userId, snapshot, authMode } = useSubscription();
+  const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
+  const appVersion = import.meta.env.VITE_APP_VERSION?.trim() || "—";
 
   if (searchParams.get("onboard") === "1") {
     return <Navigate to="/settings/shop?onboard=1" replace />;
@@ -45,9 +49,17 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       <div>
         <h1 className="text-2xl font-black text-stone-950">{t(lang, "settingsHubTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
+        <p className="mt-2 text-sm font-medium text-stone-600">
+          {t(lang, "settingsYourPlanLabel")}: <span className="font-black text-stone-900">{planTier}</span>
+          <span className="mx-2 text-stone-300" aria-hidden>
+            ·
+          </span>
+          {t(lang, "settingsAppVersionLine")}: <span className="font-mono font-black text-stone-900">{appVersion}</span>
+        </p>
       </div>
 
       {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
+      <SupportQuickStrip lang={lang} />
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
         {canShop ? (

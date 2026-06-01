@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DebtPayment, Product, Sale, ShiftRecord } from "../types";
+import type { DebtPayment, Product, ReturnRecord, Sale, ShiftRecord } from "../types";
 import {
   getDrawerCashForDay,
   sumDebtPaymentsDuringShift,
@@ -80,6 +80,28 @@ describe("debt cash reconciliation", () => {
     expect(drawer.cashFromSalesUgx).toBe(60_000);
     expect(drawer.debtCollectedUgx).toBe(25_000);
     expect(drawer.expectedDrawerCashUgx).toBe(75_000);
+    expect(drawer.refundsUgx).toBe(0);
+  });
+
+  it("refunds reduce expected drawer cash", () => {
+    const completed = sale({ status: "completed", totalUgx: 100_000, cashPaidUgx: 60_000, debtUgx: 40_000 });
+    const returns: ReturnRecord[] = [
+      {
+        id: crypto.randomUUID(),
+        saleId: completed.id,
+        productId: "prod-1",
+        productName: "Item",
+        quantity: 1,
+        refundAmountUgx: 5_000,
+        reason: "other" as const,
+        actorUserId: "u1",
+        actorName: "Owner",
+        shiftId: null,
+        createdAt: `${DAY}T12:00:00.000Z`,
+      },
+    ];
+    const drawer = getDrawerCashForDay([completed], returns, products, [payment(25_000)], DAY, 10_000);
+    expect(drawer.expectedDrawerCashUgx).toBe(70_000);
   });
 
   it("shift expected cash includes debt payments collected", () => {

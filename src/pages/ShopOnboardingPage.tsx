@@ -239,6 +239,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <p className="text-xs font-black uppercase tracking-[0.2em] text-waka-700">{t(lang, "onboardWelcomeKicker")}</p>
             <h1 className="text-2xl font-black text-stone-900">{t(lang, "onboardWelcomeTitle")}</h1>
             <p className="text-base font-medium text-stone-600">{t(lang, "onboardWelcomeSub")}</p>
+            <p className="text-sm font-bold text-waka-800">{t(lang, "onboardWelcomeSellFirst")}</p>
             {ownerName ? (
               <p className="text-sm font-bold text-stone-700">
                 {t(lang, "registerOwnerFullNameLabel")}: {ownerName}
@@ -460,6 +461,10 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
           <div className="space-y-4">
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardProductsTitle")}</h2>
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardProductsSub")}</p>
+            <p className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-sm font-bold text-waka-950">
+              {t(lang, "onboardProductsPriority")}
+            </p>
+            <p className="text-xs font-semibold text-stone-500">{t(lang, "onboardFinishLaterHint")}</p>
             <div className="grid grid-cols-2 gap-2">
               {starterProducts.map((line) => (
                 <button

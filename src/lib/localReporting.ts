@@ -1,7 +1,9 @@
 /** Client-side report aggregation (offline / local-mode fallback). */
 
 import type { Customer, Product, ReturnRecord, Sale, Supplier } from "../types";
-import { dateKeyKampala, dateKeyDaysAgoKampala, monthKeyKampala } from "./datesUg";
+import { dateKeyKampala, dateKeyDaysAgoKampala, monthKeyKampala, saleReportingDayKey } from "./datesUg";
+import { sumCashExpensesInMonth } from "./cashReconciliation";
+import type { CashExpense } from "../types";
 import { getCompletedFinancials, isRevenueSale, revenueSales } from "./financialMetrics";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isLowStock } from "./sellingEngine";
@@ -85,7 +87,7 @@ function salesInRange(sales: Sale[], range: ReportRange): Sale[] {
   const monthPrefix = today.slice(0, 7);
   return sales.filter((s) => {
     if (!isRevenueSale(s)) return false;
-    const k = dateKeyKampala(s.createdAt);
+    const k = saleReportingDayKey(s);
     if (range === "today") return k === today;
     if (range === "week") return k >= weekCut;
     return k.startsWith(monthPrefix);
@@ -191,7 +193,7 @@ export function localGetWeeklySalesSummary(
   const endDay = dateKeyKampala(new Date());
   const startDay = dateKeyDaysAgoKampala(6);
   const filtered = revenueSales(sales).filter((s) => {
-    const k = dateKeyKampala(s.createdAt);
+    const k = saleReportingDayKey(s);
     return k >= startDay && k <= endDay;
   });
   const filteredReturns = returns.filter((r) => {
@@ -228,6 +230,7 @@ export function localGetMonthlySalesSummary(
   products: Product[],
   returns: ReturnRecord[],
   month = monthKeyKampala(new Date()),
+  cashExpenses: CashExpense[] = [],
 ): MonthlySalesSummary {
   const fin = getCompletedFinancials(sales, returns, products, { monthKey: month });
   const prevParts = month.split("-").map(Number);
@@ -235,15 +238,17 @@ export function localGetMonthlySalesSummary(
   const prevMonth = monthKeyKampala(prevDate);
   const prevRevenue = getCompletedFinancials(sales, returns, products, { monthKey: prevMonth }).revenueUgx;
   const revenue = fin.revenueUgx;
+  const expensesUgx = sumCashExpensesInMonth(cashExpenses, month);
+  const grossProfitUgx = fin.profitUgx;
   return {
     month,
     transactionCount: fin.transactionCount,
     totalRevenueUgx: revenue,
     cashCollectedUgx: fin.cashCollectedUgx,
     debtIssuedUgx: fin.debtIssuedUgx,
-    estimatedProfitUgx: fin.profitUgx,
-    expensesUgx: 0,
-    netEarningsUgx: fin.profitUgx,
+    estimatedProfitUgx: grossProfitUgx,
+    expensesUgx,
+    netEarningsUgx: grossProfitUgx - expensesUgx,
     previousMonthRevenueUgx: prevRevenue,
     revenueGrowthPct: prevRevenue > 0 ? Math.round(((revenue - prevRevenue) / prevRevenue) * 1000) / 10 : null,
   };
@@ -334,13 +339,14 @@ export function localGetRangeSummary(
   returns: ReturnRecord[],
   suppliers: Supplier[],
   range: ReportRange,
+  cashExpenses: CashExpense[] = [],
 ) {
   const daily =
     range === "today"
       ? localGetDailySalesSummary(sales, products, returns)
       : localGetDailySalesSummary(sales, products, returns, dateKeyKampala(new Date()));
   const weekly = localGetWeeklySalesSummary(sales, products, returns);
-  const monthly = localGetMonthlySalesSummary(sales, products, returns);
+  const monthly = localGetMonthlySalesSummary(sales, products, returns, monthKeyKampala(new Date()), cashExpenses);
   const summary =
     range === "today" ? daily : range === "week" ? weekly : monthly;
   return {

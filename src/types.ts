@@ -659,6 +659,7 @@ export type SyncOperationKind =
   | "pending_returns"
   | "pending_expenses"
   | "pending_cash_expenses"
+  | "pending_purchases"
   | "pending_hospitality"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"

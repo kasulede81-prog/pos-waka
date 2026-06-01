@@ -19,19 +19,20 @@ import {
   sessionDisplayLabel,
   sessionSubtitle,
 } from "../lib/hospitalityStats";
-import { useSyncStatus } from "../hooks/useSyncStatus";
 import { useShallow } from "zustand/react/shallow";
+import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
+import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 
 export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const sync = useSyncStatus();
   const sales = useDeferredReportingSales(false);
-  const { preferences, products, salesCount } = usePosStore(
+  const { preferences, products, salesCount, returnRecords } = usePosStore(
     useShallow((s) => ({
       preferences: s.preferences,
       products: s.products,
       salesCount: s.sales.length,
+      returnRecords: s.returnRecords,
     })),
   );
 
@@ -62,8 +63,8 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   }, [floor, sales]);
 
   const todayRevenue = useMemo(
-    () => localGetDailySalesSummary(sales, products, [], todayKey).totalRevenueUgx,
-    [sales, products, todayKey],
+    () => localGetDailySalesSummary(sales, products, returnRecords, todayKey).totalRevenueUgx,
+    [sales, products, returnRecords, todayKey],
   );
 
   const hasOpenSessions = (floor?.sessions.some((s) => s.status === "open" || s.status === "payment_pending") ?? false);
@@ -107,18 +108,8 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
         </div>
       </div>
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-3.5 shadow-waka-sm">
-        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "dashboardSyncTitle")}</p>
-        <p className="mt-1 text-sm font-semibold text-stone-800">
-          {sync.syncing
-            ? t(lang, "syncingShort")
-            : !sync.isOnline
-              ? t(lang, "workingOfflineLabel")
-              : sync.pendingCount > 0
-                ? `${t(lang, "willSyncLater")} (${sync.pendingCount})`
-                : t(lang, "allSavedShort")}
-        </p>
-      </section>
+      <HomeTrustBanner lang={lang} />
+      <SupportQuickStrip lang={lang} compact />
 
       {preferences.onboardingDone && (products.length === 0 || !hasOpenSessions) && salesCount === 0 ? (
         <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-6 shadow-sm">
@@ -177,6 +168,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
           <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "hospitalityDashTodayRevenue")}</p>
             <p className="mt-1 text-2xl font-black">UGX {todayRevenue.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-semibold text-white/70">{t(lang, "dashboardTodaySalesHint")}</p>
             {stats.kitchenQueueCount > 0 ? (
               <p className="mt-1 text-xs font-semibold text-white/80">
                 {stats.kitchenQueueCount} {t(lang, "hospitalityDashKitchenQueue").toLowerCase()}

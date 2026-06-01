@@ -15,22 +15,23 @@ import { readPilotEvents } from "../lib/pilotEventLog";
 import { wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupport";
 import { Navigate } from "react-router-dom";
 import { canTogglePilotMode } from "../lib/pilotMode";
+import { submitPilotSupportTicket } from "../lib/internalOpsHardening";
 
 type Props = { lang: Language };
 
 function issueBody(diagnostics: PilotDiagnosticsExport, note: string): string {
   const lines = [
-    "Waka POS pilot support report",
-    `App: ${diagnostics.appVersion}`,
-    `Shop: ${diagnostics.shopId ?? "unknown"}`,
-    `Device: ${diagnostics.deviceId}`,
-    `Plan: ${diagnostics.plan}`,
-    `Sync errors: ${diagnostics.syncErrorCount}`,
-    `Pending queue: ${diagnostics.pendingSyncQueue}`,
+    "Waka POS — help request",
+    `App version: ${diagnostics.appVersion}`,
+    `Shop number: ${diagnostics.shopId ?? "unknown"}`,
+    `Phone ID: ${diagnostics.deviceId}`,
+    `Your plan: ${diagnostics.plan}`,
+    `Sales not uploaded yet: ${diagnostics.syncErrorCount}`,
+    `Waiting to upload: ${diagnostics.pendingSyncQueue}`,
     "",
-    note.trim() ? `Issue: ${note.trim()}` : "Issue: (describe above)",
+    note.trim() ? `What went wrong: ${note.trim()}` : "What went wrong: (describe above)",
     "",
-    "Full diagnostics attached or pasted separately.",
+    "Full help information is attached or pasted separately.",
   ];
   return lines.join("\n");
 }
@@ -124,19 +125,40 @@ export function PilotSupportCenterPage({ lang }: Props) {
     URL.revokeObjectURL(url);
   };
 
+  const fileTicket = async () => {
+    if (!shopId || !exportPayload) return { ok: false as const };
+    return submitPilotSupportTicket({
+      shopId,
+      subject: issueNote.trim().slice(0, 120) || "Pilot support",
+      body: issueNote.trim() || issueBody(diagnostics!, issueNote),
+      diagnostics: exportPayload,
+      screenshotMeta: screenshotName ? { fileName: screenshotName } : null,
+    });
+  };
+
   const reportViaWhatsApp = async () => {
+    const ticket = await fileTicket();
     await copyAll();
     const text = issueBody(diagnostics!, issueNote);
     window.open(wakaSupportWhatsAppUrl(text), "_blank", "noopener,noreferrer");
-    setSentHint(t(lang, "pilotSupportWhatsAppHint"));
+    setSentHint(
+      ticket.ok
+        ? `${t(lang, "pilotSupportTicketFiled")} ${t(lang, "pilotSupportWhatsAppHint")}`
+        : t(lang, "pilotSupportWhatsAppHint"),
+    );
   };
 
   const reportViaEmail = async () => {
+    const ticket = await fileTicket();
     await copyAll();
     const subject = `Waka POS pilot · ${diagnostics?.shopId ?? "shop"} · v${diagnostics?.appVersion ?? ""}`;
     const body = issueBody(diagnostics!, issueNote);
     window.location.href = wakaSupportMailtoUrl(subject, body);
-    setSentHint(t(lang, "pilotSupportEmailHint"));
+    setSentHint(
+      ticket.ok
+        ? `${t(lang, "pilotSupportTicketFiled")} ${t(lang, "pilotSupportEmailHint")}`
+        : t(lang, "pilotSupportEmailHint"),
+    );
   };
 
   const onScreenshot = (file: File | null) => {

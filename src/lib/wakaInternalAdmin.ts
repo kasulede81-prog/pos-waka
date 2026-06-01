@@ -574,6 +574,8 @@ export type SupportTicketRow = {
   device_fingerprint: string | null;
   app_version: string | null;
   sync_health_snapshot: Record<string, unknown> | null;
+  diagnostics_json: Record<string, unknown> | null;
+  screenshot_meta: Record<string, unknown> | null;
   assigned_internal_admin_id: string | null;
   assigned_admin_email: string | null;
 };
@@ -757,6 +759,14 @@ function mapSupportRpcRow(row: Record<string, unknown>): SupportTicketRow {
       row.sync_health_snapshot && typeof row.sync_health_snapshot === "object"
         ? (row.sync_health_snapshot as Record<string, unknown>)
         : null,
+    diagnostics_json:
+      row.diagnostics_json && typeof row.diagnostics_json === "object"
+        ? (row.diagnostics_json as Record<string, unknown>)
+        : null,
+    screenshot_meta:
+      row.screenshot_meta && typeof row.screenshot_meta === "object"
+        ? (row.screenshot_meta as Record<string, unknown>)
+        : null,
     assigned_internal_admin_id: (row.assigned_internal_admin_id as string) ?? null,
     assigned_admin_email: (row.assigned_admin_email as string) ?? null,
   };
@@ -779,7 +789,9 @@ export async function fetchSupportTickets(limit = 25): Promise<SupportTicketRow[
   }
   const { data: fallback, error: fbErr } = await supabase
     .from("support_requests")
-    .select("id, subject, body, status, priority, channel, created_at, contact_phone_e164, shops ( id, name, district, phone_e164 )")
+    .select(
+      "id, subject, body, status, priority, channel, created_at, contact_phone_e164, issue_type, app_version, device_fingerprint, diagnostics_json, screenshot_meta, sync_health_snapshot, shops ( id, name, district, phone_e164 )",
+    )
     .order("created_at", { ascending: false })
     .limit(limit);
   if (fbErr || !fallback) return [];

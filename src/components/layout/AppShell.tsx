@@ -567,9 +567,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   </select>
                 </label>
               ) : null}
-              <p className="mt-2 text-xs font-medium text-slate-500">
-                Pick a user or enter a matching PIN/password directly.
-              </p>
+              <p className="mt-2 text-xs font-medium text-slate-500">{t(lang, "lockScreenStaffHint")}</p>
               <PinInput
                 value={lockSecret}
                 onChange={(e) => {

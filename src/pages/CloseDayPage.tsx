@@ -3,21 +3,20 @@ import type { FormEvent } from "react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { useDeferredSales } from "../hooks/useDeferredSales";
 import { dateKeyKampala } from "../lib/datesUg";
-import { getDrawerCashForDay } from "../lib/cashReconciliation";
+import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { getCompletedFinancials } from "../lib/financialMetrics";
+import { useReportingSales } from "../hooks/useReportingSales";
+import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 
 export function CloseDayPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const sales = useDeferredSales();
+  const sales = useReportingSales(false);
   const products = usePosStore((s) => s.products);
-  const returnRecords = usePosStore((s) => s.returnRecords);
-  const debtPayments = usePosStore((s) => s.debtPayments);
-  const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const returnRecords = useReportingReturnRecords(false);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const recordDayClose = usePosStore((s) => s.recordDayClose);
@@ -26,21 +25,21 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const [counted, setCounted] = useState("");
   const [doneMsg, setDoneMsg] = useState(false);
 
-  const summary = useMemo(() => {
-    const expenseUgx = cashExpenses
-      .filter((e) => !e.deletedAt && e.paidOn === todayKey)
-      .reduce((a, e) => a + e.amountUgx, 0);
-    const drawer = getDrawerCashForDay(sales, returnRecords, products, debtPayments, todayKey, expenseUgx);
-    const fin = getCompletedFinancials(sales, returnRecords, products, { day: todayKey });
-    return {
+  const drawer = useDrawerCashForToday();
+
+  const summary = useMemo(
+    () => ({
       cash: drawer.cashFromSalesUgx,
-      debt: fin.debtIssuedUgx,
+      debt: drawer.debtIssuedUgx,
       debtCollected: drawer.debtCollectedUgx,
       expectedCash: drawer.expectedDrawerCashUgx,
-      total: fin.revenueUgx,
-      saleCount: fin.transactionCount,
-    };
-  }, [sales, returnRecords, products, debtPayments, cashExpenses, todayKey]);
+      total: drawer.revenueUgx,
+      saleCount: getCompletedFinancials(sales, returnRecords, products, { day: todayKey }).transactionCount,
+      refundsUgx: drawer.refundsUgx,
+      expenseUgx: drawer.expenseUgx,
+    }),
+    [drawer, sales, returnRecords, products, todayKey],
+  );
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -80,11 +79,16 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
+      <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950">
+        {t(lang, "closeDayTrustNote")}
+      </p>
+
       <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-waka-sm">
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl bg-stone-50 px-3 py-3">
+          <div className="rounded-2xl bg-stone-50 px-3 py-3 col-span-2">
             <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "totalSales")}</p>
             <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.total.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-medium text-slate-600">{t(lang, "closeDayTotalSalesHint")}</p>
           </div>
           <div>
             <div className="rounded-2xl bg-stone-50 px-3 py-3">
@@ -104,15 +108,41 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             <p className="text-[11px] font-black uppercase text-waka-800">{t(lang, "closeSalesCount")}</p>
             <p className="mt-1 text-xl font-black text-waka-950">{summary.saleCount}</p>
           </div>
+          {summary.expenseUgx > 0 ? (
+            <div className="rounded-2xl bg-rose-50 px-3 py-3 col-span-2">
+              <p className="text-[11px] font-black uppercase text-rose-800">{t(lang, "closeDayExpensesToday")}</p>
+              <p className="mt-1 text-xl font-black text-rose-950">UGX {summary.expenseUgx.toLocaleString()}</p>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 col-span-2">
-            <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "shiftCloseExpected")}</p>
+            <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "closeDayExpectedTitle")}</p>
             <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.expectedCash.toLocaleString()}</p>
           </div>
+        </div>
+        <div className="mt-4 rounded-2xl border border-waka-100 bg-waka-50/80 px-3 py-3 text-sm text-stone-800">
+          <p className="font-black text-stone-900">{t(lang, "closeDayExpectedFormulaIntro")}</p>
+          <ul className="mt-2 space-y-1 font-semibold">
+            <li>
+              {t(lang, "closeDayFormulaCashSales")}: UGX {summary.cash.toLocaleString()}
+            </li>
+            <li>
+              {t(lang, "closeDayFormulaDebtCollected")}: UGX {summary.debtCollected.toLocaleString()}
+            </li>
+            {summary.expenseUgx > 0 ? (
+              <li>
+                {t(lang, "closeDayFormulaExpenses")}: UGX {summary.expenseUgx.toLocaleString()}
+              </li>
+            ) : null}
+            <li className="border-t border-waka-200 pt-2 font-black text-waka-950">
+              {t(lang, "closeDayFormulaEquals")}: UGX {summary.expectedCash.toLocaleString()}
+            </li>
+          </ul>
         </div>
       </section>
 
       <form onSubmit={submit} className="rounded-3xl border border-waka-200 bg-waka-50/70 p-4">
         <label className="block text-base font-black text-waka-950">{t(lang, "closeCountedCash")}</label>
+        <p className="mt-1 text-sm font-medium text-waka-900">{t(lang, "closeDayCountedHelp")}</p>
         <input
           value={counted}
           onChange={(e) => setCounted(e.target.value.replace(/\D/g, "").slice(0, 12))}
@@ -140,7 +170,9 @@ export function CloseDayPage({ lang }: { lang: Language }) {
           </p>
           {closeVarianceFlag(last.expectedCashUgx, last.differenceUgx) ? (
             <p className="mt-3 rounded-xl bg-rose-100 px-3 py-2 text-sm font-bold text-rose-900">{t(lang, "ownerVarianceFlag")}</p>
-          ) : null}
+          ) : (
+            <p className="mt-3 rounded-xl bg-emerald-100 px-3 py-2 text-sm font-bold text-emerald-900">{t(lang, "closeDayDiffOk")}</p>
+          )}
         </section>
       ) : null}
 
@@ -162,7 +194,8 @@ export function CloseDayPage({ lang }: { lang: Language }) {
                     {t(lang, "ownerExpectedVsCounted")}: UGX {d.expectedCashUgx.toLocaleString()} / UGX {d.countedCashUgx.toLocaleString()}
                   </p>
                   <p className="text-sm font-bold text-slate-800">
-                    Δ UGX {d.differenceUgx.toLocaleString()} · {t(lang, "estimatedProfit")} UGX {d.profitEstimateUgx.toLocaleString()}
+                    {t(lang, "closeHistoryDifference")}: UGX {d.differenceUgx.toLocaleString()} · {t(lang, "closeHistoryProfit")}: UGX{" "}
+                    {d.profitEstimateUgx.toLocaleString()}
                   </p>
                 </li>
               );

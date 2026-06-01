@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { Banknote, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -14,6 +14,7 @@ import {
   canRecordCashExpenses,
   cashExpenseCategoryLabel,
 } from "../lib/cashExpenses";
+import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 
 type Props = { lang: Language };
 
@@ -21,7 +22,7 @@ export function CashExpensesPage({ lang }: Props) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
-  const sales = usePosStore((s) => s.sales);
+  const drawer = useDrawerCashForToday();
   const addCashExpense = usePosStore((s) => s.addCashExpense);
   const voidCashExpense = usePosStore((s) => s.voidCashExpense);
 
@@ -47,14 +48,6 @@ export function CashExpensesPage({ lang }: Props) {
     () => todayExpenses.reduce((a, e) => a + e.amountUgx, 0),
     [todayExpenses],
   );
-
-  const cashSalesToday = useMemo(() => {
-    return sales
-      .filter((s) => dateKeyKampala(s.createdAt) === todayKey)
-      .reduce((a, s) => a + s.cashPaidUgx, 0);
-  }, [sales, todayKey]);
-
-  const expectedCash = Math.max(0, cashSalesToday - todayExpenseTotal);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -115,11 +108,11 @@ export function CashExpensesPage({ lang }: Props) {
         <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div className="rounded-2xl bg-white/80 px-3 py-2">
             <p className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "cashExpensesCashSales")}</p>
-            <p className="font-black text-stone-900">UGX {cashSalesToday.toLocaleString()}</p>
+            <p className="font-black text-stone-900">UGX {drawer.cashFromSalesUgx.toLocaleString()}</p>
           </div>
           <div className="rounded-2xl bg-white/80 px-3 py-2">
             <p className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "cashExpensesExpectedDrawer")}</p>
-            <p className="font-black text-emerald-900">UGX {expectedCash.toLocaleString()}</p>
+            <p className="font-black text-emerald-900">UGX {drawer.expectedDrawerCashUgx.toLocaleString()}</p>
           </div>
         </div>
       </section>
@@ -128,25 +121,23 @@ export function CashExpensesPage({ lang }: Props) {
         <button
           type="button"
           onClick={() => setShowForm(true)}
-          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-waka-600 px-4 py-3 text-base font-black text-white shadow-waka-sm active:bg-waka-700"
+          className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl bg-waka-600 px-4 py-3 text-base font-black text-white shadow-waka-sm"
         >
           <Plus className="h-5 w-5" aria-hidden />
           {t(lang, "cashExpenseRecordBtn")}
         </button>
-      ) : (
+      ) : null}
+
+      {showForm ? (
         <form onSubmit={submit} className="space-y-4 rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
-          <div className="flex items-center gap-2">
-            <Banknote className="h-5 w-5 text-waka-600" aria-hidden />
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "cashExpenseRecordBtn")}</h2>
-          </div>
+          <h2 className="text-lg font-black text-stone-900">{t(lang, "cashExpenseRecordBtn")}</h2>
           <label className="block text-sm font-bold text-stone-800">
             {t(lang, "cashExpenseAmount")} *
             <input
-              inputMode="numeric"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="20000"
-              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 text-lg font-black outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200"
+              onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
+              inputMode="numeric"
+              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base"
               autoFocus
             />
           </label>
@@ -155,7 +146,7 @@ export function CashExpensesPage({ lang }: Props) {
             <select
               value={categoryKey}
               onChange={(e) => setCategoryKey(e.target.value)}
-              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 bg-white px-3 text-base font-semibold"
+              className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base"
             >
               {CASH_EXPENSE_CATEGORY_KEYS.map((k) => (
                 <option key={k} value={k}>
@@ -171,78 +162,77 @@ export function CashExpensesPage({ lang }: Props) {
               <input
                 value={customCategory}
                 onChange={(e) => setCustomCategory(e.target.value)}
-                className="mt-1.5 w-full min-h-[44px] rounded-xl border border-stone-200 px-4 text-base"
+                className="mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base"
                 placeholder={t(lang, "cashExpenseCustomPlaceholder")}
               />
             </label>
           ) : null}
           <label className="block text-sm font-bold text-stone-800">
             {t(lang, "cashExpenseDescription")}
-            <input
+            <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1.5 w-full min-h-[44px] rounded-xl border border-stone-200 px-4 text-base"
+              rows={2}
+              className="mt-1.5 w-full rounded-xl border border-stone-200 px-4 py-3 text-base"
               placeholder={t(lang, "cashExpenseDescriptionPlaceholder")}
             />
           </label>
-          <p className="text-xs text-stone-500">
+          <p className="text-xs font-medium text-stone-500">
             {t(lang, "cashExpenseRecordedBy")}: {actor.displayName ?? actor.role}
           </p>
-          {err ? <p className="text-sm font-semibold text-red-600">{err}</p> : null}
+          {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
           {saved ? <p className="text-sm font-semibold text-emerald-700">{t(lang, "cashExpenseSaved")}</p> : null}
           <div className="flex gap-2">
+            <button type="submit" className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 text-sm font-black text-white">
+              {t(lang, "save")}
+            </button>
             <button
               type="button"
-              onClick={() => setShowForm(false)}
-              className="min-h-[48px] flex-1 rounded-xl border border-stone-200 bg-white font-bold text-stone-700"
+              onClick={() => {
+                setShowForm(false);
+                setErr(null);
+              }}
+              className="min-h-[48px] rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-800"
             >
               {t(lang, "cancel")}
             </button>
-            <button
-              type="submit"
-              className="min-h-[48px] flex-[2] rounded-xl bg-waka-600 font-black text-white active:bg-waka-700"
-            >
-              {t(lang, "save")}
-            </button>
           </div>
         </form>
-      )}
+      ) : null}
 
-      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
+      <section>
         <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "cashExpensesListToday")}</h2>
         {todayExpenses.length === 0 ? (
           <p className="mt-3 text-sm font-medium text-stone-500">{t(lang, "cashExpensesEmpty")}</p>
         ) : (
           <ul className="mt-3 space-y-2">
             {todayExpenses.map((e) => (
-              <li key={e.id} className="flex items-start justify-between gap-2 rounded-2xl bg-stone-50 px-3 py-3">
+              <li key={e.id} className="flex items-center justify-between gap-3 rounded-2xl border border-stone-100 bg-white px-4 py-3">
                 <div className="min-w-0">
-                  <p className="font-black text-stone-900">{e.category}</p>
-                  <p className="text-sm font-bold text-waka-800">UGX {e.amountUgx.toLocaleString()}</p>
-                  {e.description ? <p className="mt-0.5 text-xs text-stone-600">{e.description}</p> : null}
-                  <p className="mt-1 text-[10px] font-semibold text-stone-400">
-                    {e.createdByLabel ?? "—"} · {new Date(e.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    {e.pendingSync ? ` · ${t(lang, "pendingSync")}` : ""}
-                  </p>
+                  <p className="font-bold text-stone-900">{e.category}</p>
+                  {e.description ? <p className="text-xs text-stone-500">{e.description}</p> : null}
                 </div>
-                {canDelete ? (
-                  <button
-                    type="button"
-                    onClick={() => voidCashExpense(e.id)}
-                    className="shrink-0 rounded-lg border border-red-200 px-2 py-1 text-[11px] font-bold text-red-700"
-                  >
-                    {t(lang, "remove")}
-                  </button>
-                ) : null}
+                <div className="flex shrink-0 items-center gap-2">
+                  <p className="font-black text-stone-900">UGX {e.amountUgx.toLocaleString()}</p>
+                  {canDelete ? (
+                    <button
+                      type="button"
+                      onClick={() => voidCashExpense(e.id)}
+                      className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black uppercase text-rose-800"
+                    >
+                      {t(lang, "voidBtn")}
+                    </button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
         )}
       </section>
 
-      <p className="text-center text-sm">
-        <Link to="/pos" className="font-semibold text-waka-700 underline underline-offset-2">
-          {t(lang, "backToSell")}
+      <p className="text-center">
+        <Link to="/close-day" className="text-sm font-bold text-waka-700 underline">
+          {t(lang, "closeDay")} →
         </Link>
       </p>
     </div>

@@ -289,9 +289,17 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
             <p className="mt-2 rounded-xl border border-waka-200/80 bg-white/80 px-3 py-2 text-xs font-medium leading-relaxed text-stone-700">
               {t(lang, "backupRestoreTip")}
             </p>
+            <p className="mt-2 text-xs font-semibold text-stone-600">{t(lang, "restoreCallWakaHint")}</p>
           </>
         ) : null}
-        {msg ? <p className="mt-2 rounded-xl bg-stone-50 px-3 py-2 text-sm font-semibold text-slate-800">{msg}</p> : null}
+        {msg ? (
+          <div className="mt-2 space-y-1 rounded-xl bg-stone-50 px-3 py-2">
+            <p className="text-sm font-semibold text-slate-800">{msg}</p>
+            {msg === t(lang, "backupExportOk") || msg === t(lang, "backupManualOk") ? (
+              <p className="text-xs font-medium text-stone-600">{t(lang, "backupExportOkHint")}</p>
+            ) : null}
+          </div>
+        ) : null}
 
         {!actionsEnabled ? (
           <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">

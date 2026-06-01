@@ -74,6 +74,18 @@ export function setCrashReportingUser(ctx: CrashContext): void {
 }
 
 export function captureAppException(error: unknown, extras?: Record<string, string | number | boolean>): void {
+  const message = error instanceof Error ? error.message : String(error);
+  void import("./internalOpsHardening")
+    .then(({ reportAppCrashToCloud }) =>
+      reportAppCrashToCloud({
+        appVersion: import.meta.env.VITE_APP_VERSION?.trim() || undefined,
+        scope: extras?.scope != null ? String(extras.scope) : undefined,
+        message: message.slice(0, 500),
+        extras,
+      }),
+    )
+    .catch(() => undefined);
+
   if (!initialized) return;
   Sentry.withScope((scope) => {
     if (extras) {

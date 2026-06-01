@@ -1,5 +1,6 @@
-import type { Product, Sale } from "../types";
+import type { Product, ReturnRecord, Sale } from "../types";
 import { dateKeyKampala } from "./datesUg";
+import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
 import { isLowStock } from "./sellingEngine";
 import { countExpiryBuckets, medicinesInExpiryBucket, type ExpiryBucket } from "./pharmacyExpiry";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
@@ -16,13 +17,10 @@ export type PharmacyDashboardStats = {
   topMedicines: { productId: string; name: string; quantity: number; revenueUgx: number }[];
 };
 
-function isCompletedSale(s: Sale): boolean {
-  return s.status !== "pending" && s.status !== "cancelled";
-}
-
 export function computePharmacyDashboardStats(
   products: Product[],
   sales: Sale[],
+  returns: ReturnRecord[],
   todayKey: string = dateKeyKampala(new Date()),
 ): PharmacyDashboardStats {
   const today = new Date();
@@ -36,10 +34,11 @@ export function computePharmacyDashboardStats(
   ].slice(0, 8);
   const expiredMedicines = medicinesInExpiryBucket(inStock, "expired", today).slice(0, 8);
 
-  const todaySales = sales.filter((s) => isCompletedSale(s) && dateKeyKampala(s.createdAt) === todayKey);
-  const todayDispensingTotalUgx = todaySales.reduce((sum, s) => sum + (s.totalUgx ?? 0), 0);
+  const todaySales = revenueSalesOnDay(sales, todayKey);
+  const todayFin = getCompletedFinancials(sales, returns, products, { day: todayKey });
+  const todayDispensingTotalUgx = todayFin.revenueUgx;
 
-  const top = localGetTopProducts(sales, [], products, "today", "top", 5);
+  const top = localGetTopProducts(sales, returns, products, "today", "top", 5);
 
   return {
     lowStockCount: lowStockMedicines.length,

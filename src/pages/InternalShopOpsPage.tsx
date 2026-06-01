@@ -48,6 +48,10 @@ import {
   PREVIEW_SHOP_OPS_DETAIL,
   isInternalAdminPreviewActive,
 } from "../lib/internalAdminPreview";
+import { adminSetShopPilotCohort } from "../lib/internalOpsHardening";
+import { supabase } from "../lib/supabase";
+import { AdminDiagnosticsImportPanel } from "../components/internal-admin/ops/AdminDiagnosticsImportPanel";
+import { AdminSyncInvestigationPanel } from "../components/internal-admin/ops/AdminSyncInvestigationPanel";
 
 type Props = {
   lang: Language;
@@ -94,6 +98,7 @@ export function InternalShopOpsPage({ lang }: Props) {
   const [planControlCode, setPlanControlCode] = useState<AdminPlanCode>("business");
   const [planControlDays, setPlanControlDays] = useState(30);
   const [auditRows, setAuditRows] = useState<OpsAuditRow[]>([]);
+  const [pilotCohort, setPilotCohort] = useState(false);
 
   const loadShop = useCallback(async () => {
     if (!shopId) return;
@@ -135,6 +140,16 @@ export function InternalShopOpsPage({ lang }: Props) {
       return;
     }
     void fetchShopAuditTimeline(shopId, 20).then(setAuditRows);
+  }, [shopId, previewMode]);
+
+  useEffect(() => {
+    if (!shopId || previewMode || !supabase) return;
+    void supabase
+      .from("shops")
+      .select("pilot_cohort")
+      .eq("id", shopId)
+      .maybeSingle()
+      .then(({ data }) => setPilotCohort(Boolean(data?.pilot_cohort)));
   }, [shopId, previewMode]);
 
   useEffect(() => {
@@ -462,6 +477,34 @@ export function InternalShopOpsPage({ lang }: Props) {
               </a>
             ) : null}
           </div>
+
+          {perms.canShopSupport && !previewMode ? (
+            <label className="flex items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/60 px-4 py-3">
+              <div>
+                <p className="text-sm font-black text-stone-900">Pilot cohort</p>
+                <p className="text-xs text-stone-600">Include in pilot dashboard and operational alerts.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={pilotCohort}
+                disabled={busy}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  void adminSetShopPilotCohort(detail.shop.id, next).then((r) => {
+                    if (r.ok) setPilotCohort(next);
+                    else setToast({ kind: "err", text: r.message ?? "Could not update pilot cohort." });
+                  });
+                }}
+                className="h-5 w-5"
+              />
+            </label>
+          ) : null}
+
+          {canSupport ? (
+            <AdminDiagnosticsImportPanel previewMode={previewMode} defaultShopId={detail.shop.id} />
+          ) : null}
+
+          {canSupport ? <AdminSyncInvestigationPanel detail={detail} /> : null}
 
           {canSupport ? (
             <AdminCollapsible

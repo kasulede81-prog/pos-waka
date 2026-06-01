@@ -13,6 +13,8 @@ import { adminPermissions } from "../adminRoles";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, SupportTicketCard } from "../primitives";
 import { SupportPasswordResetPanel } from "../../SupportPasswordResetPanel";
+import { AdminDiagnosticsImportPanel } from "../../ops/AdminDiagnosticsImportPanel";
+import { TicketInternalNotesPanel } from "../../ops/TicketInternalNotesPanel";
 
 type Props = {
   lang: Language;
@@ -54,6 +56,8 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
           }}
         />
       ) : null}
+
+      <AdminDiagnosticsImportPanel previewMode={previewMode} />
 
       <div className="flex gap-2">
         {(["open", "all"] as const).map((f) => (
@@ -126,6 +130,19 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
                       : undefined
                   }
                 />
+                {tk.issue_type === "pilot_support" && tk.diagnostics_json ? (
+                  <details className="mt-2 rounded-xl border border-teal-200 bg-teal-50/50 p-2 text-xs">
+                    <summary className="cursor-pointer font-black text-teal-900">Pilot diagnostics</summary>
+                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono text-[10px] text-stone-700">
+                      {JSON.stringify(tk.diagnostics_json, null, 2)}
+                    </pre>
+                    {tk.app_version ? <p className="mt-1">App v{tk.app_version}</p> : null}
+                    {tk.screenshot_meta ? (
+                      <p className="text-stone-600">Screenshot: {JSON.stringify(tk.screenshot_meta)}</p>
+                    ) : null}
+                  </details>
+                ) : null}
+                <TicketInternalNotesPanel ticketId={tk.id} />
                 {busyId === tk.id ? (
                   <p className="mt-1 text-center text-xs font-bold text-stone-500">Updating…</p>
                 ) : null}

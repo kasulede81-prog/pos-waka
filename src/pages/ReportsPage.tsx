@@ -4,6 +4,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { useShopReportBundle } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala } from "../lib/datesUg";
@@ -25,13 +26,15 @@ type Range = "today" | "week" | "month";
 export function ReportsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const returnRecords = usePosStore((s) => s.returnRecords);
   const products = usePosStore((s) => s.products);
   const purchases = usePosStore((s) => s.purchases);
+  const debtPayments = usePosStore((s) => s.debtPayments);
+  const cashExpenses = usePosStore((s) => s.cashExpenses);
   const [range, setRange] = useState<Range>("today");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [reportHint, setReportHint] = useState<string | null>(null);
   const sales = useDeferredReportingSales(includeArchived);
+  const returnRecords = useReportingReturnRecords(includeArchived);
   const report = useShopReportBundle(range, includeArchived);
 
   if (!hasPermission(actor.role, "reports.view")) {
@@ -65,7 +68,13 @@ export function ReportsPage({ lang }: { lang: Language }) {
     return computePharmacyExpiryReport(products);
   }, [preferences.businessType, preferences.pharmacyModeEnabled, products]);
 
-  const totals = { cash: report.cash, profit: report.profit, debt: report.debt, count: report.count };
+  const totals = {
+    revenue: report.revenue,
+    cash: report.cash,
+    profit: report.profit,
+    debt: report.debt,
+    count: report.count,
+  };
   const topProducts = report.topProducts;
   const weakProducts = report.slowProducts;
   const last7DayBars = report.dailyTrend;
@@ -110,7 +119,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
               onClick={() => {
                 const dk = dateKeyKampala(new Date());
-                const text = buildDailyReportText(lang, dk, sales, products, returnRecords);
+                const text = buildDailyReportText(lang, dk, sales, products, returnRecords, debtPayments, cashExpenses);
                 void navigator.clipboard.writeText(text).then(
                   () => {
                     setReportHint(t(lang, "reportCopied"));
@@ -127,7 +136,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               className="rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
               onClick={async () => {
                 const dk = dateKeyKampala(new Date());
-                const text = buildDailyReportText(lang, dk, sales, products, returnRecords);
+                const text = buildDailyReportText(lang, dk, sales, products, returnRecords, debtPayments, cashExpenses);
                 const ok = await shareText(text, t(lang, "appName"));
                 setReportHint(ok ? t(lang, "reportShared") : t(lang, "reportCopyInstead"));
                 window.setTimeout(() => setReportHint(null), 3500);

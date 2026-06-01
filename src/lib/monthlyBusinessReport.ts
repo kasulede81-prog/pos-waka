@@ -1,4 +1,5 @@
-import type { Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
+import type { CashExpense, Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
+import { sumCashExpensesInMonth } from "./cashReconciliation";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
 import { Capacitor } from "@capacitor/core";
@@ -15,7 +16,11 @@ export type MonthlyBusinessReport = {
   debtUgx: number;
   discountsUgx: number;
   refundsUgx: number;
+  /** Gross margin on sales (before cash expenses). */
   profitUgx: number;
+  cashExpensesUgx: number;
+  /** Gross profit minus cash expenses recorded in the month. */
+  netProfitUgx: number;
   topProducts: Array<{ name: string; qty: number; revenueUgx: number }>;
   byCashier: Array<{ label: string; count: number; revenueUgx: number }>;
   inventorySummary: {
@@ -46,11 +51,13 @@ export function buildMonthlyBusinessReport(params: {
   returnRecords: ReturnRecord[];
   products: Product[];
   staffAccounts: StaffAccount[];
+  cashExpenses?: CashExpense[];
 }): MonthlyBusinessReport {
-  const { monthKey, shopName, sales, returnRecords, products, staffAccounts } = params;
+  const { monthKey, shopName, sales, returnRecords, products, staffAccounts, cashExpenses = [] } = params;
   const monthSales = salesInMonth(sales, monthKey);
   const monthReturns = returnsInMonth(returnRecords, monthKey);
   const fin = getCompletedFinancials(sales, returnRecords, products, { monthKey });
+  const expensesUgx = sumCashExpensesInMonth(cashExpenses, monthKey);
 
   const productMap = new Map<string, { name: string; qty: number; revenueUgx: number }>();
   for (const sale of monthSales) {
@@ -96,6 +103,8 @@ export function buildMonthlyBusinessReport(params: {
     discountsUgx: fin.discountsUgx,
     refundsUgx: monthReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
     profitUgx: fin.profitUgx,
+    cashExpensesUgx: expensesUgx,
+    netProfitUgx: fin.profitUgx - expensesUgx,
     topProducts: [...productMap.values()].sort((a, b) => b.revenueUgx - a.revenueUgx).slice(0, 15),
     byCashier: [...cashierMap.values()].sort((a, b) => b.revenueUgx - a.revenueUgx),
     inventorySummary: {

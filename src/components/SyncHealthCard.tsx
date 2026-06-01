@@ -34,20 +34,34 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
   const syncErrors = listSalesWithSyncErrors(6);
   const needsAttention = isOnline && (h.lastIssueCode === "error" || (h.lastIssueCode === "partial" && sync.pendingCount > 5) || syncErrorCount > 0);
 
+  const issueLabel =
+    h.lastIssueCode === "error"
+      ? t(lang, "syncIssueError")
+      : h.lastIssueCode === "partial"
+        ? t(lang, "syncIssuePartial")
+        : null;
+
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <p className="text-base font-black text-stone-900">
+      <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-950">
+        {t(lang, "syncTrustSavedOnPhone")}
+      </p>
+      <p className="mt-3 text-base font-black text-stone-900">
         {simple ? t(lang, "backupSyncOnlineTitle") : t(lang, "syncDiagnosticsTitle")}
       </p>
       {!simple ? <p className="mt-1 text-sm text-stone-600">{t(lang, "syncDiagnosticsSub")}</p> : null}
       <p className="mt-2 text-sm font-semibold text-stone-600">
-        {isOnline ? t(lang, "backupSyncOnlineActive") : t(lang, "backupSyncOfflineActive")}
+        {isOnline ? t(lang, "backupSyncOnlineActive") : t(lang, "syncTrustOfflineSell")}
       </p>
+      {!isOnline ? <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "syncTrustKeepUsing")}</p> : null}
 
       {unsyncedSales > 0 ? (
-        <p className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-          {tTemplate(lang, "backupSyncWaitingUploads", { count: String(unsyncedSales) })}
-        </p>
+        <div className="mt-2 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+          <p className="text-sm font-bold text-amber-950">
+            {tTemplate(lang, "backupSyncWaitingUploads", { count: String(unsyncedSales) })}
+          </p>
+          <p className="text-xs font-semibold text-amber-900">{t(lang, "syncTrustWaitingSafe")}</p>
+        </div>
       ) : null}
 
       {!simple && needsAttention ? (
@@ -94,10 +108,10 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
               <dt className="font-semibold text-stone-600">{t(lang, "syncLastSuccess")}</dt>
               <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>
             </div>
-            {h.lastIssueCode !== "none" ? (
-              <div className="flex justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2">
-                <dt className="font-semibold text-amber-900">{t(lang, "syncLastIssue")}</dt>
-                <dd className="text-right font-black text-amber-950">{h.lastIssueCode}</dd>
+            {issueLabel ? (
+              <div className="rounded-xl bg-amber-50 px-3 py-2">
+                <p className="text-xs font-semibold text-amber-900">{t(lang, "syncLastIssue")}</p>
+                <p className="mt-0.5 text-sm font-black text-amber-950">{issueLabel}</p>
               </div>
             ) : null}
             <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
@@ -114,7 +128,7 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
           <ul className="mt-1 space-y-0.5 text-xs font-medium text-rose-800">
             {syncErrors.map((e) => (
               <li key={e.id} className="truncate">
-                {e.error} · sale {e.id.slice(0, 8)}
+                {t(lang, "syncSaleListItem")} · {e.id.slice(0, 8)}
               </li>
             ))}
           </ul>

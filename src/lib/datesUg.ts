@@ -1,3 +1,5 @@
+import type { Sale } from "../types";
+
 /** YYYY-MM-DD in Kampala for grouping “today” sales offline */
 export function dateKeyKampala(isoOrDate: string | Date): string {
   const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
@@ -34,6 +36,13 @@ export function weekStartKeyKampala(isoOrDate: string | Date): string {
   const mon0 = (anchor.getUTCDay() + 6) % 7;
   anchor.setUTCDate(anchor.getUTCDate() - mon0);
   return dateKeyKampala(anchor);
+}
+
+/**
+ * Canonical reporting day for a sale — matches server RPC (created_at) and all local dashboards.
+ */
+export function saleReportingDayKey(sale: Pick<Sale, "createdAt">): string {
+  return dateKeyKampala(sale.createdAt);
 }
 
 export function saleMatchesReceiptRange(createdAt: string, range: ReceiptDateRange): boolean {
