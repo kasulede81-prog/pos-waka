@@ -7,6 +7,7 @@ export type SubscriptionContextValue = {
   authMode: "supabase" | "local";
   snapshot: SubscriptionSnapshot;
   loading: boolean;
+  userId: string | null;
   refetch: () => Promise<void>;
 };
 
@@ -14,6 +15,7 @@ const defaultValue: SubscriptionContextValue = {
   authMode: "local",
   snapshot: { kind: "local_full" },
   loading: false,
+  userId: null,
   refetch: async () => {},
 };
 
@@ -32,8 +34,7 @@ export function SubscriptionProvider({
     authMode === "local" ? { kind: "local_full" } : { kind: "none" },
   );
   /** True until the first remote subscription fetch settles (avoids tier gates on stale { kind: "none" }). */
-  /** Do not block the shell on subscription fetch — tier gates use snapshot when ready. */
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => authMode === "supabase" && Boolean(user?.id));
   const loadedOnceRef = useRef(false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
@@ -77,9 +78,10 @@ export function SubscriptionProvider({
       authMode,
       snapshot,
       loading,
+      userId: user?.id ?? null,
       refetch: load,
     }),
-    [authMode, snapshot, loading, load],
+    [authMode, snapshot, loading, load, user?.id],
   );
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;

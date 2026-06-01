@@ -1,4 +1,4 @@
-import type { Sale, SaleLine, ShiftRecord } from "../types";
+import type { Customer, Sale, SaleLine, ShiftRecord } from "../types";
 
 export type DiscountMode = "percent" | "amount" | "final";
 
@@ -55,6 +55,27 @@ export function saleDiscountTotal(sale: Sale): number {
   return activeLines(sale).reduce((a, l) => a + lineDiscountUgx(l), 0);
 }
 
+/** Portion of a void/return amount that reduces credit debt (after cash is refunded first). */
+export function creditDebtReductionFromSaleAdjustment(sale: Sale, amountUgx: number): number {
+  const amt = Math.max(0, Math.floor(amountUgx));
+  const cashReduce = Math.min(amt, sale.cashPaidUgx);
+  return amt - cashReduce;
+}
+
+/** Apply a signed delta to a customer's running debt balance (negative reduces debt). */
+export function applyCustomerDebtDelta(
+  customers: Customer[],
+  customerId: string | null | undefined,
+  deltaUgx: number,
+): Customer[] {
+  if (!customerId || deltaUgx === 0) return customers;
+  return customers.map((c) =>
+    c.id === customerId
+      ? { ...c, debtBalanceUgx: Math.max(0, c.debtBalanceUgx + deltaUgx), version: c.version + 1 }
+      : c,
+  );
+}
+
 /** Reduce sale totals when a line is voided or returned. */
 export function reduceSaleTotalsByAmount(
   sale: Sale,
@@ -75,7 +96,8 @@ export function reduceSaleTotalsByAmount(
 export function shiftExpectedCash(sh: ShiftRecord): number {
   const voids = sh.voidsTotalUgx ?? 0;
   const returns = sh.returnsTotalUgx ?? 0;
-  return Math.max(0, sh.estimatedCashUgx - voids - returns);
+  const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
+  return Math.max(0, sh.estimatedCashUgx + debtPayments - voids - returns);
 }
 
 export function shiftExpectedCashLabelParts(sh: ShiftRecord): {
@@ -83,17 +105,20 @@ export function shiftExpectedCashLabelParts(sh: ShiftRecord): {
   discounts: number;
   voids: number;
   returns: number;
+  debtPayments: number;
   expected: number;
 } {
   const discounts = sh.discountsTotalUgx ?? 0;
   const voids = sh.voidsTotalUgx ?? 0;
   const returns = sh.returnsTotalUgx ?? 0;
+  const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
   const expected = shiftExpectedCash(sh);
   return {
-    sales: expected + voids + returns,
+    sales: expected + voids + returns - debtPayments,
     discounts,
     voids,
     returns,
+    debtPayments,
     expected,
   };
 }

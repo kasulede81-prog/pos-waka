@@ -41,3 +41,15 @@ export function deltaLinesSince(previous: SaleLine[], current: SaleLine[]): Sale
   }
   return out;
 }
+
+/** Quantities already sent to kitchen for a sale (non-cancelled tickets). */
+export function firedQtyByProductForSale(tickets: import("../types").KitchenTicket[], saleId: string): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const ticket of tickets) {
+    if (ticket.saleId !== saleId || ticket.status === "cancelled") continue;
+    for (const item of ticket.items) {
+      map.set(item.productId, (map.get(item.productId) ?? 0) + item.quantity);
+    }
+  }
+  return map;
+}

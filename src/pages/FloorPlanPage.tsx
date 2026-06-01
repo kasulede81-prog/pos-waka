@@ -9,10 +9,12 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import {
   TABLE_STATUS_COLORS,
+  activeNamedTabs,
   activeSessionForTable,
   formatUgxShort,
   isHospitalityMode,
   pendingSaleTotal,
+  sessionDisplayLabel,
   totalOpenTablesPendingUgx,
 } from "../lib/hospitality";
 import { pendingSales } from "../lib/saleStatus";
@@ -20,11 +22,14 @@ import { useShallow } from "zustand/react/shallow";
 
 const GUEST_COUNTS = [1, 2, 3, 4, 5, 6] as const;
 
+import { useHospitalityFloorPoll } from "../hooks/useHospitalityFloorPoll";
+
 export function FloorPlanPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const ensureHospitalityFloor = usePosStore((s) => s.ensureHospitalityFloor);
   const openTable = usePosStore((s) => s.openTable);
+  const openNamedTab = usePosStore((s) => s.openNamedTab);
   const resumeTableSession = usePosStore((s) => s.resumeTableSession);
   const { businessType, hospitalityModeEnabled, floor, sales } = usePosStore(
     useShallow((s) => ({
@@ -37,6 +42,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
 
   const [areaId, setAreaId] = useState<string | null>(null);
   const [openSheetTableId, setOpenSheetTableId] = useState<string | null>(null);
+  const [newTabOpen, setNewTabOpen] = useState(false);
+  const [tabLabel, setTabLabel] = useState("");
   const [guestCount, setGuestCount] = useState(2);
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
@@ -47,6 +54,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   }, [ensureHospitalityFloor]);
 
   const hospitality = isHospitalityMode(businessType, hospitalityModeEnabled);
+  useHospitalityFloorPoll(hospitality);
   const areas = floor?.areas.filter((a) => a.isActive) ?? [];
   const activeAreaId = areaId ?? areas[0]?.id ?? null;
   const tables = useMemo(
@@ -58,6 +66,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
   const canKitchen = hasPermission(actor.role, "hospitality.kitchen");
   const canPendingList = hasPermission(actor.role, "pending_sales.manage");
+  const canOrder = hasPermission(actor.role, "hospitality.order");
+  const namedTabs = floor ? activeNamedTabs(floor) : [];
 
   if (!hospitality) {
     return (
@@ -89,13 +99,40 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const handleTableTap = (tableId: string) => {
     const session = floor ? activeSessionForTable(floor, tableId) : undefined;
     if (session) {
-      const res = resumeTableSession(session.id);
-      if (res.ok) navigate(`/floor/order/${session.id}`);
+      void (async () => {
+        const res = await resumeTableSession(session.id);
+        if (res.ok) navigate(`/floor/order/${session.id}`);
+      })();
       return;
     }
-    if (!hasPermission(actor.role, "hospitality.order")) return;
+    if (!canOrder) return;
     setGuestCount(2);
     setOpenSheetTableId(tableId);
+  };
+
+  const handleOpenNamedTab = () => {
+    if (busy || !tabLabel.trim()) return;
+    setBusy(true);
+    const res = openNamedTab({
+      tabLabel: tabLabel.trim(),
+      guestCount: guestCount >= 6 ? 6 : guestCount,
+      customerName: customerName.trim() || undefined,
+      customerPhone: customerPhone.trim() || undefined,
+    });
+    setBusy(false);
+    if (!res.ok) return;
+    setNewTabOpen(false);
+    setTabLabel("");
+    setCustomerName("");
+    setCustomerPhone("");
+    if (res.sessionId) navigate(`/floor/order/${res.sessionId}`);
+  };
+
+  const handleTabTap = (sessionId: string) => {
+    void (async () => {
+      const res = await resumeTableSession(sessionId);
+      if (res.ok) navigate(`/floor/order/${sessionId}`);
+    })();
   };
 
   return (
@@ -187,6 +224,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
           const session = floor ? activeSessionForTable(floor, table.id) : undefined;
           const sale = session ? sales.find((s) => s.id === session.saleId) : undefined;
           const total = pendingSaleTotal(sale);
+          const lineCount = sale?.lines.length ?? 0;
           const colors = TABLE_STATUS_COLORS[table.displayStatus];
           return (
             <button
@@ -202,7 +240,14 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             >
               <span className="text-base font-black">{table.label}</span>
               {total > 0 ? (
-                <span className="mt-1 text-sm font-bold">{formatUgxShort(total)}</span>
+                <>
+                  <span className="mt-1 text-sm font-bold">{formatUgxShort(total)}</span>
+                  {lineCount > 0 ? (
+                    <span className="text-xs font-semibold opacity-80">
+                      {t(lang, "tableOrderItemCount").replace("{count}", String(lineCount))}
+                    </span>
+                  ) : null}
+                </>
               ) : (
                 <span className="mt-1 text-xs font-semibold opacity-80">{t(lang, colors.labelKey)}</span>
               )}
@@ -210,6 +255,69 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
           );
         })}
       </div>
+
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-black text-stone-950">{t(lang, "floorNamedTabsTitle")}</h2>
+            <p className="text-sm font-medium text-stone-500">{t(lang, "floorNamedTabsSub")}</p>
+          </div>
+          {canOrder ? (
+            <button
+              type="button"
+              onClick={() => {
+                setGuestCount(1);
+                setTabLabel("");
+                setNewTabOpen(true);
+              }}
+              className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-black text-white"
+            >
+              {t(lang, "floorNewTab")}
+            </button>
+          ) : null}
+        </div>
+        {namedTabs.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/50 px-4 py-6 text-center text-sm font-semibold text-violet-800">
+            {t(lang, "floorNamedTabsSub")}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            {namedTabs.map((session) => {
+              const sale = sales.find((s) => s.id === session.saleId);
+              const total = pendingSaleTotal(sale);
+              const lineCount = sale?.lines.length ?? 0;
+              const label = floor ? sessionDisplayLabel(session, floor) : session.tabLabel ?? "Tab";
+              return (
+                <button
+                  key={session.id}
+                  type="button"
+                  onClick={() => handleTabTap(session.id)}
+                  className={clsx(
+                    "flex min-h-[88px] flex-col items-center justify-center rounded-2xl border-2 px-3 py-4 text-center shadow-sm transition active:scale-[0.98]",
+                    session.status === "payment_pending"
+                      ? "border-red-400 bg-red-50 text-red-950"
+                      : "border-violet-400 bg-violet-50 text-violet-950",
+                  )}
+                >
+                  <span className="line-clamp-2 text-base font-black">{label}</span>
+                  {total > 0 ? (
+                    <>
+                      <span className="mt-1 text-sm font-bold">{formatUgxShort(total)}</span>
+                      {lineCount > 0 ? (
+                        <span className="text-xs font-semibold opacity-80">
+                          {t(lang, "tableOrderItemCount").replace("{count}", String(lineCount))}
+                        </span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="mt-1 text-xs font-semibold opacity-80">{t(lang, "tableStatusOccupied")}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-600">
         {(Object.keys(TABLE_STATUS_COLORS) as Array<keyof typeof TABLE_STATUS_COLORS>).map((key) => (
@@ -276,6 +384,78 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-60"
             >
               {t(lang, "openTableConfirm")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {newTabOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-black text-stone-950">{t(lang, "floorNewTabTitle")}</h2>
+                <p className="text-sm font-medium text-stone-500">{t(lang, "floorNamedTabsSub")}</p>
+              </div>
+              <button type="button" className="text-sm font-bold text-slate-500" onClick={() => setNewTabOpen(false)}>
+                {t(lang, "cancel")}
+              </button>
+            </div>
+
+            <label className="mb-4 block">
+              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "floorTabLabel")}</span>
+              <input
+                value={tabLabel}
+                onChange={(e) => setTabLabel(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                placeholder={t(lang, "floorTabLabelPh")}
+                autoFocus
+              />
+            </label>
+
+            <p className="mb-2 text-sm font-bold text-slate-700">{t(lang, "openTableGuests")}</p>
+            <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {GUEST_COUNTS.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setGuestCount(n)}
+                  className={clsx(
+                    "min-h-12 rounded-xl text-base font-black",
+                    guestCount === n ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-900",
+                  )}
+                >
+                  {n === 6 ? "6+" : n}
+                </button>
+              ))}
+            </div>
+
+            <label className="mb-3 block">
+              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "openTableCustomerName")}</span>
+              <input
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                placeholder={t(lang, "openTableCustomerNamePh")}
+              />
+            </label>
+            <label className="mb-5 block">
+              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "openTablePhone")}</span>
+              <input
+                value={customerPhone}
+                onChange={(e) => setCustomerPhone(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                placeholder="+256..."
+              />
+            </label>
+
+            <button
+              type="button"
+              disabled={busy || !tabLabel.trim()}
+              onClick={handleOpenNamedTab}
+              className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-violet-600 text-lg font-black text-white disabled:opacity-60"
+            >
+              {t(lang, "floorOpenTabConfirm")}
             </button>
           </div>
         </div>

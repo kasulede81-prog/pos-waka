@@ -8,19 +8,23 @@ type Props = {
   subtitle?: string;
   Icon: LucideIcon;
   highlight?: boolean;
+  deemphasized?: boolean;
   trailing?: string;
+  nestedLink?: { to: string; label: string };
 };
 
-export function OfficeNavCard({ to, title, subtitle, Icon, highlight, trailing }: Props) {
+export function OfficeNavCard({ to, title, subtitle, Icon, highlight, deemphasized, trailing, nestedLink }: Props) {
   return (
-    <li>
+    <li className={deemphasized ? "opacity-60" : undefined}>
       <Link
         to={to}
         className={clsx(
           "flex min-h-[60px] items-center gap-3 rounded-2xl border px-3.5 py-2.5 transition active:scale-[0.99] motion-reduce:active:scale-100",
           highlight
             ? "border-waka-300 bg-gradient-to-r from-waka-50 to-white shadow-sm"
-            : "border-stone-200/90 bg-white shadow-sm",
+            : deemphasized
+              ? "border-stone-100 bg-stone-50/80 shadow-none"
+              : "border-stone-200/90 bg-white shadow-sm",
         )}
       >
         <span
@@ -41,6 +45,14 @@ export function OfficeNavCard({ to, title, subtitle, Icon, highlight, trailing }
           <span className="shrink-0 text-right text-xs font-black text-waka-800">{trailing}</span>
         ) : null}
       </Link>
+      {nestedLink ? (
+        <Link
+          to={nestedLink.to}
+          className="ml-14 mt-1 inline-flex min-h-[36px] items-center text-xs font-black text-waka-800 underline decoration-waka-300 underline-offset-2"
+        >
+          {nestedLink.label}
+        </Link>
+      ) : null}
     </li>
   );
 }

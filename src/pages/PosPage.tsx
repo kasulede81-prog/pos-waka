@@ -40,6 +40,11 @@ import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { resolveReceiptBranding } from "../lib/receiptBranding";
 import { canRecordCashExpenses } from "../lib/cashExpenses";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { gateExpiredMedicineSale } from "../lib/pharmacySaleGuard";
+import { usePharmacyTerms } from "../lib/pharmacyTerms";
+import { useHospitalityTerms } from "../lib/hospitalityTerms";
+import { isHospitalityMode } from "../lib/hospitality";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 10;
 const MAX_RECENT_SEARCHES = 4;
@@ -134,6 +139,11 @@ export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const canSavePending = hasPermission(actor.role, "pending_sales.manage");
   const shopPreferences = usePosStore((s) => s.preferences);
+  const pt = usePharmacyTerms(lang, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
+  const ht = useHospitalityTerms(lang, shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
+  const pharmacyMode = isPharmacyMode(shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
+  const hospitalityMode = isHospitalityMode(shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
+  const modeTerm = hospitalityMode ? ht : pt;
   const { snapshot } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
@@ -176,6 +186,30 @@ export function PosPage({ lang }: { lang: Language }) {
   const setPreferences = usePosStore((s) => s.setPreferences);
 
   const quickSell = preferences.kioskQuickSell;
+
+  const runWithExpiredGuard = useCallback(
+    (product: Product, run: () => void) => {
+      const prefs = usePosStore.getState().preferences;
+      const gate = gateExpiredMedicineSale(
+        product,
+        prefs.pharmacyExpiredSaleBehavior ?? "warn",
+        isPharmacyMode(prefs.businessType, prefs.pharmacyModeEnabled),
+      );
+      if (gate.action === "proceed") {
+        run();
+        return;
+      }
+      if (gate.action === "block") {
+        setToast(t(lang, "pharmacyExpiredSaleBlocked"));
+        window.setTimeout(() => setToast(null), 2200);
+        return;
+      }
+      pendingExpiredAddRef.current = run;
+      setExpiryWarnProduct(product);
+    },
+    [lang],
+  );
+
   const currentTier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(currentTier);
   const lockedIds = useMemo(() => lockedProductIds(products, productLimit), [products, productLimit]);
@@ -220,6 +254,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const [saleCustomerName, setSaleCustomerName] = useState("");
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [expiryWarnProduct, setExpiryWarnProduct] = useState<Product | null>(null);
+  const pendingExpiredAddRef = useRef<(() => void) | null>(null);
   const [firstSaleOpen, setFirstSaleOpen] = useState(false);
   const pendingReceiptSaleIdRef = useRef<string | null>(null);
   const [receiptSaleId, setReceiptSaleId] = useState<string | null>(null);
@@ -503,19 +539,21 @@ export function PosPage({ lang }: { lang: Language }) {
       if (singleQuickPreset) {
         const mode: LineInputMode = moneyPresetsForProduct.length === 1 ? "money" : "quantity";
         const value = moneyPresetsForProduct[0] ?? qtyPresetsForProduct[0] ?? 0;
-        setDraftInput({ product: p, inputMode: mode, value });
-        const res = addDraftLineFromInput();
-        if (!res.ok) {
-          setToast(t(lang, res.errorKey ?? "saleError"));
-          window.setTimeout(() => setToast(null), 2200);
-          return;
-        }
-        bumpRecentProduct(p.id);
-        if (hapticsOn) void hapticTap();
-        setSaleCheckoutMinimized(true);
-        setToast(t(lang, "posAddedToCart"));
-        window.setTimeout(() => setToast(null), 1200);
-        searchInputRef.current?.focus();
+        runWithExpiredGuard(p, () => {
+          setDraftInput({ product: p, inputMode: mode, value });
+          const res = addDraftLineFromInput();
+          if (!res.ok) {
+            setToast(t(lang, res.errorKey ?? "saleError"));
+            window.setTimeout(() => setToast(null), 2200);
+            return;
+          }
+          bumpRecentProduct(p.id);
+          if (hapticsOn) void hapticTap();
+          setSaleCheckoutMinimized(true);
+          setToast(t(lang, "posAddedToCart"));
+          window.setTimeout(() => setToast(null), 1200);
+          searchInputRef.current?.focus();
+        });
         return;
       }
 
@@ -527,7 +565,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setDraftInput(null);
       setSheetOpen(true);
     },
-    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, lockedIds, setDraftInput],
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, lockedIds, runWithExpiredGuard, setDraftInput],
   );
 
   useEffect(() => {
@@ -595,20 +633,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const applyDraftInput = useCallback(() => {
     if (!selected) return;
     const val = inputMode === "money" ? parseDisplayMoney(display) : parseDisplayQty(display);
-    setDraftInput({ product: selected, inputMode, value: val });
-    const res = addDraftLineFromInput();
-    if (!res.ok) {
-      setToast(t(lang, res.errorKey ?? "saleError"));
-      window.setTimeout(() => setToast(null), 2200);
-      return;
-    }
-    afterAddToCart(selected.id);
-  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, afterAddToCart]);
-
-  const applyPreset = useCallback(
-    (mode: LineInputMode, value: number) => {
-      if (!selected) return;
-      setDraftInput({ product: selected, inputMode: mode, value });
+    runWithExpiredGuard(selected, () => {
+      setDraftInput({ product: selected, inputMode, value: val });
       const res = addDraftLineFromInput();
       if (!res.ok) {
         setToast(t(lang, res.errorKey ?? "saleError"));
@@ -616,8 +642,24 @@ export function PosPage({ lang }: { lang: Language }) {
         return;
       }
       afterAddToCart(selected.id);
+    });
+  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard]);
+
+  const applyPreset = useCallback(
+    (mode: LineInputMode, value: number) => {
+      if (!selected) return;
+      runWithExpiredGuard(selected, () => {
+        setDraftInput({ product: selected, inputMode: mode, value });
+        const res = addDraftLineFromInput();
+        if (!res.ok) {
+          setToast(t(lang, res.errorKey ?? "saleError"));
+          window.setTimeout(() => setToast(null), 2200);
+          return;
+        }
+        afterAddToCart(selected.id);
+      });
     },
-    [selected, setDraftInput, addDraftLineFromInput, lang, afterAddToCart],
+    [selected, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard],
   );
 
   const handleDraftQtyStep = useCallback(
@@ -803,7 +845,7 @@ export function PosPage({ lang }: { lang: Language }) {
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-3xl font-black tracking-tight text-slate-950">{t(lang, "sellTitle")}</h2>
+          <h2 className="text-3xl font-black tracking-tight text-slate-950">{modeTerm("sell")}</h2>
           {quickSell ? <p className="text-sm font-black text-waka-800">{t(lang, "quickSellBadge")}</p> : null}
         </div>
         {draftLines.length > 0 && (
@@ -868,8 +910,8 @@ export function PosPage({ lang }: { lang: Language }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitSearch(searchQuery);
               }}
-              placeholder={t(lang, "posSellSearchPlaceholder")}
-              aria-label={t(lang, "posSellSearchPlaceholder")}
+              placeholder={pharmacyMode || hospitalityMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
+              aria-label={pharmacyMode || hospitalityMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
               className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/90 pl-9 pr-10 text-base font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 focus:border-waka-400 focus:bg-white focus:ring-1"
             />
             <button
@@ -1616,6 +1658,43 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
+
+      {expiryWarnProduct ? (
+        <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
+          <div className="max-w-md rounded-[2rem] bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-black text-red-950">{t(lang, "pharmacyExpiredSaleWarnTitle")}</h2>
+            <p className="mt-3 text-base font-medium text-stone-700">
+              {t(lang, "pharmacyExpiredSaleWarnBody")
+                .replace("{name}", expiryWarnProduct.name)
+                .replace("{date}", expiryWarnProduct.expiryDate ?? "—")}
+            </p>
+            <div className="mt-6 flex flex-col gap-3">
+              <button
+                type="button"
+                className="min-h-[52px] w-full rounded-2xl bg-red-600 py-3 text-lg font-black text-white active:bg-red-700"
+                onClick={() => {
+                  const run = pendingExpiredAddRef.current;
+                  pendingExpiredAddRef.current = null;
+                  setExpiryWarnProduct(null);
+                  run?.();
+                }}
+              >
+                {t(lang, "pharmacyExpiredSaleContinue")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[52px] w-full rounded-2xl border-2 border-stone-300 py-3 text-lg font-bold text-stone-800 active:bg-stone-50"
+                onClick={() => {
+                  pendingExpiredAddRef.current = null;
+                  setExpiryWarnProduct(null);
+                }}
+              >
+                {t(lang, "cancel")}
+              </button>
+            </div>
+          </div>
+        </AppModalOverlay>
+      ) : null}
 
       {toast && (
         <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">

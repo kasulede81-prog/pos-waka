@@ -28,6 +28,8 @@
     "stress:reporting": "node scripts/reporting-stress.mjs",
     "verify:transactional-sync": "node scripts/verify-transactional-sync.mjs",
     "verify:multi-device": "node scripts/multi-device-consistency.mjs",
+    "verify:hospitality-concurrency": "vitest run src/lib/pendingSaleMerge.test.ts",
+    "test": "vitest run",
     "soak:android": "node scripts/android-soak-harness.mjs"
   },
   "dependencies": {
@@ -82,6 +84,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.10"
+    "vite": "^8.0.10",
+    "vitest": "^3.2.4"
   }
 }

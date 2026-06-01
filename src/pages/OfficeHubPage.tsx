@@ -14,13 +14,16 @@ import {
   ScrollText,
   UserCog,
   Cloud,
-  Printer,
   Share2,
   TrendingUp,
   CreditCard,
   HelpCircle,
   User,
   Banknote,
+  LayoutGrid,
+  ChefHat,
+  Pill,
+  ClipboardList,
 } from "lucide-react";
 import { canSeeOfficeProfit } from "../lib/homeProfit";
 import type { Language, Permission } from "../types";
@@ -34,11 +37,55 @@ import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
 import { usePosStore } from "../store/usePosStore";
+import { usePharmacyTerms } from "../lib/pharmacyTerms";
+import { useHospitalityTerms } from "../lib/hospitalityTerms";
+import { isHospitalityMode } from "../lib/hospitality";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { PilotSupportCard } from "../components/settings/PilotSupportCard";
+import { SyncHealthCard } from "../components/SyncHealthCard";
+import { useSyncStatus } from "../hooks/useSyncStatus";
+import { countSalesWithSyncErrors } from "../offline/cloudSync";
+import { tTemplate } from "../lib/i18n";
+
+function OfficeSyncBadge({ lang }: { lang: Language }) {
+  const sync = useSyncStatus();
+  const syncErrors = countSalesWithSyncErrors();
+  const pending = sync.pendingCount;
+
+  if (pending === 0 && syncErrors === 0) {
+    return (
+      <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-950">
+        {t(lang, "officeSyncBadgeOk")}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {pending > 0 ? (
+        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-950">
+          {tTemplate(lang, "officeSyncBadgePending", { count: String(pending) })}
+        </span>
+      ) : null}
+      {syncErrors > 0 ? (
+        <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black text-rose-950">
+          {tTemplate(lang, "officeSyncBadgeErrors", { count: String(syncErrors) })}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
-  const { snapshot, authMode } = useSubscription();
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+  const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
+  const modeTerm = hospitalityMode ? ht : pt;
+  const deemphasizePurchasing = pharmacyMode || hospitalityMode;
+  const { snapshot, authMode, userId } = useSubscription();
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
   const [showAgentPortal, setShowAgentPortal] = useState(false);
 
@@ -62,31 +109,49 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
 
   const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
   const canBackup = canUseBackupRestore(snapshot, authMode);
-
   const canRecordExpense = canRecordCashExpenses(actor.role, preferences);
+  const canProfit =
+    canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit");
+  const canShopSettings = can("settings.shop");
+
   const hasDaily =
+    can("customers.view") ||
     can("stock.view") ||
     can("purchases.record") ||
     can("suppliers.view") ||
     can("day.close") ||
-    canRecordExpense;
+    canRecordExpense ||
+    (hospitalityMode && (can("hospitality.floor") || can("hospitality.kitchen") || can("pending_sales.manage"))) ||
+    (pharmacyMode && canShopSettings);
   const hasInsights =
     can("reports.view") ||
-    (canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit")) ||
+    canProfit ||
     can("owner.dashboard") ||
     can("owner.activity");
-  const hasShopControl = can("settings.view") || can("settings.shop");
+  const hasShopControl = can("settings.view") || canShopSettings;
   const hasData = can("settings.view") && canBackup;
   const hasHelp = true;
 
   const empty = !hasDaily && !hasInsights && !hasShopControl && !hasData && !hasHelp;
+
+  const highlightCustomers = !pharmacyMode && !hospitalityMode;
+  const highlightPharmacyPatients = pharmacyMode;
+  const highlightStock = true;
+  const highlightReports = true;
+  const highlightCloseDay = !pharmacyMode && !hospitalityMode ? true : hospitalityMode || pharmacyMode;
 
   return (
     <div className="space-y-6 pb-4">
       <header>
         <h1 className="text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">{t(lang, "officeHubTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
+        <div className="mt-3">
+          <OfficeSyncBadge lang={lang} />
+        </div>
       </header>
+
+      <PilotSupportCard lang={lang} userId={userId} />
+      <SyncHealthCard lang={lang} variant="simple" />
 
       <OfficePremiumSection lang={lang} />
 
@@ -96,12 +161,76 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         <div className="space-y-6">
           {hasDaily ? (
             <OfficeNavSection title={t(lang, "officeSectionDaily")}>
+              {hospitalityMode && can("hospitality.floor") ? (
+                <OfficeNavCard
+                  to="/settings/floor"
+                  title={t(lang, "floorSetupTitle")}
+                  subtitle={t(lang, "floorSetupSub")}
+                  Icon={LayoutGrid}
+                  highlight
+                />
+              ) : null}
+              {hospitalityMode && can("hospitality.kitchen") ? (
+                <OfficeNavCard
+                  to="/kitchen"
+                  title={t(lang, "navKitchen")}
+                  subtitle={t(lang, "officeCardKitchenSub")}
+                  Icon={ChefHat}
+                  highlight
+                />
+              ) : null}
+              {hospitalityMode && can("pending_sales.manage") ? (
+                <OfficeNavCard
+                  to="/pending-sales"
+                  title={ht("pendingSale")}
+                  subtitle={t(lang, "pendingSalesSub")}
+                  Icon={ClipboardList}
+                  highlight
+                />
+              ) : null}
+              {can("customers.view") && highlightCustomers ? (
+                <>
+                  <OfficeNavCard
+                    to="/customers"
+                    title={t(lang, "customers")}
+                    subtitle={t(lang, "officeCardCustomersSub")}
+                    Icon={Users}
+                    highlight
+                  />
+                  <OfficeNavCard
+                    to="/debts"
+                    title={t(lang, "debts")}
+                    subtitle={t(lang, "debtsHelp")}
+                    Icon={Banknote}
+                    highlight
+                  />
+                </>
+              ) : null}
+              {can("customers.view") && highlightPharmacyPatients ? (
+                <OfficeNavCard
+                  to="/customers"
+                  title={pt("customers")}
+                  subtitle={t(lang, "pharmacyPage_patientsDebts")}
+                  Icon={Users}
+                  highlight
+                />
+              ) : null}
+              {pharmacyMode && canShopSettings ? (
+                <OfficeNavCard
+                  to="/settings/pharmacy"
+                  title={t(lang, "settingsHubPharmacy")}
+                  subtitle={t(lang, "settingsHubPharmacySub")}
+                  Icon={Pill}
+                  highlight
+                />
+              ) : null}
               {can("stock.view") ? (
                 <OfficeNavCard
                   to="/stock"
-                  title={t(lang, "officeCardStock")}
-                  subtitle={t(lang, "officeCardStockSub")}
+                  title={modeTerm("officeCardStock")}
+                  subtitle={modeTerm("officeCardStockSub")}
                   Icon={Package}
+                  highlight={highlightStock}
                 />
               ) : null}
               {can("purchases.record") ? (
@@ -110,6 +239,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   title={t(lang, "officeCardRestock")}
                   subtitle={t(lang, "officeCardRestockSub")}
                   Icon={Truck}
+                  deemphasized={deemphasizePurchasing}
                 />
               ) : null}
               {can("suppliers.view") ? (
@@ -118,6 +248,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   title={t(lang, "officeCardSuppliers")}
                   subtitle={t(lang, "officeCardSuppliersSub")}
                   Icon={Users}
+                  deemphasized={deemphasizePurchasing}
                 />
               ) : null}
               {canRecordExpense ? (
@@ -128,7 +259,9 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   Icon={Banknote}
                 />
               ) : null}
-              {can("day.close") ? <OfficeCloseDayCard lang={lang} /> : null}
+              {can("day.close") ? (
+                <OfficeCloseDayCard lang={lang} highlight={highlightCloseDay} />
+              ) : null}
             </OfficeNavSection>
           ) : null}
 
@@ -138,19 +271,22 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                 <OfficeNavCard
                   to="/reports"
                   title={t(lang, "officeCardReports")}
-                  subtitle={t(lang, "officeCardReportsSub")}
+                  subtitle={
+                    pharmacyMode
+                      ? t(lang, "officeCardExpiryReportsSub")
+                      : hospitalityMode
+                        ? t(lang, "officeCardHospitalityReportsSub")
+                        : t(lang, "officeCardReportsSub")
+                  }
                   Icon={BarChart3}
+                  highlight={highlightReports}
+                  nestedLink={{
+                    to: "/office/monthly-reports",
+                    label: t(lang, "officeCardReportsMonthlyNested"),
+                  }}
                 />
               ) : null}
-              {can("reports.view") ? (
-                <OfficeNavCard
-                  to="/office/monthly-reports"
-                  title={t(lang, "officeCardMonthlyReport")}
-                  subtitle={t(lang, "officeCardMonthlyReportSub")}
-                  Icon={BarChart3}
-                />
-              ) : null}
-              {canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") ? (
+              {canProfit ? (
                 <OfficeNavCard
                   to="/office/profit"
                   title={t(lang, "officeCardProfit")}
@@ -179,20 +315,12 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
 
           {hasShopControl ? (
             <OfficeNavSection title={t(lang, "officeSectionShopControl")}>
-              {can("settings.shop") ? (
+              {canShopSettings ? (
                 <OfficeNavCard
                   to="/staff-access"
                   title={t(lang, "officeCardStaffAccess")}
                   subtitle={t(lang, "officeCardStaffAccessSub")}
                   Icon={UserCog}
-                />
-              ) : null}
-              {can("settings.view") ? (
-                <OfficeNavCard
-                  to="/office/hardware"
-                  title={t(lang, "officeCardHardware")}
-                  subtitle={t(lang, "officeCardHardwareSub")}
-                  Icon={Printer}
                 />
               ) : null}
               {can("settings.view") ? (

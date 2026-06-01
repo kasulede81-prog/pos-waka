@@ -10,6 +10,9 @@ import { readSyncQueue } from "../offline/localDb";
 import { pushShopPendingToCloud, syncShopWithCloud, countUnsyncedSales } from "../offline/cloudSync";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
+import { appendPilotEvent } from "../lib/pilotEventLog";
+import { pilotSyncLog } from "../lib/pilotSyncLog";
+import { captureAppException } from "../lib/crashReporting";
 import type { SyncOperationKind, SyncStatus } from "../types";
 
 type PendingBreakdown = {
@@ -137,11 +140,14 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
           window.setTimeout(() => reject(new Error("sync_timeout")), FLUSH_TIMEOUT_MS);
         }),
       ]);
-    } catch {
+    } catch (err) {
       writeSyncHealthMeta({
         lastIssueAt: attemptAt,
         lastIssueCode: "error",
       });
+      captureAppException(err, { scope: "sync_flush" });
+      appendPilotEvent("sync_failure", "Sync flush failed", { at: attemptAt });
+      pilotSyncLog("flush_error", { at: attemptAt });
     } finally {
       syncingRef.current = false;
       if (showSpinner) setSyncing(false);

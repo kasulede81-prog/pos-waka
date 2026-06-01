@@ -4,6 +4,9 @@ import { t } from "../lib/i18n";
 import { formatProductPriceLabel } from "../store/usePosStore";
 import { formatStockLabel } from "../lib/sellingEngine";
 import { AppModalOverlay } from "./layout/AppModalOverlay";
+import { usePosStore } from "../store/usePosStore";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { normalizeExpiryDate } from "../lib/pharmacyExpiry";
 
 const SELLING_MODES: SellingMode[] = ["unit", "weighted", "portion"];
 
@@ -37,6 +40,7 @@ type Props = {
         | "minimumStockAlert"
         | "category"
         | "sku"
+        | "expiryDate"
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
       >
@@ -81,6 +85,11 @@ export function StockProductEditModal({
   const [supplierName, setSupplierName] = useState("");
   const [moneyPresets, setMoneyPresets] = useState("");
   const [qtyPresets, setQtyPresets] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+
+  const pharmacyMode = usePosStore((s) =>
+    isPharmacyMode(s.preferences.businessType, s.preferences.pharmacyModeEnabled),
+  );
 
   useEffect(() => {
     if (!open || !product) return;
@@ -108,6 +117,7 @@ export function StockProductEditModal({
     }
     setMoneyPresets((product.quickPresetsMoneyUgx ?? []).join(","));
     setQtyPresets((product.quickPresetsQty ?? []).join(","));
+    setExpiryDate(product.expiryDate ?? "");
   }, [open, product, businessUnitOptions]);
 
   if (!open || !product) return null;
@@ -164,6 +174,7 @@ export function StockProductEditModal({
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),
       sku: sku.trim() || product.sku,
+      expiryDate: pharmacyMode ? normalizeExpiryDate(expiryDate || null) : product.expiryDate ?? null,
     };
 
     if (canPresets) {
@@ -330,6 +341,19 @@ export function StockProductEditModal({
               className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
             />
           </label>
+
+          {pharmacyMode ? (
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              />
+              <p className="mt-1 text-xs font-medium text-slate-500">{t(lang, "pharmacyExpiryDateHint")}</p>
+            </label>
+          ) : null}
 
           <details className="rounded-2xl border-2 border-slate-200 bg-slate-50/80 px-4 open:pb-4 open:pt-2">
             <summary className="cursor-pointer py-3 text-base font-black text-slate-900">

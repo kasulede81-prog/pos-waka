@@ -5,14 +5,15 @@ import type { BusinessType, Language, ShopSellingStyle, UserRole } from "../type
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
 import {
-  FIRST_PRODUCT_TEMPLATES,
   ONBOARDING_BUSINESS_CARDS,
   ONBOARDING_SELLING_STYLES,
   ONBOARDING_STAFF_ROLES,
   type OnboardingStaffRole,
 } from "../config/onboardingFlow";
+import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { usePosStore } from "../store/usePosStore";
 import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
+import { captureAppException } from "../lib/crashReporting";
 import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLocation";
 import { inferFromProductName } from "../lib/smartProductGuess";
 import { PinInput } from "../components/ui/PinInput";
@@ -173,6 +174,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
         gpsSkipped: opts.gpsSkipped,
       });
     } catch (e) {
+      captureAppException(e, { scope: "onboarding_persist" });
       setErr((e as Error).message);
       setBusy(false);
       return false;
@@ -199,19 +201,23 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     })();
   };
 
-  const addTemplateProduct = (tpl: (typeof FIRST_PRODUCT_TEMPLATES)[number]) => {
-    const guess = inferFromProductName(tpl.inferName);
-    const mixed = sellingStyle === "mixed" && tpl.preferPackWhenMixed;
+  const starterProducts = useMemo(() => starterPackForBusinessType(businessType), [businessType]);
+
+  const addStarterProduct = (line: StarterLine) => {
+    const guess = inferFromProductName(line.inferName);
+    const mixed = sellingStyle === "mixed" && (line.sellingMode === "weighted" || line.sellingMode === "unit");
     quickAddProduct({
-      name: t(lang, tpl.nameKey as "starterItem_sugar"),
-      inferName: tpl.inferName,
-      priceUgx: tpl.defaultPriceUgx,
-      stockQty: tpl.defaultStock,
-      category: "General",
-      sellingMode: tpl.sellingMode,
-      baseUnit: tpl.baseUnit,
+      name: t(lang, line.nameKey as "starterItem_sugar"),
+      inferName: line.inferName,
+      priceUgx: line.defaultPriceUgx,
+      stockQty: line.defaultStock,
+      category: line.category ?? "General",
+      sellingMode: line.sellingMode,
+      baseUnit: line.baseUnit,
       buyingUnit: mixed ? guess.buyingUnit ?? "carton" : undefined,
       conversionRate: mixed ? guess.conversionRate : undefined,
+      medicineStrength: line.medicineStrength ?? null,
+      medicineForm: line.medicineForm ?? null,
     });
   };
 
@@ -455,14 +461,14 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardProductsTitle")}</h2>
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardProductsSub")}</p>
             <div className="grid grid-cols-2 gap-2">
-              {FIRST_PRODUCT_TEMPLATES.map((tpl) => (
+              {starterProducts.map((line) => (
                 <button
-                  key={tpl.id}
+                  key={line.nameKey}
                   type="button"
-                  onClick={() => addTemplateProduct(tpl)}
+                  onClick={() => addStarterProduct(line)}
                   className="min-h-[56px] rounded-2xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-black text-stone-900 active:bg-waka-50"
                 >
-                  + {t(lang, tpl.nameKey as "starterItem_sugar")}
+                  + {t(lang, line.nameKey as "starterItem_sugar")}
                 </button>
               ))}
             </div>

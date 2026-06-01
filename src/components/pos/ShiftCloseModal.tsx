@@ -55,6 +55,12 @@ export function ShiftCloseModal({ lang, open, shift, onClose, onConfirm }: Props
               <span>− UGX {parts.returns.toLocaleString()}</span>
             </li>
           ) : null}
+          {parts.debtPayments > 0 ? (
+            <li className="flex justify-between text-teal-800">
+              <span>{t(lang, "shiftCloseDebtPayments")}</span>
+              <span>+ UGX {parts.debtPayments.toLocaleString()}</span>
+            </li>
+          ) : null}
           <li className="flex justify-between border-t border-slate-200 pt-2 text-base font-black text-slate-900">
             <span>{t(lang, "shiftCloseExpected")}</span>
             <span>UGX {expected.toLocaleString()}</span>

@@ -8,6 +8,7 @@ import type {
   TableSessionStatus,
 } from "../types";
 import { computeDraftCheckoutTotals } from "./draftCart";
+import { ensureSaleLineId } from "./pendingSaleMerge";
 
 export const HOSPITALITY_BUSINESS_TYPES = [
   "restaurant",
@@ -98,13 +99,42 @@ export function defaultHospitalityFloor(): HospitalityFloorState {
   };
 }
 
+export function isTableSession(session: TableSession): boolean {
+  return session.sessionKind !== "named_tab";
+}
+
+export function isNamedTabSession(session: TableSession): boolean {
+  return session.sessionKind === "named_tab";
+}
+
+export function isActiveSession(session: TableSession): boolean {
+  return session.status === "open" || session.status === "payment_pending";
+}
+
+export function sessionDisplayLabel(session: TableSession, floor: HospitalityFloorState): string {
+  if (isNamedTabSession(session)) {
+    return session.tabLabel?.trim() || session.customerName?.trim() || "Tab";
+  }
+  const table = session.tableId ? floor.tables.find((t) => t.id === session.tableId) : undefined;
+  const area = table ? floor.areas.find((a) => a.id === table.areaId) : undefined;
+  if (table) return area ? `${table.label} · ${area.name}` : table.label;
+  return "Table";
+}
+
 export function activeSessionForTable(
   floor: HospitalityFloorState,
   tableId: string,
 ): TableSession | undefined {
   return floor.sessions.find(
-    (s) => s.tableId === tableId && (s.status === "open" || s.status === "payment_pending"),
+    (s) =>
+      s.tableId === tableId &&
+      isTableSession(s) &&
+      (s.status === "open" || s.status === "payment_pending"),
   );
+}
+
+export function activeNamedTabs(floor: HospitalityFloorState): TableSession[] {
+  return floor.sessions.filter((s) => isNamedTabSession(s) && isActiveSession(s));
 }
 
 export function deriveTableDisplayStatus(
@@ -145,7 +175,7 @@ export function buildPendingSaleFromDraft(input: {
   soldByUserId?: string | null;
   existing?: Sale | null;
 }): Sale {
-  const saleLines = input.lines;
+  const saleLines = input.lines.map(ensureSaleLineId);
   const checkout = computeDraftCheckoutTotals(saleLines, input.cartDiscountUgx);
   const listSubtotal = saleLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
   const discountTotal = Math.max(0, listSubtotal - checkout.payableUgx);
@@ -179,7 +209,7 @@ export function closeTableSession(
 ): HospitalityFloorState {
   const now = new Date().toISOString();
   const sessions = floor.sessions.map((s) =>
-    s.id === sessionId ? { ...s, status, closedAt: now } : s,
+    s.id === sessionId ? { ...s, status, closedAt: now, updatedAt: now, pendingSync: true } : s,
   );
   return syncTableDisplayStatuses({ ...floor, sessions });
 }
@@ -197,6 +227,7 @@ export function openTableSessionOnFloor(input: {
 }): HospitalityFloorState {
   const session: TableSession = {
     id: input.sessionId,
+    sessionKind: "table",
     tableId: input.tableId,
     saleId: input.saleId,
     guestCount: input.guestCount,
@@ -206,10 +237,43 @@ export function openTableSessionOnFloor(input: {
     waiterLabel: input.waiterLabel ?? null,
     status: "open",
     openedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     pendingSync: true,
   };
   const sessions = [...input.floor.sessions.filter((s) => s.id !== session.id), session];
   return syncTableDisplayStatuses({ ...input.floor, sessions });
+}
+
+export function openNamedTabSessionOnFloor(input: {
+  floor: HospitalityFloorState;
+  tabLabel: string;
+  saleId: string;
+  sessionId: string;
+  guestCount?: number;
+  customerName?: string;
+  customerPhone?: string;
+  waiterStaffId?: string | null;
+  waiterLabel?: string | null;
+}): HospitalityFloorState {
+  const label = input.tabLabel.trim();
+  const session: TableSession = {
+    id: input.sessionId,
+    sessionKind: "named_tab",
+    tableId: null,
+    tabLabel: label,
+    saleId: input.saleId,
+    guestCount: Math.max(1, input.guestCount ?? 1),
+    customerName: input.customerName ?? null,
+    customerPhone: input.customerPhone ?? null,
+    waiterStaffId: input.waiterStaffId ?? null,
+    waiterLabel: input.waiterLabel ?? null,
+    status: "open",
+    openedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    pendingSync: true,
+  };
+  const sessions = [...input.floor.sessions.filter((s) => s.id !== session.id), session];
+  return { ...input.floor, sessions };
 }
 
 export function ensureHospitalityFloor(floor: HospitalityFloorState | undefined | null): HospitalityFloorState {
@@ -220,9 +284,33 @@ export function ensureHospitalityFloor(floor: HospitalityFloorState | undefined 
 export function totalOpenTablesPendingUgx(sales: Sale[], floor: HospitalityFloorState): number {
   let sum = 0;
   for (const session of floor.sessions) {
-    if (session.status !== "open" && session.status !== "payment_pending") continue;
+    if (!isActiveSession(session)) continue;
     const sale = sales.find((s) => s.id === session.saleId);
     sum += pendingSaleTotal(sale);
   }
   return sum;
+}
+
+export function defaultMenuCategoriesForBusinessType(businessType: BusinessType | undefined | null): string[] {
+  if (businessType === "bar") {
+    return ["Beer", "Wine", "Spirits", "Cocktails", "Soft Drinks", "Water", "Snacks"];
+  }
+  if (businessType === "restaurant") {
+    return ["Food", "Chicken", "Pork", "Fish", "Rice", "Soft Drinks", "Water", "Desserts", "Coffee"];
+  }
+  if (businessType === "restaurant_bar" || businessType === "hotel") {
+    return [
+      "Food",
+      "Chicken",
+      "Beer",
+      "Wine",
+      "Spirits",
+      "Cocktails",
+      "Soft Drinks",
+      "Water",
+      "Desserts",
+      "Coffee",
+    ];
+  }
+  return ["Food", "Drinks", "Beer", "Soft Drinks"];
 }

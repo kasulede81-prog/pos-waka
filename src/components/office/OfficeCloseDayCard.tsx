@@ -6,9 +6,9 @@ import { summarizeTodaySales } from "../../lib/todaySalesSummary";
 import { useDeferredSales } from "../../hooks/useDeferredSales";
 import { OfficeNavCard } from "./OfficeNavCard";
 
-type Props = { lang: Language };
+type Props = { lang: Language; highlight?: boolean };
 
-export function OfficeCloseDayCard({ lang }: Props) {
+export function OfficeCloseDayCard({ lang, highlight = true }: Props) {
   const sales = useDeferredSales();
   const summary = useMemo(() => summarizeTodaySales(sales), [sales]);
 
@@ -23,7 +23,7 @@ export function OfficeCloseDayCard({ lang }: Props) {
       title={t(lang, "officeCardCloseDay")}
       subtitle={subtitle}
       Icon={CalendarCheck}
-      highlight
+      highlight={highlight}
       trailing={summary.count > 0 ? String(summary.count) : undefined}
     />
   );

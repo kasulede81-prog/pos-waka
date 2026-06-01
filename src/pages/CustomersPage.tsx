@@ -3,6 +3,9 @@ import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { usePharmacyTerms } from "../lib/pharmacyTerms";
+import { useHospitalityTerms } from "../lib/hospitalityTerms";
+import { isHospitalityMode } from "../lib/hospitality";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
@@ -12,6 +15,10 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const canView = hasPermission(actor.role, "customers.view");
   const canDebt = hasPermission(actor.role, "customers.debt");
   const customers = usePosStore((s) => s.customers);
+  const preferences = usePosStore((s) => s.preferences);
+  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+  const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
+  const modeTerm = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled) ? ht : pt;
   const sales = useDeferredSales();
   const debtPayments = usePosStore((s) => s.debtPayments);
   const addCustomer = usePosStore((s) => s.addCustomer);
@@ -49,13 +56,13 @@ export function CustomersPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-8">
-      <h1 className="text-3xl font-black text-slate-900">{t(lang, "debts")}</h1>
+      <h1 className="text-3xl font-black text-slate-900">{modeTerm("debts")}</h1>
       <p className="text-lg text-slate-600">{t(lang, "debtsHelp")}</p>
 
       {customers.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-6 text-center">
-          <p className="text-xl font-black text-slate-900">{t(lang, "customersEmptyTitle")}</p>
-          <p className="mt-2 text-base text-slate-700">{t(lang, "customersEmptySub")}</p>
+          <p className="text-xl font-black text-slate-900">{modeTerm("customersEmptyTitle")}</p>
+          <p className="mt-2 text-base text-slate-700">{modeTerm("customersEmptySub")}</p>
         </section>
       ) : null}
 
@@ -75,7 +82,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
           className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
         />
         <button type="submit" className="w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white">
-          {t(lang, "addCustomer")}
+          {pt("addCustomer")}
         </button>
       </form>
 

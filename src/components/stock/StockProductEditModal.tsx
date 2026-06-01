@@ -14,6 +14,11 @@ import {
   type SellUnitKind,
 } from "../../lib/simpleProductWizard";
 import { formatStockLabel, stockBreakdown } from "../../lib/sellingEngine";
+import { usePosStore } from "../../store/usePosStore";
+import { isPharmacyMode } from "../../lib/pharmacy";
+import { normalizeExpiryDate } from "../../lib/pharmacyExpiry";
+import { MEDICINE_FORMS, normalizeMedicineForm, normalizeMedicineStrength } from "../../lib/pharmacyMedicine";
+import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 
 type Props = {
   lang: Language;
@@ -37,6 +42,9 @@ type Props = {
         | "minimumStockAlert"
         | "category"
         | "sku"
+        | "expiryDate"
+        | "medicineStrength"
+        | "medicineForm"
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
       >
@@ -81,6 +89,13 @@ export function StockProductEditModal({
   const [buyPackPrice, setBuyPackPrice] = useState("");
   const [moneyPresets, setMoneyPresets] = useState("");
   const [qtyPresets, setQtyPresets] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [medicineStrength, setMedicineStrength] = useState("");
+  const [medicineForm, setMedicineForm] = useState("");
+
+  const preferences = usePosStore((s) => s.preferences);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
 
   useEffect(() => {
     if (!open || !product) return;
@@ -110,6 +125,9 @@ export function StockProductEditModal({
     }
     setMoneyPresets((product.quickPresetsMoneyUgx ?? []).join(","));
     setQtyPresets((product.quickPresetsQty ?? []).join(","));
+    setExpiryDate(product.expiryDate ?? "");
+    setMedicineStrength(product.medicineStrength ?? "");
+    setMedicineForm(product.medicineForm ?? "");
   }, [open, product]);
 
   const piecesN = Math.max(1, Math.floor(Number(piecesPerPack.replace(/[^\d.]/g, "")) || 0));
@@ -158,6 +176,9 @@ export function StockProductEditModal({
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),
       sku: sku.trim() || product.sku,
+      expiryDate: pharmacyMode ? normalizeExpiryDate(expiryDate || null) : product.expiryDate ?? null,
+      medicineStrength: pharmacyMode ? normalizeMedicineStrength(medicineStrength || null) : product.medicineStrength ?? null,
+      medicineForm: pharmacyMode ? normalizeMedicineForm(medicineForm || null) : product.medicineForm ?? null,
     };
 
     if (canPresets) {
@@ -190,7 +211,7 @@ export function StockProductEditModal({
           {t(lang, "cancel")}
         </button>
         <h2 id="stock-edit-title" className="text-center text-lg font-black text-slate-900">
-          {t(lang, "stockEditProductTitle")}
+          {pt("stockEditProduct")}
         </h2>
         <span className="w-16" aria-hidden />
       </header>
@@ -198,12 +219,12 @@ export function StockProductEditModal({
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5">
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditNameLabel")}</span>
+            <span className="text-sm font-bold text-slate-800">{pt("stockEditName")}</span>
             <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
           </label>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditShelfLabel")}</span>
+            <span className="text-sm font-bold text-slate-800">{pt("stockEditShelf")}</span>
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -219,6 +240,45 @@ export function StockProductEditModal({
               </datalist>
             ) : null}
           </label>
+
+          {pharmacyMode ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">{pt("strength")}</span>
+                <input
+                  value={medicineStrength}
+                  onChange={(e) => setMedicineStrength(e.target.value)}
+                  placeholder="500mg"
+                  className={inputClass}
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm font-bold text-slate-800">{pt("form")}</span>
+                <select
+                  value={medicineForm || ""}
+                  onChange={(e) => setMedicineForm(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">{t(lang, "pharmacyFormSelect")}</option>
+                  {MEDICINE_FORMS.map((form) => (
+                    <option key={form} value={form}>
+                      {form}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block sm:col-span-2">
+                <span className="text-sm font-bold text-slate-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
+                <input
+                  type="date"
+                  value={expiryDate}
+                  onChange={(e) => setExpiryDate(e.target.value)}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs font-medium text-slate-500">{t(lang, "pharmacyExpiryDateHint")}</p>
+              </label>
+            </div>
+          ) : null}
 
           <div>
             <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditSellUnitLabel")}</span>

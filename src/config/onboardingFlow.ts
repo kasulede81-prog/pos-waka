@@ -11,7 +11,10 @@ export type OnboardingBusinessCard = {
 export const ONBOARDING_BUSINESS_CARDS: OnboardingBusinessCard[] = [
   { id: "retail", businessType: "kiosk_duka", labelKey: "onboardBiz_retail", emoji: "🏪" },
   { id: "boutique", businessType: "boutique", labelKey: "onboardBiz_boutique", emoji: "👗" },
-  { id: "restaurant", businessType: "restaurant", labelKey: "onboardBiz_restaurant", emoji: "☕" },
+  { id: "restaurant", businessType: "restaurant", labelKey: "onboardBiz_restaurant", emoji: "🍽️" },
+  { id: "bar", businessType: "bar", labelKey: "onboardBiz_bar", emoji: "🍺" },
+  { id: "restaurant_bar", businessType: "restaurant_bar", labelKey: "onboardBiz_restaurantBar", emoji: "🍸" },
+  { id: "hotel", businessType: "hotel", labelKey: "onboardBiz_hotel", emoji: "🏨" },
   { id: "pharmacy", businessType: "pharmacy", labelKey: "onboardBiz_pharmacy", emoji: "💊" },
   { id: "hardware", businessType: "hardware", labelKey: "onboardBiz_hardware", emoji: "🔧" },
   { id: "electronics", businessType: "electronics", labelKey: "onboardBiz_electronics", emoji: "📱" },

@@ -2,9 +2,13 @@ import { useState } from "react";
 import { MoreHorizontal } from "lucide-react";
 import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
-import { formatProductPriceLabel } from "../../store/usePosStore";
+import { formatProductPriceLabel, usePosStore } from "../../store/usePosStore";
 import { formatStockLabel, isLowStock } from "../../lib/sellingEngine";
 import { normalizedCategoryKey, shelfIconFor } from "../../lib/productCategories";
+import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
+import { isPharmacyMode } from "../../lib/pharmacy";
+import { usePharmacyTerms } from "../../lib/pharmacyTerms";
+import { ExpiryStatusBadge } from "../pharmacy/ExpiryStatusBadge";
 
 type RowAction = "edit" | "sell" | "restock" | "duplicate" | "remove";
 
@@ -30,9 +34,13 @@ export function StockProductCard({
   onAction,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const preferences = usePosStore((s) => s.preferences);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const low = isLowStock(p);
   const shelf = normalizedCategoryKey(p) ? p.category!.trim() : t(lang, "uncategorized");
   const shelfIcon = shelfIconFor(shelf);
+  const detail = pharmacyMode ? formatMedicineListSecondary(p) : null;
 
   return (
     <li
@@ -40,7 +48,8 @@ export function StockProductCard({
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="text-lg font-black leading-snug text-slate-900">{p.name}</p>
+          <p className="text-lg font-black leading-snug text-slate-900">{formatMedicineListPrimary(p)}</p>
+          {pharmacyMode ? <ExpiryStatusBadge lang={lang} product={p} compact /> : null}
           {locked ? (
             <span className="rounded-full bg-stone-800 px-2 py-0.5 text-[10px] font-black uppercase text-white">
               {t(lang, "productLockedBadge")}
@@ -52,6 +61,7 @@ export function StockProductCard({
             </span>
           ) : null}
         </div>
+        {detail ? <p className="mt-0.5 text-sm font-bold text-slate-600">{detail}</p> : null}
         <p className="mt-1 text-sm font-semibold text-slate-500">
           {shelfIcon ? <span className="mr-1">{shelfIcon}</span> : null}
           {shelf}
@@ -68,7 +78,7 @@ export function StockProductCard({
               onClick={() => onAction("sell")}
               className="min-h-[44px] flex-1 rounded-2xl bg-waka-600 px-3 text-sm font-black text-white active:bg-waka-700"
             >
-              {t(lang, "stockCardSell")}
+              {pharmacyMode ? pt("stockCardSell") : t(lang, "stockCardSell")}
             </button>
           ) : null}
           {canAdd ? (

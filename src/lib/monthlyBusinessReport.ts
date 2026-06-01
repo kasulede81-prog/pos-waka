@@ -1,6 +1,6 @@
 import type { Language, Product, ReturnRecord, Sale, StaffAccount } from "../types";
 import { dateKeyKampala } from "./datesUg";
-import { computeTodayProfitBreakdown } from "./homeProfit";
+import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
 import { Capacitor } from "@capacitor/core";
 import { saveExportedFile } from "./fileDownload";
 import { t } from "./i18n";
@@ -31,7 +31,7 @@ function isValidMonthKey(monthKey: string): boolean {
 
 export function salesInMonth(sales: Sale[], monthKey: string): Sale[] {
   if (!isValidMonthKey(monthKey)) return [];
-  return sales.filter((s) => dateKeyKampala(s.createdAt).startsWith(monthKey));
+  return revenueSalesInMonth(sales, monthKey);
 }
 
 export function returnsInMonth(returns: ReturnRecord[], monthKey: string): ReturnRecord[] {
@@ -50,8 +50,7 @@ export function buildMonthlyBusinessReport(params: {
   const { monthKey, shopName, sales, returnRecords, products, staffAccounts } = params;
   const monthSales = salesInMonth(sales, monthKey);
   const monthReturns = returnsInMonth(returnRecords, monthKey);
-  const productById = new Map(products.map((p) => [p.id, p] as const));
-  const breakdown = computeTodayProfitBreakdown(monthSales, productById, monthReturns);
+  const fin = getCompletedFinancials(sales, returnRecords, products, { monthKey });
 
   const productMap = new Map<string, { name: string; qty: number; revenueUgx: number }>();
   for (const sale of monthSales) {
@@ -90,13 +89,13 @@ export function buildMonthlyBusinessReport(params: {
     monthKey,
     shopName,
     generatedAt: new Date().toISOString(),
-    totalSalesUgx: breakdown.salesUgx,
-    transactionCount: monthSales.length,
-    cashUgx: monthSales.reduce((a, s) => a + s.cashPaidUgx, 0),
-    debtUgx: monthSales.reduce((a, s) => a + s.debtUgx, 0),
-    discountsUgx: monthSales.reduce((a, s) => a + (s.discountTotalUgx ?? 0), 0),
+    totalSalesUgx: fin.revenueUgx,
+    transactionCount: fin.transactionCount,
+    cashUgx: fin.cashCollectedUgx,
+    debtUgx: fin.debtIssuedUgx,
+    discountsUgx: fin.discountsUgx,
     refundsUgx: monthReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
-    profitUgx: breakdown.profitUgx,
+    profitUgx: fin.profitUgx,
     topProducts: [...productMap.values()].sort((a, b) => b.revenueUgx - a.revenueUgx).slice(0, 15),
     byCashier: [...cashierMap.values()].sort((a, b) => b.revenueUgx - a.revenueUgx),
     inventorySummary: {

@@ -181,7 +181,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
     const url = buildAgentVerificationUrl(code);
     try {
       await navigator.clipboard.writeText(url);
-      setCreateMsg(t(lang, "agentVerifyLinkCopied"));
+      setCreateMsg(t(lang, "internalAgentIdVerifyLinkCopied"));
     } catch {
       setCreateMsg(url);
     }
@@ -360,8 +360,9 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
               </div>
               <div className="mt-3 space-y-2 border-t border-stone-100 pt-3">
                 <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
-                  {t(lang, "agentVerifyQrTitle")}
+                  {t(lang, "internalAgentIdVerifyTitle")}
                 </p>
+                <p className="text-xs font-medium text-stone-600">{t(lang, "internalAgentIdVerifySub")}</p>
                 <p className="break-all font-mono text-xs font-semibold text-stone-600">
                   {buildAgentVerificationUrl(a.referralCode)}
                 </p>
@@ -371,7 +372,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                     onClick={() => void copyVerifyLink(a.referralCode)}
                     className="text-sm font-black text-waka-800 underline"
                   >
-                    {t(lang, "agentCopyVerifyLink")}
+                    {t(lang, "internalAgentIdVerifyCopy")}
                   </button>
                   <button
                     type="button"

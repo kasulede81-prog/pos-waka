@@ -22,6 +22,8 @@ export function resolveSessionActor(params: {
   user: User | null;
   email: string | null | undefined;
   preferences: ShopPreferences;
+  /** From `shop_members` — preferred over user metadata for Supabase sessions. */
+  shopMemberRole?: UserRole | null;
   /** Offline staff login — never treat as owner while store hydrates. */
   staffSession?: { staffId: string; staffName: string; role: UserRole } | null;
 }): SessionActor {
@@ -34,7 +36,11 @@ export function resolveSessionActor(params: {
   }
 
   const meta = params.user?.user_metadata as Record<string, unknown> | undefined;
-  const authRole = resolveAuthRole({ mode: params.mode, userMetadata: meta });
+  const authRole = resolveAuthRole({
+    mode: params.mode,
+    userMetadata: meta,
+    shopMemberRole: params.shopMemberRole,
+  });
   const devAllowed = devOverrideAllowed();
   const override = params.preferences.devRoleOverride;
   const simulatedRole: UserRole =

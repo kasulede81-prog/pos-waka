@@ -22,6 +22,10 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    test: {
+      environment: "node",
+      include: ["src/**/*.test.ts"],
+    },
     define: {
       "import.meta.env.VITE_APP_VERSION": JSON.stringify(env.VITE_APP_VERSION?.trim() || pkg.version),
     },

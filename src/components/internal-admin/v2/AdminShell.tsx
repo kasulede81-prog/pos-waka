@@ -35,6 +35,7 @@ export type AdminSectionId =
   | "analytics"
   | "activations"
   | "admins"
+  | "pilot"
   | "shop";
 
 type TabDef = {
@@ -49,6 +50,7 @@ const TABS: TabDef[] = [
   { id: "shops", path: "/internal/waka/shops", label: "Shops" },
   { id: "devices", path: "/internal/waka/devices", label: "Devices" },
   { id: "support", path: "/internal/waka/support", label: "Support" },
+  { id: "pilot", path: "/internal/waka/pilot", label: "Pilot" },
   { id: "billing", path: "/internal/waka/billing", label: "Billing" },
   { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
   { id: "agents", path: "/internal/waka/agents", label: "Agents" },

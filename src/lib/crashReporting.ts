@@ -105,9 +105,19 @@ export function installGlobalErrorHandlers(): void {
   if (typeof window === "undefined") return;
 
   window.addEventListener("unhandledrejection", (event) => {
-    captureAppException(event.reason instanceof Error ? event.reason : new Error(String(event.reason)), {
-      kind: "unhandledrejection",
-    });
+    const err = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+    captureAppException(err, { kind: "unhandledrejection" });
+    if (!isCrashReportingEnabled()) {
+      void import("./monitoring")
+        .then(({ reportMonitoringEvent }) =>
+          reportMonitoringEvent({
+            category: "app",
+            code: "unhandledrejection",
+            meta: { message: err.message.slice(0, 120) },
+          }),
+        )
+        .catch(() => undefined);
+    }
   });
 
   window.addEventListener("error", (event) => {

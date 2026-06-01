@@ -16,6 +16,7 @@ import { AdminAnalyticsPage } from "../components/internal-admin/v2/pages/AdminA
 import { InternalAdminsManagement } from "../components/internal-admin/InternalAdminsManagement";
 import { InternalActivationOpsPage } from "./InternalActivationOpsPage";
 import { InternalMarketingAgents } from "../components/internal-admin/InternalMarketingAgents";
+import { AdminPilotPage } from "../components/internal-admin/v2/pages/AdminPilotPage";
 
 type Props = {
   lang: Language;
@@ -31,6 +32,7 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/billing") return "billing";
   if (pathname === "/internal/waka/agents") return "agents";
   if (pathname === "/internal/waka/activations") return "activations";
+  if (pathname === "/internal/waka/pilot") return "pilot";
   if (pathname === "/internal/waka/admins") return "admins";
   return "overview";
 }
@@ -79,6 +81,8 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     body = <InternalActivationOpsPage lang={lang} lovableUi previewMode={previewMode} />;
   } else if (section === "agents") {
     body = <InternalMarketingAgents lang={lang} lovableUi previewMode={previewMode} />;
+  } else if (section === "pilot") {
+    body = <AdminPilotPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "admins") {
     if (!previewMode && adminRow?.role !== "super_admin") {
       body = (

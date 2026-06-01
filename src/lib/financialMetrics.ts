@@ -1,0 +1,94 @@
+/**
+ * Canonical financial metrics for dashboards and reports.
+ * Revenue counts only completed sales — never pending/cancelled/open bills.
+ */
+
+import type { Product, ReturnRecord, Sale } from "../types";
+import { dateKeyKampala } from "./datesUg";
+import { computeTodayProfitBreakdown } from "./homeProfit";
+import { isCompletedSale } from "./saleStatus";
+
+/** Sales that count toward revenue (completed only). */
+export function isRevenueSale(s: Sale): boolean {
+  return isCompletedSale(s);
+}
+
+export function revenueSales(sales: Sale[]): Sale[] {
+  return sales.filter(isRevenueSale);
+}
+
+export function revenueSalesOnDay(sales: Sale[], day: string): Sale[] {
+  return revenueSales(sales).filter((s) => dateKeyKampala(s.createdAt) === day);
+}
+
+export function revenueSalesInMonth(sales: Sale[], monthKey: string): Sale[] {
+  return revenueSales(sales).filter((s) => dateKeyKampala(s.createdAt).startsWith(monthKey));
+}
+
+export type CompletedFinancialSnapshot = {
+  revenueUgx: number;
+  profitUgx: number;
+  transactionCount: number;
+  cashCollectedUgx: number;
+  debtIssuedUgx: number;
+  discountsUgx: number;
+  averageTransactionUgx: number;
+};
+
+export function getCompletedFinancials(
+  sales: Sale[],
+  returns: ReturnRecord[],
+  products: Product[],
+  opts?: { day?: string; monthKey?: string },
+): CompletedFinancialSnapshot {
+  let scoped = revenueSales(sales);
+  if (opts?.day) {
+    scoped = scoped.filter((s) => dateKeyKampala(s.createdAt) === opts.day);
+  } else if (opts?.monthKey) {
+    scoped = scoped.filter((s) => dateKeyKampala(s.createdAt).startsWith(opts.monthKey!));
+  }
+
+  const returnScoped = opts?.day
+    ? returns.filter((r) => dateKeyKampala(r.createdAt) === opts.day)
+    : opts?.monthKey
+      ? returns.filter((r) => dateKeyKampala(r.createdAt).startsWith(opts.monthKey!))
+      : returns;
+
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const breakdown = computeTodayProfitBreakdown(scoped, productById, returnScoped);
+  const tx = scoped.length;
+  const revenue = breakdown.salesUgx;
+
+  return {
+    revenueUgx: revenue,
+    profitUgx: breakdown.profitUgx,
+    transactionCount: tx,
+    cashCollectedUgx: scoped.reduce((a, s) => a + s.cashPaidUgx, 0),
+    debtIssuedUgx: scoped.reduce((a, s) => a + s.debtUgx, 0),
+    discountsUgx: scoped.reduce((a, s) => a + (s.discountTotalUgx ?? 0), 0),
+    averageTransactionUgx: tx > 0 ? Math.round(revenue / tx) : 0,
+  };
+}
+
+export function getCompletedRevenue(
+  sales: Sale[],
+  returns: ReturnRecord[],
+  products: Product[],
+  day?: string,
+): number {
+  return getCompletedFinancials(sales, returns, products, day ? { day } : undefined).revenueUgx;
+}
+
+export function getCompletedProfit(
+  sales: Sale[],
+  returns: ReturnRecord[],
+  products: Product[],
+  day?: string,
+): number {
+  return getCompletedFinancials(sales, returns, products, day ? { day } : undefined).profitUgx;
+}
+
+export function getCompletedSalesCount(sales: Sale[], day?: string): number {
+  const scoped = day ? revenueSalesOnDay(sales, day) : revenueSales(sales);
+  return scoped.length;
+}

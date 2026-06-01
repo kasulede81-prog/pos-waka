@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
-import { Home, ShoppingCart, Receipt, Briefcase, LayoutGrid } from "lucide-react";
+import { Home, ShoppingCart, Receipt, Briefcase, LayoutGrid, ChefHat, UtensilsCrossed, Package } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -14,18 +14,24 @@ import { usePosStore } from "../../store/usePosStore";
 import type { ShopPreferences } from "../../types";
 import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
+import { SessionHydrationProvider } from "../../context/SessionHydrationContext";
 import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { isHospitalityMode } from "../../lib/hospitality";
+import { isPharmacyMode } from "../../lib/pharmacy";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
+import { RouteErrorBoundary } from "../RouteErrorBoundary";
 import { FloatingSupportFab } from "../support/FloatingSupportFab";
+import { PilotModeBanner } from "../pilot/PilotModeBanner";
+import { isPilotModeActive } from "../../lib/pilotMode";
 import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { hashStaffSecret, normalizePin } from "../../lib/staffSecret";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
+import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
 
@@ -52,6 +58,12 @@ function navItemActive(path: string, pathname: string): boolean {
   if (path === "/floor") {
     return pathname === "/floor" || pathname.startsWith("/floor/");
   }
+  if (path === "/kitchen") {
+    return pathname === "/kitchen" || pathname.startsWith("/kitchen/");
+  }
+  if (path === "/stock") {
+    return pathname === "/stock" || pathname.startsWith("/stock/");
+  }
   if (path === "/office") {
     return pathname === "/office" || isBackOfficePath(pathname);
   }
@@ -72,6 +84,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       backOfficePin: s.preferences.backOfficePin,
       businessType: s.preferences.businessType,
       hospitalityModeEnabled: s.preferences.hospitalityModeEnabled,
+      pharmacyModeEnabled: s.preferences.pharmacyModeEnabled,
+      pilotModeEnabled: s.preferences.pilotModeEnabled,
     })),
   );
   const { authMode: subAuthMode, snapshot } = useSubscription();
@@ -86,6 +100,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const [lockError, setLockError] = useState<string | null>(null);
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
+  const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(null);
+  const [roleReady, setRoleReady] = useState(() => authMode !== "supabase" || !user?.id);
   const prevActorRef = useRef<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -107,6 +123,25 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     };
   }, [user?.id]);
 
+  useEffect(() => {
+    if (authMode !== "supabase" || !user?.id) {
+      setShopMemberRole(null);
+      setRoleReady(true);
+      return;
+    }
+    let cancelled = false;
+    setRoleReady(false);
+    void fetchShopMemberRoleForUser(user.id).then((role) => {
+      if (!cancelled) {
+        setShopMemberRole(role);
+        setRoleReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authMode, user?.id]);
+
   const actor = useMemo(
     () =>
       resolveSessionActor({
@@ -115,9 +150,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         email,
         preferences: preferences as ShopPreferences,
         staffSession,
+        shopMemberRole,
       }),
-    [authMode, user, email, preferences, staffSession],
+    [authMode, user, email, preferences, staffSession, shopMemberRole],
   );
+  const pilotActive = isPilotModeActive(actor.role, preferences as ShopPreferences);
   const tier = resolveEffectivePlanTier(snapshot);
   const canSwitchUser = tier === "business" || tier === "waka_plus";
 
@@ -191,32 +228,65 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const sellNavLabelKey = pharmacyNav && !hospitalityNav ? "navDispense" : "navSell";
 
   const navDefs = useMemo((): NavDef[] => {
+    if (hospitalityNav) {
+      const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
+      if (hasPermission(actor.role, "hospitality.floor")) {
+        items.push({ path: "/floor", labelKey: "navFloor", Icon: LayoutGrid, perm: "hospitality.floor" });
+      }
+      if (hasPermission(actor.role, "hospitality.kitchen")) {
+        items.push({ path: "/kitchen", labelKey: "navKitchen", Icon: ChefHat, perm: "hospitality.kitchen" });
+      }
+      if (hasPermission(actor.role, "stock.view")) {
+        items.push({ path: "/stock", labelKey: "navMenu", Icon: UtensilsCrossed, perm: "stock.view" });
+      }
+      if (hasPermission(actor.role, "back_office.access")) {
+        items.push({ path: "/office", labelKey: "navMore", Icon: Briefcase, perm: "back_office.access" });
+      } else if (hasPermission(actor.role, "purchases.record")) {
+        items.push({ path: "/restock", labelKey: "officeCardRestock", Icon: Package, perm: "purchases.record" });
+      }
+      return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
+    }
     const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
-    if (hospitalityNav && hasPermission(actor.role, "hospitality.floor")) {
-      items.push({ path: "/floor", labelKey: "navFloor", Icon: LayoutGrid, perm: "hospitality.floor" });
-    } else if (hasPermission(actor.role, "pos.sell")) {
-      items.push({ path: "/pos", labelKey: "navSell", Icon: ShoppingCart, perm: "pos.sell" });
+    if (hasPermission(actor.role, "pos.sell")) {
+      items.push({ path: "/pos", labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
     }
     if (hasPermission(actor.role, "receipts.view")) {
       items.push({ path: "/receipts", labelKey: "receipts", Icon: Receipt, perm: "receipts.view" });
+    }
+    if (hasPermission(actor.role, "stock.view") && !hasPermission(actor.role, "back_office.access")) {
+      items.push({
+        path: "/stock",
+        labelKey: pharmacyNav && !hospitalityNav ? "pharmacyTerm_medicineStock" : "navStock",
+        Icon: Package,
+        perm: "stock.view",
+      });
     }
     if (hasPermission(actor.role, "back_office.access")) {
       items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
     }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, hospitalityNav]);
+  }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey]);
 
   const mobileNavDefs = useMemo(() => {
+    const stockKeeperOnly =
+      hasPermission(actor.role, "stock.view") && !hasPermission(actor.role, "back_office.access");
     const order = hospitalityNav
-      ? (["/", "/floor", "/receipts", "/office"] as const)
-      : MOBILE_NAV_ORDER;
+      ? stockKeeperOnly
+        ? (["/", "/floor", "/kitchen", "/stock", "/restock"] as const)
+        : (["/", "/floor", "/kitchen", "/stock", "/office"] as const)
+      : stockKeeperOnly
+        ? (["/", "/stock", "/restock"] as const)
+        : MOBILE_NAV_ORDER;
     const byPath = new Map(navDefs.map((item) => [item.path, item]));
     return order.map((path) => byPath.get(path)).filter((item): item is NavDef => Boolean(item));
   }, [navDefs, hospitalityNav]);
 
   return (
+    <SessionHydrationProvider roleReady={roleReady}>
     <SessionActorProvider value={actor}>
       <div className="app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
         {pwaUpdate ? (
@@ -231,6 +301,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </button>
           </div>
         ) : null}
+        {pilotActive ? <PilotModeBanner lang={lang} /> : null}
         <header className="relative z-20 shrink-0 overflow-visible border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4">
             <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -380,7 +451,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               }`}
             >
               <BackOfficeRouteGuard lang={lang}>
-                <Outlet />
+                <RouteErrorBoundary scope="page">
+                  <Outlet />
+                </RouteErrorBoundary>
               </BackOfficeRouteGuard>
               <MobileScrollTail />
             </div>
@@ -607,5 +680,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <FloatingSupportFab lang={lang} />
       </div>
     </SessionActorProvider>
+    </SessionHydrationProvider>
   );
 }

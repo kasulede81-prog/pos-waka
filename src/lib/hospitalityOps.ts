@@ -6,8 +6,9 @@ import type {
   SaleLine,
   TableSession,
 } from "../types";
-import { deltaLinesSince, resolveStationForProduct } from "./kitchenRouting";
+import { ensureSaleLineId } from "./pendingSaleMerge";
 import { syncTableDisplayStatuses } from "./hospitality";
+import { firedQtyByProductForSale, resolveStationForProduct } from "./kitchenRouting";
 
 export function nextKitchenTicketNumber(floor: HospitalityFloorState): number {
   const today = new Date().toISOString().slice(0, 10);
@@ -28,7 +29,8 @@ export function fireKitchenTicketsForLines(input: {
   tableLabel: string;
   areaName?: string | null;
 }): HospitalityFloorState {
-  const deltas = deltaLinesSince(input.previousLines, input.newLines);
+  const firedQty = firedQtyByProductForSale(input.floor.kitchenTickets ?? [], input.session.saleId);
+  const deltas = deltaLinesSinceWithFired(input.previousLines, input.newLines, firedQty);
   if (!deltas.length) return input.floor;
 
   const byStation = new Map<string, KitchenTicketItem[]>();
@@ -65,6 +67,7 @@ export function fireKitchenTicketsForLines(input: {
       status: "queued",
       ticketNumber: ticketNo++,
       firedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       tableLabel: input.tableLabel,
       areaName: input.areaName ?? null,
       waiterLabel: input.session.waiterLabel ?? null,
@@ -85,8 +88,22 @@ export function updateKitchenTicketStatus(
   status: KitchenTicket["status"],
 ): HospitalityFloorState {
   const kitchenTickets = (floor.kitchenTickets ?? []).map((t) =>
-    t.id === ticketId ? { ...t, status, pendingSync: true } : t,
+    t.id === ticketId ? { ...t, status, updatedAt: new Date().toISOString(), pendingSync: true } : t,
   );
+  return { ...floor, kitchenTickets };
+}
+
+export function cancelKitchenTicket(floor: HospitalityFloorState, ticketId: string): HospitalityFloorState {
+  return updateKitchenTicketStatus(floor, ticketId, "cancelled");
+}
+
+export function pruneServedKitchenTickets(floor: HospitalityFloorState, maxAgeHours = 12): HospitalityFloorState {
+  const cutoff = Date.now() - maxAgeHours * 60 * 60 * 1000;
+  const kitchenTickets = (floor.kitchenTickets ?? []).filter((t) => {
+    if (t.status !== "served" && t.status !== "cancelled") return true;
+    const at = Date.parse(t.updatedAt ?? t.firedAt);
+    return !Number.isFinite(at) || at >= cutoff;
+  });
   return { ...floor, kitchenTickets };
 }
 
@@ -132,8 +149,8 @@ export function mergeSessionsOnFloor(
 }
 
 export function mergeSaleLines(target: SaleLine[], source: SaleLine[]): SaleLine[] {
-  const merged = target.map((l) => ({ ...l }));
-  for (const line of source) {
+  const merged = target.map((l) => ensureSaleLineId(l));
+  for (const line of source.map(ensureSaleLineId)) {
     const idx = merged.findIndex((l) => l.productId === line.productId);
     if (idx === -1) {
       merged.push({ ...line });
@@ -142,15 +159,37 @@ export function mergeSaleLines(target: SaleLine[], source: SaleLine[]): SaleLine
     const cur = merged[idx]!;
     const qty = cur.quantity + line.quantity;
     const unit = cur.unitPriceUgx;
+    const now = new Date().toISOString();
     merged[idx] = {
       ...cur,
       quantity: qty,
+      updatedAt: now,
       lineTotalUgx: Math.round(unit * qty),
       originalLineTotalUgx: Math.round((cur.originalLineTotalUgx ?? cur.lineTotalUgx) + (line.originalLineTotalUgx ?? line.lineTotalUgx)),
       estimatedProfitUgx: cur.estimatedProfitUgx + line.estimatedProfitUgx,
     };
   }
   return merged;
+}
+
+function deltaLinesSinceWithFired(
+  previous: SaleLine[],
+  current: SaleLine[],
+  firedQtyByProduct: Map<string, number>,
+): SaleLine[] {
+  const prev = new Map<string, number>();
+  for (const line of previous) {
+    prev.set(line.productId, (prev.get(line.productId) ?? 0) + line.quantity);
+  }
+  const out: SaleLine[] = [];
+  for (const line of current) {
+    const baseline = Math.max(prev.get(line.productId) ?? 0, firedQtyByProduct.get(line.productId) ?? 0);
+    const delta = line.quantity - baseline;
+    if (delta > 0.0001) {
+      out.push({ ...line, quantity: delta });
+    }
+  }
+  return out;
 }
 
 export function activeKitchenTickets(floor: HospitalityFloorState, stationType?: KitchenTicket["stationType"]) {

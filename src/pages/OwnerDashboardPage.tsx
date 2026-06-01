@@ -20,7 +20,13 @@ import {
   computeExtendedOwnerAlerts,
   formatVsYesterday,
 } from "../lib/ownerIntelligence";
-import { computeTodayProfitBreakdown } from "../lib/homeProfit";
+import { getCompletedFinancials } from "../lib/financialMetrics";
+import { sumDebtPaymentsOnDay } from "../lib/cashReconciliation";
+import { isHospitalityMode } from "../lib/hospitality";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { usePharmacyTerms } from "../lib/pharmacyTerms";
+import { useHospitalityTerms } from "../lib/hospitalityTerms";
+import { pendingSales } from "../lib/saleStatus";
 
 function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: string } {
   const title = a.titleVars ? tTemplate(lang, a.title, a.titleVars) : t(lang, a.title);
@@ -56,9 +62,15 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
+  const debtPayments = usePosStore((s) => s.debtPayments);
   const customers = usePosStore((s) => s.customers);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
+  const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+  const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
+  const modeTerm = hospitalityMode ? ht : pt;
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const voidRecords = usePosStore((s) => s.voidRecords);
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
@@ -93,6 +105,16 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [today],
   );
 
+  const openBillsCount = useMemo(() => {
+    if (!hospitalityMode) return 0;
+    return pendingSales(sales).length;
+  }, [hospitalityMode, sales]);
+
+  const expiringMedicinesCount = useMemo(() => {
+    if (!pharmacyMode) return 0;
+    return products.filter((p) => p.expiryDate && new Date(p.expiryDate).getTime() <= Date.now() + 30 * 86400000).length;
+  }, [pharmacyMode, products]);
+
   const todayDiscountEvents = useMemo(
     () =>
       auditLogs.filter(
@@ -102,17 +124,16 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   );
 
   const stats = useMemo(() => {
-    const productById = new Map(products.map((p) => [p.id, p] as const));
-    const netBreakdown = computeTodayProfitBreakdown(today, productById, todayReturns);
-    const totalSalesUgx = netBreakdown.salesUgx;
+    const fin = getCompletedFinancials(sales, allReturnRecords, products, { day: todayKey });
+    const totalSalesUgx = fin.revenueUgx;
     const voidsTotalUgx = todayVoids.reduce((a, v) => a + Math.max(0, v.amountUgx), 0);
+    const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, todayKey);
     const expectedCashUgx = Math.max(
       0,
-      today.reduce((a, s) => a + s.cashPaidUgx, 0) -
-        todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
+      fin.cashCollectedUgx + debtCollectedUgx - todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0),
     );
-    const debtTodayUgx = today.reduce((a, s) => a + s.debtUgx, 0);
-    const estProfitUgx = netBreakdown.profitUgx;
+    const debtTodayUgx = fin.debtIssuedUgx;
+    const estProfitUgx = fin.profitUgx;
     const returnsTotalUgx = todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0);
     const grossSalesUgx = totalSalesUgx + voidsTotalUgx + returnsTotalUgx;
     const closeToday = dayCloses.find((d) => d.dateKey === todayKey);
@@ -125,21 +146,19 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       voidsTotalUgx,
       expectedCashUgx,
       debtTodayUgx,
+      debtCollectedUgx,
       estProfitUgx,
       returnsTotalUgx,
       countedCashUgx,
       todayCloseDiff,
       shortageUgx,
-      saleCount: today.length,
+      saleCount: fin.transactionCount,
     };
-  }, [today, products, todayReturns, todayVoids, dayCloses, todayKey]);
+  }, [sales, allReturnRecords, products, todayReturns, todayVoids, dayCloses, todayKey, debtPayments]);
 
   const yesterdaySalesUgx = useMemo(
-    () =>
-      sales
-        .filter((s) => dateKeyKampala(s.createdAt) === yesterdayKey)
-        .reduce((a, s) => a + s.totalUgx, 0),
-    [sales, yesterdayKey],
+    () => getCompletedFinancials(sales, allReturnRecords, products, { day: yesterdayKey }).revenueUgx,
+    [sales, allReturnRecords, products, yesterdayKey],
   );
 
   const lowStock = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
@@ -613,6 +632,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           <p className="text-xs font-bold uppercase text-amber-900">{t(lang, "debtToday")}</p>
           <p className="mt-1 text-xl font-black text-amber-900">UGX {stats.debtTodayUgx.toLocaleString()}</p>
         </article>
+        <article className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
+          <p className="text-xs font-bold uppercase text-teal-900">{t(lang, "ownerDebtCollectedToday")}</p>
+          <p className="mt-1 text-xl font-black text-teal-950">UGX {stats.debtCollectedUgx.toLocaleString()}</p>
+        </article>
         <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
           <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "activeCashierCard")}</p>
           <p className="mt-1 text-xl font-black text-slate-900">{activeShift?.actorName ?? "—"}</p>
@@ -649,15 +672,32 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       ) : null}
 
       <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-900">{t(lang, "customers")}</h2>
+        <h2 className="text-lg font-black text-slate-900">
+          {hospitalityMode ? ht("guests") : pharmacyMode ? modeTerm("customers") : t(lang, "customers")}
+        </h2>
         <p className="mt-1 text-sm text-slate-600">
-          {t(lang, "ownerDebtHint")}:{" "}
+          {hospitalityMode
+            ? t(lang, "hospitalityPage_guestTabs")
+            : pharmacyMode
+              ? modeTerm("debts")
+              : t(lang, "ownerDebtHint")}
+          :{" "}
           <span className="font-bold text-amber-800">
             UGX {customers.reduce((a, c) => a + c.debtBalanceUgx, 0).toLocaleString()}
           </span>
         </p>
+        {hospitalityMode && openBillsCount > 0 ? (
+          <p className="mt-2 rounded-xl bg-teal-50 px-3 py-2 text-sm font-bold text-teal-950">
+            {modeTerm("pendingSale")}: {openBillsCount}
+          </p>
+        ) : null}
+        {pharmacyMode && expiringMedicinesCount > 0 ? (
+          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
+            {t(lang, "pharmacyDashExpiring30")}: {expiringMedicinesCount}
+          </p>
+        ) : null}
         <Link to="/customers" className="mt-3 inline-block text-sm font-bold text-waka-700 underline">
-          {t(lang, "customers")} →
+          {hospitalityMode ? ht("guests") : pharmacyMode ? modeTerm("customers") : t(lang, "customers")} →
         </Link>
       </section>
     </div>

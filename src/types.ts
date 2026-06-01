@@ -111,6 +111,8 @@ export type ShiftRecord = {
   voidsTotalUgx?: number;
   /** Returned item refunds */
   returnsTotalUgx?: number;
+  /** Cash collected from customer debt repayments during this shift */
+  debtPaymentsTotalUgx?: number;
   /** Cash physically counted at shift close */
   countedCashUgx?: number | null;
   /** counted − expected (positive = over, negative = short) */
@@ -182,6 +184,8 @@ export type TableDisplayStatus = "available" | "occupied" | "payment_pending" | 
 
 export type TableSessionStatus = "open" | "payment_pending" | "closed" | "cancelled" | "merged";
 
+export type TableSessionKind = "table" | "named_tab";
+
 export type KitchenStationType = "kitchen" | "bar" | "grill" | "coffee" | "other";
 
 export type DiningArea = {
@@ -211,7 +215,12 @@ export type KitchenStation = {
 
 export type TableSession = {
   id: string;
-  tableId: string;
+  /** table = dining table; named_tab = bar walk-up tab (John Tab, VIP Group, …) */
+  sessionKind?: TableSessionKind;
+  /** Set for table sessions; null/omitted for named tabs */
+  tableId?: string | null;
+  /** Display name for named_tab sessions */
+  tabLabel?: string | null;
   saleId: string;
   guestCount: number;
   customerName?: string | null;
@@ -221,6 +230,7 @@ export type TableSession = {
   status: TableSessionStatus;
   openedAt: string;
   closedAt?: string | null;
+  updatedAt?: string;
   pendingSync?: boolean;
 };
 
@@ -254,7 +264,9 @@ export type KitchenTicket = {
   tableLabel: string;
   areaName?: string | null;
   waiterLabel?: string | null;
+  ticketNotes?: string | null;
   items: KitchenTicketItem[];
+  updatedAt?: string;
   pendingSync?: boolean;
 };
 
@@ -286,6 +298,12 @@ export type Product = {
   minimumStockAlert: number;
   category: string;
   sku: string;
+  /** ISO date YYYY-MM-DD — medicine expiry (Pharmacy Mode) */
+  expiryDate?: string | null;
+  /** e.g. 500mg, 250mg */
+  medicineStrength?: string | null;
+  /** e.g. Tablet, Capsule, Syrup */
+  medicineForm?: string | null;
   updatedAt: string;
   /** Monotonic for last-write-wins sync hints */
   version: number;
@@ -380,6 +398,10 @@ export type StockMovement = {
 };
 
 export type SaleLine = {
+  /** Stable line id — required for multi-device pending bill merge */
+  id?: string;
+  /** Last line edit — used for line-level LWW merge */
+  updatedAt?: string;
   productId: string;
   name: string;
   inputMode: LineInputMode;
@@ -617,9 +639,17 @@ export type ShopPreferences = {
   hospitalityModeEnabled?: boolean;
   /** Resume table order after refresh */
   activeTableSessionId?: string | null;
+  /** When true, kitchen tickets fire only on explicit send (not each item tap) */
+  hospitalityManualKitchenFire?: boolean;
   /** Auto-remove pending sales after TTL (future) */
   pendingSalesTtl?: "24h" | "3d" | "7d" | "never";
   staffCanManagePendingSales?: boolean;
+  /** Kill switch — when false, fall back to retail UI even for pharmacy business type */
+  pharmacyModeEnabled?: boolean;
+  /** When selling expired medicine: warn cashier or block sale */
+  pharmacyExpiredSaleBehavior?: "warn" | "block";
+  /** Owner-only: extra diagnostics, support export, sync logging, pilot banners */
+  pilotModeEnabled?: boolean;
 };
 
 export type SyncOperationKind =
@@ -629,6 +659,7 @@ export type SyncOperationKind =
   | "pending_returns"
   | "pending_expenses"
   | "pending_cash_expenses"
+  | "pending_hospitality"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"
   | "product"

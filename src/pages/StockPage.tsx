@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -37,8 +37,12 @@ import {
   distinctTrimmedCategories,
   normalizedCategoryKey,
   productMatchesCategoryFilter,
+  productMatchesSellSearch,
 } from "../lib/productCategories";
-
+import { defaultMenuCategoriesForBusinessType, isHospitalityMode } from "../lib/hospitality";
+import { defaultPharmacyCategoriesForBusinessType, isPharmacyMode } from "../lib/pharmacy";
+import { usePharmacyTerms } from "../lib/pharmacyTerms";
+import { useHospitalityTerms } from "../lib/hospitalityTerms";
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
@@ -56,6 +60,11 @@ export function StockPage({ lang }: { lang: Language }) {
   const suppliers = usePosStore((s) => s.suppliers);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const preferences = usePosStore((s) => s.preferences);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+  const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
+  const modeTerm = hospitalityMode ? ht : pt;
   const currentTier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(currentTier);
   const unlockedProducts = useMemo(
@@ -109,17 +118,29 @@ export function StockPage({ lang }: { lang: Language }) {
   const defaultGroupByCategory = products.length > 12;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
 
-  const stockCategoryPicklist = useMemo(() => distinctTrimmedCategories(products), [products]);
+  const stockCategoryPicklist = useMemo(() => {
+    const fromProducts = distinctTrimmedCategories(products);
+    if (isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
+      const presets = defaultMenuCategoriesForBusinessType(preferences.businessType);
+      return [...new Set([...fromProducts, ...presets])].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      );
+    }
+    if (pharmacyMode) {
+      const presets = defaultPharmacyCategoriesForBusinessType(preferences.businessType);
+      return [...new Set([...fromProducts, ...presets])].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: "base" }),
+      );
+    }
+    return fromProducts;
+  }, [products, preferences.businessType, preferences.hospitalityModeEnabled, pharmacyMode]);
   const stockHasUncategorized = useMemo(() => products.some((p) => !normalizedCategoryKey(p)), [products]);
 
   const listableProducts = useMemo(() => {
     let list = [...products];
-    const q = listQuery.trim().toLowerCase();
+    const q = listQuery.trim();
     if (q) {
-      list = list.filter((p) => {
-        const haystack = [p.name, p.category, p.baseUnit, p.sku].filter(Boolean).join(" ").toLowerCase();
-        return haystack.includes(q);
-      });
+      list = list.filter((p) => productMatchesSellSearch(p, q));
     }
     if (listFilter === "low") list = list.filter((p) => isLowStock(p));
     list = list.filter((p) => productMatchesCategoryFilter(p, stockCategoryFilter));
@@ -192,10 +213,6 @@ export function StockPage({ lang }: { lang: Language }) {
     return { keys, map: m };
   }, [listableProducts, groupByCategory]);
 
-  if (!hasPermission(actor.role, "back_office.access")) {
-    return <Navigate to="/" replace />;
-  }
-
   const openStarter = () => {
     if (freeProductLimitReached) return;
     const pack = starterPackForBusinessType(preferences.businessType);
@@ -258,10 +275,12 @@ export function StockPage({ lang }: { lang: Language }) {
         name: displayName,
         priceUgx: price,
         stockQty: st,
-        category: cat,
+        category: row.category ?? cat,
         inferName: row.inferName,
         sellingMode: row.sellingMode,
         baseUnit: row.baseUnit,
+        medicineStrength: row.medicineStrength ?? null,
+        medicineForm: row.medicineForm ?? null,
       });
       left -= 1;
     }
@@ -410,14 +429,14 @@ export function StockPage({ lang }: { lang: Language }) {
     <div className="space-y-5 pb-4">
       <PageHeader
         lang={lang}
-        title={t(lang, "stockTitle")}
-        subtitle={t(lang, "stockPageSub")}
+        title={modeTerm("stockTitle")}
+        subtitle={modeTerm("stockPageSub")}
         backLabel={t(lang, "officeBackToHub")}
       />
 
       {freeProductLimitReached ? (
         <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
-          <p className="text-lg font-black text-orange-950">{t(lang, "freeLimitProductsTitle")}</p>
+          <p className="text-lg font-black text-orange-950">{pt("freeLimitProductsTitle")}</p>
           <p className="mt-1 text-sm font-semibold text-orange-950/80">
             {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 7) })}
           </p>
@@ -444,8 +463,8 @@ export function StockPage({ lang }: { lang: Language }) {
 
       {unlockedProducts.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-white px-6 py-10 text-center">
-          <p className="text-xl font-black text-slate-900">{t(lang, "stockEmptyTitle")}</p>
-          <p className="mx-auto mt-2 max-w-sm text-base text-slate-600">{t(lang, "stockEmptySub")}</p>
+          <p className="text-xl font-black text-slate-900">{modeTerm("stockEmptyTitle")}</p>
+          <p className="mx-auto mt-2 max-w-sm text-base text-slate-600">{modeTerm("stockEmptySub")}</p>
           {canAdd ? (
             <button
               type="button"
@@ -453,7 +472,7 @@ export function StockPage({ lang }: { lang: Language }) {
               onClick={openAddProductSheet}
               className="mt-6 w-full max-w-xs rounded-2xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-md active:bg-waka-700 sm:mx-auto"
             >
-              {t(lang, "stockAddProductBtn")}
+              {modeTerm("stockAddProduct")}
             </button>
           ) : null}
           {canAdd ? (

@@ -1,21 +1,29 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
+import { isPharmacyMode } from "../lib/pharmacy";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
+import { PilotSupportCard } from "../components/settings/PilotSupportCard";
+import { SyncHealthCard } from "../components/SyncHealthCard";
+import { PilotModeToggle } from "../components/pilot/PilotModeToggle";
+import { canTogglePilotMode, isPilotModeActive } from "../lib/pilotMode";
 import { usePosStore } from "../store/usePosStore";
+import { useSubscription } from "../context/SubscriptionContext";
 
 export function SettingsHubPage({ lang }: { lang: Language }) {
   const [searchParams] = useSearchParams();
   const actor = useSessionActor();
   const businessType = usePosStore((s) => s.preferences.businessType);
   const hospitalityModeEnabled = usePosStore((s) => s.preferences.hospitalityModeEnabled);
+  const pharmacyModeEnabled = usePosStore((s) => s.preferences.pharmacyModeEnabled);
+  const { userId } = useSubscription();
 
   if (searchParams.get("onboard") === "1") {
     return <Navigate to="/settings/shop?onboard=1" replace />;
@@ -26,7 +34,10 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   }
 
   const canShop = hasPermission(actor.role, "settings.shop");
+  const preferences = usePosStore((s) => s.preferences);
+  const pilotActive = isPilotModeActive(actor.role, preferences);
   const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
+  const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);
 
   return (
     <div className="space-y-6 pb-8">
@@ -71,6 +82,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={LayoutGrid}
           />
         ) : null}
+        {showPharmacySettings ? (
+          <OfficeNavCard
+            to="/settings/pharmacy"
+            title={t(lang, "settingsHubPharmacy")}
+            subtitle={t(lang, "settingsHubPharmacySub")}
+            Icon={Pill}
+          />
+        ) : null}
         {canShop ? (
           <OfficeNavCard
             to="/settings/pin"
@@ -111,6 +130,19 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
           />
         ) : null}
       </OfficeNavSection>
+
+      {canTogglePilotMode(actor.role) ? <PilotModeToggle lang={lang} /> : null}
+      {canTogglePilotMode(actor.role) ? (
+        <OfficeNavCard
+          to="/pilot-support"
+          title={t(lang, "pilotSupportCenterTitle")}
+          subtitle={t(lang, "pilotSupportCenterSub")}
+          Icon={LifeBuoy}
+        />
+      ) : null}
+
+      {pilotActive ? <SyncHealthCard lang={lang} variant="full" /> : null}
+      {pilotActive ? <PilotSupportCard lang={lang} userId={userId} pilotModeEnabled /> : null}
     </div>
   );
 }

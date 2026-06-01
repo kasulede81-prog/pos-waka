@@ -1,4 +1,5 @@
 import type { LineInputMode, Product, SaleLine } from "../types";
+import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatFriendlyQuantity } from "./saleQuantityLabel";
 
 const MONEY_ROUND = 4;
@@ -211,10 +212,13 @@ export function buildSaleLine(
     const qty = quantityFromMoneyUgx(product, money);
     if (qty <= 0) return { line: null, error: "qtyZero" };
     const estimatedProfitUgx = Math.round(money - qty * cost);
+    const now = new Date().toISOString();
     return {
       line: {
+        id: crypto.randomUUID(),
+        updatedAt: now,
         productId: product.id,
-        name: product.name,
+        name: formatMedicineFullLabel(product),
         inputMode: "money",
         quantity: qty,
         unitPriceUgx: price,
@@ -229,10 +233,13 @@ export function buildSaleLine(
   const qty = Math.round(rawValue * 10 ** MONEY_ROUND) / 10 ** MONEY_ROUND;
   if (qty <= 0) return { line: null, error: "invalidQty" };
   const lineTotalUgx = lineTotalFromQuantity(product, qty);
+  const now = new Date().toISOString();
   return {
     line: {
+      id: crypto.randomUUID(),
+      updatedAt: now,
       productId: product.id,
-      name: product.name,
+      name: formatMedicineFullLabel(product),
       inputMode: "quantity",
       quantity: qty,
       unitPriceUgx: price,

@@ -157,7 +157,7 @@ export function LoginPage({
         </form>
 
         <div className="mt-6 rounded-2xl bg-stone-50 p-4 text-center ring-1 ring-stone-100">
-          <p className="text-sm font-medium text-stone-600">{t(lang, "haveAccount")}</p>
+          <p className="text-sm font-medium text-stone-600">{t(lang, "noAccount")}</p>
           <Link
             to="/register"
             className="mt-2 inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-900 shadow-sm transition-waka active:bg-stone-50"

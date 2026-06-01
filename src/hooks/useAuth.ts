@@ -11,6 +11,7 @@ import { scheduleBackgroundCloudSync } from "../offline/cloudSync";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportAuthIssue } from "../lib/monitoring";
+import { appendPilotEvent } from "../lib/pilotEventLog";
 import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
@@ -354,6 +355,7 @@ export function useAuth() {
         reportAuthIssue("sign_in_failed", { status: error.status ?? 0 });
         throw error;
       }
+      appendPilotEvent("login", "Email sign-in", { mode: "supabase" });
       return;
     }
     if (!password || password.length < 4) throw new Error("Invalid password.");
@@ -601,6 +603,7 @@ export function useAuth() {
   }, []);
 
   const signOut = useCallback(async () => {
+    appendPilotEvent("logout", "Sign out");
     if (staffSession) {
       flushPendingPersist();
       const store = usePosStore.getState();

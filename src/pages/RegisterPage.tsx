@@ -140,7 +140,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
       });
       if (referralCode.trim()) storePendingReferralCode(referralCode.trim());
       if (result.needsEmailVerification) {
-        navigate("/login", { replace: true, state: { registeredPhone: phone } });
+        navigate("/verify-email", { replace: true, state: { email: emailNorm } });
         return;
       }
       navigate("/onboarding", { replace: true });

@@ -13,6 +13,12 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { PageHeader } from "../components/layout/PageHeader";
+import { computeHospitalityReports } from "../lib/hospitalityReports";
+import { isHospitalityMode } from "../lib/hospitality";
+import { computePharmacyExpiryReport } from "../lib/pharmacyReports";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
+import { ExpiryStatusBadge } from "../components/pharmacy/ExpiryStatusBadge";
 
 type Range = "today" | "week" | "month";
 
@@ -40,6 +46,24 @@ export function ReportsPage({ lang }: { lang: Language }) {
     const dk = dateKeyKampala(new Date());
     return purchases.filter((p) => dateKeyKampala(p.createdAt) === dk).reduce((a, p) => a + p.totalCostUgx, 0);
   }, [purchases]);
+
+  const preferences = usePosStore((s) => s.preferences);
+  const hospitalityReports = useMemo(() => {
+    if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) return null;
+    const today = dateKeyKampala(new Date());
+    const fromKey =
+      range === "month"
+        ? today.slice(0, 7) + "-01"
+        : range === "week"
+          ? dateKeyKampala(new Date(Date.now() - 6 * 86400000))
+          : today;
+    return computeHospitalityReports(sales, products, { fromKey, toKey: today });
+  }, [preferences.businessType, preferences.hospitalityModeEnabled, range, sales, products]);
+
+  const pharmacyExpiryReport = useMemo(() => {
+    if (!isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled)) return null;
+    return computePharmacyExpiryReport(products);
+  }, [preferences.businessType, preferences.pharmacyModeEnabled, products]);
 
   const totals = { cash: report.cash, profit: report.profit, debt: report.debt, count: report.count };
   const topProducts = report.topProducts;
@@ -238,6 +262,120 @@ export function ReportsPage({ lang }: { lang: Language }) {
               </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {pharmacyExpiryReport ? (
+        <section className="space-y-4 rounded-3xl border border-emerald-200 bg-emerald-50/40 p-4">
+          <h2 className="text-lg font-black text-emerald-950">{t(lang, "pharmacyReportsTitle")}</h2>
+          <div>
+            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "pharmacyReportsExpiring")}</p>
+            <p className="mt-1 text-sm font-semibold text-stone-700">
+              {t(lang, "pharmacyReportsExpiringValue")}: UGX {pharmacyExpiryReport.expiringValueUgx.toLocaleString()}
+            </p>
+            {pharmacyExpiryReport.expiring.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-sm">
+                {pharmacyExpiryReport.expiring.slice(0, 20).map((row) => (
+                  <li key={row.productId} className="flex justify-between gap-2 font-medium">
+                    <span className="min-w-0 truncate">
+                      {products.find((p) => p.id === row.productId)
+                        ? formatMedicineFullLabel(products.find((p) => p.id === row.productId)!)
+                        : row.name}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2 text-stone-600">
+                      {products.find((p) => p.id === row.productId) ? (
+                        <ExpiryStatusBadge lang={lang} product={products.find((p) => p.id === row.productId)!} compact />
+                      ) : null}
+                      {row.expiryDate}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm font-medium text-stone-500">{t(lang, "pharmacyReportsNoExpiring")}</p>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-black uppercase text-red-700">{t(lang, "pharmacyReportsExpired")}</p>
+            <p className="mt-1 text-sm font-semibold text-stone-700">
+              {t(lang, "pharmacyReportsExpiredValue")}: UGX {pharmacyExpiryReport.expiredValueUgx.toLocaleString()}
+            </p>
+            {pharmacyExpiryReport.expired.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-sm">
+                {pharmacyExpiryReport.expired.slice(0, 20).map((row) => (
+                  <li key={row.productId} className="flex justify-between gap-2 font-medium text-red-900">
+                    <span className="min-w-0 truncate">
+                      {products.find((p) => p.id === row.productId)
+                        ? formatMedicineFullLabel(products.find((p) => p.id === row.productId)!)
+                        : row.name}
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {products.find((p) => p.id === row.productId) ? (
+                        <ExpiryStatusBadge lang={lang} product={products.find((p) => p.id === row.productId)!} compact />
+                      ) : null}
+                      {row.expiryDate}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm font-medium text-stone-500">{t(lang, "pharmacyReportsNoExpired")}</p>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {hospitalityReports ? (
+        <section className="space-y-4 rounded-3xl border border-waka-200 bg-waka-50/40 p-4">
+          <h2 className="text-lg font-black text-waka-950">{t(lang, "hospitalityReportsTitle")}</h2>
+          <p className="text-sm font-semibold text-stone-700">
+            {hospitalityReports.completedBillCount} bills · UGX {hospitalityReports.totalRevenueUgx.toLocaleString()} ·{" "}
+            {t(lang, "hospitalityReportsAvgBill")} UGX {hospitalityReports.avgBillUgx.toLocaleString()}
+          </p>
+          {hospitalityReports.waiters.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsWaiters")}</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {hospitalityReports.waiters.slice(0, 5).map((w) => (
+                  <li key={w.waiterId} className="flex justify-between font-medium">
+                    <span>{w.label}</span>
+                    <span>
+                      {w.billCount} · UGX {w.revenueUgx.toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {hospitalityReports.categoryMix.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsMix")}</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {hospitalityReports.categoryMix.map((row) => (
+                  <li key={row.kind} className="flex justify-between font-medium capitalize">
+                    <span>{row.kind}</span>
+                    <span>UGX {row.revenueUgx.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {hospitalityReports.peakHours.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsPeak")}</p>
+              <ul className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                {hospitalityReports.peakHours
+                  .slice()
+                  .sort((a, b) => b.revenueUgx - a.revenueUgx)
+                  .slice(0, 6)
+                  .map((h) => (
+                    <li key={h.hour} className="rounded-full bg-white px-3 py-1 ring-1 ring-stone-200">
+                      {h.label}: {h.billCount}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
         </section>
       ) : null}
 

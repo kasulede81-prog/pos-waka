@@ -15,6 +15,10 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { useSyncStatus } from "../hooks/useSyncStatus";
+import { isHospitalityMode } from "../lib/hospitality";
+import { isPharmacyMode } from "../lib/pharmacy";
+import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
+import { PharmacyDashboardPage } from "./PharmacyDashboardPage";
 
 function formatDashboardSaleItems(sale: Sale, maxNames = 4): string {
   const names = sale.lines.map((l) => {
@@ -109,6 +113,16 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const quickTiles = useMemo(() => products.slice(0, 10), [products]);
 
   const gridCols = canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
+
+  const hospitalityHome = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  if (hospitalityHome) {
+    return <HospitalityDashboardPage lang={lang} />;
+  }
+
+  const pharmacyHome = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  if (pharmacyHome) {
+    return <PharmacyDashboardPage lang={lang} />;
+  }
 
   return (
     <div className="space-y-4">

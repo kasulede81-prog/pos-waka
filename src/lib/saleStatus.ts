@@ -12,6 +12,11 @@ export function isCompletedSale(s: Sale): boolean {
   return saleStatusOf(s) === "completed";
 }
 
+/** Alias — revenue metrics must use completed sales only (excludes open/pending bills). */
+export function isRevenueSale(s: Sale): boolean {
+  return isCompletedSale(s);
+}
+
 export function isPendingSale(s: Sale): boolean {
   return saleStatusOf(s) === "pending";
 }

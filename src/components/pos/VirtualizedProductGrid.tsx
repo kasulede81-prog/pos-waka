@@ -3,8 +3,11 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import clsx from "clsx";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
+import { usePosStore } from "../../store/usePosStore";
 import { formatStockLabel } from "../../lib/sellingEngine";
 import { shelfIconFor } from "../../lib/productCategories";
+import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
+import { isPharmacyMode } from "../../lib/pharmacy";
 
 const COLS = 2;
 const ROW_ESTIMATE = 132;
@@ -55,6 +58,9 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
             >
               {slice.map((p) => {
                 const locked = isLocked?.(p) ?? false;
+                const preferences = usePosStore.getState().preferences;
+                const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+                const detail = pharmacyMode ? formatMedicineListSecondary(p) : null;
                 return (
                 <button
                   key={p.id}
@@ -74,7 +80,12 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
                     </span>
                   ) : null}
                   <span>
-                    <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">{p.name}</span>
+                    <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">
+                      {formatMedicineListPrimary(p)}
+                    </span>
+                    {detail ? (
+                      <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-600">{detail}</span>
+                    ) : null}
                     <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-500">
                       {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
                       {(p.category ?? "").trim() || noShelfLabel}

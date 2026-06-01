@@ -1,4 +1,6 @@
 import type { CashExpense, Customer, Product, ReturnRecord, Sale, SaleLine, SellingMode, SupplierPayment } from "../types";
+import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
+import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
@@ -26,7 +28,7 @@ function isUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
-async function resolveShopCtx(): Promise<ShopCtx | null> {
+export async function resolveShopCtx(): Promise<ShopCtx | null> {
   if (!hasSupabaseConfig || !supabase) return null;
   const { data } = await supabase.auth.getSession();
   const userId = data.session?.user?.id;
@@ -66,6 +68,9 @@ function productToRow(p: Product, shopId: string) {
       version: p.version,
       quickPresetsMoneyUgx: p.quickPresetsMoneyUgx ?? [],
       quickPresetsQty: p.quickPresetsQty ?? [],
+      expiryDate: p.expiryDate ?? null,
+      medicineStrength: p.medicineStrength ?? null,
+      medicineForm: p.medicineForm ?? null,
       wakaClient: true,
     },
     updated_at: p.updatedAt || new Date().toISOString(),
@@ -77,6 +82,9 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
   if (!isUuid(id)) return null;
   const meta = (row.metadata ?? {}) as Record<string, unknown>;
   const sellingMode = (row.selling_mode as SellingMode) || "unit";
+  const expiryRaw = meta.expiryDate ?? meta.expiry_date;
+  const strengthRaw = meta.medicineStrength ?? meta.medicine_strength;
+  const formRaw = meta.medicineForm ?? meta.medicine_form;
   return {
     id,
     name: String(row.name ?? ""),
@@ -90,6 +98,10 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
     minimumStockAlert: Number(row.minimum_stock_alert ?? row.reorder_level ?? 0),
     category: String(meta.category ?? ""),
     sku: String(row.sku ?? ""),
+    expiryDate: expiryRaw != null && String(expiryRaw).trim() ? String(expiryRaw).trim().slice(0, 10) : null,
+    medicineStrength:
+      strengthRaw != null && String(strengthRaw).trim() ? String(strengthRaw).trim().slice(0, 64) : null,
+    medicineForm: formRaw != null && String(formRaw).trim() ? String(formRaw).trim().slice(0, 64) : null,
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
     version: Math.max(1, Math.floor(Number(meta.version ?? 1))),
     quickPresetsMoneyUgx: Array.isArray(meta.quickPresetsMoneyUgx)
@@ -121,7 +133,9 @@ function rowToSaleLine(row: Record<string, unknown>): SaleLine {
   const unitPriceUgx = Math.max(0, Math.floor(Number(row.unit_price_ugx ?? 0)));
   const lineTotalUgx = Math.max(0, Math.floor(Number(row.line_total_ugx ?? 0)));
   const meta = (row.metadata ?? {}) as Record<string, unknown>;
-  return {
+  const line: SaleLine = {
+    id: row.id != null ? String(row.id) : undefined,
+    updatedAt: meta.updatedAt != null ? String(meta.updatedAt) : undefined,
     productId: String(row.product_id ?? ""),
     name: String(meta.name ?? "Item"),
     inputMode,
@@ -132,20 +146,30 @@ function rowToSaleLine(row: Record<string, unknown>): SaleLine {
     estimatedProfitUgx: Math.max(0, Math.floor(Number(meta.estimatedProfitUgx ?? lineTotalUgx))),
     moneyAmountUgx: row.money_amount_ugx != null ? Math.floor(Number(row.money_amount_ugx)) : null,
   };
+  return ensureSaleLineId(line);
 }
 
 function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null {
   const id = String(row.id ?? "");
   if (!isUuid(id)) return null;
-  const status = String(row.status ?? "completed");
-  if (status === "void" || status === "refunded") return null;
+  const dbStatus = String(row.status ?? "completed");
+  if (dbStatus === "void" || dbStatus === "refunded") return null;
+  let status: import("../types").SaleStatus = "completed";
+  if (dbStatus === "draft") status = "pending";
+  else if (dbStatus === "cancelled") status = "cancelled";
+  const updatedAt = String(row.updated_at ?? row.completed_at ?? row.created_at ?? new Date().toISOString());
   return {
     id,
+    status,
+    referenceLabel: row.reference_label != null ? String(row.reference_label) : null,
+    tableSessionId: row.table_session_id != null ? String(row.table_session_id) : null,
+    updatedAt,
     lines,
     subtotalUgx: Math.max(0, Math.floor(Number(row.subtotal_ugx ?? row.total_ugx ?? 0))),
     totalUgx: Math.max(0, Math.floor(Number(row.total_ugx ?? 0))),
-    cashPaidUgx: Math.max(0, Math.floor(Number(row.cash_amount_ugx ?? 0))),
-    debtUgx: Math.max(0, Math.floor(Number(row.debt_amount_ugx ?? 0))),
+    cashPaidUgx: status === "completed" ? Math.max(0, Math.floor(Number(row.cash_amount_ugx ?? 0))) : 0,
+    debtUgx: status === "completed" ? Math.max(0, Math.floor(Number(row.debt_amount_ugx ?? 0))) : 0,
+    discountTotalUgx: Math.max(0, Math.floor(Number(row.discount_ugx ?? 0))),
     estimatedProfitUgx: Math.max(0, Math.floor(Number((row.metadata as Record<string, unknown>)?.estimatedProfitUgx ?? 0))),
     createdAt: String(row.completed_at ?? row.created_at ?? new Date().toISOString()),
     pendingSync: false,
@@ -245,6 +269,145 @@ export async function pushProductToCloud(product: Product, ctx: ShopCtx, deleted
   return !error;
 }
 
+export async function pushProductStockToCloud(
+  productId: string,
+  ctx: ShopCtx,
+  opts: {
+    delta: number;
+    note?: string;
+    baseUpdatedAt?: string | null;
+    baseStockOnHand?: number;
+    attempt?: number;
+  },
+): Promise<boolean> {
+  if (!supabase || !isUuid(productId)) return false;
+
+  const attempt = opts.attempt ?? 0;
+  const { data, error } = await supabase.rpc("shop_push_product_stock", {
+    p_shop_id: ctx.shopId,
+    p_payload: {
+      product_id: productId,
+      delta: opts.delta,
+      note: opts.note ?? "",
+      base_updated_at: opts.baseUpdatedAt ?? null,
+      base_stock_on_hand: opts.baseStockOnHand ?? null,
+    },
+  });
+
+  if (error) {
+    reportSyncIssue("product_stock_rpc_failed", { productId, code: error.code ?? "unknown" });
+    return false;
+  }
+
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    server_stock_on_hand?: number;
+    server_updated_at?: string;
+    stock_on_hand?: number;
+    updated_at?: string;
+  } | null;
+
+  if (!result?.ok) {
+    if (result?.error === "stale_version" && attempt < 3) {
+      const serverStock = Number(result.server_stock_on_hand ?? 0);
+      const serverUpdatedAt = String(result.server_updated_at ?? new Date().toISOString());
+      const local = usePosStore.getState().products.find((p) => p.id === productId);
+      if (local) {
+        usePosStore.setState((s) => ({
+          products: s.products.map((p) =>
+            p.id === productId
+              ? { ...p, stockOnHand: serverStock, updatedAt: serverUpdatedAt, version: p.version + 1 }
+              : p,
+          ),
+        }));
+      }
+      const refreshed = usePosStore.getState().products.find((p) => p.id === productId);
+      return pushProductStockToCloud(productId, ctx, {
+        ...opts,
+        baseUpdatedAt: serverUpdatedAt,
+        baseStockOnHand: refreshed?.stockOnHand ?? serverStock,
+        attempt: attempt + 1,
+      });
+    }
+    reportSyncIssue("product_stock_push_failed", { productId, error: result?.error ?? "unknown" });
+    return false;
+  }
+
+  const serverStock = Number(result.stock_on_hand ?? 0);
+  const serverUpdatedAt = String(result.updated_at ?? new Date().toISOString());
+  usePosStore.setState((s) => ({
+    products: s.products.map((p) =>
+      p.id === productId
+        ? { ...p, stockOnHand: serverStock, updatedAt: serverUpdatedAt, version: p.version + 1 }
+        : p,
+    ),
+  }));
+  return true;
+}
+
+export async function pushDebtPaymentToCloud(
+  paymentId: string,
+  ctx: ShopCtx,
+  attempt = 0,
+): Promise<boolean> {
+  if (!supabase || !isUuid(paymentId)) return false;
+
+  const state = usePosStore.getState();
+  const payment = state.debtPayments.find((p) => p.id === paymentId);
+  if (!payment) return true;
+
+  const customer = state.customers.find((c) => c.id === payment.customerId);
+  if (!customer || !isUuid(customer.id)) return true;
+
+  const expectedBalance = customer.debtBalanceUgx + payment.amountUgx;
+
+  const { data, error } = await supabase.rpc("shop_push_debt_payment", {
+    p_shop_id: ctx.shopId,
+    p_payload: {
+      payment_id: payment.id,
+      customer_id: payment.customerId,
+      amount_ugx: payment.amountUgx,
+      created_at: payment.createdAt,
+      expected_balance_ugx: expectedBalance,
+    },
+  });
+
+  if (error) {
+    reportSyncIssue("debt_payment_rpc_failed", { paymentId, code: error.code ?? "unknown" });
+    return false;
+  }
+
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    server_balance_ugx?: number;
+    new_balance_ugx?: number;
+  } | null;
+
+  if (!result?.ok) {
+    if (result?.error === "stale_balance" && attempt < 2) {
+      const serverBalance = Number(result.server_balance_ugx ?? customer.debtBalanceUgx);
+      usePosStore.setState((s) => ({
+        customers: s.customers.map((c) =>
+          c.id === payment.customerId ? { ...c, debtBalanceUgx: serverBalance, version: c.version + 1 } : c,
+        ),
+      }));
+      return pushDebtPaymentToCloud(paymentId, ctx, attempt + 1);
+    }
+    reportSyncIssue("debt_payment_push_failed", { paymentId, error: result?.error ?? "unknown" });
+    return false;
+  }
+
+  const newBalance = Number(result.new_balance_ugx ?? customer.debtBalanceUgx);
+  usePosStore.setState((s) => ({
+    customers: s.customers.map((c) =>
+      c.id === payment.customerId ? { ...c, debtBalanceUgx: newBalance, version: c.version + 1 } : c,
+    ),
+  }));
+  return true;
+}
+
 export async function pushCustomerToCloud(customer: Customer, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(customer.id)) return false;
   const { error } = await supabase.from("customers").upsert(customerToRow(customer, ctx.shopId), { onConflict: "id" });
@@ -340,10 +503,227 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
   };
 }
 
+function buildPendingSalePushPayload(
+  sale: Sale,
+  ctx: ShopCtx,
+  opts?: { baseUpdatedAt?: string | null; deletedLineIds?: string[] },
+) {
+  const activeLines = sale.lines.filter((line) => !line.voided).map(ensureSaleLineId);
+  const now = new Date().toISOString();
+  return {
+    base_updated_at: opts?.baseUpdatedAt ?? null,
+    deleted_line_ids: opts?.deletedLineIds ?? [],
+    sale: {
+      id: sale.id,
+      customer_id: sale.customerId && isUuid(sale.customerId) ? sale.customerId : null,
+      subtotal_ugx: sale.subtotalUgx,
+      tax_ugx: 0,
+      discount_ugx: sale.discountTotalUgx ?? 0,
+      total_ugx: sale.totalUgx,
+      reference_label: sale.referenceLabel ?? null,
+      table_session_id: sale.tableSessionId && isUuid(sale.tableSessionId) ? sale.tableSessionId : null,
+      created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
+      created_at: sale.createdAt,
+      updated_at: sale.updatedAt ?? sale.createdAt,
+      metadata: { estimatedProfitUgx: sale.estimatedProfitUgx, wakaClient: true, hospitality: true },
+    },
+    lines: activeLines.map((line, idx) => ({
+      id: line.id,
+      product_id: line.productId,
+      quantity: line.quantity,
+      unit_price_ugx: line.unitPriceUgx,
+      line_discount_ugx: line.discountUgx ?? 0,
+      line_total_ugx: line.lineTotalUgx,
+      line_input_mode: line.inputMode,
+      money_amount_ugx: line.moneyAmountUgx ?? null,
+      metadata: {
+        name: line.name,
+        unitCostUgx: line.unitCostUgx,
+        estimatedProfitUgx: line.estimatedProfitUgx,
+        updatedAt: line.updatedAt ?? now,
+        lineIndex: idx,
+      },
+    })),
+  };
+}
+
+function parseServerPendingLines(raw: unknown): SaleLine[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((row) => rowToSaleLine(row as Record<string, unknown>));
+}
+
+function applyMergedPendingSaleToStore(merged: Sale): void {
+  usePosStore.setState((s) => ({
+    sales: [merged, ...s.sales.filter((x) => x.id !== merged.id)],
+  }));
+}
+
+export async function refreshPendingSaleFromCloud(saleId: string, ctx?: ShopCtx): Promise<Sale | null> {
+  if (!supabase || !isUuid(saleId)) return null;
+  const shopCtx = ctx ?? (await resolveShopCtx());
+  if (!shopCtx) return null;
+
+  const { data, error } = await supabase
+    .from("sales")
+    .select("*, sale_line_items(*)")
+    .eq("id", saleId)
+    .eq("shop_id", shopCtx.shopId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const raw = data as Record<string, unknown>;
+  const status = String(raw.status ?? "");
+  if (status !== "draft") return null;
+
+  const items = (raw.sale_line_items as Record<string, unknown>[] | null) ?? [];
+  const lines = items.map((ln) => rowToSaleLine(ln));
+  const remote = rowToSale(raw, lines);
+  if (!remote || remote.status !== "pending") return null;
+
+  const state = usePosStore.getState();
+  const local = state.sales.find((s) => s.id === saleId);
+  const merged = local ? mergePendingSalePair(local, remote) : remote;
+  applyMergedPendingSaleToStore(merged);
+
+  const activeSessionId = state.preferences.activeTableSessionId;
+  const session = state.preferences.hospitalityFloor?.sessions.find((s) => s.id === activeSessionId);
+  if (session?.saleId === saleId && state.activePendingSaleId === saleId) {
+    usePosStore.setState({ draftLines: merged.lines.map((l) => ({ ...l })) });
+  }
+  return merged;
+}
+
+export async function refreshOpenPendingSalesFromCloud(ctx?: ShopCtx): Promise<void> {
+  const shopCtx = ctx ?? (await resolveShopCtx());
+  if (!shopCtx || !getDeviceOnline()) return;
+  const floor = usePosStore.getState().preferences.hospitalityFloor;
+  if (!floor) return;
+  const saleIds = [
+    ...new Set(
+      floor.sessions
+        .filter((s) => s.status === "open" || s.status === "payment_pending")
+        .map((s) => s.saleId)
+        .filter(isUuid),
+    ),
+  ];
+  for (const saleId of saleIds) {
+    await refreshPendingSaleFromCloud(saleId, shopCtx);
+  }
+}
+
+export async function pushPendingSaleToCloud(
+  sale: Sale,
+  ctx: ShopCtx,
+  opts?: { baseUpdatedAt?: string | null; deletedLineIds?: string[]; attempt?: number },
+): Promise<boolean> {
+  if (!supabase || !isUuid(sale.id)) {
+    markSaleSyncState(sale.id, false, "invalid_sale_id");
+    return false;
+  }
+  if (!isPendingSale(sale)) {
+    return pushSaleToCloud(sale, ctx);
+  }
+
+  const attempt = opts?.attempt ?? 0;
+  const payload = buildPendingSalePushPayload(sale, ctx, {
+    baseUpdatedAt: opts?.baseUpdatedAt ?? null,
+    deletedLineIds: opts?.deletedLineIds,
+  });
+  const { data, error } = await supabase.rpc("shop_push_pending_sale", {
+    p_shop_id: ctx.shopId,
+    p_payload: payload,
+  });
+
+  if (error) {
+    markSaleSyncState(sale.id, false, error.code ?? "pending_sale_rpc_failed");
+    reportSyncIssue("pending_sale_rpc_failed", { saleId: sale.id, code: error.code ?? "unknown" });
+    return false;
+  }
+
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    server_updated_at?: string;
+    updated_at?: string;
+    lines?: unknown;
+  } | null;
+
+  if (!result?.ok) {
+    if (result?.error === "stale_version" && attempt < 3) {
+      const serverLines = parseServerPendingLines(result.lines);
+      const serverUpdatedAt = String(result.server_updated_at ?? new Date().toISOString());
+      const serverSale: Sale = {
+        ...sale,
+        lines: serverLines,
+        updatedAt: serverUpdatedAt,
+        status: "pending",
+      };
+      const merged = mergePendingSales(serverSale, sale);
+      applyMergedPendingSaleToStore(merged);
+      return pushPendingSaleToCloud(merged, ctx, {
+        baseUpdatedAt: serverUpdatedAt,
+        deletedLineIds: [],
+        attempt: attempt + 1,
+      });
+    }
+    markSaleSyncState(sale.id, false, result?.error ?? "pending_sale_rejected");
+    reportSyncIssue("pending_sale_rejected", { saleId: sale.id, error: result?.error ?? "unknown" });
+    return false;
+  }
+
+  const serverUpdatedAt = result.updated_at ? String(result.updated_at) : sale.updatedAt;
+  if (serverUpdatedAt) {
+    usePosStore.setState((s) => ({
+      sales: s.sales.map((x) =>
+        x.id === sale.id ? { ...x, updatedAt: serverUpdatedAt, pendingSync: false, lastSyncError: null } : x,
+      ),
+    }));
+  } else {
+    markSaleSyncState(sale.id, true, null);
+  }
+  return true;
+}
+
+export async function pushCancelPendingSaleToCloud(saleId: string, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase || !isUuid(saleId)) return false;
+  const { data, error } = await supabase.rpc("shop_cancel_pending_sale", {
+    p_shop_id: ctx.shopId,
+    p_sale_id: saleId,
+  });
+  if (error) {
+    markSaleSyncState(saleId, false, error.code ?? "cancel_pending_failed");
+    return false;
+  }
+  const result = data as { ok?: boolean; error?: string } | null;
+  if (!result?.ok) {
+    markSaleSyncState(saleId, false, result?.error ?? "cancel_pending_rejected");
+    return false;
+  }
+  markSaleSyncState(saleId, true, null);
+  return true;
+}
+
+/** Route draft vs completed sales to the correct cloud RPC. */
+export async function pushSaleRowToCloud(
+  sale: Sale,
+  ctx: ShopCtx,
+  opts?: { baseUpdatedAt?: string | null; deletedLineIds?: string[] },
+): Promise<boolean> {
+  if (isPendingSale(sale)) return pushPendingSaleToCloud(sale, ctx, opts);
+  if (saleStatusOf(sale) === "cancelled") return pushCancelPendingSaleToCloud(sale.id, ctx);
+  return pushSaleToCloud(sale, ctx);
+}
+
 export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(sale.id)) {
     markSaleSyncState(sale.id, false, "invalid_sale_id");
     return false;
+  }
+  if (isPendingSale(sale)) {
+    return pushPendingSaleToCloud(sale, ctx);
+  }
+  if (saleStatusOf(sale) === "cancelled") {
+    return pushCancelPendingSaleToCloud(sale.id, ctx);
   }
 
   const payload = buildSalePushPayload(sale, ctx);
@@ -504,7 +884,7 @@ export async function syncSaleImmediately(saleId: string): Promise<boolean> {
   if (!sale) return false;
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
-  return pushSaleToCloud(sale, ctx);
+  return pushSaleRowToCloud(sale, ctx);
 }
 
 export async function processCloudSyncOperation(op: SyncOperation): Promise<boolean> {
@@ -535,7 +915,29 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     }
     case "pending_stock_updates":
     case "stock_move": {
+      if (payload.kind === "purchase") {
+        const purchaseId = String(payload.purchaseId ?? "");
+        if (!purchaseId) return true;
+        const purchase = usePosStore.getState().purchases.find((p) => p.id === purchaseId);
+        if (!purchase) return true;
+        for (const ln of purchase.lines) {
+          const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
+          if (!product) continue;
+          const ok = await pushProductToCloud(product, ctx);
+          if (!ok) return false;
+        }
+        return true;
+      }
       const productId = String(payload.productId ?? payload.id ?? "");
+      const delta = Number(payload.delta ?? 0);
+      if (isUuid(productId) && delta !== 0 && payload.baseUpdatedAt !== undefined) {
+        return pushProductStockToCloud(productId, ctx, {
+          delta,
+          note: typeof payload.note === "string" ? payload.note : "",
+          baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
+          baseStockOnHand: typeof payload.baseStockOnHand === "number" ? payload.baseStockOnHand : undefined,
+        });
+      }
       const product = usePosStore.getState().products.find((p) => p.id === productId);
       if (!product) return true;
       return pushProductToCloud(product, ctx);
@@ -544,9 +946,17 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     case "sale": {
       if (payload.kind === "day_close") return true;
       const saleId = String(payload.saleId ?? "");
+      if (payload.kind === "pending_cancel") {
+        return pushCancelPendingSaleToCloud(saleId, ctx);
+      }
       const sale = await resolveSaleForSync(saleId);
       if (!sale) return false;
-      return pushSaleToCloud(sale, ctx);
+      return pushSaleRowToCloud(sale, ctx, {
+        baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
+        deletedLineIds: Array.isArray(payload.deletedLineIds)
+          ? payload.deletedLineIds.filter((id): id is string => typeof id === "string")
+          : undefined,
+      });
     }
     case "pending_returns": {
       const returnId = String(payload.returnId ?? "");
@@ -555,7 +965,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (row.saleId) {
         const sale = await resolveSaleForSync(row.saleId);
         if (sale) {
-          const synced = await pushSaleToCloud(sale, ctx);
+          const synced = await pushSaleRowToCloud(sale, ctx);
           if (!synced) return false;
         }
       }
@@ -585,10 +995,19 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       return ok;
     }
     case "customer": {
+      if (payload.kind === "debt_payment") {
+        const paymentId = String(payload.paymentId ?? "");
+        if (!paymentId) return true;
+        return pushDebtPaymentToCloud(paymentId, ctx);
+      }
       const customerId = String(payload.id ?? "");
       const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
       if (!customer) return true;
       return pushCustomerToCloud(customer, ctx);
+    }
+    case "pending_hospitality": {
+      const { processHospitalitySyncOperation } = await import("./hospitalityCloudSync");
+      return processHospitalitySyncOperation(payload);
     }
     default:
       return true;
@@ -1118,9 +1537,15 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
   ).filter((p) => !deletedProductSet.has(p.id));
 
   const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) => newer(a, b));
-  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (a, b) =>
-    newer({ ...a, updatedAt: a.createdAt }, { ...b, updatedAt: b.createdAt }),
-  );
+  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) => {
+    if (local.status === "pending" && remote.status === "pending") {
+      return mergePendingSalePair(local, remote);
+    }
+    return newer(
+      { ...local, updatedAt: local.updatedAt ?? local.createdAt },
+      { ...remote, updatedAt: remote.updatedAt ?? remote.createdAt },
+    );
+  });
   const sales = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
   const mergedCashExpenses =
@@ -1196,7 +1621,7 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
 
   for (const s of sales) {
     if (!s.pendingSync) continue;
-    if (await pushSaleToCloud(s, ctx)) ok += 1;
+    if (await pushSaleRowToCloud(s, ctx)) ok += 1;
     else fail += 1;
   }
 
@@ -1248,6 +1673,10 @@ export async function syncShopWithCloud(opts?: {
   const doPull =
     opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();
   const pulled = doPull ? await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull }) : false;
+  const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
+  if (getDeviceOnline()) {
+    await pullHospitalityStateFromCloud(opts?.forceFull === true);
+  }
   const { push, queueFailed } = await pushShopPendingToCloud();
   if (getDeviceOnline() && push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
@@ -1265,7 +1694,7 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   if (shouldPausePosBackgroundWork()) return;
   if (backgroundSyncTimer != null) return;
   const delay = opts?.delayMs ?? 0;
-  backgroundSyncTimer = window.setTimeout(() => {
+  backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
     void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
   }, delay);
@@ -1273,4 +1702,16 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
 
 export function countUnsyncedSales(): number {
   return usePosStore.getState().sales.filter((s) => s.pendingSync).length;
+}
+
+export function countSalesWithSyncErrors(): number {
+  return usePosStore.getState().sales.filter((s) => s.lastSyncError).length;
+}
+
+export function listSalesWithSyncErrors(limit = 5): Array<{ id: string; error: string; createdAt: string }> {
+  return usePosStore
+    .getState()
+    .sales.filter((s) => s.lastSyncError)
+    .slice(0, limit)
+    .map((s) => ({ id: s.id, error: s.lastSyncError ?? "unknown", createdAt: s.createdAt }));
 }

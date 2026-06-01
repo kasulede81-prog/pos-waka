@@ -1,4 +1,4 @@
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -57,9 +57,6 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
             </option>
           ))}
         </select>
-        <Link to="/office/hardware" className="mt-3 inline-block text-sm font-bold text-waka-800 underline">
-          {t(lang, "receiptPrintHardwareLink")} →
-        </Link>
       </article>
     </div>
   );

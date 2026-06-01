@@ -3,7 +3,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { useOfflineStatus } from "../hooks/useOfflineStatus";
-import { countUnsyncedSales } from "../offline/cloudSync";
+import { countSalesWithSyncErrors, countUnsyncedSales, listSalesWithSyncErrors } from "../offline/cloudSync";
 import { tTemplate } from "../lib/i18n";
 
 type Props = { lang: Language; variant?: "full" | "simple" };
@@ -30,7 +30,9 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
   const simple = variant === "simple";
 
   const unsyncedSales = countUnsyncedSales();
-  const needsAttention = isOnline && (h.lastIssueCode === "error" || (h.lastIssueCode === "partial" && sync.pendingCount > 5));
+  const syncErrorCount = countSalesWithSyncErrors();
+  const syncErrors = listSalesWithSyncErrors(6);
+  const needsAttention = isOnline && (h.lastIssueCode === "error" || (h.lastIssueCode === "partial" && sync.pendingCount > 5) || syncErrorCount > 0);
 
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
@@ -86,7 +88,38 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
           <dt className="font-semibold text-stone-600">{t(lang, "backupSyncLastUpload")}</dt>
           <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>
         </div>
+        {!simple ? (
+          <>
+            <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
+              <dt className="font-semibold text-stone-600">{t(lang, "syncLastSuccess")}</dt>
+              <dd className="text-right font-medium text-stone-800">{fmtShort(h.lastSuccessAt, lang)}</dd>
+            </div>
+            {h.lastIssueCode !== "none" ? (
+              <div className="flex justify-between gap-2 rounded-xl bg-amber-50 px-3 py-2">
+                <dt className="font-semibold text-amber-900">{t(lang, "syncLastIssue")}</dt>
+                <dd className="text-right font-black text-amber-950">{h.lastIssueCode}</dd>
+              </div>
+            ) : null}
+            <div className="flex justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2">
+              <dt className="font-semibold text-stone-600">{t(lang, "syncFailedCount")}</dt>
+              <dd className="font-black text-stone-900">{syncErrorCount}</dd>
+            </div>
+          </>
+        ) : null}
       </dl>
+
+      {!simple && syncErrors.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+          <p className="text-xs font-black uppercase text-rose-900">{t(lang, "syncAffectedRecords")}</p>
+          <ul className="mt-1 space-y-0.5 text-xs font-medium text-rose-800">
+            {syncErrors.map((e) => (
+              <li key={e.id} className="truncate">
+                {e.error} · sale {e.id.slice(0, 8)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {msg ? <p className="mt-2 text-sm font-semibold text-waka-800">{msg}</p> : null}
 

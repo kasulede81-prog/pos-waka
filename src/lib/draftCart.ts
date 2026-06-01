@@ -1,4 +1,5 @@
 import type { Product, SaleLine } from "../types";
+import { ensureSaleLineId } from "./pendingSaleMerge";
 import { lineDiscountUgx, listPriceForLine } from "./saleAdjustments";
 import {
   baseUnitsPerBuyingUnit,
@@ -89,7 +90,12 @@ export function rebuildDraftLineQuantity(
 ): SaleLine | null {
   const built = buildSaleLine(product, "quantity", quantity);
   if (!built.line) return null;
-  const line = built.line;
+  const now = new Date().toISOString();
+  const line = {
+    ...built.line,
+    id: prior?.id ?? built.line.id ?? crypto.randomUUID(),
+    updatedAt: now,
+  };
   if (!prior || lineDiscountUgx(prior) <= 0) return line;
 
   const oldList = listPriceForLine(prior);
@@ -114,9 +120,9 @@ export function mergeDraftSaleLine(
   incoming: SaleLine,
   product: Product,
 ): SaleLine {
-  if (!existing) return incoming;
+  if (!existing) return ensureSaleLineId(incoming);
   const totalQty = existing.quantity + incoming.quantity;
-  return rebuildDraftLineQuantity(product, totalQty, existing) ?? incoming;
+  return rebuildDraftLineQuantity(product, totalQty, existing) ?? ensureSaleLineId(incoming);
 }
 
 /** +/- on cart lines always moves by one base unit (1 bottle, 1 kg, …). Use presets or qty popup for crates/sacks. */

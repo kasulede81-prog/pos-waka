@@ -5,6 +5,8 @@ import { runWhenIdle } from "./uiYield";
 import { hasSupabaseConfig } from "./supabase";
 import { usePosStore } from "../store/usePosStore";
 import { isLocalShopDataEmpty, restoreShopFromCloudSnapshot, uploadShopCloudSnapshot } from "./cloudSnapshotSync";
+import { captureAppException } from "./crashReporting";
+import { reportSyncIssue } from "./monitoring";
 
 const HYDRATE_COOLDOWN_MS = 120_000;
 const HYDRATE_FORCE_COOLDOWN_MS = 30_000;
@@ -89,7 +91,10 @@ export async function hydrateAccountFromCloud(opts?: {
   if (hydrateInFlight) return hydrateInFlight;
 
   hydrateInFlight = runHydrateAccountFromCloud(opts)
-    .catch(() => undefined)
+    .catch((err) => {
+      captureAppException(err, { scope: "cloud_hydrate" });
+      reportSyncIssue("cloud_hydrate_failed");
+    })
     .finally(() => {
       lastHydrateFinishedAt = Date.now();
       hydrateInFlight = null;

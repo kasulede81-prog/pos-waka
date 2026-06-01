@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import {
   applyRestoredSnapshotFromBackup,
   cancelBackupRestoreInProgress,
@@ -24,6 +24,10 @@ import {
 } from "../lib/backupRestoreSession";
 import { yieldUiTick } from "../lib/uiYield";
 import type { PersistedSnapshot } from "../offline/localDb";
+import { useSyncStatus } from "../hooks/useSyncStatus";
+import { assessRestoreRisk, confirmRestoreWithSafetyChecks } from "../lib/restoreSafety";
+import { appendPilotEvent } from "../lib/pilotEventLog";
+import { captureAppException } from "../lib/crashReporting";
 
 type Props = { lang: Language; compact?: boolean; /** When false, show upgrade hint instead of backup actions. */ actionsEnabled?: boolean };
 
@@ -92,6 +96,7 @@ function RestoreProgressOverlay({
 }
 
 export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Props) {
+  const sync = useSyncStatus();
   const [meta, setMeta] = useState<Array<{ id: string; kind: string; createdAt: string; dateKey?: string }>>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -154,11 +159,13 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
       setRestorePhase("saving");
       await yieldUiTick();
       await persistRestoredSnapshotToDisk(sessionId);
+      appendPilotEvent("restore", "Backup restore completed");
       setMsg(t(lang, "backupRestoreOk"));
     } catch (err) {
       if ((err as Error).message === "backup_restore_aborted") {
         setMsg(t(lang, "backupImportCancelled"));
       } else {
+        captureAppException(err, { scope: "backup_restore" });
         throw err;
       }
     }
@@ -195,7 +202,8 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
   };
 
   const restoreFromId = async (id: string) => {
-    if (!window.confirm(t(lang, "backupRestoreConfirm"))) return;
+    const risk = assessRestoreRisk(sync.pendingCount);
+    if (!confirmRestoreWithSafetyChecks(lang, risk, t, tTemplate)) return;
     setBusy(true);
     setMsg(null);
     try {
@@ -228,7 +236,8 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
       return;
     }
 
-    if (!window.confirm(t(lang, "backupRestoreConfirm"))) return;
+    const risk = assessRestoreRisk(sync.pendingCount);
+    if (!confirmRestoreWithSafetyChecks(lang, risk, t, tTemplate)) return;
 
     const sessionId = beginBackupRestoreSession();
     restoreSessionRef.current = sessionId;

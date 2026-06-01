@@ -34,14 +34,17 @@ export function parseRoleFromUserMetadata(meta: Record<string, unknown> | undefi
 export function resolveAuthRole(params: {
   mode: "supabase" | "local";
   userMetadata: Record<string, unknown> | undefined;
+  /** Authoritative when present — from `shop_members` on the primary shop. */
+  shopMemberRole?: UserRole | null;
 }): UserRole {
   if (params.mode === "local") return "owner";
+  if (params.shopMemberRole) return params.shopMemberRole;
   const parsed = parseRoleFromUserMetadata(params.userMetadata);
   return parsed ?? "owner";
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 9;
+const PERM_MATRIX_VERSION = 10;
 
 const HOSPITALITY_OWNER: Permission[] = [
   "hospitality.floor",
@@ -94,6 +97,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "products.add",
     "products.edit_presets",
     "customers.view",
+    "customers.debt",
     "day.close",
     "reports.view",
     "reports.profit",
@@ -145,6 +149,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "products.add",
     "products.edit_presets",
     "customers.view",
+    "customers.debt",
     "day.close",
     "reports.view",
     "reports.profit",

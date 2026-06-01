@@ -1,4 +1,5 @@
 import type { Product } from "../types";
+import { medicineSearchHaystack } from "./pharmacyMedicine";
 
 /** Stored in preferences / filters for products with no category text. */
 export const UNCATEGORIZED_SENTINEL = "__waka_uncategorized__";
@@ -65,8 +66,8 @@ export function productMatchesSellSearch(p: Product, query: string, aliasTerms: 
 
   const cat = normalizeSpacing(p.category ?? "");
   const name = normalizeSpacing(p.name);
-  const hay = `${name} · ${cat} · ${normalizeSpacing(`${p.baseUnit}`)} · ${normalizeSpacing(p.sku)} · ${normalizeSpacing(p.buyingUnit ?? "")}`;
-  const hayLoose = looseTokenForm(`${p.name} ${p.category ?? ""} ${p.baseUnit} ${p.sku} ${p.buyingUnit ?? ""}`);
+  const hay = `${name} · ${cat} · ${normalizeSpacing(`${p.baseUnit}`)} · ${normalizeSpacing(p.sku)} · ${normalizeSpacing(p.buyingUnit ?? "")} · ${normalizeSpacing(p.medicineStrength ?? "")} · ${normalizeSpacing(p.medicineForm ?? "")}`;
+  const hayLoose = looseTokenForm(medicineSearchHaystack(p));
 
   if (hay.includes(q) || hayLoose.includes(qLoose) || cat.includes(q) || looseTokenForm(cat).includes(qLoose)) return true;
 

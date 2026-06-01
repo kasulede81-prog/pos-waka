@@ -8,7 +8,7 @@ import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { computeDraftCheckoutTotals } from "../lib/draftCart";
-import { formatUgxShort } from "../lib/hospitality";
+import { formatUgxShort, isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
 import {
   CATEGORY_FILTER_ALL,
   distinctTrimmedCategories,
@@ -28,6 +28,8 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const saveTableBill = usePosStore((s) => s.saveTableBill);
+  const fireTableKitchenTickets = usePosStore((s) => s.fireTableKitchenTickets);
+  const manualKitchenFire = usePosStore((s) => s.preferences.hospitalityManualKitchenFire === true);
   const requestTableBill = usePosStore((s) => s.requestTableBill);
   const resumeTableSession = usePosStore((s) => s.resumeTableSession);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
@@ -37,13 +39,12 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const transferTableSession = usePosStore((s) => s.transferTableSession);
   const mergeTableSessions = usePosStore((s) => s.mergeTableSessions);
 
-  const { products, draftLines, draftCartDiscountUgx, floor, activePendingSaleId } = usePosStore(
+  const { products, draftLines, draftCartDiscountUgx, floor } = usePosStore(
     useShallow((s) => ({
       products: s.products,
       draftLines: s.draftLines,
       draftCartDiscountUgx: s.draftCartDiscountUgx,
       floor: s.preferences.hospitalityFloor,
-      activePendingSaleId: s.activePendingSaleId,
     })),
   );
 
@@ -56,14 +57,21 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const [tableAction, setTableAction] = useState<"transfer" | "merge" | null>(null);
 
   const session = floor?.sessions.find((s) => s.id === sessionId);
-  const table = session ? floor?.tables.find((tbl) => tbl.id === session.tableId) : undefined;
+  const isNamedTab = session ? isNamedTabSession(session) : false;
+  const table = session && !isNamedTab ? floor?.tables.find((tbl) => tbl.id === session.tableId) : undefined;
   const area = table ? floor?.areas.find((a) => a.id === table.areaId) : undefined;
 
   useEffect(() => {
     if (!sessionId) return;
-    if (activePendingSaleId && floor?.sessions.find((s) => s.id === sessionId)?.saleId === activePendingSaleId) return;
-    resumeTableSession(sessionId);
-  }, [sessionId, activePendingSaleId, floor, resumeTableSession]);
+    let cancelled = false;
+    void (async () => {
+      if (cancelled) return;
+      await resumeTableSession(sessionId);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, resumeTableSession]);
 
   const categories = useMemo(() => distinctTrimmedCategories(products), [products]);
   const filteredProducts = useMemo(() => {
@@ -88,12 +96,15 @@ export function TableOrderPage({ lang }: { lang: Language }) {
     [setDraftInput, addDraftLineFromInput, saveTableBill],
   );
 
-  if (!session || !table) {
+  if (!session || (!isNamedTab && !table)) {
     return <Navigate to="/floor" replace />;
   }
 
   const canSettle = hasPermission(actor.role, "hospitality.settle");
-  const canTransfer = hasPermission(actor.role, "hospitality.transfer");
+  const canTransfer = hasPermission(actor.role, "hospitality.transfer") && !isNamedTab;
+  const orderTitle = isNamedTab
+    ? sessionDisplayLabel(session, floor!)
+    : `${table!.label}${area ? ` · ${area.name}` : ""}`;
 
   const handleSettle = (input: {
     paymentMethod: "cash" | "atm" | "mobile_money" | "mixed";
@@ -125,13 +136,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xl font-black text-stone-950">
-            {table.label}
-            {area ? ` · ${area.name}` : ""}
-          </h1>
+          <h1 className="truncate text-xl font-black text-stone-950">{orderTitle}</h1>
           <p className="text-sm font-medium text-stone-500">
             {session.guestCount} {t(lang, "tableOrderGuests")}
             {session.waiterLabel ? ` · ${session.waiterLabel}` : ""}
+            {isNamedTab ? ` · ${t(lang, "floorNamedTabsTitle")}` : ""}
           </p>
         </div>
       </div>
@@ -234,6 +243,15 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             </ul>
           ) : null}
           <div className="grid grid-cols-2 gap-2">
+            {manualKitchenFire ? (
+              <button
+                type="button"
+                onClick={() => fireTableKitchenTickets()}
+                className="col-span-2 min-h-12 rounded-xl border border-waka-300 bg-waka-50 text-sm font-black text-waka-900"
+              >
+                {t(lang, "tableSendKitchen")}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -277,7 +295,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           setSettleOpen(true);
         }}
       />
-      {floor && tableAction && sessionId ? (
+      {floor && tableAction && sessionId && !isNamedTab ? (
         <TableActionSheet
           lang={lang}
           open

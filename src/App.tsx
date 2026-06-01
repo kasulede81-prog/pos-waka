@@ -22,6 +22,7 @@ import { SettingsPinPage } from "./pages/SettingsPinPage";
 import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
+import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
 import { MonthlyReportsPage } from "./pages/MonthlyReportsPage";
 import { BackupSyncPage } from "./pages/BackupSyncPage";
@@ -49,12 +50,14 @@ import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
 import { SupportPage } from "./pages/SupportPage";
+import { PilotSupportCenterPage } from "./pages/PilotSupportCenterPage";
 import { LegalPolicyPage } from "./pages/LegalPolicyPage";
 import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { InternalAdminOutlet } from "./components/routing/InternalAdminOutlet";
 import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
 import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
+import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { NativeMarketingGuard } from "./components/NativeMarketingGuard";
 import { NativePublicGuard } from "./components/NativePublicGuard";
 import { unauthenticatedEntryPath } from "./lib/nativeApp";
@@ -236,6 +239,7 @@ function App() {
                   <Route path="internal/waka/admins" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/agents" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/activations" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/pilot" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
                 </Route>
                 <Route
@@ -250,7 +254,11 @@ function App() {
                     </PosDataProvider>
                   }
                 >
-                <Route path="onboarding" element={<ShopOnboardingPage lang={lang} setLang={setLang} onSignOut={auth.signOut} />} />
+                <Route path="onboarding" element={
+                  <RouteErrorBoundary scope="onboarding">
+                    <ShopOnboardingPage lang={lang} setLang={setLang} onSignOut={auth.signOut} />
+                  </RouteErrorBoundary>
+                } />
                 <Route
                   element={
                     <SyncStatusProvider>
@@ -279,15 +287,17 @@ function App() {
             <Route
               path="office"
               element={
-                <Suspense fallback={<LazyWait />}>
-                  <OfficeHubPage lang={lang} />
-                </Suspense>
+                <RoleProtectedRoute permission="back_office.access">
+                  <Suspense fallback={<LazyWait />}>
+                    <OfficeHubPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
               }
             />
             <Route
               path="office/profit"
               element={
-                <RoleProtectedRoute permission="back_office.access">
+                <RoleProtectedRoute permission="reports.profit">
                   <ProfitPage lang={lang} />
                 </RoleProtectedRoute>
               }
@@ -480,6 +490,14 @@ function App() {
               }
             />
             <Route
+              path="pilot-support"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <PilotSupportCenterPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="settings/shop"
               element={
                 <RoleProtectedRoute permission="settings.shop">
@@ -516,6 +534,14 @@ function App() {
                   <Suspense fallback={<LazyWait />}>
                     <SettingsFloorPage lang={lang} />
                   </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/pharmacy"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsPharmacyPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

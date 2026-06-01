@@ -2,8 +2,8 @@
 
 import type { Customer, Product, ReturnRecord, Sale, Supplier } from "../types";
 import { dateKeyKampala, dateKeyDaysAgoKampala, monthKeyKampala } from "./datesUg";
+import { getCompletedFinancials, isRevenueSale, revenueSales } from "./financialMetrics";
 import { computeTodayProfitBreakdown } from "./homeProfit";
-import { isCompletedSale } from "./saleStatus";
 import { isLowStock } from "./sellingEngine";
 
 export type ProductRank = {
@@ -84,7 +84,7 @@ function salesInRange(sales: Sale[], range: ReportRange): Sale[] {
   const weekCut = dateKeyDaysAgoKampala(6);
   const monthPrefix = today.slice(0, 7);
   return sales.filter((s) => {
-    if (!isCompletedSale(s)) return false;
+    if (!isRevenueSale(s)) return false;
     const k = dateKeyKampala(s.createdAt);
     if (range === "today") return k === today;
     if (range === "week") return k >= weekCut;
@@ -169,22 +169,17 @@ export function localGetDailySalesSummary(
   returns: ReturnRecord[],
   day = dateKeyKampala(new Date()),
 ): DailySalesSummary {
-  const filtered = sales.filter((s) => dateKeyKampala(s.createdAt) === day);
-  const filteredReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === day);
-  const productById = new Map(products.map((p) => [p.id, p]));
-  const breakdown = computeTodayProfitBreakdown(filtered, productById, filteredReturns);
-  const revenue = filtered.reduce((a, s) => a + s.totalUgx, 0);
-  const tx = filtered.length;
+  const fin = getCompletedFinancials(sales, returns, products, { day });
   return {
     day,
-    transactionCount: tx,
-    totalRevenueUgx: revenue,
-    cashCollectedUgx: filtered.reduce((a, s) => a + s.cashPaidUgx, 0),
-    debtIssuedUgx: filtered.reduce((a, s) => a + s.debtUgx, 0),
-    discountsUgx: filtered.reduce((a, s) => a + (s.discountTotalUgx ?? 0), 0),
+    transactionCount: fin.transactionCount,
+    totalRevenueUgx: fin.revenueUgx,
+    cashCollectedUgx: fin.cashCollectedUgx,
+    debtIssuedUgx: fin.debtIssuedUgx,
+    discountsUgx: fin.discountsUgx,
     taxesUgx: 0,
-    estimatedProfitUgx: breakdown.profitUgx,
-    averageTransactionUgx: tx > 0 ? Math.round(revenue / tx) : 0,
+    estimatedProfitUgx: fin.profitUgx,
+    averageTransactionUgx: fin.averageTransactionUgx,
   };
 }
 
@@ -195,7 +190,7 @@ export function localGetWeeklySalesSummary(
 ): WeeklySalesSummary {
   const endDay = dateKeyKampala(new Date());
   const startDay = dateKeyDaysAgoKampala(6);
-  const filtered = sales.filter((s) => {
+  const filtered = revenueSales(sales).filter((s) => {
     const k = dateKeyKampala(s.createdAt);
     return k >= startDay && k <= endDay;
   });
@@ -206,19 +201,21 @@ export function localGetWeeklySalesSummary(
   const keys: string[] = [];
   for (let i = 6; i >= 0; i--) keys.push(dateKeyDaysAgoKampala(i));
   const dailyTrend = keys.map((day) => {
-    const daySales = sales.filter((s) => dateKeyKampala(s.createdAt) === day);
+    const dayFin = getCompletedFinancials(sales, returns, products, { day });
     return {
       day,
-      revenueUgx: daySales.reduce((a, s) => a + s.totalUgx, 0),
-      transactionCount: daySales.length,
+      revenueUgx: dayFin.revenueUgx,
+      transactionCount: dayFin.transactionCount,
     };
   });
   const customerIds = new Set(filtered.map((s) => s.customerId).filter(Boolean));
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const breakdown = computeTodayProfitBreakdown(filtered, productById, filteredReturns);
   return {
     startDay,
     endDay,
     transactionCount: filtered.length,
-    totalRevenueUgx: filtered.reduce((a, s) => a + s.totalUgx, 0),
+    totalRevenueUgx: breakdown.salesUgx,
     cashCollectedUgx: filtered.reduce((a, s) => a + s.cashPaidUgx, 0),
     dailyTrend,
     topProducts: rankProducts(filtered, filteredReturns, products, "top", 10),
@@ -232,26 +229,21 @@ export function localGetMonthlySalesSummary(
   returns: ReturnRecord[],
   month = monthKeyKampala(new Date()),
 ): MonthlySalesSummary {
-  const filtered = sales.filter((s) => dateKeyKampala(s.createdAt).startsWith(month));
-  const filteredReturns = returns.filter((r) => dateKeyKampala(r.createdAt).startsWith(month));
-  const productById = new Map(products.map((p) => [p.id, p]));
-  const breakdown = computeTodayProfitBreakdown(filtered, productById, filteredReturns);
+  const fin = getCompletedFinancials(sales, returns, products, { monthKey: month });
   const prevParts = month.split("-").map(Number);
   const prevDate = new Date(prevParts[0] ?? 2020, (prevParts[1] ?? 1) - 2, 1);
   const prevMonth = monthKeyKampala(prevDate);
-  const prevRevenue = sales
-    .filter((s) => dateKeyKampala(s.createdAt).startsWith(prevMonth))
-    .reduce((a, s) => a + s.totalUgx, 0);
-  const revenue = filtered.reduce((a, s) => a + s.totalUgx, 0);
+  const prevRevenue = getCompletedFinancials(sales, returns, products, { monthKey: prevMonth }).revenueUgx;
+  const revenue = fin.revenueUgx;
   return {
     month,
-    transactionCount: filtered.length,
+    transactionCount: fin.transactionCount,
     totalRevenueUgx: revenue,
-    cashCollectedUgx: filtered.reduce((a, s) => a + s.cashPaidUgx, 0),
-    debtIssuedUgx: filtered.reduce((a, s) => a + s.debtUgx, 0),
-    estimatedProfitUgx: breakdown.profitUgx,
+    cashCollectedUgx: fin.cashCollectedUgx,
+    debtIssuedUgx: fin.debtIssuedUgx,
+    estimatedProfitUgx: fin.profitUgx,
     expensesUgx: 0,
-    netEarningsUgx: breakdown.profitUgx,
+    netEarningsUgx: fin.profitUgx,
     previousMonthRevenueUgx: prevRevenue,
     revenueGrowthPct: prevRevenue > 0 ? Math.round(((revenue - prevRevenue) / prevRevenue) * 1000) / 10 : null,
   };

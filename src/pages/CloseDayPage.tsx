@@ -5,7 +5,8 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import { dateKeyKampala } from "../lib/datesUg";
-import { scanTodaySalesHead } from "../lib/salesDayIndex";
+import { getDrawerCashForDay } from "../lib/cashReconciliation";
+import { getCompletedFinancials } from "../lib/financialMetrics";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
@@ -13,6 +14,10 @@ import { hasPermission } from "../lib/permissions";
 export function CloseDayPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const sales = useDeferredSales();
+  const products = usePosStore((s) => s.products);
+  const returnRecords = usePosStore((s) => s.returnRecords);
+  const debtPayments = usePosStore((s) => s.debtPayments);
+  const cashExpenses = usePosStore((s) => s.cashExpenses);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
   const recordDayClose = usePosStore((s) => s.recordDayClose);
@@ -22,12 +27,20 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const [doneMsg, setDoneMsg] = useState(false);
 
   const summary = useMemo(() => {
-    const daySales = scanTodaySalesHead(sales, todayKey).todaySales;
-    const cash = daySales.reduce((a, s) => a + s.cashPaidUgx, 0);
-    const debt = daySales.reduce((a, s) => a + s.debtUgx, 0);
-    const total = daySales.reduce((a, s) => a + s.totalUgx, 0);
-    return { daySales, cash, debt, total };
-  }, [sales, todayKey]);
+    const expenseUgx = cashExpenses
+      .filter((e) => !e.deletedAt && e.paidOn === todayKey)
+      .reduce((a, e) => a + e.amountUgx, 0);
+    const drawer = getDrawerCashForDay(sales, returnRecords, products, debtPayments, todayKey, expenseUgx);
+    const fin = getCompletedFinancials(sales, returnRecords, products, { day: todayKey });
+    return {
+      cash: drawer.cashFromSalesUgx,
+      debt: fin.debtIssuedUgx,
+      debtCollected: drawer.debtCollectedUgx,
+      expectedCash: drawer.expectedDrawerCashUgx,
+      total: fin.revenueUgx,
+      saleCount: fin.transactionCount,
+    };
+  }, [sales, returnRecords, products, debtPayments, cashExpenses, todayKey]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -83,9 +96,17 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             <p className="text-[11px] font-black uppercase text-amber-700">{t(lang, "closeSimpleCreditToday")}</p>
             <p className="mt-1 text-xl font-black text-amber-900">UGX {summary.debt.toLocaleString()}</p>
           </div>
-          <div className="rounded-2xl bg-waka-50 px-3 py-3">
+          <div className="rounded-2xl bg-teal-50 px-3 py-3">
+            <p className="text-[11px] font-black uppercase text-teal-800">{t(lang, "closeDebtCollectedToday")}</p>
+            <p className="mt-1 text-xl font-black text-teal-950">UGX {summary.debtCollected.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl bg-waka-50 px-3 py-3 col-span-2">
             <p className="text-[11px] font-black uppercase text-waka-800">{t(lang, "closeSalesCount")}</p>
-            <p className="mt-1 text-xl font-black text-waka-950">{summary.daySales.length}</p>
+            <p className="mt-1 text-xl font-black text-waka-950">{summary.saleCount}</p>
+          </div>
+          <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 col-span-2">
+            <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "shiftCloseExpected")}</p>
+            <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.expectedCash.toLocaleString()}</p>
           </div>
         </div>
       </section>
