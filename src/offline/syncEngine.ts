@@ -1,6 +1,7 @@
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation } from "../types";
+import { computeSyncBackoffMs, markSyncOpFailed, shouldRetrySyncOp } from "../lib/autoSync";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
 
@@ -8,6 +9,7 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
   const full: SyncOperation = {
     ...op,
     attempts: op.attempts ?? 0,
+    lastAttemptAt: op.lastAttemptAt ?? null,
   };
   await appendSyncOperation(full);
 }
@@ -15,7 +17,6 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
 /**
  * Best-effort remote push. When Supabase is not configured, ops are cleared so
  * the queue stays small. When configured but signed out, ops are retried later.
- * Wire real inserts (shop-scoped) when backend IDs are available in the client.
  */
 async function processOne(op: SyncOperation): Promise<boolean> {
   if (!hasSupabaseConfig || !supabase) return true;
@@ -33,12 +34,20 @@ async function processOne(op: SyncOperation): Promise<boolean> {
 export async function flushSyncQueue(onProgress?: (done: number, total: number) => void): Promise<{
   failed: number;
   remaining: number;
+  skippedBackoff: number;
 }> {
   const queue = (await readSyncQueue()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   let failed = 0;
+  let skippedBackoff = 0;
   const total = queue.length;
   let done = 0;
   for (const op of queue) {
+    if (!shouldRetrySyncOp(op)) {
+      skippedBackoff += 1;
+      done += 1;
+      onProgress?.(done, total);
+      continue;
+    }
     try {
       const ok = await processOne(op);
       if (ok) {
@@ -46,7 +55,7 @@ export async function flushSyncQueue(onProgress?: (done: number, total: number) 
       } else {
         failed += 1;
         if (op.attempts < 100) {
-          await appendSyncOperation({ ...op, attempts: op.attempts + 1 });
+          await appendSyncOperation(markSyncOpFailed(op));
         }
       }
     } catch {
@@ -54,7 +63,7 @@ export async function flushSyncQueue(onProgress?: (done: number, total: number) 
       reportSyncIssue("sync_flush_error", { kind: op.kind, attempts: op.attempts + 1 });
       if (op.attempts < 100) {
         try {
-          await appendSyncOperation({ ...op, attempts: op.attempts + 1 });
+          await appendSyncOperation(markSyncOpFailed(op));
         } catch {
           reportSyncIssue("sync_queue_corrupt", { kind: op.kind });
         }
@@ -64,5 +73,17 @@ export async function flushSyncQueue(onProgress?: (done: number, total: number) 
     onProgress?.(done, total);
   }
   const remaining = (await readSyncQueue()).length;
-  return { failed, remaining };
+  return { failed, remaining, skippedBackoff };
+}
+
+/** Next retry delay for the most-backed-off op (for diagnostics). */
+export function nextQueueRetryMs(queue: SyncOperation[], nowMs = Date.now()): number | null {
+  let minWait: number | null = null;
+  for (const op of queue) {
+    if (shouldRetrySyncOp(op, nowMs)) continue;
+    const last = op.lastAttemptAt ? new Date(op.lastAttemptAt).getTime() : nowMs;
+    const wait = computeSyncBackoffMs(op.attempts) - (nowMs - last);
+    if (wait > 0) minWait = minWait == null ? wait : Math.min(minWait, wait);
+  }
+  return minWait;
 }

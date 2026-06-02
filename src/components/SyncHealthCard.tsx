@@ -55,6 +55,12 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
       </p>
       {!isOnline ? <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "syncTrustKeepUsing")}</p> : null}
 
+      {h.queueHealth !== "healthy" && isOnline ? (
+        <p className="mt-2 text-xs font-semibold text-amber-900">
+          {h.queueHealth === "backing_off" ? t(lang, "autoSyncQueueBackoff") : t(lang, "autoSyncQueueDegraded")}
+        </p>
+      ) : null}
+
       {unsyncedSales > 0 ? (
         <div className="mt-2 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
           <p className="text-sm font-bold text-amber-950">
@@ -148,7 +154,7 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
         }}
         className="mt-3 w-full rounded-2xl bg-waka-600 py-3 text-sm font-black text-white disabled:opacity-50"
       >
-        {sync.syncing ? t(lang, "syncingShort") : t(lang, "backupSyncUploadNow")}
+        {sync.syncing ? t(lang, "syncingShort") : t(lang, "syncRetryNow")}
       </button>
 
       {!simple ? (

@@ -19,7 +19,7 @@ import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
-import { isHospitalityMode } from "../../lib/hospitality";
+import { isHospitalityMode, isKitchenEnabledForHospitality } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
@@ -85,6 +85,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       backOfficePin: s.preferences.backOfficePin,
       businessType: s.preferences.businessType,
       hospitalityModeEnabled: s.preferences.hospitalityModeEnabled,
+      hospitalityKitchenEnabled: s.preferences.hospitalityKitchenEnabled,
       pharmacyModeEnabled: s.preferences.pharmacyModeEnabled,
       pilotModeEnabled: s.preferences.pilotModeEnabled,
     })),
@@ -229,6 +230,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const hospitalityKitchenNav = hospitalityNav
+    && isKitchenEnabledForHospitality(preferences.businessType, preferences.hospitalityKitchenEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const wholesaleNav = isWholesaleMode(preferences.businessType);
   const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
@@ -239,7 +242,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       if (hasPermission(actor.role, "hospitality.floor")) {
         items.push({ path: "/floor", labelKey: "navFloor", Icon: LayoutGrid, perm: "hospitality.floor" });
       }
-      if (hasPermission(actor.role, "hospitality.kitchen")) {
+      if (hospitalityKitchenNav && hasPermission(actor.role, "hospitality.kitchen")) {
         items.push({ path: "/kitchen", labelKey: "navKitchen", Icon: ChefHat, perm: "hospitality.kitchen" });
       }
       if (hasPermission(actor.role, "stock.view")) {
@@ -276,21 +279,25 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
     }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
+  }, [actor.role, hospitalityNav, hospitalityKitchenNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
 
   const mobileNavDefs = useMemo(() => {
     const stockKeeperOnly =
       hasPermission(actor.role, "stock.view") && !hasPermission(actor.role, "back_office.access");
     const order = hospitalityNav
       ? stockKeeperOnly
-        ? (["/", "/floor", "/kitchen", "/stock", "/restock"] as const)
-        : (["/", "/floor", "/kitchen", "/stock", "/office"] as const)
+        ? hospitalityKitchenNav
+          ? (["/", "/floor", "/kitchen", "/stock", "/restock"] as const)
+          : (["/", "/floor", "/stock", "/restock"] as const)
+        : hospitalityKitchenNav
+          ? (["/", "/floor", "/kitchen", "/stock", "/office"] as const)
+          : (["/", "/floor", "/stock", "/office"] as const)
       : stockKeeperOnly
         ? (["/", "/stock", "/restock"] as const)
         : MOBILE_NAV_ORDER;
     const byPath = new Map(navDefs.map((item) => [item.path, item]));
     return order.map((path) => byPath.get(path)).filter((item): item is NavDef => Boolean(item));
-  }, [navDefs, hospitalityNav]);
+  }, [navDefs, hospitalityNav, hospitalityKitchenNav]);
 
   return (
     <SessionHydrationProvider roleReady={roleReady}>

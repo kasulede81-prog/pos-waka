@@ -106,6 +106,10 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
+      <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+        {t(lang, "staffDeviceLocalTrust")}
+      </p>
+
       {created ? (
         <section className="rounded-3xl border-2 border-emerald-100 bg-emerald-50/80 p-5 shadow-waka-sm">
           <p className="text-center text-2xl">✅</p>

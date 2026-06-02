@@ -150,7 +150,7 @@ export function useAuth() {
         backgroundSyncScheduledRef.current[uid] = true;
         scheduleBackgroundCloudSync({
           pull: false,
-          delayMs: isNativeApp() ? 18_000 : 6000,
+          delayMs: isNativeApp() ? 3_000 : 1_500,
         });
       }
       return;
@@ -173,7 +173,7 @@ export function useAuth() {
       } else {
         scheduleBackgroundCloudSync({
           pull: false,
-          delayMs: isNativeApp() ? 15_000 : 5000,
+          delayMs: isNativeApp() ? 2_500 : 1_200,
         });
       }
       return;

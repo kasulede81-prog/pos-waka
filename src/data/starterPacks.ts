@@ -145,6 +145,19 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
     { nameKey: "starterItem_soda", inferName: "soda", defaultPriceUgx: 1500, defaultStock: 36, sellingMode: "unit", baseUnit: "ea", category: "Soft drinks" },
   ];
 
+  const restaurantBar: StarterLine[] = [
+    { nameKey: "starterRestaurantBar_pilau", inferName: "pilau", defaultPriceUgx: 8000, defaultStock: 0, sellingMode: "unit", baseUnit: "ea", category: "Food" },
+    { nameKey: "starterRestaurantBar_rice", inferName: "rice", defaultPriceUgx: 3000, defaultStock: 0, sellingMode: "unit", baseUnit: "ea", category: "Food" },
+    { nameKey: "starterRestaurantBar_chicken", inferName: "chicken", defaultPriceUgx: 12000, defaultStock: 0, sellingMode: "unit", baseUnit: "ea", category: "Food" },
+    { nameKey: "starterRestaurantBar_chips", inferName: "chips", defaultPriceUgx: 5000, defaultStock: 0, sellingMode: "unit", baseUnit: "ea", category: "Food" },
+    { nameKey: "starterRestaurantBar_chapati", inferName: "chapati", defaultPriceUgx: 1000, defaultStock: 0, sellingMode: "unit", baseUnit: "ea", category: "Food" },
+    { nameKey: "starterBar_nileSpecial", inferName: "Nile Special", defaultPriceUgx: 3500, defaultStock: 48, sellingMode: "unit", baseUnit: "ea", category: "Beer" },
+    { nameKey: "starterItem_soda", inferName: "soda", defaultPriceUgx: 1500, defaultStock: 36, sellingMode: "unit", baseUnit: "ea", category: "Soft drinks" },
+    { nameKey: "starterRestaurantBar_juice", inferName: "fresh juice", defaultPriceUgx: 3000, defaultStock: 12, sellingMode: "unit", baseUnit: "ea", category: "Drinks" },
+    { nameKey: "starterItem_water", inferName: "water", defaultPriceUgx: 1000, defaultStock: 24, sellingMode: "unit", baseUnit: "ea", category: "Drinks" },
+    { nameKey: "starterBar_waragi", inferName: "waragi", defaultPriceUgx: 2000, defaultStock: 24, sellingMode: "unit", baseUnit: "ea", category: "Spirits" },
+  ];
+
   const electronics: StarterLine[] = [
     { nameKey: "starterElectronics_charger", inferName: "phone charger", defaultPriceUgx: 15000, defaultStock: 12, sellingMode: "unit", baseUnit: "ea", category: "Accessories" },
     { nameKey: "starterElectronics_earphones", inferName: "earphones", defaultPriceUgx: 12000, defaultStock: 15, sellingMode: "unit", baseUnit: "ea", category: "Accessories" },
@@ -283,8 +296,9 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
     case "restaurant":
       return restaurant;
     case "bar":
-    case "restaurant_bar":
       return bar;
+    case "restaurant_bar":
+      return restaurantBar;
     case "hotel":
       return [...restaurant, ...bar.slice(0, 2)];
     case "mobile_money_agent":

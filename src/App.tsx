@@ -24,6 +24,7 @@ import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
 import { SettingsSystemHealthPage } from "./pages/SettingsSystemHealthPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
+import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
 import { MonthlyReportsPage } from "./pages/MonthlyReportsPage";
 import { BackupSyncPage } from "./pages/BackupSyncPage";
@@ -543,6 +544,14 @@ function App() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsPharmacyPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/hospitality"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsHospitalityPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

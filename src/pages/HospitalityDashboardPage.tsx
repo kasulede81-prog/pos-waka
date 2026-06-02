@@ -11,7 +11,7 @@ import { hasPermission } from "../lib/permissions";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { localGetDailySalesSummary } from "../lib/localReporting";
-import { formatUgxShort, isHospitalityMode } from "../lib/hospitality";
+import { formatUgxShort, isHospitalityMode, isKitchenEnabledForHospitality } from "../lib/hospitality";
 import {
   activeSessions,
   computeHospitalityDashboardStats,
@@ -41,7 +41,11 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const todayKey = dateKeyKampala(new Date());
 
   const canFloor = hasPermission(actor.role, "hospitality.floor");
-  const canKitchen = hasPermission(actor.role, "hospitality.kitchen");
+  const kitchenEnabled = isKitchenEnabledForHospitality(
+    preferences.businessType,
+    preferences.hospitalityKitchenEnabled,
+  );
+  const canKitchen = kitchenEnabled && hasPermission(actor.role, "hospitality.kitchen");
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
 
@@ -134,15 +138,17 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
                 </Link>
               ) : null}
             </li>
-            <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
-              <span className="text-stone-400">③</span>
-              {t(lang, "hospitalitySetupStep3")}
-              {canKitchen ? (
-                <Link to="/kitchen" className="rounded-full border-2 border-waka-700 px-4 py-2 text-sm font-black text-waka-900">
-                  {t(lang, "navKitchen")}
-                </Link>
-              ) : null}
-            </li>
+            {kitchenEnabled ? (
+              <li className="flex flex-wrap items-center gap-2 font-bold text-stone-900">
+                <span className="text-stone-400">③</span>
+                {t(lang, "hospitalitySetupStep3")}
+                {canKitchen ? (
+                  <Link to="/kitchen" className="rounded-full border-2 border-waka-700 px-4 py-2 text-sm font-black text-waka-900">
+                    {t(lang, "navKitchen")}
+                  </Link>
+                ) : null}
+              </li>
+            ) : null}
           </ol>
         </section>
       ) : null}
@@ -169,7 +175,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
             <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "hospitalityDashTodayRevenue")}</p>
             <p className="mt-1 text-2xl font-black">UGX {todayRevenue.toLocaleString()}</p>
             <p className="mt-1 text-xs font-semibold text-white/70">{t(lang, "dashboardTodaySalesHint")}</p>
-            {stats.kitchenQueueCount > 0 ? (
+            {kitchenEnabled && stats.kitchenQueueCount > 0 ? (
               <p className="mt-1 text-xs font-semibold text-white/80">
                 {stats.kitchenQueueCount} {t(lang, "hospitalityDashKitchenQueue").toLowerCase()}
               </p>

@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+import { deriveQueueHealth } from "../lib/autoSync";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { isNativeApp } from "../lib/nativeApp";
 import { nativeSyncResumeDelayMs, nativeVisibilitySyncDelayMs, runWhenIdle } from "../lib/uiYield";
@@ -31,16 +32,19 @@ export type SyncStatusApi = {
   status: SyncStatus;
   health: SyncHealthMeta;
   refreshQueue: () => void;
+  /** Diagnostics-only manual sync (pull + push). */
   flush: () => Promise<void>;
   flushFull: () => Promise<void>;
 };
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
-const QUEUE_POLL_MS = isNativeApp() ? 90_000 : 20_000;
+const QUEUE_POLL_MS = isNativeApp() ? 60_000 : 25_000;
+const AUTO_DRAIN_MS = isNativeApp() ? 60_000 : 35_000;
 const FLUSH_TIMEOUT_MS = 55_000;
-const MIN_PUSH_INTERVAL_MS = isNativeApp() ? 20_000 : 8_000;
+const MIN_PUSH_INTERVAL_MS = isNativeApp() ? 15_000 : 6_000;
 const MIN_FULL_SYNC_INTERVAL_MS = isNativeApp() ? 300_000 : 90_000;
+const RECONNECT_FLUSH_DELAY_MS = isNativeApp() ? 400 : 150;
 
 function emptyBreakdown(): PendingBreakdown {
   return { sales: 0, stock: 0, returns: 0, expenses: 0, other: 0 };
@@ -62,7 +66,11 @@ function bucketForKind(kind: SyncOperationKind): keyof PendingBreakdown {
   return "other";
 }
 
-async function pendingUploadStats(): Promise<{ total: number; breakdown: PendingBreakdown }> {
+function hasPendingSyncWork(pendingQueue: number): boolean {
+  return pendingQueue > 0 || countUnsyncedSales() > 0;
+}
+
+async function pendingUploadStats(): Promise<{ total: number; breakdown: PendingBreakdown; queueHealth: SyncHealthMeta["queueHealth"] }> {
   const queue = await readSyncQueue();
   const breakdown = emptyBreakdown();
   for (const op of queue) {
@@ -70,7 +78,7 @@ async function pendingUploadStats(): Promise<{ total: number; breakdown: Pending
     breakdown[bucket] += 1;
   }
   const total = Object.values(breakdown).reduce((sum, n) => sum + n, 0);
-  return { total, breakdown };
+  return { total, breakdown, queueHealth: deriveQueueHealth(queue) };
 }
 
 function useSyncStatusEngine(opts?: { paused?: boolean }) {
@@ -85,29 +93,44 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
   const lastFullSyncAtRef = useRef(0);
   const visTimerRef = useRef<number | null>(null);
   const pendingRef = useRef(0);
+  const wasOnlineRef = useRef(isOnline);
+  const startupDoneRef = useRef(false);
 
   const refreshQueue = useCallback(() => {
     if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-    void pendingUploadStats().then(({ total, breakdown }) => {
+    void pendingUploadStats().then(({ total, breakdown, queueHealth }) => {
       pendingRef.current = total;
       setPendingCount(total);
       setPendingBreakdown(breakdown);
+      writeSyncHealthMeta({ queueHealth });
+      setHealth(readSyncHealthMeta());
     });
-    setHealth(readSyncHealthMeta());
   }, []);
 
-  const runFlush = useCallback(async (opts?: { pull?: boolean; forceFull?: boolean; showSpinner?: boolean }) => {
+  const runFlush = useCallback(async (opts?: {
+    pull?: boolean;
+    forceFull?: boolean;
+    showSpinner?: boolean;
+    forcePending?: boolean;
+  }) => {
     if (paused || !getDeviceOnline() || syncingRef.current) return;
     const now = Date.now();
     const wantPull = opts?.pull === true;
     const forceFull = opts?.forceFull === true;
+    const forcePending = opts?.forcePending === true;
     const showSpinner = opts?.showSpinner ?? wantPull;
+    const pendingWork = hasPendingSyncWork(pendingRef.current);
 
-    if (!wantPull && now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && pendingRef.current === 0 && countUnsyncedSales() === 0) {
+    if (
+      !forcePending &&
+      !wantPull &&
+      now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS &&
+      !pendingWork
+    ) {
       return;
     }
-    if (wantPull && !forceFull && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
-      if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS) return;
+    if (wantPull && !forceFull && !forcePending && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
+      if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && !pendingWork) return;
     }
 
     syncingRef.current = true;
@@ -133,12 +156,14 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
         } else {
           const { push, queueFailed } = await pushShopPendingToCloud();
           lastPushAtRef.current = Date.now();
-          if (push.fail === 0 && queueFailed === 0 && push.ok > 0) {
+          if (push.fail === 0 && queueFailed === 0 && (push.ok > 0 || pendingRef.current === 0)) {
             writeSyncHealthMeta({
               lastSuccessAt: attemptAt,
               lastIssueCode: "none",
               lastIssueAt: null,
             });
+          } else if (push.fail > 0 || queueFailed > 0) {
+            writeSyncHealthMeta({ lastIssueAt: attemptAt, lastIssueCode: "partial" });
           }
         }
       })();
@@ -159,13 +184,27 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     } finally {
       syncingRef.current = false;
       if (showSpinner) setSyncing(false);
-      setHealth(readSyncHealthMeta());
-      const { total, breakdown } = await pendingUploadStats();
+      const { total, breakdown, queueHealth } = await pendingUploadStats();
       pendingRef.current = total;
       setPendingCount(total);
       setPendingBreakdown(breakdown);
+      writeSyncHealthMeta({ queueHealth });
+      setHealth(readSyncHealthMeta());
     }
   }, [paused]);
+
+  /** Startup: load queue stats and resume sync without user action. */
+  useEffect(() => {
+    if (paused || startupDoneRef.current) return;
+    startupDoneRef.current = true;
+    refreshQueue();
+    if (getDeviceOnline()) {
+      runWhenIdle(
+        () => void runFlush({ pull: true, showSpinner: false, forcePending: true }),
+        isNativeApp() ? 2500 : 800,
+      );
+    }
+  }, [paused, refreshQueue, runFlush]);
 
   useEffect(() => {
     if (paused) return;
@@ -174,16 +213,42 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     return () => window.clearInterval(id);
   }, [paused, refreshQueue]);
 
+  /** Connectivity restored → immediate automatic sync. */
   useEffect(() => {
     if (paused) return;
-    if (isOnline) {
-      const delay = isNativeApp() ? 12_000 : 1200;
+    const wasOnline = wasOnlineRef.current;
+    wasOnlineRef.current = isOnline;
+
+    if (!wasOnline && isOnline) {
+      writeSyncHealthMeta({
+        offlineSinceAt: null,
+        lastOnlineAt: new Date().toISOString(),
+      });
+      setHealth(readSyncHealthMeta());
       window.setTimeout(() => {
-        if (pendingRef.current === 0 && countUnsyncedSales() === 0 && isNativeApp()) return;
-        runWhenIdle(() => void runFlush({ pull: false, showSpinner: false }), isNativeApp() ? 8000 : 1500);
-      }, delay);
+        void runFlush({ pull: true, showSpinner: false, forcePending: true });
+      }, RECONNECT_FLUSH_DELAY_MS);
+    } else if (wasOnline && !isOnline) {
+      writeSyncHealthMeta({ offlineSinceAt: new Date().toISOString() });
+      setHealth(readSyncHealthMeta());
     }
   }, [isOnline, paused, runFlush]);
+
+  /** Periodic background drain + lightweight pull while online. */
+  useEffect(() => {
+    if (paused) return;
+    const id = window.setInterval(() => {
+      if (!getDeviceOnline() || syncingRef.current) return;
+      if (hasPendingSyncWork(pendingRef.current)) {
+        void runFlush({ pull: false, showSpinner: false });
+        return;
+      }
+      if (Date.now() - lastFullSyncAtRef.current >= MIN_FULL_SYNC_INTERVAL_MS) {
+        void runFlush({ pull: true, showSpinner: false });
+      }
+    }, AUTO_DRAIN_MS);
+    return () => window.clearInterval(id);
+  }, [paused, runFlush]);
 
   useEffect(() => {
     if (paused) return;
@@ -191,7 +256,10 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
       if (document.visibilityState !== "visible" || !getDeviceOnline()) return;
       if (visTimerRef.current) window.clearTimeout(visTimerRef.current);
       visTimerRef.current = window.setTimeout(() => {
-        runWhenIdle(() => void runFlush({ pull: false }), nativeVisibilitySyncDelayMs());
+        runWhenIdle(
+          () => void runFlush({ pull: hasPendingSyncWork(pendingRef.current), showSpinner: false, forcePending: true }),
+          nativeVisibilitySyncDelayMs(),
+        );
       }, nativeVisibilitySyncDelayMs());
     };
     document.addEventListener("visibilitychange", onVis);
@@ -206,10 +274,10 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     if (!Capacitor.isNativePlatform()) return;
     const sub = App.addListener("appStateChange", (s) => {
       if (s.isActive && getDeviceOnline()) {
-        if (Date.now() - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS) return;
+        refreshQueue();
         window.setTimeout(() => {
           runWhenIdle(
-            () => void runFlush({ pull: false, showSpinner: false }),
+            () => void runFlush({ pull: true, showSpinner: false, forcePending: true }),
             nativeSyncResumeDelayMs(),
           );
         }, nativeSyncResumeDelayMs());
@@ -218,7 +286,7 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     return () => {
       void sub.then((h) => h.remove());
     };
-  }, [paused, runFlush]);
+  }, [paused, runFlush, refreshQueue]);
 
   let status: SyncStatus = "offline";
   if (isOnline) {
@@ -233,8 +301,8 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     status,
     health,
     refreshQueue,
-    flush: () => runFlush({ pull: true, showSpinner: true }),
-    flushFull: () => runFlush({ pull: true, forceFull: true, showSpinner: true }),
+    flush: () => runFlush({ pull: true, showSpinner: true, forcePending: true }),
+    flushFull: () => runFlush({ pull: true, forceFull: true, showSpinner: true, forcePending: true }),
   };
 }
 

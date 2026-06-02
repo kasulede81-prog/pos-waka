@@ -1,7 +1,8 @@
-import type { Product, Sale } from "../types";
+import type { HospitalityFloorState, Product, Sale, StaffAccount } from "../types";
 import { completedSales } from "./saleStatus";
 import { resolveProductStationType } from "./kitchenRouting";
 import { dateKeyKampala } from "./datesUg";
+import { resolveSaleWaiterAttribution } from "./waiterAttribution";
 
 export type HospitalityReportRange = {
   fromKey: string;
@@ -50,18 +51,19 @@ function inRange(iso: string, range: HospitalityReportRange): boolean {
   return key >= range.fromKey && key <= range.toKey;
 }
 
-function waiterLabel(sale: Sale): string {
-  if (sale.soldByUserId) return sale.soldByUserId;
-  return "Staff";
-}
-
 export function computeHospitalityReports(
   sales: Sale[],
   products: Product[],
   range: HospitalityReportRange,
+  options?: {
+    floor?: HospitalityFloorState | null;
+    staffAccounts?: StaffAccount[] | null;
+  },
 ): HospitalityReportSummary {
   const productById = new Map(products.map((p) => [p.id, p]));
   const scoped = completedSales(sales).filter((s) => inRange(s.createdAt, range));
+  const floor = options?.floor ?? null;
+  const staffAccounts = options?.staffAccounts ?? null;
 
   let totalRevenueUgx = 0;
   const waiterMap = new Map<string, WaiterPerformanceRow>();
@@ -71,10 +73,11 @@ export function computeHospitalityReports(
 
   for (const sale of scoped) {
     totalRevenueUgx += sale.totalUgx;
-    const wKey = sale.soldByUserId ?? "unknown";
+    const attribution = resolveSaleWaiterAttribution(sale, floor, staffAccounts);
+    const wKey = attribution.reportKey;
     const wRow = waiterMap.get(wKey) ?? {
       waiterId: wKey,
-      label: waiterLabel(sale),
+      label: attribution.reportLabel,
       billCount: 0,
       revenueUgx: 0,
       avgBillUgx: 0,

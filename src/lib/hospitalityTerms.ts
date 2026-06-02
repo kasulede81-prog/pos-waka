@@ -27,6 +27,8 @@ export type HospitalityTermKey =
   | "addItem"
   | "clearSale"
   | "saveSale"
+  | "thisSale"
+  | "saleSaved"
   | "stockTitle"
   | "stockPageSub"
   | "stockAddProduct"
@@ -61,6 +63,8 @@ const RETAIL_FALLBACK: Record<HospitalityTermKey, string> = {
   pendingSale: "pendingSalesTitle",
   stock: "stockTitle",
   sell: "sellTitle",
+  thisSale: "thisSale",
+  saleSaved: "saleSaved",
   menu: "stockTitle",
   bill: "sale",
   bills: "receipts",
@@ -103,15 +107,17 @@ const HOSPITALITY_KEY: Record<HospitalityTermKey, string> = {
   checkout: "hospitalityTerm_settleBill",
   pendingSale: "hospitalityTerm_openBill",
   stock: "hospitalityTerm_menu",
-  sell: "hospitalityTerm_orders",
+  sell: "hospitalityTerm_takeOrder",
   menu: "hospitalityTerm_menu",
   bill: "hospitalityTerm_bill",
   bills: "hospitalityTerm_bills",
   guest: "hospitalityTerm_guest",
   guests: "hospitalityTerm_guests",
   addItem: "hospitalityTerm_addMenuItem",
-  clearSale: "hospitalityTerm_clearBill",
-  saveSale: "hospitalityTerm_settleBill",
+  clearSale: "hospitalityTerm_clearOrder",
+  saveSale: "hospitalityTerm_saveOrder",
+  thisSale: "hospitalityTerm_currentOrder",
+  saleSaved: "hospitalityTerm_orderSaved",
   stockTitle: "hospitalityPage_menuTitle",
   stockPageSub: "hospitalityPage_menuSub",
   stockAddProduct: "hospitalityPage_addMenuItem",

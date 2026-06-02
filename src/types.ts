@@ -460,6 +460,9 @@ export type Sale = {
   customerId?: string | null;
   /** Staff who completed the sale (session actor); drives cashier performance on owner dashboard */
   soldByUserId?: string | null;
+  /** Assigned waiter from table session — used for hospitality KPIs (not the bill closer). */
+  waiterStaffId?: string | null;
+  waiterName?: string | null;
   /** Optional split-bill breakdown shown on receipt (hospitality) */
   splitBreakdown?: BillSplitLine[] | null;
   /** Payment mode selected at checkout. */
@@ -650,6 +653,11 @@ export type ShopPreferences = {
   activeTableSessionId?: string | null;
   /** When true, kitchen tickets fire only on explicit send (not each item tap) */
   hospitalityManualKitchenFire?: boolean;
+  /**
+   * Bar-only: hide kitchen nav/widgets when false. Restaurant / restaurant_bar default on.
+   * null = use default for business type.
+   */
+  hospitalityKitchenEnabled?: boolean | null;
   /** Auto-remove pending sales after TTL (future) */
   pendingSalesTtl?: "24h" | "3d" | "7d" | "never";
   staffCanManagePendingSales?: boolean;
@@ -689,6 +697,8 @@ export type SyncOperation = {
   payload: unknown;
   createdAt: string;
   attempts: number;
+  /** ISO time of last failed upload attempt — used for exponential backoff. */
+  lastAttemptAt?: string | null;
 };
 
 /** High-level connectivity for the tiny header strip */

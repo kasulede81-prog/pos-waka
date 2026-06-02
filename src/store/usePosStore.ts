@@ -52,8 +52,10 @@ import {
   sessionDisplayLabel,
   syncTableDisplayStatuses,
   defaultHospitalityFloor,
+  defaultKitchenEnabledForBusinessType,
   isHospitalityBusinessType,
 } from "../lib/hospitality";
+import { sessionWaiterAttribution } from "../lib/waiterAttribution";
 import { isPharmacyBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { inferProductGuess } from "../lib/pharmacyUx";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
@@ -255,6 +257,8 @@ export type PosState = {
   draftCartDiscountUgx: number;
   /** When set, draft cart belongs to an open table / pending sale */
   activePendingSaleId: string | null;
+  /** Background sales history load — shows trust banner while older sales hydrate. */
+  salesHistoryHydration: { active: boolean; loaded: number; total: number } | null;
 
   hydrate: (
     data: {
@@ -726,6 +730,8 @@ function normalizeSale(s: Sale): Sale {
     estimatedProfitUgx,
     customerId: s.customerId ?? null,
     soldByUserId: s.soldByUserId ?? null,
+    waiterStaffId: s.waiterStaffId ?? null,
+    waiterName: s.waiterName ?? null,
     referenceLabel: s.referenceLabel ?? null,
     tableSessionId: s.tableSessionId ?? null,
   };
@@ -828,6 +834,7 @@ export const usePosStore = create<PosState>((set, get) => {
   draftInput: null,
   draftCartDiscountUgx: 0,
   activePendingSaleId: null,
+  salesHistoryHydration: null,
 
   hydrate: (data, opts) =>
     set({
@@ -1163,6 +1170,10 @@ export const usePosStore = create<PosState>((set, get) => {
         hospitalityFloor: hospitality
           ? (s.preferences.hospitalityFloor ?? defaultHospitalityFloor())
           : s.preferences.hospitalityFloor,
+        hospitalityKitchenEnabled: hospitality
+          ? (s.preferences.hospitalityKitchenEnabled ??
+            defaultKitchenEnabledForBusinessType(businessType))
+          : s.preferences.hospitalityKitchenEnabled,
       },
     }));
   },
@@ -1186,6 +1197,10 @@ export const usePosStore = create<PosState>((set, get) => {
         hospitalityFloor: hospitality
           ? (s.preferences.hospitalityFloor ?? defaultHospitalityFloor())
           : s.preferences.hospitalityFloor,
+        hospitalityKitchenEnabled: hospitality
+          ? (s.preferences.hospitalityKitchenEnabled ??
+            defaultKitchenEnabledForBusinessType(input.businessType))
+          : s.preferences.hospitalityKitchenEnabled,
       },
     }));
   },
@@ -1344,6 +1359,8 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel,
       soldByUserId: actor?.userId ?? null,
+      waiterStaffId: actor?.userId ?? null,
+      waiterName: actor?.displayName ?? null,
     });
     const nextFloor = openTableSessionOnFloor({
       floor,
@@ -1400,6 +1417,8 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId,
       referenceLabel: label,
       soldByUserId: actor?.userId ?? null,
+      waiterStaffId: actor?.userId ?? null,
+      waiterName: actor?.displayName ?? null,
     });
     const nextFloor = openNamedTabSessionOnFloor({
       floor,
@@ -1464,6 +1483,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const baseUpdatedAt = existing?.updatedAt ?? null;
     const draftLines = state.draftLines.map((l) => ensureSaleLineId(l));
     const deletedLineIds = existing ? deletedLineIdsFromDraft(existing.lines, draftLines) : [];
+    const floorForWaiter = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const tableWaiter = sessionWaiterAttribution(floorForWaiter, sessionId ?? existing?.tableSessionId);
     const pendingSale = buildPendingSaleFromDraft({
       saleId,
       lines: draftLines,
@@ -1471,6 +1492,8 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: sessionId ?? existing?.tableSessionId ?? null,
       referenceLabel: existing?.referenceLabel ?? null,
       soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      waiterStaffId: existing?.waiterStaffId ?? tableWaiter.waiterStaffId,
+      waiterName: existing?.waiterName ?? tableWaiter.waiterName,
       existing: existing ?? null,
     });
     const manualFire = state.preferences.hospitalityManualKitchenFire === true;
@@ -1895,6 +1918,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
     const pendingId = state.activePendingSaleId;
     const existingPending = pendingId ? state.sales.find((s) => s.id === pendingId && s.status === "pending") : null;
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const sessionWaiter = sessionWaiterAttribution(floor, existingPending?.tableSessionId);
     const sale: Sale = {
       id: existingPending?.id ?? crypto.randomUUID(),
       status: "completed",
@@ -1915,6 +1940,9 @@ export const usePosStore = create<PosState>((set, get) => {
       lastSyncError: null,
       customerId: customerId ?? null,
       soldByUserId: actorId,
+      waiterStaffId:
+        existingPending?.waiterStaffId ?? sessionWaiter.waiterStaffId ?? null,
+      waiterName: existingPending?.waiterName ?? sessionWaiter.waiterName ?? null,
       splitBreakdown: splitBreakdown ?? null,
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
       amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
@@ -3542,9 +3570,12 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
 function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
   void (async () => {
     const { getEntitiesByIds } = await import("../offline/entityStore");
+    usePosStore.setState({ salesHistoryHydration: { active: true, loaded: 0, total: ids.length } });
+    let loaded = 0;
     for (let i = 0; i < ids.length; i += SALES_PAGE_LOAD_SIZE) {
       await yieldUiTick();
       const batch = (await getEntitiesByIds<Sale>("sale", ids.slice(i, i + SALES_PAGE_LOAD_SIZE))).map(normalizeSale);
+      loaded += batch.length;
       usePosStore.setState((s) => {
         const have = new Set(s.sales.map((x) => x.id));
         const merged = [...s.sales];
@@ -3552,18 +3583,25 @@ function scheduleBackgroundSalesHydrateByIds(ids: string[]): void {
           if (!have.has(row.id)) merged.push(row);
         }
         merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-        return { sales: merged };
+        return {
+          sales: merged,
+          salesHistoryHydration: { active: true, loaded, total: ids.length },
+        };
       });
     }
+    usePosStore.setState({ salesHistoryHydration: null });
   })();
 }
 
 /** Load remaining sales in background without blocking checkout. */
 function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
   void (async () => {
+    usePosStore.setState({ salesHistoryHydration: { active: true, loaded: 0, total: sales.length } });
+    let loaded = 0;
     for (let i = 0; i < sales.length; i += SALES_PAGE_LOAD_SIZE) {
       await yieldUiTick();
       const chunk = sales.slice(i, i + SALES_PAGE_LOAD_SIZE);
+      loaded += chunk.length;
       usePosStore.setState((s) => {
         const have = new Set(s.sales.map((x) => x.id));
         const merged = [...s.sales];
@@ -3571,9 +3609,13 @@ function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
           if (!have.has(row.id)) merged.push(normalizeSale(row));
         }
         merged.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-        return { sales: merged };
+        return {
+          sales: merged,
+          salesHistoryHydration: { active: true, loaded, total: sales.length },
+        };
       });
     }
+    usePosStore.setState({ salesHistoryHydration: null });
   })();
 }
 
@@ -3694,7 +3736,7 @@ async function runPostBootstrapTasks(): Promise<void> {
   const localEmpty = isLocalShopDataEmpty();
   scheduleBackgroundCloudSync({
     pull: localEmpty,
-    delayMs: isNativeApp() ? 22_000 : 3000,
+    delayMs: isNativeApp() ? 2_500 : 800,
   });
 }
 

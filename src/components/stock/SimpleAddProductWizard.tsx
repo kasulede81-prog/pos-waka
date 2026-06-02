@@ -257,6 +257,7 @@ export function SimpleAddProductWizard({
                   preferences.businessType,
                   "simpleAddStep1Example",
                   preferences.pharmacyModeEnabled,
+                  preferences.hospitalityModeEnabled,
                 )}
                 autoFocus
                 className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-waka-300 focus:ring"
@@ -268,7 +269,13 @@ export function SimpleAddProductWizard({
             <div className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep2Title")}</h2>
               <p className="text-base text-slate-600">
-                {uiPlaceholder(lang, preferences.businessType, "simpleAddStep2Hint", preferences.pharmacyModeEnabled)}
+                {uiPlaceholder(
+                  lang,
+                  preferences.businessType,
+                  "simpleAddStep2Hint",
+                  preferences.pharmacyModeEnabled,
+                  preferences.hospitalityModeEnabled,
+                )}
               </p>
               {shelves.length > 0 && !creatingShelf ? (
                 <div className="grid grid-cols-2 gap-2">
@@ -299,6 +306,7 @@ export function SimpleAddProductWizard({
                     preferences.businessType,
                     "simpleAddShelfPlaceholder",
                     preferences.pharmacyModeEnabled,
+                    preferences.hospitalityModeEnabled,
                   )}
                   autoFocus
                   className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-waka-300 focus:ring"

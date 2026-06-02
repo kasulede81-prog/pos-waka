@@ -3,6 +3,7 @@ import type { BusinessType, Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { useWholesaleTerms } from "../../lib/wholesaleTerms";
+import { hospitalityUiActive } from "../../lib/hospitalityUx";
 import { pharmacyUiActive, uiPlaceholder, wholesaleUiActive } from "../../lib/pharmacyUx";
 import { QUICK_ADD_SELL_UNITS } from "../../lib/quickAddProductForm";
 
@@ -25,6 +26,7 @@ type Props = {
   variant?: "page" | "sheet";
   businessType?: BusinessType;
   pharmacyModeEnabled?: boolean | null;
+  hospitalityModeEnabled?: boolean | null;
 };
 
 function StepLabel({ n, text }: { n: number; text: string }) {
@@ -49,11 +51,13 @@ export function QuickAddProductFields({
   variant = "page",
   businessType,
   pharmacyModeEnabled,
+  hospitalityModeEnabled,
 }: Props) {
   const categoryListId = useId();
   const pharmacy = pharmacyUiActive(businessType, pharmacyModeEnabled);
   const wholesale = wholesaleUiActive(businessType);
-  const industryMode = pharmacy || wholesale;
+  const hospitality = hospitalityUiActive(businessType, hospitalityModeEnabled);
+  const industryMode = pharmacy || wholesale || hospitality;
   const pt = usePharmacyTerms(lang, businessType, pharmacyModeEnabled);
   const wt = useWholesaleTerms(lang, businessType);
   const inputClass =
@@ -70,10 +74,10 @@ export function QuickAddProductFields({
     ? ["piece", "pack", "other", "crate", "carton", "case", "bundle", "inner pack"]
     : QUICK_ADD_SELL_UNITS;
   const namePlaceholder = industryMode
-    ? uiPlaceholder(lang, businessType, "productNamePh", pharmacyModeEnabled)
+    ? uiPlaceholder(lang, businessType, "productNamePh", pharmacyModeEnabled, hospitalityModeEnabled)
     : t(lang, "productNamePh");
   const categoryPlaceholder = industryMode
-    ? uiPlaceholder(lang, businessType, "quickAddStep2Ph", pharmacyModeEnabled)
+    ? uiPlaceholder(lang, businessType, "quickAddStep2Ph", pharmacyModeEnabled, hospitalityModeEnabled)
     : t(lang, "quickAddStep2Ph");
 
   return (

@@ -15,7 +15,8 @@ import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { PageHeader } from "../components/layout/PageHeader";
 import { computeHospitalityReports } from "../lib/hospitalityReports";
-import { isHospitalityMode } from "../lib/hospitality";
+import { isHospitalityMode, totalOpenTablesPendingUgx } from "../lib/hospitality";
+import { activeSessions } from "../lib/hospitalityStats";
 import { computePharmacyExpiryReport } from "../lib/pharmacyReports";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
@@ -66,8 +67,28 @@ export function ReportsPage({ lang }: { lang: Language }) {
         : range === "week"
           ? dateKeyKampala(new Date(Date.now() - 6 * 86400000))
           : today;
-    return computeHospitalityReports(sales, products, { fromKey, toKey: today });
-  }, [preferences.businessType, preferences.hospitalityModeEnabled, range, sales, products]);
+    return computeHospitalityReports(sales, products, { fromKey, toKey: today }, {
+      floor: preferences.hospitalityFloor,
+      staffAccounts: preferences.staffAccounts,
+    });
+  }, [
+    preferences.businessType,
+    preferences.hospitalityModeEnabled,
+    preferences.hospitalityFloor,
+    preferences.staffAccounts,
+    range,
+    sales,
+    products,
+  ]);
+
+  const hospitalityOpenBills = useMemo(() => {
+    if (!hospitalityReports || !preferences.hospitalityFloor) return null;
+    const open = activeSessions(preferences.hospitalityFloor);
+    return {
+      count: open.length,
+      totalUgx: totalOpenTablesPendingUgx(sales, preferences.hospitalityFloor),
+    };
+  }, [hospitalityReports, preferences.hospitalityFloor, sales]);
 
   const pharmacyExpiryReport = useMemo(() => {
     if (!isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled)) return null;
@@ -244,6 +265,81 @@ export function ReportsPage({ lang }: { lang: Language }) {
         ))}
       </div>
 
+      {hospitalityReports ? (
+        <section className="space-y-4 rounded-3xl border border-waka-200 bg-waka-50/40 p-4">
+          <h2 className="text-lg font-black text-waka-950">{t(lang, "hospitalityReportsTitle")}</h2>
+          <p className="text-sm font-semibold text-stone-700">
+            {hospitalityReports.completedBillCount} bills · UGX {hospitalityReports.totalRevenueUgx.toLocaleString()} ·{" "}
+            {t(lang, "hospitalityReportsAvgBill")} UGX {hospitalityReports.avgBillUgx.toLocaleString()}
+          </p>
+          {hospitalityOpenBills && hospitalityOpenBills.count > 0 ? (
+            <article className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3">
+              <p className="text-xs font-black uppercase text-amber-900">{t(lang, "hospitalityReportsOpenBills")}</p>
+              <p className="mt-1 text-lg font-black text-amber-950">
+                {hospitalityOpenBills.count} · UGX {hospitalityOpenBills.totalUgx.toLocaleString()}
+              </p>
+            </article>
+          ) : null}
+          {hospitalityReports.waiters.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsWaiters")}</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {hospitalityReports.waiters.slice(0, 5).map((w) => (
+                  <li key={w.waiterId} className="flex justify-between font-medium">
+                    <span>{w.label}</span>
+                    <span>
+                      {w.billCount} · UGX {w.revenueUgx.toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {hospitalityReports.categoryMix.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsMix")}</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {hospitalityReports.categoryMix.map((row) => (
+                  <li key={row.kind} className="flex justify-between font-medium capitalize">
+                    <span>{row.kind}</span>
+                    <span>UGX {row.revenueUgx.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {hospitalityReports.peakHours.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsPeak")}</p>
+              <ul className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
+                {hospitalityReports.peakHours
+                  .slice()
+                  .sort((a, b) => b.revenueUgx - a.revenueUgx)
+                  .slice(0, 6)
+                  .map((h) => (
+                    <li key={h.hour} className="rounded-full bg-white px-3 py-1 ring-1 ring-stone-200">
+                      {h.label}: {h.billCount}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
+          {hospitalityReports.tables.length > 0 ? (
+            <div>
+              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsTableRevenue")}</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {hospitalityReports.tables.slice(0, 5).map((row) => (
+                  <li key={row.label} className="flex justify-between font-medium">
+                    <span className="truncate">{row.label}</span>
+                    <span>UGX {row.revenueUgx.toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {range === "today" ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-semibold text-slate-800">{t(lang, "exportReportHeading")}</p>
@@ -408,60 +504,6 @@ export function ReportsPage({ lang }: { lang: Language }) {
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
-
-      {hospitalityReports ? (
-        <section className="space-y-4 rounded-3xl border border-waka-200 bg-waka-50/40 p-4">
-          <h2 className="text-lg font-black text-waka-950">{t(lang, "hospitalityReportsTitle")}</h2>
-          <p className="text-sm font-semibold text-stone-700">
-            {hospitalityReports.completedBillCount} bills · UGX {hospitalityReports.totalRevenueUgx.toLocaleString()} ·{" "}
-            {t(lang, "hospitalityReportsAvgBill")} UGX {hospitalityReports.avgBillUgx.toLocaleString()}
-          </p>
-          {hospitalityReports.waiters.length > 0 ? (
-            <div>
-              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsWaiters")}</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {hospitalityReports.waiters.slice(0, 5).map((w) => (
-                  <li key={w.waiterId} className="flex justify-between font-medium">
-                    <span>{w.label}</span>
-                    <span>
-                      {w.billCount} · UGX {w.revenueUgx.toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {hospitalityReports.categoryMix.length > 0 ? (
-            <div>
-              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsMix")}</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {hospitalityReports.categoryMix.map((row) => (
-                  <li key={row.kind} className="flex justify-between font-medium capitalize">
-                    <span>{row.kind}</span>
-                    <span>UGX {row.revenueUgx.toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {hospitalityReports.peakHours.length > 0 ? (
-            <div>
-              <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsPeak")}</p>
-              <ul className="mt-2 flex flex-wrap gap-2 text-xs font-bold">
-                {hospitalityReports.peakHours
-                  .slice()
-                  .sort((a, b) => b.revenueUgx - a.revenueUgx)
-                  .slice(0, 6)
-                  .map((h) => (
-                    <li key={h.hour} className="rounded-full bg-white px-3 py-1 ring-1 ring-stone-200">
-                      {h.label}: {h.billCount}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-          ) : null}
         </section>
       ) : null}
 

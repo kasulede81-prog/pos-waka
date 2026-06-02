@@ -15,8 +15,14 @@ export async function initDeviceOnlineTracking(): Promise<void> {
     const status = await Network.getStatus();
     deviceOnline = status.connected;
     await Network.addListener("networkStatusChange", (s) => {
+      const was = deviceOnline;
       deviceOnline = s.connected;
       window.dispatchEvent(new CustomEvent("waka:network-status", { detail: { connected: s.connected } }));
+      if (!was && s.connected) {
+        window.dispatchEvent(new CustomEvent("waka:network-online"));
+      } else if (was && !s.connected) {
+        window.dispatchEvent(new CustomEvent("waka:network-offline"));
+      }
     });
   } catch {
     deviceOnline = navigator.onLine;

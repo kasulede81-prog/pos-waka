@@ -1,5 +1,5 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -42,6 +42,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const pilotActive = isPilotModeActive(actor.role, preferences);
   const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
   const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);
+  const showHospitalitySettings = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
 
   return (
     <div className="space-y-6 pb-8">
@@ -100,6 +101,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubPharmacy")}
             subtitle={t(lang, "settingsHubPharmacySub")}
             Icon={Pill}
+          />
+        ) : null}
+        {showHospitalitySettings ? (
+          <OfficeNavCard
+            to="/settings/hospitality"
+            title={t(lang, "hospitalitySettingsTitle")}
+            subtitle={t(lang, "hospitalitySettingsSub")}
+            Icon={UtensilsCrossed}
           />
         ) : null}
         {canShop ? (

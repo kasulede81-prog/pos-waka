@@ -3,6 +3,7 @@ import type { SmartGuess } from "./smartProductGuess";
 import { inferFromProductName } from "./smartProductGuess";
 import { isPharmacyMode } from "./pharmacy";
 import { isWholesaleMode } from "./wholesale";
+import { hospitalityPlaceholder, hospitalityUiActive, posSearchAliasesHospitality, type HospitalityPlaceholderKey } from "./hospitalityUx";
 import { t } from "./i18n";
 
 /** Terms that must not appear in pharmacy-visible UI copy (tests + audits). */
@@ -86,16 +87,20 @@ export function uiPlaceholder(
   businessType: BusinessType | undefined | null,
   key: PharmacyPlaceholderKey,
   pharmacyModeEnabled?: boolean | null,
+  hospitalityModeEnabled?: boolean | null,
 ): string {
   if (wholesaleUiActive(businessType)) {
     const wholesaleKey = WHOLESALE_PLACEHOLDER_I18N[key];
     return t(lang, wholesaleKey);
   }
-  if (!pharmacyUiActive(businessType, pharmacyModeEnabled)) {
-    return t(lang, key);
+  if (pharmacyUiActive(businessType, pharmacyModeEnabled)) {
+    const phKey = PHARMACY_PLACEHOLDER_I18N[key];
+    return t(lang, phKey);
   }
-  const phKey = PHARMACY_PLACEHOLDER_I18N[key];
-  return t(lang, phKey);
+  if (hospitalityUiActive(businessType, hospitalityModeEnabled)) {
+    return hospitalityPlaceholder(lang, businessType, key as HospitalityPlaceholderKey);
+  }
+  return t(lang, key);
 }
 
 const RETAIL_POS_ALIASES: Record<string, string[]> = {
@@ -134,14 +139,18 @@ const WHOLESALE_POS_ALIASES: Record<string, string[]> = {
 export function posSearchAliases(
   businessType: BusinessType | undefined | null,
   pharmacyModeEnabled?: boolean | null,
+  hospitalityModeEnabled?: boolean | null,
 ): Record<string, string[]> {
   if (wholesaleUiActive(businessType)) {
     return WHOLESALE_POS_ALIASES;
   }
-  if (!pharmacyUiActive(businessType, pharmacyModeEnabled)) {
-    return RETAIL_POS_ALIASES;
+  if (pharmacyUiActive(businessType, pharmacyModeEnabled)) {
+    return PHARMACY_POS_ALIASES;
   }
-  return PHARMACY_POS_ALIASES;
+  if (hospitalityUiActive(businessType, hospitalityModeEnabled)) {
+    return posSearchAliasesHospitality(businessType);
+  }
+  return RETAIL_POS_ALIASES;
 }
 
 function inferPharmacyFromProductName(raw: string): SmartGuess {

@@ -71,7 +71,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
   const wt = useWholesaleTerms(lang, preferences.businessType);
   const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
-  const industryPlaceholderMode = pharmacyMode || wholesaleMode;
+  const industryPlaceholderMode = pharmacyMode || wholesaleMode || hospitalityMode;
   const currentTier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(currentTier);
   const unlockedProducts = useMemo(
@@ -643,7 +643,13 @@ export function StockPage({ lang }: { lang: Language }) {
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
             <p className="text-center text-xl font-black text-slate-900">
               {industryPlaceholderMode
-                ? uiPlaceholder(lang, preferences.businessType, "quickAddTitle", preferences.pharmacyModeEnabled)
+                ? uiPlaceholder(
+                    lang,
+                    preferences.businessType,
+                    "quickAddTitle",
+                    preferences.pharmacyModeEnabled,
+                    preferences.hospitalityModeEnabled,
+                  )
                 : t(lang, "stockQuickAddTitle")}
             </p>
             <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "stockQuickAddSub")}</p>
@@ -658,6 +664,7 @@ export function StockPage({ lang }: { lang: Language }) {
                 variant="sheet"
                 businessType={preferences.businessType}
                 pharmacyModeEnabled={preferences.pharmacyModeEnabled}
+                hospitalityModeEnabled={preferences.hospitalityModeEnabled}
                 categorySuggestions={stockCategoryPicklist}
                 values={{
                   name: qaName,
@@ -688,7 +695,13 @@ export function StockPage({ lang }: { lang: Language }) {
               </button>
               <button type="submit" className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-lg font-black text-white">
                 {industryPlaceholderMode
-                  ? uiPlaceholder(lang, preferences.businessType, "quickAddSave", preferences.pharmacyModeEnabled)
+                  ? uiPlaceholder(
+                      lang,
+                      preferences.businessType,
+                      "quickAddSave",
+                      preferences.pharmacyModeEnabled,
+                      preferences.hospitalityModeEnabled,
+                    )
                   : t(lang, "quickAddSave")}
               </button>
             </div>

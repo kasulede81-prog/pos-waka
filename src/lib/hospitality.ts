@@ -67,6 +67,31 @@ export function isHospitalityMode(
   return isHospitalityBusinessType(businessType);
 }
 
+/** True for bar businesses with kitchen display turned off (default for bar). */
+export function isBarOnlyMode(
+  businessType: BusinessType | undefined | null,
+  hospitalityModeEnabled?: boolean | null,
+  hospitalityKitchenEnabled?: boolean | null,
+): boolean {
+  if (!isHospitalityMode(businessType, hospitalityModeEnabled)) return false;
+  if (businessType !== "bar") return false;
+  return !isKitchenEnabledForHospitality(businessType, hospitalityKitchenEnabled);
+}
+
+export function defaultKitchenEnabledForBusinessType(businessType: BusinessType | undefined | null): boolean {
+  return businessType !== "bar";
+}
+
+export function isKitchenEnabledForHospitality(
+  businessType: BusinessType | undefined | null,
+  hospitalityKitchenEnabled?: boolean | null,
+): boolean {
+  if (!isHospitalityBusinessType(businessType)) return false;
+  if (hospitalityKitchenEnabled === true) return true;
+  if (hospitalityKitchenEnabled === false) return false;
+  return defaultKitchenEnabledForBusinessType(businessType);
+}
+
 export function emptyHospitalityFloor(): HospitalityFloorState {
   return { areas: [], tables: [], sessions: [], stations: [] };
 }
@@ -173,6 +198,8 @@ export function buildPendingSaleFromDraft(input: {
   tableSessionId?: string | null;
   referenceLabel?: string | null;
   soldByUserId?: string | null;
+  waiterStaffId?: string | null;
+  waiterName?: string | null;
   existing?: Sale | null;
 }): Sale {
   const saleLines = input.lines.map(ensureSaleLineId);
@@ -199,6 +226,8 @@ export function buildPendingSaleFromDraft(input: {
     lastSyncError: null,
     customerId: input.existing?.customerId ?? null,
     soldByUserId: input.soldByUserId ?? input.existing?.soldByUserId ?? null,
+    waiterStaffId: input.waiterStaffId ?? input.existing?.waiterStaffId ?? null,
+    waiterName: input.waiterName ?? input.existing?.waiterName ?? null,
   };
 }
 

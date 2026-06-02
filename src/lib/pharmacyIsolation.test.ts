@@ -122,8 +122,8 @@ describe("pharmacy isolation — retail leak detector", () => {
 
 describe("pharmacy isolation — hospitality unchanged", () => {
   it("restaurant business type does not use pharmacy aliases", () => {
-    const aliases = posSearchAliases("restaurant", false);
-    expect(aliases.soda).toBeDefined();
+    const aliases = posSearchAliases("restaurant", false, true);
+    expect(aliases.pilau).toBeDefined();
     expect(aliases.paracetamol).toBeUndefined();
   });
 });

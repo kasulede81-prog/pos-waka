@@ -204,8 +204,10 @@ export function PosPage({ lang }: { lang: Language }) {
         return;
       }
       if (gate.action === "block") {
-        setToast(t(lang, "pharmacyExpiredSaleBlocked"));
-        window.setTimeout(() => setToast(null), 2200);
+        const msg = t(lang, "pharmacyExpiredSaleBlocked");
+        setCheckoutBlockMessage(msg);
+        setToast(msg);
+        window.setTimeout(() => setToast(null), 3200);
         return;
       }
       pendingExpiredAddRef.current = run;
@@ -258,6 +260,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const [saleCustomerName, setSaleCustomerName] = useState("");
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [checkoutBlockMessage, setCheckoutBlockMessage] = useState<string | null>(null);
+  const [checkoutBlockModalOpen, setCheckoutBlockModalOpen] = useState(false);
   const [expiryWarnProduct, setExpiryWarnProduct] = useState<Product | null>(null);
   const pendingExpiredAddRef = useRef<(() => void) | null>(null);
   const [firstSaleOpen, setFirstSaleOpen] = useState(false);
@@ -445,7 +449,11 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellSearchContext = useMemo(() => {
     const q = searchQuery.trim();
     const qLower = q.toLowerCase();
-    const aliases = posSearchAliases(shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
+    const aliases = posSearchAliases(
+      shopPreferences.businessType,
+      shopPreferences.pharmacyModeEnabled,
+      shopPreferences.hospitalityModeEnabled,
+    );
     const aliasSet = new Set<string>();
     if (qLower && aliases[qLower]) {
       for (const a of aliases[qLower]) aliasSet.add(a);
@@ -797,10 +805,17 @@ export function PosPage({ lang }: { lang: Language }) {
       changeGivenUgx: changeDue,
     });
     if (!r.ok) {
-      setToast(t(lang, r.errorKey ?? "saleError"));
-      window.setTimeout(() => setToast(null), 2200);
+      const msg = t(lang, r.errorKey ?? "saleError");
+      if (r.errorKey === "pharmacyExpiredSaleBlocked") {
+        setCheckoutBlockMessage(msg);
+        setCheckoutBlockModalOpen(true);
+      }
+      setToast(msg);
+      window.setTimeout(() => setToast(null), 3200);
       return;
     }
+    setCheckoutBlockMessage(null);
+    setCheckoutBlockModalOpen(false);
     if (hapticsOn) void hapticSaleComplete();
     if (soundOn) playSaleSuccessTone();
 
@@ -824,7 +839,7 @@ export function PosPage({ lang }: { lang: Language }) {
     } else {
       setSaleSuccessFlash(true);
       window.setTimeout(() => setSaleSuccessFlash(false), 720);
-      setToast(t(lang, "saleSaved"));
+      setToast(hospitalityMode ? ht("saleSaved") : t(lang, "saleSaved"));
       window.setTimeout(() => setToast(null), 1600);
     }
   }, [
@@ -843,6 +858,8 @@ export function PosPage({ lang }: { lang: Language }) {
     hapticsOn,
     soundOn,
     preferences.celebratedFirstSale,
+    hospitalityMode,
+    ht,
   ]);
 
   const handleSavePending = useCallback(() => {
@@ -899,7 +916,7 @@ export function PosPage({ lang }: { lang: Language }) {
             onClick={() => clearDraft()}
             className="min-h-[48px] rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
           >
-            {t(lang, "clearSale")}
+            {modeTerm("clearSale")}
           </button>
         )}
         <div className="flex flex-wrap items-center gap-2">
@@ -1226,10 +1243,10 @@ export function PosPage({ lang }: { lang: Language }) {
               onClick={() => clearDraft()}
               className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
             >
-              {t(lang, "clearSale")}
+              {modeTerm("clearSale")}
             </button>
             <h2 id="pos-checkout-title" className="min-w-0 flex-1 truncate text-center text-lg font-black text-waka-950">
-              {t(lang, "thisSale")}
+              {hospitalityMode ? ht("thisSale") : t(lang, "thisSale")}
             </h2>
             <button
               type="button"
@@ -1239,6 +1256,14 @@ export function PosPage({ lang }: { lang: Language }) {
               {t(lang, "posAddMoreItems")}
             </button>
           </header>
+          {checkoutBlockMessage ? (
+            <div
+              className="mx-3 shrink-0 rounded-xl bg-red-600 px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
+              role="alert"
+            >
+              {checkoutBlockMessage}
+            </div>
+          ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
             <DraftCartSummary lang={lang} stats={draftCartStats} />
             <ul className="mt-3 space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
@@ -1419,7 +1444,7 @@ export function PosPage({ lang }: { lang: Language }) {
               onClick={finishSale}
               className="min-h-[56px] w-full rounded-3xl bg-waka-600 py-4 text-2xl font-black text-white shadow-lg active:bg-waka-700"
             >
-              {t(lang, "saveSale")}
+              {modeTerm("saveSale")}
             </button>
           </footer>
         </div>
@@ -1743,8 +1768,24 @@ export function PosPage({ lang }: { lang: Language }) {
         </AppModalOverlay>
       ) : null}
 
+      {checkoutBlockModalOpen && checkoutBlockMessage ? (
+        <AppModalOverlay className="z-[95] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
+          <div className="max-w-md rounded-[2rem] bg-white p-6 shadow-2xl">
+            <h2 className="text-xl font-black text-red-950">{t(lang, "pharmacyExpiredCheckoutBlockedTitle")}</h2>
+            <p className="mt-3 text-base font-medium text-stone-700">{checkoutBlockMessage}</p>
+            <button
+              type="button"
+              className="mt-6 min-h-[52px] w-full rounded-2xl bg-slate-900 py-3 text-lg font-black text-white"
+              onClick={() => setCheckoutBlockModalOpen(false)}
+            >
+              {t(lang, "cancel")}
+            </button>
+          </div>
+        </AppModalOverlay>
+      ) : null}
+
       {toast && (
-        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
+        <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
           {toast}
         </div>
       )}
