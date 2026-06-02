@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PageBackBar } from "../components/layout/PageBackBar";
-import { Printer } from "lucide-react";
+import { Camera, Keyboard, Printer, ScanLine } from "lucide-react";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { printReceiptText } from "../lib/receiptPrint";
+import { printReceiptWithFallback } from "../lib/receiptPrint";
+import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
+import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
 
 const PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
 
@@ -18,6 +20,13 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const [snap, setSnap] = useState<string>("");
+  const [barcodeCaps] = useState(() => detectBarcodeCapabilities());
+  const [printerCaps, setPrinterCaps] = useState<Awaited<ReturnType<typeof detectPrinterCapabilities>> | null>(null);
+  const [scanMode, setScanMode] = useState<"hid" | "camera">("hid");
+  const [scanStatus, setScanStatus] = useState<string>("Scanner idle.");
+  const [scanResult, setScanResult] = useState<string>("");
+  const [printingStatus, setPrintingStatus] = useState<string>("");
+  const cameraRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,6 +40,16 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
     };
   }, []);
 
+  useEffect(() => {
+    void detectPrinterCapabilities().then(setPrinterCaps);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void stopBarcodeSession();
+    };
+  }, []);
+
   const testPrint = () => {
     const sample = [
       preferences.shopDisplayName?.trim() || "Waka POS",
@@ -40,8 +59,35 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
       "—",
       "Waka POS",
     ].join("\n");
-    const ok = printReceiptText(sample, preferences.receiptPaperSize ?? "80mm");
-    if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
+    setPrintingStatus("Testing printer...");
+    void printReceiptWithFallback(sample, preferences.receiptPaperSize ?? "80mm").then((result) => {
+      if (result.ok) {
+        setPrintingStatus(result.mode === "native" ? "Printed via native thermal path." : "Printed via browser fallback.");
+      } else {
+        setPrintingStatus(result.error ?? t(lang, "receiptPrintBlocked"));
+      }
+    });
+  };
+
+  const startScan = () => {
+    setScanStatus("Starting barcode scanner...");
+    setScanResult("");
+    void startBarcodeSession(scanMode, {
+      videoElement: cameraRef.current,
+      onScan: (code) => {
+        setScanResult(code);
+        setScanStatus("Scan received.");
+      },
+      onError: (message) => setScanStatus(message),
+    }).then((result) => {
+      if (!result.ok) setScanStatus(result.error ?? "Scanner not available.");
+      else if (scanMode === "hid") setScanStatus("Scanner ready. Use USB scanner now.");
+      else setScanStatus("Camera scanner ready.");
+    });
+  };
+
+  const stopScan = () => {
+    void stopBarcodeSession().then(() => setScanStatus("Scanner stopped."));
   };
 
   return (
@@ -49,6 +95,59 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
       <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
       <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
       <p className="text-sm font-medium text-stone-600">{t(lang, "hardwareSettingsSub")}</p>
+
+      <article className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">
+        <div className="flex items-center gap-2">
+          <ScanLine className="h-5 w-5 text-waka-700" aria-hidden />
+          <p className="text-lg font-black text-stone-900">Barcode diagnostics</p>
+        </div>
+        <p className="mt-2 text-sm font-medium text-stone-600">
+          Supports keyboard-wedge scanners on desktop/browser and camera scan where supported.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-semibold text-stone-700">
+          <p className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+            <Keyboard className="mr-1 inline h-3.5 w-3.5" />
+            Wedge: {barcodeCaps.hidWedge ? "ready" : "unsupported"}
+          </p>
+          <p className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+            <Camera className="mr-1 inline h-3.5 w-3.5" />
+            Camera: {barcodeCaps.cameraScan ? "ready" : "unsupported"}
+          </p>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setScanMode("hid")}
+            className={`min-h-[42px] flex-1 rounded-xl border text-sm font-black ${scanMode === "hid" ? "border-waka-400 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700"}`}
+          >
+            USB scanner
+          </button>
+          <button
+            type="button"
+            onClick={() => setScanMode("camera")}
+            className={`min-h-[42px] flex-1 rounded-xl border text-sm font-black ${scanMode === "camera" ? "border-waka-400 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700"}`}
+          >
+            Camera scanner
+          </button>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button type="button" onClick={startScan} className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 py-3 text-sm font-black text-white">
+            Start test scan
+          </button>
+          <button type="button" onClick={stopScan} className="min-h-[48px] flex-1 rounded-2xl border-2 border-stone-200 bg-white py-3 text-sm font-black text-stone-800">
+            Stop
+          </button>
+        </div>
+        {scanMode === "camera" ? (
+          <video ref={cameraRef} className="mt-3 h-40 w-full rounded-2xl border border-stone-200 bg-black object-cover" />
+        ) : null}
+        <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700">
+          Status: {scanStatus}
+        </p>
+        <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
+          Last scan: {scanResult || "—"}
+        </p>
+      </article>
 
       <article className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
@@ -76,6 +175,15 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
         >
           {t(lang, "receiptPaperTestPrint")}
         </button>
+        <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700">
+          Thermal: {printerCaps?.escPosAvailable ? "ready" : "not detected"} · USB:{" "}
+          {printerCaps?.usbAvailable ? "yes" : "no"} · Bluetooth: {printerCaps?.bluetoothAvailable ? "yes" : "no"}
+        </p>
+        {printingStatus ? (
+          <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
+            {printingStatus}
+          </p>
+        ) : null}
       </article>
 
       <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 font-mono text-xs text-stone-800">{snap || "—"}</div>

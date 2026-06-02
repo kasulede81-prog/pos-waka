@@ -13,7 +13,7 @@ import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
-import { buildReceiptNumberForSale, buildSaleReceiptText, printReceiptText } from "../lib/receiptPrint";
+import { buildReceiptNumberForSale, buildSaleReceiptText, printReceiptWithFallback } from "../lib/receiptPrint";
 import { resolveReceiptBranding } from "../lib/receiptBranding";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
@@ -216,8 +216,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         time: t(lang, "receiptTimeLabel"),
       },
     });
-    const ok = printReceiptText(text, preferences.receiptPaperSize ?? "80mm");
-    if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
+    void printReceiptWithFallback(text, preferences.receiptPaperSize ?? "80mm").then((result) => {
+      if (!result.ok) window.alert(t(lang, "receiptPrintBlocked"));
+    });
   };
 
   const filteredInRange = useMemo(() => {

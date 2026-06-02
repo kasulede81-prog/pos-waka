@@ -1,6 +1,7 @@
 import type { Product, ReceiptPaperSize, Sale } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
+import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
 
 export type ReceiptLabels = {
   cashier: string;
@@ -416,4 +417,34 @@ export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize =
   };
 
   return true;
+}
+
+function toThermalWidth(paper: ReceiptPaperSize): PrinterPaperWidth {
+  return paper === "58mm" ? "58mm" : "80mm";
+}
+
+/**
+ * Prefer native ESC/POS path when available, fallback to browser print.
+ * Returns true if either native or browser path was started successfully.
+ */
+export async function printReceiptWithFallback(
+  receiptPlain: string,
+  paper: ReceiptPaperSize = "80mm",
+): Promise<{ ok: boolean; mode: "native" | "browser" | "none"; error?: string }> {
+  try {
+    const caps = await detectPrinterCapabilities();
+    if (caps.escPosAvailable) {
+      const native = await testPrint({
+        width: toThermalWidth(paper),
+        lines: receiptPlain.split("\n"),
+      });
+      if (native.ok) return { ok: true, mode: "native" };
+    }
+  } catch {
+    // Continue into browser fallback.
+  }
+
+  const browserOk = printReceiptText(receiptPlain, paper);
+  if (browserOk) return { ok: true, mode: "browser" };
+  return { ok: false, mode: "none", error: "No printing method available." };
 }

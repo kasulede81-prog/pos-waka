@@ -1,6 +1,8 @@
 {
   "name": "pos-waka",
   "private": true,
+  "description": "WAKA POS desktop and mobile point-of-sale application.",
+  "author": "WAKA Technologies",
   "version": "1.0.5",
   "type": "module",
   "scripts": {
@@ -30,7 +32,11 @@
     "verify:multi-device": "node scripts/multi-device-consistency.mjs",
     "verify:hospitality-concurrency": "vitest run src/lib/pendingSaleMerge.test.ts",
     "test": "vitest run",
-    "soak:android": "node scripts/android-soak-harness.mjs"
+    "soak:android": "node scripts/android-soak-harness.mjs",
+    "build:windows": "npm run build && npm run windows:icon",
+    "package:windows": "npm run build:windows && electron-builder --win portable --x64",
+    "installer:windows": "npm run build:windows && electron-builder --win nsis --x64",
+    "windows:icon": "node scripts/generate-windows-icon.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -67,6 +73,8 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "electron": "^37.2.2",
+    "electron-builder": "^26.0.12",
     "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.2",
@@ -80,11 +88,61 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.5.0",
     "postcss": "^8.5.14",
+    "png-to-ico": "^2.1.8",
     "sharp": "^0.34.5",
     "tailwindcss": "^3.4.17",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.2",
     "vite": "^8.0.10",
     "vitest": "^3.2.4"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "ug.waka.pos.desktop",
+    "productName": "WAKA POS",
+    "copyright": "Copyright © 2026 WAKA Technologies",
+    "directories": {
+      "output": "release/windows",
+      "buildResources": "build"
+    },
+    "executableName": "WAKA POS",
+    "npmRebuild": false,
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "en_US"
+      ],
+      "artifactName": "WAKA-POS-Setup-${version}.${ext}",
+      "uninstallDisplayName": "WAKA POS",
+      "shortcutName": "WAKA POS"
+    },
+    "portable": {
+      "artifactName": "WAKA-POS-Portable-${version}.${ext}"
+    }
   }
 }

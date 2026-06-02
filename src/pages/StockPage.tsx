@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -46,6 +46,7 @@ import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
+import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
@@ -114,6 +115,20 @@ export function StockPage({ lang }: { lang: Language }) {
   const [removeId, setRemoveId] = useState<string | null>(null);
   const [stockCategoryFilter, setStockCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
   const [stockGroupByCategoryOverride, setStockGroupByCategoryOverride] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const caps = detectBarcodeCapabilities();
+    if (!caps.hidWedge) return;
+    void startBarcodeSession("hid", {
+      onScan: (code) => {
+        setStockTab("products");
+        setListQuery(code);
+      },
+    });
+    return () => {
+      void stopBarcodeSession();
+    };
+  }, []);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();

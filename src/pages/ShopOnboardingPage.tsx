@@ -153,7 +153,8 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     setErr(null);
     try {
       const ph = await resolveOnboardingPhone();
-      if (!ph) {
+      const requiresCloudPhone = authMode !== "local";
+      if (requiresCloudPhone && !ph) {
         setErr(t(lang, "registerPhoneInvalid"));
         setBusy(false);
         return false;
@@ -167,7 +168,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
         shopName,
         businessType,
         sellingStyle,
-        phone: ph,
+        phone: ph ?? "",
         districtId,
         latitude: opts.lat,
         longitude: opts.lng,

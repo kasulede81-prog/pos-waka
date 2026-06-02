@@ -8,12 +8,127 @@ export type PrinterCapabilities = {
   bluetoothAvailable: boolean;
   usbAvailable: boolean;
   sunmiBuiltIn: boolean;
+  escPosAvailable: boolean;
+  platform: "web" | "android" | "ios" | "electron" | "unknown";
 };
 
+const ESC_POS_INIT = [0x1b, 0x40];
+const ESC_POS_ALIGN_LEFT = [0x1b, 0x61, 0x00];
+const ESC_POS_ALIGN_CENTER = [0x1b, 0x61, 0x01];
+const ESC_POS_CUT_PARTIAL = [0x1d, 0x56, 0x42, 0x03];
+const ESC_POS_FEED_4 = [0x1b, 0x64, 0x04];
+
+const BT_PRINTER_SERVICES = [0xffe0, 0x18f0];
+const BT_PRINTER_CHARS = [0xffe1, 0x2af1];
+
+function resolvePlatform(): PrinterCapabilities["platform"] {
+  if (typeof navigator === "undefined") return "unknown";
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes("electron")) return "electron";
+  if (ua.includes("android")) return "android";
+  if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "ios";
+  return "web";
+}
+
+function toEscPos(payload: { width: PrinterPaperWidth; lines: string[] }): Uint8Array {
+  const encoder = new TextEncoder();
+  const widthLabel = payload.width === "58mm" ? "WAKA POS [58mm]" : "WAKA POS [80mm]";
+  const header = `${widthLabel}\n`;
+  const body = `${payload.lines.join("\n")}\n\n`;
+  const bytes = [
+    ...ESC_POS_INIT,
+    ...ESC_POS_ALIGN_CENTER,
+    ...Array.from(encoder.encode(header)),
+    ...ESC_POS_ALIGN_LEFT,
+    ...Array.from(encoder.encode(body)),
+    ...ESC_POS_FEED_4,
+    ...ESC_POS_CUT_PARTIAL,
+  ];
+  return new Uint8Array(bytes);
+}
+
 export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> {
-  return { bluetoothAvailable: false, usbAvailable: false, sunmiBuiltIn: false };
+  const hasNavigator = typeof navigator !== "undefined";
+  const bluetoothAvailable = hasNavigator && "bluetooth" in navigator;
+  const usbAvailable = hasNavigator && "usb" in navigator;
+  const platform = resolvePlatform();
+  const sunmiBuiltIn = platform === "android";
+  return {
+    bluetoothAvailable,
+    usbAvailable,
+    sunmiBuiltIn,
+    escPosAvailable: bluetoothAvailable || usbAvailable || sunmiBuiltIn,
+    platform,
+  };
 }
 
 export async function testPrint(_payload: { width: PrinterPaperWidth; lines: string[] }): Promise<{ ok: boolean; error?: string }> {
-  return { ok: false, error: "Printer adapter not configured on this build." };
+  const payload = _payload;
+  const caps = await detectPrinterCapabilities();
+  const bytes = toEscPos(payload);
+
+  if (caps.usbAvailable && typeof navigator !== "undefined" && "usb" in navigator) {
+    try {
+      const usb = navigator.usb as {
+        requestDevice: (opts: { filters: Array<Record<string, unknown>> }) => Promise<{
+          configuration: unknown;
+          open: () => Promise<void>;
+          selectConfiguration: (cfg: number) => Promise<void>;
+          claimInterface: (idx: number) => Promise<void>;
+          transferOut: (endpoint: number, data: Uint8Array) => Promise<void>;
+          close: () => Promise<void>;
+        }>;
+      };
+      const device = await usb.requestDevice({ filters: [] });
+      await device.open();
+      if (device.configuration == null) await device.selectConfiguration(1);
+      await device.claimInterface(0);
+      await device.transferOut(1, bytes);
+      await device.close();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "USB thermal print failed.",
+      };
+    }
+  }
+
+  if (caps.bluetoothAvailable && typeof navigator !== "undefined" && "bluetooth" in navigator) {
+    try {
+      const bluetooth = navigator.bluetooth as {
+        requestDevice: (opts: {
+          acceptAllDevices: boolean;
+          optionalServices: number[];
+        }) => Promise<{
+          gatt?: {
+            connect: () => Promise<{
+              getPrimaryService: (service: number) => Promise<{
+                getCharacteristic: (char: number) => Promise<{ writeValue: (data: Uint8Array) => Promise<void> }>;
+              }>;
+            }>;
+            disconnect: () => void;
+          };
+        }>;
+      };
+      const device = await bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: BT_PRINTER_SERVICES,
+      });
+      const server = await device.gatt?.connect();
+      if (!server) return { ok: false, error: "Bluetooth printer connection failed." };
+      const service = await server.getPrimaryService(BT_PRINTER_SERVICES[0]);
+      const characteristic = await service.getCharacteristic(BT_PRINTER_CHARS[0]);
+      await characteristic.writeValue(bytes);
+      device.gatt?.disconnect();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : "Bluetooth thermal print failed.",
+      };
+    }
+  }
+
+  return { ok: false, error: "No native thermal printer interface is available on this device." };
 }

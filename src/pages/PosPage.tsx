@@ -47,6 +47,11 @@ import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
+import {
+  detectBarcodeCapabilities,
+  startBarcodeSession,
+  stopBarcodeSession,
+} from "../services/hardware/barcodeAdapter";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 10;
 const MAX_RECENT_SEARCHES = 4;
@@ -58,7 +63,7 @@ import {
   buildReceiptNumberForSale,
   buildSaleReceiptHtml,
   buildSaleReceiptText,
-  printReceiptText,
+  printReceiptWithFallback,
 } from "../lib/receiptPrint";
 import { posSearchAliases } from "../lib/pharmacyUx";
 
@@ -261,6 +266,9 @@ export function PosPage({ lang }: { lang: Language }) {
   const [saleSuccessFlash, setSaleSuccessFlash] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  const [cameraScanOpen, setCameraScanOpen] = useState(false);
+  const [cameraScanStatus, setCameraScanStatus] = useState("");
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
 
@@ -567,6 +575,43 @@ export function PosPage({ lang }: { lang: Language }) {
     },
     [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, lockedIds, runWithExpiredGuard, setDraftInput],
   );
+
+  useEffect(() => {
+    const caps = detectBarcodeCapabilities();
+    if (!caps.hidWedge) return;
+    void startBarcodeSession("hid", {
+      onScan: (code) => {
+        setSearchQuery(code);
+        const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
+        if (exact) openProduct(exact);
+      },
+    });
+    return () => {
+      void stopBarcodeSession();
+    };
+  }, [products, openProduct]);
+
+  useEffect(() => {
+    if (!cameraScanOpen) return;
+    setCameraScanStatus("Starting camera scanner...");
+    void startBarcodeSession("camera", {
+      videoElement: cameraVideoRef.current,
+      onScan: (code) => {
+        setSearchQuery(code);
+        setCameraScanStatus(`Scanned: ${code}`);
+        const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
+        if (exact) openProduct(exact);
+        void stopBarcodeSession();
+        setCameraScanOpen(false);
+      },
+      onError: (message) => setCameraScanStatus(message),
+    }).then((result) => {
+      if (!result.ok) setCameraScanStatus(result.error ?? t(lang, "posBarcodeSoon"));
+    });
+    return () => {
+      void stopBarcodeSession();
+    };
+  }, [cameraScanOpen, lang, openProduct, products]);
 
   useEffect(() => {
     if (draftLines.length === 0) setSaleCheckoutMinimized(false);
@@ -919,6 +964,7 @@ export function PosPage({ lang }: { lang: Language }) {
               className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 active:bg-stone-100"
               onClick={() => {
                 if (searchQuery.trim()) setSearchQuery("");
+                else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
               }}
               aria-label={searchQuery.trim() ? t(lang, "posClearSearch") : t(lang, "posBarcodeSoon")}
             >
@@ -1561,8 +1607,9 @@ export function PosPage({ lang }: { lang: Language }) {
                 type="button"
                 className="min-h-[52px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white active:bg-slate-800"
                 onClick={() => {
-                  const ok = printReceiptText(receiptPlain, preferences.receiptPaperSize ?? "80mm");
-                  if (!ok) window.alert(t(lang, "receiptPrintBlocked"));
+                  void printReceiptWithFallback(receiptPlain, preferences.receiptPaperSize ?? "80mm").then((result) => {
+                    if (!result.ok) window.alert(t(lang, "receiptPrintBlocked"));
+                  });
                 }}
               >
                 {t(lang, "receiptPrint")}
@@ -1730,6 +1777,26 @@ export function PosPage({ lang }: { lang: Language }) {
                 {t(lang, "firstSaleContinue")}
               </button>
             </div>
+          </div>
+        </AppModalOverlay>
+      ) : null}
+
+      {cameraScanOpen ? (
+        <AppModalOverlay className="z-[90] flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal>
+          <div className="w-full max-w-md rounded-3xl bg-white p-4 shadow-2xl">
+            <p className="text-lg font-black text-stone-900">{t(lang, "posBarcodeSoon")}</p>
+            <video ref={cameraVideoRef} className="mt-3 h-56 w-full rounded-2xl bg-black object-cover" />
+            <p className="mt-2 text-xs font-semibold text-stone-600">{cameraScanStatus || "Point camera at barcode."}</p>
+            <button
+              type="button"
+              className="mt-3 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white py-3 text-sm font-black text-stone-900"
+              onClick={() => {
+                void stopBarcodeSession();
+                setCameraScanOpen(false);
+              }}
+            >
+              {t(lang, "cancel")}
+            </button>
           </div>
         </AppModalOverlay>
       ) : null}
