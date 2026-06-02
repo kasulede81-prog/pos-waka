@@ -4,6 +4,8 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { shelfIconFor } from "../../lib/productCategories";
+import { uiPlaceholder } from "../../lib/pharmacyUx";
+import { usePosStore } from "../../store/usePosStore";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
   PACK_TYPE_OPTIONS,
@@ -41,6 +43,7 @@ export function SimpleAddProductWizard({
   disabled,
   onSave,
 }: Props) {
+  const preferences = usePosStore((s) => s.preferences);
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
   const [shelfPick, setShelfPick] = useState("");
@@ -249,7 +252,12 @@ export function SimpleAddProductWizard({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={t(lang, "simpleAddStep1Example")}
+                placeholder={uiPlaceholder(
+                  lang,
+                  preferences.businessType,
+                  "simpleAddStep1Example",
+                  preferences.pharmacyModeEnabled,
+                )}
                 autoFocus
                 className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-waka-300 focus:ring"
               />
@@ -259,7 +267,9 @@ export function SimpleAddProductWizard({
           {step === "shelf" ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-black text-slate-900">{t(lang, "simpleAddStep2Title")}</h2>
-              <p className="text-base text-slate-600">{t(lang, "simpleAddStep2Hint")}</p>
+              <p className="text-base text-slate-600">
+                {uiPlaceholder(lang, preferences.businessType, "simpleAddStep2Hint", preferences.pharmacyModeEnabled)}
+              </p>
               {shelves.length > 0 && !creatingShelf ? (
                 <div className="grid grid-cols-2 gap-2">
                   {shelves.map((s) => (
@@ -284,7 +294,12 @@ export function SimpleAddProductWizard({
                 <input
                   value={shelfNew}
                   onChange={(e) => setShelfNew(e.target.value)}
-                  placeholder={t(lang, "simpleAddShelfPlaceholder")}
+                  placeholder={uiPlaceholder(
+                    lang,
+                    preferences.businessType,
+                    "simpleAddShelfPlaceholder",
+                    preferences.pharmacyModeEnabled,
+                  )}
                   autoFocus
                   className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-waka-300 focus:ring"
                 />

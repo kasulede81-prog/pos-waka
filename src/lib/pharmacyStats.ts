@@ -5,6 +5,7 @@ import { isLowStock } from "./sellingEngine";
 import { countExpiryBuckets, medicinesInExpiryBucket, type ExpiryBucket } from "./pharmacyExpiry";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { localGetTopProducts } from "./localReporting";
+import { computePharmacyExpiryReport } from "./pharmacyReports";
 
 export type PharmacyDashboardStats = {
   lowStockCount: number;
@@ -15,6 +16,8 @@ export type PharmacyDashboardStats = {
   todayDispensingCount: number;
   todayDispensingTotalUgx: number;
   topMedicines: { productId: string; name: string; quantity: number; revenueUgx: number }[];
+  inventoryValueAtRiskUgx: number;
+  expiredStockValueUgx: number;
 };
 
 export function computePharmacyDashboardStats(
@@ -39,6 +42,7 @@ export function computePharmacyDashboardStats(
   const todayDispensingTotalUgx = todayFin.revenueUgx;
 
   const top = localGetTopProducts(sales, returns, products, "today", "top", 5);
+  const expiryReport = computePharmacyExpiryReport(inStock, today);
 
   return {
     lowStockCount: lowStockMedicines.length,
@@ -57,6 +61,8 @@ export function computePharmacyDashboardStats(
         revenueUgx: p.revenueUgx,
       };
     }),
+    inventoryValueAtRiskUgx: expiryReport.expiringValueUgx + expiryReport.expiredValueUgx,
+    expiredStockValueUgx: expiryReport.expiredValueUgx,
   };
 }
 

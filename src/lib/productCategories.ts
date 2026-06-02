@@ -29,6 +29,20 @@ export function productMatchesCategoryFilter(p: Product, filter: string): boolea
 
 export function shelfIconFor(label: string): string | null {
   const key = label.toLowerCase();
+  if (
+    key.includes("antibiot") ||
+    key.includes("malaria") ||
+    key.includes("pain") ||
+    key.includes("vitamin") ||
+    key.includes("cough") ||
+    key.includes("first aid") ||
+    key.includes("diabetes") ||
+    key.includes("hypertension") ||
+    key.includes("family planning") ||
+    key.includes("baby care")
+  ) {
+    return "💊";
+  }
   if (key.includes("rice")) return "🌾";
   if (key.includes("sugar")) return "🍚";
   if (key.includes("oil")) return "🛢";

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ClipboardCopy, Download, LifeBuoy } from "lucide-react";
+import { ChevronDown, ClipboardCopy, Download, LifeBuoy } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
@@ -24,6 +24,7 @@ export function PilotSupportCard({ lang, userId, pilotModeEnabled = false }: Pro
   const [cloudRole, setCloudRole] = useState<UserRole | null>(null);
   const [copied, setCopied] = useState(false);
   const [diagnostics, setDiagnostics] = useState<PilotDiagnosticsExport | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -114,54 +115,66 @@ export function PilotSupportCard({ lang, userId, pilotModeEnabled = false }: Pro
         </div>
       </div>
 
-      <dl className="mt-4 grid gap-2 text-sm">
-        <Row label={t(lang, "pilotSupportAppVersion")} value={diagnostics?.appVersion ?? "—"} />
-        <Row label={t(lang, "pilotSupportRole")} value={actor.role} />
-        <Row label={t(lang, "pilotSupportShopRole")} value={cloudRole ?? "—"} />
-        <Row label={t(lang, "pilotSupportPlan")} value={tier} />
-        <Row label={t(lang, "pilotSupportShopId")} value={shopId ?? "—"} mono />
-        <Row label={t(lang, "pilotSupportDeviceId")} value={diagnostics?.deviceId ?? "—"} mono />
-        <Row label={t(lang, "backupSyncPendingLabel")} value={String(sync.pendingCount)} />
-        <Row label={t(lang, "syncFailedCount")} value={String(syncErrorCount)} />
-        {sync.health.lastSuccessAt ? (
-          <Row label={t(lang, "syncLastSuccess")} value={new Date(sync.health.lastSuccessAt).toLocaleString()} />
-        ) : null}
-        {syncErrorCount > 0 ? (
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
-            <p className="font-bold text-rose-900">
-              {tTemplate(lang, "syncErrorCount", { count: String(syncErrorCount) })}
-            </p>
-            <ul className="mt-1 space-y-0.5 text-xs font-medium text-rose-800">
-              {syncErrors.map((e) => (
-                <li key={e.id} className="truncate">
-                  {e.error} · {e.id.slice(0, 8)}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </dl>
+      <details
+        className="mt-4 rounded-xl border border-teal-100 bg-white/80"
+        open={expanded}
+        onToggle={(e) => setExpanded((e.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-black text-teal-900">
+          <span>{t(lang, expanded ? "hideExtraFields" : "showExtraFields")}</span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden />
+        </summary>
+        <div className="border-t border-teal-100 px-3 py-3">
+          <dl className="grid gap-2 text-sm">
+            <Row label={t(lang, "pilotSupportAppVersion")} value={diagnostics?.appVersion ?? "—"} />
+            <Row label={t(lang, "pilotSupportRole")} value={actor.role} />
+            <Row label={t(lang, "pilotSupportShopRole")} value={cloudRole ?? "—"} />
+            <Row label={t(lang, "pilotSupportPlan")} value={tier} />
+            <Row label={t(lang, "pilotSupportShopId")} value={shopId ?? "—"} mono />
+            <Row label={t(lang, "pilotSupportDeviceId")} value={diagnostics?.deviceId ?? "—"} mono />
+            <Row label={t(lang, "backupSyncPendingLabel")} value={String(sync.pendingCount)} />
+            <Row label={t(lang, "syncFailedCount")} value={String(syncErrorCount)} />
+            {sync.health.lastSuccessAt ? (
+              <Row label={t(lang, "syncLastSuccess")} value={new Date(sync.health.lastSuccessAt).toLocaleString()} />
+            ) : null}
+            {syncErrorCount > 0 ? (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+                <p className="font-bold text-rose-900">
+                  {tTemplate(lang, "syncErrorCount", { count: String(syncErrorCount) })}
+                </p>
+                <ul className="mt-1 space-y-0.5 text-xs font-medium text-rose-800">
+                  {syncErrors.map((e) => (
+                    <li key={e.id} className="truncate">
+                      {e.error} · {e.id.slice(0, 8)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </dl>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => void copyDiagnostics()}
-          disabled={!diagnostics}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-sm font-black text-white disabled:opacity-50"
-        >
-          <ClipboardCopy className="h-4 w-4" aria-hidden />
-          {copied ? t(lang, "pilotSupportCopied") : t(lang, "pilotSupportCopy")}
-        </button>
-        <button
-          type="button"
-          onClick={downloadDiagnostics}
-          disabled={!diagnostics}
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border-2 border-teal-700 bg-white px-4 text-sm font-black text-teal-900 disabled:opacity-50"
-        >
-          <Download className="h-4 w-4" aria-hidden />
-          {t(lang, "pilotSupportExportFile")}
-        </button>
-      </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => void copyDiagnostics()}
+              disabled={!diagnostics}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 text-sm font-black text-white disabled:opacity-50"
+            >
+              <ClipboardCopy className="h-4 w-4" aria-hidden />
+              {copied ? t(lang, "pilotSupportCopied") : t(lang, "pilotSupportCopy")}
+            </button>
+            <button
+              type="button"
+              onClick={downloadDiagnostics}
+              disabled={!diagnostics}
+              className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-xl border-2 border-teal-700 bg-white px-4 text-sm font-black text-teal-900 disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              {t(lang, "pilotSupportExportFile")}
+            </button>
+          </div>
+        </div>
+      </details>
     </article>
   );
 }

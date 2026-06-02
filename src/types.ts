@@ -64,6 +64,7 @@ export type AuditAction =
   | "stock_adjust"
   | "price_change"
   | "debt_payment"
+  | "debt_reconcile"
   | "day_close"
   | "back_office_unlock"
   | "shift_start"
@@ -80,7 +81,9 @@ export type AuditAction =
   | "cash_expense_created"
   | "cash_expense_voided"
   | "auth_forbidden"
-  | "archive_purge";
+  | "archive_purge"
+  | "day_close_override"
+  | "sync_unknown_operation";
 
 export type AuditLogEntry = {
   id: string;
@@ -485,6 +488,10 @@ export type DayCloseSummary = {
   totalDebtUgx: number;
   profitEstimateUgx: number;
   createdAt: string;
+  /** When superseded by a re-close with explicit override. */
+  supersededAt?: string | null;
+  overrideReason?: string | null;
+  replacesCloseId?: string | null;
 };
 
 export const EXPENSE_CATEGORIES = [
@@ -652,6 +659,10 @@ export type ShopPreferences = {
   pharmacyExpiredSaleBehavior?: "warn" | "block";
   /** Owner-only: extra diagnostics, support export, sync logging, pilot banners */
   pilotModeEnabled?: boolean;
+  /** Optional discount policy; default unrestricted (backward compatible). */
+  discountControlMode?: "unrestricted" | "manager_approval" | "max_percent";
+  /** Percent threshold for manager_approval / max_percent modes. */
+  discountMaxPercentThreshold?: number;
 };
 
 export type SyncOperationKind =

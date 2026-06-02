@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { activeDayCloseForDate } from "../lib/dayCloseIdempotency";
 import { ensureAllActiveSalesLoaded, usePosStore } from "../store/usePosStore";
 import { dateKeyKampala } from "../lib/datesUg";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
@@ -25,6 +26,10 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const [counted, setCounted] = useState("");
   const [doneMsg, setDoneMsg] = useState(false);
   const [closeErrorKey, setCloseErrorKey] = useState<string | null>(null);
+  const [overrideMode, setOverrideMode] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+
+  const activeCloseToday = activeDayCloseForDate(dayCloses, todayKey);
 
   const drawer = useDrawerCashForToday();
 
@@ -47,7 +52,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
     setCloseErrorKey(null);
     const n = Math.max(0, Math.floor(Number(counted.replace(/\D/g, "")) || 0));
     await ensureAllActiveSalesLoaded();
-    const result = await recordDayClose({ dateKey: todayKey, countedCashUgx: n });
+    const result = await recordDayClose({
+      dateKey: todayKey,
+      countedCashUgx: n,
+      override: Boolean(activeCloseToday && overrideMode),
+      overrideReason: activeCloseToday && overrideMode ? overrideReason : undefined,
+    });
     if (!result.ok) {
       setCloseErrorKey(result.errorKey ?? "invalid");
       return;
@@ -57,7 +67,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
     window.setTimeout(() => setDoneMsg(false), 3000);
   };
 
-  const last = dayCloses[0];
+  const last = activeCloseToday ?? dayCloses.find((d) => d.dateKey === todayKey) ?? dayCloses[0];
 
   const pct = preferences.cashVarianceThresholdPct ?? 5;
   const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
@@ -162,6 +172,34 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         </button>
         {closeErrorKey === "closeDaySalesNotLoaded" ? (
           <p className="mt-3 text-center text-sm font-bold text-red-700">{t(lang, "closeDaySalesNotLoaded")}</p>
+        ) : null}
+        {closeErrorKey === "dayCloseAlreadyExists" ? (
+          <p className="mt-3 text-center text-sm font-bold text-amber-900">{t(lang, "dayCloseAlreadyExists")}</p>
+        ) : null}
+        {closeErrorKey === "dayCloseOverrideReasonRequired" ? (
+          <p className="mt-3 text-center text-sm font-bold text-red-700">{t(lang, "dayCloseOverrideReasonRequired")}</p>
+        ) : null}
+        {activeCloseToday ? (
+          <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-bold text-amber-950">{t(lang, "dayCloseOverridePrompt")}</p>
+            <label className="mt-2 flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <input
+                type="checkbox"
+                checked={overrideMode}
+                onChange={(e) => setOverrideMode(e.target.checked)}
+              />
+              {t(lang, "dayCloseOverrideConfirm")}
+            </label>
+            {overrideMode ? (
+              <textarea
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                className="mt-2 w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm"
+                rows={2}
+                placeholder={t(lang, "dayCloseOverrideReasonPlaceholder")}
+              />
+            ) : null}
+          </div>
         ) : null}
       </form>
 

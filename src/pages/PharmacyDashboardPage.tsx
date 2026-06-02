@@ -100,6 +100,15 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
           <p className="mt-1 text-3xl font-black text-amber-950">{stats.todayDispensingCount}</p>
           <p className="text-sm font-bold text-amber-900">{formatUgxShort(stats.todayDispensingTotalUgx)}</p>
         </div>
+        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 sm:col-span-2">
+          <p className="text-xs font-black uppercase text-teal-800">{t(lang, "pharmacyDashInventoryAtRisk")}</p>
+          <p className="mt-1 text-2xl font-black text-teal-950">
+            UGX {stats.inventoryValueAtRiskUgx.toLocaleString()}
+          </p>
+          <p className="text-xs font-semibold text-teal-800">
+            {t(lang, "pharmacyReportsExpiringValue")} + {t(lang, "pharmacyReportsExpiredValue")}
+          </p>
+        </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-xs font-black uppercase text-rose-800">{t(lang, "pharmacyDashLowStock")}</p>
           <p className="mt-1 text-3xl font-black text-rose-950">{stats.lowStockCount}</p>

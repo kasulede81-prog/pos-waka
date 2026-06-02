@@ -19,6 +19,7 @@ import { isPharmacyMode } from "../../lib/pharmacy";
 import { normalizeExpiryDate } from "../../lib/pharmacyExpiry";
 import { MEDICINE_FORMS, normalizeMedicineForm, normalizeMedicineStrength } from "../../lib/pharmacyMedicine";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
+import { uiPlaceholder } from "../../lib/pharmacyUx";
 
 type Props = {
   lang: Language;
@@ -229,7 +230,12 @@ export function StockProductEditModal({
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               list={categorySuggestions?.length ? categoryListId : undefined}
-              placeholder={t(lang, "simpleAddShelfPlaceholder")}
+              placeholder={uiPlaceholder(
+                lang,
+                preferences.businessType,
+                "simpleAddShelfPlaceholder",
+                preferences.pharmacyModeEnabled,
+              )}
               className={inputClass}
             />
             {categorySuggestions?.length ? (

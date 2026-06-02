@@ -1251,8 +1251,16 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       if (!raw?.id || !raw.action) return true;
       return pushAuditLogToCloud(raw, ctx);
     }
-    default:
-      return true;
+    default: {
+      const { appendDeviceAuditEntry } = await import("../lib/deviceAudit");
+      reportSyncIssue("sync_unknown_operation", { kind: op.kind, opId: op.id });
+      appendDeviceAuditEntry("sync_unknown_operation", `Unknown sync op: ${op.kind}`, {
+        kind: op.kind,
+        opId: op.id,
+        attempts: op.attempts,
+      });
+      return false;
+    }
   }
 }
 

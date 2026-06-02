@@ -4,8 +4,9 @@ import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isLowStock } from "../lib/sellingEngine";
-import { inferFromProductName } from "../lib/smartProductGuess";
-import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
+import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
+import { starterPackForBusinessType, starterExpiryDateIso, type StarterLine } from "../data/starterPacks";
+import { PharmacyAddMedicineWizard } from "../components/stock/PharmacyAddMedicineWizard";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -43,6 +44,8 @@ import { defaultMenuCategoriesForBusinessType, isHospitalityMode } from "../lib/
 import { defaultPharmacyCategoriesForBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
+import { isWholesaleMode } from "../lib/wholesale";
+import { useWholesaleTerms } from "../lib/wholesaleTerms";
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
@@ -62,9 +65,12 @@ export function StockPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const wholesaleMode = isWholesaleMode(preferences.businessType);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
-  const modeTerm = hospitalityMode ? ht : pt;
+  const wt = useWholesaleTerms(lang, preferences.businessType);
+  const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
+  const industryPlaceholderMode = pharmacyMode || wholesaleMode;
   const currentTier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(currentTier);
   const unlockedProducts = useMemo(
@@ -112,8 +118,8 @@ export function StockPage({ lang }: { lang: Language }) {
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
     if (!n) return null;
-    return inferFromProductName(n);
-  }, [qaName]);
+    return inferProductGuess(n, preferences.businessType, preferences.pharmacyModeEnabled);
+  }, [qaName, preferences.businessType, preferences.pharmacyModeEnabled]);
 
   const defaultGroupByCategory = products.length > 12;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
@@ -281,6 +287,10 @@ export function StockPage({ lang }: { lang: Language }) {
         baseUnit: row.baseUnit,
         medicineStrength: row.medicineStrength ?? null,
         medicineForm: row.medicineForm ?? null,
+        expiryDate:
+          pharmacyMode && row.defaultExpiryDaysFromNow != null
+            ? starterExpiryDateIso(row.defaultExpiryDaysFromNow)
+            : null,
       });
       left -= 1;
     }
@@ -597,7 +607,9 @@ export function StockPage({ lang }: { lang: Language }) {
             </section>
           ) : null}
 
-          {stockTab === "movements" ? <StockMovementsPanel lang={lang} movements={recentMovements} /> : null}
+          {stockTab === "movements" ? (
+            <StockMovementsPanel lang={lang} movements={recentMovements} pharmacyMode={pharmacyMode} wholesaleMode={wholesaleMode} />
+          ) : null}
         </>
       )}
 
@@ -614,7 +626,11 @@ export function StockPage({ lang }: { lang: Language }) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
-            <p className="text-center text-xl font-black text-slate-900">{t(lang, "stockQuickAddTitle")}</p>
+            <p className="text-center text-xl font-black text-slate-900">
+              {industryPlaceholderMode
+                ? uiPlaceholder(lang, preferences.businessType, "quickAddTitle", preferences.pharmacyModeEnabled)
+                : t(lang, "stockQuickAddTitle")}
+            </p>
             <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "stockQuickAddSub")}</p>
             {guessPreview ? (
               <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
@@ -625,6 +641,8 @@ export function StockPage({ lang }: { lang: Language }) {
               <QuickAddProductFields
                 lang={lang}
                 variant="sheet"
+                businessType={preferences.businessType}
+                pharmacyModeEnabled={preferences.pharmacyModeEnabled}
                 categorySuggestions={stockCategoryPicklist}
                 values={{
                   name: qaName,
@@ -654,7 +672,9 @@ export function StockPage({ lang }: { lang: Language }) {
                 {t(lang, "cancel")}
               </button>
               <button type="submit" className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-lg font-black text-white">
-                {t(lang, "quickAddSave")}
+                {industryPlaceholderMode
+                  ? uiPlaceholder(lang, preferences.businessType, "quickAddSave", preferences.pharmacyModeEnabled)
+                  : t(lang, "quickAddSave")}
               </button>
             </div>
             </div>
@@ -734,15 +754,26 @@ export function StockPage({ lang }: { lang: Language }) {
         </AppModalOverlay>
       ) : null}
 
-      <SimpleAddProductWizard
-        lang={lang}
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        shelves={stockCategoryPicklist}
-        generalCategoryLabel={t(lang, "generalCategory")}
-        disabled={freeProductLimitReached}
-        onSave={saveFromSimpleWizard}
-      />
+      {pharmacyMode ? (
+        <PharmacyAddMedicineWizard
+          lang={lang}
+          open={bulkOpen}
+          onClose={() => setBulkOpen(false)}
+          shelves={stockCategoryPicklist}
+          disabled={freeProductLimitReached}
+          onSaved={() => {}}
+        />
+      ) : (
+        <SimpleAddProductWizard
+          lang={lang}
+          open={bulkOpen}
+          onClose={() => setBulkOpen(false)}
+          shelves={stockCategoryPicklist}
+          generalCategoryLabel={t(lang, "generalCategory")}
+          disabled={freeProductLimitReached}
+          onSave={saveFromSimpleWizard}
+        />
+      )}
 
       <StockProductEditModal
         lang={lang}

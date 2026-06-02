@@ -15,7 +15,7 @@ import { usePosStore } from "../store/usePosStore";
 import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { captureAppException } from "../lib/crashReporting";
 import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLocation";
-import { inferFromProductName } from "../lib/smartProductGuess";
+import { inferProductGuess } from "../lib/pharmacyUx";
 import { PinInput } from "../components/ui/PinInput";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 import { normalizeUgPhoneE164, loadRegistrationProfileFromAuth, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
@@ -204,7 +204,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const starterProducts = useMemo(() => starterPackForBusinessType(businessType), [businessType]);
 
   const addStarterProduct = (line: StarterLine) => {
-    const guess = inferFromProductName(line.inferName);
+    const guess = inferProductGuess(line.inferName, businessType, businessType === "pharmacy");
     const mixed = sellingStyle === "mixed" && (line.sellingMode === "weighted" || line.sellingMode === "unit");
     quickAddProduct({
       name: t(lang, line.nameKey as "starterItem_sugar"),

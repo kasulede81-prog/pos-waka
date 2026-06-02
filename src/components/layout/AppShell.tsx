@@ -21,6 +21,7 @@ import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { isHospitalityMode } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
+import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { RouteErrorBoundary } from "../RouteErrorBoundary";
@@ -229,7 +230,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const sellNavLabelKey = pharmacyNav && !hospitalityNav ? "navDispense" : "navSell";
+  const wholesaleNav = isWholesaleMode(preferences.businessType);
+  const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
 
   const navDefs = useMemo((): NavDef[] => {
     if (hospitalityNav) {
@@ -255,12 +257,17 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       items.push({ path: "/pos", labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
     }
     if (hasPermission(actor.role, "receipts.view")) {
-      items.push({ path: "/receipts", labelKey: "receipts", Icon: Receipt, perm: "receipts.view" });
+      items.push({
+        path: "/receipts",
+        labelKey: pharmacyNav && !hospitalityNav ? "pharmacyTerm_dispensingReceipts" : wholesaleNav ? "navInvoices" : "receipts",
+        Icon: Receipt,
+        perm: "receipts.view",
+      });
     }
     if (hasPermission(actor.role, "stock.view") && !hasPermission(actor.role, "back_office.access")) {
       items.push({
         path: "/stock",
-        labelKey: pharmacyNav && !hospitalityNav ? "pharmacyTerm_medicineStock" : "navStock",
+        labelKey: pharmacyNav && !hospitalityNav ? "pharmacyTerm_medicineStock" : wholesaleNav ? "navWarehouse" : "navStock",
         Icon: Package,
         perm: "stock.view",
       });
@@ -269,7 +276,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
     }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey]);
+  }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
 
   const mobileNavDefs = useMemo(() => {
     const stockKeeperOnly =

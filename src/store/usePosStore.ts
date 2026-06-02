@@ -37,7 +37,6 @@ import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
-import { inferFromProductName } from "../lib/smartProductGuess";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
 import { getActiveAccountKey } from "../offline/accountScope";
@@ -56,6 +55,7 @@ import {
   isHospitalityBusinessType,
 } from "../lib/hospitality";
 import { isPharmacyBusinessType, isPharmacyMode } from "../lib/pharmacy";
+import { inferProductGuess } from "../lib/pharmacyUx";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
 import {
@@ -95,6 +95,7 @@ import {
 } from "../lib/sellingEngine";
 import {
   applyDiscountToLine,
+  listPriceForLine,
   applyCustomerDebtDelta,
   creditDebtReductionFromSaleAdjustment,
   reduceSaleTotalsByAmount,
@@ -110,6 +111,9 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
+import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
+import { validateDraftDiscount } from "../lib/discountGovernance";
+import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { validateReturnAuthorization } from "../lib/returnPolicy";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
@@ -353,7 +357,7 @@ export type PosState = {
   setDraftLineQuantity: (productId: string, quantity: number) => { ok: boolean; errorKey?: string };
   adjustDraftLineQuantity: (productId: string, delta: number) => { ok: boolean; errorKey?: string };
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
-  setDraftCartDiscount: (amountUgx: number) => void;
+  setDraftCartDiscount: (amountUgx: number) => { ok: boolean; errorKey?: string };
   clearDraft: () => void;
   ensureHospitalityFloor: () => void;
   openTable: (input: {
@@ -433,6 +437,7 @@ export type PosState = {
     medicineStrength?: string | null;
     medicineForm?: string | null;
     expiryDate?: string | null;
+    minimumStockAlert?: number;
   }) => { ok: boolean; errorKey?: string };
   bulkQuickAddProducts: (
     rows: Array<{
@@ -484,7 +489,10 @@ export type PosState = {
   recordDayClose: (opts: {
     dateKey: string;
     countedCashUgx: number;
+    override?: boolean;
+    overrideReason?: string;
   }) => Promise<{ ok: boolean; errorKey?: string }>;
+  repairCustomerDebtIntegrity: () => { ok: boolean; healedCount: number; mismatchCount: number };
   addCashExpense: (input: { amountUgx: number; category: string; description?: string }) => { ok: boolean; errorKey?: string };
   voidCashExpense: (id: string) => { ok: boolean };
 
@@ -1256,10 +1264,21 @@ export const usePosStore = create<PosState>((set, get) => {
 
   applyDraftLineDiscount: (productId, mode, value) => {
     const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
     const line = state.draftLines.find((l) => l.productId === productId);
     if (!line) return { ok: false, errorKey: "noSelection" };
     const next = applyDiscountToLine(line, mode, value);
     if (!next) return { ok: false, errorKey: "invalid" };
+    const list = listPriceForLine(line);
+    const discountUgx = Math.max(0, list - next.lineTotalUgx);
+    const policy = validateDraftDiscount({
+      prefs: state.preferences,
+      role: actor.role,
+      discountUgx,
+      lineSubtotalUgx: list,
+    });
+    if (!policy.ok) return { ok: false, errorKey: policy.errorKey };
     set((s) => ({
       draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
     }));
@@ -1268,9 +1287,22 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   setDraftCartDiscount: (amountUgx) => {
-    const capped = Math.max(0, Math.floor(amountUgx));
+    const state = get();
+    const actor = state.sessionActor;
+    const lineSubtotal = state.draftLines.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const capped = Math.min(Math.max(0, Math.floor(amountUgx)), lineSubtotal);
+    if (actor) {
+      const policy = validateDraftDiscount({
+        prefs: state.preferences,
+        role: actor.role,
+        discountUgx: capped,
+        lineSubtotalUgx: lineSubtotal,
+      });
+      if (!policy.ok) return { ok: false, errorKey: policy.errorKey };
+    }
     set({ draftCartDiscountUgx: capped });
     scheduleDraftPersist(get);
+    return { ok: true };
   },
 
   clearDraft: () => {
@@ -1823,6 +1855,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const listSubtotal = saleLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
     const lineSubtotal = saleLines.reduce((a, l) => a + l.lineTotalUgx, 0);
     const cartDiscount = Math.min(Math.max(0, Math.floor(state.draftCartDiscountUgx)), lineSubtotal);
+    const actorRole = state.sessionActor?.role ?? "cashier";
+    const discountPolicy = validateDraftDiscount({
+      prefs: state.preferences,
+      role: actorRole,
+      discountUgx: cartDiscount,
+      lineSubtotalUgx: lineSubtotal,
+    });
+    if (!discountPolicy.ok) return { ok: false, errorKey: discountPolicy.errorKey };
+
     const total = Math.max(0, lineSubtotal - cartDiscount);
     const discountTotal = Math.max(0, listSubtotal - total);
     const debt = Math.min(Math.max(0, Math.floor(debtUgx)), total);
@@ -1997,10 +2038,12 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   voidSaleLine: ({ saleId, lineIndex, reason, note }) => {
+    const denied = denyUnlessPerm("sale_void", "voidSaleLine");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    if (!hasPermission(actor.role, "sale_void")) return { ok: false, errorKey: "forbidden" };
     const saleIdx = state.sales.findIndex((s) => s.id === saleId);
     if (saleIdx === -1) return { ok: false, errorKey: "missingProduct" };
     const sale = state.sales[saleIdx]!;
@@ -2075,7 +2118,6 @@ export const usePosStore = create<PosState>((set, get) => {
       voidRecords: [voidRec, ...state.voidRecords],
       stockMovements: mergeStockMovements([movement], state.stockMovements),
     });
-    applyCustomerDebtHeal();
 
     if (openShift) {
       set((st) => ({
@@ -2119,10 +2161,12 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   returnProduct: ({ saleId, productId, quantity, refundAmountUgx, reason, note }) => {
+    const denied = denyUnlessPerm("sale_void", "returnProduct");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    if (!hasPermission(actor.role, "sale_void")) return { ok: false, errorKey: "forbidden" };
     const qty = Math.max(0, Number(quantity) || 0);
     const refund = Math.max(0, Math.floor(refundAmountUgx));
     if (qty <= 0 || refund <= 0) return { ok: false, errorKey: "invalid" };
@@ -2208,7 +2252,6 @@ export const usePosStore = create<PosState>((set, get) => {
       returnRecords: [returnRec, ...state.returnRecords],
       stockMovements: mergeStockMovements([movement], state.stockMovements),
     });
-    applyCustomerDebtHeal();
 
     if (openShift) {
       set((st) => ({
@@ -2295,7 +2338,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const trimmed = input.name.trim();
     if (!trimmed) return { ok: false, errorKey: "invalid" };
     const hint = (input.inferName ?? trimmed).trim();
-    const guess = inferFromProductName(hint);
+    const prefs = get().preferences;
+    const guess = inferProductGuess(hint, prefs.businessType, prefs.pharmacyModeEnabled);
     const sellingMode = input.sellingMode ?? guess.sellingMode;
     const baseUnit = (input.baseUnit ?? guess.baseUnit).trim() || "ea";
     const buyingUnit = input.buyingUnit !== undefined ? input.buyingUnit : guess.buyingUnit;
@@ -2306,7 +2350,14 @@ export const usePosStore = create<PosState>((set, get) => {
       input.costPricePerUnitUgx !== undefined && input.costPricePerUnitUgx !== null
         ? Math.max(0, Math.floor(Number(input.costPricePerUnitUgx)))
         : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
-    const minAlert = sellingMode === "portion" ? 1 : sellingMode === "weighted" ? 3 : 5;
+    const minAlert =
+      input.minimumStockAlert !== undefined
+        ? Math.max(0, Math.floor(input.minimumStockAlert))
+        : sellingMode === "portion"
+          ? 1
+          : sellingMode === "weighted"
+            ? 3
+            : 5;
     const presetMoney = input.quickPresetsMoneyUgx?.filter((x) => x > 0);
     const presetQty = input.quickPresetsQty?.filter((x) => x > 0);
     const sameShape =
@@ -2915,14 +2966,35 @@ export const usePosStore = create<PosState>((set, get) => {
     if (denied) return;
 
     const state = get();
+    const forensic = buildArchiveForensicSummary({
+      archivedSales: state.archivedSales,
+      archivedReturnRecords: state.archivedReturnRecords,
+      archivedVoidRecords: state.archivedVoidRecords,
+      archivedAuditLogs: state.archivedAuditLogs,
+      lastArchiveRunAt: state.preferences.lastArchiveRunAt,
+    });
     const counts = {
-      archivedSales: state.archivedSales.length,
-      archivedAuditLogs: state.archivedAuditLogs.length,
+      archivedSales: forensic.salesCount,
+      archivedAuditLogs: forensic.auditCount,
       archivedDayCloses: state.archivedDayCloses.length,
-      archivedVoidRecords: state.archivedVoidRecords.length,
-      archivedReturnRecords: state.archivedReturnRecords.length,
+      archivedVoidRecords: forensic.voidCount,
+      archivedReturnRecords: forensic.returnsCount,
       archivedShifts: (state.preferences.archivedShifts ?? []).length,
     };
+
+    const totalRecordsRemoved =
+      counts.archivedSales +
+      counts.archivedAuditLogs +
+      counts.archivedDayCloses +
+      counts.archivedVoidRecords +
+      counts.archivedReturnRecords +
+      counts.archivedShifts;
+
+    pushAudit("archive_purge", "Permanent archive purge", {
+      forensic,
+      ...counts,
+      totalRecordsRemoved,
+    });
 
     set({
       archivedSales: [],
@@ -2934,17 +3006,6 @@ export const usePosStore = create<PosState>((set, get) => {
         ...get().preferences,
         archivedShifts: [],
       },
-    });
-
-    pushAudit("archive_purge", "Permanent archive purge", {
-      ...counts,
-      totalRecordsRemoved:
-        counts.archivedSales +
-        counts.archivedAuditLogs +
-        counts.archivedDayCloses +
-        counts.archivedVoidRecords +
-        counts.archivedReturnRecords +
-        counts.archivedShifts,
     });
   },
 
@@ -2988,10 +3049,12 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   voidCashExpense: (id) => {
+    const denied = denyUnlessPerm("expenses.delete", "voidCashExpense");
+    if (denied) return { ok: false };
+
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false };
-    if (!hasPermission(actor.role, "expenses.delete")) return { ok: false };
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
     if (!row) return { ok: false };
     const now = new Date().toISOString();
@@ -3007,7 +3070,7 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  recordDayClose: async ({ dateKey, countedCashUgx }) => {
+  recordDayClose: async ({ dateKey, countedCashUgx, override, overrideReason }) => {
     const denied = denyUnlessPerm("day.close", "recordDayClose");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
@@ -3017,6 +3080,14 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     const state = get();
+    const gate = canRecordDayClose(state.dayCloses, dateKey, override);
+    if (!gate.ok) return { ok: false, errorKey: gate.errorKey };
+
+    const existing = activeDayCloseForDate(state.dayCloses, dateKey);
+    if (existing && override) {
+      const reason = (overrideReason ?? "").trim();
+      if (reason.length < 3) return { ok: false, errorKey: "dayCloseOverrideReasonRequired" };
+    }
     const drawer = getDrawerCashForDayInput({
       sales: state.sales,
       returns: state.returnRecords,
@@ -3032,6 +3103,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const profitEstimateUgx = fin.profitUgx;
     const counted = Math.max(0, Math.floor(countedCashUgx));
     const diff = counted - expectedCashUgx;
+    const now = new Date().toISOString();
     const row: DayCloseSummary = {
       id: crypto.randomUUID(),
       dateKey,
@@ -3041,10 +3113,27 @@ export const usePosStore = create<PosState>((set, get) => {
       totalSalesUgx,
       totalDebtUgx,
       profitEstimateUgx,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      replacesCloseId: existing?.id ?? null,
+      overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
     };
-    set((s) => ({ dayCloses: [row, ...s.dayCloses] }));
+    set((s) => ({
+      dayCloses: [
+        row,
+        ...s.dayCloses.map((d) =>
+          existing && d.id === existing.id ? { ...d, supersededAt: now } : d,
+        ),
+      ],
+    }));
     void queueRemote("pending_sales", { kind: "day_close", id: row.id });
+    if (existing && override) {
+      pushAudit("day_close_override", `Re-close ${dateKey}`, {
+        previousCloseId: existing.id,
+        newCloseId: row.id,
+        overrideReason: row.overrideReason,
+        dateKey,
+      });
+    }
     pushAudit("day_close", `Close ${dateKey} counted UGX ${counted.toLocaleString()}`, {
       dayCloseId: row.id,
       dateKey,
@@ -3060,6 +3149,28 @@ export const usePosStore = create<PosState>((set, get) => {
       expenseUgx: drawer.expenseUgx,
     });
     return { ok: true };
+  },
+
+  repairCustomerDebtIntegrity: () => {
+    const denied = denyUnlessPerm("owner.dashboard", "repairCustomerDebtIntegrity");
+    if (denied) return { ok: false, healedCount: 0, mismatchCount: 0 };
+
+    const state = get();
+    const before = verifyCustomerDebtIntegrity(state.customers, state.sales, state.debtPayments, { heal: false });
+    const result = verifyCustomerDebtIntegrity(state.customers, state.sales, state.debtPayments, { heal: true });
+    if (result.healedCount > 0) {
+      set({ customers: result.customers });
+    }
+    pushAudit("debt_reconcile", `Debt reconciliation healed ${result.healedCount}`, {
+      healedCount: result.healedCount,
+      mismatchCountBefore: before.mismatches.length,
+      mismatchCountAfter: result.mismatches.length,
+    });
+    return {
+      ok: result.ok,
+      healedCount: result.healedCount,
+      mismatchCount: result.mismatches.length,
+    };
   },
 };
 });
@@ -3197,6 +3308,14 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           : String(p.lastMonthlyReportPromptMonth).slice(0, 7) || null,
     lastArchiveRunAt:
       p.lastArchiveRunAt === undefined ? (base.lastArchiveRunAt ?? null) : p.lastArchiveRunAt === null ? null : String(p.lastArchiveRunAt),
+    discountControlMode:
+      p.discountControlMode === "manager_approval" || p.discountControlMode === "max_percent"
+        ? p.discountControlMode
+        : (base.discountControlMode ?? "unrestricted"),
+    discountMaxPercentThreshold:
+      typeof p.discountMaxPercentThreshold === "number" && p.discountMaxPercentThreshold >= 0 && p.discountMaxPercentThreshold <= 100
+        ? p.discountMaxPercentThreshold
+        : (base.discountMaxPercentThreshold ?? 10),
   };
 }
 
@@ -3467,14 +3586,6 @@ export async function isActiveSalesFullyLoaded(): Promise<boolean> {
   return manifest.salesOrder.every((id) => have.has(id));
 }
 
-function applyCustomerDebtHeal(): void {
-  const state = usePosStore.getState();
-  const result = verifyCustomerDebtIntegrity(state.customers, state.sales, state.debtPayments, { heal: true });
-  if (result.healedCount > 0) {
-    usePosStore.setState({ customers: result.customers });
-  }
-}
-
 /** Load any sales not yet in RAM (reports/search). */
 export async function ensureAllActiveSalesLoaded(): Promise<void> {
   const { readEntityManifest, getEntitiesByIds } = await import("../offline/entityStore");
@@ -3557,7 +3668,6 @@ function schedulePostBootstrapTasks(): void {
 
 async function runPostBootstrapTasks(): Promise<void> {
   if (!usePosStore.getState()._hydrated) return;
-  applyCustomerDebtHeal();
   void restoreDraftSaleFromDisk();
   runWhenIdle(() => usePosStore.getState().runDataArchive(), 4000);
 

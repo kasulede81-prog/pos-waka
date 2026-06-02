@@ -6,6 +6,8 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
+import { isWholesaleMode } from "../lib/wholesale";
+import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
@@ -18,7 +20,12 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
-  const modeTerm = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled) ? ht : pt;
+  const wt = useWholesaleTerms(lang, preferences.businessType);
+  const modeTerm = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)
+    ? ht
+    : isWholesaleMode(preferences.businessType)
+      ? wt
+      : pt;
   const sales = useDeferredSales();
   const debtPayments = usePosStore((s) => s.debtPayments);
   const addCustomer = usePosStore((s) => s.addCustomer);
@@ -82,7 +89,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
           className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
         />
         <button type="submit" className="w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white">
-          {pt("addCustomer")}
+          {modeTerm("addCustomer")}
         </button>
       </form>
 

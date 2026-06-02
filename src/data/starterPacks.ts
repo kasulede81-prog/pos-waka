@@ -12,6 +12,8 @@ export type StarterLine = {
   category?: string;
   medicineStrength?: string;
   medicineForm?: string;
+  /** Optional default expiry offset in days from today (starter onboarding). */
+  defaultExpiryDaysFromNow?: number;
 };
 
 export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
@@ -36,6 +38,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       category: "Pain Relief",
       medicineStrength: "500mg",
       medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 365,
     },
     {
       nameKey: "starterPharmacy_amox",
@@ -43,8 +46,69 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       defaultPriceUgx: 1500,
       defaultStock: 60,
       category: "Antibiotics",
-      medicineStrength: "500mg",
+      medicineStrength: "250mg",
       medicineForm: "Capsule",
+      defaultExpiryDaysFromNow: 540,
+    },
+    {
+      nameKey: "starterPharmacy_ibuprofen",
+      inferName: "Ibuprofen",
+      defaultPriceUgx: 800,
+      defaultStock: 80,
+      category: "Pain Relief",
+      medicineStrength: "400mg",
+      medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 365,
+    },
+    {
+      nameKey: "starterPharmacy_omeprazole",
+      inferName: "Omeprazole",
+      defaultPriceUgx: 1200,
+      defaultStock: 48,
+      category: "Hypertension",
+      medicineStrength: "20mg",
+      medicineForm: "Capsule",
+      defaultExpiryDaysFromNow: 540,
+    },
+    {
+      nameKey: "starterPharmacy_metronidazole",
+      inferName: "Metronidazole",
+      defaultPriceUgx: 900,
+      defaultStock: 40,
+      category: "Antibiotics",
+      medicineStrength: "400mg",
+      medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 365,
+    },
+    {
+      nameKey: "starterPharmacy_vitc",
+      inferName: "Vitamin C",
+      defaultPriceUgx: 600,
+      defaultStock: 72,
+      category: "Vitamins",
+      medicineStrength: "1000mg",
+      medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 730,
+    },
+    {
+      nameKey: "starterPharmacy_diclofenac",
+      inferName: "Diclofenac",
+      defaultPriceUgx: 700,
+      defaultStock: 60,
+      category: "Pain Relief",
+      medicineStrength: "50mg",
+      medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 365,
+    },
+    {
+      nameKey: "starterPharmacy_cetirizine",
+      inferName: "Cetirizine",
+      defaultPriceUgx: 500,
+      defaultStock: 48,
+      category: "Cough & Cold",
+      medicineStrength: "10mg",
+      medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 540,
     },
     {
       nameKey: "starterPharmacy_ors",
@@ -53,6 +117,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       defaultStock: 40,
       category: "First Aid",
       medicineForm: "Other",
+      defaultExpiryDaysFromNow: 730,
     },
     {
       nameKey: "starterPharmacy_artemether",
@@ -62,6 +127,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       category: "Malaria",
       medicineStrength: "20/120mg",
       medicineForm: "Tablet",
+      defaultExpiryDaysFromNow: 540,
     },
   ];
 
@@ -108,8 +174,96 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
   ];
 
   const wholesale: StarterLine[] = [
-    ...kiosk,
-    { nameKey: "starterItem_posho", inferName: "posho", defaultPriceUgx: 3200, defaultStock: 50, sellingMode: "weighted", baseUnit: "kg" },
+    {
+      nameKey: "starterWholesale_rice25",
+      inferName: "Rice 25kg Bag",
+      defaultPriceUgx: 95_000,
+      defaultStock: 40,
+      sellingMode: "weighted",
+      baseUnit: "kg",
+      category: "Grains",
+    },
+    {
+      nameKey: "starterWholesale_rice50",
+      inferName: "Rice 50kg Bag",
+      defaultPriceUgx: 185_000,
+      defaultStock: 25,
+      sellingMode: "weighted",
+      baseUnit: "kg",
+      category: "Grains",
+    },
+    {
+      nameKey: "starterWholesale_sugar50",
+      inferName: "Sugar 50kg Sack",
+      defaultPriceUgx: 210_000,
+      defaultStock: 18,
+      sellingMode: "weighted",
+      baseUnit: "kg",
+      category: "Sugar & Flour",
+    },
+    {
+      nameKey: "starterWholesale_oilCarton",
+      inferName: "Cooking Oil Carton",
+      defaultPriceUgx: 240_000,
+      defaultStock: 24,
+      sellingMode: "unit",
+      baseUnit: "bottle",
+      category: "Edible Oil",
+    },
+    {
+      nameKey: "starterWholesale_softDrinkCrate",
+      inferName: "Soft Drink Crate",
+      defaultPriceUgx: 42_000,
+      defaultStock: 30,
+      sellingMode: "unit",
+      baseUnit: "bottle",
+      category: "Beverage Crates",
+    },
+    {
+      nameKey: "starterWholesale_waterCase",
+      inferName: "Water Case",
+      defaultPriceUgx: 18_000,
+      defaultStock: 30,
+      sellingMode: "unit",
+      baseUnit: "bottle",
+      category: "Beverage Crates",
+    },
+    {
+      nameKey: "starterWholesale_soapCarton",
+      inferName: "Laundry Soap Carton",
+      defaultPriceUgx: 78_000,
+      defaultStock: 20,
+      sellingMode: "unit",
+      baseUnit: "piece",
+      category: "Home Care",
+    },
+    {
+      nameKey: "starterWholesale_detergentCarton",
+      inferName: "Detergent Carton",
+      defaultPriceUgx: 132_000,
+      defaultStock: 20,
+      sellingMode: "unit",
+      baseUnit: "pack",
+      category: "Home Care",
+    },
+    {
+      nameKey: "starterWholesale_biscuitsCarton",
+      inferName: "Biscuits Carton",
+      defaultPriceUgx: 64_000,
+      defaultStock: 25,
+      sellingMode: "unit",
+      baseUnit: "pack",
+      category: "Snacks",
+    },
+    {
+      nameKey: "starterWholesale_saltBag",
+      inferName: "Salt Bag",
+      defaultPriceUgx: 68_000,
+      defaultStock: 25,
+      sellingMode: "weighted",
+      baseUnit: "kg",
+      category: "Salt",
+    },
   ];
 
   switch (bt) {
@@ -144,4 +298,11 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
     default:
       return kiosk;
   }
+}
+
+/** ISO date YYYY-MM-DD for starter expiry defaults. */
+export function starterExpiryDateIso(daysFromNow: number, now: Date = new Date()): string {
+  const d = new Date(now);
+  d.setDate(d.getDate() + Math.max(0, daysFromNow));
+  return d.toISOString().slice(0, 10);
 }

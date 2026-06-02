@@ -11,6 +11,8 @@ import { AppModalOverlay } from "./layout/AppModalOverlay";
 const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
 
 function featureKeyForBusinessType(type: BusinessType): string {
+  if (type === "wholesale") return "businessTypeFeatures_wholesale";
+  if (type === "mini_supermarket") return "businessTypeFeatures_mini_supermarket";
   if (type === "boutique") return "businessTypeFeatures_boutique";
   if (type === "restaurant") return "businessTypeFeatures_restaurant";
   if (type === "bar") return "businessTypeFeatures_bar";
@@ -19,6 +21,10 @@ function featureKeyForBusinessType(type: BusinessType): string {
   if (type === "pharmacy") return "businessTypeFeatures_pharmacy";
   if (type === "hardware") return "businessTypeFeatures_hardware";
   if (type === "electronics") return "businessTypeFeatures_electronics";
+  if (type === "salon") return "businessTypeFeatures_salon";
+  if (type === "produce_market") return "businessTypeFeatures_produce_market";
+  if (type === "mobile_money_agent") return "businessTypeFeatures_mobile_money_agent";
+  if (type === "other") return "businessTypeFeatures_other";
   return "businessTypeFeatures_kiosk_duka";
 }
 

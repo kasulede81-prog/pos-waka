@@ -190,7 +190,7 @@ export function computeExtendedOwnerAlerts(params: {
   const pct = preferences.cashVarianceThresholdPct ?? 5;
   const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
 
-  const closeToday = dayCloses.find((d) => d.dateKey === todayKey);
+  const closeToday = dayCloses.find((d) => d.dateKey === todayKey && !d.supersededAt);
   if (closeToday && closeToday.differenceUgx < 0) {
     const short = -closeToday.differenceUgx;
     const threshold = Math.max((pct / 100) * Math.max(1, closeToday.expectedCashUgx), fixed);

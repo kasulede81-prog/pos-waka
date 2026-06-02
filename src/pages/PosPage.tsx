@@ -45,6 +45,8 @@ import { gateExpiredMedicineSale } from "../lib/pharmacySaleGuard";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
+import { isWholesaleMode } from "../lib/wholesale";
+import { useWholesaleTerms } from "../lib/wholesaleTerms";
 
 const VIRTUAL_PRODUCT_THRESHOLD = 10;
 const MAX_RECENT_SEARCHES = 4;
@@ -58,12 +60,7 @@ import {
   buildSaleReceiptText,
   printReceiptText,
 } from "../lib/receiptPrint";
-const SEARCH_ALIASES: Record<string, string[]> = {
-  blueband: ["margarine"],
-  margarine: ["blueband"],
-  soda: ["coke", "coca cola", "pepsi", "fanta", "sprite", "mirinda", "soft drink"],
-  sugar: ["kakira", "kinyara", "brown sugar", "sack"],
-};
+import { posSearchAliases } from "../lib/pharmacyUx";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -141,9 +138,11 @@ export function PosPage({ lang }: { lang: Language }) {
   const shopPreferences = usePosStore((s) => s.preferences);
   const pt = usePharmacyTerms(lang, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
+  const wt = useWholesaleTerms(lang, shopPreferences.businessType);
   const pharmacyMode = isPharmacyMode(shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
   const hospitalityMode = isHospitalityMode(shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
-  const modeTerm = hospitalityMode ? ht : pt;
+  const wholesaleMode = isWholesaleMode(shopPreferences.businessType);
+  const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
   const { snapshot } = useSubscription();
   const location = useLocation();
   const navigate = useNavigate();
@@ -438,16 +437,17 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellSearchContext = useMemo(() => {
     const q = searchQuery.trim();
     const qLower = q.toLowerCase();
+    const aliases = posSearchAliases(shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
     const aliasSet = new Set<string>();
-    if (qLower && SEARCH_ALIASES[qLower]) {
-      for (const a of SEARCH_ALIASES[qLower]) aliasSet.add(a);
+    if (qLower && aliases[qLower]) {
+      for (const a of aliases[qLower]) aliasSet.add(a);
     }
     for (const tok of qLower.split(/\s+/).filter(Boolean)) {
-      const al = SEARCH_ALIASES[tok];
+      const al = aliases[tok];
       if (al) for (const x of al) aliasSet.add(x);
     }
     return { q, aliasTerms: [...aliasSet] };
-  }, [searchQuery]);
+  }, [searchQuery, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled]);
 
   const sellRowMatchesSearch = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
@@ -910,8 +910,8 @@ export function PosPage({ lang }: { lang: Language }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitSearch(searchQuery);
               }}
-              placeholder={pharmacyMode || hospitalityMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
-              aria-label={pharmacyMode || hospitalityMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
+              placeholder={pharmacyMode || hospitalityMode || wholesaleMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
+              aria-label={pharmacyMode || hospitalityMode || wholesaleMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
               className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/90 pl-9 pr-10 text-base font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 focus:border-waka-400 focus:bg-white focus:ring-1"
             />
             <button

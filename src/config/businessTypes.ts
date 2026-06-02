@@ -3,13 +3,20 @@ import type { BusinessType } from "../types";
 /** Stored on shop / local preferences — drives labels, nav, and defaults */
 export const BUSINESS_TYPE_IDS: readonly BusinessType[] = [
   "kiosk_duka",
+  "wholesale",
+  "mini_supermarket",
   "boutique",
   "restaurant",
   "bar",
   "restaurant_bar",
+  "hotel",
   "pharmacy",
   "hardware",
   "electronics",
+  "salon",
+  "produce_market",
+  "mobile_money_agent",
+  "other",
 ] as const;
 
 export type DashboardVariant = "kiosk" | "retail" | "service" | "agent";

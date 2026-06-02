@@ -26,6 +26,8 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
+import { isWholesaleMode } from "../lib/wholesale";
+import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { pendingSales } from "../lib/saleStatus";
 
 function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: string } {
@@ -67,9 +69,11 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const wholesaleMode = isWholesaleMode(preferences.businessType);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
-  const modeTerm = hospitalityMode ? ht : pt;
+  const wt = useWholesaleTerms(lang, preferences.businessType);
+  const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const voidRecords = usePosStore((s) => s.voidRecords);
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
@@ -133,7 +137,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     const estProfitUgx = fin.profitUgx;
     const returnsTotalUgx = todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0);
     const grossSalesUgx = totalSalesUgx + voidsTotalUgx + returnsTotalUgx;
-    const closeToday = dayCloses.find((d) => d.dateKey === todayKey);
+    const closeToday = dayCloses.find((d) => d.dateKey === todayKey && !d.supersededAt);
     const countedCashUgx = closeToday?.countedCashUgx ?? null;
     const todayCloseDiff = closeToday?.differenceUgx ?? null;
     const shortageUgx = closeToday && closeToday.differenceUgx < 0 ? -closeToday.differenceUgx : null;
@@ -670,12 +674,12 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-black text-slate-900">
-          {hospitalityMode ? ht("guests") : pharmacyMode ? modeTerm("customers") : t(lang, "customers")}
+          {hospitalityMode || pharmacyMode || wholesaleMode ? modeTerm("customers") : t(lang, "customers")}
         </h2>
         <p className="mt-1 text-sm text-slate-600">
           {hospitalityMode
             ? t(lang, "hospitalityPage_guestTabs")
-            : pharmacyMode
+            : pharmacyMode || wholesaleMode
               ? modeTerm("debts")
               : t(lang, "ownerDebtHint")}
           :{" "}
@@ -694,7 +698,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           </p>
         ) : null}
         <Link to="/customers" className="mt-3 inline-block text-sm font-bold text-waka-700 underline">
-          {hospitalityMode ? ht("guests") : pharmacyMode ? modeTerm("customers") : t(lang, "customers")} →
+          {hospitalityMode || pharmacyMode || wholesaleMode ? modeTerm("customers") : t(lang, "customers")} →
         </Link>
       </section>
     </div>

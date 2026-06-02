@@ -18,6 +18,7 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
 import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { isPharmacyMode } from "../lib/pharmacy";
+import { isWholesaleMode } from "../lib/wholesale";
 import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
 import { PharmacyDashboardPage } from "./PharmacyDashboardPage";
 
@@ -123,6 +124,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   if (pharmacyHome) {
     return <PharmacyDashboardPage lang={lang} />;
   }
+  const wholesaleHome = isWholesaleMode(preferences.businessType);
 
   return (
     <div className="space-y-4">
@@ -177,8 +179,12 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-stone-950">{t(lang, "homeCashierHello")}</h1>
-          <p className="mt-1 text-base font-medium text-stone-500">{t(lang, "homeCashierSub")}</p>
+          <h1 className="text-3xl font-black tracking-tight text-stone-950">
+            {wholesaleHome ? t(lang, "wholesaleDashTitle") : t(lang, "homeCashierHello")}
+          </h1>
+          <p className="mt-1 text-base font-medium text-stone-500">
+            {wholesaleHome ? t(lang, "wholesaleDashSub") : t(lang, "homeCashierSub")}
+          </p>
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {canSell ? (
@@ -186,7 +192,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
               to="/pos"
               className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl bg-waka-600 px-5 py-3 text-base font-black text-white shadow-waka-sm active:bg-waka-700"
             >
-              {t(lang, "sellTitle")}
+              {wholesaleHome ? t(lang, "wholesaleDashGoInvoice") : t(lang, "sellTitle")}
             </Link>
           ) : null}
           {canReceipts ? (
@@ -194,7 +200,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
               to="/receipts"
               className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-black text-stone-800 shadow-sm"
             >
-              {t(lang, "receipts")}
+              {wholesaleHome ? t(lang, "navInvoices") : t(lang, "receipts")}
             </Link>
           ) : null}
           {canDayClose ? (
@@ -271,9 +277,13 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
       <section className={`grid grid-cols-2 gap-3 ${gridCols}`}>
         <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
-          <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "todaySection")}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-white/80">
+            {wholesaleHome ? t(lang, "wholesaleDashLargeInvoices") : t(lang, "todaySection")}
+          </p>
           <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {salesTodayTotal.toLocaleString()}</p>
-          <p className="mt-1 text-xs font-semibold text-white/70">{t(lang, "dashboardTodaySalesHint")}</p>
+          <p className="mt-1 text-xs font-semibold text-white/70">
+            {wholesaleHome ? t(lang, "wholesaleDashNoInvoices") : t(lang, "dashboardTodaySalesHint")}
+          </p>
           <p className="mt-1 text-xs font-semibold text-white/80">
             {t(lang, "dashboardSalesMeta")
               .replace("{{count}}", String(todaySales.length))
@@ -282,13 +292,17 @@ export function DashboardPage({ lang }: { lang: Language }) {
         </article>
         {canStock ? (
           <article className="rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-waka-sm">
-            <p className="text-xs font-black uppercase tracking-wide text-rose-900">{t(lang, "cardLowStock")}</p>
+            <p className="text-xs font-black uppercase tracking-wide text-rose-900">
+              {wholesaleHome ? t(lang, "wholesaleDashReorderRequired") : t(lang, "cardLowStock")}
+            </p>
             <p className="mt-1 text-3xl font-black text-rose-950">{lowStockProducts.length}</p>
             <p className="mt-1 text-xs font-semibold text-rose-800">{t(lang, "almostFinishedHint")}</p>
           </article>
         ) : null}
         <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
-          <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">{t(lang, "cardDebtToday")}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">
+            {wholesaleHome ? t(lang, "wholesaleDashReceivables") : t(lang, "cardDebtToday")}
+          </p>
           <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
           <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtTodayHint")}</p>
         </article>

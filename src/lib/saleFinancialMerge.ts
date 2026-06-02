@@ -34,16 +34,26 @@ function financialFields(sale: Sale): SaleFinancialFields {
   };
 }
 
-/** Prefer the copy that reflects more void/return adjustments (lower remaining total). */
+/** Higher rank = more void/return adjustments applied (authoritative financial copy). */
+export function completedSaleAdjustmentRank(sale: Sale): [number, number, number] {
+  const voided = sale.voidedTotalUgx ?? 0;
+  const list = sale.subtotalUgx ?? sale.totalUgx;
+  const shrink = Math.max(0, list - sale.totalUgx);
+  return [voided, shrink, -sale.totalUgx];
+}
+
+function rankCompare(a: [number, number, number], b: [number, number, number]): number {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
+  }
+  return 0;
+}
+
+/** Prefer return/void-adjusted sale; stale higher totals cannot win on recency alone. */
 export function pickAuthoritativeCompletedFinancial(local: Sale, remote: Sale): Sale {
-  if (local.totalUgx !== remote.totalUgx) {
-    return local.totalUgx < remote.totalUgx ? local : remote;
-  }
-  const localVoided = local.voidedTotalUgx ?? 0;
-  const remoteVoided = remote.voidedTotalUgx ?? 0;
-  if (localVoided !== remoteVoided) {
-    return localVoided > remoteVoided ? local : remote;
-  }
+  const cmp = rankCompare(completedSaleAdjustmentRank(local), completedSaleAdjustmentRank(remote));
+  if (cmp > 0) return local;
+  if (cmp < 0) return remote;
   return local;
 }
 

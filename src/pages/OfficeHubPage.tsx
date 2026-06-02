@@ -41,6 +41,8 @@ import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
+import { isWholesaleMode } from "../lib/wholesale";
+import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
 import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { SyncHealthCard } from "../components/SyncHealthCard";
@@ -82,9 +84,11 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const wholesaleMode = isWholesaleMode(preferences.businessType);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
-  const modeTerm = hospitalityMode ? ht : pt;
+  const wt = useWholesaleTerms(lang, preferences.businessType);
+  const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
   const deemphasizePurchasing = pharmacyMode || hospitalityMode;
   const { snapshot, authMode, userId } = useSubscription();
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
@@ -135,7 +139,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
 
   const empty = !hasDaily && !hasInsights && !hasShopControl && !hasData && !hasHelp;
 
-  const highlightCustomers = !pharmacyMode && !hospitalityMode;
+  const highlightCustomers = !pharmacyMode && !hospitalityMode && !wholesaleMode;
   const highlightPharmacyPatients = pharmacyMode;
   const highlightStock = true;
   const highlightReports = true;
@@ -213,6 +217,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   to="/customers"
                   title={pt("customers")}
                   subtitle={t(lang, "pharmacyPage_patientsDebts")}
+                  Icon={Users}
+                  highlight
+                />
+              ) : null}
+              {can("customers.view") && wholesaleMode ? (
+                <OfficeNavCard
+                  to="/customers"
+                  title={wt("customers")}
+                  subtitle={t(lang, "wholesalePage_receivables")}
                   Icon={Users}
                   highlight
                 />

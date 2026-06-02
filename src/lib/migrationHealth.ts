@@ -4,7 +4,9 @@ export type MigrationCheckId =
   | "082_inventory_integrity"
   | "083_sale_stock_sync"
   | "084_remediate_sale_inventory_movement_duplicates"
-  | "085_audit_log_client_entry_idempotent";
+  | "085_audit_log_client_entry_idempotent"
+  | "086_certification_closure"
+  | "087_migration_health_086";
 
 export type MigrationCheckResult = {
   id: MigrationCheckId;
@@ -24,6 +26,8 @@ const EXPECTED_CHECKS: MigrationCheckId[] = [
   "083_sale_stock_sync",
   "084_remediate_sale_inventory_movement_duplicates",
   "085_audit_log_client_entry_idempotent",
+  "086_certification_closure",
+  "087_migration_health_086",
 ];
 
 export async function fetchProductionMigrationHealth(): Promise<MigrationHealthReport> {

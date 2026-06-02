@@ -73,6 +73,26 @@ describe("usePosStore — cashier mutation regression", () => {
     expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(5_000);
   });
 
+  it("cashier voidCashExpense is denied with auth_forbidden audit", () => {
+    usePosStore.setState({
+      cashExpenses: [
+        {
+          id: "exp-1",
+          category: "transport",
+          amountUgx: 5000,
+          description: "",
+          paidOn: "2026-05-31",
+          createdAt: "2026-05-31T10:00:00.000Z",
+          createdByUserId: "staff:1",
+          pendingSync: false,
+        },
+      ],
+    });
+    const r = usePosStore.getState().voidCashExpense("exp-1");
+    expect(r.ok).toBe(false);
+    expect(usePosStore.getState().auditLogs.some((a) => a.action === "auth_forbidden")).toBe(true);
+  });
+
   it("cashier updateProduct fails", () => {
     const r = usePosStore.getState().updateProduct(PRODUCT_ID, { sellingPricePerUnitUgx: 2_000 });
     expect(r.ok).toBe(false);
