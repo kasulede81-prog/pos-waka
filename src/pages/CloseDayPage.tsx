@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { usePosStore } from "../store/usePosStore";
+import { ensureAllActiveSalesLoaded, usePosStore } from "../store/usePosStore";
 import { dateKeyKampala } from "../lib/datesUg";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { getCompletedFinancials } from "../lib/financialMetrics";
@@ -24,6 +24,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const todayKey = dateKeyKampala(new Date());
   const [counted, setCounted] = useState("");
   const [doneMsg, setDoneMsg] = useState(false);
+  const [closeErrorKey, setCloseErrorKey] = useState<string | null>(null);
 
   const drawer = useDrawerCashForToday();
 
@@ -41,10 +42,16 @@ export function CloseDayPage({ lang }: { lang: Language }) {
     [drawer, sales, returnRecords, products, todayKey],
   );
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
+    setCloseErrorKey(null);
     const n = Math.max(0, Math.floor(Number(counted.replace(/\D/g, "")) || 0));
-    recordDayClose({ dateKey: todayKey, countedCashUgx: n });
+    await ensureAllActiveSalesLoaded();
+    const result = await recordDayClose({ dateKey: todayKey, countedCashUgx: n });
+    if (!result.ok) {
+      setCloseErrorKey(result.errorKey ?? "invalid");
+      return;
+    }
     setCounted("");
     setDoneMsg(true);
     window.setTimeout(() => setDoneMsg(false), 3000);
@@ -153,6 +160,9 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         <button type="submit" className="mt-5 w-full rounded-3xl bg-waka-600 py-4 text-xl font-black text-white">
           {t(lang, "closeConfirm")}
         </button>
+        {closeErrorKey === "closeDaySalesNotLoaded" ? (
+          <p className="mt-3 text-center text-sm font-bold text-red-700">{t(lang, "closeDaySalesNotLoaded")}</p>
+        ) : null}
       </form>
 
       {doneMsg && (

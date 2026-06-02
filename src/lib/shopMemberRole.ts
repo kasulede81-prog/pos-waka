@@ -21,5 +21,7 @@ export async function fetchShopMemberRoleForUser(userId: string): Promise<UserRo
     .maybeSingle();
 
   if (error || !data?.role) return null;
-  return normalizeUserRole(data.role);
+  const role = normalizeUserRole(data.role);
+  if (!role) return null;
+  return role;
 }

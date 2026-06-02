@@ -1,4 +1,5 @@
 import type {
+  AuditLogEntry,
   CashExpense,
   Customer,
   Product,
@@ -12,6 +13,7 @@ import type {
 } from "../types";
 import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
+import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
@@ -37,6 +39,12 @@ import {
   type CloudSupplierRow,
 } from "../lib/purchaseRecovery";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
+import {
+  mergeProductFromCloudPull,
+  patchProductsWithServerStock,
+  type ServerProductStockRow,
+} from "../lib/inventoryIntegrity";
+import { buyingUnitsToBaseUnits } from "../lib/sellingEngine";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -65,8 +73,8 @@ function productSku(p: Product): string {
   return `waka-${p.id.replace(/-/g, "").slice(0, 40)}`;
 }
 
-function productToRow(p: Product, shopId: string) {
-  return {
+function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolean }) {
+  const row: Record<string, unknown> = {
     id: p.id,
     shop_id: shopId,
     name: p.name,
@@ -79,7 +87,6 @@ function productToRow(p: Product, shopId: string) {
     cost_price_per_unit_ugx: Math.max(0, Math.floor(p.costPricePerUnitUgx)),
     price_ugx: Math.max(0, Math.floor(p.sellingPricePerUnitUgx)),
     cost_ugx: Math.max(0, Math.floor(p.costPricePerUnitUgx)),
-    stock_on_hand: Number(p.stockOnHand) || 0,
     reorder_level: Number(p.minimumStockAlert) || 0,
     minimum_stock_alert: Number(p.minimumStockAlert) || 0,
     sku: productSku(p),
@@ -96,6 +103,10 @@ function productToRow(p: Product, shopId: string) {
     },
     updated_at: p.updatedAt || new Date().toISOString(),
   };
+  if (opts?.includeStock !== false) {
+    row.stock_on_hand = Number(p.stockOnHand) || 0;
+  }
+  return row;
 }
 
 function rowToProduct(row: Record<string, unknown>): Product | null {
@@ -276,6 +287,19 @@ function markSaleSyncState(saleId: string, synced: boolean, errorCode: string | 
   }));
 }
 
+/** Push catalog fields only — never overwrites server stock (use pushProductStockToCloud for deltas). */
+export async function pushProductCatalogToCloud(
+  product: Product,
+  ctx: ShopCtx,
+  opts?: { includeStock?: boolean },
+): Promise<boolean> {
+  if (!supabase || !isUuid(product.id)) return false;
+  const { error } = await supabase
+    .from("products")
+    .upsert(productToRow(product, ctx.shopId, { includeStock: opts?.includeStock === true }), { onConflict: "id" });
+  return !error;
+}
+
 export async function pushProductToCloud(product: Product, ctx: ShopCtx, deleted = false): Promise<boolean> {
   if (!supabase || !isUuid(product.id)) return false;
   if (deleted) {
@@ -286,8 +310,7 @@ export async function pushProductToCloud(product: Product, ctx: ShopCtx, deleted
       .eq("shop_id", ctx.shopId);
     return !error;
   }
-  const { error } = await supabase.from("products").upsert(productToRow(product, ctx.shopId), { onConflict: "id" });
-  return !error;
+  return pushProductCatalogToCloud(product, ctx);
 }
 
 export async function pushProductStockToCloud(
@@ -330,6 +353,13 @@ export async function pushProductStockToCloud(
   } | null;
 
   if (!result?.ok) {
+    if (result?.error === "stale_version") {
+      reportSyncIssue("product_stock_stale", {
+        productId,
+        serverStock: result.server_stock_on_hand,
+        baseStock: opts.baseStockOnHand,
+      });
+    }
     if (result?.error === "stale_version" && attempt < 3) {
       const serverStock = Number(result.server_stock_on_hand ?? 0);
       const serverUpdatedAt = String(result.server_updated_at ?? new Date().toISOString());
@@ -364,6 +394,36 @@ export async function pushProductStockToCloud(
         : p,
     ),
   }));
+  return true;
+}
+
+export async function pushAuditLogToCloud(entry: AuditLogEntry, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase) return false;
+
+  const actorId = isUuid(entry.actorUserId) ? entry.actorUserId : ctx.userId;
+  const clientEntryId = isUuid(entry.id) ? entry.id : null;
+  if (!clientEntryId) return false;
+
+  const row: Record<string, unknown> = {
+    shop_id: ctx.shopId,
+    actor_user_id: actorId,
+    role: entry.role,
+    action: entry.action,
+    payload_summary: entry.payloadSummary.slice(0, 500),
+    payload: entry.payload,
+    device_id: entry.deviceId ?? null,
+    client_entry_id: clientEntryId,
+    created_at: entry.at,
+  };
+
+  const { error } = await supabase.from("audit_logs").insert(row);
+
+  if (error) {
+    const code = (error as { code?: string }).code;
+    if (code === "23505") return true;
+    reportSyncIssue("audit_log_push_failed", { entryId: entry.id, code: code ?? "unknown" });
+    return false;
+  }
   return true;
 }
 
@@ -468,15 +528,7 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
     qtyByProduct.set(line.productId, (qtyByProduct.get(line.productId) ?? 0) + line.quantity);
   }
 
-  const productPreStock: Array<{ product_id: string; stock_on_hand: number }> = [];
-  for (const [productId, qtySold] of qtyByProduct) {
-    const p = usePosStore.getState().products.find((x) => x.id === productId);
-    if (p) {
-      productPreStock.push({ product_id: productId, stock_on_hand: p.stockOnHand + qtySold });
-    }
-  }
-
-  const activeLines = sale.lines.filter((line) => !line.voided);
+  const activeLines = sale.lines.filter((line) => !line.voided).map(ensureSaleLineId);
   return {
     sale: {
       id: sale.id,
@@ -496,6 +548,7 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       updated_at: sale.createdAt,
     },
     lines: activeLines.map((line, idx) => ({
+      id: line.id,
       product_id: line.productId,
       quantity: line.quantity,
       unit_price_ugx: line.unitPriceUgx,
@@ -520,7 +573,6 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
             },
           ]
         : [],
-    product_pre_stock: productPreStock,
   };
 }
 
@@ -759,15 +811,59 @@ export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean
     return false;
   }
 
-  const result = data as { ok?: boolean; error?: string } | null;
+  const result = data as {
+    ok?: boolean;
+    error?: string;
+    product_stocks?: ServerProductStockRow[];
+  } | null;
   if (!result?.ok) {
     markSaleSyncState(sale.id, false, result?.error ?? "sale_rpc_rejected");
     reportSyncIssue("sale_rpc_rejected", { saleId: sale.id, error: result?.error ?? "unknown" });
     return false;
   }
 
+  const stockRows = Array.isArray(result?.product_stocks) ? result.product_stocks : [];
+  if (stockRows.length > 0) {
+    usePosStore.setState((s) => ({
+      products: patchProductsWithServerStock(s.products, stockRows),
+    }));
+  } else {
+    await refreshProductStockFromCloud(
+      sale.lines.filter((l) => !l.voided).map((l) => l.productId),
+      ctx,
+    );
+  }
+
   markSaleSyncState(sale.id, true, null);
   return true;
+}
+
+/** Fetch authoritative stock_on_hand from cloud after sale or pull. */
+export async function refreshProductStockFromCloud(
+  productIds: string[],
+  ctx: ShopCtx,
+): Promise<void> {
+  if (!supabase || productIds.length === 0) return;
+  const ids = [...new Set(productIds)].filter((id) => isUuid(id));
+  if (ids.length === 0) return;
+
+  const { data, error } = await supabase
+    .from("products")
+    .select("id, stock_on_hand, updated_at")
+    .eq("shop_id", ctx.shopId)
+    .in("id", ids);
+
+  if (error || !data?.length) return;
+
+  const rows: ServerProductStockRow[] = data.map((row) => ({
+    product_id: String(row.id),
+    stock_on_hand: Number(row.stock_on_hand ?? 0),
+    updated_at: String(row.updated_at ?? new Date().toISOString()),
+  }));
+
+  usePosStore.setState((s) => ({
+    products: patchProductsWithServerStock(s.products, rows),
+  }));
 }
 
 async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise<boolean> {
@@ -974,8 +1070,17 @@ async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boo
   for (const ln of purchase.lines) {
     const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
     if (!product) continue;
-    const ok = await pushProductToCloud(product, ctx);
-    if (!ok) return false;
+    const baseIn = buyingUnitsToBaseUnits(product, ln.qtyBuyingUnits);
+    if (baseIn <= 0) continue;
+    const catalogOk = await pushProductCatalogToCloud(product, ctx);
+    if (!catalogOk) return false;
+    const stockOk = await pushProductStockToCloud(product.id, ctx, {
+      delta: baseIn,
+      note: `purchase:${purchase.id}`,
+      baseUpdatedAt: product.updatedAt,
+      baseStockOnHand: product.stockOnHand - baseIn,
+    });
+    if (!stockOk) return false;
   }
 
   if (!isWalkInSupplierId(purchase.supplierId)) {
@@ -1023,9 +1128,15 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
         }
         return !error;
       }
+      if (payload.presets === true || payload.catalogOnly === true) {
+        const product = usePosStore.getState().products.find((p) => p.id === productId);
+        if (!product) return true;
+        return pushProductCatalogToCloud(product, ctx);
+      }
+      const includeStock = payload.isNew === true;
       const product = usePosStore.getState().products.find((p) => p.id === productId);
       if (!product) return true;
-      return pushProductToCloud(product, ctx);
+      return pushProductCatalogToCloud(product, ctx, { includeStock });
     }
     case "pending_purchases": {
       const purchaseId = String(payload.purchaseId ?? "");
@@ -1052,7 +1163,7 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       }
       const productId = String(payload.productId ?? payload.id ?? "");
       const delta = Number(payload.delta ?? 0);
-      if (isUuid(productId) && delta !== 0 && payload.baseUpdatedAt !== undefined) {
+      if (isUuid(productId) && delta !== 0) {
         return pushProductStockToCloud(productId, ctx, {
           delta,
           note: typeof payload.note === "string" ? payload.note : "",
@@ -1060,9 +1171,13 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
           baseStockOnHand: typeof payload.baseStockOnHand === "number" ? payload.baseStockOnHand : undefined,
         });
       }
-      const product = usePosStore.getState().products.find((p) => p.id === productId);
-      if (!product) return true;
-      return pushProductToCloud(product, ctx);
+      if (payload.catalogOnly === true && isUuid(productId)) {
+        const product = usePosStore.getState().products.find((p) => p.id === productId);
+        if (!product) return true;
+        return pushProductCatalogToCloud(product, ctx);
+      }
+      reportSyncIssue("stock_update_missing_delta", { productId, kind: op.kind });
+      return false;
     }
     case "pending_sales":
     case "sale": {
@@ -1130,6 +1245,11 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     case "pending_hospitality": {
       const { processHospitalitySyncOperation } = await import("./hospitalityCloudSync");
       return processHospitalitySyncOperation(payload);
+    }
+    case "audit_log": {
+      const raw = payload.entry as AuditLogEntry | undefined;
+      if (!raw?.id || !raw.action) return true;
+      return pushAuditLogToCloud(raw, ctx);
     }
     default:
       return true;
@@ -2089,21 +2209,15 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     await mergeByIdChunked(
       state.products.filter((p) => !tombstoneIds.has(p.id) && !deletedProductSet.has(p.id)),
       cloud.products,
-      (a, b) => newer(a, b),
+      (a, b) => mergeProductFromCloudPull(a, b),
       tombstoneIds,
     )
   ).filter((p) => !deletedProductSet.has(p.id));
 
   const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) => newer(a, b));
-  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) => {
-    if (local.status === "pending" && remote.status === "pending") {
-      return mergePendingSalePair(local, remote);
-    }
-    return newer(
-      { ...local, updatedAt: local.updatedAt ?? local.createdAt },
-      { ...remote, updatedAt: remote.updatedAt ?? remote.createdAt },
-    );
-  });
+  const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) =>
+    mergeSaleFromCloudPull(local, remote),
+  );
   const sales = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
 
   const mergedCashExpenses =

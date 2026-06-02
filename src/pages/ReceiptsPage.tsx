@@ -473,6 +473,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         open={returnSale !== null}
         sale={returnSale}
         products={products}
+        returnRecords={allReturns}
+        actorRole={actor.role}
         onClose={() => setReturnSale(null)}
         onConfirm={(input) => returnProduct(input)}
       />

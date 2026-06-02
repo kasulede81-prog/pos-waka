@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
-import type { Language, Product, ReturnReason, Sale } from "../../types";
+import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
+import { canPerformUnlinkedReturn } from "../../lib/returnPolicy";
+import {
+  remainingRefundableAmount,
+  remainingRefundableForLineQty,
+  remainingReturnableQuantity,
+} from "../../lib/returnLimits";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 
@@ -12,6 +18,8 @@ type Props = {
   open: boolean;
   sale: Sale | null;
   products: Product[];
+  returnRecords?: ReturnRecord[];
+  actorRole: UserRole;
   onClose: () => void;
   onConfirm: (input: {
     saleId: string | null;
@@ -23,17 +31,20 @@ type Props = {
   }) => { ok: boolean; errorKey?: string };
 };
 
-export function ReturnProductModal({ lang, open, sale, products, onClose, onConfirm }: Props) {
+export function ReturnProductModal({ lang, open, sale, products, returnRecords = [], actorRole, onClose, onConfirm }: Props) {
   const [productId, setProductId] = useState("");
   const [qty, setQty] = useState("1");
   const [refund, setRefund] = useState("");
   const [reason, setReason] = useState<ReturnReason>("damaged");
   const [note, setNote] = useState("");
 
+  const allowUnlinked = canPerformUnlinkedReturn(actorRole);
   const lineOptions = sale?.lines.filter((l) => !l.voided) ?? [];
   const pickList = lineOptions.length
     ? lineOptions.map((l) => ({ id: l.productId, name: l.name }))
-    : products.map((p) => ({ id: p.id, name: p.name }));
+    : allowUnlinked
+      ? products.map((p) => ({ id: p.id, name: p.name }))
+      : [];
 
   useEffect(() => {
     if (!open) return;
@@ -54,11 +65,35 @@ export function ReturnProductModal({ lang, open, sale, products, onClose, onConf
         ? Math.round(pricePerBaseUnitUgx(product) * qtyN)
         : 0;
 
+  const maxQty =
+    sale && productId
+      ? remainingReturnableQuantity(sale, productId, returnRecords)
+      : null;
+  const maxRefundSale =
+    sale ? remainingRefundableAmount(sale) : null;
+  const maxRefundLine =
+    sale && productId && qtyN > 0
+      ? remainingRefundableForLineQty(sale, productId, qtyN, returnRecords)
+      : null;
+  const maxRefundUgx =
+    maxRefundSale != null
+      ? Math.min(
+          maxRefundSale,
+          maxRefundLine ?? maxRefundSale,
+          suggestedRefund > 0 ? suggestedRefund : maxRefundSale,
+        )
+      : null;
+
   if (!open) return null;
 
   const handleSubmit = () => {
     if (!productId || qtyN <= 0) return;
-    const refundN = Math.floor(Number(refund.replace(/\D/g, "")) || 0) || suggestedRefund;
+    if (maxQty != null && qtyN > maxQty) return;
+    let refundN = Math.floor(Number(refund.replace(/\D/g, "")) || 0) || suggestedRefund;
+    if (maxRefundUgx != null) refundN = Math.min(refundN, maxRefundUgx);
+    if (!sale && !allowUnlinked) return;
+    if (!sale && note.trim().length < 3) return;
+
     const r = onConfirm({
       saleId: sale?.id ?? null,
       productId,
@@ -133,9 +168,17 @@ export function ReturnProductModal({ lang, open, sale, products, onClose, onConf
         </div>
 
         <label className="mt-3 block text-sm font-bold text-slate-800">
-          {t(lang, "voidNoteOptional")}
-          <input value={note} onChange={(e) => setNote(e.target.value)} className="mt-2 min-h-[44px] w-full rounded-xl border-2 px-3" />
+          {!sale && allowUnlinked ? t(lang, "returnUnlinkedNoteRequired") : t(lang, "voidNoteOptional")}
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="mt-2 min-h-[44px] w-full rounded-xl border-2 px-3"
+            required={!sale && allowUnlinked}
+          />
         </label>
+        {!sale && !allowUnlinked ? (
+          <p className="mt-2 text-sm font-bold text-red-800">{t(lang, "returnUnlinkedForbidden")}</p>
+        ) : null}
 
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button type="button" onClick={onClose} className="min-h-[52px] rounded-2xl border-2 font-bold">

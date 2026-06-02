@@ -78,7 +78,9 @@ export type AuditAction =
   | "purchase_saved"
   | "supplier_payment"
   | "cash_expense_created"
-  | "cash_expense_voided";
+  | "cash_expense_voided"
+  | "auth_forbidden"
+  | "archive_purge";
 
 export type AuditLogEntry = {
   id: string;

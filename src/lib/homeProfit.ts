@@ -1,4 +1,5 @@
 import type { Product, ReturnRecord, Sale, UserRole } from "../types";
+import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { costPerBaseUnitUgx, estimatedProfitForLine } from "./sellingEngine";
 
 /** Profit reports in Back Office — owners/managers only (not cashiers). */
@@ -56,7 +57,6 @@ export function computeTodayProfitBreakdown(
   for (const sale of todaySales) {
     for (const line of sale.lines) {
       if (line.voided) continue;
-      salesUgx += line.lineTotalUgx;
       const product = productById.get(line.productId);
       const unitCost =
         Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
@@ -85,6 +85,8 @@ export function computeTodayProfitBreakdown(
     costUgx -= returnCost;
     profitUgx -= Math.round(refundUgx - returnCost);
   }
+
+  salesUgx = computeCanonicalRevenueUgx(todaySales, returnRecords);
 
   return {
     profitUgx: Math.round(profitUgx),

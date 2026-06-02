@@ -32,6 +32,7 @@ import type {
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
 import { hasPermission } from "../lib/permissions";
+import { checkStorePermission } from "../lib/storeAuthorization";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
@@ -108,7 +109,11 @@ import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
+import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
+import { validateReturnAgainstSale } from "../lib/returnLimits";
+import { validateReturnAuthorization } from "../lib/returnPolicy";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
+import { saleStockMovementsFromSale } from "../lib/inventoryIntegrity";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { normalizeShopCurrency } from "../lib/shopCurrency";
 import { generateStaffUsername } from "../lib/staffAccountHelpers";
@@ -476,7 +481,10 @@ export type PosState = {
   adjustStock: (productId: string, delta: number, reason?: string) => void;
   addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
   addDebtPayment: (customerId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
-  recordDayClose: (opts: { dateKey: string; countedCashUgx: number }) => void;
+  recordDayClose: (opts: {
+    dateKey: string;
+    countedCashUgx: number;
+  }) => Promise<{ ok: boolean; errorKey?: string }>;
   addCashExpense: (input: { amountUgx: number; category: string; description?: string }) => { ok: boolean; errorKey?: string };
   voidCashExpense: (id: string) => { ok: boolean };
 
@@ -771,6 +779,19 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({ auditLogs: mergeAuditLogs(s.auditLogs, [entry]) }));
     logPilotEventFromAudit(action, payloadSummary, payload);
     void queueRemote("audit_log", { entry });
+  };
+
+  const denyUnlessPerm = (permission: Permission, actionLabel: string) => {
+    const actor = get().sessionActor;
+    const check = checkStorePermission(actor, permission);
+    if (check.ok) return null;
+    pushAudit("auth_forbidden", `Denied ${actionLabel}`, {
+      permission,
+      action: actionLabel,
+      attemptedRole: actor?.role ?? null,
+      errorKey: check.errorKey,
+    });
+    return check;
   };
 
   return {
@@ -1780,6 +1801,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   finalizeDraftSale: ({ debtUgx, customerId, paymentMethod, amountPaidUgx, changeGivenUgx, splitBreakdown }) => {
+    const denied = denyUnlessPerm("pos.sell", "finalizeDraftSale");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const state = get();
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
 
@@ -1865,17 +1889,12 @@ export const usePosStore = create<PosState>((set, get) => {
       );
     }
 
-    const saleMovements: StockMovement[] = state.draftLines.map((line) => ({
-      id: crypto.randomUUID(),
-      at: sale.createdAt,
-      productId: line.productId,
-      productName: line.name,
-      deltaBaseUnits: -line.quantity,
-      kind: "sale_out" as const,
-      summary: `Sale −${line.quantity}`,
-      refId: sale.id,
-      supplierId: null,
-    }));
+    const shopKey = getActiveAccountKey() ?? "local";
+    const saleMovements: StockMovement[] = saleStockMovementsFromSale(shopKey, {
+      id: sale.id,
+      createdAt: sale.createdAt,
+      lines: saleLines,
+    });
 
     const auditEntries: AuditLogEntry[] = [];
     const buildAudit = (action: AuditAction, payloadSummary: string, payload: Record<string, unknown>): AuditLogEntry => ({
@@ -2056,6 +2075,7 @@ export const usePosStore = create<PosState>((set, get) => {
       voidRecords: [voidRec, ...state.voidRecords],
       stockMovements: mergeStockMovements([movement], state.stockMovements),
     });
+    applyCustomerDebtHeal();
 
     if (openShift) {
       set((st) => ({
@@ -2107,6 +2127,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const refund = Math.max(0, Math.floor(refundAmountUgx));
     if (qty <= 0 || refund <= 0) return { ok: false, errorKey: "invalid" };
 
+    const saleIdxPrecheck = saleId ? state.sales.findIndex((s) => s.id === saleId) : -1;
+    const auth = validateReturnAuthorization({
+      role: actor.role,
+      saleId: saleId ?? null,
+      saleFound: saleIdxPrecheck >= 0,
+      note: note ?? "",
+    });
+    if (!auth.ok) return { ok: false, errorKey: auth.errorKey };
+
     const product = state.products.find((p) => p.id === productId);
     if (!product) return { ok: false, errorKey: "missingProduct" };
 
@@ -2154,6 +2183,14 @@ export const usePosStore = create<PosState>((set, get) => {
       const saleIdx = sales.findIndex((s) => s.id === saleId);
       if (saleIdx >= 0) {
         const sale = sales[saleIdx]!;
+        const limit = validateReturnAgainstSale({
+          sale,
+          productId,
+          quantity: qty,
+          refundAmountUgx: refund,
+          returnRecords: state.returnRecords,
+        });
+        if (!limit.ok) return { ok: false, errorKey: limit.errorKey };
         linkedCustomerId = sale.customerId ?? null;
         debtReduce = creditDebtReductionFromSaleAdjustment(sale, refund);
         const totals = reduceSaleTotalsByAmount(sale, refund);
@@ -2171,6 +2208,7 @@ export const usePosStore = create<PosState>((set, get) => {
       returnRecords: [returnRec, ...state.returnRecords],
       stockMovements: mergeStockMovements([movement], state.stockMovements),
     });
+    applyCustomerDebtHeal();
 
     if (openShift) {
       set((st) => ({
@@ -2251,6 +2289,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   quickAddProduct: (input) => {
+    const denied = denyUnlessPerm("products.add", "quickAddProduct");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const trimmed = input.name.trim();
     if (!trimmed) return { ok: false, errorKey: "invalid" };
     const hint = (input.inferName ?? trimmed).trim();
@@ -2317,6 +2358,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   duplicateProduct: (productId, nameSuffix) => {
+    const denied = denyUnlessPerm("products.add", "duplicateProduct");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const p = get().products.find((x) => x.id === productId);
     if (!p) return { ok: false, errorKey: "missingProduct" };
     get().addProduct({
@@ -2341,6 +2385,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   removeProduct: (productId) => {
+    const denied = denyUnlessPerm("products.remove", "removeProduct");
+    if (denied) return;
+
     const p = get().products.find((x) => x.id === productId);
     set((s) => ({ products: s.products.filter((x) => x.id !== productId) }));
     void import("../offline/incrementalPersist").then((m) => m.markProductDeleted(productId));
@@ -2349,6 +2396,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addProduct: (p) => {
+    const denied = denyUnlessPerm("products.add", "addProduct");
+    if (denied) return;
+
     const now = new Date().toISOString();
     const qp = defaultQuickPresetsForProduct(p);
     const row: Product = {
@@ -2360,11 +2410,14 @@ export const usePosStore = create<PosState>((set, get) => {
       quickPresetsQty: p.quickPresetsQty ?? qp.quickPresetsQty,
     };
     set((s) => ({ products: [normalizeProduct(row), ...s.products] }));
-    void queueRemote("product", { id: row.id });
+    void queueRemote("product", { id: row.id, isNew: true });
     pushAudit("product_add", row.name, { productId: row.id, name: row.name, category: row.category });
   },
 
   updateProductQuickPresets: (productId, presets) => {
+    const denied = denyUnlessPerm("products.edit_presets", "updateProductQuickPresets");
+    if (denied) return;
+
     set((s) => ({
       products: s.products.map((p) =>
         p.id === productId
@@ -2378,12 +2431,15 @@ export const usePosStore = create<PosState>((set, get) => {
           : p,
       ),
     }));
-    void queueRemote("product", { id: productId, presets: true });
+    void queueRemote("product", { id: productId, presets: true, catalogOnly: true });
     const pn = get().products.find((x) => x.id === productId)?.name ?? productId;
     pushAudit("product_presets", `Presets ${pn}`, { productId });
   },
 
   updateProduct: (productId, patch) => {
+    const denied = denyUnlessPerm("stock.adjust", "updateProduct");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const prev = get().products.find((p) => p.id === productId);
     if (!prev) return { ok: false, errorKey: "missingProduct" };
 
@@ -2478,12 +2534,24 @@ export const usePosStore = create<PosState>((set, get) => {
       stockMovements: movement ? mergeStockMovements([movement], s.stockMovements) : s.stockMovements,
     }));
 
-    void queueRemote("product", { id: productId });
+    if (Math.abs(stockDelta) > 1e-6) {
+      void queueRemote("pending_stock_updates", {
+        productId,
+        delta: stockDelta,
+        note: "count",
+        baseUpdatedAt: prev.updatedAt,
+        baseStockOnHand: prevStock,
+      });
+    }
+    void queueRemote("product", { id: productId, catalogOnly: true });
     pushAudit("product_update", merged.name, { productId, name: merged.name });
     return { ok: true };
   },
 
   adjustStock: (productId, delta, reason) => {
+    const denied = denyUnlessPerm("stock.adjust", "adjustStock");
+    if (denied) return;
+
     const prev = get().products.find((p) => p.id === productId);
     const at = new Date().toISOString();
     const kind = stockKindFromAdjustReason(reason);
@@ -2526,6 +2594,17 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addCustomer: (c) => {
+    const denied = denyUnlessPerm("customers.view", "addCustomer");
+    if (denied) {
+      return {
+        ...c,
+        id: "denied",
+        createdAt: new Date().toISOString(),
+        version: 1,
+        debtBalanceUgx: 0,
+      };
+    }
+
     const row: Customer = {
       ...c,
       id: crypto.randomUUID(),
@@ -2540,6 +2619,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addDebtPayment: (customerId, amountUgx) => {
+    const denied = denyUnlessPerm("customers.debt", "addDebtPayment");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const amount = Math.floor(Math.max(0, amountUgx));
     if (amount <= 0) return { ok: false, errorKey: "invalidMoney" };
     const state = get();
@@ -2590,6 +2672,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addSupplier: (input) => {
+    const denied = denyUnlessPerm("suppliers.manage", "addSupplier");
+    if (denied) return;
+
     const name = input.name.trim();
     if (!name) return;
     const now = new Date().toISOString();
@@ -2611,11 +2696,14 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addSupplierPayment: (supplierId, amountUgx) => {
-    const pay = Math.floor(Math.max(0, amountUgx));
-    if (pay <= 0) return { ok: false, errorKey: "invalidMoney" };
+    const denied = denyUnlessPerm("suppliers.manage", "addSupplierPayment");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const state = get();
     const sup = state.suppliers.find((x) => x.id === supplierId);
     if (!sup) return { ok: false, errorKey: "missingSupplier" };
+    const pay = Math.min(Math.floor(Math.max(0, amountUgx)), Math.max(0, sup.balanceOwedUgx));
+    if (pay <= 0) return { ok: false, errorKey: "invalidMoney" };
     const payment: SupplierPayment = {
       id: crypto.randomUUID(),
       supplierId,
@@ -2642,6 +2730,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   recordPurchase: (input) => {
+    const denied = denyUnlessPerm("purchases.record", "recordPurchase");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const state = get();
     if (!input.lines.length) return { ok: false, errorKey: "emptySale" };
 
@@ -2760,6 +2851,13 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   runDataArchive: () => {
+    const denied = denyUnlessPerm("settings.shop", "runDataArchive");
+    if (denied) {
+      return {
+        moved: { sales: 0, auditLogs: 0, dayCloses: 0, voidRecords: 0, returnRecords: 0, shifts: 0 },
+      };
+    }
+
     const s = get();
     const windowed = archiveSalesBeyondActiveWindow(s.sales, s.archivedSales);
     const policy = normalizeDataRetentionPolicy(s.preferences.dataRetentionPolicy);
@@ -2813,6 +2911,19 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   permanentlyDeleteArchived: () => {
+    const denied = denyUnlessPerm("settings.shop", "permanentlyDeleteArchived");
+    if (denied) return;
+
+    const state = get();
+    const counts = {
+      archivedSales: state.archivedSales.length,
+      archivedAuditLogs: state.archivedAuditLogs.length,
+      archivedDayCloses: state.archivedDayCloses.length,
+      archivedVoidRecords: state.archivedVoidRecords.length,
+      archivedReturnRecords: state.archivedReturnRecords.length,
+      archivedShifts: (state.preferences.archivedShifts ?? []).length,
+    };
+
     set({
       archivedSales: [],
       archivedAuditLogs: [],
@@ -2824,9 +2935,23 @@ export const usePosStore = create<PosState>((set, get) => {
         archivedShifts: [],
       },
     });
+
+    pushAudit("archive_purge", "Permanent archive purge", {
+      ...counts,
+      totalRecordsRemoved:
+        counts.archivedSales +
+        counts.archivedAuditLogs +
+        counts.archivedDayCloses +
+        counts.archivedVoidRecords +
+        counts.archivedReturnRecords +
+        counts.archivedShifts,
+    });
   },
 
   addCashExpense: (input) => {
+    const denied = denyUnlessPerm("expenses.record", "addCashExpense");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
@@ -2882,7 +3007,15 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  recordDayClose: ({ dateKey, countedCashUgx }) => {
+  recordDayClose: async ({ dateKey, countedCashUgx }) => {
+    const denied = denyUnlessPerm("day.close", "recordDayClose");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    await ensureAllActiveSalesLoaded();
+    if (!(await isActiveSalesFullyLoaded())) {
+      return { ok: false, errorKey: "closeDaySalesNotLoaded" };
+    }
+
     const state = get();
     const drawer = getDrawerCashForDayInput({
       sales: state.sales,
@@ -2918,7 +3051,15 @@ export const usePosStore = create<PosState>((set, get) => {
       expectedCashUgx: expectedCashUgx,
       countedCashUgx: counted,
       differenceUgx: diff,
+      totalSalesUgx,
+      totalDebtUgx,
+      profitEstimateUgx,
+      cashFromSalesUgx: drawer.cashFromSalesUgx,
+      debtCollectedUgx: drawer.debtCollectedUgx,
+      refundsUgx: drawer.refundsUgx,
+      expenseUgx: drawer.expenseUgx,
     });
+    return { ok: true };
   },
 };
 });
@@ -3141,6 +3282,16 @@ function reportRestoreProgress(
 
 /** Write current in-memory store to IndexedDB after a restore (can run after UI unblocks). */
 export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise<void> {
+  const restoreAuth = checkStorePermission(usePosStore.getState().sessionActor, "settings.shop");
+  if (!restoreAuth.ok) {
+    usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup persist", {
+      permission: "settings.shop",
+      action: "backup_persist",
+      errorKey: restoreAuth.errorKey,
+    });
+    throw new Error(restoreAuth.errorKey);
+  }
+
   assertBackupRestoreNotAborted(sessionId);
   await yieldUiTick();
   assertBackupRestoreNotAborted(sessionId);
@@ -3157,6 +3308,16 @@ export async function applyRestoredSnapshotFromBackup(
   snap: PersistedSnapshot,
   opts?: { sessionId?: number; onProgress?: (percent: number) => void },
 ): Promise<void> {
+  const restoreAuth = checkStorePermission(usePosStore.getState().sessionActor, "settings.shop");
+  if (!restoreAuth.ok) {
+    usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup restore", {
+      permission: "settings.shop",
+      action: "backup_restore",
+      errorKey: restoreAuth.errorKey,
+    });
+    throw new Error(restoreAuth.errorKey);
+  }
+
   const sessionId = opts?.sessionId;
   const release = suspendStorePersist();
   if (persistTimer) {
@@ -3297,6 +3458,23 @@ function scheduleBackgroundSalesHydrate(sales: Sale[]): void {
   })();
 }
 
+/** True when every active sale id from the entity manifest is present in RAM. */
+export async function isActiveSalesFullyLoaded(): Promise<boolean> {
+  const { readEntityManifest } = await import("../offline/entityStore");
+  const manifest = await readEntityManifest();
+  if (!manifest) return true;
+  const have = new Set(usePosStore.getState().sales.map((s) => s.id));
+  return manifest.salesOrder.every((id) => have.has(id));
+}
+
+function applyCustomerDebtHeal(): void {
+  const state = usePosStore.getState();
+  const result = verifyCustomerDebtIntegrity(state.customers, state.sales, state.debtPayments, { heal: true });
+  if (result.healedCount > 0) {
+    usePosStore.setState({ customers: result.customers });
+  }
+}
+
 /** Load any sales not yet in RAM (reports/search). */
 export async function ensureAllActiveSalesLoaded(): Promise<void> {
   const { readEntityManifest, getEntitiesByIds } = await import("../offline/entityStore");
@@ -3379,6 +3557,7 @@ function schedulePostBootstrapTasks(): void {
 
 async function runPostBootstrapTasks(): Promise<void> {
   if (!usePosStore.getState()._hydrated) return;
+  applyCustomerDebtHeal();
   void restoreDraftSaleFromDisk();
   runWhenIdle(() => usePosStore.getState().runDataArchive(), 4000);
 

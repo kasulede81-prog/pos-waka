@@ -5,6 +5,7 @@
 
 import type { Product, ReturnRecord, Sale } from "../types";
 import { dateKeyKampala, saleReportingDayKey } from "./datesUg";
+import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 
@@ -57,7 +58,7 @@ export function getCompletedFinancials(
   const productById = new Map(products.map((p) => [p.id, p]));
   const breakdown = computeTodayProfitBreakdown(scoped, productById, returnScoped);
   const tx = scoped.length;
-  const revenue = breakdown.salesUgx;
+  const revenue = computeCanonicalRevenueUgx(scoped, returnScoped);
 
   return {
     revenueUgx: revenue,

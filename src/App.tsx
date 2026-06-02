@@ -22,6 +22,7 @@ import { SettingsPinPage } from "./pages/SettingsPinPage";
 import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
+import { SettingsSystemHealthPage } from "./pages/SettingsSystemHealthPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
 import { MonthlyReportsPage } from "./pages/MonthlyReportsPage";
@@ -570,6 +571,14 @@ function App() {
               element={
                 <RoleProtectedRoute permission="settings.view">
                   <SettingsNotificationsPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/health"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsSystemHealthPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

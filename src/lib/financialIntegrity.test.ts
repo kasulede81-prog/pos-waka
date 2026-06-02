@@ -133,11 +133,33 @@ describe("isRevenueSale and completed-only metrics", () => {
 });
 
 describe("returns and profit", () => {
-  it("return reduces revenue in completed financials", () => {
+  it("return reduces revenue when sale header is adjusted (linked return)", () => {
     const s = sale({ status: "completed", totalUgx: 50_000 });
     const ret: ReturnRecord = {
       id: crypto.randomUUID(),
       saleId: s.id,
+      productId: "prod-1",
+      productName: "Item",
+      quantity: 1,
+      refundAmountUgx: 10_000,
+      reason: "damaged",
+      actorUserId: "u1",
+      actorName: "Cashier",
+      shiftId: null,
+      createdAt: `${DAY}T12:00:00.000Z`,
+    };
+    const adjusted = { ...s, ...reduceSaleTotalsByAmount(s, 10_000) };
+    const before = getCompletedRevenue([s], [], products, DAY);
+    const after = getCompletedRevenue([adjusted], [ret], products, DAY);
+    expect(after).toBe(before - 10_000);
+    expect(after).toBe(40_000);
+  });
+
+  it("unlinked return reduces revenue without sale adjustment", () => {
+    const s = sale({ status: "completed", totalUgx: 50_000 });
+    const ret: ReturnRecord = {
+      id: crypto.randomUUID(),
+      saleId: null,
       productId: "prod-1",
       productName: "Item",
       quantity: 1,
@@ -192,6 +214,26 @@ describe("debt balance invariant simulation", () => {
 
     expect(debtReduce).toBe(10_000);
     expect(customers[0]!.debtBalanceUgx).toBe(40_000);
+  });
+});
+
+describe("cart discount revenue invariant", () => {
+  it("revenue matches cash plus debt after cart-wide discount", () => {
+    const lines = [
+      line({ lineTotalUgx: 50_000 }),
+      line({ lineTotalUgx: 50_000 }),
+    ];
+    const discounted = sale({
+      status: "completed",
+      totalUgx: 90_000,
+      cashPaidUgx: 50_000,
+      debtUgx: 40_000,
+      discountTotalUgx: 10_000,
+      lines,
+    });
+    const fin = getCompletedFinancials([discounted], [], products, { day: DAY });
+    expect(fin.revenueUgx).toBe(90_000);
+    expect(fin.cashCollectedUgx + fin.debtIssuedUgx).toBe(90_000);
   });
 });
 

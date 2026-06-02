@@ -1,5 +1,5 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -133,6 +133,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
           subtitle={t(lang, "settingsHubNotificationsSub")}
           Icon={Bell}
         />
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/health"
+            title={t(lang, "settingsHubSystemHealth")}
+            subtitle={t(lang, "settingsHubSystemHealthSub")}
+            Icon={Activity}
+          />
+        ) : null}
         {canShop ? (
           <OfficeNavCard
             to="/settings/retention"

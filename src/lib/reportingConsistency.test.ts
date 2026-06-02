@@ -8,6 +8,7 @@ import { computePharmacyDashboardStats } from "./pharmacyStats";
 import { computeProfitGroupedByCategory } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 import { saleReportingDayKey } from "./datesUg";
+import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 
 const DAY = "2026-05-31";
 
@@ -70,7 +71,8 @@ describe("reporting consistency — revenue", () => {
       shiftId: null,
       createdAt: `${DAY}T12:00:00.000Z`,
     };
-    const sales = [completed];
+    const adjusted = { ...completed, ...reduceSaleTotalsByAmount(completed, 10_000) };
+    const sales = [adjusted];
     const returns = [ret];
 
     const fin = getCompletedFinancials(sales, returns, products, { day: DAY });

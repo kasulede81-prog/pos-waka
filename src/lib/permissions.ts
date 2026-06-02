@@ -1,13 +1,15 @@
 import type { Permission, UserRole } from "../types";
+import { appendPilotEvent } from "./pilotEventLog";
 
 /**
  * Role source of truth on the client:
- * - Supabase: `user.user_metadata.pos_role` or `user.user_metadata.role` when set to a known role.
- * - When missing (legacy accounts): treat as **owner** so existing shops keep full access until `shop_members` is wired.
  * - Local/offline sign-in: **owner** (single-device shop).
- * - Constrained accounts: set `pos_role` in Supabase user metadata to `cashier`, `manager`, or `stock_keeper`.
+ * - Supabase: **shop_members** row only — no metadata fallback, no default owner.
  */
 const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper", "supervisor", "waiter"];
+
+/** Lowest-privilege role when Supabase membership cannot be resolved. */
+export const FAIL_CLOSED_ROLE: UserRole = "waiter";
 
 function isUserRole(v: string): v is UserRole {
   return (ALL_ROLES as string[]).includes(v);
@@ -31,6 +33,10 @@ export function parseRoleFromUserMetadata(meta: Record<string, unknown> | undefi
   return normalizeUserRole(raw);
 }
 
+export function logRoleResolutionFailure(details: Record<string, string | boolean | null>): void {
+  appendPilotEvent("other", "Auth role fail-closed (no valid shop_members)", details);
+}
+
 export function resolveAuthRole(params: {
   mode: "supabase" | "local";
   userMetadata: Record<string, unknown> | undefined;
@@ -39,8 +45,10 @@ export function resolveAuthRole(params: {
 }): UserRole {
   if (params.mode === "local") return "owner";
   if (params.shopMemberRole) return params.shopMemberRole;
-  const parsed = parseRoleFromUserMetadata(params.userMetadata);
-  return parsed ?? "owner";
+  logRoleResolutionFailure({
+    hadMetadataRole: parseRoleFromUserMetadata(params.userMetadata) != null,
+  });
+  return FAIL_CLOSED_ROLE;
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
