@@ -20,6 +20,7 @@ import { normalizeExpiryDate } from "../../lib/pharmacyExpiry";
 import { MEDICINE_FORMS, normalizeMedicineForm, normalizeMedicineStrength } from "../../lib/pharmacyMedicine";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
+import { PharmacyCostWarningBanner } from "../pharmacy/PharmacyCostWarningBanner";
 
 type Props = {
   lang: Language;
@@ -85,6 +86,7 @@ export function StockProductEditModal({
   const [looseCount, setLooseCount] = useState("");
   const [pieceOnlyStock, setPieceOnlyStock] = useState("");
   const [price, setPrice] = useState("");
+  const [buyPricePerUnit, setBuyPricePerUnit] = useState("");
   const [minAlert, setMinAlert] = useState("");
   const [sku, setSku] = useState("");
   const [buyPackPrice, setBuyPackPrice] = useState("");
@@ -116,6 +118,7 @@ export function StockProductEditModal({
     setLooseCount(b.hasPackTracking ? String(b.loosePieces) : "");
     setPieceOnlyStock(b.hasPackTracking ? "" : String(product.stockOnHand));
     setPrice(String(Math.max(0, Math.floor(product.sellingPricePerUnitUgx))));
+    setBuyPricePerUnit(String(Math.max(0, Math.floor(product.costPricePerUnitUgx))));
     setMinAlert(String(Math.max(0, Math.floor(product.minimumStockAlert))));
     setSku(product.sku ?? "");
     const conv = product.conversionRate && product.conversionRate > 0 ? product.conversionRate : 0;
@@ -155,7 +158,9 @@ export function StockProductEditModal({
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     const priceUgx = Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0));
+    const buyPerUnit = Math.max(0, Math.floor(Number(buyPricePerUnit.replace(/\D/g, "")) || 0));
     if (priceUgx <= 0 || !name.trim()) return;
+    if (pharmacyMode && buyPerUnit <= 0) return;
     if (sellUnit === "custom" && !sellUnitCustom.trim()) return;
     if (hasPack && packKind === "custom" && !packCustom.trim()) return;
 
@@ -163,8 +168,11 @@ export function StockProductEditModal({
     const hasTrack = hasPack && piecesN > 1;
     const buyingUnit = hasTrack ? packLabel.toLowerCase() : null;
     const conversionRate = hasTrack ? piecesN : null;
-    const costPricePerUnitUgx =
-      hasTrack && packPrice > 0 ? Math.floor(packPrice / piecesN) : product.costPricePerUnitUgx;
+    const costPricePerUnitUgx = pharmacyMode
+      ? buyPerUnit
+      : hasTrack && packPrice > 0
+        ? Math.floor(packPrice / piecesN)
+        : product.costPricePerUnitUgx;
 
     const patch: Parameters<typeof updateProduct>[1] = {
       name: name.trim(),
@@ -400,18 +408,60 @@ export function StockProductEditModal({
             </p>
           </div>
 
-          <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditPriceLabel")}</span>
-            <input
-              value={price}
-              onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              inputMode="numeric"
-              placeholder="2000"
-              className={`${inputClass} text-2xl font-black`}
-              required
+          {pharmacyMode ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block rounded-2xl border-2 border-teal-100 bg-teal-50/50 p-4">
+                <span className="text-sm font-black text-teal-900">{t(lang, "pharmacyEditBuyPriceLabel")}</span>
+                <input
+                  value={buyPricePerUnit}
+                  onChange={(e) => setBuyPricePerUnit(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  inputMode="numeric"
+                  className={`${inputClass} mt-2 text-2xl font-black`}
+                  required
+                />
+                <span className="mt-1 block text-xs font-semibold text-teal-800">
+                  UGX / {previewProduct.baseUnit}
+                </span>
+              </label>
+              <label className="block rounded-2xl border-2 border-waka-100 bg-waka-50/50 p-4">
+                <span className="text-sm font-black text-waka-900">{t(lang, "pharmacyEditSellPriceLabel")}</span>
+                <input
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  inputMode="numeric"
+                  className={`${inputClass} mt-2 text-2xl font-black`}
+                  required
+                />
+                <span className="mt-1 block text-xs font-semibold text-waka-800">
+                  UGX / {previewProduct.baseUnit}
+                </span>
+              </label>
+            </div>
+          ) : (
+            <label className="block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditPriceLabel")}</span>
+              <input
+                value={price}
+                onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                inputMode="numeric"
+                placeholder="2000"
+                className={`${inputClass} text-2xl font-black`}
+                required
+              />
+              <span className="mt-1 block text-xs font-semibold text-slate-500">UGX</span>
+            </label>
+          )}
+
+          {pharmacyMode ? (
+            <PharmacyCostWarningBanner
+              lang={lang}
+              product={{
+                ...previewProduct,
+                sellingPricePerUnitUgx: Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0)),
+                costPricePerUnitUgx: Math.max(0, Math.floor(Number(buyPricePerUnit.replace(/\D/g, "")) || 0)),
+              }}
             />
-            <span className="mt-1 block text-xs font-semibold text-slate-500">UGX</span>
-          </label>
+          ) : null}
 
           <label className="block">
             <span className="text-sm font-bold text-slate-800">

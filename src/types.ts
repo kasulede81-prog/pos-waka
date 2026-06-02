@@ -33,6 +33,8 @@ export type Permission =
   | "suppliers.manage"
   /** Record stock-in / purchases (restock) */
   | "purchases.record"
+  /** Write off expired pharmacy stock (owner/manager) */
+  | "pharmacy.expired_writeoff"
   /** View purchase history in reports and product detail */
   | "purchases.view"
   /** Stock, suppliers, reports, settings hub — not for cashiers */
@@ -62,6 +64,7 @@ export type AuditAction =
   | "discount_given"
   | "shift_close_count"
   | "stock_adjust"
+  | "expired_stock_writeoff"
   | "price_change"
   | "debt_payment"
   | "debt_reconcile"
@@ -387,7 +390,8 @@ export type StockMovementKind =
   | "adjust_damage"
   | "adjust_use"
   | "adjust_other"
-  | "adjust_count";
+  | "adjust_count"
+  | "adjust_expired_writeoff";
 
 export type StockMovement = {
   id: string;
@@ -481,6 +485,25 @@ export type DebtPayment = {
 };
 
 /** End-of-day note — counted cash vs expected */
+/** Immutable audit metadata for day-close PDF exports (no accounting effect). */
+export type DayCloseDocumentSnapshot = {
+  documentVersion: 1;
+  generatedAt: string;
+  closedByUserId: string | null;
+  closedByLabel: string;
+  expectedCashUgx: number;
+  countedCashUgx: number;
+  varianceUgx: number;
+  totalSalesUgx: number;
+  profitEstimateUgx: number;
+  totalDebtUgx: number;
+  cashFromSalesUgx: number;
+  debtCollectedUgx: number;
+  refundsUgx: number;
+  expenseUgx: number;
+  transactionCount: number;
+};
+
 export type DayCloseSummary = {
   id: string;
   dateKey: string;
@@ -495,6 +518,8 @@ export type DayCloseSummary = {
   supersededAt?: string | null;
   overrideReason?: string | null;
   replacesCloseId?: string | null;
+  /** PDF/print snapshot for accountant archive */
+  documentSnapshot?: DayCloseDocumentSnapshot | null;
 };
 
 export const EXPENSE_CATEGORIES = [

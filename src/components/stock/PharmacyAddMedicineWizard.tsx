@@ -9,10 +9,11 @@ import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { MEDICINE_FORMS } from "../../lib/pharmacyMedicine";
 import { usePosStore } from "../../store/usePosStore";
 import { defaultPharmacyCategoriesForBusinessType } from "../../lib/pharmacy";
+import { pharmacyCostWarnings } from "../../lib/pharmacyCostIntegrity";
 
-type Step = "name" | "category" | "strength" | "form" | "expiry" | "stock" | "price";
+type Step = "name" | "category" | "strength" | "form" | "expiry" | "stock" | "buyPrice" | "sellPrice";
 
-const STEPS: Step[] = ["name", "category", "strength", "form", "expiry", "stock", "price"];
+const STEPS: Step[] = ["name", "category", "strength", "form", "expiry", "stock", "buyPrice", "sellPrice"];
 
 type Props = {
   lang: Language;
@@ -35,6 +36,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
   const [medicineForm, setMedicineForm] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [stockCount, setStockCount] = useState("");
+  const [buyPrice, setBuyPrice] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [minAlert, setMinAlert] = useState("10");
   const [savedFlash, setSavedFlash] = useState(false);
@@ -55,6 +57,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     setMedicineForm("");
     setExpiryDate("");
     setStockCount("");
+    setBuyPrice("");
     setSellPrice("");
     setMinAlert("10");
     setSavedFlash(false);
@@ -68,10 +71,31 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
   const resolvedCategory = () => (categoryPick || category).trim() || t(lang, "generalCategory");
 
+  const previewWarnings = useMemo(() => {
+    const cost = Math.max(0, Math.floor(Number(buyPrice.replace(/\D/g, "")) || 0));
+    const sell = Math.max(0, Math.floor(Number(sellPrice.replace(/\D/g, "")) || 0));
+    if (cost <= 0 && sell <= 0) return [];
+    return pharmacyCostWarnings({
+      id: "preview",
+      name: name.trim() || "—",
+      sellingMode: "unit",
+      baseUnit: "tablet",
+      sellingPricePerUnitUgx: sell,
+      costPricePerUnitUgx: cost,
+      stockOnHand: 0,
+      minimumStockAlert: 0,
+      category: "",
+      sku: "",
+      updatedAt: "",
+      version: 1,
+    });
+  }, [buyPrice, sellPrice, name]);
+
   const save = () => {
     const priceUgx = Math.max(0, Math.floor(Number(sellPrice.replace(/\D/g, "")) || 0));
+    const costUgx = Math.max(0, Math.floor(Number(buyPrice.replace(/\D/g, "")) || 0));
     const stockQty = Math.max(0, Math.floor(Number(stockCount.replace(/\D/g, "")) || 0));
-    if (!name.trim() || priceUgx <= 0) return false;
+    if (!name.trim() || priceUgx <= 0 || costUgx <= 0 || stockQty <= 0) return false;
 
     const r = quickAddProduct({
       name: name.trim(),
@@ -84,7 +108,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
       medicineStrength: strength.trim() || null,
       medicineForm: medicineForm.trim() || null,
       expiryDate: expiryDate.trim() || null,
-      costPricePerUnitUgx: Math.max(0, Math.floor(priceUgx * 0.75)),
+      costPricePerUnitUgx: costUgx,
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert) || 10)),
     });
     if (!r.ok) return false;
@@ -98,9 +122,17 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     return true;
   };
 
+  const stepBlocked = (): boolean => {
+    if (step === "name") return !name.trim();
+    if (step === "stock") return Math.floor(Number(stockCount.replace(/\D/g, "")) || 0) <= 0;
+    if (step === "buyPrice") return Math.floor(Number(buyPrice.replace(/\D/g, "")) || 0) <= 0;
+    if (step === "sellPrice") return Math.floor(Number(sellPrice.replace(/\D/g, "")) || 0) <= 0;
+    return false;
+  };
+
   const next = () => {
-    if (step === "name" && !name.trim()) return;
-    if (step === "price") {
+    if (stepBlocked()) return;
+    if (step === "sellPrice") {
       save();
       return;
     }
@@ -246,6 +278,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
         {step === "stock" ? (
           <div className="space-y-3">
             <h3 className="text-xl font-black text-slate-900">{t(lang, "pharmacyAddMedicine_stockNow")}</h3>
+            <p className="text-sm font-medium text-slate-600">{t(lang, "pharmacyOpeningStockRequiredHint")}</p>
             <input
               value={stockCount}
               onChange={(e) => setStockCount(e.target.value.replace(/[^\d.]/g, ""))}
@@ -255,7 +288,21 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
           </div>
         ) : null}
 
-        {step === "price" ? (
+        {step === "buyPrice" ? (
+          <div className="space-y-3">
+            <h3 className="text-xl font-black text-slate-900">{t(lang, "pharmacyAddMedicine_buyPrice")}</h3>
+            <p className="text-sm font-medium text-slate-600">{t(lang, "pharmacyAddMedicine_buyPriceHint")}</p>
+            <input
+              value={buyPrice}
+              onChange={(e) => setBuyPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              inputMode="numeric"
+              className={inputClass}
+            />
+            <span className="text-xs font-bold text-slate-500">UGX {t(lang, "pharmacyPerUnit")}</span>
+          </div>
+        ) : null}
+
+        {step === "sellPrice" ? (
           <div className="space-y-3">
             <h3 className="text-xl font-black text-slate-900">{t(lang, "pharmacyAddMedicine_sellPrice")}</h3>
             <input
@@ -264,6 +311,12 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
               inputMode="numeric"
               className={inputClass}
             />
+            <span className="text-xs font-bold text-slate-500">UGX {t(lang, "pharmacyPerUnit")}</span>
+            {previewWarnings.map((w) => (
+              <p key={w.kind} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
+                {t(lang, w.messageKey)}
+              </p>
+            ))}
           </div>
         ) : null}
       </div>
@@ -271,11 +324,11 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
       <footer className="shrink-0 border-t border-slate-100 p-4">
         <button
           type="button"
-          disabled={disabled || (step === "name" && !name.trim())}
+          disabled={disabled || stepBlocked()}
           onClick={next}
           className="min-h-[52px] w-full rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-50"
         >
-          {step === "price" ? t(lang, "pharmacyAddMedicine_save") : t(lang, "simpleAddNext")}
+          {step === "sellPrice" ? t(lang, "pharmacyAddMedicine_save") : t(lang, "simpleAddNext")}
         </button>
       </footer>
     </AppModalOverlay>

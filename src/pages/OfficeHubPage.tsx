@@ -44,7 +44,6 @@ import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
-import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
@@ -155,7 +154,6 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         </div>
       </header>
 
-      <SupportQuickStrip lang={lang} />
       <PilotSupportCard lang={lang} userId={userId} />
       <SyncHealthCard lang={lang} variant="simple" />
 
@@ -307,6 +305,14 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   title={t(lang, "officeCardProfit")}
                   subtitle={t(lang, "officeCardProfitSub")}
                   Icon={TrendingUp}
+                />
+              ) : null}
+              {pharmacyMode && canProfit ? (
+                <OfficeNavCard
+                  to="/office/pharmacy-margins"
+                  title={t(lang, "officeCardPharmacyMargin")}
+                  subtitle={t(lang, "officeCardPharmacyMarginSub")}
+                  Icon={Pill}
                 />
               ) : null}
               {can("owner.dashboard") ? (

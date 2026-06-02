@@ -63,8 +63,10 @@ import {
   buildReceiptNumberForSale,
   buildSaleReceiptHtml,
   buildSaleReceiptText,
-  printReceiptWithFallback,
 } from "../lib/receiptPrint";
+import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../lib/receiptDocuments";
+import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
+import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { posSearchAliases } from "../lib/pharmacyUx";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
@@ -1626,44 +1628,68 @@ export function PosPage({ lang }: { lang: Language }) {
               dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
             />
           </div>
-          <footer className="shrink-0 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                className="min-h-[52px] rounded-2xl bg-slate-900 py-3 text-sm font-black text-white active:bg-slate-800"
-                onClick={() => {
-                  void printReceiptWithFallback(receiptPlain, preferences.receiptPaperSize ?? "80mm").then((result) => {
-                    if (!result.ok) window.alert(t(lang, "receiptPrintBlocked"));
+          <footer className="shrink-0 space-y-2 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+            {receiptSale ? (
+              <DocumentActionsBar
+                lang={lang}
+                compact
+                onPrint={() => {
+                  const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
+                  const ctx = buildSaleReceiptContext({
+                    lang,
+                    sale: receiptSale,
+                    allSales: sales,
+                    preferences: shopPreferences,
+                    products,
+                    actor,
+                    customerName: cust?.name ?? null,
+                    customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+                  });
+                  void printSaleReceipt(ctx).then((r) => {
+                    if (!r.ok) window.alert(t(lang, "receiptPrintBlocked"));
                   });
                 }}
-              >
-                {t(lang, "receiptPrint")}
-              </button>
-              <button
-                type="button"
-                className="min-h-[52px] rounded-2xl bg-emerald-600 py-3 text-sm font-black text-white active:bg-emerald-700"
-                onClick={async () => {
-                  if (navigator.share) {
-                    try {
-                      await navigator.share({ title: "Waka POS Receipt", text: receiptPlain });
-                      return;
-                    } catch {
-                      // fallback below
-                    }
-                  }
-                  window.open(`https://wa.me/?text=${encodeURIComponent(receiptPlain)}`, "_blank", "noopener,noreferrer");
+                onDownloadPdf={() => {
+                  const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
+                  const ctx = buildSaleReceiptContext({
+                    lang,
+                    sale: receiptSale,
+                    allSales: sales,
+                    preferences: shopPreferences,
+                    products,
+                    actor,
+                    customerName: cust?.name ?? null,
+                    customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+                  });
+                  void downloadSaleReceiptPdf(ctx).then((ok) => {
+                    if (!ok) window.alert(t(lang, "receiptPdfFailed"));
+                  });
                 }}
-              >
-                Share
-              </button>
-              <button
-                type="button"
-                className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white active:bg-waka-700"
-                onClick={() => setReceiptSaleId(null)}
-              >
-                {t(lang, "receiptClose")}
-              </button>
-            </div>
+                onSharePdf={() => {
+                  const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
+                  const ctx = buildSaleReceiptContext({
+                    lang,
+                    sale: receiptSale,
+                    allSales: sales,
+                    preferences: shopPreferences,
+                    products,
+                    actor,
+                    customerName: cust?.name ?? null,
+                    customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+                  });
+                  void shareSaleReceiptPdf(ctx).then((ok) => {
+                    if (!ok) window.alert(t(lang, "receiptPdfFailed"));
+                  });
+                }}
+              />
+            ) : null}
+            <button
+              type="button"
+              className="min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-sm font-black text-white active:bg-waka-700"
+              onClick={() => setReceiptSaleId(null)}
+            >
+              {t(lang, "receiptClose")}
+            </button>
           </footer>
         </div>
         </PosScreenPortal>

@@ -14,6 +14,8 @@ export type StarterLine = {
   medicineForm?: string;
   /** Optional default expiry offset in days from today (starter onboarding). */
   defaultExpiryDaysFromNow?: number;
+  /** Pharmacy: explicit buy price per unit (required for pharmacy starter apply). */
+  defaultCostUgx?: number;
 };
 
 export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
@@ -34,6 +36,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_paracetamol",
       inferName: "Paracetamol",
       defaultPriceUgx: 500,
+      defaultCostUgx: 320,
       defaultStock: 120,
       category: "Pain Relief",
       medicineStrength: "500mg",
@@ -44,6 +47,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_amox",
       inferName: "Amoxicillin",
       defaultPriceUgx: 1500,
+      defaultCostUgx: 1100,
       defaultStock: 60,
       category: "Antibiotics",
       medicineStrength: "250mg",
@@ -54,6 +58,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_ibuprofen",
       inferName: "Ibuprofen",
       defaultPriceUgx: 800,
+      defaultCostUgx: 520,
       defaultStock: 80,
       category: "Pain Relief",
       medicineStrength: "400mg",
@@ -64,6 +69,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_omeprazole",
       inferName: "Omeprazole",
       defaultPriceUgx: 1200,
+      defaultCostUgx: 850,
       defaultStock: 48,
       category: "Hypertension",
       medicineStrength: "20mg",
@@ -74,6 +80,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_metronidazole",
       inferName: "Metronidazole",
       defaultPriceUgx: 900,
+      defaultCostUgx: 620,
       defaultStock: 40,
       category: "Antibiotics",
       medicineStrength: "400mg",
@@ -84,6 +91,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_vitc",
       inferName: "Vitamin C",
       defaultPriceUgx: 600,
+      defaultCostUgx: 400,
       defaultStock: 72,
       category: "Vitamins",
       medicineStrength: "1000mg",
@@ -94,6 +102,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_diclofenac",
       inferName: "Diclofenac",
       defaultPriceUgx: 700,
+      defaultCostUgx: 480,
       defaultStock: 60,
       category: "Pain Relief",
       medicineStrength: "50mg",
@@ -104,6 +113,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_cetirizine",
       inferName: "Cetirizine",
       defaultPriceUgx: 500,
+      defaultCostUgx: 330,
       defaultStock: 48,
       category: "Cough & Cold",
       medicineStrength: "10mg",
@@ -114,6 +124,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_ors",
       inferName: "ORS",
       defaultPriceUgx: 1000,
+      defaultCostUgx: 700,
       defaultStock: 40,
       category: "First Aid",
       medicineForm: "Other",
@@ -123,6 +134,7 @@ export function starterPackForBusinessType(bt: BusinessType): StarterLine[] {
       nameKey: "starterPharmacy_artemether",
       inferName: "Artemether-Lumefantrine",
       defaultPriceUgx: 5000,
+      defaultCostUgx: 3800,
       defaultStock: 24,
       category: "Malaria",
       medicineStrength: "20/120mg",

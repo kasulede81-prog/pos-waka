@@ -16,7 +16,6 @@ import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { isHospitalityMode } from "../lib/hospitality";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
-import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
 import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
@@ -215,7 +214,6 @@ export function DashboardPage({ lang }: { lang: Language }) {
       </div>
 
       <HomeTrustBanner lang={lang} />
-      <SupportQuickStrip lang={lang} compact />
 
       {canSell && quickTiles.length > 0 ? (
         <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">

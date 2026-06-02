@@ -1,22 +1,19 @@
 import { jsPDF } from "jspdf";
 import type { Sale } from "../types";
+import { saveExportedFile } from "./fileDownload";
+import { sanitizePdfStem } from "./pdfLayout";
 
 const UG_LOCALE = "en-UG";
-
-function sanitizeFileStem(stem: string): string {
-  return stem.replace(/[^\w\-]+/g, "_").slice(0, 80) || "waka-sales";
-}
 
 /**
  * Build a simple text PDF of sales for sharing/archiving. Uses Helvetica only;
  * some product names (non-Latin scripts) may not render fully in the PDF.
  */
-export function saveSalesListPdf(opts: {
+export function buildSalesListPdfBlob(opts: {
   sales: Sale[];
   title: string;
   subtitle?: string;
-  fileStem: string;
-}): void {
+}): Blob {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -86,5 +83,16 @@ export function saveSalesListPdf(opts: {
     y += 10;
   }
 
-  doc.save(`${sanitizeFileStem(opts.fileStem)}.pdf`);
+  return doc.output("blob");
+}
+
+export async function saveSalesListPdf(opts: {
+  sales: Sale[];
+  title: string;
+  subtitle?: string;
+  fileStem: string;
+}): Promise<boolean> {
+  const blob = buildSalesListPdfBlob(opts);
+  const filename = `${sanitizePdfStem(opts.fileStem)}.pdf`;
+  return saveExportedFile(filename, blob, "application/pdf");
 }

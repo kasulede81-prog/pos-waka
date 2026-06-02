@@ -5,6 +5,7 @@ import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { printReceiptWithFallback } from "../lib/receiptPrint";
+import { printElectronWindow } from "../lib/documentPrint";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
 
@@ -175,10 +176,29 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
         >
           {t(lang, "receiptPaperTestPrint")}
         </button>
-        <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700">
-          Thermal: {printerCaps?.escPosAvailable ? "ready" : "not detected"} · USB:{" "}
-          {printerCaps?.usbAvailable ? "yes" : "no"} · Bluetooth: {printerCaps?.bluetoothAvailable ? "yes" : "no"}
-        </p>
+        {printerCaps ? (
+          <p className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs font-semibold text-stone-700">
+            {printerCaps.state === "SUPPORTED"
+              ? t(lang, "printerStateSupported")
+              : printerCaps.state === "PARTIAL"
+                ? t(lang, "printerStatePartial")
+                : t(lang, "printerStateUnavailable")}
+            <br />
+            {printerCaps.stateReason}
+            <br />
+            {t(lang, "printerDiagnostics")}: USB {printerCaps.usbAvailable ? "yes" : "no"} · BT{" "}
+            {printerCaps.bluetoothAvailable ? "yes" : "no"} · {printerCaps.platform}
+          </p>
+        ) : null}
+        {typeof window !== "undefined" && window.wakaDesktop?.print ? (
+          <button
+            type="button"
+            className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-stone-300 bg-white py-2 text-sm font-black text-stone-800"
+            onClick={() => void printElectronWindow().then((ok) => setPrintingStatus(ok ? "Electron print invoked." : "Electron print failed."))}
+          >
+            {t(lang, "electronPrintTest")}
+          </button>
+        ) : null}
         {printingStatus ? (
           <p className="mt-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">
             {printingStatus}

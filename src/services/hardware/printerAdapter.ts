@@ -1,15 +1,21 @@
 /**
- * Thermal / receipt printer adapter (Bluetooth, USB, Sunmi). Implement per platform.
- * Queue-aware: callers should use print queue when offline.
+ * Thermal / receipt printer adapter (Bluetooth, USB). Web APIs only — no Sunmi SDK yet.
  */
 export type PrinterPaperWidth = "58mm" | "80mm";
+
+export type PrinterPlatform = "web" | "android" | "ios" | "electron" | "unknown";
+
+/** Production certification state — do not claim "ready" unless SUPPORTED. */
+export type PrinterCapabilityState = "SUPPORTED" | "PARTIAL" | "UNAVAILABLE";
 
 export type PrinterCapabilities = {
   bluetoothAvailable: boolean;
   usbAvailable: boolean;
   sunmiBuiltIn: boolean;
   escPosAvailable: boolean;
-  platform: "web" | "android" | "ios" | "electron" | "unknown";
+  platform: PrinterPlatform;
+  state: PrinterCapabilityState;
+  stateReason: string;
 };
 
 const ESC_POS_INIT = [0x1b, 0x40];
@@ -21,13 +27,56 @@ const ESC_POS_FEED_4 = [0x1b, 0x64, 0x04];
 const BT_PRINTER_SERVICES = [0xffe0, 0x18f0];
 const BT_PRINTER_CHARS = [0xffe1, 0x2af1];
 
-function resolvePlatform(): PrinterCapabilities["platform"] {
+function resolvePlatform(): PrinterPlatform {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent.toLowerCase();
   if (ua.includes("electron")) return "electron";
   if (ua.includes("android")) return "android";
   if (ua.includes("iphone") || ua.includes("ipad") || ua.includes("ipod")) return "ios";
   return "web";
+}
+
+function resolveCapabilityState(
+  platform: PrinterPlatform,
+  bluetoothAvailable: boolean,
+  usbAvailable: boolean,
+): { state: PrinterCapabilityState; stateReason: string; escPosAvailable: boolean } {
+  if (typeof navigator === "undefined") {
+    return { state: "UNAVAILABLE", stateReason: "No browser runtime.", escPosAvailable: false };
+  }
+  if (usbAvailable) {
+    return {
+      state: "SUPPORTED",
+      stateReason: "WebUSB thermal printing available (pair printer, allow access).",
+      escPosAvailable: true,
+    };
+  }
+  if (bluetoothAvailable) {
+    return {
+      state: "PARTIAL",
+      stateReason: "Web Bluetooth may work with compatible printers; use browser print as fallback.",
+      escPosAvailable: true,
+    };
+  }
+  if (platform === "electron") {
+    return {
+      state: "PARTIAL",
+      stateReason: "Use system print dialog (Receipt Print). USB/BT thermal needs WebUSB/Web Bluetooth in Chromium.",
+      escPosAvailable: false,
+    };
+  }
+  if (platform === "android" || platform === "ios") {
+    return {
+      state: "PARTIAL",
+      stateReason: "Native thermal SDK not installed. Use Receipt Print or save/share PDF.",
+      escPosAvailable: false,
+    };
+  }
+  return {
+    state: "PARTIAL",
+    stateReason: "Browser print to any printer or Save as PDF from the print dialog.",
+    escPosAvailable: false,
+  };
 }
 
 function toEscPos(payload: { width: PrinterPaperWidth; lines: string[] }): Uint8Array {
@@ -52,19 +101,25 @@ export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> 
   const bluetoothAvailable = hasNavigator && "bluetooth" in navigator;
   const usbAvailable = hasNavigator && "usb" in navigator;
   const platform = resolvePlatform();
-  const sunmiBuiltIn = platform === "android";
+  const sunmiBuiltIn = false;
+  const { state, stateReason, escPosAvailable } = resolveCapabilityState(platform, bluetoothAvailable, usbAvailable);
   return {
     bluetoothAvailable,
     usbAvailable,
     sunmiBuiltIn,
-    escPosAvailable: bluetoothAvailable || usbAvailable || sunmiBuiltIn,
+    escPosAvailable,
     platform,
+    state,
+    stateReason,
   };
 }
 
 export async function testPrint(_payload: { width: PrinterPaperWidth; lines: string[] }): Promise<{ ok: boolean; error?: string }> {
   const payload = _payload;
   const caps = await detectPrinterCapabilities();
+  if (!caps.escPosAvailable) {
+    return { ok: false, error: caps.stateReason };
+  }
   const bytes = toEscPos(payload);
 
   if (caps.usbAvailable && typeof navigator !== "undefined" && "usb" in navigator) {
@@ -130,5 +185,5 @@ export async function testPrint(_payload: { width: PrinterPaperWidth; lines: str
     }
   }
 
-  return { ok: false, error: "No native thermal printer interface is available on this device." };
+  return { ok: false, error: caps.stateReason };
 }

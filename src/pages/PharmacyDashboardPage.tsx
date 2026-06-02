@@ -17,7 +17,8 @@ import { expiryTilePresentation } from "../lib/pharmacyExpiry";
 import { ExpiryStatusBadge } from "../components/pharmacy/ExpiryStatusBadge";
 import { useShallow } from "zustand/react/shallow";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
-import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
+import { PharmacyExpiredWriteOffPanel } from "../components/pharmacy/PharmacyExpiredWriteOffPanel";
+import { canSeeOfficeProfit } from "../lib/homeProfit";
 
 export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -37,6 +38,8 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
   const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
+  const canProfit = canSeeOfficeProfit(actor.role, authMode) && hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const canWriteOff = hasEffectivePermission(actor.role, "pharmacy.expired_writeoff", snapshot, authMode);
 
   const stats = useMemo(
     () => computePharmacyDashboardStats(products, sales, returnRecords, todayKey),
@@ -88,26 +91,48 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
               {t(lang, "pharmacyDashGoReports")}
             </Link>
           ) : null}
+          {canProfit ? (
+            <Link
+              to="/office/pharmacy-margins"
+              className="inline-flex min-h-[46px] shrink-0 items-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-base font-black text-emerald-950 shadow-sm"
+            >
+              {t(lang, "officeCardPharmacyMargin")}
+            </Link>
+          ) : null}
         </div>
       </div>
 
       <HomeTrustBanner lang={lang} />
-      <SupportQuickStrip lang={lang} compact />
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {canProfit ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-xs font-black uppercase text-emerald-800">{t(lang, "pharmacyDashTodayProfit")}</p>
+            <p className={`mt-1 text-2xl font-black ${stats.todayProfitUgx < 0 ? "text-stone-700" : "text-emerald-950"}`}>
+              UGX {stats.todayProfitUgx.toLocaleString()}
+            </p>
+            <p className="text-xs font-semibold text-emerald-800">{t(lang, "estimatedProfitHint")}</p>
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-xs font-black uppercase text-amber-800">{t(lang, "pharmacyDashTodayDispensings")}</p>
-          <p className="mt-1 text-3xl font-black text-amber-950">{stats.todayDispensingCount}</p>
-          <p className="text-sm font-bold text-amber-900">{formatUgxShort(stats.todayDispensingTotalUgx)}</p>
+          <p className="text-xs font-black uppercase text-amber-800">{t(lang, "pharmacyDashTodayRevenue")}</p>
+          <p className="mt-1 text-2xl font-black text-amber-950">
+            UGX {stats.todayDispensingTotalUgx.toLocaleString()}
+          </p>
+          <p className="text-xs font-semibold text-amber-800">
+            {stats.todayDispensingCount} {t(lang, "pharmacyDashTodayDispensings").toLowerCase()}
+          </p>
         </div>
-        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 sm:col-span-2">
-          <p className="text-xs font-black uppercase text-teal-800">{t(lang, "pharmacyDashInventoryAtRisk")}</p>
-          <p className="mt-1 text-2xl font-black text-teal-950">
-            UGX {stats.inventoryValueAtRiskUgx.toLocaleString()}
+        <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+          <p className="text-xs font-black uppercase text-stone-700">{t(lang, "pharmacyDashInventoryValue")}</p>
+          <p className="mt-1 text-2xl font-black text-stone-950">UGX {stats.inventoryValueUgx.toLocaleString()}</p>
+        </div>
+        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+          <p className="text-xs font-black uppercase text-orange-800">{t(lang, "pharmacyDashExpiringStockValue")}</p>
+          <p className="mt-1 text-2xl font-black text-orange-950">
+            UGX {stats.expiringStockValueUgx.toLocaleString()}
           </p>
-          <p className="text-xs font-semibold text-teal-800">
-            {t(lang, "pharmacyReportsExpiringValue")} + {t(lang, "pharmacyReportsExpiredValue")}
-          </p>
+          <p className="text-xs font-semibold text-orange-800">{t(lang, "pharmacyDashInventoryAtRisk")}</p>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-xs font-black uppercase text-rose-800">{t(lang, "pharmacyDashLowStock")}</p>
@@ -130,6 +155,8 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
         );
         })}
       </section>
+
+      <PharmacyExpiredWriteOffPanel lang={lang} products={products} canWriteOff={canWriteOff} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">

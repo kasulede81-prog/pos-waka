@@ -1,8 +1,9 @@
-const { app, BrowserWindow, shell } = require("electron");
+const { app, BrowserWindow, shell, ipcMain } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 
 const APP_NAME = "WAKA POS";
+let mainWindow = null;
 
 function createMainWindow() {
   const iconPath = path.join(__dirname, "..", "build", "icon.png");
@@ -25,6 +26,8 @@ function createMainWindow() {
     },
   });
 
+  mainWindow = win;
+
   win.once("ready-to-show", () => {
     win.show();
   });
@@ -37,6 +40,34 @@ function createMainWindow() {
   const indexPath = path.join(__dirname, "..", "dist", "index.html");
   win.loadFile(indexPath);
 }
+
+ipcMain.handle("waka-print", async (_event, opts) => {
+  const win = mainWindow ?? BrowserWindow.getFocusedWindow();
+  if (!win) return { ok: false, error: "No window" };
+  return new Promise((resolve) => {
+    win.webContents.print(
+      {
+        silent: Boolean(opts?.silent),
+        printBackground: true,
+      },
+      (success, failureReason) => {
+        if (success) resolve({ ok: true });
+        else resolve({ ok: false, error: failureReason || "Print failed" });
+      },
+    );
+  });
+});
+
+ipcMain.handle("waka-printer-diagnostics", async () => {
+  const win = mainWindow ?? BrowserWindow.getFocusedWindow();
+  return {
+    platform: process.platform,
+    electron: process.versions.electron,
+    chrome: process.versions.chrome,
+    hasWindow: Boolean(win),
+    printApi: true,
+  };
+});
 
 app.setName(APP_NAME);
 

@@ -83,6 +83,7 @@ body {
     --waka-pos-checkout-strip-h: 4rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
+    --waka-scroll-tail-stock: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 1.5rem);
     --waka-scroll-tail-pos: calc(var(--waka-bottom-nav-h) + var(--waka-pos-checkout-strip-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-pos-sale: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     /* Stacking: main scroll < FAB 35 < bottom nav 45 < POS sheets 52+ < receipt 65 */

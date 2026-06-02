@@ -11,6 +11,14 @@ import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import {
+  documentReceiptNumber,
+  downloadDebtPaymentReceiptPdf,
+  printDebtPaymentReceipt,
+  shareDebtPaymentReceiptPdf,
+  type DebtPaymentReceiptContext,
+} from "../lib/receiptDocuments";
+import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 
 export function CustomersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -35,6 +43,8 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const [phone, setPhone] = useState("");
   const [payOpen, setPayOpen] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [debtReceiptCtx, setDebtReceiptCtx] = useState<DebtPaymentReceiptContext | null>(null);
+  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -51,7 +61,19 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const submitPay = (customerId: string) => {
     const n = Math.floor(Number(payAmount.replace(/\D/g, "")) || 0);
     const r = addDebtPayment(customerId, n);
-    if (r.ok) {
+    if (r.ok && r.payment) {
+      const customer = customers.find((c) => c.id === customerId);
+      if (customer) {
+        setDebtReceiptCtx({
+          shopName,
+          receiptNumber: documentReceiptNumber("DEBT", r.payment.id, r.payment.createdAt),
+          payment: r.payment,
+          customer,
+          cashier: actor.displayName?.trim() || t(lang, "role_owner"),
+          balanceAfterUgx: customer.debtBalanceUgx,
+          paper: preferences.receiptPaperSize ?? "80mm",
+        });
+      }
       setPayOpen(null);
       setPayAmount("");
     }
@@ -155,6 +177,35 @@ export function CustomersPage({ lang }: { lang: Language }) {
           )}
         </article>
       ))}
+
+      {debtReceiptCtx ? (
+        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal>
+          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
+            <h2 className="text-lg font-black text-stone-900">{t(lang, "payDown")}</h2>
+            <p className="mt-1 text-sm text-stone-600">{debtReceiptCtx.customer.name}</p>
+            <div className="mt-4">
+              <DocumentActionsBar
+                lang={lang}
+                compact
+                onPrint={() => void printDebtPaymentReceipt(debtReceiptCtx).then((r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")))}
+                onDownloadPdf={() =>
+                  void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+                }
+                onSharePdf={() =>
+                  void shareDebtPaymentReceiptPdf(debtReceiptCtx).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+                }
+              />
+            </div>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-2xl border-2 border-stone-200 py-3 font-bold"
+              onClick={() => setDebtReceiptCtx(null)}
+            >
+              {t(lang, "receiptClose")}
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

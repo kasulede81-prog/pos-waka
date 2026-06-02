@@ -7,6 +7,7 @@ import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { ShopProfileForm } from "../components/settings/ShopProfileForm";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
+import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 
 type Props = {
   lang: Language;
@@ -43,6 +44,7 @@ export function SettingsShopPage({ lang, email, shopName, user, authMode }: Prop
         onSaved={() => navigate(showOnboardGate ? "/" : "/settings/shop", { replace: true })}
       />
       <ShopSupportNumberCard lang={lang} />
+      <SupportQuickStrip lang={lang} />
     </div>
   );
 }

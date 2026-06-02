@@ -25,7 +25,6 @@ import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { RouteErrorBoundary } from "../RouteErrorBoundary";
-import { FloatingSupportFab } from "../support/FloatingSupportFab";
 import { PilotModeBanner } from "../pilot/PilotModeBanner";
 import { isPilotModeActive } from "../../lib/pilotMode";
 import { MobileScrollTail } from "./MobileScrollTail";
@@ -689,7 +688,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </AppModalOverlay>
         ) : null}
-        <FloatingSupportFab lang={lang} />
       </div>
     </SessionActorProvider>
     </SessionHydrationProvider>

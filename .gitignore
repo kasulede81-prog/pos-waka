@@ -22,6 +22,30 @@ dist-ssr
 
 android/local.properties
 
+# Electron builds
+release/
+release/windows/
+release/windows-build/
+win-unpacked/
+
+# Windows installers
+*.exe
+*.msi
+*.blockmap
+
+# Archives
+*.zip
+*.7z
+
+# Electron builder
+latest.yml
+builder-debug.yml
+builder-effective-config.yaml
+
+# Generated icons
+build/icon.ico
+build/icon.png
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

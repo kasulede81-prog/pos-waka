@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MoreHorizontal } from "lucide-react";
+import { AlertTriangle, MoreHorizontal } from "lucide-react";
 import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatProductPriceLabel, usePosStore } from "../../store/usePosStore";
@@ -20,6 +20,8 @@ type Props = {
   canRemove: boolean;
   canSell: boolean;
   canRestock: boolean;
+  /** True when this is the only product in stock (shows always-visible remove affordance). */
+  isOnlyProduct?: boolean;
   onAction: (action: RowAction) => void;
 };
 
@@ -31,6 +33,7 @@ export function StockProductCard({
   canRemove,
   canSell,
   canRestock,
+  isOnlyProduct = false,
   onAction,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -102,8 +105,8 @@ export function StockProductCard({
             </button>
             {menuOpen ? (
               <>
-                <button type="button" className="fixed inset-0 z-10" aria-label={t(lang, "cancel")} onClick={() => setMenuOpen(false)} />
-                <ul className="absolute right-0 top-[calc(100%+0.35rem)] z-20 min-w-[10rem] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
+                <button type="button" className="fixed inset-0 z-[46]" aria-label={t(lang, "cancel")} onClick={() => setMenuOpen(false)} />
+                <ul className="absolute bottom-[calc(100%+0.35rem)] right-0 z-[50] min-w-[10rem] rounded-xl border border-slate-200 bg-white py-1 shadow-lg">
                   {canRestock ? (
                     <li>
                       <button
@@ -150,6 +153,20 @@ export function StockProductCard({
               </>
             ) : null}
           </div>
+        </div>
+      ) : null}
+
+      {!locked && isOnlyProduct && canRemove ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-800" aria-hidden />
+          <p className="min-w-0 flex-1 text-sm font-semibold text-amber-950">{t(lang, "stockLastProductHint")}</p>
+          <button
+            type="button"
+            onClick={() => onAction("remove")}
+            className="min-h-[44px] shrink-0 rounded-2xl bg-rose-600 px-4 text-sm font-black text-white active:bg-rose-700"
+          >
+            {t(lang, "stockActionRemove")}
+          </button>
         </div>
       ) : null}
     </li>

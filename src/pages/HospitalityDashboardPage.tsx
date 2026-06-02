@@ -21,7 +21,6 @@ import {
 } from "../lib/hospitalityStats";
 import { useShallow } from "zustand/react/shallow";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
-import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 
 export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -113,7 +112,6 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
       </div>
 
       <HomeTrustBanner lang={lang} />
-      <SupportQuickStrip lang={lang} compact />
 
       {preferences.onboardingDone && (products.length === 0 || !hasOpenSessions) && salesCount === 0 ? (
         <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-6 shadow-sm">

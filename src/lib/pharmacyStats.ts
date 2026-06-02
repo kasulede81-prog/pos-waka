@@ -6,6 +6,7 @@ import { countExpiryBuckets, medicinesInExpiryBucket, type ExpiryBucket } from "
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { localGetTopProducts } from "./localReporting";
 import { computePharmacyExpiryReport } from "./pharmacyReports";
+import { pharmacyInventoryValueAtCostUgx } from "./pharmacyCostIntegrity";
 
 export type PharmacyDashboardStats = {
   lowStockCount: number;
@@ -15,6 +16,9 @@ export type PharmacyDashboardStats = {
   expiredMedicines: Product[];
   todayDispensingCount: number;
   todayDispensingTotalUgx: number;
+  todayProfitUgx: number;
+  inventoryValueUgx: number;
+  expiringStockValueUgx: number;
   topMedicines: { productId: string; name: string; quantity: number; revenueUgx: number }[];
   inventoryValueAtRiskUgx: number;
   expiredStockValueUgx: number;
@@ -40,9 +44,11 @@ export function computePharmacyDashboardStats(
   const todaySales = revenueSalesOnDay(sales, todayKey);
   const todayFin = getCompletedFinancials(sales, returns, products, { day: todayKey });
   const todayDispensingTotalUgx = todayFin.revenueUgx;
+  const todayProfitUgx = todayFin.profitUgx;
 
   const top = localGetTopProducts(sales, returns, products, "today", "top", 5);
   const expiryReport = computePharmacyExpiryReport(inStock, today);
+  const inventoryValueUgx = pharmacyInventoryValueAtCostUgx(inStock);
 
   return {
     lowStockCount: lowStockMedicines.length,
@@ -52,6 +58,9 @@ export function computePharmacyDashboardStats(
     expiredMedicines,
     todayDispensingCount: todaySales.length,
     todayDispensingTotalUgx,
+    todayProfitUgx,
+    inventoryValueUgx,
+    expiringStockValueUgx: expiryReport.expiringValueUgx,
     topMedicines: top.map((p) => {
       const product = products.find((x) => x.id === p.productId);
       return {

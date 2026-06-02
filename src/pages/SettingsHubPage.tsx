@@ -11,7 +11,6 @@ import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 import { PilotSupportCard } from "../components/settings/PilotSupportCard";
-import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { PilotModeToggle } from "../components/pilot/PilotModeToggle";
 import { canTogglePilotMode, isPilotModeActive } from "../lib/pilotMode";
@@ -60,7 +59,6 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       </div>
 
       {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
-      <SupportQuickStrip lang={lang} />
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
         {canShop ? (

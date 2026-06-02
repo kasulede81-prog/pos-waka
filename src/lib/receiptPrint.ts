@@ -334,7 +334,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
     </article>`;
 }
 
-function paperCss(paper: ReceiptPaperSize): string {
+export function paperCss(paper: ReceiptPaperSize): string {
   switch (paper) {
     case "58mm":
       return `@page { size: 58mm auto; margin: 4mm; }

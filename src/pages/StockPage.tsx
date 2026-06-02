@@ -302,6 +302,8 @@ export function StockPage({ lang }: { lang: Language }) {
         baseUnit: row.baseUnit,
         medicineStrength: row.medicineStrength ?? null,
         medicineForm: row.medicineForm ?? null,
+        costPricePerUnitUgx:
+          pharmacyMode && row.defaultCostUgx != null ? Math.max(1, Math.floor(row.defaultCostUgx)) : undefined,
         expiryDate:
           pharmacyMode && row.defaultExpiryDaysFromNow != null
             ? starterExpiryDateIso(row.defaultExpiryDaysFromNow)
@@ -417,6 +419,8 @@ export function StockPage({ lang }: { lang: Language }) {
     });
   };
 
+  const onlyProductInStock = unlockedProducts.length === 1;
+
   const renderProductCards = (items: Product[]) => {
     if (items.length === 0) {
       return (
@@ -438,6 +442,7 @@ export function StockPage({ lang }: { lang: Language }) {
             canRemove={canRemove}
             canSell={canSell}
             canRestock={canRestock}
+            isOnlyProduct={onlyProductInStock}
             onAction={(action) => handleRowAction(p, action)}
           />
         ))}
@@ -451,7 +456,7 @@ export function StockPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-5 pb-4">
+    <div className="space-y-5 pb-2">
       <PageHeader
         lang={lang}
         title={modeTerm("stockTitle")}
@@ -827,7 +832,12 @@ export function StockPage({ lang }: { lang: Language }) {
       {removeId ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
           <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
-            <p className="text-lg font-black text-slate-900">{t(lang, "removeProductConfirm")}</p>
+            <p className="text-lg font-black text-slate-900">
+              {onlyProductInStock ? t(lang, "removeLastProductConfirmTitle") : t(lang, "removeProductConfirm")}
+            </p>
+            {onlyProductInStock ? (
+              <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "removeLastProductConfirmBody")}</p>
+            ) : null}
             <div className="mt-6 flex gap-3">
               <button type="button" className="flex-1 rounded-2xl border-2 py-3 font-bold" onClick={() => setRemoveId(null)}>
                 {t(lang, "cancel")}

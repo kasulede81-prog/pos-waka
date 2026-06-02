@@ -59,6 +59,7 @@ import { sessionWaiterAttribution } from "../lib/waiterAttribution";
 import { isPharmacyBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { inferProductGuess } from "../lib/pharmacyUx";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
+import { pharmacyQuickAddRequiresBuyPrice } from "../lib/pharmacyCostIntegrity";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
 import {
   fireKitchenTicketsForLines,
@@ -114,6 +115,7 @@ import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
 import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
+import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
 import { validateDraftDiscount } from "../lib/discountGovernance";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
@@ -412,7 +414,7 @@ export type PosState = {
     refundAmountUgx: number;
     reason: ReturnReason;
     note?: string;
-  }) => { ok: boolean; errorKey?: string };
+  }) => { ok: boolean; errorKey?: string; returnRecord?: ReturnRecord };
   closeShiftWithCashCount: (countedCashUgx: number) => { ok: boolean; errorKey?: string; differenceUgx?: number };
   finalizeDraftSale: (opts: {
     debtUgx: number;
@@ -488,8 +490,17 @@ export type PosState = {
     >,
   ) => { ok: boolean; errorKey?: string };
   adjustStock: (productId: string, delta: number, reason?: string) => void;
+  /** Pharmacy: write off expired stock with audit trail and inventory loss value. */
+  writeOffExpiredStock: (input: {
+    productId: string;
+    quantity?: number;
+    note?: string;
+  }) => { ok: boolean; errorKey?: string; lossValueUgx?: number };
   addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
-  addDebtPayment: (customerId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
+  addDebtPayment: (
+    customerId: string,
+    amountUgx: number,
+  ) => { ok: boolean; errorKey?: string; payment?: import("../types").DebtPayment };
   recordDayClose: (opts: {
     dateKey: string;
     countedCashUgx: number;
@@ -2319,7 +2330,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (linkedCustomerId && debtReduce > 0) {
       void queueRemote("customer", { id: linkedCustomerId });
     }
-    return { ok: true };
+    return { ok: true, returnRecord: returnRec };
   },
 
   closeShiftWithCashCount: (countedCashUgx) => {
@@ -2373,11 +2384,19 @@ export const usePosStore = create<PosState>((set, get) => {
     const buyingUnit = input.buyingUnit !== undefined ? input.buyingUnit : guess.buyingUnit;
     const conversionRate = input.conversionRate !== undefined ? input.conversionRate : guess.conversionRate;
     const price = Math.max(0, Math.floor(input.priceUgx));
+    if (price <= 0) return { ok: false, errorKey: "invalid" };
     const stock = Math.max(0, Number(input.stockQty) || 0);
-    const cost =
+    const pharmacyRequiresBuy = pharmacyQuickAddRequiresBuyPrice(prefs.businessType, prefs.pharmacyModeEnabled);
+    if (pharmacyRequiresBuy && stock <= 0) return { ok: false, errorKey: "pharmacyOpeningStockRequired" };
+    const costExplicit =
       input.costPricePerUnitUgx !== undefined && input.costPricePerUnitUgx !== null
         ? Math.max(0, Math.floor(Number(input.costPricePerUnitUgx)))
-        : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
+        : null;
+    if (pharmacyRequiresBuy) {
+      if (costExplicit === null || costExplicit <= 0) return { ok: false, errorKey: "pharmacyBuyPriceRequired" };
+    }
+    const cost =
+      costExplicit !== null ? costExplicit : Math.min(price, Math.max(0, Math.floor(price * 0.72)));
     const minAlert =
       input.minimumStockAlert !== undefined
         ? Math.max(0, Math.floor(input.minimumStockAlert))
@@ -2672,6 +2691,79 @@ export const usePosStore = create<PosState>((set, get) => {
     });
   },
 
+  writeOffExpiredStock: ({ productId, quantity, note }) => {
+    const denied = denyUnlessPerm("pharmacy.expired_writeoff", "writeOffExpiredStock");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    if (!isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled)) {
+      return { ok: false, errorKey: "invalid" };
+    }
+
+    const p = state.products.find((x) => x.id === productId);
+    if (!p) return { ok: false, errorKey: "missingProduct" };
+    if (!isProductExpired(p)) return { ok: false, errorKey: "pharmacyWriteOffNotExpired" };
+
+    const onHand = Math.max(0, Number(p.stockOnHand) || 0);
+    if (onHand <= 0) return { ok: false, errorKey: "noStock" };
+
+    const qty = quantity != null ? Math.min(onHand, Math.max(0, Number(quantity) || 0)) : onHand;
+    if (qty <= 0) return { ok: false, errorKey: "invalidQty" };
+
+    const costPerUnit = Math.max(0, Math.floor(p.costPricePerUnitUgx));
+    const lossValueUgx = Math.round(qty * costPerUnit);
+    const at = new Date().toISOString();
+    const writeOffId = crypto.randomUUID();
+    const delta = -qty;
+
+    const movement: StockMovement = {
+      id: crypto.randomUUID(),
+      at,
+      productId: p.id,
+      productName: p.name,
+      deltaBaseUnits: delta,
+      kind: "adjust_expired_writeoff",
+      summary: `Expired write-off −${qty} ${p.baseUnit}`,
+      refId: writeOffId,
+      supplierId: null,
+    };
+
+    set((s) => ({
+      products: s.products.map((row) =>
+        row.id === productId
+          ? {
+              ...row,
+              stockOnHand: Math.max(0, row.stockOnHand + delta),
+              updatedAt: at,
+              version: row.version + 1,
+            }
+          : row,
+      ),
+      stockMovements: mergeStockMovements([movement], s.stockMovements),
+    }));
+
+    void queueRemote("pending_stock_updates", {
+      productId,
+      delta,
+      note: "expired_writeoff",
+      baseUpdatedAt: p.updatedAt,
+      baseStockOnHand: p.stockOnHand,
+    });
+
+    pushAudit("expired_stock_writeoff", `Expired write-off ${p.name} −${qty} · loss UGX ${lossValueUgx.toLocaleString()}`, {
+      writeOffId,
+      productId,
+      productName: p.name,
+      quantity: qty,
+      lossValueUgx,
+      costPerUnitUgx: costPerUnit,
+      expiryDate: p.expiryDate ?? null,
+      note: note?.trim() || null,
+    });
+
+    return { ok: true, lossValueUgx };
+  },
+
   addCustomer: (c) => {
     const denied = denyUnlessPerm("customers.view", "addCustomer");
     if (denied) {
@@ -2747,7 +2839,7 @@ export const usePosStore = create<PosState>((set, get) => {
       paymentId: payment.id,
       amountUgx: pay,
     });
-    return { ok: true };
+    return { ok: true, payment };
   },
 
   addSupplier: (input) => {
@@ -3132,8 +3224,35 @@ export const usePosStore = create<PosState>((set, get) => {
     const counted = Math.max(0, Math.floor(countedCashUgx));
     const diff = counted - expectedCashUgx;
     const now = new Date().toISOString();
+    const actor = state.sessionActor;
+    const closedByLabel = actor?.displayName?.trim() || actor?.role || "Owner";
+    const closeId = crypto.randomUUID();
+    const documentSnapshot = buildDayCloseSnapshot({
+      closedByUserId: actor?.userId ?? null,
+      closedByLabel,
+      row: {
+        id: closeId,
+        dateKey,
+        expectedCashUgx,
+        countedCashUgx: counted,
+        differenceUgx: diff,
+        totalSalesUgx,
+        totalDebtUgx,
+        profitEstimateUgx,
+        createdAt: now,
+        replacesCloseId: existing?.id ?? null,
+        overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
+      },
+      drawer: {
+        cashFromSalesUgx: drawer.cashFromSalesUgx,
+        debtCollectedUgx: drawer.debtCollectedUgx,
+        refundsUgx: drawer.refundsUgx,
+        expenseUgx: drawer.expenseUgx,
+      },
+      transactionCount: fin.transactionCount,
+    });
     const row: DayCloseSummary = {
-      id: crypto.randomUUID(),
+      id: closeId,
       dateKey,
       expectedCashUgx,
       countedCashUgx: counted,
@@ -3144,6 +3263,7 @@ export const usePosStore = create<PosState>((set, get) => {
       createdAt: now,
       replacesCloseId: existing?.id ?? null,
       overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
+      documentSnapshot,
     };
     set((s) => ({
       dayCloses: [

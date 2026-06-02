@@ -12,6 +12,8 @@ import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
+import { downloadDayClosePdf, printDayCloseReport, shareDayClosePdf } from "../lib/dayCloseDocument";
 
 export function CloseDayPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -20,6 +22,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const returnRecords = useReportingReturnRecords(false);
   const dayCloses = usePosStore((s) => s.dayCloses);
   const preferences = usePosStore((s) => s.preferences);
+  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
   const recordDayClose = usePosStore((s) => s.recordDayClose);
 
   const todayKey = dateKeyKampala(new Date());
@@ -204,11 +207,38 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       </form>
 
       {doneMsg && (
-        <p className="rounded-2xl bg-slate-900 px-4 py-3 text-center text-lg font-bold text-white">{t(lang, "closeSaved")}</p>
+        <div className="space-y-3 rounded-2xl bg-slate-900 px-4 py-4 text-white">
+          <p className="text-center text-lg font-bold">{t(lang, "closeSaved")}</p>
+          {last && last.dateKey === todayKey ? (
+            <DocumentActionsBar
+              lang={lang}
+              compact
+              onPrint={() => void printDayCloseReport(lang, last, shopName)}
+              onDownloadPdf={() =>
+                void downloadDayClosePdf(lang, last, shopName).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+              }
+              onSharePdf={() =>
+                void shareDayClosePdf(lang, last, shopName).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+              }
+            />
+          ) : null}
+        </div>
       )}
 
       {last && last.dateKey === todayKey ? (
         <section className="rounded-3xl border-2 border-slate-200 bg-slate-50 p-5">
+          <div className="mb-4">
+            <DocumentActionsBar
+              lang={lang}
+              onPrint={() => void printDayCloseReport(lang, last, shopName)}
+              onDownloadPdf={() =>
+                void downloadDayClosePdf(lang, last, shopName).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+              }
+              onSharePdf={() =>
+                void shareDayClosePdf(lang, last, shopName).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+              }
+            />
+          </div>
           <p className="text-lg font-black text-slate-900">{t(lang, "closeLastDiff")}</p>
           <p className="mt-2 text-3xl font-black text-slate-800">
             UGX {last.differenceUgx.toLocaleString()}

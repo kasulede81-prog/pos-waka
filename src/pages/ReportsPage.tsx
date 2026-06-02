@@ -13,6 +13,22 @@ import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
+import { downloadDailyReportPdf } from "../lib/dailyReportPdf";
+import {
+  downloadPharmacyExpiryCsv,
+  downloadPharmacyExpiryPdf,
+} from "../lib/pharmacyDocumentExports";
+import {
+  downloadWholesaleDebtorListPdf,
+  downloadWholesaleReceivablesCsv,
+  downloadWholesaleReceivablesPdf,
+  wholesaleReceivablesRows,
+} from "../lib/wholesaleDocumentExports";
+import {
+  downloadHospitalityKitchenPdf,
+  downloadHospitalityTablePdf,
+  downloadHospitalityWaiterPdf,
+} from "../lib/hospitalityDocumentExports";
 import { PageHeader } from "../components/layout/PageHeader";
 import { computeHospitalityReports } from "../lib/hospitalityReports";
 import { isHospitalityMode, totalOpenTablesPendingUgx } from "../lib/hospitality";
@@ -180,6 +196,22 @@ export function ReportsPage({ lang }: { lang: Language }) {
             <StockMovementsPanel lang={lang} movements={stockMovements} pharmacyMode />
           </div>
         </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white"
+            onClick={() => void downloadPharmacyExpiryPdf(lang, products)}
+          >
+            {t(lang, "pharmacyExportPdf")}
+          </button>
+          <button
+            type="button"
+            className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black text-emerald-900"
+            onClick={() => void downloadPharmacyExpiryCsv(products)}
+          >
+            {t(lang, "pharmacyExportCsv")}
+          </button>
+        </div>
       </section>
     ) : null;
 
@@ -233,6 +265,32 @@ export function ReportsPage({ lang }: { lang: Language }) {
         <div className="mt-2">
           <StockMovementsPanel lang={lang} movements={stockMovements} wholesaleMode />
         </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="rounded-xl bg-indigo-700 px-3 py-2 text-xs font-black text-white"
+          onClick={() => {
+            const rows = wholesaleReceivablesRows(customers);
+            void downloadWholesaleReceivablesPdf(lang, rows, debtOutstanding);
+          }}
+        >
+          {t(lang, "wholesaleExportReceivablesPdf")}
+        </button>
+        <button
+          type="button"
+          className="rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-black text-indigo-900"
+          onClick={() => void downloadWholesaleReceivablesCsv(wholesaleReceivablesRows(customers))}
+        >
+          {t(lang, "wholesaleExportReceivablesCsv")}
+        </button>
+        <button
+          type="button"
+          className="rounded-xl border border-indigo-300 bg-white px-3 py-2 text-xs font-black text-indigo-900"
+          onClick={() => void downloadWholesaleDebtorListPdf(lang, wholesaleReceivablesRows(customers))}
+        >
+          {t(lang, "wholesaleExportDebtorsPdf")}
+        </button>
       </div>
     </section>
   ) : null;
@@ -337,6 +395,31 @@ export function ReportsPage({ lang }: { lang: Language }) {
               </ul>
             </div>
           ) : null}
+          {hospitalityReports ? (
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                type="button"
+                className="rounded-xl bg-waka-700 px-3 py-2 text-xs font-black text-white"
+                onClick={() => void downloadHospitalityWaiterPdf(lang, hospitalityReports)}
+              >
+                {t(lang, "hospitalityExportWaiterPdf")}
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-waka-300 bg-white px-3 py-2 text-xs font-black text-waka-900"
+                onClick={() => void downloadHospitalityKitchenPdf(lang, hospitalityReports)}
+              >
+                {t(lang, "hospitalityExportKitchenPdf")}
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-waka-300 bg-white px-3 py-2 text-xs font-black text-waka-900"
+                onClick={() => void downloadHospitalityTablePdf(lang, hospitalityReports)}
+              >
+                {t(lang, "hospitalityExportTablePdf")}
+              </button>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -344,7 +427,27 @@ export function ReportsPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-semibold text-slate-800">{t(lang, "exportReportHeading")}</p>
           {reportHint ? <p className="mt-2 text-sm text-slate-600">{reportHint}</p> : null}
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <button
+              type="button"
+              className="rounded-2xl bg-waka-600 px-4 py-3 text-sm font-bold text-white"
+              onClick={() => {
+                const dk = dateKeyKampala(new Date());
+                void downloadDailyReportPdf({
+                  lang,
+                  dateKey: dk,
+                  shopName: preferences.shopDisplayName?.trim() || "Waka POS",
+                  sales,
+                  products,
+                  returnRecords,
+                  debtPayments,
+                  cashExpenses,
+                  topProducts: report.topProducts,
+                }).then((ok) => setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")));
+              }}
+            >
+              {t(lang, "dailyReportDownloadPdf")}
+            </button>
             <button
               type="button"
               className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"

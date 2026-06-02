@@ -43,6 +43,7 @@ import { NativeSplashGate } from "./components/NativeSplashGate";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
 import { ProfitPage } from "./pages/ProfitPage";
+import { PharmacyMarginReportPage } from "./pages/PharmacyMarginReportPage";
 import { StockPage } from "./pages/StockPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
@@ -301,6 +302,14 @@ function App() {
               element={
                 <RoleProtectedRoute permission="reports.profit">
                   <ProfitPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/pharmacy-margins"
+              element={
+                <RoleProtectedRoute permission="reports.profit">
+                  <PharmacyMarginReportPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

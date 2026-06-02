@@ -13,8 +13,9 @@ import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
-import { buildReceiptNumberForSale, buildSaleReceiptText, printReceiptWithFallback } from "../lib/receiptPrint";
-import { resolveReceiptBranding } from "../lib/receiptBranding";
+import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
+import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
+import { ReturnReceiptActionsModal, buildReturnReceiptContext } from "../components/documents/ReturnReceiptActionsModal";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
@@ -26,8 +27,6 @@ import {
   groupPendingSalesByKampalaDay,
   partitionReceiptsSales,
 } from "../lib/receiptsGrouping";
-import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
-
 function formatReceiptsDayHeading(dateKey: string): string {
   const parts = dateKey.split("-").map(Number);
   const y = parts[0];
@@ -56,12 +55,13 @@ type SaleArticleProps = {
   canVoid: boolean;
   soldByLabel: (sale: Sale) => string;
   onPrint: (sale: Sale) => void;
+  onReceiptPdf: (sale: Sale) => void;
   onVoidLine: (sale: Sale, lineIndex: number, line: SaleLine) => void;
   onReturn: (sale: Sale) => void;
   pendingBadge?: boolean;
 };
 
-function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onVoidLine, onReturn, pendingBadge }: SaleArticleProps) {
+function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, onVoidLine, onReturn, pendingBadge }: SaleArticleProps) {
   const completed = isCompletedSale(sale);
   const allowAdjust = completed && canVoid;
 
@@ -128,6 +128,14 @@ function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onVoidLine, on
           <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {t(lang, "receiptPrint")}
         </button>
+        <button
+          type="button"
+          onClick={() => onReceiptPdf(sale)}
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-waka-200 bg-waka-50 px-3 text-xs font-black text-waka-800"
+        >
+          <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t(lang, "receiptDownloadPdf")}
+        </button>
         {allowAdjust ? (
           <button
             type="button"
@@ -163,6 +171,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const [showCancelled, setShowCancelled] = useState(false);
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
+  const [returnReceiptCtx, setReturnReceiptCtx] = useState<import("../lib/receiptDocuments").ReturnReceiptContext | null>(null);
 
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
   const customers = usePosStore((s) => s.customers);
@@ -186,38 +195,30 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     return t(lang, "role_owner");
   };
 
-  const printSale = (sale: Sale) => {
-    const shopName = shopLabel || "Waka POS";
-    const cashier = soldByLabel(sale);
-    const receiptNumber = buildReceiptNumberForSale(sale, sales);
+  const receiptCtxFor = (sale: Sale) => {
     const cust = sale.customerId ? customers.find((c) => c.id === sale.customerId) : null;
-    const productById = new Map(products.map((p) => [p.id, p] as const));
-    const branding = resolveReceiptBranding(preferences);
-    const text = buildSaleReceiptText({
-      shopName,
-      shopAddress: preferences.shopAddressLine ?? null,
-      shopPhone: preferences.shopPhoneE164 ?? null,
-      cashier,
-      receiptNumber,
+    return buildSaleReceiptContext({
+      lang,
       sale,
-      productById,
-      customHeaderLines: branding.customHeaderLines,
-      footerThanks: branding.footerThanks,
-      returnPolicy: branding.returnPolicy,
+      allSales: sales,
+      preferences,
+      products,
+      actor,
       customerName: cust?.name ?? null,
-      customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
-      labels: {
-        cashier: t(lang, "receiptCashier"),
-        items: t(lang, "receiptItemsLabel"),
-        total: t(lang, "receiptTotalLabel"),
-        paid: t(lang, "receiptPaidLabel"),
-        debtSale: t(lang, "receiptDebtLine"),
-        balance: t(lang, "receiptBalanceLine"),
-        time: t(lang, "receiptTimeLabel"),
-      },
+      customerBalanceUgx: cust?.debtBalanceUgx ?? null,
     });
-    void printReceiptWithFallback(text, preferences.receiptPaperSize ?? "80mm").then((result) => {
+  };
+
+  const printSale = (sale: Sale) => {
+    void printSaleReceipt(receiptCtxFor(sale)).then((result) => {
       if (!result.ok) window.alert(t(lang, "receiptPrintBlocked"));
+    });
+  };
+
+  const receiptPdfSale = (sale: Sale) => {
+    const ctx = receiptCtxFor(sale);
+    void downloadSaleReceiptPdf(ctx).then((ok) => {
+      if (!ok) window.alert(t(lang, "receiptPdfFailed"));
     });
   };
 
@@ -249,7 +250,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const onDownloadAll = async () => {
     const { saveSalesListPdf } = await import("../lib/receiptsPdf");
-    saveSalesListPdf({
+    await saveSalesListPdf({
       sales: partitioned.completed,
       title: t(lang, "receiptsPdfAllTitle"),
       subtitle: shopLabel,
@@ -259,7 +260,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const onDownloadDay = async (daySales: Sale[], dateKey: string) => {
     const { saveSalesListPdf } = await import("../lib/receiptsPdf");
-    saveSalesListPdf({
+    await saveSalesListPdf({
       sales: daySales,
       title: tTemplate(lang, "receiptsPdfDayTitle", { date: formatReceiptsDayHeading(dateKey) }),
       subtitle: shopLabel,
@@ -293,8 +294,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           {tTemplate(lang, "syncErrorCount", { count: String(syncErrorCount) })} — {t(lang, "syncErrorBanner")}
         </p>
       ) : null}
-
-      <SupportQuickStrip lang={lang} compact />
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
@@ -376,6 +375,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                     canVoid={canVoid}
                     soldByLabel={soldByLabel}
                     onPrint={printSale}
+                    onReceiptPdf={receiptPdfSale}
                     onVoidLine={(s, lineIndex, line) => setVoidTarget({ sale: s, lineIndex, line })}
                     onReturn={setReturnSale}
                   />
@@ -415,6 +415,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                     canVoid={false}
                     soldByLabel={soldByLabel}
                     onPrint={printSale}
+                    onReceiptPdf={receiptPdfSale}
                     onVoidLine={() => undefined}
                     onReturn={() => undefined}
                     pendingBadge
@@ -444,6 +445,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                   canVoid={false}
                   soldByLabel={soldByLabel}
                   onPrint={printSale}
+                  onReceiptPdf={receiptPdfSale}
                   onVoidLine={() => undefined}
                   onReturn={() => undefined}
                 />
@@ -477,7 +479,32 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         returnRecords={allReturns}
         actorRole={actor.role}
         onClose={() => setReturnSale(null)}
-        onConfirm={(input) => returnProduct(input)}
+        onConfirm={(input) => {
+          const r = returnProduct(input);
+          if (!r.ok) return r;
+          if (r.returnRecord) {
+            const sale = returnSale;
+            const cust = sale?.customerId ? customers.find((c) => c.id === sale.customerId) : null;
+            setReturnReceiptCtx(
+              buildReturnReceiptContext({
+                shopName: shopLabel || "Waka POS",
+                returnRecord: r.returnRecord,
+                sale,
+                cashier: sale ? soldByLabel(sale) : actor.displayName?.trim() || t(lang, "role_owner"),
+                customerName: cust?.name ?? null,
+              }),
+            );
+            setReturnSale(null);
+          }
+          return r;
+        }}
+      />
+
+      <ReturnReceiptActionsModal
+        lang={lang}
+        open={returnReceiptCtx !== null}
+        ctx={returnReceiptCtx}
+        onClose={() => setReturnReceiptCtx(null)}
       />
     </div>
   );
