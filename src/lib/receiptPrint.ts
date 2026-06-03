@@ -1,10 +1,11 @@
 import type { Product, ReceiptDisplayOptions, ReceiptPaperSize, Sale, SaleLine } from "../types";
-import { defaultReceiptDisplayOptions } from "./receiptBranding";
+import { defaultReceiptDisplayOptions, receiptFooterLinesForPrint } from "./receiptBranding";
 import { dateKeyKampala } from "./datesUg";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
+import { isNativePrintPlatform, sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 
 export type ReceiptLabels = {
   cashier: string;
@@ -172,7 +173,11 @@ export function buildReceiptDisplayData(params: {
   const opts = displayOptions ?? defaultReceiptDisplayOptions();
   const resolvedHeader =
     headerLines?.length ? headerLines : customHeaderLines?.length ? customHeaderLines : null;
-  const resolvedFooter = (footerLines ?? []).map((l) => l.trim()).filter(Boolean);
+  const resolvedFooter = footerLines?.length
+    ? receiptFooterLinesForPrint(footerLines)
+    : footerThanks?.trim()
+      ? [footerThanks.trim()]
+      : ["Thank you for shopping with us"];
   const lines: ReceiptDisplayLine[] = sale.lines
     .filter((ln) => !ln.voided)
     .map((ln) => {
@@ -353,6 +358,11 @@ export function buildSaleReceiptText(params: {
   return lines.join("\n");
 }
 
+function receiptHtmlParagraph(line: string, esc: (v: string) => string): string {
+  if (line === "") return `<p class="spacer">&nbsp;</p>`;
+  return `<p>${esc(line)}</p>`;
+}
+
 export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
   const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const fmt = (n: number) => `UGX ${Math.max(0, Math.round(n)).toLocaleString()}`;
@@ -380,7 +390,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
       : "";
   const headerSource = display.headerLines.length ? display.headerLines : display.customHeaderLines;
   const headerBlock = headerSource?.length
-    ? headerSource.map((line) => `<p>${esc(line)}</p>`).join("")
+    ? headerSource.map((line) => receiptHtmlParagraph(line, esc)).join("")
     : `<h2>${esc(display.shopName)}</h2>
         ${display.displayOptions.showShopAddress && display.shopAddress ? `<p>${esc(display.shopAddress)}</p>` : ""}
         ${display.displayOptions.showShopPhone && display.shopPhone ? `<p>${esc(display.shopPhone)}</p>` : ""}`;
@@ -410,7 +420,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
          }`
       : "";
 
-  const footerBlock = display.footerLines.map((line) => `<p>${esc(line)}</p>`).join("");
+  const footerBlock = display.footerLines.map((line) => receiptHtmlParagraph(line, esc)).join("");
   const poweredBlock = display.footerPowered
     ? `<p class="powered">${esc(display.footerPowered)}</p>`
     : "";
@@ -421,6 +431,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
       .waka-receipt .header { text-align: center; border-bottom: 1px dashed #cbd5e1; padding-bottom: 10px; margin-bottom: 10px; }
       .waka-receipt .header h2 { margin: 0; font-size: 1.1rem; font-weight: 900; letter-spacing: 0.02em; text-transform: uppercase; }
       .waka-receipt .header p { margin: 2px 0; font-size: 0.8rem; color: #334155; }
+      .waka-receipt .spacer { min-height: 0.55em; margin: 4px 0; }
       .waka-receipt .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; font-size: 0.77rem; margin-bottom: 10px; }
       .waka-receipt .meta div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted #e2e8f0; padding-bottom: 2px; }
       .waka-receipt .items { border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 8px 0; }
@@ -501,7 +512,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 
 /** Print via hidden iframe (avoids popup blockers; works with AirPrint / system dialog). */
 export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isNativePrintPlatform()) return false;
 
   const html = receiptHtml(receiptPlain, paper);
   const iframe = document.createElement("iframe");
@@ -561,7 +572,7 @@ function toThermalWidth(paper: ReceiptPaperSize): PrinterPaperWidth {
 export async function printReceiptWithFallback(
   receiptPlain: string,
   paper: ReceiptPaperSize = "80mm",
-): Promise<{ ok: boolean; mode: "native" | "browser" | "none"; error?: string }> {
+): Promise<{ ok: boolean; mode: "native" | "browser" | "share" | "none"; error?: string }> {
   try {
     const caps = await detectPrinterCapabilities();
     if (caps.escPosAvailable) {
@@ -572,7 +583,17 @@ export async function printReceiptWithFallback(
       if (native.ok) return { ok: true, mode: "native" };
     }
   } catch {
-    // Continue into browser fallback.
+    // Continue into fallback.
+  }
+
+  if (isNativePrintPlatform()) {
+    const shared = await sharePlainReceiptForPrint(receiptPlain, paper);
+    if (shared) return { ok: true, mode: "share" };
+    return {
+      ok: false,
+      mode: "none",
+      error: "Could not open share sheet. Try Share receipt PDF from the receipt screen.",
+    };
   }
 
   const browserOk = printReceiptText(receiptPlain, paper);

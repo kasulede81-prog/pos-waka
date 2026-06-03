@@ -1,6 +1,7 @@
 import type { ReceiptPaperSize } from "../types";
-import { paperCss } from "./receiptPrint";
 import { saveExportedFile } from "./fileDownload";
+import { isNativePrintPlatform } from "./nativeReceiptPrint";
+import { paperCss } from "./receiptPrint";
 
 declare global {
   interface Window {
@@ -24,7 +25,7 @@ body { font-family: Inter, system-ui, sans-serif; padding: 8px; color: #111; mar
 }
 
 export function printHtmlDocument(bodyHtml: string, paper: ReceiptPaperSize = "80mm", title = "Waka document"): boolean {
-  if (typeof document === "undefined") return false;
+  if (typeof document === "undefined" || isNativePrintPlatform()) return false;
 
   const html = wrapPrintHtml(bodyHtml, paper, title);
   const iframe = document.createElement("iframe");
@@ -96,7 +97,9 @@ export async function downloadPdfBlob(filename: string, blob: Blob): Promise<boo
 }
 
 export async function sharePdfBlob(filename: string, blob: Blob): Promise<boolean> {
-  return saveExportedFile(filename, blob, "application/pdf");
+  return saveExportedFile(filename, blob, "application/pdf", {
+    shareDialogTitle: "Print or share receipt",
+  });
 }
 
 export function downloadCsvText(filename: string, body: string): Promise<boolean> {

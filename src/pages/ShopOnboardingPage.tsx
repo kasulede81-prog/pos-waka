@@ -10,6 +10,14 @@ import {
   ONBOARDING_STAFF_ROLES,
   type OnboardingStaffRole,
 } from "../config/onboardingFlow";
+import {
+  HOSPITALITY_ONBOARDING_GROUP_ID,
+  HOSPITALITY_ONBOARDING_STYLES,
+  businessTypeForHospitalityStyle,
+  hospitalityStyleIdForBusinessType,
+  isHospitalityOnboardingGroupCard,
+  type HospitalityOnboardingStyleId,
+} from "../config/hospitalityOnboarding";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { usePosStore } from "../store/usePosStore";
 import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
@@ -25,7 +33,7 @@ import { supabase } from "../lib/supabase";
 
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
-type Step = "welcome" | "business" | "selling" | "location" | "staff" | "products";
+type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "staff" | "products";
 
 const fieldClass =
   "mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
@@ -58,6 +66,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [skippedWelcome, setSkippedWelcome] = useState(false);
   const [step, setStep] = useState<Step>("welcome");
   const [businessType, setBusinessType] = useState<BusinessType>("kiosk_duka");
+  const [selectedBusinessCardId, setSelectedBusinessCardId] = useState<string>("retail");
+  const [pickedHospitalityGroup, setPickedHospitalityGroup] = useState(false);
+  const [hospitalityStyleId, setHospitalityStyleId] = useState<HospitalityOnboardingStyleId>(() => {
+    const fromPrefs = preferences.businessType;
+    return hospitalityStyleIdForBusinessType(fromPrefs) ?? "restaurant";
+  });
   const [sellingStyle, setSellingStyle] = useState<ShopSellingStyle>("piece");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -100,17 +114,30 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     if (fromPrefs && !phoneFallback) setPhoneFallback(fromPrefs);
   }, [preferences.shopPhoneE164, phoneFallback]);
 
+  useEffect(() => {
+    const bt = preferences.businessType;
+    const style = hospitalityStyleIdForBusinessType(bt);
+    if (style) {
+      setPickedHospitalityGroup(true);
+      setSelectedBusinessCardId(HOSPITALITY_ONBOARDING_GROUP_ID);
+      setHospitalityStyleId(style);
+      setBusinessType(bt);
+    }
+  }, [preferences.businessType]);
+
   const [staffOpen, setStaffOpen] = useState(false);
   const [staffName, setStaffName] = useState("");
   const [staffRole, setStaffRole] = useState<OnboardingStaffRole>("cashier");
   const [staffPin, setStaffPin] = useState("");
 
   const stepOrder = useMemo(() => {
-    const order: Step[] = ["welcome", "business", "selling", "location"];
+    const order: Step[] = ["welcome", "business"];
+    if (pickedHospitalityGroup) order.push("hospitality_style");
+    order.push("selling", "location");
     if (showStaffStep) order.push("staff");
     order.push("products");
     return order;
-  }, [showStaffStep]);
+  }, [showStaffStep, pickedHospitalityGroup]);
 
   const stepIndex = useMemo(() => stepOrder.indexOf(step), [stepOrder, step]);
   const progressTotal = Math.max(stepOrder.length - 1, 1);
@@ -271,21 +298,85 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             ) : null}
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardBizTitle")}</h2>
             <div className="grid gap-2">
-              {ONBOARDING_BUSINESS_CARDS.map((card) => (
+              {ONBOARDING_BUSINESS_CARDS.map((card) => {
+                const selected =
+                  card.hospitalityGroup
+                    ? selectedBusinessCardId === card.id
+                    : selectedBusinessCardId === card.id ||
+                      (card.businessType != null && businessType === card.businessType && !pickedHospitalityGroup);
+                return (
+                  <button
+                    key={card.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedBusinessCardId(card.id);
+                      if (card.hospitalityGroup) {
+                        setPickedHospitalityGroup(true);
+                        setBusinessType(businessTypeForHospitalityStyle(hospitalityStyleId));
+                      } else if (card.businessType) {
+                        setPickedHospitalityGroup(false);
+                        setBusinessType(card.businessType);
+                      }
+                    }}
+                    className={`${cardBtn} ${selected ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"}`}
+                  >
+                    <span className="text-2xl">{card.emoji}</span>
+                    <span className="mt-1 block text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              className={primaryBtn}
+              onClick={() => {
+                if (pickedHospitalityGroup || isHospitalityOnboardingGroupCard(selectedBusinessCardId)) {
+                  setBusinessType(businessTypeForHospitalityStyle(hospitalityStyleId));
+                  setStep("hospitality_style");
+                } else {
+                  setStep("selling");
+                }
+              }}
+            >
+              {t(lang, "onboardContinue")}
+            </button>
+          </div>
+        ) : null}
+
+        {!booting && step === "hospitality_style" ? (
+          <div className="space-y-4">
+            <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("business")}>
+              <ChevronLeft className="mr-1 inline h-4 w-4" />
+              {t(lang, "onboardBack")}
+            </button>
+            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardHospitalityStyleTitle")}</h2>
+            <p className="text-sm font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
+            <div className="grid gap-2">
+              {HOSPITALITY_ONBOARDING_STYLES.map((style) => (
                 <button
-                  key={card.id}
+                  key={style.id}
                   type="button"
-                  onClick={() => setBusinessType(card.businessType)}
+                  onClick={() => {
+                    setHospitalityStyleId(style.id);
+                    setBusinessType(style.businessType);
+                  }}
                   className={`${cardBtn} ${
-                    businessType === card.businessType ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"
+                    hospitalityStyleId === style.id ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"
                   }`}
                 >
-                  <span className="text-2xl">{card.emoji}</span>
-                  <span className="mt-1 block text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
+                  <span className="text-2xl">{style.emoji}</span>
+                  <span className="mt-1 block text-base font-black text-stone-900">{t(lang, style.labelKey)}</span>
                 </button>
               ))}
             </div>
-            <button type="button" className={primaryBtn} onClick={() => setStep("selling")}>
+            <button
+              type="button"
+              className={primaryBtn}
+              onClick={() => {
+                setBusinessType(businessTypeForHospitalityStyle(hospitalityStyleId));
+                setStep("selling");
+              }}
+            >
               {t(lang, "onboardContinue")}
             </button>
           </div>
@@ -293,7 +384,11 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
 
         {!booting && step === "selling" ? (
           <div className="space-y-4">
-            <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("business")}>
+            <button
+              type="button"
+              className="text-sm font-bold text-stone-500"
+              onClick={() => setStep(pickedHospitalityGroup ? "hospitality_style" : "business")}
+            >
               <ChevronLeft className="mr-1 inline h-4 w-4" />
               {t(lang, "onboardBack")}
             </button>

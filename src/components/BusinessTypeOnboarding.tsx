@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 import type { BusinessType, Language } from "../types";
 import { t } from "../lib/i18n";
-import { BUSINESS_TYPE_IDS } from "../config/businessTypes";
 import { usePosStore } from "../store/usePosStore";
 import { saveBusinessProfileToCloud } from "../lib/businessProfile";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { SHOP_CURRENCY } from "../lib/shopCurrency";
 import { AppModalOverlay } from "./layout/AppModalOverlay";
+import {
+  HOSPITALITY_ONBOARDING_STYLES,
+  NON_HOSPITALITY_BUSINESS_TYPE_IDS,
+  businessTypeForHospitalityStyle,
+  hospitalityStyleIdForBusinessType,
+  type HospitalityOnboardingStyleId,
+} from "../config/hospitalityOnboarding";
+import { isHospitalityBusinessType } from "../lib/hospitality";
 
 const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
 
@@ -40,6 +47,12 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const [shopName, setShopName] = useState(() => preferences.shopDisplayName ?? "");
   const [businessType, setBusinessType] = useState<BusinessType>(() => preferences.businessType ?? "kiosk_duka");
+  const [hospitalityFlow, setHospitalityFlow] = useState(() =>
+    isHospitalityBusinessType(preferences.businessType ?? null),
+  );
+  const [hospitalityStyleId, setHospitalityStyleId] = useState<HospitalityOnboardingStyleId>(() => {
+    return hospitalityStyleIdForBusinessType(preferences.businessType) ?? "restaurant";
+  });
   const [phone, setPhone] = useState(() => preferences.shopPhoneE164 ?? "");
   const [address, setAddress] = useState(() => preferences.shopAddressLine ?? "");
   const [busy, setBusy] = useState(false);
@@ -58,7 +71,16 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
         address?: string;
       };
       if (d.shopName) setShopName(d.shopName);
-      if (d.businessType) setBusinessType(d.businessType);
+      if (d.businessType) {
+        setBusinessType(d.businessType);
+        const style = hospitalityStyleIdForBusinessType(d.businessType);
+        if (style) {
+          setHospitalityFlow(true);
+          setHospitalityStyleId(style);
+        } else {
+          setHospitalityFlow(false);
+        }
+      }
       if (d.phone) setPhone(d.phone);
       if (d.address) setAddress(d.address);
     } catch {
@@ -74,6 +96,26 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     } catch {
       /* ignore */
     }
+  };
+
+  const selectDirectType = (id: BusinessType) => {
+    setHospitalityFlow(false);
+    setBusinessType(id);
+    persistDraft({ shopName, businessType: id, phone, address });
+  };
+
+  const selectHospitalityGroup = () => {
+    setHospitalityFlow(true);
+    const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
+    setBusinessType(bt);
+    persistDraft({ shopName, businessType: bt, phone, address });
+  };
+
+  const selectHospitalityStyle = (styleId: HospitalityOnboardingStyleId) => {
+    setHospitalityStyleId(styleId);
+    const bt = businessTypeForHospitalityStyle(styleId);
+    setBusinessType(bt);
+    persistDraft({ shopName, businessType: bt, phone, address });
   };
 
   return (
@@ -98,22 +140,55 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
           </label>
           <p className="text-sm font-bold text-slate-700">{t(lang, "registerBusinessTypeLabel")}</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {BUSINESS_TYPE_IDS.map((id) => (
+            {NON_HOSPITALITY_BUSINESS_TYPE_IDS.map((id) => (
               <button
                 key={id}
                 type="button"
-                onClick={() => {
-                  setBusinessType(id);
-                  persistDraft({ shopName, businessType: id, phone, address });
-                }}
+                onClick={() => selectDirectType(id)}
                 className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold ${
-                  businessType === id ? "border-waka-500 bg-waka-50 text-waka-900" : "border-slate-200 bg-slate-50 text-slate-900"
+                  !hospitalityFlow && businessType === id
+                    ? "border-waka-500 bg-waka-50 text-waka-900"
+                    : "border-slate-200 bg-slate-50 text-slate-900"
                 }`}
               >
                 {t(lang, `businessType_${id}`)}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={selectHospitalityGroup}
+              className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold sm:col-span-2 ${
+                hospitalityFlow
+                  ? "border-waka-500 bg-waka-50 text-waka-900"
+                  : "border-slate-200 bg-slate-50 text-slate-900"
+              }`}
+            >
+              {t(lang, "onboardBiz_hospitality")}
+            </button>
           </div>
+          {hospitalityFlow ? (
+            <div className="rounded-3xl border border-stone-200 bg-stone-50 p-4">
+              <p className="text-sm font-black text-stone-900">{t(lang, "onboardHospitalityStyleTitle")}</p>
+              <p className="mt-1 text-xs font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {HOSPITALITY_ONBOARDING_STYLES.map((style) => (
+                  <button
+                    key={style.id}
+                    type="button"
+                    onClick={() => selectHospitalityStyle(style.id)}
+                    className={`rounded-2xl border-2 px-3 py-3 text-left text-sm font-bold ${
+                      hospitalityStyleId === style.id
+                        ? "border-waka-500 bg-waka-50 text-waka-900"
+                        : "border-stone-200 bg-white text-stone-900"
+                    }`}
+                  >
+                    <span className="mr-1">{style.emoji}</span>
+                    {t(lang, style.labelKey)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="rounded-3xl border border-waka-100 bg-waka-50/70 p-4">
             <p className="text-sm font-black text-waka-950">{t(lang, "businessTypeFeaturesTitle")}</p>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -166,9 +241,12 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 setErr(t(lang, "shopNameRequired"));
                 return;
               }
+              const resolvedType = hospitalityFlow
+                ? businessTypeForHospitalityStyle(hospitalityStyleId)
+                : businessType;
               setBusy(true);
               try {
-                complete(businessType);
+                complete(resolvedType);
                 setPreferences({
                   shopDisplayName: shopName.trim(),
                   shopPhoneE164: phone.trim() || null,
@@ -178,7 +256,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 await saveBusinessProfileToCloud(
                   {
                     shopName: shopName.trim(),
-                    businessType,
+                    businessType: resolvedType,
                     currency: SHOP_CURRENCY,
                     phone,
                     address,

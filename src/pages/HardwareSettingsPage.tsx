@@ -63,7 +63,13 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
     setPrintingStatus("Testing printer...");
     void printReceiptWithFallback(sample, preferences.receiptPaperSize ?? "80mm").then((result) => {
       if (result.ok) {
-        setPrintingStatus(result.mode === "native" ? "Printed via native thermal path." : "Printed via browser fallback.");
+        const msg =
+          result.mode === "native"
+            ? "Printed via native thermal path."
+            : result.mode === "share"
+              ? t(lang, "receiptPrintNativeOpened")
+              : "Printed via browser fallback.";
+        setPrintingStatus(msg);
       } else {
         setPrintingStatus(result.error ?? t(lang, "receiptPrintBlocked"));
       }

@@ -10,18 +10,11 @@ import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import {
   canHideWakaReceiptBranding,
   defaultReceiptDisplayOptions,
+  padReceiptFooterSlots,
   resolveReceiptHeaderConfig,
 } from "../lib/receiptBranding";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { ReceiptLivePreview } from "../components/settings/ReceiptLivePreview";
-
-const FOOTER_SLOT_COUNT = 4;
-
-function padFooterLines(lines: string[] | null | undefined): string[] {
-  const base = (lines ?? []).slice(0, FOOTER_SLOT_COUNT).map((l) => String(l ?? ""));
-  while (base.length < FOOTER_SLOT_COUNT) base.push("");
-  return base;
-}
 
 export function SettingsReceiptPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -35,7 +28,7 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
   }
 
   const header = resolveReceiptHeaderConfig(preferences);
-  const footerLines = padFooterLines(preferences.receiptFooterLines);
+  const footerLines = padReceiptFooterSlots(preferences.receiptFooterLines);
   const displayOpts = useMemo(
     () => ({ ...defaultReceiptDisplayOptions(), ...preferences.receiptDisplayOptions }),
     [preferences.receiptDisplayOptions],
@@ -97,11 +90,15 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
           </label>
           <label className="block text-sm font-bold text-stone-700">
             {t(lang, "settingsReceiptAddress")}
-            <input
+            <textarea
+              rows={3}
               value={header.address}
               onChange={(e) => patchHeader({ address: e.target.value })}
-              className={inputClass}
+              className={`${inputClass} min-h-[5.5rem] resize-y py-3 leading-snug`}
             />
+            <span className="mt-1 block text-xs font-medium text-stone-500">
+              {t(lang, "settingsReceiptAddressHint")}
+            </span>
           </label>
           <label className="block text-sm font-bold text-stone-700">
             {t(lang, "settingsReceiptPhone")}

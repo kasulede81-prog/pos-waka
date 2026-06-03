@@ -39,7 +39,11 @@ function triggerAnchorDownload(url: string, filename: string): boolean {
   }
 }
 
-async function saveViaNativeShare(filename: string, blob: Blob): Promise<boolean> {
+async function saveViaNativeShare(
+  filename: string,
+  blob: Blob,
+  dialogTitle = "Save or share file",
+): Promise<boolean> {
   const safeName = sanitizeFilename(filename);
   const path = `WakaReports/${safeName}`;
   const base64 = await blobToBase64(blob);
@@ -59,7 +63,7 @@ async function saveViaNativeShare(filename: string, blob: Blob): Promise<boolean
   await Share.share({
     title: safeName,
     url: uri,
-    dialogTitle: "Save monthly report",
+    dialogTitle,
   });
   return true;
 }
@@ -74,13 +78,18 @@ function isUserShareCancel(err: unknown): boolean {
  * Save export file — awaits share/download so success toasts match real outcomes.
  * On Android/iOS opens the system share sheet (pick Files, Drive, WhatsApp, etc.).
  */
-export async function saveExportedFile(filename: string, body: string | Blob, mime: string): Promise<boolean> {
+export async function saveExportedFile(
+  filename: string,
+  body: string | Blob,
+  mime: string,
+  options?: { shareDialogTitle?: string },
+): Promise<boolean> {
   const blob = body instanceof Blob ? body : new Blob([body], { type: mime });
   const safeName = sanitizeFilename(filename);
 
   if (Capacitor.isNativePlatform()) {
     try {
-      return await saveViaNativeShare(safeName, blob);
+      return await saveViaNativeShare(safeName, blob, options?.shareDialogTitle);
     } catch (err) {
       if (isUserShareCancel(err)) return false;
       try {

@@ -5,6 +5,7 @@ import {
   buildSaleReceiptPdfBlob,
   documentReceiptNumber,
 } from "./receiptDocuments";
+import { buildPlainReceiptPdfBlob } from "./nativeReceiptPrint";
 import type { Customer, DebtPayment, ReturnRecord, Sale } from "../types";
 
 const sale: Sale = {
@@ -128,5 +129,11 @@ describe("receiptPdf", () => {
     const n = documentReceiptNumber("SAL", "abc-def-ghi", "2026-06-02T10:00:00.000Z");
     expect(n).toMatch(/^SAL-/);
     expect(n).toContain("ABC-DE");
+  });
+
+  it("builds plain text receipt PDF for native share/print", () => {
+    const blob = buildPlainReceiptPdfBlob("Shop\n\nTotal: UGX 1,000\n", "80mm");
+    expect(blob.size).toBeGreaterThan(200);
+    expect(blob.type).toBe("application/pdf");
   });
 });

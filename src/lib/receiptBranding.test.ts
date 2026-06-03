@@ -6,6 +6,7 @@ import {
   buildReceiptBrandingSnapshot,
   buildReceiptHeaderLines,
   industryReceiptFooterTemplate,
+  receiptFooterLinesForPrint,
   receiptFooterLinesFromPreferences,
   resolveFooterPowered,
   resolveReceiptBranding,
@@ -51,14 +52,42 @@ describe("receipt header", () => {
     expect(lines).toContain("+256705110478");
     expect(lines.some((l) => l.startsWith("TIN:"))).toBe(true);
   });
+
+  it("splits multiline address into separate receipt lines", () => {
+    const lines = buildReceiptHeaderLines(
+      {
+        businessName: "Shop",
+        address: "Plot 5\nNansana\nUganda",
+        phone: "",
+        email: "",
+        tin: "",
+      },
+      {
+        showCashier: true,
+        showReceiptNumber: true,
+        showPaymentMethod: true,
+        showCustomerName: true,
+        showCustomerPhone: true,
+        showDebtInfo: true,
+        showShopAddress: true,
+        showShopPhone: true,
+      },
+    );
+    expect(lines).toEqual(["SHOP", "Plot 5", "Nansana", "Uganda"]);
+  });
 });
 
 describe("footer lines", () => {
-  it("ignores empty footer slots", () => {
+  it("keeps blank row between non-empty footer slots", () => {
+    expect(receiptFooterLinesForPrint(["Thank you", "", "Visit again", ""])).toEqual([
+      "Thank you",
+      "",
+      "Visit again",
+    ]);
     const p = prefs({
       receiptFooterLines: ["Thank you", "", "Visit again", ""],
     });
-    expect(receiptFooterLinesFromPreferences(p)).toEqual(["Thank you", "Visit again"]);
+    expect(receiptFooterLinesFromPreferences(p)).toEqual(["Thank you", "", "Visit again"]);
   });
 
   it("industry pharmacy template", () => {

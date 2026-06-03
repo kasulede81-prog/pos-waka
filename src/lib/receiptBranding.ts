@@ -25,6 +25,32 @@ export type ReceiptBranding = {
 const DEFAULT_FOOTER = "Thank you for shopping with us";
 const DEFAULT_RETURN_POLICY = "Returns accepted with receipt within 24 hours.";
 const POWERED_BY = "Powered by Waka POS";
+export const RECEIPT_FOOTER_SLOT_COUNT = 4;
+
+/** Footer slots as stored in settings (preserves spaces; does not trim). */
+export function padReceiptFooterSlots(lines: string[] | null | undefined): string[] {
+  const base = (lines ?? []).slice(0, RECEIPT_FOOTER_SLOT_COUNT).map((l) => String(l ?? ""));
+  while (base.length < RECEIPT_FOOTER_SLOT_COUNT) base.push("");
+  return base;
+}
+
+/**
+ * Footer lines for print/PDF/preview — keeps intentional blank rows between non-empty slots.
+ */
+export function receiptFooterLinesForPrint(slots: string[] | null | undefined): string[] {
+  const padded = padReceiptFooterSlots(slots);
+  const out: string[] = [];
+  for (let i = 0; i < padded.length; i++) {
+    const raw = padded[i];
+    if (raw.trim()) {
+      out.push(raw);
+      continue;
+    }
+    const hasLater = padded.slice(i + 1).some((l) => l.trim().length > 0);
+    if (out.length > 0 && hasLater) out.push("");
+  }
+  return out;
+}
 
 export function defaultReceiptDisplayOptions(): ReceiptDisplayOptions {
   return {
@@ -60,10 +86,8 @@ export function industryReceiptFooterTemplate(businessType: BusinessType): strin
 export function receiptFooterLinesFromPreferences(preferences: ShopPreferences): string[] {
   const structured = preferences.receiptFooterLines;
   if (Array.isArray(structured) && structured.some((l) => String(l ?? "").trim())) {
-    return structured
-      .slice(0, 4)
-      .map((l) => String(l ?? "").trim())
-      .filter(Boolean);
+    const printed = receiptFooterLinesForPrint(structured);
+    if (printed.length) return printed;
   }
   const legacy = preferences.receiptCustomFooterText?.trim();
   if (legacy) return [legacy];
@@ -74,13 +98,13 @@ export function receiptFooterLinesFromPreferences(preferences: ShopPreferences):
 
 export function resolveReceiptHeaderConfig(preferences: ShopPreferences): ReceiptHeaderConfig {
   const h = preferences.receiptHeader;
-  if (h && (h.businessName?.trim() || h.address?.trim() || h.phone?.trim())) {
+  if (h && (h.businessName?.trim() || h.address?.trim() || h.phone?.trim() || h.email?.trim() || h.tin?.trim())) {
     return {
-      businessName: String(h.businessName ?? "").trim(),
-      address: String(h.address ?? "").trim(),
-      phone: String(h.phone ?? "").trim(),
-      email: String(h.email ?? "").trim(),
-      tin: String(h.tin ?? "").trim(),
+      businessName: String(h.businessName ?? ""),
+      address: String(h.address ?? ""),
+      phone: String(h.phone ?? ""),
+      email: String(h.email ?? ""),
+      tin: String(h.tin ?? ""),
     };
   }
   const legacyHeader = preferences.receiptCustomHeaderText?.trim();
@@ -103,13 +127,26 @@ export function resolveReceiptHeaderConfig(preferences: ShopPreferences): Receip
   };
 }
 
+function appendMultilineField(lines: string[], raw: string): void {
+  const parts = raw.split(/\r?\n/);
+  for (let i = 0; i < parts.length; i++) {
+    const line = parts[i];
+    if (line.trim()) {
+      lines.push(line);
+      continue;
+    }
+    const hasLater = parts.slice(i + 1).some((p) => p.trim().length > 0);
+    if (lines.length > 0 && hasLater) lines.push("");
+  }
+}
+
 export function buildReceiptHeaderLines(
   config: ReceiptHeaderConfig,
   display: ReceiptDisplayOptions,
 ): string[] {
   const lines: string[] = [];
   if (config.businessName.trim()) lines.push(config.businessName.trim().toUpperCase());
-  if (display.showShopAddress && config.address.trim()) lines.push(config.address.trim());
+  if (display.showShopAddress && config.address.trim()) appendMultilineField(lines, config.address);
   if (display.showShopPhone && config.phone.trim()) lines.push(config.phone.trim());
   if (config.email.trim()) lines.push(config.email.trim());
   if (config.tin.trim()) lines.push(`TIN: ${config.tin.trim()}`);
@@ -149,9 +186,7 @@ export function resolveReceiptBranding(
   const displayOptions = resolveReceiptDisplayOptions(preferences);
   const headerConfig = resolveReceiptHeaderConfig(preferences);
   const headerLines = buildReceiptHeaderLines(headerConfig, displayOptions);
-  const footerLines = receiptFooterLinesFromPreferences(preferences)
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const footerLines = receiptFooterLinesFromPreferences(preferences);
   const footerPowered = resolveFooterPowered(preferences, planTier);
   const returnPolicy = resolveReturnPolicy(preferences);
 
