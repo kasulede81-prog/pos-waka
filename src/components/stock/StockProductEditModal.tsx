@@ -21,6 +21,18 @@ import { MEDICINE_FORMS, normalizeMedicineForm, normalizeMedicineStrength } from
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { PharmacyCostWarningBanner } from "../pharmacy/PharmacyCostWarningBanner";
+import {
+  buildPackagingFromState,
+  packagingStateFromProduct,
+  PharmacyPackagingFields,
+  type PharmacyPackagingFieldState,
+} from "./PharmacyPackagingFields";
+import {
+  buyingUnitFromPackaging,
+  formatPharmacyStockEquivalent,
+  formatPharmacyStockPrimary,
+  isPharmacyPackagingActive,
+} from "../../lib/pharmacyPackaging";
 
 type Props = {
   lang: Language;
@@ -49,6 +61,7 @@ type Props = {
         | "medicineForm"
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
+        | "pharmacyPackaging"
       >
     >,
   ) => { ok: boolean; errorKey?: string };
@@ -95,6 +108,9 @@ export function StockProductEditModal({
   const [expiryDate, setExpiryDate] = useState("");
   const [medicineStrength, setMedicineStrength] = useState("");
   const [medicineForm, setMedicineForm] = useState("");
+  const [packagingState, setPackagingState] = useState<PharmacyPackagingFieldState>(() =>
+    packagingStateFromProduct(null),
+  );
 
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -116,7 +132,9 @@ export function StockProductEditModal({
     setPiecesPerPack(b.hasPackTracking ? String(rate) : "");
     setPackCount(b.hasPackTracking ? String(b.fullPacks) : "");
     setLooseCount(b.hasPackTracking ? String(b.loosePieces) : "");
-    setPieceOnlyStock(b.hasPackTracking ? "" : String(product.stockOnHand));
+    setPieceOnlyStock(
+      b.hasPackTracking && !isPharmacyPackagingActive(product) ? "" : String(Math.floor(product.stockOnHand)),
+    );
     setPrice(String(Math.max(0, Math.floor(product.sellingPricePerUnitUgx))));
     setBuyPricePerUnit(String(Math.max(0, Math.floor(product.costPricePerUnitUgx))));
     setMinAlert(String(Math.max(0, Math.floor(product.minimumStockAlert))));
@@ -132,6 +150,10 @@ export function StockProductEditModal({
     setExpiryDate(product.expiryDate ?? "");
     setMedicineStrength(product.medicineStrength ?? "");
     setMedicineForm(product.medicineForm ?? "");
+    const ps = packagingStateFromProduct(product.pharmacyPackaging);
+    ps.sellStrip = product.pharmacyPackaging?.sell.strip ?? ps.sellStrip;
+    ps.sellBox = product.pharmacyPackaging?.sell.box ?? ps.sellBox;
+    setPackagingState(ps);
   }, [open, product]);
 
   const piecesN = Math.max(1, Math.floor(Number(piecesPerPack.replace(/[^\d.]/g, "")) || 0));
@@ -144,15 +166,24 @@ export function StockProductEditModal({
 
   const unitLabel = sellUnitLabel(sellUnit, lang, sellUnitCustom);
   const packLabel = packKindLabel(packKind, packCustom, lang);
-
   if (!open || !product) return null;
 
+  const packagingEdit = pharmacyMode && (packagingState.enabled || isPharmacyPackagingActive(product));
+
+  const previewPackaging =
+    packagingEdit && packagingState.enabled
+      ? buildPackagingFromState(packagingState, Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0)), product.pharmacyPackaging)
+      : product.pharmacyPackaging;
+  const previewStock = packagingEdit
+    ? Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0)
+    : totalStock;
   const previewProduct: Product = {
     ...product,
-    stockOnHand: totalStock,
-    baseUnit: resolveSellBaseUnit(sellUnit, sellUnitCustom),
-    buyingUnit: hasPack && piecesN > 1 ? packLabel.toLowerCase() : null,
-    conversionRate: hasPack && piecesN > 1 ? piecesN : null,
+    stockOnHand: previewStock,
+    baseUnit: packagingEdit && previewPackaging?.enabled ? previewPackaging.baseUnit : resolveSellBaseUnit(sellUnit, sellUnitCustom),
+    buyingUnit: hasPack && piecesN > 1 && !packagingEdit ? packLabel.toLowerCase() : product.buyingUnit,
+    conversionRate: hasPack && piecesN > 1 && !packagingEdit ? piecesN : product.conversionRate,
+    pharmacyPackaging: previewPackaging,
   };
 
   const onSubmit = (e: FormEvent) => {
@@ -174,20 +205,37 @@ export function StockProductEditModal({
         ? Math.floor(packPrice / piecesN)
         : product.costPricePerUnitUgx;
 
+    let pharmacyPackaging = product.pharmacyPackaging ?? null;
+    let baseUnit = resolveSellBaseUnit(sellUnit, sellUnitCustom);
+    let patchBuyingUnit = buyingUnit;
+    let patchConversion = conversionRate;
+
+    if (packagingEdit && packagingState.enabled) {
+      pharmacyPackaging = buildPackagingFromState(packagingState, priceUgx, product.pharmacyPackaging);
+      if (pharmacyPackaging) {
+        baseUnit = pharmacyPackaging.baseUnit;
+        const bu = buyingUnitFromPackaging(pharmacyPackaging);
+        patchBuyingUnit = bu.buyingUnit;
+        patchConversion = bu.conversionRate;
+        pharmacyPackaging.lowStockAlertUnit = packagingState.lowStockUnit;
+      }
+    }
+
     const patch: Parameters<typeof updateProduct>[1] = {
       name: name.trim(),
-      baseUnit: resolveSellBaseUnit(sellUnit, sellUnitCustom),
-      buyingUnit,
-      conversionRate,
+      baseUnit,
+      buyingUnit: patchBuyingUnit,
+      conversionRate: patchConversion,
       sellingPricePerUnitUgx: priceUgx,
       costPricePerUnitUgx,
-      stockOnHand: totalStock,
+      stockOnHand: packagingEdit ? Math.max(0, Number(pieceOnlyStock.replace(/[^\d.]/g, "")) || 0) : totalStock,
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),
       sku: sku.trim() || product.sku,
       expiryDate: pharmacyMode ? normalizeExpiryDate(expiryDate || null) : product.expiryDate ?? null,
       medicineStrength: pharmacyMode ? normalizeMedicineStrength(medicineStrength || null) : product.medicineStrength ?? null,
       medicineForm: pharmacyMode ? normalizeMedicineForm(medicineForm || null) : product.medicineForm ?? null,
+      pharmacyPackaging: packagingEdit ? pharmacyPackaging : product.pharmacyPackaging ?? null,
     };
 
     if (canPresets) {
@@ -294,119 +342,157 @@ export function StockProductEditModal({
             </div>
           ) : null}
 
-          <div>
-            <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditSellUnitLabel")}</span>
-            <div className="mt-2 grid grid-cols-2 gap-2">
-              {SELL_UNITS.map((u) => (
-                <button
-                  key={u}
-                  type="button"
-                  onClick={() => setSellUnit(u)}
-                  className={clsx(
-                    "min-h-[48px] rounded-2xl border-2 text-sm font-black",
-                    sellUnit === u ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-900",
-                  )}
-                >
-                  {t(lang, SELL_UNIT_OPTIONS.find((o) => o.id === u)!.labelKey as "sellUnit_piece")}
-                </button>
-              ))}
-            </div>
-            {sellUnit === "custom" ? (
-              <input
-                value={sellUnitCustom}
-                onChange={(e) => setSellUnitCustom(e.target.value)}
-                placeholder={t(lang, "simpleAddSellUnitCustomPh")}
-                className={clsx(inputClass, "mt-2")}
+          {packagingEdit ? (
+            <>
+              <PharmacyPackagingFields
+                lang={lang}
+                state={packagingState}
+                onChange={(patch) => setPackagingState((s) => ({ ...s, ...patch }))}
+                hideTabletPrice
+                showEnableToggle={!isPharmacyPackagingActive(product)}
+                inputClass={inputClass}
+                labelClass="block text-sm font-bold text-slate-700"
               />
-            ) : null}
-          </div>
-
-          <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/80 p-4">
-            <label className="flex cursor-pointer items-center gap-3">
-              <input
-                type="checkbox"
-                checked={hasPack}
-                onChange={(e) => setHasPack(e.target.checked)}
-                className="h-5 w-5 accent-waka-600"
-              />
-              <span className="text-sm font-black text-slate-900">{t(lang, "simpleAddPackToggle")}</span>
-            </label>
-            {hasPack ? (
-              <div className="mt-3 space-y-3">
-                <p className="text-xs font-semibold text-slate-600">{t(lang, "simpleAddPackTypeLabel")}</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {PACK_TYPE_OPTIONS.map((opt) => (
+              <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
+                <label className="block text-sm font-bold text-slate-800">
+                  {t(lang, "pharmacyPackStockOnHand")}
+                  <input
+                    value={pieceOnlyStock || String(product.stockOnHand)}
+                    onChange={(e) => setPieceOnlyStock(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    inputMode="numeric"
+                    className={inputClass}
+                  />
+                </label>
+                {packagingState.enabled ? (
+                  <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-waka-900">
+                    <p>{t(lang, "pharmacyPackStockPrimary")}: {formatPharmacyStockPrimary({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) })}</p>
+                    {formatPharmacyStockEquivalent({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) }) ? (
+                      <p className="mt-1 whitespace-pre-line text-xs font-bold text-slate-600">
+                        {t(lang, "pharmacyPackStockEquivalent")}:{"\n"}
+                        {formatPharmacyStockEquivalent({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) })}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditSellUnitLabel")}</span>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {SELL_UNITS.map((u) => (
                     <button
-                      key={opt.id}
+                      key={u}
                       type="button"
-                      onClick={() => setPackKind(opt.id)}
+                      onClick={() => setSellUnit(u)}
                       className={clsx(
-                        "min-h-[44px] rounded-xl border-2 text-xs font-black",
-                        packKind === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white",
+                        "min-h-[48px] rounded-2xl border-2 text-sm font-black",
+                        sellUnit === u ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-900",
                       )}
                     >
-                      {t(lang, opt.labelKey as "packKind_crate")}
+                      {t(lang, SELL_UNIT_OPTIONS.find((o) => o.id === u)!.labelKey as "sellUnit_piece")}
                     </button>
                   ))}
                 </div>
-                {packKind === "custom" ? (
+                {sellUnit === "custom" ? (
                   <input
-                    value={packCustom}
-                    onChange={(e) => setPackCustom(e.target.value)}
-                    placeholder={t(lang, "simpleAddPackCustomPh")}
-                    className={inputClass}
+                    value={sellUnitCustom}
+                    onChange={(e) => setSellUnitCustom(e.target.value)}
+                    placeholder={t(lang, "simpleAddSellUnitCustomPh")}
+                    className={clsx(inputClass, "mt-2")}
                   />
                 ) : null}
-                <label className="block text-sm font-bold text-slate-800">
-                  {tTemplate(lang, "simpleAddStep5Title", { unit: unitLabel, pack: packLabel })}
-                  <input
-                    value={piecesPerPack}
-                    onChange={(e) => setPiecesPerPack(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))}
-                    inputMode="numeric"
-                    placeholder="24"
-                    className={inputClass}
-                  />
-                </label>
               </div>
-            ) : null}
-          </div>
 
-          <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditStockLabel")}</span>
-            {hasPack && piecesN > 1 ? (
-              <div className="mt-2 space-y-3">
-                <label className="block text-sm font-semibold text-slate-700">
-                  {tTemplate(lang, "simpleAddStep6TitlePack", { pack: packLabel })}
+              <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/80 p-4">
+                <label className="flex cursor-pointer items-center gap-3">
                   <input
-                    value={packCount}
-                    onChange={(e) => setPackCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                    inputMode="decimal"
-                    className={inputClass}
+                    type="checkbox"
+                    checked={hasPack}
+                    onChange={(e) => setHasPack(e.target.checked)}
+                    className="h-5 w-5 accent-waka-600"
                   />
+                  <span className="text-sm font-black text-slate-900">{t(lang, "simpleAddPackToggle")}</span>
                 </label>
-                <label className="block text-sm font-semibold text-slate-700">
-                  {tTemplate(lang, "stockEditLooseLabel", { unit: unitLabel })}
-                  <input
-                    value={looseCount}
-                    onChange={(e) => setLooseCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                    inputMode="decimal"
-                    placeholder="0"
-                    className={inputClass}
-                  />
-                </label>
+                {hasPack ? (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-xs font-semibold text-slate-600">{t(lang, "simpleAddPackTypeLabel")}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {PACK_TYPE_OPTIONS.map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setPackKind(opt.id)}
+                          className={clsx(
+                            "min-h-[44px] rounded-xl border-2 text-xs font-black",
+                            packKind === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white",
+                          )}
+                        >
+                          {t(lang, opt.labelKey as "packKind_crate")}
+                        </button>
+                      ))}
+                    </div>
+                    {packKind === "custom" ? (
+                      <input
+                        value={packCustom}
+                        onChange={(e) => setPackCustom(e.target.value)}
+                        placeholder={t(lang, "simpleAddPackCustomPh")}
+                        className={inputClass}
+                      />
+                    ) : null}
+                    <label className="block text-sm font-bold text-slate-800">
+                      {tTemplate(lang, "simpleAddStep5Title", { unit: unitLabel, pack: packLabel })}
+                      <input
+                        value={piecesPerPack}
+                        onChange={(e) => setPiecesPerPack(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))}
+                        inputMode="numeric"
+                        placeholder="24"
+                        className={inputClass}
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </div>
-            ) : (
-              <input
-                value={pieceOnlyStock}
-                onChange={(e) => setPieceOnlyStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 10))}
-                inputMode="decimal"
-                className={inputClass}
-              />
-            )}
-            <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-waka-900">
-              {formatStockLabel(previewProduct)}
-            </p>
-          </div>
+
+              <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
+                <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditStockLabel")}</span>
+                {hasPack && piecesN > 1 ? (
+                  <div className="mt-2 space-y-3">
+                    <label className="block text-sm font-semibold text-slate-700">
+                      {tTemplate(lang, "simpleAddStep6TitlePack", { pack: packLabel })}
+                      <input
+                        value={packCount}
+                        onChange={(e) => setPackCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                        inputMode="decimal"
+                        className={inputClass}
+                      />
+                    </label>
+                    <label className="block text-sm font-semibold text-slate-700">
+                      {tTemplate(lang, "stockEditLooseLabel", { unit: unitLabel })}
+                      <input
+                        value={looseCount}
+                        onChange={(e) => setLooseCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
+                        inputMode="decimal"
+                        placeholder="0"
+                        className={inputClass}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <input
+                    value={pieceOnlyStock}
+                    onChange={(e) => setPieceOnlyStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 10))}
+                    inputMode="decimal"
+                    className={inputClass}
+                  />
+                )}
+                <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-waka-900">
+                  {formatStockLabel(previewProduct)}
+                </p>
+              </div>
+            </>
+          )}
 
           {pharmacyMode ? (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -465,15 +551,35 @@ export function StockProductEditModal({
 
           <label className="block">
             <span className="text-sm font-bold text-slate-800">
-              {tTemplate(lang, "stockEditLowStockLabel", { unit: unitLabel })}
+              {packagingEdit && packagingState.enabled
+                ? t(lang, "pharmacyPackLowStockLabel")
+                : tTemplate(lang, "stockEditLowStockLabel", { unit: unitLabel })}
             </span>
-            <input
-              value={minAlert}
-              onChange={(e) => setMinAlert(e.target.value.replace(/\D/g, "").slice(0, 8))}
-              inputMode="numeric"
-              placeholder="10"
-              className={inputClass}
-            />
+            <div className={packagingEdit && packagingState.enabled ? "mt-2 flex gap-2" : ""}>
+              <input
+                value={minAlert}
+                onChange={(e) => setMinAlert(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                inputMode="numeric"
+                placeholder="10"
+                className={packagingEdit && packagingState.enabled ? `${inputClass} flex-1` : inputClass}
+              />
+              {packagingEdit && packagingState.enabled ? (
+                <select
+                  value={packagingState.lowStockUnit}
+                  onChange={(e) =>
+                    setPackagingState((s) => ({
+                      ...s,
+                      lowStockUnit: e.target.value as PharmacyPackagingFieldState["lowStockUnit"],
+                    }))
+                  }
+                  className={`${inputClass} w-[8.5rem] shrink-0`}
+                >
+                  <option value="tablet">{packagingState.baseUnit}</option>
+                  {packagingState.level1Enabled ? <option value="strip">{packagingState.level1Unit}</option> : null}
+                  {packagingState.level2Enabled ? <option value="box">{packagingState.level2Unit}</option> : null}
+                </select>
+              ) : null}
+            </div>
           </label>
 
           <details className="rounded-2xl border border-slate-200 bg-slate-50/50 px-4 open:pb-4">

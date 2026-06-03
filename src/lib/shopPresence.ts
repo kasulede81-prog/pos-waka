@@ -1,6 +1,6 @@
 import { Capacitor } from "@capacitor/core";
-import { getOrCreateDeviceId } from "./deviceId";
 import { getDeviceOnline } from "./deviceOnline";
+import { getOrCreateDeviceId } from "./deviceId";
 import { supabase } from "./supabase";
 
 const HEARTBEAT_MIN_INTERVAL_MS = 3 * 60 * 1000;
@@ -27,20 +27,44 @@ function writeLastHeartbeatMs(ms: number): void {
   }
 }
 
-function presencePlatform(): string {
+export function presencePlatform(): string {
   if (typeof window === "undefined") return "server";
   if (Capacitor.isNativePlatform()) return Capacitor.getPlatform();
   return "web";
 }
 
-function presenceLabel(): string {
+export function presenceLabel(): string {
   const platform = presencePlatform();
   if (platform === "android") return "Android POS";
   if (platform === "ios") return "iOS POS";
   return "Web POS";
 }
 
-/** Registers this device and refreshes shop last_seen_at (throttled). */
+function presencePayload(shopId: string) {
+  return {
+    p_shop_id: shopId,
+    p_device_fingerprint: getOrCreateDeviceId(),
+    p_label: presenceLabel(),
+    p_platform: presencePlatform(),
+    p_app_version: import.meta.env.VITE_APP_VERSION ?? "1.0.0",
+  };
+}
+
+function parseHeartbeatResult(data: unknown): { accepted?: boolean } {
+  if (!data || typeof data !== "object") return {};
+  const r = data as Record<string, unknown>;
+  return {
+    accepted: r.accepted === true || r.ok === true,
+  };
+}
+
+/** @deprecated Use ensureShopDeviceActivation from deviceActivation.ts */
+export async function registerShopDeviceOnLogin(shopId: string) {
+  const { registerShopDeviceOnLogin: register } = await import("./deviceActivation");
+  return register(shopId);
+}
+
+/** Registers this device and refreshes shop last_seen_at (throttled). Never activates disconnected devices. */
 export async function sendShopPresenceHeartbeat(shopId: string): Promise<void> {
   if (!shopId || !supabase || !getDeviceOnline()) return;
 
@@ -53,14 +77,12 @@ export async function sendShopPresenceHeartbeat(shopId: string): Promise<void> {
   }
 
   inFlight = (async () => {
-    const { error } = await supabase.rpc("shop_device_heartbeat", {
-      p_shop_id: shopId,
-      p_device_fingerprint: getOrCreateDeviceId(),
-      p_label: presenceLabel(),
-      p_platform: presencePlatform(),
-      p_app_version: import.meta.env.VITE_APP_VERSION ?? "1.0.0",
-    });
-    if (!error) writeLastHeartbeatMs(Date.now());
+    const { data, error } = await supabase.rpc("shop_device_heartbeat", presencePayload(shopId));
+    if (error) return;
+    const parsed = parseHeartbeatResult(data);
+    if (parsed.accepted !== false) {
+      writeLastHeartbeatMs(Date.now());
+    }
   })();
 
   try {

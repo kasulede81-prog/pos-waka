@@ -54,7 +54,9 @@ Local builds may write under `release/windows/` or `release/windows-build/`; tho
 npm run installer:windows
 ```
 
-Output (ignored by Git): typically `release/windows-build/WAKA-POS-Setup-<version>.exe` or `release/windows/` depending on lock/state — upload the installer only via Releases or your download site.
+Output (ignored by Git): `release/windows-build/WAKA-POS-Setup-<version>.exe` (copied after each build). Builds use a fresh `release/win-build-*` folder to avoid `app.asar` file-lock errors.
+
+**If build fails with “cannot access app.asar”:** quit any running **WAKA POS** desktop app, close Explorer windows inside `release/`, then run `npm run installer:windows` again. Add `release/` to Windows Defender exclusions if locks persist without the app running.
 
 ---
 

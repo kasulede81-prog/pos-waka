@@ -1,6 +1,7 @@
 import type { Product } from "../types";
 import { isPharmacyMode } from "./pharmacy";
 import type { BusinessType } from "../types";
+import { isPharmacyPackagingActive, packagingMarginStock } from "./pharmacyPackaging";
 
 export type PharmacyCostWarningKind =
   | "zero_cost"
@@ -56,6 +57,10 @@ export type MedicineMarginRow = {
   marginPercent: number | null;
   stockOnHand: number;
   inventoryValueUgx: number;
+  stockTablets: number;
+  stockStrips: number | null;
+  stockBoxes: number | null;
+  packagingEnabled: boolean;
 };
 
 export type MedicineMarginSort = "highest_margin" | "lowest_margin" | "largest_inventory_value";
@@ -67,6 +72,7 @@ export function computeMedicineMarginRows(products: Product[]): MedicineMarginRo
       const cost = Math.max(0, Math.floor(p.costPricePerUnitUgx));
       const sell = Math.max(0, Math.floor(p.sellingPricePerUnitUgx));
       const stock = Math.max(0, Number(p.stockOnHand) || 0);
+      const packStock = packagingMarginStock(p);
       return {
         productId: p.id,
         name: p.name,
@@ -77,6 +83,10 @@ export function computeMedicineMarginRows(products: Product[]): MedicineMarginRo
         marginPercent: pharmacyMarginPercent(p),
         stockOnHand: stock,
         inventoryValueUgx: Math.round(stock * cost),
+        stockTablets: packStock?.stockTablets ?? stock,
+        stockStrips: packStock?.stockStrips ?? null,
+        stockBoxes: packStock?.stockBoxes ?? null,
+        packagingEnabled: isPharmacyPackagingActive(p),
       };
     });
 }

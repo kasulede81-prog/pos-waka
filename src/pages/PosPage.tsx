@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
-import type { Language, LineInputMode, Product, SaleLine } from "../types";
+import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
@@ -33,6 +33,12 @@ import {
   shelfIconFor,
 } from "../lib/productCategories";
 import { formatStockLabel, getPosSellPresets } from "../lib/sellingEngine";
+import {
+  baseUnitsForSaleUnit,
+  detectPharmacySaleUnit,
+  formatPharmacyStockPrimary,
+  isPharmacyPackagingActive,
+} from "../lib/pharmacyPackaging";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
 import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
 import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
@@ -188,7 +194,6 @@ export function PosPage({ lang }: { lang: Language }) {
   const clearDraft = usePosStore((s) => s.clearDraft);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
   const savePendingSale = usePosStore((s) => s.savePendingSale);
-  const addCustomer = usePosStore((s) => s.addCustomer);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
   const quickSell = preferences.kioskQuickSell;
@@ -234,9 +239,31 @@ export function PosPage({ lang }: { lang: Language }) {
   /** When true, checkout is a slim bar so the user can scroll the product list again. */
   const [saleCheckoutMinimized, setSaleCheckoutMinimized] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [pharmacySellUnit, setPharmacySellUnit] = useState<PharmacySaleUnitType>("tablet");
   const [inputMode, setInputMode] = useState<LineInputMode>("money");
   const [display, setDisplay] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  const pharmacyPackActive = selected ? isPharmacyPackagingActive(selected) : false;
+  const pharmacySellUnits = useMemo((): PharmacySaleUnitType[] => {
+    const pkg = selected?.pharmacyPackaging;
+    if (!pkg?.enabled) return [];
+    const units: PharmacySaleUnitType[] = [];
+    if (pkg.sell.tablet !== false) units.push("tablet");
+    if (pkg.sell.strip && pkg.level1) units.push("strip");
+    if (pkg.sell.box && pkg.level2) units.push("box");
+    return units;
+  }, [selected]);
+
+  useEffect(() => {
+    if (!selected || !pharmacyPackActive) return;
+    const pkg = selected.pharmacyPackaging!;
+    if (pkg.level2 && pkg.sell.box) setPharmacySellUnit("box");
+    else if (pkg.level1 && pkg.sell.strip) setPharmacySellUnit("strip");
+    else setPharmacySellUnit("tablet");
+    setInputMode("quantity");
+    setShowAdvanced(true);
+  }, [selected?.id, pharmacyPackActive]);
 
   const draftCartStats = useMemo(() => computeDraftCartStats(draftLines), [draftLines]);
   const checkoutTotals = useMemo(
@@ -689,7 +716,12 @@ export function PosPage({ lang }: { lang: Language }) {
     if (!selected) return;
     const val = inputMode === "money" ? parseDisplayMoney(display) : parseDisplayQty(display);
     runWithExpiredGuard(selected, () => {
-      setDraftInput({ product: selected, inputMode, value: val });
+      setDraftInput({
+        product: selected,
+        inputMode,
+        value: val,
+        ...(pharmacyPackActive && inputMode === "quantity" ? { pharmacySaleUnit: pharmacySellUnit } : {}),
+      });
       const res = addDraftLineFromInput();
       if (!res.ok) {
         setToast(t(lang, res.errorKey ?? "saleError"));
@@ -698,13 +730,20 @@ export function PosPage({ lang }: { lang: Language }) {
       }
       afterAddToCart(selected.id);
     });
-  }, [selected, inputMode, display, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard]);
+  }, [selected, inputMode, display, pharmacyPackActive, pharmacySellUnit, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard]);
 
   const applyPreset = useCallback(
     (mode: LineInputMode, value: number) => {
       if (!selected) return;
       runWithExpiredGuard(selected, () => {
-        setDraftInput({ product: selected, inputMode: mode, value });
+        if (pharmacyPackActive && mode === "quantity" && selected.pharmacyPackaging) {
+          const unit = detectPharmacySaleUnit(selected, value);
+          const per = baseUnitsForSaleUnit(selected.pharmacyPackaging, unit);
+          const qtyInUnit = per > 0 ? value / per : value;
+          setDraftInput({ product: selected, inputMode: mode, value: qtyInUnit, pharmacySaleUnit: unit });
+        } else {
+          setDraftInput({ product: selected, inputMode: mode, value });
+        }
         const res = addDraftLineFromInput();
         if (!res.ok) {
           setToast(t(lang, res.errorKey ?? "saleError"));
@@ -714,7 +753,7 @@ export function PosPage({ lang }: { lang: Language }) {
         afterAddToCart(selected.id);
       });
     },
-    [selected, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard],
+    [selected, pharmacyPackActive, setDraftInput, addDraftLineFromInput, lang, afterAddToCart, runWithExpiredGuard],
   );
 
   const handleDraftQtyStep = useCallback(
@@ -790,18 +829,18 @@ export function PosPage({ lang }: { lang: Language }) {
       return;
     }
     const debt = paymentMethod === "credit" || paymentMethod === "mixed" ? computedDebt : 0;
-    let customerId = saleCustomerId || null;
-    if (debt > 0 && !customerId && saleCustomerName.trim()) {
-      const created = addCustomer({
-        name: saleCustomerName.trim(),
-        phone: saleCustomerPhone.trim(),
-        location: "Uganda",
-      });
-      customerId = created.id;
+    const customerId = saleCustomerId || null;
+    const customerName = saleCustomerName.trim();
+    if (debt > 0 && !customerId && !customerName) {
+      setToast(t(lang, "debtRequiresCustomerName"));
+      window.setTimeout(() => setToast(null), 3200);
+      return;
     }
     const r = finalizeDraftSale({
       debtUgx: debt,
       customerId,
+      customerName: customerName || null,
+      customerPhone: saleCustomerPhone.trim() || null,
       paymentMethod,
       amountPaidUgx: totalPaidInput,
       changeGivenUgx: changeDue,
@@ -852,7 +891,6 @@ export function PosPage({ lang }: { lang: Language }) {
     saleCustomerId,
     saleCustomerName,
     saleCustomerPhone,
-    addCustomer,
     totalPaidInput,
     changeDue,
     finalizeDraftSale,
@@ -1495,12 +1533,46 @@ export function PosPage({ lang }: { lang: Language }) {
                 {selected.name}
               </p>
               <p className="truncate text-sm font-semibold text-slate-500">{formatProductPriceLabel(selected)}</p>
-              <p className="truncate text-xs font-bold text-slate-600">{formatStockLabel(selected)}</p>
+              <p className="truncate text-xs font-bold text-slate-600">
+                {pharmacyPackActive ? formatPharmacyStockPrimary(selected) : formatStockLabel(selected)}
+              </p>
             </div>
             <span className="min-h-[48px] w-[5.5rem] shrink-0" aria-hidden />
           </header>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 pb-4 [-webkit-overflow-scrolling:touch]">
+            {pharmacyPackActive && pharmacySellUnits.length > 0 ? (
+              <div className="mb-4 grid grid-cols-3 gap-2">
+                {pharmacySellUnits.map((unit) => {
+                  const pkg = selected.pharmacyPackaging!;
+                  const label =
+                    unit === "box"
+                      ? pkg.level2?.unit ?? "box"
+                      : unit === "strip"
+                        ? pkg.level1?.unit ?? "strip"
+                        : pkg.baseUnit;
+                  return (
+                    <button
+                      key={unit}
+                      type="button"
+                      onClick={() => {
+                        setPharmacySellUnit(unit);
+                        setInputMode("quantity");
+                        setDisplay("");
+                      }}
+                      className={clsx(
+                        "min-h-[52px] rounded-2xl border-2 text-sm font-black capitalize",
+                        pharmacySellUnit === unit
+                          ? "border-waka-500 bg-waka-600 text-white"
+                          : "border-slate-200 bg-white text-slate-800",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             {(sellPresets.length > 0 || moneyPresets.length > 0 || qtyPresets.length > 0) && (
               <div className="space-y-3">
                 <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">
@@ -1563,7 +1635,17 @@ export function PosPage({ lang }: { lang: Language }) {
 
                 <div className="mt-4 min-h-[76px] rounded-2xl bg-slate-100 px-4 py-4 text-right text-5xl font-black tracking-tight text-slate-900">
                   {display || "0"}
-                  <span className="ml-2 text-xl font-bold text-slate-500">{inputMode === "money" ? "UGX" : selected.baseUnit}</span>
+                  <span className="ml-2 text-xl font-bold text-slate-500">
+                    {inputMode === "money"
+                      ? "UGX"
+                      : pharmacyPackActive
+                        ? pharmacySellUnit === "box"
+                          ? selected.pharmacyPackaging?.level2?.unit ?? "box"
+                          : pharmacySellUnit === "strip"
+                            ? selected.pharmacyPackaging?.level1?.unit ?? "strip"
+                            : selected.pharmacyPackaging?.baseUnit ?? selected.baseUnit
+                        : selected.baseUnit}
+                  </span>
                 </div>
 
                 <div className="mt-4">

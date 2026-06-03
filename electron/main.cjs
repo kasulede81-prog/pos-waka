@@ -38,7 +38,16 @@ function createMainWindow() {
   });
 
   const indexPath = path.join(__dirname, "..", "dist", "index.html");
-  win.loadFile(indexPath);
+  if (!fs.existsSync(indexPath)) {
+    console.error("[WAKA POS] Missing dist/index.html at", indexPath);
+  }
+  win.webContents.on("did-fail-load", (_event, code, description, url) => {
+    console.error("[WAKA POS] did-fail-load", code, description, url);
+  });
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    if (level >= 2) console.error("[renderer]", message, sourceId, line);
+  });
+  void win.loadFile(indexPath);
 }
 
 ipcMain.handle("waka-print", async (_event, opts) => {

@@ -118,6 +118,34 @@ export function PharmacyMarginReportPage({ lang }: Props) {
                       {row.marginPercent != null ? `${row.marginPercent}%` : "—"}
                     </dd>
                   </div>
+                  <div>
+                    <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColInventory")}</dt>
+                    <dd className="font-black text-stone-900">UGX {row.inventoryValueUgx.toLocaleString()}</dd>
+                  </div>
+                  {row.packagingEnabled ? (
+                    <>
+                      <div>
+                        <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColStockTablets")}</dt>
+                        <dd className="font-black text-stone-900">{Math.round(row.stockTablets).toLocaleString()}</dd>
+                      </div>
+                      {row.stockStrips != null ? (
+                        <div>
+                          <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColStockStrips")}</dt>
+                          <dd className="font-black text-stone-900">
+                            {row.stockStrips % 1 === 0 ? row.stockStrips.toLocaleString() : row.stockStrips.toFixed(1)}
+                          </dd>
+                        </div>
+                      ) : null}
+                      {row.stockBoxes != null ? (
+                        <div>
+                          <dt className="text-xs font-bold text-stone-500">{t(lang, "pharmacyMarginColStockBoxes")}</dt>
+                          <dd className="font-black text-stone-900">
+                            {row.stockBoxes % 1 === 0 ? row.stockBoxes.toLocaleString() : row.stockBoxes.toFixed(1)}
+                          </dd>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
                 </dl>
                 {product ? <PharmacyCostWarningBanner lang={lang} product={product} className="mt-3" /> : null}
               </li>

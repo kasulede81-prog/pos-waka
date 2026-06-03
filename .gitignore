@@ -26,6 +26,8 @@ android/local.properties
 release/
 release/windows/
 release/windows-build/
+release/win-build-*/
+release/win-installer-tmp/
 win-unpacked/
 
 # Windows installers

@@ -7,6 +7,7 @@ import {
   packLabelFromProduct,
   pricePerBaseUnitUgx,
 } from "./sellingEngine";
+import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { formatFriendlyQuantity } from "./saleQuantityLabel";
 
 /** Aggregates for wholesale / large-order checkout UI. */
@@ -62,6 +63,9 @@ export function draftPayableTotal(lines: SaleLine[], cartDiscountUgx = 0): numbe
 
 /** Human-readable quantity on a cart line (pieces vs full packs). */
 export function formatDraftLineQty(product: Product, line: SaleLine): string {
+  if (isPharmacyPackagingActive(product)) {
+    return formatPharmacySaleQtyLabel(product, line, "short");
+  }
   const qty = line.quantity;
   const unit = product.baseUnit || "ea";
   const rate = baseUnitsPerBuyingUnit(product);

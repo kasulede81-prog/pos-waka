@@ -41,10 +41,12 @@ export function buildPharmacyExpiryPdfBlob(lang: Language, products: Product[]):
 
 export function pharmacyMarginCsv(products: Product[]): string {
   const rows = sortMedicineMarginRows(computeMedicineMarginRows(products), "highest_margin");
-  const lines = ["product,margin_pct,margin_ugx,inventory_value_ugx"];
+  const lines = [
+    "product,cost_per_tablet_ugx,sell_per_tablet_ugx,margin_pct,margin_ugx,inventory_value_ugx,stock_tablets,stock_strips,stock_boxes",
+  ];
   for (const r of rows) {
     lines.push(
-      `"${r.name.replace(/"/g, '""')}",${r.marginPercent ?? ""},${r.marginUgx},${r.inventoryValueUgx}`,
+      `"${r.name.replace(/"/g, '""')}",${r.costPerUnitUgx},${r.sellingPricePerUnitUgx},${r.marginPercent ?? ""},${r.marginUgx},${r.inventoryValueUgx},${r.stockTablets},${r.stockStrips ?? ""},${r.stockBoxes ?? ""}`,
     );
   }
   return lines.join("\n");

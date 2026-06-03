@@ -1,4 +1,9 @@
 import type { LineInputMode, Product, SaleLine } from "../types";
+import {
+  getPharmacyPackagingSellPresets,
+  isPharmacyPackagingActive,
+  lowStockThresholdBaseUnits,
+} from "./pharmacyPackaging";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatFriendlyQuantity } from "./saleQuantityLabel";
 
@@ -97,6 +102,11 @@ export function formatStockLabel(product: Product): string {
 
 /** Friendly sell buttons: one piece + full pack when applicable. */
 export function getPosSellPresets(product: Product): PosSellPreset[] {
+  if (isPharmacyPackagingActive(product)) {
+    const pharmacyPresets = getPharmacyPackagingSellPresets(product);
+    if (pharmacyPresets.length > 0) return pharmacyPresets;
+  }
+
   const price = pricePerBaseUnitUgx(product);
   if (price <= 0) return [];
 
@@ -259,6 +269,9 @@ export function estimatedProfitForLine(product: Product, line: SaleLine): number
 }
 
 export function lowStockThreshold(product: Product): number {
+  if (isPharmacyPackagingActive(product)) {
+    return lowStockThresholdBaseUnits(product);
+  }
   const m = product.minimumStockAlert;
   return m > 0 ? m : 0;
 }

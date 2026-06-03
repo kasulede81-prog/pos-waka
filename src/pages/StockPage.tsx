@@ -403,7 +403,28 @@ export function StockPage({ lang }: { lang: Language }) {
     costPerPackUgx: number;
     supplierId: string;
     supplierName: string;
+    pharmacyRestock?: {
+      unit: import("../types").PharmacySaleUnitType;
+      invoiceTotalUgx: number;
+      baseUnitsIn: number;
+      costPerBaseUnitUgx: number;
+    };
   }) => {
+    if (input.pharmacyRestock) {
+      const pr = input.pharmacyRestock;
+      return recordPurchase({
+        supplierId: input.supplierId,
+        supplierName: input.supplierName,
+        lines: [
+          {
+            productId: input.productId,
+            baseUnitsIn: pr.baseUnitsIn,
+            costPerBaseUnitUgx: pr.costPerBaseUnitUgx,
+          },
+        ],
+        amountPaidUgx: pr.invoiceTotalUgx,
+      });
+    }
     const total = input.packQty * input.costPerPackUgx;
     return recordPurchase({
       supplierId: input.supplierId,

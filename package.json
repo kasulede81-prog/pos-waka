@@ -33,9 +33,10 @@
     "verify:hospitality-concurrency": "vitest run src/lib/pendingSaleMerge.test.ts",
     "test": "vitest run",
     "soak:android": "node scripts/android-soak-harness.mjs",
-    "build:windows": "npm run build && npm run windows:icon",
-    "package:windows": "npm run build:windows && electron-builder --win portable --x64",
-    "installer:windows": "npm run build:windows && electron-builder --win nsis --x64",
+    "build:electron": "node scripts/build-electron-dist.mjs",
+    "build:windows": "npm run build:electron && npm run windows:icon",
+    "package:windows": "npm run build:windows && node scripts/run-windows-installer.mjs portable",
+    "installer:windows": "npm run build:windows && node scripts/run-windows-installer.mjs nsis",
     "windows:icon": "node scripts/generate-windows-icon.mjs"
   },
   "dependencies": {

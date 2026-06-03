@@ -49,10 +49,17 @@ export async function fetchRemoteSubscriptionForUser(userId: string): Promise<Re
 
   const { data: plan, error: pErr } = await supabase
     .from("subscription_plans")
-    .select("code, max_pos_users, max_shops")
+    .select("code, max_pos_users, max_shops, features")
     .eq("id", sub.plan_id)
     .maybeSingle();
   if (pErr || !plan?.code) return null;
+
+  const features = plan.features as Record<string, unknown> | null;
+  const devicesRaw = features?.devices;
+  const maxDevices =
+    typeof devicesRaw === "number" && Number.isFinite(devicesRaw) && devicesRaw > 0
+      ? Math.floor(devicesRaw)
+      : null;
 
   const row: RemoteSubscriptionRow = {
     id: sub.id,
@@ -65,6 +72,7 @@ export async function fetchRemoteSubscriptionForUser(userId: string): Promise<Re
     plan_code: plan.code,
     max_pos_users: plan.max_pos_users ?? null,
     max_shops: plan.max_shops ?? null,
+    max_devices: maxDevices,
   };
   return row;
 }

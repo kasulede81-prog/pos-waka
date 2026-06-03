@@ -10,6 +10,7 @@ const pkg = JSON.parse(
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const isElectronDist = process.env.ELECTRON === "1";
   const appName = env.VITE_APP_NAME?.trim() || "Waka POS";
   const shortName = env.VITE_APP_SHORT_NAME?.trim() || "WakaPOS";
   const googleClientId = env.VITE_GOOGLE_OAUTH_CLIENT_ID?.trim() ?? "";
@@ -22,6 +23,7 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    base: isElectronDist ? "./" : "/",
     test: {
       environment: "node",
       include: ["src/**/*.test.ts"],

@@ -26,6 +26,7 @@ export const PHARMACY_CATEGORY_PRESETS = [
   "First Aid",
   "Diabetes",
   "Hypertension",
+  "Other",
 ] as const;
 
 export function defaultPharmacyCategoriesForBusinessType(

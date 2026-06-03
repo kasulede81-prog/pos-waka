@@ -17,6 +17,8 @@ export type RemoteSubscriptionRow = {
   plan_code: string;
   max_pos_users: number | null;
   max_shops: number | null;
+  /** From subscription_plans.features.devices when present. */
+  max_devices: number | null;
 };
 
 export type SubscriptionSnapshot =

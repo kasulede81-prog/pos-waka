@@ -1,4 +1,5 @@
 import type { Product, SaleLine } from "../types";
+import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 
 const QTY_EPS = 0.012;
 
@@ -71,6 +72,14 @@ export function buildReceiptLineQuantityDisplay(
   line: SaleLine,
   product?: Product,
 ): ReceiptLineQuantityDisplay {
+  if (product && isPharmacyPackagingActive(product)) {
+    const qtyLabel = formatPharmacySaleQtyLabel(product, line, "receipt");
+    const money =
+      line.inputMode === "money" && line.moneyAmountUgx != null && line.moneyAmountUgx > 0
+        ? ` — UGX ${line.moneyAmountUgx.toLocaleString()}`
+        : "";
+    return { quantityLabel: `${qtyLabel}${money}`, showCalculation: false };
+  }
   const baseUnit = product?.baseUnit?.trim() || "item";
   const buyingUnit = product?.buyingUnit?.trim();
   const conversionRate = Math.max(0, Number(product?.conversionRate ?? 0));

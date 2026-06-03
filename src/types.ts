@@ -22,6 +22,7 @@ export type Permission =
   | "reports.profit"
   | "settings.view"
   | "settings.shop"
+  | "settings.devices"
   | "owner.dashboard"
   | "owner.activity"
   | "owner.cash_history"
@@ -86,7 +87,14 @@ export type AuditAction =
   | "auth_forbidden"
   | "archive_purge"
   | "day_close_override"
-  | "sync_unknown_operation";
+  | "sync_unknown_operation"
+  | "device_viewed"
+  | "device_disconnected"
+  | "device_reactivated"
+  | "device_heartbeat_rejected"
+  | "device_limit_hit"
+  | "device_login_blocked"
+  | "device_replacement_completed";
 
 export type AuditLogEntry = {
   id: string;
@@ -288,6 +296,52 @@ export type SellingMode = "unit" | "weighted" | "portion";
 
 export type LineInputMode = "quantity" | "money";
 
+export type PharmacyPackagingLevel1 = {
+  unit: string;
+  containsBaseUnits: number;
+};
+
+export type PharmacyPackagingLevel2 = {
+  unit: string;
+  containsLevel1Units: number;
+};
+
+export type PharmacySellConfig = {
+  tablet: boolean;
+  strip: boolean;
+  box: boolean;
+};
+
+/** Reserved for FEFO / batch tracking (not used in this sprint). */
+export type PharmacyBatchRecord = {
+  id: string;
+  batchNumber?: string | null;
+  lotNumber?: string | null;
+  supplierBatch?: string | null;
+  expiryDate?: string | null;
+  quantityBase: number;
+  receivedAt?: string;
+};
+
+/** How `minimumStockAlert` is interpreted when pharmacy packaging is enabled. */
+export type PharmacyLowStockUnit = "tablet" | "strip" | "box";
+
+/** Customer-facing sell unit on receipts (inventory stays in base units). */
+export type PharmacySaleUnitType = "tablet" | "strip" | "box";
+
+export type PharmacyPackaging = {
+  enabled: boolean;
+  baseUnit: string;
+  level1?: PharmacyPackagingLevel1 | null;
+  level2?: PharmacyPackagingLevel2 | null;
+  sell: PharmacySellConfig;
+  priceStripUgx?: number | null;
+  priceBoxUgx?: number | null;
+  /** Alert when stock falls below `minimumStockAlert` in this unit (default tablet). */
+  lowStockAlertUnit?: PharmacyLowStockUnit | null;
+  batches?: PharmacyBatchRecord[];
+};
+
 export type Product = {
   id: string;
   name: string;
@@ -312,6 +366,8 @@ export type Product = {
   medicineStrength?: string | null;
   /** e.g. Tablet, Capsule, Syrup */
   medicineForm?: string | null;
+  /** Optional strip/box hierarchy + sell units (pharmacy packaging mode). */
+  pharmacyPackaging?: PharmacyPackaging | null;
   updatedAt: string;
   /** Monotonic for last-write-wins sync hints */
   version: number;
@@ -429,6 +485,10 @@ export type SaleLine = {
   estimatedProfitUgx: number;
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
+  /** Pharmacy POS: unit the cashier sold (display only; `quantity` is base units). */
+  saleUnitType?: PharmacySaleUnitType | null;
+  /** Count in `saleUnitType` (e.g. 2 tablets, 1 strip). */
+  saleUnitQty?: number | null;
   /** Set when voided after payment — line stays on receipt for audit */
   voided?: boolean;
   voidedAt?: string | null;

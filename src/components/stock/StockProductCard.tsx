@@ -4,6 +4,12 @@ import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatProductPriceLabel, usePosStore } from "../../store/usePosStore";
 import { formatStockLabel, isLowStock } from "../../lib/sellingEngine";
+import {
+  formatPharmacyLowStockRemaining,
+  formatPharmacyStockEquivalent,
+  formatPharmacyStockPrimary,
+  isPharmacyPackagingActive,
+} from "../../lib/pharmacyPackaging";
 import { normalizedCategoryKey, shelfIconFor } from "../../lib/productCategories";
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../lib/pharmacy";
@@ -69,7 +75,26 @@ export function StockProductCard({
           {shelfIcon ? <span className="mr-1">{shelfIcon}</span> : null}
           {shelf}
         </p>
-        <p className="mt-2 text-sm font-black leading-snug text-slate-700">{formatStockLabel(p)}</p>
+        {isPharmacyPackagingActive(p) ? (
+          <div className="mt-2 text-sm font-black leading-snug text-slate-700">
+            <p>
+              {t(lang, "pharmacyPackStockLabel")}: {formatPharmacyStockPrimary(p)}
+            </p>
+            {formatPharmacyStockEquivalent(p) ? (
+              <p className="mt-1 whitespace-pre-line text-xs font-bold text-slate-500">
+                {t(lang, "pharmacyPackStockEquivalent")}:{"\n"}
+                {formatPharmacyStockEquivalent(p)}
+              </p>
+            ) : null}
+            {low ? (
+              <p className="mt-1 text-xs font-bold text-rose-700">
+                {t(lang, "pharmacyPackStockRemaining")}: {formatPharmacyLowStockRemaining(p)}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm font-black leading-snug text-slate-700">{formatStockLabel(p)}</p>
+        )}
         <p className="mt-1 text-base font-black text-waka-700">{formatProductPriceLabel(p)}</p>
       </div>
 

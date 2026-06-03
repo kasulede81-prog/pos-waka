@@ -1,7 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import {
+  buildCreditActivityTimeline,
+  findOrphanDebtSales,
+  sumOrphanDebtUgx,
+} from "../lib/customerDebtActivity";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -46,6 +51,9 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const [debtReceiptCtx, setDebtReceiptCtx] = useState<DebtPaymentReceiptContext | null>(null);
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
 
+  const orphanDebts = useMemo(() => findOrphanDebtSales(sales), [sales]);
+  const orphanDebtTotal = useMemo(() => sumOrphanDebtUgx(sales), [sales]);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     addCustomer({ name: name.trim(), phone: phone.trim(), location: "Uganda" });
@@ -53,16 +61,13 @@ export function CustomersPage({ lang }: { lang: Language }) {
     setPhone("");
   };
 
-  const creditSalesFor = (customerId: string) =>
-    sales.filter((s) => s.customerId === customerId && s.debtUgx > 0).length;
-
   const paymentsFor = (customerId: string) => debtPayments.filter((d) => d.customerId === customerId);
 
   const submitPay = (customerId: string) => {
     const n = Math.floor(Number(payAmount.replace(/\D/g, "")) || 0);
     const r = addDebtPayment(customerId, n);
     if (r.ok && r.payment) {
-      const customer = customers.find((c) => c.id === customerId);
+      const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
       if (customer) {
         setDebtReceiptCtx({
           shopName,
@@ -87,6 +92,28 @@ export function CustomersPage({ lang }: { lang: Language }) {
     <div className="space-y-5 pb-8">
       <h1 className="text-3xl font-black text-slate-900">{modeTerm("debts")}</h1>
       <p className="text-lg text-slate-600">{t(lang, "debtsHelp")}</p>
+
+      {orphanDebts.length > 0 ? (
+        <section className="rounded-3xl border-2 border-red-200 bg-red-50 p-5">
+          <p className="text-lg font-black text-red-950">{t(lang, "orphanDebtTitle")}</p>
+          <p className="mt-2 text-sm text-red-900">{t(lang, "orphanDebtHelp")}</p>
+          <p className="mt-3 text-2xl font-black text-red-950">
+            UGX {orphanDebtTotal.toLocaleString()} · {orphanDebts.length}{" "}
+            {orphanDebts.length === 1 ? t(lang, "orphanDebtSaleOne") : t(lang, "orphanDebtSaleMany")}
+          </p>
+          <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-sm text-red-900">
+            {orphanDebts.map((o) => (
+              <li key={o.saleId} className="flex justify-between gap-2">
+                <span>
+                  {new Date(o.createdAt).toLocaleString()}
+                  {o.receiptSeq != null ? ` · #${o.receiptSeq}` : ""}
+                </span>
+                <span className="font-bold">UGX {o.debtUgx.toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {customers.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-6 text-center">
@@ -115,68 +142,107 @@ export function CustomersPage({ lang }: { lang: Language }) {
         </button>
       </form>
 
-      {customers.map((c) => (
-        <article key={c.id} className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <p className="text-2xl font-black text-slate-900">{c.name}</p>
-              <p className="text-slate-500">{c.phone}</p>
+      {customers.map((c) => {
+        const timeline = buildCreditActivityTimeline(c.id, sales, debtPayments);
+        const repaymentOnly = paymentsFor(c.id);
+        return (
+          <article key={c.id} className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-2xl font-black text-slate-900">{c.name}</p>
+                <p className="text-slate-500">{c.phone || t(lang, "debtNoPhone")}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold uppercase text-amber-800">{t(lang, "debtBalanceLabel")}</p>
+                <p className="text-3xl font-black text-amber-900">UGX {c.debtBalanceUgx.toLocaleString()}</p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-bold uppercase text-amber-800">{t(lang, "debtBalanceLabel")}</p>
-              <p className="text-3xl font-black text-amber-900">UGX {c.debtBalanceUgx.toLocaleString()}</p>
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-slate-500">
-            {t(lang, "creditSalesCount")}: {creditSalesFor(c.id)}
-          </p>
-          {canDebt ? (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setPayOpen(payOpen === c.id ? null : c.id);
-                  setPayAmount("");
-                }}
-                className="mt-4 w-full rounded-2xl bg-waka-600 py-3 text-lg font-black text-white"
-              >
-                {t(lang, "repayDebt")}
-              </button>
-              {payOpen === c.id && (
-                <div className="mt-4 rounded-2xl border-2 border-waka-200 bg-waka-50 p-4">
-                  <label className="block font-bold text-waka-950">{t(lang, "payDown")}</label>
-                  <input
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    inputMode="numeric"
-                    className="mt-2 w-full rounded-xl border-2 border-waka-300 px-3 py-3 text-2xl font-black"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => submitPay(c.id)}
-                    className="mt-3 w-full rounded-xl bg-waka-700 py-3 font-black text-white"
-                  >
-                    {t(lang, "saveSale")}
-                  </button>
-                </div>
+
+            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+              <p className="font-bold text-slate-900">{t(lang, "creditActivityTitle")}</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {t(lang, "creditActivityBalance")}: UGX {c.debtBalanceUgx.toLocaleString()}
+              </p>
+              {timeline.length === 0 ? (
+                <p className="mt-2 text-sm text-slate-500">{t(lang, "creditActivityEmpty")}</p>
+              ) : (
+                <ul className="mt-3 space-y-2">
+                  {timeline.map((entry) => (
+                    <li
+                      key={`${entry.kind}-${entry.id}`}
+                      className="flex items-start justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <p className="font-bold text-slate-800">
+                          {entry.kind === "credit_sale"
+                            ? t(lang, "creditSaleActivity")
+                            : t(lang, "debtPaymentActivity")}
+                          {entry.receiptSeq != null ? ` #${entry.receiptSeq}` : ""}
+                        </p>
+                        <p className="text-slate-500">{new Date(entry.at).toLocaleString()}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 font-black ${
+                          entry.deltaUgx >= 0 ? "text-amber-900" : "text-waka-800"
+                        }`}
+                      >
+                        {entry.deltaUgx >= 0 ? "+" : "−"}UGX {entry.amountUgx.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            </>
-          ) : null}
-          {paymentsFor(c.id).length > 0 && (
-            <div className="mt-4">
-              <p className="font-bold text-slate-800">{t(lang, "debtHistory")}</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {paymentsFor(c.id).map((p) => (
-                  <li key={p.id} className="flex justify-between text-slate-600">
-                    <span>{new Date(p.createdAt).toLocaleString()}</span>
-                    <span className="font-bold text-waka-800">−UGX {p.amountUgx.toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
-          )}
-        </article>
-      ))}
+
+            {canDebt ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPayOpen(payOpen === c.id ? null : c.id);
+                    setPayAmount("");
+                  }}
+                  className="mt-4 w-full rounded-2xl bg-waka-600 py-3 text-lg font-black text-white"
+                >
+                  {t(lang, "repayDebt")}
+                </button>
+                {payOpen === c.id && (
+                  <div className="mt-4 rounded-2xl border-2 border-waka-200 bg-waka-50 p-4">
+                    <label className="block font-bold text-waka-950">{t(lang, "payDown")}</label>
+                    <input
+                      value={payAmount}
+                      onChange={(e) => setPayAmount(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                      inputMode="numeric"
+                      className="mt-2 w-full rounded-xl border-2 border-waka-300 px-3 py-3 text-2xl font-black"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => submitPay(c.id)}
+                      className="mt-3 w-full rounded-xl bg-waka-700 py-3 font-black text-white"
+                    >
+                      {t(lang, "saveSale")}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : null}
+
+            {repaymentOnly.length > 0 ? (
+              <div className="mt-4">
+                <p className="font-bold text-slate-800">{t(lang, "repaymentHistory")}</p>
+                <ul className="mt-2 space-y-1 text-sm">
+                  {repaymentOnly.map((p) => (
+                    <li key={p.id} className="flex justify-between text-slate-600">
+                      <span>{new Date(p.createdAt).toLocaleString()}</span>
+                      <span className="font-bold text-waka-800">−UGX {p.amountUgx.toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </article>
+        );
+      })}
 
       {debtReceiptCtx ? (
         <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal>

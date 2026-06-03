@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 11;
+const PERM_MATRIX_VERSION = 12;
 
 const HOSPITALITY_OWNER: Permission[] = [
   "hospitality.floor",
@@ -81,6 +81,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "reports.profit",
     "settings.view",
     "settings.shop",
+    "settings.devices",
     "owner.dashboard",
     "owner.activity",
     "owner.cash_history",

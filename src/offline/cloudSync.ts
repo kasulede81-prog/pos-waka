@@ -45,6 +45,7 @@ import {
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
 import { buyingUnitsToBaseUnits } from "../lib/sellingEngine";
+import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -99,6 +100,7 @@ function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolea
       expiryDate: p.expiryDate ?? null,
       medicineStrength: p.medicineStrength ?? null,
       medicineForm: p.medicineForm ?? null,
+      pharmacyPackaging: p.pharmacyPackaging ?? null,
       wakaClient: true,
     },
     updated_at: p.updatedAt || new Date().toISOString(),
@@ -134,6 +136,7 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
     medicineStrength:
       strengthRaw != null && String(strengthRaw).trim() ? String(strengthRaw).trim().slice(0, 64) : null,
     medicineForm: formRaw != null && String(formRaw).trim() ? String(formRaw).trim().slice(0, 64) : null,
+    pharmacyPackaging: normalizePharmacyPackaging(meta.pharmacyPackaging),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
     version: Math.max(1, Math.floor(Number(meta.version ?? 1))),
     quickPresetsMoneyUgx: Array.isArray(meta.quickPresetsMoneyUgx)

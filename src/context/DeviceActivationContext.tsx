@@ -1,0 +1,129 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import type { User } from "@supabase/supabase-js";
+import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
+import {
+  ensureShopDeviceActivation,
+  fetchShopDeviceLimitContext,
+  type DeviceActivationResult,
+  type DeviceLimitContext,
+} from "../lib/deviceActivation";
+
+export type DeviceActivationBlock = {
+  shopId: string;
+  result: DeviceActivationResult;
+  context: DeviceLimitContext | null;
+};
+
+type DeviceActivationState = {
+  loading: boolean;
+  activated: boolean;
+  block: DeviceActivationBlock | null;
+  shopId: string | null;
+  retry: () => Promise<void>;
+};
+
+const DeviceActivationCtx = createContext<DeviceActivationState | null>(null);
+
+export function pathAllowedWhenDeviceBlocked(path: string): boolean {
+  const p = path.split("?")[0] || "/";
+  return (
+    p === "/device-limit" ||
+    p === "/upgrade" ||
+    p === "/login" ||
+    p.startsWith("/auth/") ||
+    p === "/account"
+  );
+}
+
+type ProviderProps = {
+  authMode: "supabase" | "local";
+  user: User | null | undefined;
+  children: ReactNode;
+};
+
+export function DeviceActivationProvider({ authMode, user, children }: ProviderProps) {
+  const [loading, setLoading] = useState(authMode === "supabase");
+  const [activated, setActivated] = useState(authMode !== "supabase");
+  const [block, setBlock] = useState<DeviceActivationBlock | null>(null);
+  const [shopId, setShopId] = useState<string | null>(null);
+  const inFlightRef = useRef<string | null>(null);
+
+  const runCheck = useCallback(async (uid: string) => {
+    if (inFlightRef.current === uid) return;
+    inFlightRef.current = uid;
+    setLoading(true);
+    try {
+      const org = await resolvePrimaryOrganizationForUser(uid);
+      const sid = org?.shopId ?? null;
+      setShopId(sid);
+      if (!sid) {
+        setActivated(true);
+        setBlock(null);
+        return;
+      }
+      const result = await ensureShopDeviceActivation(sid);
+      if (result.activated) {
+        setActivated(true);
+        setBlock(null);
+        return;
+      }
+      if (result.limit_blocked) {
+        const context = await fetchShopDeviceLimitContext(sid).catch(() => null);
+        setActivated(false);
+        setBlock({ shopId: sid, result, context });
+        return;
+      }
+      setActivated(true);
+      setBlock(null);
+    } finally {
+      inFlightRef.current = null;
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (authMode !== "supabase" || !user?.id) {
+      setLoading(false);
+      setActivated(true);
+      setBlock(null);
+      setShopId(null);
+      return;
+    }
+    void runCheck(user.id);
+  }, [authMode, user?.id, runCheck]);
+
+  const retry = useCallback(async () => {
+    if (!user?.id) return;
+    await runCheck(user.id);
+  }, [runCheck, user?.id]);
+
+  const value = useMemo(
+    () => ({ loading, activated, block, shopId, retry }),
+    [loading, activated, block, shopId, retry],
+  );
+
+  return <DeviceActivationCtx.Provider value={value}>{children}</DeviceActivationCtx.Provider>;
+}
+
+export function useDeviceActivation(): DeviceActivationState {
+  const ctx = useContext(DeviceActivationCtx);
+  if (!ctx) {
+    return {
+      loading: false,
+      activated: true,
+      block: null,
+      shopId: null,
+      retry: async () => {},
+    };
+  }
+  return ctx;
+}

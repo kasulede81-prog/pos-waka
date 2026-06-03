@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { isElectronDesktop } from "./lib/electronDesktop";
 import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
@@ -23,6 +24,7 @@ import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
 import { SettingsSystemHealthPage } from "./pages/SettingsSystemHealthPage";
+import { ConnectedDevicesPage } from "./pages/ConnectedDevicesPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
@@ -65,6 +67,9 @@ import { NativeMarketingGuard } from "./components/NativeMarketingGuard";
 import { NativePublicGuard } from "./components/NativePublicGuard";
 import { unauthenticatedEntryPath } from "./lib/nativeApp";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
+import { DeviceActivationProvider } from "./context/DeviceActivationContext";
+import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOutlet";
+import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import type { Language } from "./types";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
@@ -97,7 +102,7 @@ function LazyWait() {
   );
 }
 
-function App() {
+function AppRoutes() {
   const auth = useAuth();
   const [lang, setLang] = useState<Language>("en");
   const showDiagnostics = isDiagnosticsEnabled();
@@ -107,7 +112,7 @@ function App() {
   }, [showDiagnostics]);
 
   return (
-    <BrowserRouter>
+    <>
       {showDiagnostics ? <StabilityDiagnosticsOverlay /> : null}
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
       <Routes>
@@ -225,13 +230,19 @@ function App() {
               }
             >
               <Route path="activate" element={<BusinessActivationPage lang={lang} />} />
-              <Route
-                element={
-                  <SubscriptionProvider user={auth.user} authMode={auth.mode}>
-                    <Outlet />
-                  </SubscriptionProvider>
-                }
-              >
+                <Route
+                  element={
+                    <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+                      <DeviceActivationProvider authMode={auth.mode} user={auth.user}>
+                        <DeviceActivationGateOutlet />
+                      </DeviceActivationProvider>
+                    </SubscriptionProvider>
+                  }
+                >
+                <Route
+                  path="device-limit"
+                  element={<DeviceLimitReachedPage lang={lang} onSignOut={auth.signOut} />}
+                />
                 <Route element={<InternalAdminOutlet />}>
                   <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/shops" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
@@ -593,6 +604,14 @@ function App() {
               }
             />
             <Route
+              path="settings/devices"
+              element={
+                <RoleProtectedRoute permission="settings.devices">
+                  <ConnectedDevicesPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="settings/health"
               element={
                 <RoleProtectedRoute permission="settings.shop">
@@ -633,7 +652,16 @@ function App() {
 
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />
       </Routes>
-    </BrowserRouter>
+    </>
+  );
+}
+
+function App() {
+  const Router = isElectronDesktop() ? HashRouter : BrowserRouter;
+  return (
+    <Router>
+      <AppRoutes />
+    </Router>
   );
 }
 
