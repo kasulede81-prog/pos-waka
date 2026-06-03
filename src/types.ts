@@ -22,6 +22,8 @@ export type Permission =
   | "reports.profit"
   | "settings.view"
   | "settings.shop"
+  /** Receipt header/footer branding (owner + manager) */
+  | "settings.receipt"
   | "settings.devices"
   | "owner.dashboard"
   | "owner.activity"
@@ -535,6 +537,12 @@ export type Sale = {
   amountPaidUgx?: number | null;
   /** Change returned to customer at checkout (when captured). */
   changeGivenUgx?: number | null;
+  /** Branding frozen at checkout — historical receipts must not change. */
+  receiptHeaderSnapshot?: ReceiptHeaderSnapshot | null;
+  receiptFooterSnapshot?: ReceiptFooterSnapshot | null;
+  /** Customer label frozen for debt receipts (RCPT-06). */
+  receiptCustomerName?: string | null;
+  receiptCustomerPhone?: string | null;
 };
 
 export type DebtPayment = {
@@ -542,6 +550,8 @@ export type DebtPayment = {
   customerId: string;
   amountUgx: number;
   createdAt: string;
+  receiptHeaderSnapshot?: ReceiptHeaderSnapshot | null;
+  receiptFooterSnapshot?: ReceiptFooterSnapshot | null;
 };
 
 /** End-of-day note — counted cash vs expected */
@@ -640,6 +650,39 @@ export type StaffAccount = {
 /** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */
 export type ReceiptPaperSize = "58mm" | "80mm" | "a4";
 
+/** Structured receipt header fields (Settings → Receipt branding). */
+export type ReceiptHeaderConfig = {
+  businessName: string;
+  address: string;
+  phone: string;
+  email: string;
+  tin: string;
+};
+
+/** Per-field visibility on printed / PDF receipts. */
+export type ReceiptDisplayOptions = {
+  showCashier: boolean;
+  showReceiptNumber: boolean;
+  showPaymentMethod: boolean;
+  showCustomerName: boolean;
+  showCustomerPhone: boolean;
+  showDebtInfo: boolean;
+  showShopAddress: boolean;
+  showShopPhone: boolean;
+};
+
+/** Frozen header lines at sale / debt payment time (RCPT-07). */
+export type ReceiptHeaderSnapshot = {
+  lines: string[];
+};
+
+/** Frozen footer lines + powered-by at sale time (RCPT-07). */
+export type ReceiptFooterSnapshot = {
+  lines: string[];
+  poweredBy: string | null;
+  displayOptions: ReceiptDisplayOptions;
+};
+
 /** How long sales / activity stay in active lists before moving to archive. */
 export type DataRetentionPolicy = "forever" | "3m" | "6m" | "12m";
 
@@ -719,6 +762,14 @@ export type ShopPreferences = {
   receiptCustomFooterText?: string | null;
   /** Return policy line; empty string hides it; blank uses default 24h message. */
   receiptReturnPolicyText?: string | null;
+  /** Structured header fields (preferred over receiptCustomHeaderText). */
+  receiptHeader?: ReceiptHeaderConfig | null;
+  /** Up to 4 footer lines; empty entries ignored on print. */
+  receiptFooterLines?: string[] | null;
+  /** Field visibility on receipts (defaults all on). */
+  receiptDisplayOptions?: ReceiptDisplayOptions | null;
+  /** When false on premium plans, hide “Powered by Waka POS”. Free/Starter always show. */
+  receiptShowPoweredByWaka?: boolean;
   /**
    * Archive sales, receipts, and activity after this window (never auto-delete).
    * Default: 3 months (90 days).

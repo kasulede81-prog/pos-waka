@@ -5,6 +5,7 @@ import {
   buildSaleReceiptHtml,
   buildSaleReceiptText,
   printReceiptWithFallback,
+  receiptLineDetailLabel,
   type ReceiptDisplayData,
   type ReceiptLabels,
 } from "./receiptPrint";
@@ -21,10 +22,14 @@ export type SaleReceiptContext = {
   sale: Sale;
   productById?: Map<string, Product>;
   customHeaderLines?: string[] | null;
+  headerLines?: string[];
+  footerLines?: string[];
   footerThanks?: string;
-  footerPowered?: string;
+  footerPowered?: string | null;
   returnPolicy?: string | null;
+  displayOptions?: import("../types").ReceiptDisplayOptions;
   customerName?: string | null;
+  customerPhone?: string | null;
   customerBalanceUgx?: number | null;
   labels: ReceiptLabels;
   paper?: ReceiptPaperSize;
@@ -47,23 +52,27 @@ export type DebtPaymentReceiptContext = {
   customer: Customer;
   cashier: string;
   balanceAfterUgx: number;
+  headerLines?: string[];
+  footerLines?: string[];
+  footerPowered?: string | null;
   paper?: ReceiptPaperSize;
 };
 
 function renderDisplayToPdf(doc: jsPDF, display: ReceiptDisplayData, title: string): void {
   const layout = createPdfLayout(doc);
-  pdfLine(layout, doc, display.shopName.toUpperCase(), { size: 14, bold: true });
-  if (display.customHeaderLines?.length) {
-    for (const line of display.customHeaderLines) pdfLine(layout, doc, line, { size: 9 });
+  const headerBlock = display.headerLines.length ? display.headerLines : display.customHeaderLines;
+  if (headerBlock?.length) {
+    for (const line of headerBlock) pdfLine(layout, doc, line, { size: 9, bold: line === headerBlock[0] });
   } else {
-    if (display.shopAddress) pdfLine(layout, doc, display.shopAddress, { size: 9 });
-    if (display.shopPhone) pdfLine(layout, doc, display.shopPhone, { size: 9 });
+    pdfLine(layout, doc, display.shopName.toUpperCase(), { size: 14, bold: true });
+    if (display.displayOptions.showShopAddress && display.shopAddress) pdfLine(layout, doc, display.shopAddress, { size: 9 });
+    if (display.displayOptions.showShopPhone && display.shopPhone) pdfLine(layout, doc, display.shopPhone, { size: 9 });
   }
   pdfGap(layout, 6);
   pdfLine(layout, doc, title, { size: 12, bold: true });
-  pdfLine(layout, doc, `Receipt No: ${display.receiptNumber}`);
+  if (display.displayOptions.showReceiptNumber) pdfLine(layout, doc, `Receipt No: ${display.receiptNumber}`);
   pdfLine(layout, doc, `Date: ${display.dateText}  Time: ${display.timeText}`);
-  pdfLine(layout, doc, `Cashier: ${display.cashier}`);
+  if (display.displayOptions.showCashier) pdfLine(layout, doc, `Cashier: ${display.cashier}`);
   pdfGap(layout, 4);
   pdfLine(layout, doc, "Items", { bold: true });
   for (const ln of display.lines) {
@@ -73,7 +82,8 @@ function renderDisplayToPdf(doc: jsPDF, display: ReceiptDisplayData, title: stri
         size: 9,
       });
     } else {
-      pdfLine(layout, doc, `${ln.quantityLabel} — UGX ${ln.lineTotalUgx.toLocaleString()}`, { size: 9 });
+      if (ln.name?.trim()) pdfLine(layout, doc, ln.name, { bold: true });
+      pdfLine(layout, doc, receiptLineDetailLabel(ln), { size: 9 });
     }
   }
   pdfGap(layout, 4);
@@ -82,11 +92,24 @@ function renderDisplayToPdf(doc: jsPDF, display: ReceiptDisplayData, title: stri
   pdfLine(layout, doc, `Grand Total: UGX ${display.totalUgx.toLocaleString()}`, { bold: true });
   pdfLine(layout, doc, `Paid: UGX ${display.paidUgx.toLocaleString()}`);
   pdfLine(layout, doc, `Change: UGX ${display.changeUgx.toLocaleString()}`);
-  pdfLine(layout, doc, `Method: ${display.paymentMethodLabel}`);
-  if (display.returnPolicy) pdfLine(layout, doc, display.returnPolicy, { size: 8 });
+  if (display.displayOptions.showPaymentMethod) {
+    pdfLine(layout, doc, `Method: ${display.paymentMethodLabel}`);
+  }
+  if (display.displayOptions.showDebtInfo && display.outstandingDebtUgx > 0) {
+    pdfLine(layout, doc, `Outstanding Debt: UGX ${display.outstandingDebtUgx.toLocaleString()}`, { bold: true });
+    if (display.displayOptions.showCustomerName) {
+      pdfLine(layout, doc, `Customer: ${display.customerName?.trim() || "Not Recorded"}`);
+    }
+    if (display.displayOptions.showCustomerPhone && display.customerPhone?.trim()) {
+      pdfLine(layout, doc, `Phone: ${display.customerPhone.trim()}`);
+    }
+  }
+  if (display.returnPolicy && !display.footerLines.includes(display.returnPolicy)) {
+    pdfLine(layout, doc, display.returnPolicy, { size: 8 });
+  }
   pdfGap(layout, 6);
-  pdfLine(layout, doc, display.footerThanks, { size: 9 });
-  pdfLine(layout, doc, display.footerPowered, { size: 8 });
+  for (const line of display.footerLines) pdfLine(layout, doc, line, { size: 9 });
+  if (display.footerPowered) pdfLine(layout, doc, display.footerPowered, { size: 8 });
 }
 
 export function buildSaleReceiptPdfBlob(ctx: SaleReceiptContext): Blob {
@@ -99,9 +122,15 @@ export function buildSaleReceiptPdfBlob(ctx: SaleReceiptContext): Blob {
     sale: ctx.sale,
     productById: ctx.productById,
     customHeaderLines: ctx.customHeaderLines,
+    headerLines: ctx.headerLines,
+    footerLines: ctx.footerLines,
     footerThanks: ctx.footerThanks,
-    footerPowered: ctx.footerPowered,
+    footerPowered: ctx.footerPowered ?? undefined,
     returnPolicy: ctx.returnPolicy,
+    displayOptions: ctx.displayOptions,
+    customerName: ctx.customerName,
+    customerPhone: ctx.customerPhone,
+    customerBalanceUgx: ctx.customerBalanceUgx,
   });
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   renderDisplayToPdf(doc, display, "SALE RECEIPT");
@@ -132,23 +161,29 @@ export function buildReturnReceiptPdfBlob(ctx: ReturnReceiptContext): Blob {
   return doc.output("blob");
 }
 
+function debtCustomerLabel(customer: Customer): string {
+  return customer.name?.trim() || "Not Recorded";
+}
+
 export function buildDebtPaymentReceiptPdfBlob(ctx: DebtPaymentReceiptContext): Blob {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const layout = createPdfLayout(doc);
   const when = new Date(ctx.payment.createdAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" });
-  pdfLine(layout, doc, ctx.shopName.toUpperCase(), { size: 14, bold: true });
+  const header = ctx.headerLines?.length ? ctx.headerLines : [ctx.shopName.toUpperCase()];
+  for (const line of header) pdfLine(layout, doc, line, { size: line === header[0] ? 14 : 10, bold: line === header[0] });
   pdfGap(layout, 6);
   pdfLine(layout, doc, "DEBT PAYMENT RECEIPT", { size: 12, bold: true });
   pdfLine(layout, doc, `Receipt No: ${ctx.receiptNumber}`);
   pdfLine(layout, doc, `Date: ${when}`);
   pdfLine(layout, doc, `Cashier: ${ctx.cashier}`);
-  pdfLine(layout, doc, `Customer: ${ctx.customer.name}`);
-  if (ctx.customer.phone) pdfLine(layout, doc, `Phone: ${ctx.customer.phone}`);
+  pdfLine(layout, doc, `Customer: ${debtCustomerLabel(ctx.customer)}`);
+  if (ctx.customer.phone?.trim()) pdfLine(layout, doc, `Phone: ${ctx.customer.phone.trim()}`);
   pdfGap(layout, 4);
   pdfLine(layout, doc, `Amount paid: UGX ${ctx.payment.amountUgx.toLocaleString()}`, { bold: true });
   pdfLine(layout, doc, `Balance after: UGX ${ctx.balanceAfterUgx.toLocaleString()}`);
-  pdfGap(layout, 6);
-  pdfLine(layout, doc, "Powered by Waka POS", { size: 8 });
+  pdfGap(layout, 4);
+  for (const foot of ctx.footerLines ?? []) pdfLine(layout, doc, foot);
+  if (ctx.footerPowered) pdfLine(layout, doc, ctx.footerPowered, { size: 8 });
   return doc.output("blob");
 }
 
@@ -162,10 +197,14 @@ export function saleReceiptPlain(ctx: SaleReceiptContext): string {
     sale: ctx.sale,
     productById: ctx.productById,
     customHeaderLines: ctx.customHeaderLines,
+    headerLines: ctx.headerLines,
+    footerLines: ctx.footerLines,
     footerThanks: ctx.footerThanks,
-    footerPowered: ctx.footerPowered,
+    footerPowered: ctx.footerPowered ?? undefined,
     returnPolicy: ctx.returnPolicy,
+    displayOptions: ctx.displayOptions,
     customerName: ctx.customerName ?? null,
+    customerPhone: ctx.customerPhone ?? null,
     customerBalanceUgx: ctx.customerBalanceUgx ?? null,
     labels: ctx.labels,
   });
@@ -181,9 +220,15 @@ export function saleReceiptHtml(ctx: SaleReceiptContext): string {
     sale: ctx.sale,
     productById: ctx.productById,
     customHeaderLines: ctx.customHeaderLines,
+    headerLines: ctx.headerLines,
+    footerLines: ctx.footerLines,
     footerThanks: ctx.footerThanks,
-    footerPowered: ctx.footerPowered,
+    footerPowered: ctx.footerPowered ?? undefined,
     returnPolicy: ctx.returnPolicy,
+    displayOptions: ctx.displayOptions,
+    customerName: ctx.customerName,
+    customerPhone: ctx.customerPhone,
+    customerBalanceUgx: ctx.customerBalanceUgx,
   });
   return buildSaleReceiptHtml(display);
 }
@@ -202,12 +247,17 @@ function returnReceiptHtml(ctx: ReturnReceiptContext): string {
 
 function debtReceiptHtml(ctx: DebtPaymentReceiptContext): string {
   const when = new Date(ctx.payment.createdAt).toLocaleString("en-UG", { timeZone: "Africa/Kampala" });
+  const headerHtml = (ctx.headerLines?.length ? ctx.headerLines : [ctx.shopName])
+    .map((l) => `<p>${l}</p>`)
+    .join("");
+  const footerHtml = [...(ctx.footerLines ?? []), ctx.footerPowered].filter(Boolean).map((l) => `<p>${l}</p>`).join("");
   return `<article class="waka-receipt">
-    <header class="header"><h2>${ctx.shopName}</h2></header>
+    <header class="header">${headerHtml}</header>
     <p><strong>DEBT PAYMENT RECEIPT</strong></p>
     <p>Receipt No: ${ctx.receiptNumber}<br/>${when}<br/>Cashier: ${ctx.cashier}</p>
-    <p>Customer: ${ctx.customer.name}</p>
+    <p>Customer: ${debtCustomerLabel(ctx.customer)}</p>
     <p><strong>UGX ${ctx.payment.amountUgx.toLocaleString()}</strong><br/>Balance after: UGX ${ctx.balanceAfterUgx.toLocaleString()}</p>
+    ${footerHtml}
   </article>`;
 }
 

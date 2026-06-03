@@ -15,6 +15,8 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
+import { useSubscription } from "../context/SubscriptionContext";
+import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { ReturnReceiptActionsModal, buildReturnReceiptContext } from "../components/documents/ReturnReceiptActionsModal";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
@@ -158,6 +160,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const preferences = usePosStore((s) => s.preferences);
+  const { authMode, snapshot } = useSubscription();
+  const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
@@ -204,8 +208,10 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       preferences,
       products,
       actor,
-      customerName: cust?.name ?? null,
+      customerName: sale.receiptCustomerName ?? cust?.name ?? null,
+      customerPhone: sale.receiptCustomerPhone ?? cust?.phone ?? null,
       customerBalanceUgx: cust?.debtBalanceUgx ?? null,
+      planTier: receiptPlanTier,
     });
   };
 

@@ -46,6 +46,7 @@ import {
 } from "../lib/inventoryIntegrity";
 import { buyingUnitsToBaseUnits } from "../lib/sellingEngine";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
+import { defaultReceiptDisplayOptions } from "../lib/receiptBranding";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -211,6 +212,39 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     lastSyncError: null,
     customerId: (row.customer_id as string | null) ?? null,
     soldByUserId: (row.created_by as string | null) ?? null,
+    receiptHeaderSnapshot: parseReceiptHeaderSnapshot((row.metadata as Record<string, unknown>)?.receiptHeaderSnapshot),
+    receiptFooterSnapshot: parseReceiptFooterSnapshot((row.metadata as Record<string, unknown>)?.receiptFooterSnapshot),
+    receiptCustomerName:
+      (row.metadata as Record<string, unknown>)?.receiptCustomerName != null
+        ? String((row.metadata as Record<string, unknown>).receiptCustomerName)
+        : null,
+    receiptCustomerPhone:
+      (row.metadata as Record<string, unknown>)?.receiptCustomerPhone != null
+        ? String((row.metadata as Record<string, unknown>).receiptCustomerPhone)
+        : null,
+  };
+}
+
+function parseReceiptHeaderSnapshot(raw: unknown): import("../types").ReceiptHeaderSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const lines = Array.isArray(r.lines) ? r.lines.map((l) => String(l)).filter(Boolean) : [];
+  return lines.length ? { lines } : null;
+}
+
+function parseReceiptFooterSnapshot(raw: unknown): import("../types").ReceiptFooterSnapshot | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const lines = Array.isArray(r.lines) ? r.lines.map((l) => String(l)).filter(Boolean) : [];
+  const displayRaw = r.displayOptions;
+  const displayOptions =
+    displayRaw && typeof displayRaw === "object"
+      ? { ...defaultReceiptDisplayOptions(), ...(displayRaw as object) }
+      : defaultReceiptDisplayOptions();
+  return {
+    lines,
+    poweredBy: r.poweredBy != null ? String(r.poweredBy) : null,
+    displayOptions,
   };
 }
 
@@ -546,7 +580,14 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       issue_receipt: false,
       created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
       completed_at: sale.createdAt,
-      metadata: { estimatedProfitUgx: sale.estimatedProfitUgx, wakaClient: true },
+      metadata: {
+        estimatedProfitUgx: sale.estimatedProfitUgx,
+        wakaClient: true,
+        receiptHeaderSnapshot: sale.receiptHeaderSnapshot ?? null,
+        receiptFooterSnapshot: sale.receiptFooterSnapshot ?? null,
+        receiptCustomerName: sale.receiptCustomerName ?? null,
+        receiptCustomerPhone: sale.receiptCustomerPhone ?? null,
+      },
       created_at: sale.createdAt,
       updated_at: sale.createdAt,
     },

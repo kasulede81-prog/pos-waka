@@ -37,6 +37,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   }
 
   const canShop = hasPermission(actor.role, "settings.shop");
+  const canReceipt = hasPermission(actor.role, "settings.receipt");
   const canDevices = hasPermission(actor.role, "settings.devices");
   const preferences = usePosStore((s) => s.preferences);
   const pilotActive = isPilotModeActive(actor.role, preferences);
@@ -70,7 +71,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={Store}
           />
         ) : null}
-        {canShop ? (
+        {canShop || canReceipt ? (
           <OfficeNavCard
             to="/settings/receipt"
             title={t(lang, "settingsHubReceipt")}

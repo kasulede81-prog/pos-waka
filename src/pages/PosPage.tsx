@@ -44,7 +44,7 @@ import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
 import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
 import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
-import { resolveReceiptBranding } from "../lib/receiptBranding";
+import { brandingFromSale } from "../lib/receiptBranding";
 import { canRecordCashExpenses } from "../lib/cashExpenses";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { gateExpiredMedicineSale } from "../lib/pharmacySaleGuard";
@@ -156,7 +156,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const hospitalityMode = isHospitalityMode(shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
   const wholesaleMode = isWholesaleMode(shopPreferences.businessType);
   const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
-  const { snapshot } = useSubscription();
+  const { snapshot, authMode } = useSubscription();
+  const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const location = useLocation();
   const navigate = useNavigate();
   const products = usePosStore(useShallow((s) => s.products));
@@ -378,42 +379,39 @@ export function PosPage({ lang }: { lang: Language }) {
     [actor.displayName, lang, staffNameById],
   );
 
-  const receiptBranding = useMemo(
-    () => resolveReceiptBranding(usePosStore.getState().preferences),
-    [
-      preferences.shopDisplayName,
-      preferences.shopAddressLine,
-      preferences.shopPhoneE164,
-      preferences.receiptPaperSize,
-    ],
-  );
-
   const receiptDisplay = useMemo(() => {
     if (!receiptSale) return null;
+    const branding = brandingFromSale(receiptSale, shopPreferences, receiptPlanTier);
     const shopName = (preferences.shopDisplayName ?? "").trim() || "Waka POS";
     const receiptNumber = buildReceiptNumberForSale(receiptSale, sales);
+    const cust = receiptSale.customerId ? customers.find((c) => c.id === receiptSale.customerId) : null;
     return buildReceiptDisplayData({
       shopName,
       shopAddress: preferences.shopAddressLine ?? null,
       shopPhone: preferences.shopPhoneE164 ?? null,
-      customHeaderLines: receiptBranding.customHeaderLines,
+      headerLines: branding.headerLines,
+      customHeaderLines: branding.customHeaderLines,
+      footerLines: branding.footerLines,
       cashier: receiptCashierLabel(receiptSale),
       receiptNumber,
       sale: receiptSale,
       productById,
-      footerThanks: receiptBranding.footerThanks,
-      footerPowered: "Powered by Waka POS",
-      returnPolicy: receiptBranding.returnPolicy,
+      footerThanks: branding.footerThanks,
+      footerPowered: branding.footerPowered,
+      returnPolicy: branding.returnPolicy,
+      displayOptions: branding.displayOptions,
+      customerName: receiptSale.receiptCustomerName ?? cust?.name ?? null,
+      customerPhone: receiptSale.receiptCustomerPhone ?? cust?.phone ?? null,
+      customerBalanceUgx: cust?.debtBalanceUgx ?? null,
     });
   }, [
     receiptSale,
-    preferences.shopDisplayName,
-    preferences.shopAddressLine,
-    preferences.shopPhoneE164,
-    receiptBranding,
+    shopPreferences,
+    receiptPlanTier,
     sales,
     productById,
     receiptCashierLabel,
+    customers,
   ]);
 
   const receiptPlain = useMemo(() => {
@@ -431,10 +429,14 @@ export function PosPage({ lang }: { lang: Language }) {
       amountPaidUgx: receiptDisplay.paidUgx,
       changeUgx: receiptDisplay.changeUgx,
       footerThanks: receiptDisplay.footerThanks,
-      footerPowered: receiptDisplay.footerPowered,
+      footerPowered: receiptDisplay.footerPowered ?? undefined,
       returnPolicy: receiptDisplay.returnPolicy,
       customerName: cust?.name ?? null,
       customerBalanceUgx: cust ? cust.debtBalanceUgx : null,
+      headerLines: receiptDisplay.headerLines,
+      footerLines: receiptDisplay.footerLines,
+      displayOptions: receiptDisplay.displayOptions,
+      customerPhone: receiptDisplay.customerPhone,
       labels: {
         cashier: t(lang, "receiptCashier"),
         items: t(lang, "receiptItemsLabel"),
@@ -443,6 +445,16 @@ export function PosPage({ lang }: { lang: Language }) {
         debtSale: t(lang, "receiptDebtLine"),
         balance: t(lang, "receiptBalanceLine"),
         time: t(lang, "receiptTimeLabel"),
+        outstandingDebt: t(lang, "receiptOutstandingDebt"),
+        customer: t(lang, "receiptCustomerLabel"),
+        customerNotRecorded: t(lang, "receiptCustomerNotRecorded"),
+        receiptNo: t(lang, "receiptNoLabel"),
+        date: t(lang, "receiptDateLabel"),
+        method: t(lang, "receiptMethodLabel"),
+        change: t(lang, "receiptChangeLabel"),
+        subtotal: t(lang, "receiptSubtotalLabel"),
+        discount: t(lang, "receiptDiscountLabel"),
+        grandTotal: t(lang, "receiptGrandTotalLabel"),
       },
     });
   }, [receiptSale, receiptDisplay, customers, productById, lang]);
@@ -1510,17 +1522,19 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {sheetOpen && selected && (
+        <PosScreenPortal>
         <div
-          className="fixed inset-0 z-[52] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]"
-          style={{
-            paddingBottom:
-              keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
-          }}
+          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
+          style={
+            keyboardInset > 0
+              ? { paddingBottom: keyboardInset }
+              : undefined
+          }
           role="dialog"
           aria-modal
           aria-labelledby="pos-add-sheet-title"
         >
-          <header className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-3 py-3">
+          <header className="flex shrink-0 items-start gap-3 border-b border-slate-100 px-3 py-3">
             <button
               type="button"
               onClick={() => setSheetOpen(false)}
@@ -1528,12 +1542,12 @@ export function PosPage({ lang }: { lang: Language }) {
             >
               {t(lang, "cancel")}
             </button>
-            <div className="min-w-0 flex-1 text-center">
-              <p id="pos-add-sheet-title" className="truncate text-xl font-black text-slate-900">
+            <div className="min-w-0 flex-1 py-0.5 text-center">
+              <p id="pos-add-sheet-title" className="text-lg font-black leading-snug text-slate-900">
                 {selected.name}
               </p>
-              <p className="truncate text-sm font-semibold text-slate-500">{formatProductPriceLabel(selected)}</p>
-              <p className="truncate text-xs font-bold text-slate-600">
+              <p className="text-sm font-semibold leading-snug text-slate-500">{formatProductPriceLabel(selected)}</p>
+              <p className="text-xs font-bold leading-snug text-slate-600">
                 {pharmacyPackActive ? formatPharmacyStockPrimary(selected) : formatStockLabel(selected)}
               </p>
             </div>
@@ -1655,7 +1669,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </>
             )}
             </div>
-            <div className="shrink-0 border-t border-slate-100 bg-white p-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
+            <div className="shrink-0 border-t border-slate-100 bg-white p-4">
               {quickSell && !showAdvanced ? null : (
                 <button
                   type="button"
@@ -1668,6 +1682,7 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           </div>
         </div>
+        </PosScreenPortal>
       )}
 
       {saleSuccessFlash ? (
@@ -1687,7 +1702,7 @@ export function PosPage({ lang }: { lang: Language }) {
       {receiptSale && receiptPlain && receiptDisplay ? (
         <PosScreenPortal>
         <div
-          className="fixed inset-0 z-[80] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]"
+          className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
           role="dialog"
           aria-modal
           aria-labelledby="pos-receipt-title"

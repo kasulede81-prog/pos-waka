@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import clsx from "clsx";
 import type { BillSplitLine, Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { formatUgxShort } from "../../lib/hospitality";
+import { formatUgx } from "../../lib/formatUgx";
 
 type Props = {
   lang: Language;
@@ -41,7 +41,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-black text-stone-950">{t(lang, "splitBillTitle")}</h2>
-            <p className="text-lg font-black text-waka-700">{formatUgxShort(totalUgx)}</p>
+            <p className="text-lg font-black text-waka-700">{formatUgx(totalUgx)}</p>
           </div>
           <button type="button" className="text-sm font-bold text-slate-500" onClick={onClose}>
             {t(lang, "cancel")}
@@ -95,7 +95,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                   <span>
                     {t(lang, "splitBillPerson")} {s.label}
                   </span>
-                  <span>{formatUgxShort(s.amountUgx)}</span>
+                  <span>{formatUgx(s.amountUgx)}</span>
                 </li>
               ))}
             </ul>
@@ -141,7 +141,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
               {t(lang, "splitBillAddPerson")}
             </button>
             <p className={clsx("mb-3 text-sm font-bold", customValid ? "text-emerald-700" : "text-rose-700")}>
-              {t(lang, "splitBillSum")}: {formatUgxShort(customSum)} / {formatUgxShort(totalUgx)}
+              {t(lang, "splitBillSum")}: {formatUgx(customSum)} / {formatUgx(totalUgx)}
             </p>
             <button
               type="button"

@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
-import { formatUgxShort } from "../lib/hospitality";
+import { formatUgx } from "../lib/formatUgx";
 import { pendingSales } from "../lib/saleStatus";
 import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
@@ -64,7 +64,7 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-base font-black text-stone-950">{label}</p>
-                    <p className="text-sm font-bold text-waka-700">{formatUgxShort(sale.totalUgx)}</p>
+                    <p className="text-sm font-bold text-waka-700">{formatUgx(sale.totalUgx)}</p>
                     <p className="text-xs font-medium text-slate-500">
                       {sale.lines.length} {t(lang, "pendingSalesItems")} · {formatWhen(sale.updatedAt ?? sale.createdAt)}
                     </p>

@@ -156,13 +156,13 @@ export function buildDailyOwnerSummaryLines(lang: Language, input: DailySummaryI
 export function buildWhatsAppOwnerSummaryLine(lang: Language, input: DailySummaryInput): string {
   const parts: string[] = [
     tTemplate(lang, "waSummaryHead", { app: t(lang, "appName") }),
-    tTemplate(lang, "waSummarySales", { amount: `${Math.round(input.totalSalesUgx / 1000)}k` }),
-    tTemplate(lang, "waSummaryProfit", { amount: `${Math.round(input.estProfitUgx / 1000)}k` }),
+    tTemplate(lang, "waSummarySales", { amount: input.totalSalesUgx.toLocaleString() }),
+    tTemplate(lang, "waSummaryProfit", { amount: input.estProfitUgx.toLocaleString() }),
   ];
   if (input.topProductName) parts.push(tTemplate(lang, "waSummaryTop", { name: input.topProductName }));
   if (input.lowProductName) parts.push(tTemplate(lang, "waSummaryLow", { name: input.lowProductName }));
   if (input.cashShortUgx && input.cashShortUgx > 0) {
-    parts.push(tTemplate(lang, "waSummaryShort", { amount: `${Math.round(input.cashShortUgx / 1000)}k` }));
+    parts.push(tTemplate(lang, "waSummaryShort", { amount: input.cashShortUgx.toLocaleString() }));
   }
   return parts.join(" ").slice(0, 220);
 }

@@ -82,7 +82,10 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         setBlock({ shopId: sid, result, context });
         return;
       }
-      setActivated(true);
+      setActivated(false);
+      setBlock(null);
+    } catch {
+      setActivated(false);
       setBlock(null);
     } finally {
       inFlightRef.current = null;

@@ -1,5 +1,8 @@
-import type { Product, ReceiptPaperSize, Sale } from "../types";
+import type { Product, ReceiptDisplayOptions, ReceiptPaperSize, Sale, SaleLine } from "../types";
+import { defaultReceiptDisplayOptions } from "./receiptBranding";
 import { dateKeyKampala } from "./datesUg";
+import { formatMedicineFullLabel } from "./pharmacyMedicine";
+import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
 
@@ -11,6 +14,16 @@ export type ReceiptLabels = {
   debtSale: string;
   balance: string;
   time: string;
+  outstandingDebt: string;
+  customer: string;
+  customerNotRecorded: string;
+  receiptNo: string;
+  date: string;
+  method: string;
+  change: string;
+  subtotal: string;
+  discount: string;
+  grandTotal: string;
 };
 
 export type ReceiptDisplayLine = {
@@ -21,12 +34,34 @@ export type ReceiptDisplayLine = {
   showCalculation: boolean;
 };
 
+/** Product title for receipt lines (medicine name, not qty-only text). */
+export function resolveReceiptLineName(line: SaleLine, product?: Product): string {
+  const stored = line.name?.trim() ?? "";
+  if (!product) return stored;
+  const canonical = isPharmacyPackagingActive(product)
+    ? formatMedicineFullLabel(product)
+    : product.name.trim();
+  if (!stored) return canonical;
+  if (isPharmacyPackagingActive(product)) {
+    const qtyOnly = formatPharmacySaleQtyLabel(product, line, "receipt").trim();
+    if (stored.toLowerCase() === qtyOnly.toLowerCase()) return canonical;
+  }
+  return stored;
+}
+
+/** Qty/price line when unit breakdown is shown instead of per-unit math. */
+export function receiptLineDetailLabel(line: ReceiptDisplayLine): string {
+  if (/UGX\s*[\d,]+/i.test(line.quantityLabel)) return line.quantityLabel;
+  return `${line.quantityLabel} — UGX ${line.lineTotalUgx.toLocaleString()}`;
+}
+
 export type ReceiptDisplayData = {
   shopName: string;
   shopAddress: string | null;
   shopPhone: string | null;
   /** When set, replaces the default shop name / address / phone block. */
   customHeaderLines: string[] | null;
+  headerLines: string[];
   receiptNumber: string;
   dateText: string;
   timeText: string;
@@ -38,9 +73,15 @@ export type ReceiptDisplayData = {
   paidUgx: number;
   changeUgx: number;
   paymentMethodLabel: string;
+  footerLines: string[];
   footerThanks: string;
-  footerPowered: string;
+  footerPowered: string | null;
   returnPolicy: string | null;
+  displayOptions: ReceiptDisplayOptions;
+  customerName: string | null;
+  customerPhone: string | null;
+  outstandingDebtUgx: number;
+  customerBalanceUgx: number | null;
 };
 
 function formatDateUg(value: string): string {
@@ -83,10 +124,10 @@ function inferPaymentMethodLabel(
   if (sale.paymentMethod === "atm") return "ATM";
   if (sale.paymentMethod === "mobile_money") return "MOMO PAY";
   if (sale.paymentMethod === "mixed") return "Mixed";
-  if (sale.paymentMethod === "credit") return "Pay later";
+  if (sale.paymentMethod === "credit") return "Pay Later";
   if (sale.paymentMethod === "cash") return "CASH";
   if (sale.debtUgx > 0 && sale.cashPaidUgx > 0) return "Mixed";
-  if (sale.debtUgx > 0) return "Credit";
+  if (sale.debtUgx > 0) return "Pay Later";
   return "CASH";
 }
 
@@ -99,9 +140,15 @@ export function buildReceiptDisplayData(params: {
   sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" };
   productById?: Map<string, Product>;
   customHeaderLines?: string[] | null;
+  headerLines?: string[] | null;
+  footerLines?: string[];
   footerThanks?: string;
-  footerPowered?: string;
+  footerPowered?: string | null;
   returnPolicy?: string | null;
+  displayOptions?: ReceiptDisplayOptions;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  customerBalanceUgx?: number | null;
 }): ReceiptDisplayData {
   const {
     shopName,
@@ -112,17 +159,27 @@ export function buildReceiptDisplayData(params: {
     sale,
     productById,
     customHeaderLines,
+    headerLines,
+    footerLines,
     footerThanks,
     footerPowered,
     returnPolicy,
+    displayOptions,
+    customerName,
+    customerPhone,
+    customerBalanceUgx,
   } = params;
+  const opts = displayOptions ?? defaultReceiptDisplayOptions();
+  const resolvedHeader =
+    headerLines?.length ? headerLines : customHeaderLines?.length ? customHeaderLines : null;
+  const resolvedFooter = (footerLines ?? []).map((l) => l.trim()).filter(Boolean);
   const lines: ReceiptDisplayLine[] = sale.lines
     .filter((ln) => !ln.voided)
     .map((ln) => {
       const product = productById?.get(ln.productId);
       const { quantityLabel, showCalculation } = buildReceiptLineQuantityDisplay(ln, product);
       return {
-        name: ln.name,
+        name: resolveReceiptLineName(ln, product),
         quantityLabel,
         unitPriceUgx: ln.unitPriceUgx,
         lineTotalUgx: ln.lineTotalUgx,
@@ -141,11 +198,15 @@ export function buildReceiptDisplayData(params: {
       ? Math.floor(sale.changeGivenUgx ?? 0)
       : paidUgx - sale.totalUgx,
   );
+  const saleCustomerName = customerName ?? sale.receiptCustomerName ?? null;
+  const saleCustomerPhone = customerPhone ?? sale.receiptCustomerPhone ?? null;
+
   return {
     shopName,
     shopAddress: shopAddress?.trim() || null,
     shopPhone: shopPhone?.trim() || null,
-    customHeaderLines: customHeaderLines?.length ? customHeaderLines : null,
+    customHeaderLines: resolvedHeader,
+    headerLines: resolvedHeader ?? [],
     receiptNumber,
     dateText: formatDateUg(sale.createdAt),
     timeText: formatTimeUg(sale.createdAt),
@@ -157,9 +218,15 @@ export function buildReceiptDisplayData(params: {
     paidUgx,
     changeUgx,
     paymentMethodLabel: inferPaymentMethodLabel(sale),
-    footerThanks: footerThanks?.trim() || "Thank you for shopping with us",
-    footerPowered: footerPowered?.trim() || "Powered by Waka POS",
+    footerLines: resolvedFooter.length ? resolvedFooter : [footerThanks?.trim() || "Thank you for shopping with us"],
+    footerThanks: footerThanks?.trim() || resolvedFooter[0] || "Thank you for shopping with us",
+    footerPowered: footerPowered?.trim() ? footerPowered.trim() : footerPowered === null ? null : "Powered by Waka POS",
     returnPolicy: returnPolicy?.trim() || null,
+    displayOptions: opts,
+    customerName: saleCustomerName,
+    customerPhone: saleCustomerPhone,
+    outstandingDebtUgx: Math.max(0, Math.floor(sale.debtUgx)),
+    customerBalanceUgx: customerBalanceUgx ?? null,
   };
 }
 
@@ -179,7 +246,11 @@ export function buildSaleReceiptText(params: {
   footerPowered?: string;
   returnPolicy?: string | null;
   customerName: string | null;
+  customerPhone?: string | null;
   customerBalanceUgx: number | null;
+  headerLines?: string[];
+  footerLines?: string[];
+  displayOptions?: ReceiptDisplayOptions;
   labels: ReceiptLabels;
 }): string {
   const {
@@ -200,6 +271,10 @@ export function buildSaleReceiptText(params: {
     footerThanks,
     footerPowered,
     returnPolicy,
+    displayOptions,
+    customerPhone,
+    headerLines,
+    footerLines,
   } = params;
   const display = buildReceiptDisplayData({
     shopName,
@@ -210,52 +285,71 @@ export function buildSaleReceiptText(params: {
     sale: { ...sale, paymentMethod: (sale as Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" }).paymentMethod },
     productById,
     customHeaderLines,
+    headerLines,
+    footerLines,
     footerThanks,
     footerPowered,
     returnPolicy,
+    displayOptions,
+    customerName,
+    customerPhone,
+    customerBalanceUgx,
   });
   const lines: string[] = [];
-  if (display.customHeaderLines?.length) {
-    for (const line of display.customHeaderLines) lines.push(line);
+  const headerBlock = display.headerLines.length ? display.headerLines : display.customHeaderLines;
+  if (headerBlock?.length) {
+    for (const line of headerBlock) lines.push(line);
   } else {
     lines.push(display.shopName.toUpperCase());
-    if (display.shopAddress) lines.push(display.shopAddress);
-    if (display.shopPhone) lines.push(display.shopPhone);
+    if (display.displayOptions.showShopAddress && display.shopAddress) lines.push(display.shopAddress);
+    if (display.displayOptions.showShopPhone && display.shopPhone) lines.push(display.shopPhone);
   }
   lines.push("");
-  lines.push(`Receipt No: ${display.receiptNumber}`);
-  lines.push(`Date: ${display.dateText}`);
+  if (display.displayOptions.showReceiptNumber) {
+    lines.push(`${labels.receiptNo}: ${display.receiptNumber}`);
+  }
+  lines.push(`${labels.date}: ${display.dateText}`);
   lines.push(`${labels.time}: ${display.timeText}`);
-  lines.push(`${labels.cashier}: ${display.cashier}`);
+  if (display.displayOptions.showCashier) {
+    lines.push(`${labels.cashier}: ${display.cashier}`);
+  }
   lines.push("");
-  lines.push("Items");
+  lines.push(labels.items);
   for (const ln of display.lines) {
     if (ln.showCalculation) {
       lines.push(ln.name);
       lines.push(`${ln.quantityLabel} x ${ln.unitPriceUgx.toLocaleString()} UGX = ${ln.lineTotalUgx.toLocaleString()} UGX`);
     } else {
-      lines.push(`${ln.quantityLabel} — ${ln.lineTotalUgx.toLocaleString()} UGX`);
+      const title = ln.name?.trim();
+      if (title) lines.push(title);
+      lines.push(receiptLineDetailLabel(ln));
     }
   }
   lines.push("");
-  lines.push(`Subtotal: UGX ${display.subtotalUgx.toLocaleString()}`);
-  if (display.discountUgx > 0) lines.push(`Discount: -UGX ${display.discountUgx.toLocaleString()}`);
-  lines.push(`Grand Total: UGX ${display.totalUgx.toLocaleString()}`);
+  lines.push(`${labels.subtotal}: UGX ${display.subtotalUgx.toLocaleString()}`);
+  if (display.discountUgx > 0) lines.push(`${labels.discount}: -UGX ${display.discountUgx.toLocaleString()}`);
+  lines.push(`${labels.grandTotal}: UGX ${display.totalUgx.toLocaleString()}`);
   lines.push(`${labels.paid}: UGX ${(amountPaidUgx ?? display.paidUgx).toLocaleString()}`);
-  lines.push(`Change: UGX ${(changeUgx ?? display.changeUgx).toLocaleString()}`);
-  lines.push(`Method: ${paymentMethodLabel ?? display.paymentMethodLabel}`);
-  if (sale.debtUgx > 0) {
-    lines.push(`${labels.debtSale}: UGX ${sale.debtUgx.toLocaleString()}`);
-    if (customerName) {
-      lines.push(`${labels.balance} (${customerName}): UGX ${(customerBalanceUgx ?? 0).toLocaleString()}`);
-    } else {
-      lines.push(`${labels.balance}: UGX ${(customerBalanceUgx ?? 0).toLocaleString()}`);
+  lines.push(`${labels.change}: UGX ${(changeUgx ?? display.changeUgx).toLocaleString()}`);
+  if (display.displayOptions.showPaymentMethod) {
+    lines.push(`${labels.method}: ${paymentMethodLabel ?? display.paymentMethodLabel}`);
+  }
+  if (display.displayOptions.showDebtInfo && display.outstandingDebtUgx > 0) {
+    lines.push(`${labels.outstandingDebt}: UGX ${display.outstandingDebtUgx.toLocaleString()}`);
+    if (display.displayOptions.showCustomerName) {
+      const name = display.customerName?.trim() || customerName?.trim();
+      lines.push(`${labels.customer}: ${name || labels.customerNotRecorded}`);
+    }
+    if (display.displayOptions.showCustomerPhone && display.customerPhone?.trim()) {
+      lines.push(`${display.customerPhone.trim()}`);
     }
   }
   lines.push("");
-  if (display.returnPolicy) lines.push(display.returnPolicy);
-  lines.push(display.footerThanks);
-  lines.push(display.footerPowered);
+  for (const foot of display.footerLines) lines.push(foot);
+  if (display.returnPolicy && !display.footerLines.includes(display.returnPolicy)) {
+    lines.push(display.returnPolicy);
+  }
+  if (display.footerPowered) lines.push(display.footerPowered);
   return lines.join("\n");
 }
 
@@ -269,7 +363,9 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
           ${
             ln.showCalculation
               ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta">${esc(ln.quantityLabel)} x ${fmt(ln.unitPriceUgx)} = <strong>${fmt(ln.lineTotalUgx)}</strong></div>`
-              : `<div class="line-name">${esc(ln.quantityLabel)} — <strong>${fmt(ln.lineTotalUgx)}</strong></div>`
+              : ln.name?.trim()
+                ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta"><strong>${esc(receiptLineDetailLabel(ln))}</strong></div>`
+                : `<div class="line-name">${esc(receiptLineDetailLabel(ln))}</div>`
           }
         </div>`,
     )
@@ -278,12 +374,47 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
     display.discountUgx > 0
       ? `<div class="row"><span>Discount</span><span>- ${fmt(display.discountUgx)}</span></div>`
       : "";
-  const policyBlock = display.returnPolicy ? `<p class="policy">${esc(display.returnPolicy)}</p>` : "";
-  const headerBlock = display.customHeaderLines?.length
-    ? display.customHeaderLines.map((line) => `<p>${esc(line)}</p>`).join("")
+  const policyBlock =
+    display.returnPolicy && !display.footerLines.includes(display.returnPolicy)
+      ? `<p class="policy">${esc(display.returnPolicy)}</p>`
+      : "";
+  const headerSource = display.headerLines.length ? display.headerLines : display.customHeaderLines;
+  const headerBlock = headerSource?.length
+    ? headerSource.map((line) => `<p>${esc(line)}</p>`).join("")
     : `<h2>${esc(display.shopName)}</h2>
-        ${display.shopAddress ? `<p>${esc(display.shopAddress)}</p>` : ""}
-        ${display.shopPhone ? `<p>${esc(display.shopPhone)}</p>` : ""}`;
+        ${display.displayOptions.showShopAddress && display.shopAddress ? `<p>${esc(display.shopAddress)}</p>` : ""}
+        ${display.displayOptions.showShopPhone && display.shopPhone ? `<p>${esc(display.shopPhone)}</p>` : ""}`;
+
+  const metaRows: string[] = [];
+  if (display.displayOptions.showReceiptNumber) {
+    metaRows.push(`<div><span>Receipt No:</span><strong>${esc(display.receiptNumber)}</strong></div>`);
+  }
+  metaRows.push(`<div><span>Date:</span><strong>${esc(display.dateText)}</strong></div>`);
+  metaRows.push(`<div><span>Time:</span><strong>${esc(display.timeText)}</strong></div>`);
+  if (display.displayOptions.showCashier) {
+    metaRows.push(`<div><span>Cashier:</span><strong>${esc(display.cashier)}</strong></div>`);
+  }
+
+  const debtRows =
+    display.displayOptions.showDebtInfo && display.outstandingDebtUgx > 0
+      ? `<div class="row"><span>Outstanding Debt</span><span>${fmt(display.outstandingDebtUgx)}</span></div>
+         ${
+           display.displayOptions.showCustomerName
+             ? `<div class="row"><span>Customer</span><span>${esc(display.customerName?.trim() || "Not Recorded")}</span></div>`
+             : ""
+         }
+         ${
+           display.displayOptions.showCustomerPhone && display.customerPhone?.trim()
+             ? `<div class="row"><span>Phone</span><span>${esc(display.customerPhone.trim())}</span></div>`
+             : ""
+         }`
+      : "";
+
+  const footerBlock = display.footerLines.map((line) => `<p>${esc(line)}</p>`).join("");
+  const poweredBlock = display.footerPowered
+    ? `<p class="powered">${esc(display.footerPowered)}</p>`
+    : "";
+
   return `
     <style>
       .waka-receipt { font-family: "Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; }
@@ -309,12 +440,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
       <header class="header">
         ${headerBlock}
       </header>
-      <section class="meta">
-        <div><span>Receipt No:</span><strong>${esc(display.receiptNumber)}</strong></div>
-        <div><span>Date:</span><strong>${esc(display.dateText)}</strong></div>
-        <div><span>Time:</span><strong>${esc(display.timeText)}</strong></div>
-        <div><span>Cashier:</span><strong>${esc(display.cashier)}</strong></div>
-      </section>
+      <section class="meta">${metaRows.join("")}</section>
       <section class="items">${rows}</section>
       <section class="totals">
         <div class="row"><span>Subtotal</span><span>${fmt(display.subtotalUgx)}</span></div>
@@ -324,12 +450,17 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
       <section class="payment">
         <div class="row"><span>Paid</span><span>${fmt(display.paidUgx)}</span></div>
         <div class="row"><span>Change</span><span>${fmt(display.changeUgx)}</span></div>
-        <div class="row"><span>Method</span><span>${esc(display.paymentMethodLabel)}</span></div>
+        ${
+          display.displayOptions.showPaymentMethod
+            ? `<div class="row"><span>Method</span><span>${esc(display.paymentMethodLabel)}</span></div>`
+            : ""
+        }
+        ${debtRows}
       </section>
       <footer>
         ${policyBlock}
-        <p>${esc(display.footerThanks)}</p>
-        <p class="powered">${esc(display.footerPowered)}</p>
+        ${footerBlock}
+        ${poweredBlock}
       </footer>
     </article>`;
 }

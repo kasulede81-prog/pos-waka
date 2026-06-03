@@ -1,6 +1,22 @@
-import type { ShopPreferences } from "../types";
+import type {
+  BusinessType,
+  DebtPayment,
+  ReceiptDisplayOptions,
+  ReceiptFooterSnapshot,
+  ReceiptHeaderConfig,
+  ReceiptHeaderSnapshot,
+  Sale,
+  ShopPreferences,
+} from "../types";
+import type { SubscriptionPlanCode } from "./subscriptionEntitlements";
+import { tierMeetsMinimum } from "./subscriptionEntitlements";
 
 export type ReceiptBranding = {
+  headerLines: string[];
+  footerLines: string[];
+  footerPowered: string | null;
+  displayOptions: ReceiptDisplayOptions;
+  /** @deprecated Use footerLines — kept for callers during migration */
   customHeaderLines: string[] | null;
   footerThanks: string;
   returnPolicy: string | null;
@@ -8,29 +24,227 @@ export type ReceiptBranding = {
 
 const DEFAULT_FOOTER = "Thank you for shopping with us";
 const DEFAULT_RETURN_POLICY = "Returns accepted with receipt within 24 hours.";
+const POWERED_BY = "Powered by Waka POS";
 
-export function resolveReceiptBranding(preferences: ShopPreferences): ReceiptBranding {
-  const headerRaw = preferences.receiptCustomHeaderText?.trim();
-  const footerRaw = preferences.receiptCustomFooterText?.trim();
-  const policyRaw = preferences.receiptReturnPolicyText;
+export function defaultReceiptDisplayOptions(): ReceiptDisplayOptions {
+  return {
+    showCashier: true,
+    showReceiptNumber: true,
+    showPaymentMethod: true,
+    showCustomerName: true,
+    showCustomerPhone: true,
+    showDebtInfo: true,
+    showShopAddress: true,
+    showShopPhone: true,
+  };
+}
 
-  let returnPolicy: string | null;
-  if (policyRaw === "") {
-    returnPolicy = null;
-  } else if (policyRaw?.trim()) {
-    returnPolicy = policyRaw.trim();
-  } else {
-    returnPolicy = DEFAULT_RETURN_POLICY;
+/** Industry default footer lines (RCPT-04) — applied only on new shop setup. */
+export function industryReceiptFooterTemplate(businessType: BusinessType): string[] {
+  switch (businessType) {
+    case "pharmacy":
+      return ["Keep medicines away from children", "Drugs sold are not returnable", "", ""];
+    case "restaurant":
+    case "hotel":
+      return ["Thank you for dining with us", "Visit again", "", ""];
+    case "bar":
+    case "restaurant_bar":
+      return ["Drink responsibly", "Thank you for visiting", "", ""];
+    case "wholesale":
+      return ["Thank you for doing business with us", "", "", ""];
+    default:
+      return ["Thank you for shopping with us", "Returns accepted within 24 hours", "", ""];
   }
+}
+
+export function receiptFooterLinesFromPreferences(preferences: ShopPreferences): string[] {
+  const structured = preferences.receiptFooterLines;
+  if (Array.isArray(structured) && structured.some((l) => String(l ?? "").trim())) {
+    return structured
+      .slice(0, 4)
+      .map((l) => String(l ?? "").trim())
+      .filter(Boolean);
+  }
+  const legacy = preferences.receiptCustomFooterText?.trim();
+  if (legacy) return [legacy];
+  const policy = resolveReturnPolicy(preferences);
+  if (policy) return [DEFAULT_FOOTER, policy];
+  return [DEFAULT_FOOTER];
+}
+
+export function resolveReceiptHeaderConfig(preferences: ShopPreferences): ReceiptHeaderConfig {
+  const h = preferences.receiptHeader;
+  if (h && (h.businessName?.trim() || h.address?.trim() || h.phone?.trim())) {
+    return {
+      businessName: String(h.businessName ?? "").trim(),
+      address: String(h.address ?? "").trim(),
+      phone: String(h.phone ?? "").trim(),
+      email: String(h.email ?? "").trim(),
+      tin: String(h.tin ?? "").trim(),
+    };
+  }
+  const legacyHeader = preferences.receiptCustomHeaderText?.trim();
+  if (legacyHeader) {
+    const lines = legacyHeader.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    return {
+      businessName: lines[0] ?? preferences.shopDisplayName?.trim() ?? "",
+      address: lines[1] ?? preferences.shopAddressLine?.trim() ?? "",
+      phone: lines[2] ?? preferences.shopPhoneE164?.trim() ?? "",
+      email: lines[3] ?? "",
+      tin: "",
+    };
+  }
+  return {
+    businessName: preferences.shopDisplayName?.trim() || "Waka POS",
+    address: preferences.shopAddressLine?.trim() ?? "",
+    phone: preferences.shopPhoneE164?.trim() ?? "",
+    email: "",
+    tin: "",
+  };
+}
+
+export function buildReceiptHeaderLines(
+  config: ReceiptHeaderConfig,
+  display: ReceiptDisplayOptions,
+): string[] {
+  const lines: string[] = [];
+  if (config.businessName.trim()) lines.push(config.businessName.trim().toUpperCase());
+  if (display.showShopAddress && config.address.trim()) lines.push(config.address.trim());
+  if (display.showShopPhone && config.phone.trim()) lines.push(config.phone.trim());
+  if (config.email.trim()) lines.push(config.email.trim());
+  if (config.tin.trim()) lines.push(`TIN: ${config.tin.trim()}`);
+  return lines;
+}
+
+function resolveReturnPolicy(preferences: ShopPreferences): string | null {
+  const policyRaw = preferences.receiptReturnPolicyText;
+  if (policyRaw === "") return null;
+  if (policyRaw?.trim()) return policyRaw.trim();
+  return DEFAULT_RETURN_POLICY;
+}
+
+export function resolveReceiptDisplayOptions(preferences: ShopPreferences): ReceiptDisplayOptions {
+  const d = preferences.receiptDisplayOptions;
+  if (!d) return defaultReceiptDisplayOptions();
+  return { ...defaultReceiptDisplayOptions(), ...d };
+}
+
+export function canHideWakaReceiptBranding(planTier: SubscriptionPlanCode): boolean {
+  return tierMeetsMinimum(planTier, "business");
+}
+
+export function resolveFooterPowered(
+  preferences: ShopPreferences,
+  planTier: SubscriptionPlanCode,
+): string | null {
+  if (!canHideWakaReceiptBranding(planTier)) return POWERED_BY;
+  if (preferences.receiptShowPoweredByWaka === false) return null;
+  return POWERED_BY;
+}
+
+export function resolveReceiptBranding(
+  preferences: ShopPreferences,
+  planTier: SubscriptionPlanCode = "waka_plus",
+): ReceiptBranding {
+  const displayOptions = resolveReceiptDisplayOptions(preferences);
+  const headerConfig = resolveReceiptHeaderConfig(preferences);
+  const headerLines = buildReceiptHeaderLines(headerConfig, displayOptions);
+  const footerLines = receiptFooterLinesFromPreferences(preferences)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const footerPowered = resolveFooterPowered(preferences, planTier);
+  const returnPolicy = resolveReturnPolicy(preferences);
 
   return {
-    customHeaderLines: headerRaw
-      ? headerRaw
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter(Boolean)
-      : null,
-    footerThanks: footerRaw || DEFAULT_FOOTER,
+    headerLines,
+    footerLines,
+    footerPowered,
+    displayOptions,
+    customHeaderLines: headerLines.length ? headerLines : null,
+    footerThanks: footerLines[0] ?? DEFAULT_FOOTER,
     returnPolicy,
+  };
+}
+
+/** Snapshot stored on each completed sale / debt payment (RCPT-07). */
+export function buildReceiptBrandingSnapshot(
+  preferences: ShopPreferences,
+  planTier: SubscriptionPlanCode,
+): { header: ReceiptHeaderSnapshot; footer: ReceiptFooterSnapshot } {
+  const branding = resolveReceiptBranding(preferences, planTier);
+  return {
+    header: { lines: [...branding.headerLines] },
+    footer: {
+      lines: [...branding.footerLines],
+      poweredBy: branding.footerPowered,
+      displayOptions: { ...branding.displayOptions },
+    },
+  };
+}
+
+export function brandingFromSale(sale: Sale, preferences: ShopPreferences, planTier: SubscriptionPlanCode): ReceiptBranding {
+  const fromSnap = brandingFromSnapshots(sale.receiptHeaderSnapshot, sale.receiptFooterSnapshot);
+  if (fromSnap) return fromSnap;
+  return resolveReceiptBranding(preferences, planTier);
+}
+
+function brandingFromSnapshots(
+  header: ReceiptHeaderSnapshot | null | undefined,
+  footer: ReceiptFooterSnapshot | null | undefined,
+): ReceiptBranding | null {
+  if (!header || !footer) return null;
+  const displayOptions = footer.displayOptions ?? defaultReceiptDisplayOptions();
+  return {
+    headerLines: [...header.lines],
+    footerLines: [...footer.lines],
+    footerPowered: footer.poweredBy,
+    displayOptions,
+    customHeaderLines: header.lines.length ? header.lines : null,
+    footerThanks: footer.lines[0] ?? DEFAULT_FOOTER,
+    returnPolicy: null,
+  };
+}
+
+export function brandingFromDebtPayment(
+  payment: DebtPayment,
+  preferences: ShopPreferences,
+  planTier: SubscriptionPlanCode,
+): ReceiptBranding {
+  const fromSnap = brandingFromSnapshots(payment.receiptHeaderSnapshot, payment.receiptFooterSnapshot);
+  if (fromSnap) return fromSnap;
+  return resolveReceiptBranding(preferences, planTier);
+}
+
+export function applyIndustryReceiptDefaults(
+  preferences: ShopPreferences,
+  businessType: BusinessType,
+): Partial<ShopPreferences> {
+  const hasFooter =
+    (preferences.receiptFooterLines?.some((l) => String(l).trim()) ?? false) ||
+    Boolean(preferences.receiptCustomFooterText?.trim());
+  const patch: Partial<ShopPreferences> = {};
+  if (!hasFooter) {
+    patch.receiptFooterLines = industryReceiptFooterTemplate(businessType);
+  }
+  if (!preferences.receiptDisplayOptions) {
+    patch.receiptDisplayOptions = defaultReceiptDisplayOptions();
+  }
+  if (preferences.receiptShowPoweredByWaka === undefined) {
+    patch.receiptShowPoweredByWaka = true;
+  }
+  return patch;
+}
+
+/** @deprecated Use resolveReceiptBranding — kept for gradual migration */
+export function resolveReceiptBrandingLegacy(preferences: ShopPreferences): {
+  customHeaderLines: string[] | null;
+  footerThanks: string;
+  returnPolicy: string | null;
+} {
+  const b = resolveReceiptBranding(preferences);
+  return {
+    customHeaderLines: b.customHeaderLines,
+    footerThanks: b.footerThanks,
+    returnPolicy: b.returnPolicy,
   };
 }

@@ -8,7 +8,8 @@ import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { computeDraftCheckoutTotals } from "../lib/draftCart";
-import { formatUgxShort, isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
+import { isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
+import { formatUgx } from "../lib/formatUgx";
 import {
   CATEGORY_FILTER_ALL,
   distinctTrimmedCategories,
@@ -228,7 +229,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
         <div className="mx-auto max-w-3xl space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-slate-600">{t(lang, "tableRunningBill")}</span>
-            <span className="text-xl font-black text-stone-950">{formatUgxShort(checkout.payableUgx)}</span>
+            <span className="text-xl font-black text-stone-950">{formatUgx(checkout.payableUgx)}</span>
           </div>
           {draftLines.length > 0 ? (
             <ul className="max-h-28 space-y-1 overflow-y-auto text-sm">
@@ -237,7 +238,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                   <span>
                     {line.quantity}× {line.name}
                   </span>
-                  <span>{formatUgxShort(line.lineTotalUgx)}</span>
+                  <span>{formatUgx(line.lineTotalUgx)}</span>
                 </li>
               ))}
             </ul>

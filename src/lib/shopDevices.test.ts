@@ -49,6 +49,14 @@ describe("buildDeviceUsageSummary", () => {
   it("flags at plan limit", () => {
     const u = buildDeviceUsageSummary(devices, 2);
     expect(u.atPlanLimit).toBe(true);
+    expect(u.overPlanLimit).toBe(false);
+  });
+
+  it("flags over plan limit when extra active devices exist", () => {
+    const u = buildDeviceUsageSummary(devices, 1);
+    expect(u.activeCount).toBe(2);
+    expect(u.atPlanLimit).toBe(true);
+    expect(u.overPlanLimit).toBe(true);
   });
 });
 

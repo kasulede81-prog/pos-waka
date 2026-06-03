@@ -161,6 +161,14 @@ export function ConnectedDevicesPage({ lang }: Props) {
           ) : null}
         </div>
         <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "connectedDevicesUsageHint")}</p>
+        {usage.overPlanLimit && usage.planLimit != null ? (
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-900" role="alert">
+            {tTemplate(lang, "connectedDevicesOverLimitWarning", {
+              used: String(usage.activeCount),
+              limit: String(usage.planLimit),
+            })}
+          </p>
+        ) : null}
         {usage.atPlanLimit ? (
           <Link
             to="/upgrade"

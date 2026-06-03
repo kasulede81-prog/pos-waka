@@ -11,7 +11,8 @@ import { hasPermission } from "../lib/permissions";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { localGetDailySalesSummary } from "../lib/localReporting";
-import { formatUgxShort, isHospitalityMode, isKitchenEnabledForHospitality } from "../lib/hospitality";
+import { isHospitalityMode, isKitchenEnabledForHospitality } from "../lib/hospitality";
+import { formatUgx } from "../lib/formatUgx";
 import {
   activeSessions,
   computeHospitalityDashboardStats,
@@ -166,7 +167,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
           </article>
           <article className="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-amber-900">{t(lang, "hospitalityDashPendingBills")}</p>
-            <p className="mt-1 text-2xl font-black text-amber-950">{formatUgxShort(stats.pendingBillsUgx)}</p>
+            <p className="mt-1 text-2xl font-black text-amber-950">{formatUgx(stats.pendingBillsUgx)}</p>
             <p className="mt-1 text-xs font-semibold text-amber-800">{stats.pendingBillCount} open</p>
           </article>
           <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
@@ -206,7 +207,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
                     <p className="text-xs font-medium text-stone-500">{subtitle}</p>
                   </div>
                   <p className="shrink-0 text-sm font-black text-waka-700">
-                    {total > 0 ? formatUgxShort(total) : "—"}
+                    {total > 0 ? formatUgx(total) : "—"}
                   </p>
                 </Link>
               </li>

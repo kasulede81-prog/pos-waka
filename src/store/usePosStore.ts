@@ -61,6 +61,8 @@ import { inferProductGuess } from "../lib/pharmacyUx";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
 import { pharmacyQuickAddRequiresBuyPrice } from "../lib/pharmacyCostIntegrity";
 import { buildPharmacySaleLine, buyingUnitFromPackaging } from "../lib/pharmacyPackaging";
+import { applyIndustryReceiptDefaults, buildReceiptBrandingSnapshot } from "../lib/receiptBranding";
+import type { SubscriptionPlanCode } from "../lib/subscriptionEntitlements";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
 import {
   fireKitchenTicketsForLines,
@@ -706,6 +708,12 @@ function defaultQuickPresetsForProduct(p: Omit<Product, "id" | "updatedAt" | "ve
   return { quickPresetsMoneyUgx: u > 0 ? [u, u * 2, u * 3] : [], quickPresetsQty: [1, 2, 3] };
 }
 
+function receiptSnapshotPlanTier(preferences: ShopPreferences): SubscriptionPlanCode {
+  if (!hasSupabaseConfig) return "waka_plus";
+  if (preferences.receiptShowPoweredByWaka === false) return "business";
+  return "free";
+}
+
 function normalizeProduct(p: Product): Product {
   const d = defaultQuickPresetsForProduct(p);
   const hasMoney = (p.quickPresetsMoneyUgx?.length ?? 0) > 0;
@@ -1205,6 +1213,7 @@ export const usePosStore = create<PosState>((set, get) => {
           ? (s.preferences.hospitalityKitchenEnabled ??
             defaultKitchenEnabledForBusinessType(businessType))
           : s.preferences.hospitalityKitchenEnabled,
+        ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
     }));
   },
@@ -1232,6 +1241,7 @@ export const usePosStore = create<PosState>((set, get) => {
           ? (s.preferences.hospitalityKitchenEnabled ??
             defaultKitchenEnabledForBusinessType(input.businessType))
           : s.preferences.hospitalityKitchenEnabled,
+        ...applyIndustryReceiptDefaults(s.preferences, input.businessType),
       },
     }));
   },
@@ -1978,6 +1988,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const existingPending = pendingId ? state.sales.find((s) => s.id === pendingId && s.status === "pending") : null;
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const sessionWaiter = sessionWaiterAttribution(floor, existingPending?.tableSessionId);
+    const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
+    const debtorCustomer =
+      customerId && debt > 0 ? customers.find((c) => c.id === customerId) : null;
     const sale: Sale = {
       id: existingPending?.id ?? crypto.randomUUID(),
       status: "completed",
@@ -1985,6 +1998,10 @@ export const usePosStore = create<PosState>((set, get) => {
       tableSessionId: existingPending?.tableSessionId ?? null,
       updatedAt: new Date().toISOString(),
       receiptSeq,
+      receiptHeaderSnapshot: receiptSnap.header,
+      receiptFooterSnapshot: receiptSnap.footer,
+      receiptCustomerName: debtorCustomer?.name?.trim() || (customerName?.trim() || null),
+      receiptCustomerPhone: debtorCustomer?.phone?.trim() || (customerPhone?.trim() || null),
       lines: saleLines,
       subtotalUgx: listSubtotal,
       totalUgx: total,
@@ -2870,11 +2887,14 @@ export const usePosStore = create<PosState>((set, get) => {
     const pay = Math.min(amount, c.debtBalanceUgx);
     if (pay <= 0) return { ok: false, errorKey: "invalid" };
 
+    const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
     const payment: DebtPayment = {
       id: crypto.randomUUID(),
       customerId,
       amountUgx: pay,
       createdAt: new Date().toISOString(),
+      receiptHeaderSnapshot: receiptSnap.header,
+      receiptFooterSnapshot: receiptSnap.footer,
     };
 
     set({

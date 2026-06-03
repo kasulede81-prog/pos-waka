@@ -11,12 +11,12 @@ import {
   TABLE_STATUS_COLORS,
   activeNamedTabs,
   activeSessionForTable,
-  formatUgxShort,
   isHospitalityMode,
   pendingSaleTotal,
   sessionDisplayLabel,
   totalOpenTablesPendingUgx,
 } from "../lib/hospitality";
+import { formatUgx } from "../lib/formatUgx";
 import { pendingSales } from "../lib/saleStatus";
 import { useShallow } from "zustand/react/shallow";
 
@@ -142,7 +142,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
           <h1 className="text-2xl font-black text-stone-950">{t(lang, "floorPlanTitle")}</h1>
           <p className="mt-1 text-sm font-medium text-stone-500">
             {pendingTotal > 0
-              ? t(lang, "floorOpenTotal").replace("{amount}", formatUgxShort(pendingTotal))
+              ? t(lang, "floorOpenTotal").replace("{amount}", formatUgx(pendingTotal))
               : t(lang, "floorPlanSub")}
           </p>
         </div>
@@ -241,7 +241,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               <span className="text-base font-black">{table.label}</span>
               {total > 0 ? (
                 <>
-                  <span className="mt-1 text-sm font-bold">{formatUgxShort(total)}</span>
+                  <span className="mt-1 text-sm font-bold">{formatUgx(total)}</span>
                   {lineCount > 0 ? (
                     <span className="text-xs font-semibold opacity-80">
                       {t(lang, "tableOrderItemCount").replace("{count}", String(lineCount))}
@@ -302,7 +302,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                   <span className="line-clamp-2 text-base font-black">{label}</span>
                   {total > 0 ? (
                     <>
-                      <span className="mt-1 text-sm font-bold">{formatUgxShort(total)}</span>
+                      <span className="mt-1 text-sm font-bold">{formatUgx(total)}</span>
                       {lineCount > 0 ? (
                         <span className="text-xs font-semibold opacity-80">
                           {t(lang, "tableOrderItemCount").replace("{count}", String(lineCount))}

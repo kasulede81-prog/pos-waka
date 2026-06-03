@@ -23,6 +23,14 @@ import { isHospitalityMode, isKitchenEnabledForHospitality } from "../../lib/hos
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
+
+/** Shorter labels on mobile bottom tabs so pharmacy terms are not clipped. */
+function mobileBottomNavLabelKey(labelKey: string, pharmacyNav: boolean): string {
+  if (!pharmacyNav) return labelKey;
+  if (labelKey === "pharmacyTerm_dispensingReceipts") return "pharmacyNav_receipts";
+  if (labelKey === "pharmacyTerm_medicineStock") return "pharmacyNav_stock";
+  return labelKey;
+}
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { RouteErrorBoundary } from "../RouteErrorBoundary";
 import { PilotModeBanner } from "../pilot/PilotModeBanner";
@@ -479,10 +487,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           aria-label="Main navigation"
         >
           <div
-            className="mx-auto grid max-w-lg items-end gap-0 px-1.5 pt-1 pb-bottom-nav"
+            className="mx-auto grid max-w-lg min-h-[var(--waka-bottom-nav-h)] items-end gap-0 px-1.5 pt-1.5 pb-[max(0.375rem,var(--waka-safe-bottom))]"
             style={{ gridTemplateColumns: `repeat(${Math.min(mobileNavDefs.length, 5)}, minmax(0, 1fr))` }}
           >
             {mobileNavDefs.map(({ path, labelKey, Icon }) => {
+              const navLabelKey = mobileBottomNavLabelKey(labelKey, pharmacyNav);
               const active = navItemActive(path, location.pathname);
               const isSell = path === "/pos";
               const isHome = path === "/";
@@ -494,14 +503,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       aria-current={active ? "page" : undefined}
                       aria-label={t(lang, labelKey)}
                       onClick={() => navigate(path, { preventScrollReset: true })}
-                      className={`touch-manipulation -mt-1.5 flex min-h-[56px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 py-2 text-[11px] font-black leading-tight text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[60px] sm:min-w-[60px] sm:text-xs ${
+                      className={`touch-manipulation -mt-1.5 flex min-h-[56px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 py-2 font-black text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[60px] sm:min-w-[60px] ${
                         active
                           ? "bg-waka-700 ring-2 ring-waka-300 ring-offset-2 ring-offset-white"
                           : "bg-waka-600 hover:bg-waka-700"
                       }`}
                     >
                       <Icon className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" strokeWidth={2.75} aria-hidden />
-                      <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
+                      <span className="waka-mobile-nav-label max-w-[4.75rem] font-black">{t(lang, navLabelKey)}</span>
                     </button>
                   </div>
                 );
@@ -524,7 +533,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       strokeWidth={active ? 2.5 : 2.25}
                       aria-hidden
                     />
-                    <span className="max-w-[4.5rem] truncate text-center">{t(lang, labelKey)}</span>
+                    <span className="waka-mobile-nav-label max-w-[4.75rem] font-bold">{t(lang, navLabelKey)}</span>
                   </button>
                 );
               }
@@ -534,7 +543,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   type="button"
                   aria-current={active ? "page" : undefined}
                   onClick={() => navigate(path, { preventScrollReset: true })}
-                  className={`touch-manipulation flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-semibold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[46px] sm:text-[11px] ${
+                  className={`touch-manipulation flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 font-semibold transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[50px] ${
                     active
                       ? "bg-stone-100 text-waka-800 ring-1 ring-stone-200/80"
                       : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
@@ -545,7 +554,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     strokeWidth={active ? 2.4 : 2}
                     aria-hidden
                   />
-                  <span className="max-w-[4.25rem] truncate text-center">{t(lang, labelKey)}</span>
+                  <span className="waka-mobile-nav-label max-w-[4.5rem]">{t(lang, navLabelKey)}</span>
                 </button>
               );
             })}

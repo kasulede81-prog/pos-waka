@@ -23,6 +23,8 @@ export type DeviceUsageSummary = {
   totalCount: number;
   planLimit: number | null;
   atPlanLimit: boolean;
+  /** More active devices than plan allows (grandfathered before enforcement). */
+  overPlanLimit: boolean;
 };
 
 /** Plan device cap from subscription_plans.features.devices only; null = unlimited. */
@@ -42,7 +44,8 @@ export function buildDeviceUsageSummary(
   const activeCount = devices.filter((d) => isActiveDeviceStatus(d.status)).length;
   const totalCount = devices.length;
   const atPlanLimit = planLimit != null && planLimit > 0 && activeCount >= planLimit;
-  return { activeCount, totalCount, planLimit, atPlanLimit };
+  const overPlanLimit = planLimit != null && planLimit > 0 && activeCount > planLimit;
+  return { activeCount, totalCount, planLimit, atPlanLimit, overPlanLimit };
 }
 
 function parseDeviceRows(data: unknown): ShopDeviceRow[] {

@@ -24,7 +24,7 @@ export function SettingsPharmacyPage({ lang }: { lang: Language }) {
   const behavior = preferences.pharmacyExpiredSaleBehavior ?? "warn";
 
   return (
-    <div className="space-y-5 pb-8">
+    <div className="page-content-pad space-y-5">
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "pharmacySettingsTitle")}

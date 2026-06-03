@@ -53,7 +53,7 @@ export type DeviceActivationResult = {
 function parseActivationResult(data: unknown): DeviceActivationResult {
   if (!data || typeof data !== "object") return { ok: false, activated: false };
   const r = data as Record<string, unknown>;
-  const activated = r.activated === true || (r.accepted === true && r.limit_blocked !== true);
+  const activated = r.activated === true && r.limit_blocked !== true;
   return {
     ok: r.ok === true,
     activated,

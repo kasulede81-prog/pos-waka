@@ -111,6 +111,16 @@ describe("retail isolation — receipts", () => {
       debtSale: "Debt",
       balance: "Balance",
       time: "Time",
+      outstandingDebt: "Outstanding Debt",
+      customer: "Customer",
+      customerNotRecorded: "Not Recorded",
+      receiptNo: "Receipt No",
+      date: "Date",
+      method: "Method",
+      change: "Change",
+      subtotal: "Subtotal",
+      discount: "Discount",
+      grandTotal: "Grand Total",
     };
     const text = buildSaleReceiptText({
       shopName: "Retail Shop",

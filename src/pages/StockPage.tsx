@@ -477,7 +477,7 @@ export function StockPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-5 pb-2">
+    <div className="page-content-pad space-y-5">
       <PageHeader
         lang={lang}
         title={modeTerm("stockTitle")}

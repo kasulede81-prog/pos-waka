@@ -79,7 +79,8 @@ body {
    */
   :root {
     --waka-safe-bottom: env(safe-area-inset-bottom, 0px);
-    --waka-bottom-nav-h: 4.75rem;
+    --waka-safe-top: env(safe-area-inset-top, 0px);
+    --waka-bottom-nav-h: 5.5rem;
     --waka-pos-checkout-strip-h: 4rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
@@ -136,8 +137,26 @@ body {
   }
   /** Applied to AppShell <main> — keeps scroll-end / focus-scroll clear of fixed chrome */
   .scroll-main-chrome {
-    scroll-padding-top: 0.75rem;
+    scroll-padding-top: max(0.75rem, var(--waka-safe-top));
     scroll-padding-bottom: var(--waka-scroll-tail-default);
+  }
+  /** Bottom tab label — two lines, no vertical clip under icons */
+  .waka-mobile-nav-label {
+    max-width: 100%;
+    padding-inline: 0.125rem;
+    text-align: center;
+    font-size: 0.625rem;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    word-break: break-word;
+  }
+  @media (min-width: 640px) {
+    .waka-mobile-nav-label {
+      font-size: 0.6875rem;
+    }
   }
   .scroll-main-chrome--pos {
     scroll-padding-bottom: var(--waka-scroll-tail-pos-sale);

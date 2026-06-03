@@ -32,5 +32,5 @@ export function DeviceActivationGateOutlet() {
     return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
   }
 
-  return <Outlet />;
+  return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
 }

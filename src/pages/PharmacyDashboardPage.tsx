@@ -9,7 +9,7 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
-import { formatUgxShort } from "../lib/hospitality";
+import { formatUgx } from "../lib/formatUgx";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { computePharmacyDashboardStats, expiryBucketLabelKey } from "../lib/pharmacyStats";
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
@@ -58,7 +58,7 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const tileStyles = (key: (typeof expiryTiles)[number]["key"]) => expiryTilePresentation(key);
 
   return (
-    <div className="space-y-4">
+    <div className="page-content-pad space-y-4">
       {!preferences.onboardingWizardDone && !preferences.onboardingDone ? <BusinessTypeOnboarding lang={lang} /> : null}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -224,7 +224,7 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
               {stats.topMedicines.map((m) => (
                 <li key={m.productId || m.name} className="flex items-center justify-between gap-2 text-sm">
                   <span className="truncate font-bold text-stone-900">{m.name}</span>
-                  <span className="shrink-0 font-bold text-waka-800">{formatUgxShort(m.revenueUgx)}</span>
+                  <span className="shrink-0 font-bold text-waka-800">{formatUgx(m.revenueUgx)}</span>
                 </li>
               ))}
             </ul>

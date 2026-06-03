@@ -180,12 +180,6 @@ export function syncTableDisplayStatuses(floor: HospitalityFloorState): Hospital
   return { ...floor, tables };
 }
 
-export function formatUgxShort(n: number): string {
-  if (n >= 1_000_000) return `UGX ${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `UGX ${Math.round(n / 1000)}k`;
-  return `UGX ${n.toLocaleString()}`;
-}
-
 export function pendingSaleTotal(sale: Sale | undefined): number {
   if (!sale) return 0;
   return sale.totalUgx ?? 0;

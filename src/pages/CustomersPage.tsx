@@ -23,6 +23,9 @@ import {
   shareDebtPaymentReceiptPdf,
   type DebtPaymentReceiptContext,
 } from "../lib/receiptDocuments";
+import { brandingFromDebtPayment } from "../lib/receiptBranding";
+import { useSubscription } from "../context/SubscriptionContext";
+import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 
 export function CustomersPage({ lang }: { lang: Language }) {
@@ -50,6 +53,8 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const [payAmount, setPayAmount] = useState("");
   const [debtReceiptCtx, setDebtReceiptCtx] = useState<DebtPaymentReceiptContext | null>(null);
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+  const { snapshot, authMode } = useSubscription();
+  const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
 
   const orphanDebts = useMemo(() => findOrphanDebtSales(sales), [sales]);
   const orphanDebtTotal = useMemo(() => sumOrphanDebtUgx(sales), [sales]);
@@ -69,6 +74,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
     if (r.ok && r.payment) {
       const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
       if (customer) {
+        const branding = brandingFromDebtPayment(r.payment, preferences, receiptPlanTier);
         setDebtReceiptCtx({
           shopName,
           receiptNumber: documentReceiptNumber("DEBT", r.payment.id, r.payment.createdAt),
@@ -76,6 +82,9 @@ export function CustomersPage({ lang }: { lang: Language }) {
           customer,
           cashier: actor.displayName?.trim() || t(lang, "role_owner"),
           balanceAfterUgx: customer.debtBalanceUgx,
+          headerLines: branding.headerLines,
+          footerLines: branding.footerLines,
+          footerPowered: branding.footerPowered,
           paper: preferences.receiptPaperSize ?? "80mm",
         });
       }

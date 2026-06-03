@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product } from "../types";
+import { buildReceiptDisplayData, buildSaleReceiptHtml } from "./receiptPrint";
 import {
   baseUnitsPerBox,
   baseUnitsPerStrip,
@@ -180,5 +181,40 @@ describe("buildPharmacySaleLine", () => {
     expect(built.line?.saleUnitType).toBe("strip");
     expect(built.line?.saleUnitQty).toBe(1);
     expect(built.line?.lineTotalUgx).toBe(3000);
+  });
+});
+
+describe("pharmacy receipt line labels", () => {
+  it("includes medicine name on receipt HTML, not only tablet count", () => {
+    const p = product({
+      name: "Paracetamol",
+      medicineStrength: "500mg",
+      medicineForm: "Tablet",
+      pharmacyPackaging: amoxicillinPackaging,
+    });
+    const built = buildPharmacySaleLine(p, "tablet", 10);
+    expect(built.line).toBeTruthy();
+    const display = buildReceiptDisplayData({
+      shopName: "LILY PHARMACY",
+      cashier: "Herbat",
+      receiptNumber: "001",
+      sale: {
+        id: "s1",
+        createdAt: "2026-06-03T14:29:00.000Z",
+        lines: [built.line!],
+        subtotalUgx: 1000,
+        totalUgx: 1000,
+        cashPaidUgx: 1000,
+        debtUgx: 0,
+        estimatedProfitUgx: 0,
+        pendingSync: false,
+        paymentMethod: "cash",
+      },
+      productById: new Map([[p.id, p]]),
+    });
+    const html = buildSaleReceiptHtml(display);
+    expect(html).toContain("Paracetamol");
+    expect(html).toContain("10 Tablets");
+    expect(html).not.toMatch(/line-name">10 Tablets/);
   });
 });
