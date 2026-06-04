@@ -96,7 +96,9 @@ export type AuditAction =
   | "device_heartbeat_rejected"
   | "device_limit_hit"
   | "device_login_blocked"
-  | "device_replacement_completed";
+  | "device_replacement_completed"
+  | "device_new_activation"
+  | "device_suspicious_fingerprint";
 
 export type AuditLogEntry = {
   id: string;

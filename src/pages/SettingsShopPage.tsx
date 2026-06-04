@@ -6,6 +6,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { ShopProfileForm } from "../components/settings/ShopProfileForm";
+import { PrimaryShopSelector } from "../components/settings/PrimaryShopSelector";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
 import { SupportQuickStrip } from "../components/trust/SupportQuickStrip";
 
@@ -34,6 +35,7 @@ export function SettingsShopPage({ lang, email, shopName, user, authMode }: Prop
         title={t(lang, "shopProfilePageTitle")}
         subtitle={t(lang, "shopProfilePageSubtitle")}
       />
+      <PrimaryShopSelector lang={lang} authMode={authMode} />
       <ShopProfileForm
         lang={lang}
         authMode={authMode}

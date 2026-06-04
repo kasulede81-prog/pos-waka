@@ -1042,6 +1042,7 @@ export const usePosStore = create<PosState>((set, get) => {
         staffAccounts: [row, ...(s.preferences.staffAccounts ?? [])],
       },
     }));
+    void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(row));
     return { ok: true, id: row.id };
   },
 

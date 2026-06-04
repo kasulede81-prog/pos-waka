@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate, useLocation } from "react-router-dom";
 import { Mail } from "lucide-react";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
-import { hasSupabaseConfig } from "../lib/supabase";
+import { hasSupabaseConfig, supabase } from "../lib/supabase";
+import { isSupabaseEmailVerified } from "../lib/emailVerification";
 
 type Props = {
   lang: Language;
@@ -15,14 +16,27 @@ type Props = {
 };
 
 export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerificationEmail }: Props) {
-  const location = useLocation() as { state?: { email?: string } };
+  const location = useLocation() as { state?: { email?: string; from?: string } };
   const presetEmail = location.state?.email ?? "";
   const [email, setEmail] = useState(presetEmail);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  if (isAuthenticated) return <Navigate to="/" replace />;
+  const [verifiedRedirect, setVerifiedRedirect] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated || !supabase) return;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (data.user && isSupabaseEmailVerified(data.user)) {
+        setVerifiedRedirect(true);
+      }
+    });
+  }, [isAuthenticated]);
+
+  if (verifiedRedirect) {
+    return <Navigate to={location.state?.from || "/"} replace />;
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();

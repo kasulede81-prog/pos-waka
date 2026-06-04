@@ -14,6 +14,7 @@ import type {
 import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
+import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
@@ -62,8 +63,10 @@ function isUuid(id: string): boolean {
 export async function resolveShopCtx(): Promise<ShopCtx | null> {
   if (!hasSupabaseConfig || !supabase) return null;
   const { data } = await supabase.auth.getSession();
-  const userId = data.session?.user?.id;
-  if (!userId) return null;
+  const user = data.session?.user;
+  const userId = user?.id;
+  if (!userId || !user) return null;
+  if (!isSupabaseEmailVerified(user)) return null;
   const orgShop = await resolvePrimaryOrganizationForUser(userId);
   if (!orgShop) return null;
   return { shopId: orgShop.shopId, userId };
@@ -2411,6 +2414,13 @@ export async function syncShopWithCloud(opts?: {
 }> {
   if (shouldPausePosBackgroundWork()) {
     return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
+  }
+  if (hasSupabaseConfig && supabase) {
+    const { data } = await supabase.auth.getSession();
+    const user = data.session?.user;
+    if (user && !isSupabaseEmailVerified(user)) {
+      return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
+    }
   }
   const doPull =
     opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();

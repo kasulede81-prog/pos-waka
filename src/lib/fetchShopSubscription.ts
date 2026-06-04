@@ -1,3 +1,4 @@
+import { fetchProfilePrimaryShopId } from "./primaryShop";
 import { supabase } from "./supabase";
 import type { RemoteSubscriptionRow } from "./subscriptionEntitlements";
 
@@ -6,6 +7,26 @@ export async function resolvePrimaryOrganizationForUser(userId: string): Promise
   shopId: string;
 } | null> {
   if (!supabase) return null;
+
+  const primaryShopId = await fetchProfilePrimaryShopId(userId);
+  if (primaryShopId) {
+    const { data: member, error: pmErr } = await supabase
+      .from("shop_members")
+      .select("shop_id")
+      .eq("user_id", userId)
+      .eq("shop_id", primaryShopId)
+      .maybeSingle();
+    if (!pmErr && member?.shop_id) {
+      const { data: shop, error: sErr } = await supabase
+        .from("shops")
+        .select("organization_id")
+        .eq("id", primaryShopId)
+        .maybeSingle();
+      if (!sErr && shop?.organization_id) {
+        return { organizationId: shop.organization_id, shopId: primaryShopId };
+      }
+    }
+  }
 
   const { data: members, error: mErr } = await supabase
     .from("shop_members")

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
+import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { fetchRemoteSubscriptionForUser } from "../lib/fetchShopSubscription";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
 
@@ -47,6 +48,12 @@ export function SubscriptionProvider({
     if (!user?.id) {
       setSnapshot({ kind: "none" });
       setLoading(false);
+      return;
+    }
+    if (!isSupabaseEmailVerified(user)) {
+      setSnapshot({ kind: "none" });
+      setLoading(false);
+      loadedOnceRef.current = true;
       return;
     }
     if (!opts?.silent && !loadedOnceRef.current) setLoading(true);

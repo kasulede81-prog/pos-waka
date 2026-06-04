@@ -1,4 +1,5 @@
 import type { BusinessType, Language } from "../types";
+import { isSupabaseEmailVerified } from "./emailVerification";
 import { fetchOwnerOnboardingStatus, writeCachedOwnerOnboardingComplete } from "./ownerOnboarding";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
@@ -23,6 +24,10 @@ export async function saveOwnerBusinessProfileBundleRpc(
 ): Promise<{ ok: boolean; message?: string; shopId?: string; organizationId?: string }> {
   const sb = supabase;
   if (!sb) return { ok: false, message: "Offline" };
+  const { data: authData } = await sb.auth.getUser();
+  if (authData.user && !isSupabaseEmailVerified(authData.user)) {
+    return { ok: false, message: "email_not_verified" };
+  }
   const callSaveRpc = async () =>
     sb.rpc("save_owner_business_profile_bundle", {
       p_shop_name: args.shopName.trim(),

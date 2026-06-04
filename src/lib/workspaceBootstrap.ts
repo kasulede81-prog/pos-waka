@@ -1,5 +1,6 @@
 import type { User } from "@supabase/supabase-js";
 import type { BusinessType } from "../types";
+import { isSupabaseEmailVerified } from "./emailVerification";
 import { reportAuthIssue } from "./monitoring";
 import { supabase } from "./supabase";
 
@@ -25,6 +26,9 @@ export type BootstrapArgs = {
  */
 export async function bootstrapOwnerWorkspace(user: User, args: BootstrapArgs): Promise<void> {
   if (!supabase) return;
+  if (!isSupabaseEmailVerified(user)) {
+    throw new Error("Confirm your email before creating your shop in the cloud.");
+  }
   const orgName = args.organizationName.trim();
   if (!orgName) {
     throw new Error("Could not finish creating your shop. Please try again.");

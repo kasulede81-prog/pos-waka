@@ -1,6 +1,10 @@
 import { Capacitor } from "@capacitor/core";
 import { appendDeviceAuditEntry } from "./deviceAudit";
 import { getOrCreateDeviceId } from "./deviceId";
+import {
+  notifyOwnerNewDeviceActivation,
+  reportDeviceFingerprintChangeIfNeeded,
+} from "./deviceFingerprintTrust";
 import { supabase } from "./supabase";
 
 function presencePlatform(): string {
@@ -84,14 +88,17 @@ function presenceFields(shopId: string) {
   };
 }
 
-export async function ensureShopDeviceActivation(shopId: string): Promise<DeviceActivationResult> {
-  if (!shopId || !supabase) return { ok: true, activated: true };
-  const args = presenceFields(shopId);
-  const { data, error } = await supabase.rpc("shop_device_ensure_activation", args);
-  if (error) throw error;
-  const parsed = parseActivationResult(data);
+function applyActivationSideEffects(shopId: string, parsed: DeviceActivationResult): void {
+  void reportDeviceFingerprintChangeIfNeeded(shopId);
   if (parsed.reactivated) {
     appendDeviceAuditEntry("device_reactivated", "Device reactivated after login", {
+      shopId,
+      deviceFingerprint: getOrCreateDeviceId(),
+    });
+  }
+  if (parsed.ok && parsed.activated && !parsed.existing_device && !parsed.reactivated) {
+    void notifyOwnerNewDeviceActivation(shopId, getOrCreateDeviceId());
+    appendDeviceAuditEntry("device_new_activation", "New device activated on this shop", {
       shopId,
       deviceFingerprint: getOrCreateDeviceId(),
     });
@@ -105,6 +112,15 @@ export async function ensureShopDeviceActivation(shopId: string): Promise<Device
       deviceLimit: parsed.device_limit,
     });
   }
+}
+
+export async function ensureShopDeviceActivation(shopId: string): Promise<DeviceActivationResult> {
+  if (!shopId || !supabase) return { ok: true, activated: true };
+  const args = presenceFields(shopId);
+  const { data, error } = await supabase.rpc("shop_device_ensure_activation", args);
+  if (error) throw error;
+  const parsed = parseActivationResult(data);
+  applyActivationSideEffects(shopId, parsed);
   return parsed;
 }
 
@@ -114,21 +130,7 @@ export async function registerShopDeviceOnLogin(shopId: string): Promise<DeviceA
   const { data, error } = await supabase.rpc("shop_device_register_on_login", args);
   if (error) throw error;
   const parsed = parseActivationResult(data);
-  if (parsed.reactivated) {
-    appendDeviceAuditEntry("device_reactivated", "Device reactivated after login", {
-      shopId,
-      deviceFingerprint: getOrCreateDeviceId(),
-    });
-  }
-  if (parsed.limit_blocked) {
-    appendDeviceAuditEntry("device_login_blocked", "Device activation blocked at plan limit", {
-      shopId,
-      deviceFingerprint: getOrCreateDeviceId(),
-      planCode: parsed.plan_code,
-      activeCount: parsed.active_count,
-      deviceLimit: parsed.device_limit,
-    });
-  }
+  applyActivationSideEffects(shopId, parsed);
   return parsed;
 }
 

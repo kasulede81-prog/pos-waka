@@ -16,6 +16,8 @@ import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
+import { isSupabaseEmailVerified } from "../lib/emailVerification";
+import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
@@ -137,6 +139,8 @@ export function useAuth() {
     const uid = next.user.id;
     if (workspaceEnsureInFlightRef.current === uid) return;
 
+    const verified = isSupabaseEmailVerified(next.user);
+
     const alreadyEnsured =
       workspaceEnsuredForUserRef.current === uid ||
       bootstrappedUserIdsRef.current[uid] ||
@@ -145,19 +149,29 @@ export function useAuth() {
     if (alreadyEnsured) {
       workspaceEnsuredForUserRef.current = uid;
       bootstrappedUserIdsRef.current[uid] = true;
-      await tryApplyPendingReferral(next);
-      if (!backgroundSyncScheduledRef.current[uid]) {
-        backgroundSyncScheduledRef.current[uid] = true;
-        scheduleBackgroundCloudSync({
-          pull: false,
-          delayMs: isNativeApp() ? 3_000 : 1_500,
-        });
+      if (verified) {
+        await repairOwnerWorkspaceIfNeeded(next.user);
+        await tryApplyPendingReferral(next);
+        if (!backgroundSyncScheduledRef.current[uid]) {
+          backgroundSyncScheduledRef.current[uid] = true;
+          scheduleBackgroundCloudSync({
+            pull: false,
+            delayMs: isNativeApp() ? 3_000 : 1_500,
+          });
+        }
       }
       return;
     }
 
     workspaceEnsureInFlightRef.current = uid;
     try {
+    if (!verified) {
+      workspaceEnsuredForUserRef.current = uid;
+      return;
+    }
+
+    await repairOwnerWorkspaceIfNeeded(next.user);
+
     const existing = await resolvePrimaryOrganizationForUser(uid);
     if (existing?.shopId) {
       bootstrappedUserIdsRef.current[uid] = true;
@@ -501,17 +515,20 @@ export function useAuth() {
       throw error;
     }
     if (data.session) {
+      applyAccountSwitchSync(
+        computeAccountKey({ mode: "supabase", userId: data.session.user?.id, email: data.session.user?.email }),
+      );
+      applySignupProfileToLocalStore(data.session);
+      setSession(data.session);
+      if (!isSupabaseEmailVerified(data.session.user)) {
+        return { needsEmailVerification: true };
+      }
       try {
         await ensureWorkspaceForSession(data.session);
       } catch (e) {
         console.error("[waka-auth] signUp immediate bootstrap failed", e);
         throw e;
       }
-      applyAccountSwitchSync(
-        computeAccountKey({ mode: "supabase", userId: data.session.user?.id, email: data.session.user?.email }),
-      );
-      applySignupProfileToLocalStore(data.session);
-      setSession(data.session);
       return { needsEmailVerification: false, session: data.session };
     }
     return { needsEmailVerification: true };

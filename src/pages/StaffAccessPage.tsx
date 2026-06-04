@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language, UserRole } from "../types";
@@ -9,6 +9,9 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { usePosStore } from "../store/usePosStore";
 import { PinInput } from "../components/ui/PinInput";
+import { isSupabaseEmailVerified } from "../lib/emailVerification";
+import { syncStaffAccountsWithCloud } from "../lib/shopStaffCloud";
+import { supabase } from "../lib/supabase";
 
 const ROLE_OPTIONS: UserRole[] = ["cashier", "manager", "stock_keeper"];
 
@@ -25,6 +28,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const maxStaff = maxStaffAccountsForTier(planTier);
   const staff = usePosStore((s) => s.preferences.staffAccounts ?? []);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
+  const setPreferences = usePosStore((s) => s.setPreferences);
   const updateStaffAccount = usePosStore((s) => s.updateStaffAccount);
   const removeStaffAccount = usePosStore((s) => s.removeStaffAccount);
   const resetStaffSecret = usePosStore((s) => s.resetStaffSecret);
@@ -42,6 +46,18 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
   const ordered = useMemo(() => [...staff].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)), [staff]);
 
+  useEffect(() => {
+    if (authMode !== "supabase" || !supabase) return;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!data.user || !isSupabaseEmailVerified(data.user)) return;
+      void syncStaffAccountsWithCloud(data.user, staff).then((merged) => {
+        if (merged && merged.length > 0) {
+          setPreferences({ staffAccounts: merged });
+        }
+      });
+    });
+  }, [authMode, setPreferences, staff.length]);
+
   const resetForm = () => {
     setName("");
     setRole("cashier");
@@ -53,8 +69,15 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
     setMsg(null);
   };
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setMsg(null);
+    if (authMode === "supabase" && supabase) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user && !isSupabaseEmailVerified(data.user)) {
+        setMsg(t(lang, "verifyActivateLead"));
+        return;
+      }
+    }
     if (maxStaff > 0 && staff.length >= maxStaff) {
       setMsg(tTemplate(lang, "staffLimitPlan", { max: String(maxStaff) }));
       return;

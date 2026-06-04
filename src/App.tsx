@@ -69,6 +69,7 @@ import { unauthenticatedEntryPath } from "./lib/nativeApp";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { DeviceActivationProvider } from "./context/DeviceActivationContext";
 import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOutlet";
+import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateOutlet";
 import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import type { Language } from "./types";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
@@ -233,9 +234,11 @@ function AppRoutes() {
                 <Route
                   element={
                     <SubscriptionProvider user={auth.user} authMode={auth.mode}>
-                      <DeviceActivationProvider authMode={auth.mode} user={auth.user}>
-                        <DeviceActivationGateOutlet />
-                      </DeviceActivationProvider>
+                      <EmailVerificationGateOutlet authMode={auth.mode} user={auth.user}>
+                        <DeviceActivationProvider authMode={auth.mode} user={auth.user}>
+                          <DeviceActivationGateOutlet />
+                        </DeviceActivationProvider>
+                      </EmailVerificationGateOutlet>
                     </SubscriptionProvider>
                   }
                 >
