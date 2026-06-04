@@ -12,7 +12,6 @@ import {
 } from "../config/onboardingFlow";
 import {
   HOSPITALITY_ONBOARDING_GROUP_ID,
-  HOSPITALITY_ONBOARDING_STYLES,
   businessTypeForHospitalityStyle,
   hospitalityStyleIdForBusinessType,
   isHospitalityOnboardingGroupCard,
@@ -30,6 +29,12 @@ import { normalizeUgPhoneE164, loadRegistrationProfileFromAuth, applyRegistratio
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { supabase } from "../lib/supabase";
+import { useBusinessTypeVisibility } from "../hooks/useBusinessTypeVisibility";
+import {
+  businessTypeVisibilityStatus,
+  filterHospitalityOnboardingStyles,
+  filterOnboardingBusinessCards,
+} from "../config/businessTypeVisibility";
 
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
@@ -54,6 +59,16 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
   const { snapshot, authMode } = useSubscription();
+  const { settings: bizTypeSettings, isSuperAdmin: bizTypeSuperAdmin } = useBusinessTypeVisibility();
+
+  const visibleBusinessCards = useMemo(
+    () => filterOnboardingBusinessCards(ONBOARDING_BUSINESS_CARDS, bizTypeSettings, bizTypeSuperAdmin),
+    [bizTypeSettings, bizTypeSuperAdmin],
+  );
+  const visibleHospitalityStyles = useMemo(
+    () => filterHospitalityOnboardingStyles(bizTypeSettings, bizTypeSuperAdmin),
+    [bizTypeSettings, bizTypeSuperAdmin],
+  );
 
   const shopName = preferences.shopDisplayName?.trim() || "My Shop";
   const planTier =
@@ -298,12 +313,16 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             ) : null}
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardBizTitle")}</h2>
             <div className="grid gap-2">
-              {ONBOARDING_BUSINESS_CARDS.map((card) => {
+              {visibleBusinessCards.map((card) => {
                 const selected =
                   card.hospitalityGroup
                     ? selectedBusinessCardId === card.id
                     : selectedBusinessCardId === card.id ||
                       (card.businessType != null && businessType === card.businessType && !pickedHospitalityGroup);
+                const status =
+                  card.businessType && bizTypeSuperAdmin
+                    ? businessTypeVisibilityStatus(card.businessType, bizTypeSettings, true)
+                    : null;
                 return (
                   <button
                     key={card.id}
@@ -322,6 +341,11 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                   >
                     <span className="text-2xl">{card.emoji}</span>
                     <span className="mt-1 block text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
+                    {status && status !== "enabled" ? (
+                      <span className="mt-1 block text-[10px] font-black uppercase tracking-wide text-stone-500">
+                        {status}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}
@@ -352,7 +376,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardHospitalityStyleTitle")}</h2>
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
             <div className="grid gap-2">
-              {HOSPITALITY_ONBOARDING_STYLES.map((style) => (
+              {visibleHospitalityStyles.map((style) => (
                 <button
                   key={style.id}
                   type="button"

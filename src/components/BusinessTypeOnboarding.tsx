@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { BusinessType, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -7,13 +7,18 @@ import { getActiveAccountKey } from "../offline/accountScope";
 import { SHOP_CURRENCY } from "../lib/shopCurrency";
 import { AppModalOverlay } from "./layout/AppModalOverlay";
 import {
-  HOSPITALITY_ONBOARDING_STYLES,
   NON_HOSPITALITY_BUSINESS_TYPE_IDS,
   businessTypeForHospitalityStyle,
   hospitalityStyleIdForBusinessType,
   type HospitalityOnboardingStyleId,
 } from "../config/hospitalityOnboarding";
 import { isHospitalityBusinessType } from "../lib/hospitality";
+import { useBusinessTypeVisibility } from "../hooks/useBusinessTypeVisibility";
+import {
+  filterHospitalityOnboardingStyles,
+  filterNonHospitalityBusinessTypeIds,
+  isHospitalityOnboardingVisible,
+} from "../config/businessTypeVisibility";
 
 const DRAFT_BASE_KEY = "waka.business.onboarding.draft";
 
@@ -42,6 +47,17 @@ function getDraftKey(): string | null {
 }
 
 export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
+  const { settings: bizTypeSettings, isSuperAdmin: bizTypeSuperAdmin } = useBusinessTypeVisibility();
+  const visibleNonHospitalityIds = useMemo(
+    () => filterNonHospitalityBusinessTypeIds(NON_HOSPITALITY_BUSINESS_TYPE_IDS, bizTypeSettings, bizTypeSuperAdmin),
+    [bizTypeSettings, bizTypeSuperAdmin],
+  );
+  const visibleHospitalityStyles = useMemo(
+    () => filterHospitalityOnboardingStyles(bizTypeSettings, bizTypeSuperAdmin),
+    [bizTypeSettings, bizTypeSuperAdmin],
+  );
+  const showHospitalityGroup = isHospitalityOnboardingVisible(bizTypeSettings, bizTypeSuperAdmin);
+
   const complete = usePosStore((s) => s.completeBusinessOnboarding);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const preferences = usePosStore((s) => s.preferences);
@@ -140,7 +156,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
           </label>
           <p className="text-sm font-bold text-slate-700">{t(lang, "registerBusinessTypeLabel")}</p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {NON_HOSPITALITY_BUSINESS_TYPE_IDS.map((id) => (
+            {visibleNonHospitalityIds.map((id) => (
               <button
                 key={id}
                 type="button"
@@ -154,24 +170,26 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 {t(lang, `businessType_${id}`)}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={selectHospitalityGroup}
-              className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold sm:col-span-2 ${
-                hospitalityFlow
-                  ? "border-waka-500 bg-waka-50 text-waka-900"
-                  : "border-slate-200 bg-slate-50 text-slate-900"
-              }`}
-            >
-              {t(lang, "onboardBiz_hospitality")}
-            </button>
+            {showHospitalityGroup ? (
+              <button
+                type="button"
+                onClick={selectHospitalityGroup}
+                className={`rounded-2xl border-2 px-4 py-4 text-left text-base font-bold sm:col-span-2 ${
+                  hospitalityFlow
+                    ? "border-waka-500 bg-waka-50 text-waka-900"
+                    : "border-slate-200 bg-slate-50 text-slate-900"
+                }`}
+              >
+                {t(lang, "onboardBiz_hospitality")}
+              </button>
+            ) : null}
           </div>
           {hospitalityFlow ? (
             <div className="rounded-3xl border border-stone-200 bg-stone-50 p-4">
               <p className="text-sm font-black text-stone-900">{t(lang, "onboardHospitalityStyleTitle")}</p>
               <p className="mt-1 text-xs font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
               <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {HOSPITALITY_ONBOARDING_STYLES.map((style) => (
+                {visibleHospitalityStyles.map((style) => (
                   <button
                     key={style.id}
                     type="button"

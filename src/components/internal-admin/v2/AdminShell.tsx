@@ -36,6 +36,7 @@ export type AdminSectionId =
   | "activations"
   | "admins"
   | "pilot"
+  | "business_types"
   | "shop";
 
 type TabDef = {
@@ -56,6 +57,7 @@ const TABS: TabDef[] = [
   { id: "agents", path: "/internal/waka/agents", label: "Agents" },
   { id: "activations", path: "/internal/waka/activations", label: "Keys" },
   { id: "admins", path: "/internal/waka/admins", label: "Admins", superOnly: true },
+  { id: "business_types", path: "/internal/waka/business-types", label: "Biz types", superOnly: true },
 ];
 
 type Props = {
