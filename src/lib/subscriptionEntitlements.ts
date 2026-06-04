@@ -85,6 +85,22 @@ export function tierMeetsMinimum(tier: SubscriptionPlanCode, minimum: Subscripti
   return TIER_RANK[tier] >= TIER_RANK[minimum];
 }
 
+/** True when org has Starter, Business, or Waka Plus (including trial period on those plans). */
+export function hasCommercialSubscription(snapshot: SubscriptionSnapshot): boolean {
+  if (snapshot.kind === "local_full") return true;
+  if (snapshot.kind !== "remote") return false;
+  const row = snapshot.row;
+  const plan = normalizePlanCode(row.plan_code);
+  if (plan === "free") return false;
+  const st = (row.status ?? "").trim().toLowerCase();
+  return st === "active" || st === "trial" || st === "trialing";
+}
+
+/** “Why upgrade?” and similar free-only upsell — not for paid or trial commercial plans. */
+export function shouldShowFreeUpgradePitch(snapshot: SubscriptionSnapshot): boolean {
+  return !hasCommercialSubscription(snapshot);
+}
+
 export function canUseBackupRestore(
   snapshot: SubscriptionSnapshot,
   authMode: "supabase" | "local",

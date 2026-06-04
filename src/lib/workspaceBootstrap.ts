@@ -49,7 +49,7 @@ export async function bootstrapOwnerWorkspace(user: User, args: BootstrapArgs): 
     hasGps: Boolean(hasLat),
   });
 
-  const { error } = await supabase.rpc("bootstrap_owner_workspace", {
+  const rpcArgs = {
     p_org_name: orgName,
     p_business_type: args.businessType,
     p_full_name: fullName,
@@ -61,21 +61,39 @@ export async function bootstrapOwnerWorkspace(user: User, args: BootstrapArgs): 
     p_latitude: hasLat ? args.latitude! : null,
     p_longitude: hasLat ? args.longitude! : null,
     p_shop_display_name: shopLabel,
-  });
+  };
 
-  if (error) {
-    reportAuthIssue("workspace_bootstrap_failed", {
-      status: error.code ?? "unknown",
-    });
-    console.error("[waka-auth] bootstrap_owner_workspace:error", {
-      userId: user.id,
-      code: error.code,
-      message: error.message,
-      details: error.details,
-      hint: error.hint,
-    });
-    throw new Error(error.message || "Could not finish creating your shop. Please try again.");
+  const maxAttempts = 3;
+  let lastError: { message?: string; code?: string } | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const { error } = await supabase.rpc("bootstrap_owner_workspace", rpcArgs);
+    if (!error) {
+      console.info("[waka-auth] bootstrap_owner_workspace:ok", { userId: user.id, attempt });
+      return;
+    }
+    lastError = error;
+    const msg = (error.message ?? "").toLowerCase();
+    const retryable =
+      attempt < maxAttempts &&
+      (msg.includes("jwt") ||
+        msg.includes("not authenticated") ||
+        msg.includes("timeout") ||
+        msg.includes("network") ||
+        msg.includes("email_not_verified"));
+    if (retryable) {
+      await new Promise((r) => setTimeout(r, 350 * attempt));
+      continue;
+    }
+    break;
   }
 
-  console.info("[waka-auth] bootstrap_owner_workspace:ok", { userId: user.id });
+  reportAuthIssue("workspace_bootstrap_failed", {
+    status: lastError?.code ?? "unknown",
+  });
+  console.error("[waka-auth] bootstrap_owner_workspace:error", {
+    userId: user.id,
+    code: lastError?.code,
+    message: lastError?.message,
+  });
+  throw new Error(lastError?.message || "Could not finish creating your shop. Please try again.");
 }

@@ -119,8 +119,9 @@ export function useAuth() {
   );
 
   const bootstrappedUserIdsRef = useRef<Record<string, true>>({});
-  const workspaceEnsureInFlightRef = useRef<string | null>(null);
+  const workspaceEnsurePromisesRef = useRef<Record<string, Promise<void>>>({});
   const workspaceEnsuredForUserRef = useRef<string | null>(null);
+  const signUpInProgressRef = useRef(false);
   const backgroundSyncScheduledRef = useRef<Record<string, true>>({});
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
@@ -134,134 +135,154 @@ export function useAuth() {
     }
   }, []);
 
-  const ensureWorkspaceForSession = useCallback(async (next: Session | null) => {
-    if (!next?.user || !supabase) return;
-    const uid = next.user.id;
-    if (workspaceEnsureInFlightRef.current === uid) return;
+  const markWorkspaceEnsured = useCallback((uid: string) => {
+    workspaceEnsuredForUserRef.current = uid;
+    bootstrappedUserIdsRef.current[uid] = true;
+  }, []);
 
-    const verified = isSupabaseEmailVerified(next.user);
+  const ensureWorkspaceForSession = useCallback(
+    async (next: Session | null) => {
+      if (!next?.user || !supabase) return;
+      const uid = next.user.id;
 
-    const alreadyEnsured =
-      workspaceEnsuredForUserRef.current === uid ||
-      bootstrappedUserIdsRef.current[uid] ||
-      isWorkspaceBootstrapped(uid);
+      const inFlight = workspaceEnsurePromisesRef.current[uid];
+      if (inFlight) return inFlight;
 
-    if (alreadyEnsured) {
-      workspaceEnsuredForUserRef.current = uid;
-      bootstrappedUserIdsRef.current[uid] = true;
-      if (verified) {
-        await repairOwnerWorkspaceIfNeeded(next.user);
-        await tryApplyPendingReferral(next);
-        if (!backgroundSyncScheduledRef.current[uid]) {
-          backgroundSyncScheduledRef.current[uid] = true;
-          scheduleBackgroundCloudSync({
-            pull: false,
-            delayMs: isNativeApp() ? 3_000 : 1_500,
+      const promise = (async () => {
+        const verified = isSupabaseEmailVerified(next.user);
+
+        const alreadyEnsured =
+          workspaceEnsuredForUserRef.current === uid ||
+          bootstrappedUserIdsRef.current[uid] ||
+          isWorkspaceBootstrapped(uid);
+
+        if (alreadyEnsured) {
+          markWorkspaceEnsured(uid);
+          if (verified) {
+            await repairOwnerWorkspaceIfNeeded(next.user);
+            await tryApplyPendingReferral(next);
+            if (!backgroundSyncScheduledRef.current[uid]) {
+              backgroundSyncScheduledRef.current[uid] = true;
+              scheduleBackgroundCloudSync({
+                pull: false,
+                delayMs: isNativeApp() ? 3_000 : 1_500,
+              });
+            }
+          }
+          return;
+        }
+
+        try {
+          if (!verified) {
+            markWorkspaceEnsured(uid);
+            return;
+          }
+
+          await repairOwnerWorkspaceIfNeeded(next.user);
+
+          const existing = await resolvePrimaryOrganizationForUser(uid);
+          if (existing?.shopId) {
+            markWorkspaceBootstrapped(uid);
+            markWorkspaceEnsured(uid);
+            await tryApplyPendingReferral(next);
+            const onboarding = await fetchOwnerOnboardingStatus();
+            if (onboarding?.complete) {
+              await finalizeOwnerOnboardingAfterCloudSave(uid);
+            }
+            const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
+            if (isLocalShopDataEmpty()) {
+              void hydrateAccountFromCloud({ forcePull: true });
+            } else {
+              scheduleBackgroundCloudSync({
+                pull: false,
+                delayMs: isNativeApp() ? 2_500 : 1_200,
+              });
+            }
+            return;
+          }
+
+          const meta = next.user.user_metadata as Record<string, unknown> | undefined;
+          const orgFromMeta =
+            String(meta?.organization_name ?? "").trim() ||
+            String(meta?.business_name ?? "").trim() ||
+            String(meta?.shop_name ?? "").trim() ||
+            String(next.user.email ?? "").split("@")[0] ||
+            "My Shop";
+          const shopFromMeta =
+            String(meta?.shop_display_name ?? "").trim() ||
+            String(meta?.shop_name ?? "").trim() ||
+            orgFromMeta;
+          const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
+          const fullName = String(meta?.full_name ?? "").trim();
+          const phoneRaw = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
+          const phoneE164 = normalizeUgPhoneE164(phoneRaw) ?? undefined;
+          const districtId =
+            typeof meta?.district_id === "string" && meta.district_id.length > 0 ? meta.district_id : undefined;
+          const gpsSkipped = meta?.gps_skipped === true;
+          const latRaw = meta?.latitude;
+          const lngRaw = meta?.longitude;
+          const latitude =
+            typeof latRaw === "number" ? latRaw : typeof latRaw === "string" ? Number.parseFloat(latRaw) : undefined;
+          const longitude =
+            typeof lngRaw === "number" ? lngRaw : typeof lngRaw === "string" ? Number.parseFloat(lngRaw) : undefined;
+          const hasGps =
+            latitude != null &&
+            longitude != null &&
+            !Number.isNaN(latitude) &&
+            !Number.isNaN(longitude);
+
+          await bootstrapOwnerWorkspace(next.user, {
+            organizationName: orgFromMeta,
+            shopDisplayName: shopFromMeta,
+            businessType,
+            fullName: fullName || undefined,
+            districtId,
+            phoneE164,
+            address: undefined,
+            gpsMissing: gpsSkipped || !hasGps,
+            latitude: hasGps ? latitude : undefined,
+            longitude: hasGps ? longitude : undefined,
           });
+
+          const cur = String(meta?.default_currency ?? "").trim().toUpperCase();
+          if (cur.length === 3 && /^[A-Z]{3}$/.test(cur)) {
+            const { data: om } = await supabase
+              .from("organization_members")
+              .select("organization_id")
+              .eq("user_id", next.user.id)
+              .order("created_at", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            const oid = om?.organization_id as string | undefined;
+            if (oid) {
+              const { error: curErr } = await supabase.from("organizations").update({ default_currency: cur }).eq("id", oid);
+              if (curErr) console.error("[waka-auth] default_currency update failed", curErr);
+            }
+          }
+
+          markWorkspaceBootstrapped(next.user.id);
+          markWorkspaceEnsured(uid);
+          await tryApplyPendingReferral(next);
+          const onboarding = await fetchOwnerOnboardingStatus();
+          if (onboarding?.complete) {
+            await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
+          }
+          void hydrateAccountFromCloud({ forcePull: true });
+        } catch (e) {
+          console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
+          throw new Error("Could not finish creating your shop. Please try again.");
         }
-      }
-      return;
-    }
+      })();
 
-    workspaceEnsureInFlightRef.current = uid;
-    try {
-    if (!verified) {
-      workspaceEnsuredForUserRef.current = uid;
-      return;
-    }
-
-    await repairOwnerWorkspaceIfNeeded(next.user);
-
-    const existing = await resolvePrimaryOrganizationForUser(uid);
-    if (existing?.shopId) {
-      bootstrappedUserIdsRef.current[uid] = true;
-      markWorkspaceBootstrapped(uid);
-      await tryApplyPendingReferral(next);
-      const onboarding = await fetchOwnerOnboardingStatus();
-      if (onboarding?.complete) {
-        await finalizeOwnerOnboardingAfterCloudSave(uid);
+      workspaceEnsurePromisesRef.current[uid] = promise;
+      try {
+        await promise;
+      } finally {
+        delete workspaceEnsurePromisesRef.current[uid];
       }
-      const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
-      if (isLocalShopDataEmpty()) {
-        void hydrateAccountFromCloud({ forcePull: true });
-      } else {
-        scheduleBackgroundCloudSync({
-          pull: false,
-          delayMs: isNativeApp() ? 2_500 : 1_200,
-        });
-      }
-      return;
-    }
-
-    const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-    const orgFromMeta =
-      String(meta?.organization_name ?? "").trim() ||
-      String(meta?.business_name ?? "").trim() ||
-      String(meta?.shop_name ?? "").trim() ||
-      String(next.user.email ?? "").split("@")[0] ||
-      "My Shop";
-    const shopFromMeta =
-      String(meta?.shop_display_name ?? "").trim() ||
-      String(meta?.shop_name ?? "").trim() ||
-      orgFromMeta;
-    const businessType = (String(meta?.business_type ?? "kiosk_duka") || "kiosk_duka") as BusinessType;
-    const fullName = String(meta?.full_name ?? "").trim();
-    const phoneRaw = String(meta?.phone_e164 ?? meta?.phone ?? "").trim();
-    const phoneE164 = normalizeUgPhoneE164(phoneRaw) ?? undefined;
-    const districtId = typeof meta?.district_id === "string" && meta.district_id.length > 0 ? meta.district_id : undefined;
-    const gpsSkipped = meta?.gps_skipped === true;
-    const latRaw = meta?.latitude;
-    const lngRaw = meta?.longitude;
-    const latitude = typeof latRaw === "number" ? latRaw : typeof latRaw === "string" ? Number.parseFloat(latRaw) : undefined;
-    const longitude = typeof lngRaw === "number" ? lngRaw : typeof lngRaw === "string" ? Number.parseFloat(lngRaw) : undefined;
-    const hasGps =
-      latitude != null &&
-      longitude != null &&
-      !Number.isNaN(latitude) &&
-      !Number.isNaN(longitude);
-      await bootstrapOwnerWorkspace(next.user, {
-        organizationName: orgFromMeta,
-        shopDisplayName: shopFromMeta,
-        businessType,
-        fullName: fullName || undefined,
-        districtId,
-        phoneE164,
-        address: undefined,
-        gpsMissing: gpsSkipped || !hasGps,
-        latitude: hasGps ? latitude : undefined,
-        longitude: hasGps ? longitude : undefined,
-      });
-      const cur = String(meta?.default_currency ?? "").trim().toUpperCase();
-      if (supabase && cur.length === 3 && /^[A-Z]{3}$/.test(cur)) {
-        const { data: om } = await supabase
-          .from("organization_members")
-          .select("organization_id")
-          .eq("user_id", next.user.id)
-          .order("created_at", { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        const oid = om?.organization_id as string | undefined;
-        if (oid) {
-          const { error: curErr } = await supabase.from("organizations").update({ default_currency: cur }).eq("id", oid);
-          if (curErr) console.error("[waka-auth] default_currency update failed", curErr);
-        }
-      }
-      bootstrappedUserIdsRef.current[next.user.id] = true;
-      markWorkspaceBootstrapped(next.user.id);
-      await tryApplyPendingReferral(next);
-      const onboarding = await fetchOwnerOnboardingStatus();
-      if (onboarding?.complete) {
-        await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
-      }
-      void hydrateAccountFromCloud({ forcePull: true });
-    } catch (e) {
-      console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
-      throw new Error("Could not finish creating your shop. Please try again.");
-    } finally {
-      workspaceEnsureInFlightRef.current = null;
-      workspaceEnsuredForUserRef.current = uid;
-    }
-  }, [tryApplyPendingReferral]);
+    },
+    [markWorkspaceEnsured, tryApplyPendingReferral],
+  );
 
   const ensureWorkspaceRef = useRef(ensureWorkspaceForSession);
   ensureWorkspaceRef.current = ensureWorkspaceForSession;
@@ -336,7 +357,7 @@ export function useAuth() {
           computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
         );
         applySignupProfileToLocalStore(next);
-        if (event === "SIGNED_IN") {
+        if (event === "SIGNED_IN" && !signUpInProgressRef.current) {
           void ensureWorkspaceRef.current(next).catch((e) => {
             console.error("[waka-auth] bootstrap on auth state change failed", e);
           });
@@ -476,62 +497,91 @@ export function useAuth() {
       storePendingReferralCode(refCode);
     }
 
-    const firstAttempt = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectTo,
-        data: meta,
-      },
-    });
-    let data = firstAttempt.data;
-    let error = firstAttempt.error;
-    const maybeDbSignupFailure = (error?.message ?? "").toLowerCase().includes("database error saving new user");
-    if (maybeDbSignupFailure) {
-      if (import.meta.env.DEV) {
-        console.warn("[waka-auth] signUp retry without metadata after DB error");
-      }
-      const retry = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: redirectTo, data: meta },
-      });
-      data = retry.data;
-      error = retry.error;
-    }
-    if (error) {
-      if (import.meta.env.DEV) {
-        console.error("[waka-auth] signUp failed", {
-          code: error.code,
-          status: error.status,
-          name: error.name,
-          message: error.message,
-        });
-      }
-      reportAuthIssue("sign_up_failed", { status: error.status ?? 0 });
-      if ((error.message ?? "").toLowerCase().includes("database error saving new user")) {
-        throw new Error("Could not finish creating your shop. Please try again.");
-      }
-      throw error;
-    }
-    if (data.session) {
+    const finishSignUpSession = async (active: Session): Promise<SignUpResult> => {
       applyAccountSwitchSync(
-        computeAccountKey({ mode: "supabase", userId: data.session.user?.id, email: data.session.user?.email }),
+        computeAccountKey({ mode: "supabase", userId: active.user?.id, email: active.user?.email }),
       );
-      applySignupProfileToLocalStore(data.session);
-      setSession(data.session);
-      if (!isSupabaseEmailVerified(data.session.user)) {
+      applySignupProfileToLocalStore(active);
+      if (!isSupabaseEmailVerified(active.user)) {
+        setSession(active);
         return { needsEmailVerification: true };
       }
-      try {
-        await ensureWorkspaceForSession(data.session);
-      } catch (e) {
-        console.error("[waka-auth] signUp immediate bootstrap failed", e);
-        throw e;
+      await ensureWorkspaceForSession(active);
+      setSession(active);
+      return { needsEmailVerification: false, session: active };
+    };
+
+    signUpInProgressRef.current = true;
+    try {
+      const firstAttempt = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectTo,
+          data: meta,
+        },
+      });
+      let data = firstAttempt.data;
+      let error = firstAttempt.error;
+      const maybeDbSignupFailure = (error?.message ?? "").toLowerCase().includes("database error saving new user");
+      if (maybeDbSignupFailure) {
+        if (import.meta.env.DEV) {
+          console.warn("[waka-auth] signUp retry after DB error");
+        }
+        const retry = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: redirectTo, data: meta },
+        });
+        data = retry.data;
+        error = retry.error;
       }
-      return { needsEmailVerification: false, session: data.session };
+
+      const alreadyRegistered =
+        error &&
+        /already registered|already exists|user already/i.test(error.message ?? "");
+
+      if (error && alreadyRegistered) {
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInErr) {
+          reportAuthIssue("sign_up_failed", { status: error.status ?? 0 });
+          throw error;
+        }
+        if (signInData.session) {
+          return finishSignUpSession(signInData.session);
+        }
+        reportAuthIssue("sign_up_failed", { status: error.status ?? 0 });
+        throw error;
+      }
+
+      if (error) {
+        if (import.meta.env.DEV) {
+          console.error("[waka-auth] signUp failed", {
+            code: error.code,
+            status: error.status,
+            name: error.name,
+            message: error.message,
+          });
+        }
+        reportAuthIssue("sign_up_failed", { status: error.status ?? 0 });
+        if ((error.message ?? "").toLowerCase().includes("database error saving new user")) {
+          throw new Error("Could not finish creating your shop. Please try again.");
+        }
+        throw error;
+      }
+
+      if (data.session) {
+        try {
+          return await finishSignUpSession(data.session);
+        } catch (e) {
+          console.error("[waka-auth] signUp immediate bootstrap failed", e);
+          throw e;
+        }
+      }
+      return { needsEmailVerification: true };
+    } finally {
+      signUpInProgressRef.current = false;
     }
-    return { needsEmailVerification: true };
   },
   [ensureWorkspaceForSession]);
 

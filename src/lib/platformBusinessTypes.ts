@@ -54,6 +54,9 @@ export function invalidatePlatformBusinessTypeSettingsCache(): void {
   cachedSettings = null;
   cachedFromServer = false;
   cacheAt = 0;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("waka:business-type-settings-changed"));
+  }
 }
 
 export async function isCurrentUserSuperAdmin(): Promise<boolean> {

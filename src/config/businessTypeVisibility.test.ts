@@ -10,11 +10,24 @@ import {
 } from "./businessTypeVisibility";
 
 describe("businessTypeVisibility", () => {
-  it("shows all types for normal users when defaults are fully enabled", () => {
+  it("shows standard (non-experimental) types when defaults are enabled", () => {
     const visible = getVisibleBusinessTypes(DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS, false);
-    expect(visible.length).toBe(15);
+    expect(visible.some((v) => v.id === "hardware")).toBe(false);
+    expect(visible.some((v) => v.id === "electronics")).toBe(false);
+    expect(visible.some((v) => v.id === "kiosk_duka")).toBe(true);
     const cards = filterOnboardingBusinessCards(ONBOARDING_BUSINESS_CARDS, DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS, false);
-    expect(cards.length).toBe(ONBOARDING_BUSINESS_CARDS.length);
+    expect(cards.some((c) => c.businessType === "hardware")).toBe(false);
+    expect(cards.some((c) => c.businessType === "electronics")).toBe(false);
+  });
+
+  it("shows hardware and electronics on onboarding only when explicitly enabled", () => {
+    const settings: PlatformBusinessTypeSettings = {
+      enabled: ["kiosk_duka", "hardware", "electronics"],
+      showExperimental: false,
+    };
+    const cards = filterOnboardingBusinessCards(ONBOARDING_BUSINESS_CARDS, settings, false);
+    expect(cards.some((c) => c.businessType === "hardware")).toBe(true);
+    expect(cards.some((c) => c.businessType === "electronics")).toBe(true);
   });
 
   it("hides disabled types from normal users", () => {

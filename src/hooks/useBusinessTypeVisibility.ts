@@ -22,9 +22,9 @@ export function useBusinessTypeVisibility(opts?: Options) {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const load = async () => {
       const [fetched, superRow] = await Promise.all([
-        fetchPlatformBusinessTypeSettings(false, { forRegistration }),
+        fetchPlatformBusinessTypeSettings(true, { forRegistration }),
         forRegistration ? Promise.resolve(false) : isCurrentUserSuperAdmin(),
       ]);
       if (cancelled) return;
@@ -32,9 +32,15 @@ export function useBusinessTypeVisibility(opts?: Options) {
       setFromServer(fetched.fromServer);
       setIsSuperAdmin(forRegistration ? false : superRow);
       setLoading(false);
-    })();
+    };
+    void load();
+    const onChanged = () => {
+      void load();
+    };
+    window.addEventListener("waka:business-type-settings-changed", onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener("waka:business-type-settings-changed", onChanged);
     };
   }, [forRegistration]);
 

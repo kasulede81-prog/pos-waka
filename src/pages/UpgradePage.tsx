@@ -9,6 +9,7 @@ import {
   maxProductsForTier,
   maxStaffAccountsForTier,
   resolveEffectivePlanTier,
+  shouldShowFreeUpgradePitch,
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
@@ -49,6 +50,7 @@ function usersHintForPlan(plan: SubscriptionPlanCode): number {
 export function UpgradePage({ lang }: { lang: Language }) {
   const { snapshot, authMode, loading, refetch } = useSubscription();
   const current = resolveEffectivePlanTier(snapshot);
+  const showFreePitch = shouldShowFreeUpgradePitch(snapshot);
   const renewalCountdown = getPaidPlanRenewalCountdown(snapshot);
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
 
@@ -122,17 +124,19 @@ export function UpgradePage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      <section className="rounded-3xl border border-stone-200 bg-stone-50 p-5 shadow-sm">
-        <h2 className="text-lg font-black text-stone-900">{t(lang, "upgradeWhyTitle")}</h2>
-        <ul className="mt-4 space-y-3">
-          {whyRows.map((row) => (
-            <li key={row.q} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-              <span className="font-semibold text-stone-700">{row.q}</span>
-              <span className="font-black text-waka-800">→ {row.plan}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
+      {!loading && showFreePitch ? (
+        <section className="rounded-3xl border border-stone-200 bg-stone-50 p-5 shadow-sm">
+          <h2 className="text-lg font-black text-stone-900">{t(lang, "upgradeWhyTitle")}</h2>
+          <ul className="mt-4 space-y-3">
+            {whyRows.map((row) => (
+              <li key={row.q} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+                <span className="font-semibold text-stone-700">{row.q}</span>
+                <span className="font-black text-waka-800">→ {row.plan}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="space-y-4">
         <p className="text-lg font-black text-slate-900">{t(lang, "upgradePickTitle")}</p>

@@ -34,8 +34,9 @@ export type VisibleBusinessType = {
   selectable: boolean;
 };
 
+/** Client fallback when RPC returns no enabled array — matches DB default after migration 096. */
 export const DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS: PlatformBusinessTypeSettings = {
-  enabled: [...BUSINESS_TYPE_IDS],
+  enabled: BUSINESS_TYPE_IDS.filter((id) => !isExperimentalBusinessType(id)),
   showExperimental: false,
 };
 
@@ -54,12 +55,17 @@ export function isExperimentalBusinessType(id: BusinessType): boolean {
 export function parsePlatformBusinessTypeSettings(raw: unknown): PlatformBusinessTypeSettings {
   if (!raw || typeof raw !== "object") return DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS;
   const o = raw as { enabled?: unknown; show_experimental?: unknown };
-  const enabledRaw = Array.isArray(o.enabled) ? o.enabled : [];
-  const enabled = enabledRaw.filter(
+  if (!Array.isArray(o.enabled)) {
+    return {
+      enabled: [...DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS.enabled],
+      showExperimental: Boolean(o.show_experimental),
+    };
+  }
+  const enabled = o.enabled.filter(
     (id): id is BusinessType => typeof id === "string" && (BUSINESS_TYPE_IDS as readonly string[]).includes(id),
   );
   return {
-    enabled: enabled.length ? enabled : [...DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS.enabled],
+    enabled,
     showExperimental: Boolean(o.show_experimental),
   };
 }

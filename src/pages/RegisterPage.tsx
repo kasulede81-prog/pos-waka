@@ -43,6 +43,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const [phone, setPhone] = useState("");
   const [districtId, setDistrictId] = useState("");
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
+  const [districtsLoading, setDistrictsLoading] = useState(hasSupabaseConfig);
   const [districtsError, setDistrictsError] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [referralCode, setReferralCode] = useState(() => searchParams.get("ref")?.trim().toUpperCase() ?? "");
@@ -54,10 +55,15 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const showGoogle = hasSupabaseConfig && isGoogleAuthUiAvailable();
 
   const loadDistricts = useCallback(async () => {
+    setDistrictsLoading(true);
     setDistrictsError(null);
-    const { districts: d, error: err } = await fetchDistricts();
-    setDistricts(d);
-    if (err) setDistrictsError(err);
+    try {
+      const { districts: d, error: err } = await fetchDistricts();
+      setDistricts(d);
+      if (err) setDistrictsError(err);
+    } finally {
+      setDistrictsLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -146,7 +152,11 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
       navigate("/onboarding", { replace: true });
     } catch (err) {
       const msg = (err as Error).message || "";
-      if (msg.toLowerCase().includes("database error saving new user")) {
+      const lower = msg.toLowerCase();
+      if (
+        lower.includes("database error saving new user") ||
+        lower.includes("could not finish creating your shop")
+      ) {
         setError(t(lang, "signupWorkspaceError"));
       } else {
         setError(formatAuthError(err));
@@ -314,7 +324,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
 
             <button
-              disabled={busy}
+              disabled={busy || districtsLoading || districts.length === 0}
               type="submit"
               className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
             >

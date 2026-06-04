@@ -172,8 +172,11 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
         <>
           <label className="flex items-center justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
             <div>
-              <p className="text-sm font-black text-violet-950">Show experimental business types</p>
-              <p className="text-xs text-violet-800">Super Admin sees unfinished types in the list below.</p>
+              <p className="text-sm font-black text-violet-950">Highlight experimental in admin preview</p>
+              <p className="text-xs text-violet-800">
+                Cosmetic only for this page. Registration uses the On/Off toggles below — including hardware and
+                electronics.
+              </p>
             </div>
             <input
               type="checkbox"
@@ -202,30 +205,30 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
             })}
           </section>
 
-          {settings.showExperimental ? (
-            <section className="space-y-2">
-              <h2 className="text-sm font-black uppercase tracking-wide text-violet-700">Experimental business types</h2>
-              <p className="text-xs text-stone-600">
-                Hidden from normal users until enabled here. Examples: hardware, electronics, salon, agriculture,
-                auto parts.
-              </p>
-              {experimentalIds.map((id) => {
-                const enabled = settings.enabled.includes(id);
-                const row = visiblePreview.find((v) => v.id === id);
-                return (
-                  <TypeRow
-                    key={id}
-                    id={id}
-                    enabled={enabled}
-                    experimental
-                    statusLabel={row?.status ?? (enabled ? "enabled" : "experimental")}
-                    busy={busyId === id}
-                    onToggle={(next) => void toggleType(id, next)}
-                  />
-                );
-              })}
-            </section>
-          ) : null}
+          <section className="space-y-2">
+            <h2 className="text-sm font-black uppercase tracking-wide text-violet-700">
+              Optional / experimental (registration)
+            </h2>
+            <p className="text-xs text-stone-600">
+              Turn <strong>Off</strong> to hide from signup and onboarding (e.g. hardware, electronics). These toggles
+              always apply — not hidden when the highlight option above is off.
+            </p>
+            {experimentalIds.map((id) => {
+              const enabled = settings.enabled.includes(id);
+              const row = visiblePreview.find((v) => v.id === id);
+              return (
+                <TypeRow
+                  key={id}
+                  id={id}
+                  enabled={enabled}
+                  experimental
+                  statusLabel={row?.status ?? (enabled ? "enabled" : "disabled")}
+                  busy={busyId === id}
+                  onToggle={(next) => void toggleType(id, next)}
+                />
+              );
+            })}
+          </section>
 
           <p className="text-xs text-stone-500">
             Audit: <code className="font-mono">business_type_enabled</code> /{" "}
