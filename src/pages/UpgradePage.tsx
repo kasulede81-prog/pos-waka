@@ -195,7 +195,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
                 </div>
                 {isPaid && !isCurrent ? (
                   <Link
-                    to="/support"
+                    to="/pilot-support"
                     className="mt-4 flex min-h-[48px] items-center justify-center rounded-2xl bg-stone-950 px-4 py-3 text-sm font-black text-white"
                   >
                     {t(lang, planTextKey(plan, "cta"))}
@@ -222,7 +222,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
           ))}
         </ul>
         <Link
-          to="/support"
+          to="/pilot-support"
           className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white"
         >
           {t(lang, "upgradePaySoon")} →
@@ -232,7 +232,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
       <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-950">{t(lang, "upgradePaymentPrep")}</p>
 
       <Link
-        to="/support"
+        to="/pilot-support"
         className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-orange-200 bg-orange-50 px-4 py-3 text-base font-black text-orange-950 shadow-sm"
       >
         {t(lang, "supportNav")} →

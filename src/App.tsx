@@ -193,9 +193,13 @@ function AppRoutes() {
         <Route
           path="/support"
           element={
-            <SubscriptionProvider user={auth.user} authMode={auth.mode}>
-              <SupportPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />
-            </SubscriptionProvider>
+            <RouteErrorBoundary scope="Support">
+              <SyncStatusProvider>
+                <SubscriptionProvider user={auth.user} authMode={auth.mode}>
+                  <SupportPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />
+                </SubscriptionProvider>
+              </SyncStatusProvider>
+            </RouteErrorBoundary>
           }
         />
         <Route path="/terms" element={<LegalPolicyPage kind="terms" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
