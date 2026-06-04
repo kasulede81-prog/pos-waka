@@ -77,10 +77,25 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "password_update_failed", detail: pwErr.message }, 500);
   }
 
-  await userClient.rpc("admin_shop_password_set_audit", {
+  const { data: authUser } = await userClient.auth.getUser();
+  const actorId = authUser.user?.id ?? null;
+
+  const { error: auditRpcErr } = await userClient.rpc("admin_shop_password_set_audit", {
     p_shop_id: shopId,
     p_note: "Direct password set by support",
   });
+
+  if (auditRpcErr) {
+    await admin.from("internal_ops_admin_audit").insert({
+      actor: actorId,
+      action: "admin_set_owner_password",
+      target_shop_id: shopId,
+      payload: {
+        note: "Direct password set by support",
+        audit_rpc_error: auditRpcErr.message,
+      },
+    });
+  }
 
   return json({ ok: true });
 });

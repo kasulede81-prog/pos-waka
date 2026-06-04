@@ -1576,6 +1576,12 @@ export async function adminShopSendOwnerPasswordReset(
   if (j.ok === true) {
     return { ok: true, ownerEmail: String(j.owner_email ?? "").trim() || undefined };
   }
+  if (j.error === "owner_email_missing") {
+    return {
+      ok: false,
+      message: "Owner has no email on profile or auth account. Use “Set owner login password” on Support instead.",
+    };
+  }
   return { ok: false, message: j.error ?? "Could not send password reset." };
 }
 
@@ -1877,6 +1883,46 @@ export type OpsAuditRow = {
   created_at: string;
 };
 
+/** Admin owner password recovery actions (ops + shop audit_logs). */
+export const ADMIN_PASSWORD_RESET_AUDIT_ACTIONS = [
+  "admin_request_owner_password_reset",
+  "admin_set_owner_password",
+  "admin_password_reset_email_sent",
+  "admin_password_reset_email_failed",
+] as const;
+
+function auditLogRowToOpsRow(row: {
+  id: string;
+  shop_id: string | null;
+  actor_user_id: string | null;
+  action: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}): OpsAuditRow {
+  return {
+    id: row.id,
+    actor: row.actor_user_id,
+    action: row.action,
+    target_shop_id: row.shop_id,
+    target_org_id: null,
+    payload: row.payload,
+    created_at: row.created_at,
+  };
+}
+
+function mergeOpsAuditRows(rows: OpsAuditRow[], limit: number): OpsAuditRow[] {
+  const seen = new Set<string>();
+  const unique: OpsAuditRow[] = [];
+  for (const row of [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())) {
+    const key = `${row.action}:${row.created_at.slice(0, 19)}:${row.target_shop_id ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(row);
+    if (unique.length >= limit) break;
+  }
+  return unique;
+}
+
 export async function fetchOpsAuditFeed(limit = 30): Promise<OpsAuditRow[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
@@ -1888,14 +1934,78 @@ export async function fetchOpsAuditFeed(limit = 30): Promise<OpsAuditRow[]> {
   return data as OpsAuditRow[];
 }
 
-export async function fetchShopAuditTimeline(shopId: string, limit = 25): Promise<OpsAuditRow[]> {
+/** All admin password reset events (internal ops audit). */
+export async function fetchAdminPasswordResetAudit(limit = 50): Promise<OpsAuditRow[]> {
   if (!supabase) return [];
+  const cap = Math.min(limit, 100);
   const { data, error } = await supabase
     .from("internal_ops_admin_audit")
     .select("id, actor, action, target_shop_id, target_org_id, payload, created_at")
-    .eq("target_shop_id", shopId)
+    .in("action", [...ADMIN_PASSWORD_RESET_AUDIT_ACTIONS])
     .order("created_at", { ascending: false })
-    .limit(Math.min(limit, 50));
+    .limit(cap);
   if (error || !data) return [];
   return data as OpsAuditRow[];
+}
+
+export async function fetchShopAuditTimeline(shopId: string, limit = 25): Promise<OpsAuditRow[]> {
+  if (!supabase) return [];
+  const cap = Math.min(limit, 50);
+  const [opsRes, shopRes] = await Promise.all([
+    supabase
+      .from("internal_ops_admin_audit")
+      .select("id, actor, action, target_shop_id, target_org_id, payload, created_at")
+      .eq("target_shop_id", shopId)
+      .order("created_at", { ascending: false })
+      .limit(cap),
+    supabase
+      .from("audit_logs")
+      .select("id, shop_id, actor_user_id, action, payload, created_at")
+      .eq("shop_id", shopId)
+      .in("action", [...ADMIN_PASSWORD_RESET_AUDIT_ACTIONS])
+      .order("created_at", { ascending: false })
+      .limit(cap),
+  ]);
+
+  const merged: OpsAuditRow[] = [];
+  if (opsRes.data) merged.push(...(opsRes.data as OpsAuditRow[]));
+  if (shopRes.data) {
+    for (const row of shopRes.data) {
+      merged.push(
+        auditLogRowToOpsRow({
+          id: row.id as string,
+          shop_id: row.shop_id as string | null,
+          actor_user_id: row.actor_user_id as string | null,
+          action: row.action as string,
+          payload: (row.payload as Record<string, unknown> | null) ?? null,
+          created_at: row.created_at as string,
+        }),
+      );
+    }
+  }
+  return mergeOpsAuditRows(merged, cap);
+}
+
+export async function adminShopLogPasswordResetEmail(
+  shopId: string,
+  ok: boolean,
+  detail?: string,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_log_password_reset_email", {
+    p_shop_id: shopId,
+    p_ok: ok,
+    p_detail: detail ?? null,
+  });
+  if (error) {
+    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
+    return {
+      ok: false,
+      message: missingFn
+        ? "Missing RPC: admin_shop_log_password_reset_email. Apply migration 093 and retry."
+        : error.message,
+    };
+  }
+  const j = (data ?? {}) as { ok?: boolean };
+  return j.ok === true ? { ok: true } : { ok: false, message: "Could not log email delivery." };
 }

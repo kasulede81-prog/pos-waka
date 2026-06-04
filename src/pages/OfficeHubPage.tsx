@@ -43,38 +43,35 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
-import { PilotSupportCard } from "../components/settings/PilotSupportCard";
-import { SyncHealthCard } from "../components/SyncHealthCard";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { tTemplate } from "../lib/i18n";
 
-function OfficeSyncBadge({ lang }: { lang: Language }) {
+/** One-line upload status in the office header — details live under Save & upload. */
+function OfficeSyncStatusChip({ lang }: { lang: Language }) {
   const sync = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
   const pending = sync.pendingCount;
+  const ok = pending === 0 && syncErrors === 0;
 
-  if (pending === 0 && syncErrors === 0) {
-    return (
-      <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-950">
-        {t(lang, "officeSyncBadgeOk")}
-      </p>
-    );
-  }
+  const label = ok
+    ? t(lang, "officeSyncBadgeOk")
+    : pending > 0
+      ? tTemplate(lang, "officeSyncBadgePending", { count: String(pending) })
+      : tTemplate(lang, "officeSyncBadgeErrors", { count: String(syncErrors) });
 
   return (
-    <div className="flex flex-wrap gap-2">
-      {pending > 0 ? (
-        <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-950">
-          {tTemplate(lang, "officeSyncBadgePending", { count: String(pending) })}
-        </span>
-      ) : null}
-      {syncErrors > 0 ? (
-        <span className="rounded-full bg-rose-100 px-3 py-1 text-xs font-black text-rose-950">
-          {tTemplate(lang, "officeSyncBadgeErrors", { count: String(syncErrors) })}
-        </span>
-      ) : null}
-    </div>
+    <Link
+      to="/office/backup"
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ${
+        ok
+          ? "border border-emerald-200/80 bg-emerald-50 text-emerald-900"
+          : "border border-amber-200 bg-amber-50 text-amber-950"
+      }`}
+    >
+      <Cloud className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+      <span className="truncate">{label}</span>
+    </Link>
   );
 }
 
@@ -89,7 +86,9 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const wt = useWholesaleTerms(lang, preferences.businessType);
   const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
   const deemphasizePurchasing = pharmacyMode || hospitalityMode;
-  const { snapshot, authMode, userId } = useSubscription();
+  const { snapshot, authMode } = useSubscription();
+  const sync = useSyncStatus();
+  const syncAttention = sync.pendingCount > 0 || countSalesWithSyncErrors() > 0;
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
   const [showAgentPortal, setShowAgentPortal] = useState(false);
 
@@ -149,13 +148,10 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       <header>
         <h1 className="text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">{t(lang, "officeHubTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
-        <div className="mt-3">
-          <OfficeSyncBadge lang={lang} />
+        <div className="mt-2">
+          <OfficeSyncStatusChip lang={lang} />
         </div>
       </header>
-
-      <PilotSupportCard lang={lang} userId={userId} />
-      <SyncHealthCard lang={lang} variant="simple" />
 
       <OfficePremiumSection lang={lang} />
 
@@ -360,8 +356,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
               <OfficeNavCard
                 to="/office/backup"
                 title={t(lang, "officeCardBackup")}
-                subtitle={t(lang, "officeCardBackupSub")}
+                subtitle={
+                  syncAttention
+                    ? tTemplate(lang, "officeCardBackupSubAttention", {
+                        count: String(sync.pendingCount),
+                      })
+                    : t(lang, "officeCardBackupSub")
+                }
                 Icon={Cloud}
+                highlight={syncAttention}
               />
             </OfficeNavSection>
           ) : null}
@@ -376,7 +379,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
             <OfficeNavCard
               to="/support"
               title={t(lang, "officeCardSupport")}
-              subtitle={t(lang, "officeCardSupportSub")}
+              subtitle={t(lang, "officeCardSupportSubDiagnostics")}
               Icon={HelpCircle}
             />
             <OfficeNavCard

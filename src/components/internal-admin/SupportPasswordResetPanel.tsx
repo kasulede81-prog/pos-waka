@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { adminShopSetOwnerPasswordDirect, resolveShopIdForAdmin } from "../../lib/wakaInternalAdmin";
+
+export type SupportPasswordResetToast = { kind: "ok" | "err"; text: string };
 import { isWakaShopNumberInput } from "../../lib/shopNumber";
 
 type Props = {
   previewMode: boolean;
-  onToast: (toast: { kind: "ok" | "err"; text: string }) => void;
+  onToast: (toast: SupportPasswordResetToast) => void;
+  onSuccess?: () => void;
 };
 
-export function SupportPasswordResetPanel({ previewMode, onToast }: Props) {
+export function SupportPasswordResetPanel({ previewMode, onToast, onSuccess }: Props) {
   const [shopId, setShopId] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -47,6 +50,7 @@ export function SupportPasswordResetPanel({ previewMode, onToast }: Props) {
     if (r.ok) {
       setPassword("");
       setConfirm("");
+      onSuccess?.();
       onToast({ kind: "ok", text: "Owner login password updated. Tell them the new password securely." });
     } else {
       onToast({ kind: "err", text: r.message ?? "Could not set password." });

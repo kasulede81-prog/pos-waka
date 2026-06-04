@@ -47,7 +47,8 @@ function getDraftKey(): string | null {
 }
 
 export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
-  const { settings: bizTypeSettings, isSuperAdmin: bizTypeSuperAdmin } = useBusinessTypeVisibility();
+  const { settings: bizTypeSettings, isSuperAdmin: bizTypeSuperAdmin, loading: bizTypeSettingsLoading } =
+    useBusinessTypeVisibility({ forRegistration: true });
   const visibleNonHospitalityIds = useMemo(
     () => filterNonHospitalityBusinessTypeIds(NON_HOSPITALITY_BUSINESS_TYPE_IDS, bizTypeSettings, bizTypeSuperAdmin),
     [bizTypeSettings, bizTypeSuperAdmin],
@@ -155,8 +156,16 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
             />
           </label>
           <p className="text-sm font-bold text-slate-700">{t(lang, "registerBusinessTypeLabel")}</p>
+          {bizTypeSettingsLoading ? (
+            <p className="text-sm font-semibold text-stone-500">{t(lang, "onboardBizLoading")}</p>
+          ) : visibleNonHospitalityIds.length === 0 && !showHospitalityGroup ? (
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+              {t(lang, "onboardBizNoneEnabled")}
+            </p>
+          ) : null}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {visibleNonHospitalityIds.map((id) => (
+            {!bizTypeSettingsLoading &&
+              visibleNonHospitalityIds.map((id) => (
               <button
                 key={id}
                 type="button"
@@ -170,7 +179,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
                 {t(lang, `businessType_${id}`)}
               </button>
             ))}
-            {showHospitalityGroup ? (
+            {!bizTypeSettingsLoading && showHospitalityGroup ? (
               <button
                 type="button"
                 onClick={selectHospitalityGroup}

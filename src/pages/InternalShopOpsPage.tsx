@@ -187,6 +187,9 @@ export function InternalShopOpsPage({ lang }: Props) {
     if (r.ok) {
       setToast({ kind: "ok", text: t(lang, "internalShopProfileDone") });
       await loadShop();
+      if (shopId && !previewMode) {
+        void fetchShopAuditTimeline(shopId, 20).then(setAuditRows);
+      }
     } else {
       setToast({ kind: "err", text: r.message ?? t(lang, "internalShopProfileError") });
     }
@@ -296,14 +299,30 @@ export function InternalShopOpsPage({ lang }: Props) {
         break;
       case "password_reset":
         void run(async () => {
-          const audit = await adminShopSendOwnerPasswordReset(detail.shop.id);
+          const shopId = detail.shop.id;
+          const audit = await adminShopSendOwnerPasswordReset(shopId);
           if (!audit.ok) return audit;
           const email =
             audit.ownerEmail ??
             detail.owner_email?.trim().toLowerCase() ??
             "";
           if (!email) return { ok: false, message: "No owner email on file." };
-          return sendOwnerPasswordResetEmail(email);
+          const sent = await sendOwnerPasswordResetEmail(email);
+          const { adminShopLogPasswordResetEmail } = await import("../lib/wakaInternalAdmin");
+          await adminShopLogPasswordResetEmail(
+            shopId,
+            sent.ok,
+            sent.ok ? `Email sent to ${email}` : sent.message ?? "send_failed",
+          );
+          if (!sent.ok) {
+            return {
+              ok: false,
+              message:
+                sent.message ??
+                "Audit logged but email failed. Check Supabase Auth email settings and redirect URL.",
+            };
+          }
+          return sent;
         });
         break;
       case "clear_bo_pin":

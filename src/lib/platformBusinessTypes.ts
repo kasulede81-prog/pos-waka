@@ -1,5 +1,6 @@
 import {
   DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS,
+  REGISTRATION_SAFE_BUSINESS_TYPE_SETTINGS,
   parsePlatformBusinessTypeSettings,
   type PlatformBusinessTypeSettings,
 } from "../config/businessTypeVisibility";
@@ -8,33 +9,50 @@ import { fetchWakaInternalAdminMe } from "./wakaInternalAdmin";
 import { isSuperAdmin, normalizeAdminRole } from "../components/internal-admin/v2/adminRoles";
 
 let cachedSettings: PlatformBusinessTypeSettings | null = null;
+let cachedFromServer = false;
 let cacheAt = 0;
 const CACHE_MS = 60_000;
 
+export type PlatformBusinessTypeSettingsResult = {
+  settings: PlatformBusinessTypeSettings;
+  /** True when read from `get_platform_business_type_settings` RPC. */
+  fromServer: boolean;
+};
+
 export async function fetchPlatformBusinessTypeSettings(
   force = false,
-): Promise<PlatformBusinessTypeSettings> {
+  opts?: { forRegistration?: boolean },
+): Promise<PlatformBusinessTypeSettingsResult> {
   const now = Date.now();
-  if (!force && cachedSettings && now - cacheAt < CACHE_MS) return cachedSettings;
-
-  if (!supabase) {
-    cachedSettings = DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS;
-    cacheAt = now;
-    return cachedSettings;
+  if (!force && cachedSettings && now - cacheAt < CACHE_MS) {
+    return { settings: cachedSettings, fromServer: cachedFromServer };
   }
+
+  const registrationFallback = () => {
+    const settings = opts?.forRegistration
+      ? REGISTRATION_SAFE_BUSINESS_TYPE_SETTINGS
+      : DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS;
+    cachedSettings = settings;
+    cachedFromServer = false;
+    cacheAt = now;
+    return { settings, fromServer: false };
+  };
+
+  if (!supabase) return registrationFallback();
 
   const { data, error } = await supabase.rpc("get_platform_business_type_settings");
   if (error || !data) {
-    cachedSettings = DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS;
-  } else {
-    cachedSettings = parsePlatformBusinessTypeSettings(data);
+    return registrationFallback();
   }
+  cachedSettings = parsePlatformBusinessTypeSettings(data);
+  cachedFromServer = true;
   cacheAt = now;
-  return cachedSettings;
+  return { settings: cachedSettings, fromServer: true };
 }
 
 export function invalidatePlatformBusinessTypeSettingsCache(): void {
   cachedSettings = null;
+  cachedFromServer = false;
   cacheAt = 0;
 }
 

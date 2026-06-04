@@ -92,7 +92,7 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
       return;
     }
     setLoading(true);
-    const s = await fetchPlatformBusinessTypeSettings(true);
+    const { settings: s } = await fetchPlatformBusinessTypeSettings(true);
     setSettings(s);
     setLoading(false);
   }, [previewMode]);

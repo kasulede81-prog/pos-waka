@@ -12,6 +12,7 @@ import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { useNavigate } from "react-router-dom";
 import { EmptyState, SupportTicketCard } from "../primitives";
+import { AdminPasswordResetLogPanel } from "../../AdminPasswordResetLogPanel";
 import { SupportPasswordResetPanel } from "../../SupportPasswordResetPanel";
 import { AdminDiagnosticsImportPanel } from "../../ops/AdminDiagnosticsImportPanel";
 import { TicketInternalNotesPanel } from "../../ops/TicketInternalNotesPanel";
@@ -28,6 +29,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
   const data = useInternalOpsData(adminRow, previewMode, "support");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [filter, setFilter] = useState<"open" | "all">("open");
+  const [passwordLogKey, setPasswordLogKey] = useState(0);
 
   const list =
     filter === "open"
@@ -50,11 +52,16 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
       {perms.canShopSupport && (perms.role === "super_admin" || perms.role === "support_admin") ? (
         <SupportPasswordResetPanel
           previewMode={previewMode}
+          onSuccess={() => setPasswordLogKey((k) => k + 1)}
           onToast={(toast) => {
             if (toast.kind === "ok") window.alert(toast.text);
             else window.alert(toast.text);
           }}
         />
+      ) : null}
+
+      {perms.canShopSupport ? (
+        <AdminPasswordResetLogPanel key={passwordLogKey} previewMode={previewMode} />
       ) : null}
 
       <AdminDiagnosticsImportPanel previewMode={previewMode} />

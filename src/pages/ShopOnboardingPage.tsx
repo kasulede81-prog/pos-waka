@@ -31,7 +31,6 @@ import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscr
 import { supabase } from "../lib/supabase";
 import { useBusinessTypeVisibility } from "../hooks/useBusinessTypeVisibility";
 import {
-  businessTypeVisibilityStatus,
   filterHospitalityOnboardingStyles,
   filterOnboardingBusinessCards,
 } from "../config/businessTypeVisibility";
@@ -59,7 +58,11 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
   const { snapshot, authMode } = useSubscription();
-  const { settings: bizTypeSettings, isSuperAdmin: bizTypeSuperAdmin } = useBusinessTypeVisibility();
+  const {
+    settings: bizTypeSettings,
+    isSuperAdmin: bizTypeSuperAdmin,
+    loading: bizTypeSettingsLoading,
+  } = useBusinessTypeVisibility({ forRegistration: true });
 
   const visibleBusinessCards = useMemo(
     () => filterOnboardingBusinessCards(ONBOARDING_BUSINESS_CARDS, bizTypeSettings, bizTypeSuperAdmin),
@@ -96,6 +99,38 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
   const [districtId, setDistrictId] = useState("");
   const [phoneFallback, setPhoneFallback] = useState("");
+
+  useEffect(() => {
+    if (bizTypeSettingsLoading || visibleBusinessCards.length === 0) return;
+    const allowed = new Set<BusinessType>();
+    for (const card of visibleBusinessCards) {
+      if (card.businessType) allowed.add(card.businessType);
+      if (card.hospitalityGroup) {
+        for (const style of visibleHospitalityStyles) allowed.add(style.businessType);
+      }
+    }
+    if (allowed.has(businessType)) return;
+    const first = visibleBusinessCards[0];
+    if (first?.hospitalityGroup) {
+      setPickedHospitalityGroup(true);
+      setSelectedBusinessCardId(first.id);
+      const style = visibleHospitalityStyles[0];
+      if (style) {
+        setHospitalityStyleId(style.id);
+        setBusinessType(style.businessType);
+      }
+    } else if (first?.businessType) {
+      setPickedHospitalityGroup(false);
+      setSelectedBusinessCardId(first.id);
+      setBusinessType(first.businessType);
+    }
+  }, [
+    bizTypeSettingsLoading,
+    visibleBusinessCards,
+    visibleHospitalityStyles,
+    businessType,
+    hospitalityStyleId,
+  ]);
 
   useEffect(() => {
     void fetchDistricts().then(({ districts: d }) => setDistricts(d));
@@ -312,17 +347,21 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               </button>
             ) : null}
             <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardBizTitle")}</h2>
+            {bizTypeSettingsLoading ? (
+              <p className="text-sm font-semibold text-stone-500">{t(lang, "onboardBizLoading")}</p>
+            ) : visibleBusinessCards.length === 0 ? (
+              <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+                {t(lang, "onboardBizNoneEnabled")}
+              </p>
+            ) : null}
             <div className="grid gap-2">
-              {visibleBusinessCards.map((card) => {
+              {!bizTypeSettingsLoading &&
+                visibleBusinessCards.map((card) => {
                 const selected =
                   card.hospitalityGroup
                     ? selectedBusinessCardId === card.id
                     : selectedBusinessCardId === card.id ||
                       (card.businessType != null && businessType === card.businessType && !pickedHospitalityGroup);
-                const status =
-                  card.businessType && bizTypeSuperAdmin
-                    ? businessTypeVisibilityStatus(card.businessType, bizTypeSettings, true)
-                    : null;
                 return (
                   <button
                     key={card.id}
@@ -341,17 +380,13 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                   >
                     <span className="text-2xl">{card.emoji}</span>
                     <span className="mt-1 block text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
-                    {status && status !== "enabled" ? (
-                      <span className="mt-1 block text-[10px] font-black uppercase tracking-wide text-stone-500">
-                        {status}
-                      </span>
-                    ) : null}
                   </button>
                 );
               })}
             </div>
             <button
               type="button"
+              disabled={bizTypeSettingsLoading || visibleBusinessCards.length === 0}
               className={primaryBtn}
               onClick={() => {
                 if (pickedHospitalityGroup || isHospitalityOnboardingGroupCard(selectedBusinessCardId)) {

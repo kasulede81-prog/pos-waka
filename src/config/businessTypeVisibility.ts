@@ -39,6 +39,12 @@ export const DEFAULT_PLATFORM_BUSINESS_TYPE_SETTINGS: PlatformBusinessTypeSettin
   showExperimental: false,
 };
 
+/** Used when platform settings cannot be loaded — do not expose all types. */
+export const REGISTRATION_SAFE_BUSINESS_TYPE_SETTINGS: PlatformBusinessTypeSettings = {
+  enabled: ["kiosk_duka"],
+  showExperimental: false,
+};
+
 const HOSPITALITY_TYPES: BusinessType[] = ["restaurant", "bar", "restaurant_bar", "hotel"];
 
 export function isExperimentalBusinessType(id: BusinessType): boolean {
