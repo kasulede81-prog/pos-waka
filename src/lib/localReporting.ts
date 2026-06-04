@@ -1,10 +1,17 @@
 /** Client-side report aggregation (offline / local-mode fallback). */
 
 import type { Customer, Product, ReturnRecord, Sale, Supplier } from "../types";
-import { dateKeyKampala, dateKeyDaysAgoKampala, monthKeyKampala, saleReportingDayKey } from "./datesUg";
+import { dateKeyDaysAgoKampala, dateKeyKampala, monthKeyKampala, saleReportingDayKey } from "./datesUg";
+import {
+  enumerateDaysInBounds,
+  resolveDateFilterBounds,
+  returnsInBounds,
+  revenueSalesInBounds,
+  type DateFilterValue,
+} from "./dateFilters";
 import { sumCashExpensesInMonth } from "./cashReconciliation";
 import type { CashExpense } from "../types";
-import { getCompletedFinancials, isRevenueSale, revenueSales } from "./financialMetrics";
+import { getCompletedFinancials, isRevenueSale } from "./financialMetrics";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isLowStock } from "./sellingEngine";
 
@@ -79,31 +86,16 @@ export type CustomerInsights = {
   customersWithDebt: number;
 };
 
-export type ReportRange = "today" | "week" | "month";
+export type { ReportRange } from "./dateFilters";
 
-function salesInRange(sales: Sale[], range: ReportRange): Sale[] {
-  const today = dateKeyKampala(new Date());
-  const weekCut = dateKeyDaysAgoKampala(6);
-  const monthPrefix = today.slice(0, 7);
-  return sales.filter((s) => {
-    if (!isRevenueSale(s)) return false;
-    const k = saleReportingDayKey(s);
-    if (range === "today") return k === today;
-    if (range === "week") return k >= weekCut;
-    return k.startsWith(monthPrefix);
-  });
+function salesForFilter(sales: Sale[], filter: DateFilterValue): Sale[] {
+  const bounds = resolveDateFilterBounds(filter);
+  return revenueSalesInBounds(sales, bounds);
 }
 
-function returnsInRange(returns: ReturnRecord[], range: ReportRange): ReturnRecord[] {
-  const today = dateKeyKampala(new Date());
-  const weekCut = dateKeyDaysAgoKampala(6);
-  const monthPrefix = today.slice(0, 7);
-  return returns.filter((r) => {
-    const k = dateKeyKampala(r.createdAt);
-    if (range === "today") return k === today;
-    if (range === "week") return k >= weekCut;
-    return k.startsWith(monthPrefix);
-  });
+function returnsForFilter(returns: ReturnRecord[], filter: DateFilterValue): ReturnRecord[] {
+  const bounds = resolveDateFilterBounds(filter);
+  return returnsInBounds(returns, bounds);
 }
 
 function rankProducts(
@@ -185,14 +177,16 @@ export function localGetDailySalesSummary(
   };
 }
 
-export function localGetWeeklySalesSummary(
+/** Home dashboard hint — rolling last 7 calendar days (not Monday week). */
+export function localGetRollingSevenDaySalesSummary(
   sales: Sale[],
   products: Product[],
   returns: ReturnRecord[],
 ): WeeklySalesSummary {
   const endDay = dateKeyKampala(new Date());
   const startDay = dateKeyDaysAgoKampala(6);
-  const filtered = revenueSales(sales).filter((s) => {
+  const filtered = sales.filter((s) => {
+    if (!isRevenueSale(s)) return false;
     const k = saleReportingDayKey(s);
     return k >= startDay && k <= endDay;
   });
@@ -202,6 +196,34 @@ export function localGetWeeklySalesSummary(
   });
   const keys: string[] = [];
   for (let i = 6; i >= 0; i--) keys.push(dateKeyDaysAgoKampala(i));
+  return buildWeeklySummaryFromFiltered(sales, products, returns, filtered, filteredReturns, startDay, endDay, keys);
+}
+
+export function localGetWeeklySalesSummary(
+  sales: Sale[],
+  products: Product[],
+  returns: ReturnRecord[],
+  now: Date = new Date(),
+): WeeklySalesSummary {
+  const bounds = resolveDateFilterBounds({ kind: "preset", preset: "this_week" }, now);
+  const startDay = bounds.fromKey;
+  const endDay = bounds.toKey;
+  const filtered = revenueSalesInBounds(sales, bounds);
+  const filteredReturns = returnsInBounds(returns, bounds);
+  const keys = enumerateDaysInBounds(bounds);
+  return buildWeeklySummaryFromFiltered(sales, products, returns, filtered, filteredReturns, startDay, endDay, keys);
+}
+
+function buildWeeklySummaryFromFiltered(
+  sales: Sale[],
+  products: Product[],
+  returns: ReturnRecord[],
+  filtered: Sale[],
+  filteredReturns: ReturnRecord[],
+  startDay: string,
+  endDay: string,
+  keys: string[],
+): WeeklySalesSummary {
   const dailyTrend = keys.map((day) => {
     const dayFin = getCompletedFinancials(sales, returns, products, { day });
     return {
@@ -258,12 +280,12 @@ export function localGetTopProducts(
   sales: Sale[],
   returns: ReturnRecord[],
   products: Product[],
-  range: ReportRange,
+  filter: DateFilterValue,
   order: "top" | "slow",
   limit = 10,
 ): ProductRank[] {
-  const filtered = salesInRange(sales, range);
-  const filteredReturns = returnsInRange(returns, range);
+  const filtered = salesForFilter(sales, filter);
+  const filteredReturns = returnsForFilter(returns, filter);
   return rankProducts(filtered, filteredReturns, products, order, limit);
 }
 
@@ -303,12 +325,13 @@ export function localGetInventoryInsights(products: Product[]): InventoryInsight
 export function localGetCustomerInsights(
   sales: Sale[],
   customers: Customer[],
-  range: ReportRange,
+  filter: DateFilterValue,
   limit = 10,
 ): CustomerInsights {
-  const endDay = dateKeyKampala(new Date());
-  const startDay = range === "month" ? `${endDay.slice(0, 7)}-01` : range === "week" ? dateKeyDaysAgoKampala(6) : endDay;
-  const filtered = salesInRange(sales, range);
+  const bounds = resolveDateFilterBounds(filter);
+  const startDay = bounds.fromKey;
+  const endDay = bounds.toKey;
+  const filtered = salesForFilter(sales, filter);
   const debtCustomers = customers.filter((c) => c.debtBalanceUgx > 0);
   const topCustomers = customers
     .map((c) => {
@@ -338,30 +361,59 @@ export function localGetRangeSummary(
   customers: Customer[],
   returns: ReturnRecord[],
   suppliers: Supplier[],
-  range: ReportRange,
+  filter: DateFilterValue,
   cashExpenses: CashExpense[] = [],
 ) {
-  const daily =
-    range === "today"
-      ? localGetDailySalesSummary(sales, products, returns)
-      : localGetDailySalesSummary(sales, products, returns, dateKeyKampala(new Date()));
+  const bounds = resolveDateFilterBounds(filter);
   const weekly = localGetWeeklySalesSummary(sales, products, returns);
-  const monthly = localGetMonthlySalesSummary(sales, products, returns, monthKeyKampala(new Date()), cashExpenses);
-  const summary =
-    range === "today" ? daily : range === "week" ? weekly : monthly;
+  const monthly = localGetMonthlySalesSummary(
+    sales,
+    products,
+    returns,
+    monthKeyKampala(bounds.toKey),
+    cashExpenses,
+  );
+  let summary: DailySalesSummary | WeeklySalesSummary | MonthlySalesSummary;
+  let dailyTrend = weekly.dailyTrend;
+  if (filter.kind === "preset" && filter.preset === "this_month") {
+    summary = monthly;
+    dailyTrend = weekly.dailyTrend;
+  } else if (filter.kind === "preset" && filter.preset === "this_week") {
+    summary = weekly;
+    dailyTrend = weekly.dailyTrend;
+  } else {
+    const dayKey = bounds.fromKey;
+    const dayFin = getCompletedFinancials(sales, returns, products, { day: dayKey });
+    summary = {
+      day: dayKey,
+      transactionCount: dayFin.transactionCount,
+      totalRevenueUgx: dayFin.revenueUgx,
+      cashCollectedUgx: dayFin.cashCollectedUgx,
+      debtIssuedUgx: dayFin.debtIssuedUgx,
+      discountsUgx: dayFin.discountsUgx,
+      taxesUgx: 0,
+      estimatedProfitUgx: dayFin.profitUgx,
+      averageTransactionUgx: dayFin.averageTransactionUgx,
+    };
+    dailyTrend = [{ day: dayKey, revenueUgx: dayFin.revenueUgx, transactionCount: dayFin.transactionCount }];
+  }
+
+  const filteredSales = salesForFilter(sales, filter);
+  const filteredReturns = returnsForFilter(returns, filter);
+
   return {
     summary,
     profitUgx: computeTodayProfitBreakdown(
-      salesInRange(sales, range),
+      filteredSales,
       new Map(products.map((p) => [p.id, p])),
-      returnsInRange(returns, range),
+      filteredReturns,
     ).profitUgx,
-    weekly: localGetWeeklySalesSummary(sales, products, returns),
-    topProducts: localGetTopProducts(sales, returns, products, range, "top", 10),
-    slowProducts: localGetTopProducts(sales, returns, products, range, "slow", 8),
+    weekly,
+    topProducts: localGetTopProducts(sales, returns, products, filter, "top", 10),
+    slowProducts: localGetTopProducts(sales, returns, products, filter, "slow", 8),
     inventory: localGetInventoryInsights(products),
-    customers: localGetCustomerInsights(sales, customers, range),
+    customers: localGetCustomerInsights(sales, customers, filter),
     supplierDebtTotal: suppliers.reduce((a, s) => a + Math.max(0, s.balanceOwedUgx), 0),
-    dailyTrend: weekly.dailyTrend,
+    dailyTrend,
   };
 }

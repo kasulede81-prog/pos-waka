@@ -18,7 +18,7 @@ export function dateKeyDaysAgoKampala(days: number): string {
   return dateKeyKampala(d);
 }
 
-export type ReceiptDateRange = "today" | "week" | "month";
+export type { ReceiptDateRange } from "./dateFilters";
 
 /** YYYY-MM in Kampala timezone. */
 export function monthKeyKampala(isoOrDate: string | Date): string {
@@ -45,10 +45,4 @@ export function saleReportingDayKey(sale: Pick<Sale, "createdAt">): string {
   return dateKeyKampala(sale.createdAt);
 }
 
-export function saleMatchesReceiptRange(createdAt: string, range: ReceiptDateRange): boolean {
-  const now = new Date();
-  const saleDay = dateKeyKampala(createdAt);
-  if (range === "today") return saleDay === dateKeyKampala(now);
-  if (range === "month") return monthKeyKampala(createdAt) === monthKeyKampala(now);
-  return weekStartKeyKampala(createdAt) === weekStartKeyKampala(now);
-}
+export { saleMatchesReceiptRange } from "./dateFilters";

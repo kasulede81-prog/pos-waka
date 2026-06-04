@@ -8,6 +8,11 @@ import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { useShopReportBundle } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala } from "../lib/datesUg";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
+import { isSingleDayFilter, selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -40,8 +45,6 @@ import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
 import { ExpiryStatusBadge } from "../components/pharmacy/ExpiryStatusBadge";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 
-type Range = "today" | "week" | "month";
-
 export function ReportsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
@@ -50,12 +53,22 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const purchases = usePosStore((s) => s.purchases);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
-  const [range, setRange] = useState<Range>("today");
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const {
+    filter,
+    setFilter,
+    bounds,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+  } = useReportingDateFilter();
   const [reportHint, setReportHint] = useState<string | null>(null);
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = useReportingReturnRecords(includeArchived);
-  const report = useShopReportBundle(range, includeArchived);
+  const report = useShopReportBundle(filter, includeArchived);
+  const reportDayKey = selectedDayKeyForFilter(filter) ?? dateKeyKampala(new Date());
+  const showDailyExport = isSingleDayFilter(filter);
 
   if (!hasPermission(actor.role, "reports.view")) {
     return <Navigate to="/" replace />;
@@ -66,9 +79,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const canSuppliersView = hasPermission(actor.role, "suppliers.view");
 
   const purchasesTodayUgx = useMemo(() => {
-    const dk = dateKeyKampala(new Date());
+    const dk = reportDayKey;
     return purchases.filter((p) => dateKeyKampala(p.createdAt) === dk).reduce((a, p) => a + p.totalCostUgx, 0);
-  }, [purchases]);
+  }, [purchases, reportDayKey]);
 
   const preferences = usePosStore((s) => s.preferences);
   const stockMovements = usePosStore((s) => s.stockMovements);
@@ -76,14 +89,8 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const wholesaleMode = isWholesaleMode(preferences.businessType);
   const hospitalityReports = useMemo(() => {
     if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) return null;
-    const today = dateKeyKampala(new Date());
-    const fromKey =
-      range === "month"
-        ? today.slice(0, 7) + "-01"
-        : range === "week"
-          ? dateKeyKampala(new Date(Date.now() - 6 * 86400000))
-          : today;
-    return computeHospitalityReports(sales, products, { fromKey, toKey: today }, {
+    const { fromKey, toKey } = bounds;
+    return computeHospitalityReports(sales, products, { fromKey, toKey }, {
       floor: preferences.hospitalityFloor,
       staffAccounts: preferences.staffAccounts,
     });
@@ -92,7 +99,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
     preferences.hospitalityModeEnabled,
     preferences.hospitalityFloor,
     preferences.staffAccounts,
-    range,
+    bounds,
     sales,
     products,
   ]);
@@ -303,25 +310,32 @@ export function ReportsPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
+      <DateFilterBar
+        lang={lang}
+        value={filter}
+        onChange={setFilter}
+        activeClassName="border-slate-800 bg-slate-900 text-white shadow-sm"
+        inactiveClassName="border-slate-200 bg-white text-slate-700 ring-1 ring-slate-200"
+      />
+      <DateFilterViewingLabel lang={lang} value={filter} />
+      {archiveNotice ? (
+        <DateFilterArchiveNotice
+          lang={lang}
+          archivedCount={archivedSalesCount}
+          onEnableArchived={() => setIncludeArchived(true)}
+        />
+      ) : null}
+      {needsArchive && includeArchived && archivedSalesCount > 0 ? (
+        <p className="text-xs font-semibold text-slate-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+      ) : null}
+      {needsArchive && archivedSalesCount === 0 ? (
+        <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
+      ) : null}
+
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {pharmacyMode && pharmacyExpirySection ? pharmacyExpirySection : null}
       {wholesaleSection}
-
-      <div className="flex gap-2">
-        {(["today", "week", "month"] as const).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRange(r)}
-            className={`flex-1 rounded-2xl py-3 text-sm font-bold ${
-              range === r ? "bg-slate-900 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200"
-            }`}
-          >
-            {t(lang, `range_${r}`)}
-          </button>
-        ))}
-      </div>
 
       {hospitalityReports ? (
         <section className="space-y-4 rounded-3xl border border-waka-200 bg-waka-50/40 p-4">
@@ -423,7 +437,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      {range === "today" ? (
+      {showDailyExport ? (
         <section className="rounded-3xl border border-slate-200 bg-white p-4">
           <p className="text-sm font-semibold text-slate-800">{t(lang, "exportReportHeading")}</p>
           {reportHint ? <p className="mt-2 text-sm text-slate-600">{reportHint}</p> : null}
@@ -432,7 +446,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               type="button"
               className="rounded-2xl bg-waka-600 px-4 py-3 text-sm font-bold text-white"
               onClick={() => {
-                const dk = dateKeyKampala(new Date());
+                const dk = reportDayKey;
                 void downloadDailyReportPdf({
                   lang,
                   dateKey: dk,
@@ -452,7 +466,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               type="button"
               className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
               onClick={() => {
-                const dk = dateKeyKampala(new Date());
+                const dk = reportDayKey;
                 const text = buildDailyReportText(lang, dk, sales, products, returnRecords, debtPayments, cashExpenses);
                 void navigator.clipboard.writeText(text).then(
                   () => {
@@ -469,7 +483,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               type="button"
               className="rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
               onClick={async () => {
-                const dk = dateKeyKampala(new Date());
+                const dk = reportDayKey;
                 const text = buildDailyReportText(lang, dk, sales, products, returnRecords, debtPayments, cashExpenses);
                 const ok = await shareText(text, t(lang, "appName"));
                 setReportHint(ok ? t(lang, "reportShared") : t(lang, "reportCopyInstead"));

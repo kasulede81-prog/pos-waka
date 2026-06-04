@@ -1,27 +1,39 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { dateKeyKampala, dateKeyDaysAgoKampala, saleReportingDayKey } from "../lib/datesUg";
+import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { isCompletedSale } from "../lib/saleStatus";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canSeeOfficeProfit, computeProfitGroupedByCategory } from "../lib/homeProfit";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { PageHeader } from "../components/layout/PageHeader";
-
-type Range = "today" | "week" | "month";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
+import { formatDateFilterChipDay } from "../lib/dateFilterLabels";
+import { tTemplate } from "../lib/i18n";
 
 type Props = { lang: Language };
 
 export function ProfitPage({ lang }: Props) {
   const actor = useSessionActor();
   const { authMode, snapshot } = useSubscription();
-  const [includeArchived, setIncludeArchived] = useState(false);
-  const [range, setRange] = useState<Range>("today");
+  const {
+    filter,
+    setFilter,
+    bounds,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+  } = useReportingDateFilter();
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
@@ -35,30 +47,15 @@ export function ProfitPage({ lang }: Props) {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const generalLabel = t(lang, "uncategorized");
 
-  const filteredSales = useMemo(() => {
-    const today = dateKeyKampala(new Date());
-    const weekCut = dateKeyDaysAgoKampala(6);
-    const monthPrefix = today.slice(0, 7);
-    return sales.filter((s) => {
-      if (!isCompletedSale(s)) return false;
-      const k = saleReportingDayKey(s);
-      if (range === "today") return k === today;
-      if (range === "week") return k >= weekCut;
-      return k.startsWith(monthPrefix);
-    });
-  }, [sales, range]);
+  const filteredSales = useMemo(
+    () => sales.filter((s) => isCompletedSale(s) && saleMatchesFilter(s, bounds)),
+    [sales, bounds],
+  );
 
-  const filteredReturns = useMemo(() => {
-    const today = dateKeyKampala(new Date());
-    const weekCut = dateKeyDaysAgoKampala(6);
-    const monthPrefix = today.slice(0, 7);
-    return allReturnRecords.filter((r) => {
-      const k = dateKeyKampala(r.createdAt);
-      if (range === "today") return k === today;
-      if (range === "week") return k >= weekCut;
-      return k.startsWith(monthPrefix);
-    });
-  }, [allReturnRecords, range]);
+  const filteredReturns = useMemo(
+    () => allReturnRecords.filter((r) => returnMatchesFilter(r, bounds)),
+    [allReturnRecords, bounds],
+  );
 
   const report = useMemo(
     () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, filteredReturns),
@@ -66,6 +63,7 @@ export function ProfitPage({ lang }: Props) {
   );
 
   const { groups, total } = report;
+  const showDayChip = filter.kind === "day";
 
   return (
     <div className="space-y-5 pb-12">
@@ -76,20 +74,28 @@ export function ProfitPage({ lang }: Props) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
-      <div className="flex gap-2">
-        {(["today", "week", "month"] as const).map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRange(r)}
-            className={`flex-1 rounded-2xl py-3 text-sm font-bold ${
-              range === r ? "bg-waka-600 text-white" : "bg-white text-stone-700 ring-1 ring-stone-200"
-            }`}
-          >
-            {t(lang, `range_${r}`)}
-          </button>
-        ))}
-      </div>
+      <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
+      <DateFilterViewingLabel lang={lang} value={filter} />
+      {showDayChip ? (
+        <p className="text-xs font-bold text-waka-800">
+          {tTemplate(lang, "dateFilterSelectedDayChip", {
+            label: formatDateFilterChipDay(filter.dateKey, lang),
+          })}
+        </p>
+      ) : null}
+      {archiveNotice ? (
+        <DateFilterArchiveNotice
+          lang={lang}
+          archivedCount={archivedSalesCount}
+          onEnableArchived={() => setIncludeArchived(true)}
+        />
+      ) : null}
+      {needsArchive && includeArchived && archivedSalesCount > 0 ? (
+        <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+      ) : null}
+      {needsArchive && archivedSalesCount === 0 ? (
+        <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
+      ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 

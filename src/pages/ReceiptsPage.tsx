@@ -9,7 +9,13 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { dateKeyKampala, saleMatchesReceiptRange, type ReceiptDateRange } from "../lib/datesUg";
+import { dateKeyKampala } from "../lib/datesUg";
+import { saleMatchesFilter } from "../lib/dateFilters";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
+import { formatDateFilterChipDay } from "../lib/dateFilterLabels";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
@@ -44,12 +50,6 @@ function formatReceiptsDayHeading(dateKey: string): string {
     timeZone: "Africa/Kampala",
   }).format(anchor);
 }
-
-const RECEIPT_FILTERS: { key: ReceiptDateRange; labelKey: "receiptsFilterToday" | "receiptsFilterWeek" | "receiptsFilterMonth" }[] = [
-  { key: "today", labelKey: "receiptsFilterToday" },
-  { key: "week", labelKey: "receiptsFilterWeek" },
-  { key: "month", labelKey: "receiptsFilterMonth" },
-];
 
 type SaleArticleProps = {
   lang: Language;
@@ -154,7 +154,16 @@ function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, 
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const {
+    filter,
+    setFilter,
+    bounds,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+  } = useReportingDateFilter();
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
@@ -171,7 +180,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const products = usePosStore((s) => s.products);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
-  const [range, setRange] = useState<ReceiptDateRange>("today");
   const [showCancelled, setShowCancelled] = useState(false);
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
@@ -229,10 +237,10 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   };
 
   const filteredInRange = useMemo(() => {
-    const inRange = sales.filter((s) => saleMatchesReceiptRange(s.createdAt, range));
+    const inRange = sales.filter((s) => saleMatchesFilter(s, bounds));
     if (actor.role !== "cashier") return inRange;
     return inRange.filter((s) => s.soldByUserId && s.soldByUserId === actor.userId);
-  }, [sales, range, actor.role, actor.userId]);
+  }, [sales, bounds, actor.role, actor.userId]);
 
   const partitioned = useMemo(() => partitionReceiptsSales(filteredInRange), [filteredInRange]);
 
@@ -301,26 +309,34 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         </p>
       ) : null}
 
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
-
       {sales.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {RECEIPT_FILTERS.map(({ key, labelKey }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setRange(key)}
-              className={`h-9 shrink-0 cursor-pointer rounded-full border px-3.5 text-xs font-black transition-colors active:scale-[0.98] ${
-                range === key
-                  ? "border-waka-400 bg-waka-600 text-white shadow-sm"
-                  : "border-stone-200 bg-white text-stone-700 hover:border-waka-200 hover:bg-waka-50"
-              }`}
-            >
-              {t(lang, labelKey)}
-            </button>
-          ))}
-        </div>
+        <>
+          <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
+          <DateFilterViewingLabel lang={lang} value={filter} />
+          {filter.kind === "day" ? (
+            <p className="text-xs font-bold text-waka-800">
+              {tTemplate(lang, "dateFilterSelectedDayChip", {
+                label: formatDateFilterChipDay(filter.dateKey, lang),
+              })}
+            </p>
+          ) : null}
+          {archiveNotice ? (
+            <DateFilterArchiveNotice
+              lang={lang}
+              archivedCount={archivedSalesCount}
+              onEnableArchived={() => setIncludeArchived(true)}
+            />
+          ) : null}
+          {needsArchive && includeArchived && archivedSalesCount > 0 ? (
+            <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+          ) : null}
+          {needsArchive && archivedSalesCount === 0 ? (
+            <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
+          ) : null}
+        </>
       ) : null}
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {hasAnyInRange ? (
         <p className="rounded-xl border border-waka-100 bg-waka-50/80 px-3 py-2 text-sm font-bold text-waka-950">

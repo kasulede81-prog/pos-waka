@@ -4,6 +4,7 @@ import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
 import { isLowStock } from "./sellingEngine";
 import { countExpiryBuckets, medicinesInExpiryBucket, type ExpiryBucket } from "./pharmacyExpiry";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
+import { DEFAULT_DATE_FILTER } from "./dateFilters";
 import { localGetTopProducts } from "./localReporting";
 import { computePharmacyExpiryReport } from "./pharmacyReports";
 import { pharmacyInventoryValueAtCostUgx } from "./pharmacyCostIntegrity";
@@ -46,7 +47,7 @@ export function computePharmacyDashboardStats(
   const todayDispensingTotalUgx = todayFin.revenueUgx;
   const todayProfitUgx = todayFin.profitUgx;
 
-  const top = localGetTopProducts(sales, returns, products, "today", "top", 5);
+  const top = localGetTopProducts(sales, returns, products, DEFAULT_DATE_FILTER, "top", 5);
   const expiryReport = computePharmacyExpiryReport(inStock, today);
   const inventoryValueUgx = pharmacyInventoryValueAtCostUgx(inStock);
 

@@ -2,11 +2,11 @@ import { useMemo } from "react";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "./useDeferredReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
+import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
 import {
   localGetRangeSummary,
-  localGetWeeklySalesSummary,
+  localGetRollingSevenDaySalesSummary,
   type ProductRank,
-  type ReportRange,
   type DailySalesSummary,
   type WeeklySalesSummary,
   type MonthlySalesSummary,
@@ -42,7 +42,7 @@ function trendBars(days: { day: string; revenueUgx: number }[]) {
   }));
 }
 
-export function useShopReportBundle(range: ReportRange, includeArchived: boolean): ShopReportBundle {
+export function useShopReportBundle(filter: DateFilterValue, includeArchived: boolean): ShopReportBundle {
   const sales = useDeferredReportingSales(includeArchived);
   const returns = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
@@ -51,8 +51,8 @@ export function useShopReportBundle(range: ReportRange, includeArchived: boolean
   const cashExpenses = usePosStore((s) => s.cashExpenses);
 
   const local = useMemo(
-    () => localGetRangeSummary(sales, products, customers, returns, suppliers, range, cashExpenses),
-    [sales, products, customers, returns, suppliers, range, cashExpenses],
+    () => localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses),
+    [sales, products, customers, returns, suppliers, filter, cashExpenses],
   );
 
   const summary = local.summary;
@@ -90,11 +90,11 @@ export function useDashboardAnalytics(includeArchived: boolean) {
   const customers = usePosStore((s) => s.customers);
 
   const localToday = useMemo(
-    () => localGetRangeSummary(sales, products, customers, returns, [], "today"),
+    () => localGetRangeSummary(sales, products, customers, returns, [], DEFAULT_DATE_FILTER),
     [sales, products, customers, returns],
   );
   const localWeekly = useMemo(
-    () => localGetWeeklySalesSummary(sales, products, returns),
+    () => localGetRollingSevenDaySalesSummary(sales, products, returns),
     [sales, products, returns],
   );
 
