@@ -71,7 +71,13 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webp}"],
           navigateFallback: "/index.html",
-          navigateFallbackDenylist: [/^\/auth\/callback/, /^\/auth\/recovery/, /^\/reset-password/],
+          navigateFallbackDenylist: [
+            /^\/auth\/callback/,
+            /^\/auth\/recovery/,
+            /^\/reset-password/,
+            /^\/sitemap\.xml$/,
+            /^\/robots\.txt$/,
+          ],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*supabase\.co\/.*/i,

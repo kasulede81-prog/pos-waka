@@ -58,3 +58,5 @@ build/icon.png
 *.njsproj
 *.sln
 *.sw?
+
+.vercel

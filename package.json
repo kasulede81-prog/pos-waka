@@ -9,7 +9,7 @@
     "dev": "vite --mode development",
     "dev:staging": "vite --mode staging",
     "check:google-auth": "node scripts/check-google-auth-env.mjs",
-    "build": "tsc -b && vite build --mode production",
+    "build": "tsc -b && vite build --mode production && node scripts/verify-seo-assets.mjs",
     "build:staging": "tsc -b && vite build --mode staging",
     "build:production": "tsc -b && vite build --mode production",
     "lint": "eslint .",

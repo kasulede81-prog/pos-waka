@@ -1,0 +1,13 @@
+android/
+release/
+release/**
+win-unpacked/
+node_modules/
+lovable-import/
+supabase/.temp/
+*.exe
+*.msi
+*.blockmap
+*.zip
+*.7z
+.git/
