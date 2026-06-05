@@ -4,7 +4,8 @@ import { t } from "../lib/i18n";
 import { MarketingLayout } from "../components/marketing/MarketingLayout";
 import { SeoHead } from "../components/marketing/SeoHead";
 import { FounderSection } from "../components/marketing/FounderSection";
-import { FOUNDER_HOME_LINE, WAKA_PRODUCT_DESCRIPTION } from "../config/company";
+import { FOUNDER_HOME_LINE, WAKA_SEO_HOME_DESCRIPTION, WAKA_SEO_HOME_TITLE } from "../config/company";
+import { SOLUTION_NAV_LINKS } from "../config/solutionPages";
 
 type Props = {
   lang: Language;
@@ -25,8 +26,8 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="Waka POS | Simple POS for Shops in Uganda"
-        description={WAKA_PRODUCT_DESCRIPTION}
+        title={WAKA_SEO_HOME_TITLE}
+        description={WAKA_SEO_HOME_DESCRIPTION}
         path="/home"
         structuredData="home"
       />
@@ -95,6 +96,27 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
               >
                 <span className="mr-2 inline-block h-2 w-2 rounded-full bg-orange-500 align-middle" />
                 {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-2xl font-black text-stone-950">POS solutions for every business in Uganda</h2>
+          <p className="mt-2 max-w-2xl text-sm font-medium text-stone-600">
+            Whether you run a chemist, supermarket, restaurant, or retail shop — Waka POS includes inventory management,
+            receipt printing, debt tracking, sales reports, staff access, offline mode, barcode support, and cloud sync.
+          </p>
+          <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {SOLUTION_NAV_LINKS.map((link) => (
+              <li key={link.slug}>
+                <Link
+                  to={link.path}
+                  className="flex min-h-[72px] flex-col justify-center rounded-2xl border border-orange-100 bg-white px-5 py-4 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+                >
+                  <span className="text-sm font-black text-orange-800">{link.label}</span>
+                  <span className="mt-1 text-xs font-medium text-stone-500">Learn more →</span>
+                </Link>
               </li>
             ))}
           </ul>

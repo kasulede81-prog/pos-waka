@@ -23,7 +23,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
         title="About Waka POS and Waka Technologies"
-        description={`${WAKA_BRAND_NAME} builds ${WAKA_MAIN_PRODUCT} for Ugandan shops. Founded by ${FOUNDER_NAME}. ${WAKA_PRODUCT_DESCRIPTION}`}
+        description={`${WAKA_BRAND_NAME} builds ${WAKA_MAIN_PRODUCT} in Uganda for retail shops, pharmacies, supermarkets, and restaurants. Founded by ${FOUNDER_NAME} — simple POS software with local support and offline selling.`}
         path="/about"
         structuredData="home"
       />

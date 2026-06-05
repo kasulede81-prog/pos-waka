@@ -6,7 +6,6 @@ import { t } from "../../lib/i18n";
 import { WAKA_MAIN_PRODUCT } from "../../config/company";
 import { WakaSymbolIcon } from "../../components/brand/WakaLogo";
 import { fetchAgentVerification, type AgentVerificationResult } from "../../lib/referralAgents";
-import { SeoHead } from "../../components/marketing/SeoHead";
 
 type Props = {
   lang: Language;
@@ -63,12 +62,6 @@ export function VerifyAgentPage({ lang }: Props) {
 
   return (
     <div className="min-h-dvh bg-gradient-to-b from-orange-50 via-stone-50 to-white text-stone-900">
-      <SeoHead
-        title={`Verify Waka Agent | ${WAKA_MAIN_PRODUCT}`}
-        description="Scan a Waka POS agent QR code to confirm the agent is registered and active."
-        path={`/verify-agent/${agentId}`}
-      />
-
       <header className="border-b border-stone-200/80 bg-white/90 px-4 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center gap-3">
           <WakaSymbolIcon size="xs" className="h-10 w-10 shrink-0" />

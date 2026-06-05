@@ -37,6 +37,7 @@ import { AboutPage } from "./pages/public/AboutPage";
 import { ContactPage } from "./pages/public/ContactPage";
 import { FounderPage } from "./pages/public/FounderPage";
 import { CompanyPage } from "./pages/public/CompanyPage";
+import { SolutionPage } from "./pages/public/SolutionPage";
 import { VerifyAgentPage } from "./pages/public/VerifyAgentPage";
 import { DemoExperiencePage } from "./pages/DemoExperiencePage";
 import { BusinessActivationPage } from "./pages/BusinessActivationPage";
@@ -64,6 +65,7 @@ import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
 import { NativeMarketingGuard } from "./components/NativeMarketingGuard";
+import { RouteSeoController } from "./components/marketing/RouteSeoController";
 import { NativePublicGuard } from "./components/NativePublicGuard";
 import { unauthenticatedEntryPath } from "./lib/nativeApp";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
@@ -115,6 +117,7 @@ function AppRoutes() {
   return (
     <>
       {showDiagnostics ? <StabilityDiagnosticsOverlay /> : null}
+      <RouteSeoController />
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
       <Routes>
         <Route element={<NativePublicGuard isAuthenticated={auth.isAuthenticated} />}>
@@ -221,6 +224,7 @@ function AppRoutes() {
           <Route path="/founder" element={<FounderPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/about/founder" element={<Navigate to="/founder" replace />} />
           <Route path="/company" element={<CompanyPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/solutions/:solutionSlug" element={<SolutionPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/demo" element={<DemoExperiencePage lang={lang} isAuthenticated={auth.isAuthenticated} />} />
         </Route>
         </Route>

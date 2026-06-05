@@ -154,7 +154,8 @@ export function SeoHead({
   structuredData = "page",
 }: SeoProps) {
   const canonical = marketingCanonical(path);
-  const fullTitle = title.includes("|") ? title : `${title} | ${WAKA_MAIN_PRODUCT}`;
+  const fullTitle =
+    title.includes("|") || title.includes(WAKA_MAIN_PRODUCT) ? title : `${title} | ${WAKA_MAIN_PRODUCT}`;
 
   useEffect(() => {
     document.title = fullTitle;

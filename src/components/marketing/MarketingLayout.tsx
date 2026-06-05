@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { WAKA_BRAND_NAME, WAKA_LEGAL_COMPANY_NAME, WAKA_SLOGAN } from "../../config/company";
+import { SOLUTION_NAV_LINKS } from "../../config/solutionPages";
 import { WakaBrandWordmark } from "../brand/WakaLogo";
 
 type Props = {
@@ -99,13 +100,22 @@ export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Pr
                 {t(lang, "appName")} · {t(lang, "marketingFooterLegalNote")}
               </p>
             </div>
-            <nav className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold text-orange-300 sm:mt-0 sm:justify-end">
-              {FOOTER_LINKS.map((link) => (
-                <Link key={link.to} to={link.to} className="hover:text-white">
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
+            <div className="mt-4 space-y-3 sm:mt-0">
+              <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold text-orange-300 sm:justify-end">
+                {SOLUTION_NAV_LINKS.map((link) => (
+                  <Link key={link.path} to={link.path} className="hover:text-white">
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+              <nav className="flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm font-bold text-orange-300 sm:justify-end">
+                {FOOTER_LINKS.map((link) => (
+                  <Link key={link.to} to={link.to} className="hover:text-white">
+                    {link.label}
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
           <p className="text-center text-xs text-stone-600 sm:text-left">
             © {new Date().getFullYear()} {WAKA_LEGAL_COMPANY_NAME}

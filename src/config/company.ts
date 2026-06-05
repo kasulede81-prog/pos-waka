@@ -22,8 +22,12 @@ export const WAKA_MAIN_PRODUCT = "Waka POS";
 export const WAKA_PRODUCT_DESCRIPTION =
   "Waka POS by WAKA helps shops, supermarkets, pharmacies, salons, and restaurants in Uganda manage sales, stock, and daily reports without complicated systems.";
 
-export const WAKA_SEO_DEFAULT_TITLE = "Waka POS | Simple POS for Shops in Uganda";
-export const WAKA_SEO_DEFAULT_DESCRIPTION = WAKA_PRODUCT_DESCRIPTION;
+export const WAKA_SEO_HOME_TITLE =
+  "Waka POS – POS Software & Inventory Management for Shops in Uganda";
+export const WAKA_SEO_HOME_DESCRIPTION =
+  "POS Software Uganda for retail shops, pharmacies, supermarkets, and restaurants. Waka POS offers inventory management, retail POS, pharmacy POS, supermarket POS, and restaurant POS — simple sales, stock, and daily reports.";
+export const WAKA_SEO_DEFAULT_TITLE = WAKA_SEO_HOME_TITLE;
+export const WAKA_SEO_DEFAULT_DESCRIPTION = WAKA_SEO_HOME_DESCRIPTION;
 
 export const WAKA_OFFICE_STREET =
   "Opposite Freedom City, Namasuba – Kikajjo Road, Namasuba Central, Masajja Ward, Wakiso District";

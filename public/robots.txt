@@ -1,4 +1,13 @@
 User-agent: *
 Allow: /
+Disallow: /internal/
+Disallow: /demo
+Disallow: /login
+Disallow: /register
+Disallow: /auth/
+Disallow: /verify-agent/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /verify-email
 
 Sitemap: https://waka.ug/sitemap.xml
