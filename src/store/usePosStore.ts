@@ -4232,7 +4232,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         stockMovements: (await getEntitiesByBucket<StockMovement>("stockMovement")).map(normalizeStockMovement),
         voidRecords: await getEntitiesByBucket("voidRecord"),
         returnRecords: await getEntitiesByBucket("returnRecord"),
-        cashExpenses: (await getEntitiesByBucket("cashExpense")).map(normalizeCashExpense),
+        cashExpenses: (await getEntitiesByBucket<CashExpense>("cashExpense")).map(normalizeCashExpense),
         archivedSales: (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale),
         archivedAuditLogs: await getEntitiesByBucket("archivedAuditLog"),
         archivedDayCloses: await getEntitiesByBucket("archivedDayClose"),

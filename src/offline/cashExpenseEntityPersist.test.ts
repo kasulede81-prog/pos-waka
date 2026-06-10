@@ -21,7 +21,7 @@ describe("cash expense entity persistence", () => {
 
   it("entity bootstrap hydrates cashExpenses from bucket", () => {
     const storeSrc = readSrc("src/store/usePosStore.ts");
-    expect(storeSrc).toContain('getEntitiesByBucket("cashExpense")');
+    expect(storeSrc).toContain('getEntitiesByBucket<CashExpense>("cashExpense")');
     expect(storeSrc).toContain("normalizeCashExpense");
   });
 });

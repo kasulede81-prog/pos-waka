@@ -5,7 +5,6 @@
 import { describe, expect, it, beforeEach, vi, afterEach } from "vitest";
 import type { Product, SaleLine } from "../types";
 import { computeDraftCheckoutTotals } from "./draftCart";
-import { buildPendingSaleFromDraft } from "./hospitality";
 import {
   hasEffectivePermission,
   maxStaffAccountsForTier,
@@ -195,6 +194,7 @@ describe("P0-6 Monthly trend accuracy", () => {
         cashPaidUgx: 50_000,
         debtUgx: 0,
         estimatedProfitUgx: 40_000,
+        pendingSync: false,
         lines: [{ ...line, lineTotalUgx: 50_000, quantity: 5 }],
       },
       {
@@ -207,6 +207,7 @@ describe("P0-6 Monthly trend accuracy", () => {
         cashPaidUgx: 20_000,
         debtUgx: 0,
         estimatedProfitUgx: 14_000,
+        pendingSync: false,
         lines: [{ ...line, lineTotalUgx: 20_000, quantity: 2 }],
       },
     ];
@@ -234,6 +235,6 @@ describe("P0-7 Expense persistence contract", () => {
     const store = readFileSync(resolve(process.cwd(), "src/store/usePosStore.ts"), "utf8");
     expect(inc).toContain('persistArrayDelta("cashExpense"');
     expect(ent).toContain("cashExpense");
-    expect(store).toContain('getEntitiesByBucket("cashExpense")');
+    expect(store).toMatch(/getEntitiesByBucket(<CashExpense>)?\("cashExpense"\)/);
   });
 });

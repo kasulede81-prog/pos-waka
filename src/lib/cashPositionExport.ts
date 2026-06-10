@@ -245,7 +245,7 @@ export async function downloadCashPositionPdf(
 ): Promise<boolean> {
   const blob = buildCashPositionPdfBlob(lang, report, reconciliation);
   const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
-  return downloadPdfBlob(blob, `${stem}.pdf`);
+  return downloadPdfBlob(`${stem}.pdf`, blob);
 }
 
 export async function downloadCashPositionCsv(

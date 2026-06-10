@@ -58,7 +58,7 @@ export async function downloadPurchasesPdf(
   dayLabel: string,
 ): Promise<boolean> {
   const blob = buildPurchasesPdfBlob(lang, shopName, rows);
-  return downloadPdfBlob(blob, `${sanitizePdfStem(`purchases-${dayLabel}`)}.pdf`);
+  return downloadPdfBlob(`${sanitizePdfStem(`purchases-${dayLabel}`)}.pdf`, blob);
 }
 
 export function supplierStatementToCsv(supplierName: string, entries: SupplierStatementEntry[]): string {
@@ -119,5 +119,5 @@ export async function downloadSupplierStatementPdf(
   stem: string,
 ): Promise<boolean> {
   const blob = buildSupplierStatementPdfBlob(lang, shopName, supplierName, entries);
-  return downloadPdfBlob(blob, `${sanitizePdfStem(`supplier-statement-${stem}`)}.pdf`);
+  return downloadPdfBlob(`${sanitizePdfStem(`supplier-statement-${stem}`)}.pdf`, blob);
 }

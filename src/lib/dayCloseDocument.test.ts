@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DayCloseSummary } from "../types";
 
-const printHtmlDocumentWithDesktop = vi.fn(async () => true);
-const sharePdfBlob = vi.fn(async () => true);
+const printHtmlDocumentWithDesktop = vi.fn(async (..._args: unknown[]) => true);
+const sharePdfBlob = vi.fn(async (..._args: unknown[]) => true);
 const isNativePrintPlatform = vi.fn(() => false);
 
 vi.mock("./documentPrint", () => ({
@@ -28,7 +28,6 @@ describe("day close print fallback", () => {
     totalDebtUgx: 10_000,
     profitEstimateUgx: 40_000,
     createdAt: "2026-06-15T18:00:00.000Z",
-    pendingSync: false,
   };
 
   beforeEach(() => {
