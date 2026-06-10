@@ -182,7 +182,7 @@ export function reconcileSuppliersFromPurchaseHistory(
   }
 
   for (const p of purchases) {
-    if (isWalkInSupplierId(p.supplierId)) continue;
+    if (isWalkInSupplierId(p.supplierId) || p.voidedAt) continue;
     let s = byId.get(p.supplierId);
     if (!s) {
       s = {

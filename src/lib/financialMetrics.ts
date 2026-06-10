@@ -40,7 +40,7 @@ export function getCompletedFinancials(
   sales: Sale[],
   returns: ReturnRecord[],
   products: Product[],
-  opts?: { day?: string; monthKey?: string },
+  opts?: { day?: string; monthKey?: string; skipProfit?: boolean },
 ): CompletedFinancialSnapshot {
   let scoped = revenueSales(sales);
   if (opts?.day) {
@@ -56,7 +56,9 @@ export function getCompletedFinancials(
       : returns;
 
   const productById = new Map(products.map((p) => [p.id, p]));
-  const breakdown = computeTodayProfitBreakdown(scoped, productById, returnScoped);
+  const breakdown = opts?.skipProfit
+    ? { profitUgx: 0, salesUgx: 0, costUgx: 0, linesMissingCost: 0 }
+    : computeTodayProfitBreakdown(scoped, productById, returnScoped);
   const tx = scoped.length;
   const revenue = computeCanonicalRevenueUgx(scoped, returnScoped);
 

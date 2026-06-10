@@ -1,5 +1,6 @@
 import type {
   AuditLogEntry,
+  CashExpense,
   Customer,
   DayCloseSummary,
   DebtPayment,
@@ -32,6 +33,7 @@ export type EntityBucket =
   | "stockMovement"
   | "voidRecord"
   | "returnRecord"
+  | "cashExpense"
   | "archivedAuditLog"
   | "archivedDayClose"
   | "archivedVoidRecord"
@@ -225,6 +227,10 @@ export async function migrateSnapshotToEntities(snap: PersistedSnapshot): Promis
   await putEntitiesBatch("voidRecord", (snap.voidRecords ?? []).map((v) => ({ id: v.id, data: v, sortKey: v.createdAt })));
   await putEntitiesBatch("returnRecord", (snap.returnRecords ?? []).map((r) => ({ id: r.id, data: r, sortKey: r.createdAt })));
   await putEntitiesBatch(
+    "cashExpense",
+    (snap.cashExpenses ?? []).map((e) => ({ id: e.id, data: e, sortKey: e.createdAt })),
+  );
+  await putEntitiesBatch(
     "archivedAuditLog",
     (snap.archivedAuditLogs ?? []).map((a) => ({ id: a.id, data: a, sortKey: a.at })),
   );
@@ -265,6 +271,7 @@ export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot 
     stockMovements: await getEntitiesByBucket<StockMovement>("stockMovement"),
     voidRecords: await getEntitiesByBucket<VoidRecord>("voidRecord"),
     returnRecords: await getEntitiesByBucket<ReturnRecord>("returnRecord"),
+    cashExpenses: await getEntitiesByBucket<CashExpense>("cashExpense"),
     archivedSales: manifest.archivedSalesOrder.map((id) => archivedById.get(id)).filter((s): s is Sale => s != null),
     archivedAuditLogs: await getEntitiesByBucket<AuditLogEntry>("archivedAuditLog"),
     archivedDayCloses: await getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),

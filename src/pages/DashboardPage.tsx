@@ -18,6 +18,7 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
+import { canSeeOfficeProfit } from "../lib/homeProfit";
 import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
 import { PharmacyDashboardPage } from "./PharmacyDashboardPage";
 
@@ -60,6 +61,9 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const canDayClose = hasEffectivePermission(actor.role, "day.close", snapshot, authMode);
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
+  const canProfit =
+    canSeeOfficeProfit(actor.role, authMode) &&
+    hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
 
   const sales = useDeferredReportingSales(includeArchived);
   const analytics = useDashboardAnalytics(includeArchived);
@@ -98,6 +102,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const salesTodayTotal = localToday.totalRevenueUgx;
   const cashToday = localToday.cashCollectedUgx;
   const debtToday = localToday.debtIssuedUgx;
+  const todayProfitUgx = localToday.estimatedProfitUgx;
   const cashWeekDisplay = localWeek.cashCollectedUgx;
   const lowStockProducts = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
 
@@ -112,7 +117,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const quickTiles = useMemo(() => products.slice(0, 10), [products]);
 
-  const gridCols = canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
+  const gridCols = canStock && canProfit ? "lg:grid-cols-2" : canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
 
   const hospitalityHome = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   if (hospitalityHome) {
@@ -304,6 +309,19 @@ export function DashboardPage({ lang }: { lang: Language }) {
           <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
           <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtTodayHint")}</p>
         </article>
+        {canProfit ? (
+          <article className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 shadow-waka-sm">
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-900">
+              {t(lang, "cardProfitToday")}
+            </p>
+            <p
+              className={`mt-1 text-2xl font-black sm:text-3xl ${todayProfitUgx < 0 ? "text-stone-700" : "text-emerald-950"}`}
+            >
+              UGX {todayProfitUgx.toLocaleString()}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-emerald-900/80">{t(lang, "dashboardProfitShortNote")}</p>
+          </article>
+        ) : null}
       </section>
 
       <p className="text-center text-sm font-medium text-stone-500">

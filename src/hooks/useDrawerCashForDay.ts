@@ -16,6 +16,7 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
   const products = usePosStore((s) => s.products);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const supplierPayments = usePosStore((s) => s.supplierPayments);
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
@@ -29,9 +30,10 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
         products,
         debtPayments,
         cashExpenses,
+        supplierPayments,
         day,
       }),
-    [sales, returns, products, debtPayments, cashExpenses, day],
+    [sales, returns, products, debtPayments, cashExpenses, supplierPayments, day],
   );
 }
 

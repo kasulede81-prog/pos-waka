@@ -1,5 +1,6 @@
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { receiptPrintActionLabel } from "../../lib/printActionLabels";
 
 type Props = {
   lang: Language;
@@ -16,7 +17,7 @@ export function DocumentActionsBar({ lang, onPrint, onDownloadPdf, onSharePdf, c
   return (
     <div className={`grid gap-2 ${compact ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3"}`}>
       <button type="button" className={`${btn} bg-slate-900 text-white`} onClick={onPrint}>
-        {t(lang, "receiptPrint")}
+        {receiptPrintActionLabel(lang)}
       </button>
       <button type="button" className={`${btn} bg-waka-600 text-white`} onClick={onDownloadPdf}>
         {t(lang, "receiptDownloadPdf")}

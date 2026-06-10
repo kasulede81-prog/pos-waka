@@ -74,6 +74,7 @@ import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from ".
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { posSearchAliases } from "../lib/pharmacyUx";
+import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -148,6 +149,11 @@ function parseDisplayQty(s: string): number {
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const canSavePending = hasPermission(actor.role, "pending_sales.manage");
+  const canIssueDebt = hasPermission(actor.role, "customers.debt");
+  const checkoutMethods = useMemo(
+    () => POS_CHECKOUT_METHODS.filter((m) => m !== "credit" || canIssueDebt),
+    [canIssueDebt],
+  );
   const shopPreferences = usePosStore((s) => s.preferences);
   const pt = usePharmacyTerms(lang, shopPreferences.businessType, shopPreferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
@@ -283,6 +289,10 @@ export function PosPage({ lang }: { lang: Language }) {
   const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+
+  useEffect(() => {
+    if (paymentMethod === "credit" && !canIssueDebt) setPaymentMethod("cash");
+  }, [paymentMethod, canIssueDebt]);
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutAmountField>("cash");
@@ -946,6 +956,38 @@ export function PosPage({ lang }: { lang: Language }) {
     if (rid) setReceiptSaleId(rid);
   }, [lang, setPreferences]);
 
+  const closeExpiryWarn = useCallback(() => {
+    pendingExpiredAddRef.current = null;
+    setExpiryWarnProduct(null);
+  }, []);
+
+  usePosAndroidBackStack({
+    cameraScanOpen,
+    setCameraScanOpen,
+    checkoutOverlayOpen: draftLines.length > 0 && !saleCheckoutMinimized,
+    setSaleCheckoutMinimized,
+    sheetOpen,
+    setSheetOpen,
+    receiptOpen: receiptSaleId !== null,
+    closeReceipt: () => setReceiptSaleId(null),
+    checkoutBlockModalOpen,
+    setCheckoutBlockModalOpen,
+    cartSaleDiscountOpen,
+    setCartSaleDiscountOpen,
+    discountLineOpen: discountLine !== null,
+    closeDiscountLine: () => setDiscountLine(null),
+    qtyEditOpen: qtyEditLine !== null,
+    closeQtyEdit: () => setQtyEditLine(null),
+    shiftCloseOpen,
+    setShiftCloseOpen,
+    productLockedOpen,
+    setProductLockedOpen,
+    expiryWarnOpen: expiryWarnProduct !== null,
+    closeExpiryWarn,
+    firstSaleOpen,
+    dismissFirstSale,
+  });
+
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
   const sellPresets = selected ? getPosSellPresets(selected) : [];
@@ -1368,7 +1410,7 @@ export function PosPage({ lang }: { lang: Language }) {
             <div className="mt-4">
               <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "paymentMethodLabel")}</p>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {POS_CHECKOUT_METHODS.map((method) => (
+                {checkoutMethods.map((method) => (
                   <button
                     key={method}
                     type="button"

@@ -52,6 +52,10 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
+import { CashPositionPage } from "./pages/CashPositionPage";
+import { PurchasesPage } from "./pages/PurchasesPage";
+import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
+import { SupplierDetailPage } from "./pages/SupplierDetailPage";
 import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
@@ -73,9 +77,9 @@ import { DeviceActivationProvider } from "./context/DeviceActivationContext";
 import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOutlet";
 import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateOutlet";
 import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
-import type { Language } from "./types";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
+import { useUiLanguage } from "./hooks/useUiLanguage";
 
 const OwnerDashboardPage = lazy(() =>
   import("./pages/OwnerDashboardPage").then((m) => ({ default: m.OwnerDashboardPage })),
@@ -107,12 +111,16 @@ function LazyWait() {
 
 function AppRoutes() {
   const auth = useAuth();
-  const [lang, setLang] = useState<Language>("en");
+  const { lang, setLang, ready: langReady } = useUiLanguage();
   const showDiagnostics = isDiagnosticsEnabled();
 
   useEffect(() => {
     if (showDiagnostics) installNetworkDiagnosticsProbe();
   }, [showDiagnostics]);
+
+  if (!langReady) {
+    return null;
+  }
 
   return (
     <>
@@ -332,6 +340,30 @@ function AppRoutes() {
               }
             />
             <Route
+              path="office/cash-position"
+              element={
+                <RoleProtectedRoute permission="day.close">
+                  <CashPositionPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/purchases"
+              element={
+                <RoleProtectedRoute permission="purchases.view">
+                  <PurchasesPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/purchases/:purchaseId"
+              element={
+                <RoleProtectedRoute permission="purchases.view">
+                  <PurchaseDetailPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="office/pharmacy-margins"
               element={
                 <RoleProtectedRoute permission="reports.profit">
@@ -396,6 +428,14 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="suppliers.view">
                   <SuppliersPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="suppliers/:supplierId"
+              element={
+                <RoleProtectedRoute permission="suppliers.view">
+                  <SupplierDetailPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

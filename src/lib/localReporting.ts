@@ -377,7 +377,11 @@ export function localGetRangeSummary(
   let dailyTrend = weekly.dailyTrend;
   if (filter.kind === "preset" && filter.preset === "this_month") {
     summary = monthly;
-    dailyTrend = weekly.dailyTrend;
+    const monthBounds = resolveDateFilterBounds({ kind: "preset", preset: "this_month" });
+    dailyTrend = enumerateDaysInBounds(monthBounds).map((day) => {
+      const fin = getCompletedFinancials(sales, returns, products, { day });
+      return { day, revenueUgx: fin.revenueUgx, transactionCount: fin.transactionCount };
+    });
   } else if (filter.kind === "preset" && filter.preset === "this_week") {
     summary = weekly;
     dailyTrend = weekly.dailyTrend;

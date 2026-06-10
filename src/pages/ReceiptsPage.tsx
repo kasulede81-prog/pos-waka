@@ -20,6 +20,7 @@ import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
+import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
@@ -128,7 +129,7 @@ function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, 
           className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
         >
           <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {t(lang, "receiptPrint")}
+          {receiptPrintActionLabel(lang)}
         </button>
         <button
           type="button"

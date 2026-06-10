@@ -84,6 +84,7 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
   await persistArrayDelta("stockMovement", prev.stockMovements, next.stockMovements, (m) => m.at, stats);
   await persistArrayDelta("voidRecord", prev.voidRecords, next.voidRecords, (v) => v.createdAt, stats);
   await persistArrayDelta("returnRecord", prev.returnRecords, next.returnRecords, (r) => r.createdAt, stats);
+  await persistArrayDelta("cashExpense", prev.cashExpenses, next.cashExpenses, (e) => e.createdAt, stats);
   await persistArrayDelta(
     "archivedAuditLog",
     prev.archivedAuditLogs,

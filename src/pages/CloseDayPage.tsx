@@ -46,6 +46,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       saleCount: getCompletedFinancials(sales, returnRecords, products, { day: todayKey }).transactionCount,
       refundsUgx: drawer.refundsUgx,
       expenseUgx: drawer.expenseUgx,
+      supplierPaymentsUgx: drawer.supplierPaymentsUgx,
     }),
     [drawer, sales, returnRecords, products, todayKey],
   );
@@ -134,6 +135,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
               <p className="mt-1 text-xl font-black text-rose-950">UGX {summary.expenseUgx.toLocaleString()}</p>
             </div>
           ) : null}
+          {summary.supplierPaymentsUgx > 0 ? (
+            <div className="rounded-2xl bg-rose-50 px-3 py-3 col-span-2">
+              <p className="text-[11px] font-black uppercase text-rose-800">{t(lang, "closeDaySupplierPaymentsToday")}</p>
+              <p className="mt-1 text-xl font-black text-rose-950">UGX {summary.supplierPaymentsUgx.toLocaleString()}</p>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 col-span-2">
             <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "closeDayExpectedTitle")}</p>
             <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.expectedCash.toLocaleString()}</p>
@@ -151,6 +158,16 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             {summary.expenseUgx > 0 ? (
               <li>
                 {t(lang, "closeDayFormulaExpenses")}: UGX {summary.expenseUgx.toLocaleString()}
+              </li>
+            ) : null}
+            {summary.supplierPaymentsUgx > 0 ? (
+              <li>
+                {t(lang, "closeDayFormulaSupplierPayments")}: UGX {summary.supplierPaymentsUgx.toLocaleString()}
+              </li>
+            ) : null}
+            {summary.refundsUgx > 0 ? (
+              <li>
+                {t(lang, "closeDayFormulaRefunds")}: UGX {summary.refundsUgx.toLocaleString()}
               </li>
             ) : null}
             <li className="border-t border-waka-200 pt-2 font-black text-waka-950">

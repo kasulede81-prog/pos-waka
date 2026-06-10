@@ -154,6 +154,25 @@ describe("today and month filters", () => {
     vi.useRealTimers();
   });
 
+  it("month filter daily trend spans calendar month days, not current week", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-12T12:00:00.000Z"));
+
+    const sales = [
+      completedSale("2026-06-01T10:00:00.000Z", 10_000),
+      completedSale("2026-06-08T10:00:00.000Z", 20_000),
+      completedSale("2026-06-10T10:00:00.000Z", 30_000),
+      completedSale("2026-06-12T09:00:00.000Z", 40_000),
+    ];
+    const filter = { kind: "preset" as const, preset: "this_month" as const };
+    const bundle = localGetRangeSummary(sales, PRODUCTS, [], [], [], filter);
+
+    expect(bundle.dailyTrend).toHaveLength(12);
+    expect(bundle.dailyTrend.find((d) => d.day === "2026-06-08")?.revenueUgx).toBe(20_000);
+    expect(bundle.dailyTrend.find((d) => d.day === "2026-06-12")?.revenueUgx).toBe(40_000);
+    expect(bundle.dailyTrend.find((d) => d.day === "2026-06-02")?.revenueUgx).toBe(0);
+  });
+
   it("today filter matches one Kampala day", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-12T18:00:00.000Z"));

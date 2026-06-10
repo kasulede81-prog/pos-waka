@@ -1,0 +1,320 @@
+import { useMemo, useState, type FormEvent } from "react";
+import { Link, Navigate, useParams } from "react-router-dom";
+import type { Language } from "../types";
+import { t } from "../lib/i18n";
+import { usePosStore } from "../store/usePosStore";
+import { useSessionActor } from "../context/SessionActorContext";
+import { hasPermission } from "../lib/permissions";
+import { PageHeader } from "../components/layout/PageHeader";
+import {
+  buildSupplierStatement,
+  filterSupplierPayments,
+  resolvePurchaseFilterBounds,
+  sumSupplierPaymentsUgx,
+} from "../lib/purchaseReporting";
+import { supplierPaymentCreatedByLabel } from "../lib/purchaseCorrections";
+import { downloadSupplierStatementCsv, downloadSupplierStatementPdf } from "../lib/purchaseExport";
+import { dateKeyKampala } from "../lib/datesUg";
+import { isWalkInSupplierId } from "../lib/walkInSupplier";
+
+export function SupplierDetailPage({ lang }: { lang: Language }) {
+  const { supplierId } = useParams<{ supplierId: string }>();
+  const actor = useSessionActor();
+  const canView = hasPermission(actor.role, "suppliers.view");
+  const canManage = hasPermission(actor.role, "suppliers.manage");
+
+  const suppliers = usePosStore((s) => s.suppliers);
+  const auditLogs = usePosStore((s) => s.auditLogs);
+  const updateSupplier = usePosStore((s) => s.updateSupplier);
+  const purchases = usePosStore((s) => s.purchases);
+  const supplierPayments = usePosStore((s) => s.supplierPayments);
+  const preferences = usePosStore((s) => s.preferences);
+  const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
+
+  const [exportHint, setExportHint] = useState<string | null>(null);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editSaved, setEditSaved] = useState(false);
+
+  const supplier = useMemo(
+    () => suppliers.find((s) => s.id === supplierId) ?? null,
+    [suppliers, supplierId],
+  );
+
+  const allTimeBounds = useMemo(
+    () => resolvePurchaseFilterBounds({ kind: "range", fromKey: "2000-01-01", toKey: "2099-12-31" }),
+    [],
+  );
+
+  const statement = useMemo(() => {
+    if (!supplier) return [];
+    return buildSupplierStatement(supplier.id, supplier.name, purchases, supplierPayments);
+  }, [supplier, purchases, supplierPayments]);
+
+  const payments = useMemo(() => {
+    if (!supplier) return [];
+    return filterSupplierPayments(supplierPayments, allTimeBounds, supplier.id);
+  }, [supplier, supplierPayments, allTimeBounds]);
+
+  const runExport = async (kind: "csv" | "pdf") => {
+    if (!supplier) return;
+    setExportBusy(true);
+    try {
+      const stem = supplier.id.slice(0, 8);
+      const ok =
+        kind === "csv"
+          ? await downloadSupplierStatementCsv(supplier.name, statement, stem)
+          : await downloadSupplierStatementPdf(lang, shopName, supplier.name, statement, stem);
+      setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
+      window.setTimeout(() => setExportHint(null), 3500);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  if (!canView) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!supplier || isWalkInSupplierId(supplier.id)) {
+    return <Navigate to="/suppliers" replace />;
+  }
+
+  const openEdit = () => {
+    setEditName(supplier.name);
+    setEditPhone(supplier.phone);
+    setEditLocation(supplier.location);
+    setEditNotes(supplier.notes);
+    setEditOpen(true);
+    setEditSaved(false);
+  };
+
+  const submitEdit = (e: FormEvent) => {
+    e.preventDefault();
+    const r = updateSupplier(supplier.id, {
+      name: editName,
+      phone: editPhone,
+      location: editLocation,
+      notes: editNotes,
+    });
+    if (r.ok) {
+      setEditOpen(false);
+      setEditSaved(true);
+      window.setTimeout(() => setEditSaved(false), 3000);
+    }
+  };
+
+  return (
+    <div className="space-y-5 pb-16">
+      <PageHeader
+        lang={lang}
+        title={supplier.name}
+        subtitle={t(lang, "supplierDetailTitle")}
+        backFallback="/suppliers"
+        backLabel={t(lang, "suppliersTitle")}
+      />
+
+      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        {editSaved ? (
+          <p className="mb-3 text-sm font-bold text-emerald-800">{t(lang, "supplierEditSave")}</p>
+        ) : null}
+        {canManage && !editOpen ? (
+          <button
+            type="button"
+            onClick={openEdit}
+            className="mb-4 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 py-2.5 text-sm font-black text-stone-800"
+          >
+            {t(lang, "supplierEditTitle")}
+          </button>
+        ) : null}
+        {editOpen ? (
+          <form onSubmit={submitEdit} className="mb-4 space-y-3 rounded-2xl border border-waka-200 bg-waka-50/40 p-4">
+            <h3 className="text-sm font-black text-waka-950">{t(lang, "supplierEditTitle")}</h3>
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder={t(lang, "supplierNamePh")}
+              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              required
+            />
+            <input
+              value={editPhone}
+              onChange={(e) => setEditPhone(e.target.value)}
+              placeholder={t(lang, "supplierPhonePh")}
+              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+            />
+            <input
+              value={editLocation}
+              onChange={(e) => setEditLocation(e.target.value)}
+              placeholder={t(lang, "supplierLocationPh")}
+              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+            />
+            <textarea
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              placeholder={t(lang, "supplierNotesPh")}
+              rows={2}
+              className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setEditOpen(false)}
+                className="flex-1 rounded-xl border border-stone-200 bg-white py-2 text-sm font-bold"
+              >
+                {t(lang, "pendingSalesCancel")}
+              </button>
+              <button type="submit" className="flex-1 rounded-xl bg-waka-600 py-2 text-sm font-black text-white">
+                {t(lang, "supplierEditSave")}
+              </button>
+            </div>
+          </form>
+        ) : null}
+        <dl className="space-y-2 text-sm">
+          {supplier.phone ? (
+            <div>
+              <dt className="font-bold text-stone-500">Phone</dt>
+              <dd className="font-semibold text-stone-900">{supplier.phone}</dd>
+            </div>
+          ) : null}
+          {supplier.location ? (
+            <div>
+              <dt className="font-bold text-stone-500">Location</dt>
+              <dd className="font-semibold text-stone-900">{supplier.location}</dd>
+            </div>
+          ) : null}
+          {supplier.notes ? (
+            <div>
+              <dt className="font-bold text-stone-500">Notes</dt>
+              <dd className="font-semibold text-stone-900">{supplier.notes}</dd>
+            </div>
+          ) : null}
+        </dl>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="rounded-2xl bg-amber-50 px-3 py-3">
+            <p className="text-[10px] font-black uppercase text-amber-800">{t(lang, "supplierBalanceLabel")}</p>
+            <p className="mt-1 text-xl font-black text-amber-950">UGX {supplier.balanceOwedUgx.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl bg-stone-50 px-3 py-3">
+            <p className="text-[10px] font-black uppercase text-stone-500">{t(lang, "supplierTotalBuy")}</p>
+            <p className="mt-1 text-xl font-black text-stone-900">UGX {supplier.totalPurchasesUgx.toLocaleString()}</p>
+          </div>
+          {supplier.lastSupplyAt ? (
+            <div className="col-span-2 rounded-2xl bg-stone-50 px-3 py-3">
+              <p className="text-[10px] font-black uppercase text-stone-500">{t(lang, "supplierLastSupply")}</p>
+              <p className="mt-1 font-bold text-stone-900">{dateKeyKampala(supplier.lastSupplyAt)}</p>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/40 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-waka-950">{t(lang, "supplierStatementTitle")}</h2>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={exportBusy || statement.length === 0}
+              onClick={() => void runExport("csv")}
+              className="min-h-[40px] rounded-2xl border-2 border-stone-300 bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
+            >
+              {t(lang, "purchasesExportCsv")}
+            </button>
+            <button
+              type="button"
+              disabled={exportBusy || statement.length === 0}
+              onClick={() => void runExport("pdf")}
+              className="min-h-[40px] rounded-2xl bg-waka-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+            >
+              {t(lang, "purchasesExportPdf")}
+            </button>
+          </div>
+        </div>
+        {exportHint ? <p className="mt-2 text-sm font-bold text-waka-800">{exportHint}</p> : null}
+        {statement.length === 0 ? (
+          <p className="mt-3 text-sm text-stone-600">{t(lang, "purchasesEmpty")}</p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {statement.map((entry) => (
+              <li key={`${entry.kind}-${entry.id}`} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-stone-500">{entry.dayKey}</p>
+                    <p className="mt-1 font-black text-stone-900">
+                      {entry.kind === "purchase"
+                        ? t(lang, "supplierStatementPurchase")
+                        : t(lang, "supplierStatementPayment")}
+                    </p>
+                    {entry.kind === "purchase" ? (
+                      <Link
+                        to={`/office/purchases/${entry.purchaseId}`}
+                        className="text-sm font-semibold text-waka-700 underline"
+                      >
+                        UGX {entry.amountUgx.toLocaleString()}
+                      </Link>
+                    ) : (
+                      <p className="text-sm font-semibold text-stone-800">UGX {entry.amountUgx.toLocaleString()}</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-lg font-black ${entry.deltaUgx >= 0 ? "text-amber-900" : "text-teal-800"}`}>
+                      {entry.deltaUgx >= 0 ? "+" : ""}
+                      UGX {entry.deltaUgx.toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs font-bold text-stone-600">
+                      {t(lang, "supplierStatementBalance")}: UGX {entry.runningBalanceUgx.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <h2 className="text-lg font-black text-stone-900">{t(lang, "supplierPaymentHistory")}</h2>
+        <p className="mt-1 text-sm font-semibold text-stone-600">
+          {t(lang, "purchasesColTotal")}: UGX {sumSupplierPaymentsUgx(payments).toLocaleString()}
+        </p>
+        {payments.length === 0 ? (
+          <p className="mt-3 text-sm text-stone-500">{t(lang, "supplierPaymentEmpty")}</p>
+        ) : (
+          <ul className="mt-4 space-y-2">
+            {payments.map((pay) => (
+              <li key={pay.id} className="flex justify-between gap-3 rounded-2xl bg-stone-50 px-4 py-3">
+                <div>
+                  <p className="text-xs font-semibold text-stone-500">{dateKeyKampala(pay.createdAt)}</p>
+                  <p className="text-xs font-semibold text-stone-600">
+                    {t(lang, "supplierPaymentCreatedBy")}:{" "}
+                    {supplierPaymentCreatedByLabel(
+                      pay,
+                      auditLogs.find(
+                        (e) => e.action === "supplier_payment" && e.payload.paymentId === pay.id,
+                      ) ?? null,
+                    )}
+                  </p>
+                  {pay.paymentMethod ? (
+                    <p className="text-xs text-stone-500">
+                      {t(lang, "supplierPaymentMethod")}: {pay.paymentMethod}
+                    </p>
+                  ) : null}
+                  {pay.reference ? (
+                    <p className="text-xs text-stone-500">
+                      {t(lang, "supplierPaymentReference")}: {pay.reference}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="font-black text-teal-800">UGX {pay.amountUgx.toLocaleString()}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}

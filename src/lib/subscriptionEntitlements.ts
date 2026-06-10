@@ -67,7 +67,7 @@ export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): Subscr
 
   const row = snapshot.row;
   const trialLike = row.status === "trial" || row.status === "trialing";
-  if (trialLike) return "free";
+  if (trialLike) return normalizePlanCode(row.plan_code);
 
   if (row.status === "expired") {
     return "free";

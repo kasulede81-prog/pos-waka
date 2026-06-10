@@ -108,10 +108,17 @@ import {
   shiftExpectedCash,
   type DiscountMode,
 } from "../lib/saleAdjustments";
-import { mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
+import { cartDiscountFromPendingSale, mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
 import { deletedLineIdsFromDraft, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
+import {
+  diffSupplierEdit,
+  isPurchaseVoided,
+  lastSupplyAtForSupplier,
+  supplierTotalsAfterPurchaseVoid,
+  validatePurchaseVoidStock,
+} from "../lib/purchaseCorrections";
 import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
@@ -522,7 +529,12 @@ export type PosState = {
   voidCashExpense: (id: string) => { ok: boolean };
 
   addSupplier: (input: { name: string; phone?: string; location?: string; notes?: string }) => void;
+  updateSupplier: (
+    supplierId: string,
+    patch: { name?: string; phone?: string; location?: string; notes?: string },
+  ) => { ok: boolean; errorKey?: string };
   addSupplierPayment: (supplierId: string, amountUgx: number) => { ok: boolean; errorKey?: string };
+  voidPurchase: (purchaseId: string, reason: string) => { ok: boolean; errorKey?: string };
   recordPurchase: (input: {
     supplierId?: string | null;
     /** Display name when buying in town (no fixed supplier). */
@@ -794,11 +806,18 @@ function normalizePurchase(p: Purchase): Purchase {
     pendingSync: p.pendingSync !== false,
     notes: p.notes ?? "",
     lines: Array.isArray(p.lines) ? p.lines : [],
+    voidedAt: p.voidedAt ?? null,
+    voidReason: p.voidReason ?? undefined,
   };
 }
 
 function normalizeSupplierPayment(p: SupplierPayment): SupplierPayment {
-  return { ...p, pendingSync: p.pendingSync !== false };
+  return {
+    ...p,
+    pendingSync: p.pendingSync !== false,
+    createdByUserId: p.createdByUserId ?? undefined,
+    createdByName: p.createdByName ?? undefined,
+  };
 }
 
 function normalizeStockMovement(m: StockMovement): StockMovement {
@@ -1511,7 +1530,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!sale) return { ok: false, errorKey: "missingProduct" };
     set({
       draftLines: sale.lines.map((l) => ({ ...ensureSaleLineId(l) })),
-      draftCartDiscountUgx: 0,
+      draftCartDiscountUgx: cartDiscountFromPendingSale(sale),
       activePendingSaleId: sale.id,
       preferences: { ...fresh.preferences, activeTableSessionId: sessionId },
       draftInput: null,
@@ -1860,7 +1879,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!sale) return { ok: false, errorKey: "invalid" };
     set({
       draftLines: sale.lines.map((l) => ({ ...l })),
-      draftCartDiscountUgx: 0,
+      draftCartDiscountUgx: cartDiscountFromPendingSale(sale),
       activePendingSaleId: sale.id,
       draftInput: null,
       preferences: {
@@ -1944,6 +1963,10 @@ export const usePosStore = create<PosState>((set, get) => {
     const total = Math.max(0, lineSubtotal - cartDiscount);
     const discountTotal = Math.max(0, listSubtotal - total);
     const debt = Math.min(Math.max(0, Math.floor(debtUgx)), total);
+    if (debt > 0) {
+      const debtDenied = denyUnlessPerm("customers.debt", "finalizeDraftSale");
+      if (debtDenied) return { ok: false, errorKey: debtDenied.errorKey };
+    }
     const cashPaidUgx = total - debt;
 
     let customers = state.customers;
@@ -2956,6 +2979,40 @@ export const usePosStore = create<PosState>((set, get) => {
     pushAudit("supplier_add", row.name, { supplierId: row.id, name: row.name });
   },
 
+  updateSupplier: (supplierId, patch) => {
+    const denied = denyUnlessPerm("suppliers.manage", "updateSupplier");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const sup = state.suppliers.find((s) => s.id === supplierId);
+    if (!sup || isWalkInSupplierId(supplierId)) return { ok: false, errorKey: "missingSupplier" };
+
+    const changes = diffSupplierEdit(sup, patch);
+    if (changes.length === 0) return { ok: true };
+
+    const nextName = patch.name !== undefined ? patch.name.trim() : sup.name;
+    if (!nextName) return { ok: false, errorKey: "invalid" };
+
+    const updated: Supplier = {
+      ...sup,
+      name: nextName,
+      phone: patch.phone !== undefined ? patch.phone.trim() : sup.phone,
+      location: patch.location !== undefined ? patch.location.trim() : sup.location,
+      notes: patch.notes !== undefined ? patch.notes.trim() : sup.notes,
+      version: sup.version + 1,
+    };
+
+    set({
+      suppliers: state.suppliers.map((s) => (s.id === supplierId ? normalizeSupplier(updated) : s)),
+    });
+    void queueRemote("supplier", { id: supplierId });
+    pushAudit("supplier_edit", `Updated supplier ${updated.name}`, {
+      supplierId,
+      changes: changes.map((c) => ({ field: c.field, before: c.before, after: c.after })),
+    });
+    return { ok: true };
+  },
+
   addSupplierPayment: (supplierId, amountUgx) => {
     const denied = denyUnlessPerm("suppliers.manage", "addSupplierPayment");
     if (denied) return { ok: false, errorKey: denied.errorKey };
@@ -2965,10 +3022,13 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!sup) return { ok: false, errorKey: "missingSupplier" };
     const pay = Math.min(Math.floor(Math.max(0, amountUgx)), Math.max(0, sup.balanceOwedUgx));
     if (pay <= 0) return { ok: false, errorKey: "invalidMoney" };
+    const actor = state.sessionActor;
     const payment: SupplierPayment = {
       id: crypto.randomUUID(),
       supplierId,
       amountUgx: pay,
+      createdByUserId: actor?.userId,
+      createdByName: actor?.displayName,
       createdAt: new Date().toISOString(),
       pendingSync: true,
     };
@@ -2986,6 +3046,97 @@ export const usePosStore = create<PosState>((set, get) => {
       supplierName: sup.name,
       paymentId: payment.id,
       amountUgx: pay,
+    });
+    return { ok: true };
+  },
+
+  voidPurchase: (purchaseId, reason) => {
+    const denied = denyUnlessPerm("purchases.void", "voidPurchase");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const trimmedReason = reason.trim();
+    if (!trimmedReason) return { ok: false, errorKey: "invalid" };
+
+    const state = get();
+    const purchaseIdx = state.purchases.findIndex((p) => p.id === purchaseId);
+    if (purchaseIdx === -1) return { ok: false, errorKey: "missingProduct" };
+    const purchase = state.purchases[purchaseIdx]!;
+    if (isPurchaseVoided(purchase)) return { ok: false, errorKey: "invalid" };
+
+    const stockCheck = validatePurchaseVoidStock(purchaseId, state.products, state.stockMovements);
+    if (!stockCheck.ok) return { ok: false, errorKey: "insufficientStock" };
+
+    const at = new Date().toISOString();
+    const walkIn = isWalkInSupplierId(purchase.supplierId);
+    const products = [...state.products];
+    const reversalMovements: StockMovement[] = [];
+
+    for (const [productId, remove] of stockCheck.deltas) {
+      const idx = products.findIndex((p) => p.id === productId);
+      if (idx === -1) return { ok: false, errorKey: "missingProduct" };
+      const p = products[idx]!;
+      products[idx] = {
+        ...p,
+        stockOnHand: Math.max(0, p.stockOnHand - remove),
+        updatedAt: at,
+        version: p.version + 1,
+      };
+      reversalMovements.push({
+        id: crypto.randomUUID(),
+        at,
+        productId: p.id,
+        productName: p.name,
+        deltaBaseUnits: -remove,
+        kind: "adjust_other",
+        summary: `Void purchase −${remove} ${p.baseUnit}`,
+        refId: purchaseId,
+        supplierId: walkIn ? null : purchase.supplierId,
+      });
+    }
+
+    const voidedPurchase: Purchase = {
+      ...purchase,
+      voidedAt: at,
+      voidReason: trimmedReason,
+      pendingSync: true,
+    };
+
+    const purchases = [...state.purchases];
+    purchases[purchaseIdx] = voidedPurchase;
+
+    let suppliers = state.suppliers;
+    if (!walkIn) {
+      suppliers = state.suppliers.map((s) => {
+        if (s.id !== purchase.supplierId) return s;
+        const totals = supplierTotalsAfterPurchaseVoid(s, purchase);
+        return normalizeSupplier({
+          ...s,
+          balanceOwedUgx: totals.balanceOwedUgx,
+          totalPurchasesUgx: totals.totalPurchasesUgx,
+          lastSupplyAt: lastSupplyAtForSupplier(s.id, purchases),
+          version: s.version + 1,
+        });
+      });
+    }
+
+    set({
+      products,
+      purchases,
+      suppliers,
+      stockMovements: mergeStockMovements(reversalMovements, state.stockMovements),
+    });
+
+    void queueRemote("pending_purchases", { purchaseId, void: true });
+    void queueRemote("pending_stock_updates", { kind: "purchase_void", purchaseId });
+    if (!walkIn) void queueRemote("supplier", { id: purchase.supplierId });
+    pushAudit("purchase_void", `Voided purchase UGX ${purchase.totalCostUgx.toLocaleString()} · ${purchase.supplierName}`, {
+      purchaseId,
+      supplierId: purchase.supplierId,
+      supplierName: purchase.supplierName,
+      totalCostUgx: purchase.totalCostUgx,
+      balanceDeltaUgx: purchase.balanceDeltaUgx,
+      amountPaidUgx: purchase.amountPaidUgx,
+      reason: trimmedReason,
     });
     return { ok: true };
   },
@@ -3330,6 +3481,7 @@ export const usePosStore = create<PosState>((set, get) => {
       products: state.products,
       debtPayments: state.debtPayments,
       cashExpenses: state.cashExpenses,
+      supplierPayments: state.supplierPayments,
       day: dateKey,
     });
     const fin = getCompletedFinancials(state.sales, state.returnRecords, state.products, { day: dateKey });
@@ -4080,6 +4232,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         stockMovements: (await getEntitiesByBucket<StockMovement>("stockMovement")).map(normalizeStockMovement),
         voidRecords: await getEntitiesByBucket("voidRecord"),
         returnRecords: await getEntitiesByBucket("returnRecord"),
+        cashExpenses: (await getEntitiesByBucket("cashExpense")).map(normalizeCashExpense),
         archivedSales: (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale),
         archivedAuditLogs: await getEntitiesByBucket("archivedAuditLog"),
         archivedDayCloses: await getEntitiesByBucket("archivedDayClose"),

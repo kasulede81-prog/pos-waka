@@ -40,6 +40,8 @@ export type Permission =
   | "pharmacy.expired_writeoff"
   /** View purchase history in reports and product detail */
   | "purchases.view"
+  /** Void a recorded purchase (reverse stock and supplier balance) */
+  | "purchases.void"
   /** Stock, suppliers, reports, settings hub — not for cashiers */
   | "back_office.access"
   /** View / print receipts (today’s slips) without full reports */
@@ -83,6 +85,7 @@ export type AuditAction =
   | "supplier_add"
   | "supplier_edit"
   | "purchase_saved"
+  | "purchase_void"
   | "supplier_payment"
   | "cash_expense_created"
   | "cash_expense_voided"
@@ -432,6 +435,11 @@ export type Purchase = {
   /** Added to supplier balance: totalCost - amountPaid (can be negative if overpaying old debt) */
   balanceDeltaUgx: number;
   notes: string;
+  /** Optional supplier invoice reference (future-ready). */
+  invoiceNumber?: string;
+  /** Set when voided — purchase is never hard-deleted. */
+  voidedAt?: string | null;
+  voidReason?: string;
   createdAt: string;
   pendingSync: boolean;
 };
@@ -440,6 +448,12 @@ export type SupplierPayment = {
   id: string;
   supplierId: string;
   amountUgx: number;
+  /** Future-ready: cash, mobile_money, bank_transfer, etc. */
+  paymentMethod?: string;
+  /** Future-ready: receipt or transfer reference. */
+  reference?: string;
+  createdByUserId?: string;
+  createdByName?: string;
   createdAt: string;
   pendingSync: boolean;
 };

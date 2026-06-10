@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   hasCommercialSubscription,
+  hasEffectivePermission,
+  resolveEffectivePlanTier,
   shouldShowFreeUpgradePitch,
   type RemoteSubscriptionRow,
   type SubscriptionSnapshot,
@@ -38,5 +40,24 @@ describe("shouldShowFreeUpgradePitch", () => {
 
   it("hides for trial on commercial plan (bootstrap business trial)", () => {
     expect(shouldShowFreeUpgradePitch(remote({ plan_code: "business", status: "trial" }))).toBe(false);
+  });
+});
+
+describe("resolveEffectivePlanTier", () => {
+  it("grants business tier during business trial", () => {
+    const snap = remote({ plan_code: "business", status: "trial" });
+    expect(resolveEffectivePlanTier(snap)).toBe("business");
+  });
+
+  it("grants starter tier during starter trialing", () => {
+    const snap = remote({ plan_code: "starter", status: "trialing" });
+    expect(resolveEffectivePlanTier(snap)).toBe("starter");
+  });
+
+  it("business trial unlocks owner dashboard for owner role", () => {
+    const snap = remote({ plan_code: "business", status: "trial" });
+    expect(hasEffectivePermission("owner", "owner.dashboard", snap, "supabase")).toBe(true);
+    expect(hasEffectivePermission("owner", "settings.shop", snap, "supabase")).toBe(true);
+    expect(hasEffectivePermission("owner", "reports.profit", snap, "supabase")).toBe(true);
   });
 });

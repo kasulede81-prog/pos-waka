@@ -69,10 +69,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const report = useShopReportBundle(filter, includeArchived);
   const reportDayKey = selectedDayKeyForFilter(filter) ?? dateKeyKampala(new Date());
   const showDailyExport = isSingleDayFilter(filter);
-
-  if (!hasPermission(actor.role, "reports.view")) {
-    return <Navigate to="/" replace />;
-  }
+  const canViewReports = hasPermission(actor.role, "reports.view");
 
   const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
   const canPurchasesView = hasPermission(actor.role, "purchases.view");
@@ -117,6 +114,22 @@ export function ReportsPage({ lang }: { lang: Language }) {
     if (!isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled)) return null;
     return computePharmacyExpiryReport(products);
   }, [preferences.businessType, preferences.pharmacyModeEnabled, products]);
+
+  const receivablesByAccount = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const c of customers) {
+      totals.set(c.name, c.debtBalanceUgx);
+    }
+    return [...totals.entries()]
+      .map(([name, debt]) => ({ name, debt }))
+      .filter((row) => row.debt > 0)
+      .sort((a, b) => b.debt - a.debt)
+      .slice(0, 10);
+  }, [customers]);
+
+  if (!canViewReports) {
+    return <Navigate to="/" replace />;
+  }
 
   const totals = {
     revenue: report.revenue,
@@ -221,18 +234,6 @@ export function ReportsPage({ lang }: { lang: Language }) {
         </div>
       </section>
     ) : null;
-
-  const receivablesByAccount = useMemo(() => {
-    const totals = new Map<string, number>();
-    for (const c of customers) {
-      totals.set(c.name, c.debtBalanceUgx);
-    }
-    return [...totals.entries()]
-      .map(([name, debt]) => ({ name, debt }))
-      .filter((row) => row.debt > 0)
-      .sort((a, b) => b.debt - a.debt)
-      .slice(0, 10);
-  }, [customers]);
 
   const wholesaleSection = wholesaleMode ? (
     <section className="space-y-4 rounded-3xl border border-indigo-200 bg-indigo-50/40 p-4">

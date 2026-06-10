@@ -108,7 +108,9 @@ export function SuppliersPage({ lang }: { lang: Language }) {
             <article key={s.id} className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
-                  <p className="text-xl font-black text-slate-900">{s.name}</p>
+                  <Link to={`/suppliers/${s.id}`} className="text-xl font-black text-slate-900 hover:text-waka-700">
+                    {s.name}
+                  </Link>
                   <p className="text-sm text-slate-600">{s.phone || "—"}</p>
                   {s.location ? <p className="text-sm text-slate-500">{s.location}</p> : null}
                   {s.notes ? <p className="mt-2 text-sm text-slate-700">{s.notes}</p> : null}
@@ -121,6 +123,12 @@ export function SuppliersPage({ lang }: { lang: Language }) {
                   </p>
                 </div>
               </div>
+              <Link
+                to={`/suppliers/${s.id}`}
+                className="mt-3 inline-block text-sm font-bold text-waka-700 underline"
+              >
+                {t(lang, "supplierViewDetail")}
+              </Link>
               {canManage && s.balanceOwedUgx > 0 ? (
                 <button
                   type="button"

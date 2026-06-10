@@ -2,10 +2,18 @@ import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
+import { dispatchAndroidBack } from "../lib/androidBackStack";
 import { getBackFallbackPath, historyCanGoBack } from "../lib/navigationBack";
 
+const MINIMIZE_AT_ROOT_PATHS = new Set(["/", "/pos"]);
+
+function shouldMinimizeApp(pathname: string, fallback: string): boolean {
+  if (MINIMIZE_AT_ROOT_PATHS.has(pathname)) return true;
+  return fallback === pathname;
+}
+
 /**
- * Hardware back: go back in web history when possible, otherwise sensible parent route.
+ * Hardware back: overlay handlers first, then history, then parent route, then minimize at root.
  */
 export function useAndroidBackButton() {
   const navigate = useNavigate();
@@ -15,11 +23,20 @@ export function useAndroidBackButton() {
     if (!Capacitor.isNativePlatform()) return;
     let handle: { remove: () => void } | undefined;
     void App.addListener("backButton", () => {
+      if (dispatchAndroidBack()) return;
+
       if (historyCanGoBack()) {
         navigate(-1);
-      } else {
-        navigate(getBackFallbackPath(location.pathname), { replace: false });
+        return;
       }
+
+      const fallback = getBackFallbackPath(location.pathname);
+      if (shouldMinimizeApp(location.pathname, fallback)) {
+        void App.minimizeApp();
+        return;
+      }
+
+      navigate(fallback, { replace: false });
     }).then((h) => {
       handle = h;
     });

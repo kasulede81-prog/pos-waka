@@ -93,6 +93,7 @@ export function verifyFinancialInvariants(input: {
     products: input.products,
     debtPayments: input.debtPayments,
     cashExpenses: input.cashExpenses,
+    supplierPayments: input.supplierPayments ?? [],
     day,
   });
 
@@ -103,10 +104,13 @@ export function verifyFinancialInvariants(input: {
   const expensesDay = input.cashExpenses
     .filter((e) => !e.deletedAt && e.paidOn === day)
     .reduce((a, e) => a + Math.max(0, e.amountUgx), 0);
+  const supplierPayDay = (input.supplierPayments ?? [])
+    .filter((p) => dateKeyKampala(p.createdAt) === day)
+    .reduce((a, p) => a + Math.max(0, p.amountUgx), 0);
 
   const expectedCash = Math.max(
     0,
-    fin.cashCollectedUgx + debtPayDay - refundsDay - expensesDay,
+    fin.cashCollectedUgx + debtPayDay - refundsDay - expensesDay - supplierPayDay,
   );
 
   if (drawer.expectedDrawerCashUgx !== expectedCash) {

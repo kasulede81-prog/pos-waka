@@ -56,6 +56,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitBreakdown, setSplitBreakdown] = useState<BillSplitLine[] | null>(null);
   const [tableAction, setTableAction] = useState<"transfer" | "merge" | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const session = floor?.sessions.find((s) => s.id === sessionId);
   const isNamedTab = session ? isNamedTabSession(session) : false;
@@ -127,7 +128,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
       setSettleOpen(false);
       clearActiveTableOrder();
       navigate("/floor");
+      return;
     }
+    const msg = t(lang, res.errorKey ?? "tableSettleFailed");
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 4000);
   };
 
   return (
@@ -316,6 +321,12 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             setTableAction(null);
           }}
         />
+      ) : null}
+
+      {toast ? (
+        <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-2xl bg-rose-950 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
+          {toast}
+        </div>
       ) : null}
     </div>
   );

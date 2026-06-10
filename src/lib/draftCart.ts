@@ -1,4 +1,4 @@
-import type { Product, SaleLine } from "../types";
+import type { Product, Sale, SaleLine } from "../types";
 import { ensureSaleLineId } from "./pendingSaleMerge";
 import { lineDiscountUgx, listPriceForLine } from "./saleAdjustments";
 import {
@@ -59,6 +59,13 @@ export function computeDraftCartStats(lines: SaleLine[]): DraftCartStats {
 /** @deprecated Prefer computeDraftCheckoutTotals for checkout display. */
 export function draftPayableTotal(lines: SaleLine[], cartDiscountUgx = 0): number {
   return computeDraftCheckoutTotals(lines, cartDiscountUgx).payableUgx;
+}
+
+/** Restore whole-cart discount from a held/pending sale so checkout totals match the held bill. */
+export function cartDiscountFromPendingSale(sale: Sale): number {
+  const lineSubtotalUgx = sale.lines.reduce((a, l) => a + l.lineTotalUgx, 0);
+  const heldTotalUgx = Math.max(0, Math.floor(sale.totalUgx ?? 0));
+  return Math.max(0, Math.min(lineSubtotalUgx, lineSubtotalUgx - heldTotalUgx));
 }
 
 /** Human-readable quantity on a cart line (pieces vs full packs). */

@@ -36,6 +36,8 @@ import { OfficePremiumSection } from "../components/office/OfficePremiumSection"
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
+import { OfficeSupplierSummaryCard } from "../components/office/OfficeSupplierSummaryCard";
+import { OfficeRestockSuggestionsCard } from "../components/office/OfficeRestockSuggestionsCard";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -260,6 +262,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   deemphasized={deemphasizePurchasing}
                 />
               ) : null}
+              {can("purchases.view") ? (
+                <OfficeNavCard
+                  to="/office/purchases"
+                  title={t(lang, "officeCardPurchases")}
+                  subtitle={t(lang, "officeCardPurchasesSub")}
+                  Icon={Truck}
+                  deemphasized={deemphasizePurchasing}
+                />
+              ) : null}
               {canRecordExpense ? (
                 <OfficeNavCard
                   to="/cash-expenses"
@@ -269,8 +280,19 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                 />
               ) : null}
               {can("day.close") ? (
-                <OfficeCloseDayCard lang={lang} highlight={highlightCloseDay} />
+                <>
+                  <OfficeNavCard
+                    to="/office/cash-position"
+                    title={t(lang, "officeCardCashPosition")}
+                    subtitle={t(lang, "officeCardCashPositionSub")}
+                    Icon={Banknote}
+                    highlight
+                  />
+                  <OfficeCloseDayCard lang={lang} highlight={highlightCloseDay} />
+                </>
               ) : null}
+              {can("suppliers.view") ? <OfficeSupplierSummaryCard lang={lang} /> : null}
+              {can("purchases.record") ? <OfficeRestockSuggestionsCard lang={lang} /> : null}
             </OfficeNavSection>
           ) : null}
 
