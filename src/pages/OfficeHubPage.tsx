@@ -191,22 +191,13 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                 />
               ) : null}
               {can("customers.view") && highlightCustomers ? (
-                <>
-                  <OfficeNavCard
-                    to="/customers"
-                    title={t(lang, "customers")}
-                    subtitle={t(lang, "officeCardCustomersSub")}
-                    Icon={Users}
-                    highlight
-                  />
-                  <OfficeNavCard
-                    to="/debts"
-                    title={t(lang, "debts")}
-                    subtitle={t(lang, "debtsHelp")}
-                    Icon={Banknote}
-                    highlight
-                  />
-                </>
+                <OfficeNavCard
+                  to="/debts"
+                  title={t(lang, "debts")}
+                  subtitle={t(lang, "debtsHelp")}
+                  Icon={Banknote}
+                  highlight
+                />
               ) : null}
               {can("customers.view") && highlightPharmacyPatients ? (
                 <OfficeNavCard
