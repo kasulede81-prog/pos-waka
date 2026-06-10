@@ -1,6 +1,6 @@
 import { fetchProfilePrimaryShopId } from "./primaryShop";
 import { supabase } from "./supabase";
-import type { RemoteSubscriptionRow } from "./subscriptionEntitlements";
+import type { PromotionalGrantRow, RemoteSubscriptionRow, SubscriptionSnapshot } from "./subscriptionEntitlements";
 
 export async function resolvePrimaryOrganizationForUser(userId: string): Promise<{
   organizationId: string;
@@ -51,12 +51,56 @@ export async function resolvePrimaryOrganizationForUser(userId: string): Promise
 }
 
 /**
+ * Latest active promotional grant (growth campaign / referral / manual) for the org.
+ * RLS limits rows to the member's own organization; failures degrade to null so
+ * the real subscription still resolves.
+ */
+export async function fetchActivePromotionalGrant(organizationId: string): Promise<PromotionalGrantRow | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from("promotional_grants")
+      .select("id, plan_code, granted_by, campaign_id, granted_at, expires_at, revoked_at")
+      .eq("organization_id", organizationId)
+      .is("revoked_at", null)
+      .gt("expires_at", new Date().toISOString())
+      .order("expires_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) return null;
+    return data as PromotionalGrantRow;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Full snapshot for the signed-in user: real subscription row + any active
+ * promotional grant. Grant priority is applied by `resolveEffectivePlanTier`.
+ */
+export async function fetchSubscriptionSnapshotForUser(userId: string): Promise<SubscriptionSnapshot> {
+  if (!supabase) return { kind: "none" };
+  const orgShop = await resolvePrimaryOrganizationForUser(userId);
+  if (!orgShop) return { kind: "none" };
+
+  const [row, grant] = await Promise.all([
+    fetchRemoteSubscriptionForUser(userId, orgShop),
+    fetchActivePromotionalGrant(orgShop.organizationId),
+  ]);
+  if (row) return { kind: "remote", row, promotionalGrant: grant };
+  return { kind: "none", promotionalGrant: grant };
+}
+
+/**
  * Loads the org subscription for the signed-in user (via primary shop membership).
  */
-export async function fetchRemoteSubscriptionForUser(userId: string): Promise<RemoteSubscriptionRow | null> {
+export async function fetchRemoteSubscriptionForUser(
+  userId: string,
+  resolvedOrgShop?: { organizationId: string; shopId: string },
+): Promise<RemoteSubscriptionRow | null> {
   if (!supabase) return null;
 
-  const orgShop = await resolvePrimaryOrganizationForUser(userId);
+  const orgShop = resolvedOrgShop ?? (await resolvePrimaryOrganizationForUser(userId));
   if (!orgShop) return null;
 
   const { data: sub, error: subErr } = await supabase

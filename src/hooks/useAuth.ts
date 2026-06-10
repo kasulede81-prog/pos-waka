@@ -127,12 +127,16 @@ export function useAuth() {
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
     if (!next?.user || !supabase) return;
     const meta = next.user.user_metadata as Record<string, unknown> | undefined;
-    const res = await ensureReferralAttributionForSession(String(meta?.referral_code ?? ""));
+    const metaReferralCode = String(meta?.referral_code ?? "");
+    const res = await ensureReferralAttributionForSession(metaReferralCode);
     if (!res.ok && res.error && res.error !== "invalid_code") {
       reportAuthIssue("referral_apply_failed", { error: res.error });
     } else if (!res.ok && import.meta.env.DEV) {
       console.warn("[waka-auth] ensure_referral_attribution", res.error);
     }
+    // Growth campaign: idempotent automatic/referral promotional grant for new shops.
+    const { applyGrowthCampaignGrantForSession } = await import("../lib/growthCampaignsAdmin");
+    void applyGrowthCampaignGrantForSession(metaReferralCode || null);
   }, []);
 
   const markWorkspaceEnsured = useCallback((uid: string) => {

@@ -21,10 +21,25 @@ export type RemoteSubscriptionRow = {
   max_devices: number | null;
 };
 
+/**
+ * Active promotional grant (growth campaign / referral / manual admin grant).
+ * Grants temporary premium access on top of — never instead of — the real
+ * subscription row.
+ */
+export type PromotionalGrantRow = {
+  id: string;
+  plan_code: string;
+  granted_by: string;
+  campaign_id: string | null;
+  granted_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+};
+
 export type SubscriptionSnapshot =
   | { kind: "local_full" }
-  | { kind: "none" }
-  | { kind: "remote"; row: RemoteSubscriptionRow };
+  | { kind: "none"; promotionalGrant?: PromotionalGrantRow | null }
+  | { kind: "remote"; row: RemoteSubscriptionRow; promotionalGrant?: PromotionalGrantRow | null };
 
 const TIER_RANK: Record<SubscriptionPlanCode, number> = {
   free: 0,
@@ -56,12 +71,22 @@ export function normalizePlanCode(raw: string | undefined | null): SubscriptionP
   return "starter";
 }
 
-/**
- * Effective subscription tier for feature gates.
- * - New users: Free Mode immediately, no admin approval required.
- * - Paid rows unlock Starter, Business, or Waka Plus.
- */
-export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): SubscriptionPlanCode {
+/** Tier from an active (non-revoked, non-expired) promotional grant, or null. */
+export function resolvePromotionalGrantTier(
+  snapshot: SubscriptionSnapshot,
+  nowMs: number = Date.now(),
+): SubscriptionPlanCode | null {
+  if (snapshot.kind === "local_full") return null;
+  const grant = snapshot.promotionalGrant;
+  if (!grant || grant.revoked_at) return null;
+  const end = new Date(grant.expires_at).getTime();
+  if (!Number.isFinite(end) || end <= nowMs) return null;
+  const tier = normalizePlanCode(grant.plan_code);
+  return tier === "free" ? null : tier;
+}
+
+/** Underlying tier from the real subscription only (paid → trial → free). */
+function resolveBasePlanTier(snapshot: SubscriptionSnapshot, nowMs: number): SubscriptionPlanCode {
   if (snapshot.kind === "local_full") return "waka_plus";
   if (snapshot.kind === "none") return "free";
 
@@ -75,19 +100,36 @@ export function resolveEffectivePlanTier(snapshot: SubscriptionSnapshot): Subscr
 
   if (row.status === "active" && row.current_period_end) {
     const periodEndMs = new Date(row.current_period_end).getTime();
-    if (Number.isFinite(periodEndMs) && periodEndMs <= Date.now()) return "free";
+    if (Number.isFinite(periodEndMs) && periodEndMs <= nowMs) return "free";
   }
 
   return normalizePlanCode(row.plan_code);
+}
+
+/**
+ * Effective subscription tier for feature gates.
+ * Priority: active promotional grant → active paid subscription → trial → free.
+ * A grant never downgrades a higher paid tier (no feature loss during campaigns),
+ * and on grant expiry the shop falls back to its real subscription automatically.
+ */
+export function resolveEffectivePlanTier(
+  snapshot: SubscriptionSnapshot,
+  nowMs: number = Date.now(),
+): SubscriptionPlanCode {
+  const base = resolveBasePlanTier(snapshot, nowMs);
+  const grantTier = resolvePromotionalGrantTier(snapshot, nowMs);
+  if (grantTier && TIER_RANK[grantTier] > TIER_RANK[base]) return grantTier;
+  return base;
 }
 
 export function tierMeetsMinimum(tier: SubscriptionPlanCode, minimum: SubscriptionPlanCode): boolean {
   return TIER_RANK[tier] >= TIER_RANK[minimum];
 }
 
-/** True when org has Starter, Business, or Waka Plus (including trial period on those plans). */
+/** True when org has Starter, Business, or Waka Plus (including trial period on those plans, or an active promotional grant). */
 export function hasCommercialSubscription(snapshot: SubscriptionSnapshot): boolean {
   if (snapshot.kind === "local_full") return true;
+  if (resolvePromotionalGrantTier(snapshot) !== null) return true;
   if (snapshot.kind !== "remote") return false;
   const row = snapshot.row;
   const plan = normalizePlanCode(row.plan_code);

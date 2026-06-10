@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
-import { fetchRemoteSubscriptionForUser } from "../lib/fetchShopSubscription";
+import { fetchSubscriptionSnapshotForUser } from "../lib/fetchShopSubscription";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
 
 export type SubscriptionContextValue = {
@@ -58,8 +58,8 @@ export function SubscriptionProvider({
     }
     if (!opts?.silent && !loadedOnceRef.current) setLoading(true);
     try {
-      const row = await fetchRemoteSubscriptionForUser(user.id);
-      setSnapshot(row ? { kind: "remote", row } : { kind: "none" });
+      const next = await fetchSubscriptionSnapshotForUser(user.id);
+      setSnapshot(next);
       loadedOnceRef.current = true;
     } catch {
       setSnapshot({ kind: "none" });

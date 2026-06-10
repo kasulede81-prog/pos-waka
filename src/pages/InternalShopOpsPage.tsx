@@ -9,6 +9,7 @@ import { AdminPermanentDeletePanel } from "../components/internal-admin/AdminPer
 import { AdminShopInventoryPanel } from "../components/internal-admin/AdminShopInventoryPanel";
 import { AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
 import { InternalNotesPanel, ShopTimelinePanel } from "../components/internal-admin/v2/ops/OpsWidgets";
+import { PromotionalAccessPanel } from "../components/internal-admin/v2/PromotionalAccessPanel";
 import {
   buildShopTimelineFromDetail,
   computeShopHealth,
@@ -674,6 +675,10 @@ export function InternalShopOpsPage({ lang }: Props) {
             {!canSubs ? (
               <p className="mt-2 text-xs font-semibold text-stone-500">{t(lang, "internalShopProfilePlanNoPermission")}</p>
             ) : null}
+          </AdminCollapsible>
+
+          <AdminCollapsible title="Promotional access" summary="Growth campaign grants">
+            <PromotionalAccessPanel shopId={detail.shop.id} canManage={canSubs} previewMode={previewMode} />
           </AdminCollapsible>
 
           {detail.sync_health ? (
