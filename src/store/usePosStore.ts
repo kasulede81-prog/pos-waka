@@ -94,7 +94,6 @@ import {
   buildSaleLine,
   buyingUnitsToBaseUnits,
   costPerBaseFromBuyingUnitCost,
-  estimatedProfitForLine,
   pricePerBaseUnitUgx,
   purchaseLineCostTotalUgx,
   weightedCostAfterStockIn,

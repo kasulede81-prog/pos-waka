@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import type { Product, Sale, SaleLine } from "../types";
+import type { Product, SaleLine } from "../types";
 import { cartDiscountFromPendingSale, computeDraftCheckoutTotals, estimatedProfitAfterCartDiscount } from "./draftCart";
 import { buildPendingSaleFromDraft } from "./hospitality";
 import { mergePendingSales } from "./pendingSaleMerge";

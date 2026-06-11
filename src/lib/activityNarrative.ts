@@ -50,7 +50,6 @@ function productNameFromPayload(
   payload: Record<string, unknown>,
   productById: Map<string, { name: string }>,
 ): string {
-): string {
   const id = typeof payload.productId === "string" ? payload.productId : "";
   const fromMap = id ? productById.get(id)?.name : undefined;
   const n = typeof payload.name === "string" ? payload.name : "";
