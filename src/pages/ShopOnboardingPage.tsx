@@ -18,6 +18,8 @@ import {
   type HospitalityOnboardingStyleId,
 } from "../config/hospitalityOnboarding";
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
+import { AiBusinessSetupCard } from "../components/onboarding/AiBusinessSetupCard";
+import type { AiStarterProductRow } from "../lib/ai/aiBusinessSchemas";
 import { usePosStore } from "../store/usePosStore";
 import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { captureAppException } from "../lib/crashReporting";
@@ -280,6 +282,20 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   };
 
   const starterProducts = useMemo(() => starterPackForBusinessType(businessType), [businessType]);
+
+  const addAiStarterProducts = (rows: AiStarterProductRow[]) => {
+    for (const row of rows) {
+      quickAddProduct({
+        name: row.name,
+        inferName: row.name,
+        priceUgx: Math.max(0, Math.floor(row.suggestedPriceUgx)),
+        stockQty: Math.max(0, row.suggestedStockQty),
+        category: row.category || "General",
+        sellingMode: row.sellingMode,
+        baseUnit: row.unit,
+      });
+    }
+  };
 
   const addStarterProduct = (line: StarterLine) => {
     const guess = inferProductGuess(line.inferName, businessType, businessType === "pharmacy");
@@ -620,6 +636,14 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               {t(lang, "onboardProductsPriority")}
             </p>
             <p className="text-xs font-semibold text-stone-500">{t(lang, "onboardFinishLaterHint")}</p>
+            <AiBusinessSetupCard
+              lang={lang}
+              shopName={shopName}
+              businessType={businessType}
+              enabled={authMode !== "local"}
+              onUseStarter={addAiStarterProducts}
+              onSkipClassic={() => {}}
+            />
             <div className="grid grid-cols-2 gap-2">
               {starterProducts.map((line) => (
                 <button

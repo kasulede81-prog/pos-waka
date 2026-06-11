@@ -12,6 +12,9 @@ type Props = {
   canRestock: boolean;
   freeProductLimitReached: boolean;
   onAddProduct: () => void;
+  aiProductAssistantEnabled?: boolean;
+  onAddProductWithAi?: () => void;
+  onBulkInventoryWithAi?: () => void;
 };
 
 export function StockOverviewPanel({
@@ -24,6 +27,9 @@ export function StockOverviewPanel({
   canRestock,
   freeProductLimitReached,
   onAddProduct,
+  aiProductAssistantEnabled = false,
+  onAddProductWithAi,
+  onBulkInventoryWithAi,
 }: Props) {
   const cards = [
     { label: t(lang, "stockStatTotalProducts"), value: String(totalProducts) },
@@ -55,6 +61,26 @@ export function StockOverviewPanel({
             className="min-h-[56px] rounded-2xl bg-waka-600 text-lg font-black text-white shadow-md disabled:opacity-50"
           >
             {t(lang, "stockAddProductBtn")}
+          </button>
+        ) : null}
+        {canAdd && aiProductAssistantEnabled && onAddProductWithAi ? (
+          <button
+            type="button"
+            disabled={freeProductLimitReached}
+            onClick={onAddProductWithAi}
+            className="min-h-[56px] rounded-2xl border-2 border-violet-300 bg-violet-50 text-lg font-black text-violet-950 shadow-sm disabled:opacity-50"
+          >
+            {t(lang, "aiProductAssistBtn")}
+          </button>
+        ) : null}
+        {canAdd && onBulkInventoryWithAi ? (
+          <button
+            type="button"
+            disabled={freeProductLimitReached}
+            onClick={onBulkInventoryWithAi}
+            className="min-h-[56px] rounded-2xl border-2 border-violet-200 bg-white text-lg font-black text-violet-900 shadow-sm disabled:opacity-50 sm:col-span-2"
+          >
+            {t(lang, "aiBulkBtn")}
           </button>
         ) : null}
         {canRestock ? (

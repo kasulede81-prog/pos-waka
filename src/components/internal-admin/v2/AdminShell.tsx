@@ -38,6 +38,7 @@ export type AdminSectionId =
   | "pilot"
   | "business_types"
   | "growth_campaign"
+  | "ai_settings"
   | "shop";
 
 type TabDef = {
@@ -56,6 +57,7 @@ const TABS: TabDef[] = [
   { id: "billing", path: "/internal/waka/billing", label: "Billing" },
   { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
   { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
+  { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI Center", superOnly: true },
   { id: "agents", path: "/internal/waka/agents", label: "Agents" },
   { id: "activations", path: "/internal/waka/activations", label: "Keys" },
   { id: "admins", path: "/internal/waka/admins", label: "Admins", superOnly: true },

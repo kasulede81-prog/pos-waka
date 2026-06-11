@@ -14,7 +14,11 @@ import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptio
 import { StockProductEditModal } from "../components/stock/StockProductEditModal";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
-import { SimpleAddProductWizard } from "../components/stock/SimpleAddProductWizard";
+import { SimpleAddProductWizard, type SimpleAddWizardPrefill, type SimpleAddWizardStep } from "../components/stock/SimpleAddProductWizard";
+import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
+import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
+import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
+import { usePlatformAiSettings } from "../hooks/usePlatformAiSettings";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { StockProductCard } from "../components/stock/StockProductCard";
@@ -85,14 +89,23 @@ export function StockPage({ lang }: { lang: Language }) {
   const productSlotsLeft = productLimit === null ? null : Math.max(0, productLimit - products.length);
 
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
+  const bulkQuickAddProducts = usePosStore((s) => s.bulkQuickAddProducts);
   const removeProduct = usePosStore((s) => s.removeProduct);
   const adjustStock = usePosStore((s) => s.adjustStock);
   const updateProduct = usePosStore((s) => s.updateProduct);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
 
+  const { productAssistantEnabled, inventoryAssistantEnabled } = usePlatformAiSettings();
+  const aiProductAssistantEnabled = canAdd && productAssistantEnabled && !pharmacyMode;
+  const aiInventoryAssistantEnabled = canAdd && inventoryAssistantEnabled && !pharmacyMode;
+
   const [quickOpen, setQuickOpen] = useState(false);
   const [starterOpen, setStarterOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [aiAssistOpen, setAiAssistOpen] = useState(false);
+  const [bulkAiOpen, setBulkAiOpen] = useState(false);
+  const [wizardPrefill, setWizardPrefill] = useState<SimpleAddWizardPrefill | undefined>();
+  const [wizardInitialStep, setWizardInitialStep] = useState<SimpleAddWizardStep | undefined>();
 
   const [qaName, setQaName] = useState("");
   const [qaUnitPreset, setQaUnitPreset] = useState("piece");
@@ -278,8 +291,51 @@ export function StockPage({ lang }: { lang: Language }) {
     setQuickOpen(false);
   };
 
+  const closeAddProductWizard = () => {
+    setBulkOpen(false);
+    setWizardPrefill(undefined);
+    setWizardInitialStep(undefined);
+  };
+
   const openAddProductSheet = () => {
     if (freeProductLimitReached) return;
+    setWizardPrefill(undefined);
+    setWizardInitialStep(undefined);
+    setBulkOpen(true);
+  };
+
+  const openAiProductAssist = () => {
+    if (freeProductLimitReached || !aiProductAssistantEnabled) return;
+    setAiAssistOpen(true);
+  };
+
+  const openBulkInventoryAi = () => {
+    if (freeProductLimitReached || !aiInventoryAssistantEnabled) return;
+    setBulkAiOpen(true);
+  };
+
+  const handleBulkAiImport = (rows: ReturnType<typeof mapBulkRowsToQuickAdd>) => bulkQuickAddProducts(rows);
+
+  const handleAiContinue = (prefill: SimpleAddWizardPrefill) => {
+    setAiAssistOpen(false);
+    setWizardPrefill(prefill);
+    setWizardInitialStep("stock");
+    setBulkOpen(true);
+  };
+
+  const handleAiContinueManual = (name: string) => {
+    setAiAssistOpen(false);
+    setWizardPrefill({
+      name,
+      shelf: "",
+      sellUnit: "piece",
+      sellUnitCustom: "",
+      hasPack: false,
+      packKind: "crate",
+      packCustom: "",
+      piecesPerPack: "",
+    });
+    setWizardInitialStep("name");
     setBulkOpen(true);
   };
 
@@ -517,14 +573,26 @@ export function StockPage({ lang }: { lang: Language }) {
           <p className="text-xl font-black text-slate-900">{modeTerm("stockEmptyTitle")}</p>
           <p className="mx-auto mt-2 max-w-sm text-base text-slate-600">{modeTerm("stockEmptySub")}</p>
           {canAdd ? (
-            <button
-              type="button"
-              disabled={freeProductLimitReached}
-              onClick={openAddProductSheet}
-              className="mt-6 w-full max-w-xs rounded-2xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-md active:bg-waka-700 sm:mx-auto"
-            >
-              {modeTerm("stockAddProduct")}
-            </button>
+            <div className="mx-auto mt-6 flex w-full max-w-xs flex-col gap-2">
+              <button
+                type="button"
+                disabled={freeProductLimitReached}
+                onClick={openAddProductSheet}
+                className="w-full rounded-2xl bg-waka-600 px-6 py-4 text-lg font-black text-white shadow-md active:bg-waka-700"
+              >
+                {modeTerm("stockAddProduct")}
+              </button>
+              {aiProductAssistantEnabled ? (
+                <button
+                  type="button"
+                  disabled={freeProductLimitReached}
+                  onClick={openAiProductAssist}
+                  className="w-full rounded-2xl border-2 border-violet-300 bg-violet-50 px-6 py-3 text-base font-black text-violet-950"
+                >
+                  {t(lang, "aiProductAssistBtn")}
+                </button>
+              ) : null}
+            </div>
           ) : null}
           {canAdd ? (
             <button
@@ -552,6 +620,9 @@ export function StockPage({ lang }: { lang: Language }) {
               canRestock={canRestock}
               freeProductLimitReached={freeProductLimitReached}
               onAddProduct={openAddProductSheet}
+              aiProductAssistantEnabled={aiProductAssistantEnabled}
+              onAddProductWithAi={openAiProductAssist}
+              onBulkInventoryWithAi={aiInventoryAssistantEnabled ? openBulkInventoryAi : undefined}
             />
           ) : null}
 
@@ -821,13 +892,38 @@ export function StockPage({ lang }: { lang: Language }) {
         <SimpleAddProductWizard
           lang={lang}
           open={bulkOpen}
-          onClose={() => setBulkOpen(false)}
+          onClose={closeAddProductWizard}
           shelves={stockCategoryPicklist}
           generalCategoryLabel={t(lang, "generalCategory")}
           disabled={freeProductLimitReached}
           onSave={saveFromSimpleWizard}
+          prefill={wizardPrefill}
+          initialStep={wizardInitialStep}
         />
       )}
+
+      {aiInventoryAssistantEnabled ? (
+        <BulkInventoryAiModal
+          lang={lang}
+          open={bulkAiOpen}
+          onClose={() => setBulkAiOpen(false)}
+          businessType={preferences.businessType}
+          shopName={preferences.shopDisplayName ?? ""}
+          productSlotsLeft={productSlotsLeft}
+          onImport={handleBulkAiImport}
+        />
+      ) : null}
+
+      {aiProductAssistantEnabled ? (
+        <AiProductAssistSheet
+          lang={lang}
+          open={aiAssistOpen}
+          onClose={() => setAiAssistOpen(false)}
+          businessType={preferences.businessType}
+          onContinue={handleAiContinue}
+          onContinueManual={handleAiContinueManual}
+        />
+      ) : null}
 
       <StockProductEditModal
         lang={lang}

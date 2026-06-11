@@ -19,10 +19,23 @@ import {
   type PackKind,
   type SellUnitKind,
 } from "../../lib/simpleProductWizard";
+import type { WizardPrefillFromAi } from "../../lib/ai/mapAiSuggestionToWizard";
 
-type Step = "name" | "shelf" | "sellUnit" | "pack" | "piecesPerPack" | "stock" | "sellPrice" | "buyPrice";
+export type SimpleAddWizardStep =
+  | "name"
+  | "shelf"
+  | "sellUnit"
+  | "pack"
+  | "piecesPerPack"
+  | "stock"
+  | "sellPrice"
+  | "buyPrice";
+
+type Step = SimpleAddWizardStep;
 
 const STEPS: Step[] = ["name", "shelf", "sellUnit", "pack", "piecesPerPack", "stock", "sellPrice", "buyPrice"];
+
+export type SimpleAddWizardPrefill = WizardPrefillFromAi;
 
 type Props = {
   lang: Language;
@@ -32,7 +45,59 @@ type Props = {
   generalCategoryLabel: string;
   disabled?: boolean;
   onSave: (payload: BuiltWizardProduct | null) => boolean;
+  prefill?: SimpleAddWizardPrefill;
+  initialStep?: SimpleAddWizardStep;
 };
+
+function applyWizardPrefill(
+  prefill: SimpleAddWizardPrefill,
+  shelves: string[],
+  setters: {
+    setName: (v: string) => void;
+    setShelfPick: (v: string) => void;
+    setShelfNew: (v: string) => void;
+    setCreatingShelf: (v: boolean) => void;
+    setSellUnit: (v: SellUnitKind) => void;
+    setSellUnitCustom: (v: string) => void;
+    setHasPack: (v: boolean) => void;
+    setPackKind: (v: PackKind) => void;
+    setPackCustom: (v: string) => void;
+    setPiecesPerPack: (v: string) => void;
+    setStockCount: (v: string) => void;
+    setSellPrice: (v: string) => void;
+    setBuyPackPrice: (v: string) => void;
+    setSavedFlash: (v: boolean) => void;
+  },
+) {
+  setters.setName(prefill.name ?? "");
+  const shelf = (prefill.shelf ?? "").trim();
+  const shelfMatch = shelf
+    ? shelves.find((s) => s.trim().toLowerCase() === shelf.toLowerCase())
+    : undefined;
+  if (shelfMatch) {
+    setters.setShelfPick(shelfMatch);
+    setters.setShelfNew("");
+    setters.setCreatingShelf(false);
+  } else if (shelf) {
+    setters.setShelfPick("");
+    setters.setShelfNew(shelf);
+    setters.setCreatingShelf(true);
+  } else {
+    setters.setShelfPick("");
+    setters.setShelfNew("");
+    setters.setCreatingShelf(shelves.length === 0);
+  }
+  setters.setSellUnit(prefill.sellUnit ?? "piece");
+  setters.setSellUnitCustom(prefill.sellUnitCustom ?? "");
+  setters.setHasPack(prefill.hasPack ?? false);
+  setters.setPackKind(prefill.packKind ?? "crate");
+  setters.setPackCustom(prefill.packCustom ?? "");
+  setters.setPiecesPerPack(prefill.piecesPerPack ?? "");
+  setters.setStockCount("");
+  setters.setSellPrice("");
+  setters.setBuyPackPrice("");
+  setters.setSavedFlash(false);
+}
 
 export function SimpleAddProductWizard({
   lang,
@@ -42,6 +107,8 @@ export function SimpleAddProductWizard({
   generalCategoryLabel,
   disabled,
   onSave,
+  prefill,
+  initialStep,
 }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const [step, setStep] = useState<Step>("name");
@@ -93,8 +160,28 @@ export function SimpleAddProductWizard({
 
   useEffect(() => {
     if (!open) return;
+    if (prefill) {
+      applyWizardPrefill(prefill, shelves, {
+        setName,
+        setShelfPick,
+        setShelfNew,
+        setCreatingShelf,
+        setSellUnit,
+        setSellUnitCustom,
+        setHasPack,
+        setPackKind,
+        setPackCustom,
+        setPiecesPerPack,
+        setStockCount,
+        setSellPrice,
+        setBuyPackPrice,
+        setSavedFlash,
+      });
+      setStep(initialStep ?? "name");
+      return;
+    }
     reset();
-  }, [open]);
+  }, [open, prefill, initialStep, shelves]);
 
   useEffect(() => {
     if (step === "shelf" && shelves.length === 0) setCreatingShelf(true);

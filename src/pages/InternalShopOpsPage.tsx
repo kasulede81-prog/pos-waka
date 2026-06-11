@@ -10,6 +10,7 @@ import { AdminShopInventoryPanel } from "../components/internal-admin/AdminShopI
 import { AdminCollapsible, type AdminActionOption } from "../components/internal-admin/adminUi";
 import { InternalNotesPanel, ShopTimelinePanel } from "../components/internal-admin/v2/ops/OpsWidgets";
 import { PromotionalAccessPanel } from "../components/internal-admin/v2/PromotionalAccessPanel";
+import { AdminAiSetupPanel } from "../components/internal-admin/v2/AdminAiSetupPanel";
 import {
   buildShopTimelineFromDetail,
   computeShopHealth,
@@ -679,6 +680,16 @@ export function InternalShopOpsPage({ lang }: Props) {
 
           <AdminCollapsible title="Promotional access" summary="Growth campaign grants">
             <PromotionalAccessPanel shopId={detail.shop.id} canManage={canSubs} previewMode={previewMode} />
+          </AdminCollapsible>
+
+          <AdminCollapsible title="AI business setup" summary="Onboarding templates">
+            <AdminAiSetupPanel
+              shopId={detail.shop.id}
+              shopName={detail.shop.name}
+              businessType={detail.shop.business_type ?? "kiosk_duka"}
+              canManage={canSubs}
+              previewMode={previewMode}
+            />
           </AdminCollapsible>
 
           {detail.sync_health ? (
