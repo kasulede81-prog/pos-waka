@@ -18,7 +18,7 @@ import { SimpleAddProductWizard, type SimpleAddWizardPrefill, type SimpleAddWiza
 import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
 import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
-import { usePlatformAiSettings } from "../hooks/usePlatformAiSettings";
+import { useAiFeatureGate } from "../hooks/useAiFeatureGate";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
 import { StockProductCard } from "../components/stock/StockProductCard";
@@ -95,9 +95,10 @@ export function StockPage({ lang }: { lang: Language }) {
   const updateProduct = usePosStore((s) => s.updateProduct);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
 
-  const { productAssistantEnabled, inventoryAssistantEnabled } = usePlatformAiSettings();
-  const aiProductAssistantEnabled = canAdd && productAssistantEnabled && !pharmacyMode;
-  const aiInventoryAssistantEnabled = canAdd && inventoryAssistantEnabled && !pharmacyMode;
+  const productAiGate = useAiFeatureGate("product_assistant");
+  const inventoryAiGate = useAiFeatureGate("inventory_assistant");
+  const aiProductAssistantEnabled = canAdd && productAiGate.enabled && !pharmacyMode;
+  const aiInventoryAssistantEnabled = canAdd && inventoryAiGate.enabled && !pharmacyMode;
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [starterOpen, setStarterOpen] = useState(false);

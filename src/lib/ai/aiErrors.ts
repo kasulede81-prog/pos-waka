@@ -8,6 +8,10 @@ export type AiErrorCode =
   | "deepseek_not_configured"
   | "ai_platform_disabled"
   | "feature_disabled"
+  | "pilot_not_approved"
+  | "shop_ai_disabled"
+  | "shop_feature_disabled"
+  | "shop_monthly_limit_reached"
   | "permission_check_failed"
   | "settings_unavailable"
   | "rpc_missing"
@@ -33,6 +37,10 @@ const FRIENDLY: Record<string, string> = {
   deepseek_not_configured: "Couldn't get suggestions. You can still add the product yourself.",
   ai_platform_disabled: "Couldn't get suggestions. You can still add the product yourself.",
   feature_disabled: "Couldn't get suggestions. You can still add the product yourself.",
+  pilot_not_approved: "Couldn't get suggestions. You can still add the product yourself.",
+  shop_ai_disabled: "Couldn't get suggestions. You can still add the product yourself.",
+  shop_feature_disabled: "Couldn't get suggestions. You can still add the product yourself.",
+  shop_monthly_limit_reached: "AI is temporarily unavailable. Try again later or add the product manually.",
   permission_check_failed: "Couldn't get suggestions. You can still add the product yourself.",
   settings_unavailable: "Couldn't get suggestions. You can still add the product yourself.",
   rpc_missing: "Couldn't get suggestions. You can still add the product yourself.",
@@ -59,6 +67,10 @@ const DEV_LABEL: Record<string, string> = {
   deepseek_not_configured: "Missing API key",
   ai_platform_disabled: "AI disabled",
   feature_disabled: "AI feature disabled",
+  pilot_not_approved: "Shop not approved for AI pilot",
+  shop_ai_disabled: "Shop AI disabled",
+  shop_feature_disabled: "Feature disabled for shop",
+  shop_monthly_limit_reached: "Shop rate limit reached",
   permission_check_failed: "Permission check failed",
   settings_unavailable: "AI settings unavailable",
   rpc_missing: "RPC missing",
@@ -94,6 +106,10 @@ export function normalizeAiErrorCode(code?: string | null, message?: string | nu
   if (raw === "deepseek_not_configured") return "deepseek_not_configured";
   if (raw === "ai_platform_disabled" || raw === "ai_disabled") return "ai_platform_disabled";
   if (raw === "feature_disabled") return "feature_disabled";
+  if (raw === "pilot_not_approved") return "pilot_not_approved";
+  if (raw === "shop_ai_disabled") return "shop_ai_disabled";
+  if (raw === "shop_feature_disabled") return "shop_feature_disabled";
+  if (raw === "shop_monthly_limit_reached") return "shop_monthly_limit_reached";
   if (raw === "permission_check_failed") return "permission_check_failed";
   if (raw === "settings_unavailable") return "settings_unavailable";
   if (raw === "monthly_request_limit_reached") return "monthly_request_limit_reached";

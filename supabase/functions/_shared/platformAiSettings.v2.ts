@@ -18,6 +18,8 @@ export type PlatformAiSettingsV2 = {
   monthly_budget_limit: number;
   per_shop_limit: number;
   per_user_limit: number;
+  pilot_rollout_mode: boolean;
+  pilot_auto_enable_new_shops: boolean;
 };
 
 const DEFAULTS: PlatformAiSettingsV2 = {
@@ -38,6 +40,8 @@ const DEFAULTS: PlatformAiSettingsV2 = {
   monthly_budget_limit: 50,
   per_shop_limit: 500,
   per_user_limit: 100,
+  pilot_rollout_mode: false,
+  pilot_auto_enable_new_shops: false,
 };
 
 function boolField(obj: Record<string, unknown>, ...keys: string[]): boolean {
@@ -85,6 +89,8 @@ export function parsePlatformAiSettingsV2(raw: unknown): PlatformAiSettingsV2 {
     monthly_budget_limit: numField(obj, "monthly_budget_limit", DEFAULTS.monthly_budget_limit),
     per_shop_limit: numField(obj, "per_shop_limit", DEFAULTS.per_shop_limit),
     per_user_limit: numField(obj, "per_user_limit", DEFAULTS.per_user_limit),
+    pilot_rollout_mode: obj.pilot_rollout_mode === true,
+    pilot_auto_enable_new_shops: obj.pilot_auto_enable_new_shops === true,
   };
 }
 

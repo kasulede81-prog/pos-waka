@@ -6,16 +6,14 @@ import {
   type WizardPrefillFromAi,
 } from "../lib/ai/mapAiSuggestionToWizard";
 import { suggestProductWithAi } from "../lib/ai/productAiSuggest";
-import { canUseAiAllowed } from "../lib/ai/canUseAi";
-import { usePlatformAiSettings } from "./usePlatformAiSettings";
+import { useAiFeatureGate } from "./useAiFeatureGate";
 
 export type AiSuggestOutcome =
   | { ok: true; prefill: WizardPrefillFromAi; fromCache: boolean; suggestion: AiProductSuggestion }
   | { ok: false; error: string; errorCode?: string };
 
 export function useAiProductSuggest() {
-  const { settings } = usePlatformAiSettings();
-  const productAssistantEnabled = canUseAiAllowed("product_assistant", settings);
+  const { enabled: productAssistantEnabled } = useAiFeatureGate("product_assistant");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -89,7 +87,7 @@ export function useAiProductSuggest() {
       inflight.current.set(dedupeKey, run);
       return run;
     },
-    [productAssistantEnabled, settings],
+    [productAssistantEnabled],
   );
 
   return {

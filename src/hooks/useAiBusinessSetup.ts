@@ -7,8 +7,7 @@ import {
   generateBusinessSetupWithAi,
   resolveActiveShopId,
 } from "../lib/ai/businessSetupAi";
-import { canUseAiAllowed } from "../lib/ai/canUseAi";
-import { usePlatformAiSettings } from "./usePlatformAiSettings";
+import { useAiFeatureGate } from "./useAiFeatureGate";
 
 export function useAiBusinessSetup(params: {
   shopName: string;
@@ -16,8 +15,8 @@ export function useAiBusinessSetup(params: {
   businessDescription?: string;
   enabled?: boolean;
 }) {
-  const { settings } = usePlatformAiSettings();
-  const featureOn = canUseAiAllowed("business_setup_assistant", settings) && params.enabled !== false;
+  const { enabled: featureOnBase } = useAiFeatureGate("business_setup_assistant");
+  const featureOn = featureOnBase && params.enabled !== false;
 
   const [shopId, setShopId] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
