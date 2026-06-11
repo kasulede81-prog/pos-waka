@@ -97,8 +97,8 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const productAiGate = useAiFeatureGate("product_assistant");
   const inventoryAiGate = useAiFeatureGate("inventory_assistant");
-  const aiProductAssistantEnabled = canAdd && productAiGate.enabled && !pharmacyMode;
-  const aiInventoryAssistantEnabled = canAdd && inventoryAiGate.enabled && !pharmacyMode;
+  const aiProductAssistantEnabled = canAdd && productAiGate.enabled;
+  const aiInventoryAssistantEnabled = canAdd && inventoryAiGate.enabled;
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [starterOpen, setStarterOpen] = useState(false);
@@ -880,11 +880,11 @@ export function StockPage({ lang }: { lang: Language }) {
         </AppModalOverlay>
       ) : null}
 
-      {pharmacyMode ? (
+      {pharmacyMode && !wizardPrefill ? (
         <PharmacyAddMedicineWizard
           lang={lang}
           open={bulkOpen}
-          onClose={() => setBulkOpen(false)}
+          onClose={closeAddProductWizard}
           shelves={stockCategoryPicklist}
           disabled={freeProductLimitReached}
           onSaved={() => {}}

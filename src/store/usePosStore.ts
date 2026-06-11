@@ -1268,12 +1268,24 @@ export const usePosStore = create<PosState>((set, get) => {
 
   updateBusinessType: (businessType) => {
     const prof = getBusinessProfile(businessType);
+    const hospitality = isHospitalityBusinessType(businessType);
+    const pharmacy = isPharmacyBusinessType(businessType);
     set((s) => ({
       preferences: {
         ...s.preferences,
         businessType,
         kioskQuickSell: prof.kioskQuickSellDefault,
         schemaVersion: 2,
+        hospitalityModeEnabled: hospitality ? true : s.preferences.hospitalityModeEnabled,
+        pharmacyModeEnabled: pharmacy ? true : s.preferences.pharmacyModeEnabled,
+        hospitalityFloor: hospitality
+          ? (s.preferences.hospitalityFloor ?? defaultHospitalityFloor())
+          : s.preferences.hospitalityFloor,
+        hospitalityKitchenEnabled: hospitality
+          ? (s.preferences.hospitalityKitchenEnabled ??
+            defaultKitchenEnabledForBusinessType(businessType))
+          : s.preferences.hospitalityKitchenEnabled,
+        ...applyIndustryReceiptDefaults(s.preferences, businessType),
       },
     }));
   },

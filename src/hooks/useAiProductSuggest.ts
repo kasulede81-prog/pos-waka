@@ -13,7 +13,8 @@ export type AiSuggestOutcome =
   | { ok: false; error: string; errorCode?: string };
 
 export function useAiProductSuggest() {
-  const { enabled: productAssistantEnabled } = useAiFeatureGate("product_assistant");
+  const { enabled: productAssistantEnabled, loading: gateLoading } =
+    useAiFeatureGate("product_assistant");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | null>(null);
@@ -30,7 +31,9 @@ export function useAiProductSuggest() {
       productName: string;
       businessType?: string | null;
     }): Promise<AiSuggestOutcome> => {
-      if (!productAssistantEnabled) {
+      // While the gate is still loading we let the request through; the edge
+      // function re-checks permissions server-side and is authoritative.
+      if (!productAssistantEnabled && !gateLoading) {
         return { ok: false, error: "AI assistant is disabled.", errorCode: "ai_disabled" };
       }
 
@@ -87,7 +90,7 @@ export function useAiProductSuggest() {
       inflight.current.set(dedupeKey, run);
       return run;
     },
-    [productAssistantEnabled],
+    [productAssistantEnabled, gateLoading],
   );
 
   return {

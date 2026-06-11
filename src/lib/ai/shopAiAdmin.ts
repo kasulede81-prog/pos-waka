@@ -7,11 +7,32 @@ export type AdminShopAiBundle = {
   usage: ShopAiUsageSummary;
 };
 
+const memberSettingsCache = new Map<string, { value: ShopAiSettings; at: number }>();
+const memberSettingsInflight = new Map<string, Promise<ShopAiSettings | null>>();
+const MEMBER_SETTINGS_CACHE_MS = 60_000;
+
 export async function fetchShopAiSettingsForMember(shopId: string): Promise<ShopAiSettings | null> {
   if (!supabase || !shopId) return null;
-  const { data, error } = await supabase.rpc("get_shop_ai_settings_for_member", { p_shop_id: shopId });
-  if (error || !data) return null;
-  return parseShopAiSettings(data, shopId);
+
+  const cached = memberSettingsCache.get(shopId);
+  if (cached && Date.now() - cached.at < MEMBER_SETTINGS_CACHE_MS) return cached.value;
+
+  const inflight = memberSettingsInflight.get(shopId);
+  if (inflight) return inflight;
+
+  const run = (async () => {
+    try {
+      const { data, error } = await supabase.rpc("get_shop_ai_settings_for_member", { p_shop_id: shopId });
+      if (error || !data) return null;
+      const parsed = parseShopAiSettings(data, shopId);
+      if (parsed) memberSettingsCache.set(shopId, { value: parsed, at: Date.now() });
+      return parsed;
+    } finally {
+      memberSettingsInflight.delete(shopId);
+    }
+  })();
+  memberSettingsInflight.set(shopId, run);
+  return run;
 }
 
 export async function adminFetchShopAiSettings(shopId: string): Promise<AdminShopAiBundle | null> {
@@ -42,6 +63,7 @@ export async function adminUpdateShopAiSettings(
     p_settings: patch,
   });
   if (error) return { ok: false, error: error.message };
+  memberSettingsCache.delete(shopId);
   const row = (data ?? {}) as { ok?: boolean; settings?: unknown };
   if (!row.ok) return { ok: false, error: "update_failed" };
   const settings = parseShopAiSettings(row.settings, shopId);

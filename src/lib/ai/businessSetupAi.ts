@@ -20,18 +20,35 @@ type EdgeResponse = {
   setup?: unknown;
 };
 
+let shopIdCached: { value: string; at: number } | null = null;
+let shopIdInflight: Promise<string | null> | null = null;
+const SHOP_ID_CACHE_MS = 60_000;
+
 export async function resolveActiveShopId(): Promise<string | null> {
   if (!supabase) return null;
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth.user?.id) return null;
-  const { data } = await supabase
-    .from("shop_members")
-    .select("shop_id")
-    .eq("user_id", auth.user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  return data?.shop_id ?? null;
+  if (shopIdCached && Date.now() - shopIdCached.at < SHOP_ID_CACHE_MS) {
+    return shopIdCached.value;
+  }
+  if (shopIdInflight) return shopIdInflight;
+  shopIdInflight = (async () => {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user?.id) return null;
+      const { data } = await supabase
+        .from("shop_members")
+        .select("shop_id")
+        .eq("user_id", auth.user.id)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const id = data?.shop_id ?? null;
+      if (id) shopIdCached = { value: id, at: Date.now() };
+      return id;
+    } finally {
+      shopIdInflight = null;
+    }
+  })();
+  return shopIdInflight;
 }
 
 export async function fetchShopAiSetupCompleted(shopId: string): Promise<boolean> {
