@@ -6,11 +6,14 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
+import { isCatalogTamperAction } from "../lib/catalogAudit";
+import { dateKeyKampala } from "../lib/datesUg";
 
 const PAGE = 120;
 
 export function StaffActivityPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
+  const [catalogOnly, setCatalogOnly] = useState(false);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
@@ -19,7 +22,17 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
-  const trimmed = useMemo(() => auditLogs.slice(0, PAGE), [auditLogs]);
+  const trimmed = useMemo(() => {
+    const base = auditLogs.slice(0, PAGE);
+    if (!catalogOnly) return base;
+    const todayKey = dateKeyKampala(new Date());
+    return base.filter(
+      (e) =>
+        isCatalogTamperAction(e.action) &&
+        e.action !== "price_change" &&
+        dateKeyKampala(e.at) === todayKey,
+    );
+  }, [auditLogs, catalogOnly]);
 
   const groups = useMemo(
     () => buildGroupedActivityTimeline(lang, trimmed, productById, customerById, { maxGroups: 20 }),
@@ -50,6 +63,16 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
       />
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+
+      <button
+        type="button"
+        onClick={() => setCatalogOnly((v) => !v)}
+        className={`min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black ${
+          catalogOnly ? "border-violet-500 bg-violet-50 text-violet-950" : "border-slate-200 bg-white text-slate-800"
+        }`}
+      >
+        {t(lang, "staffActivityCatalogOnly")}
+      </button>
 
       {groups.length === 0 ? (
         <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>

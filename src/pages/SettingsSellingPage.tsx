@@ -5,6 +5,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import type { DiscountControlMode } from "../lib/discountGovernance";
 
 const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
 
@@ -12,6 +13,14 @@ function receiptPaperLabelKey(size: ReceiptPaperSize): string {
   if (size === "58mm") return "receiptPaperSize58";
   if (size === "80mm") return "receiptPaperSize80";
   return "receiptPaperSizeA4";
+}
+
+const DISCOUNT_MODES: DiscountControlMode[] = ["unrestricted", "max_percent", "manager_approval"];
+
+function discountModeLabelKey(mode: DiscountControlMode): string {
+  if (mode === "max_percent") return "settingsDiscountModeMaxPercent";
+  if (mode === "manager_approval") return "settingsDiscountModeManagerApproval";
+  return "settingsDiscountModeUnrestricted";
 }
 
 export function SettingsSellingPage({ lang }: { lang: Language }) {
@@ -23,6 +32,8 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
     return <Navigate to="/settings" replace />;
   }
 
+  const discountMode = preferences.discountControlMode ?? "unrestricted";
+
   return (
     <div className="space-y-5 pb-8">
       <SettingsPageHeader
@@ -30,6 +41,40 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
         title={t(lang, "settingsHubSelling")}
         subtitle={t(lang, "settingsHubSellingSub")}
       />
+
+      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <p className="text-base font-black text-stone-950">{t(lang, "settingsDiscountTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "settingsDiscountSub")}</p>
+        <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "settingsDiscountModeLabel")}</label>
+        <select
+          value={discountMode}
+          onChange={(e) => setPreferences({ discountControlMode: e.target.value as DiscountControlMode })}
+          className="mt-2 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-semibold"
+        >
+          {DISCOUNT_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {t(lang, discountModeLabelKey(mode))}
+            </option>
+          ))}
+        </select>
+        {discountMode !== "unrestricted" ? (
+          <label className="mt-4 block">
+            <span className="text-sm font-bold text-slate-800">{t(lang, "settingsDiscountMaxPercentLabel")}</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={preferences.discountMaxPercentThreshold ?? 10}
+              onChange={(e) =>
+                setPreferences({
+                  discountMaxPercentThreshold: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                })
+              }
+              className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-base font-semibold"
+            />
+          </label>
+        ) : null}
+      </article>
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <label className="flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-slate-900">

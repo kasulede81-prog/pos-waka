@@ -6,11 +6,16 @@ type Props = {
   lang: Language;
   stats: DraftCartStats;
   compact?: boolean;
+  payableUgx?: number;
+  cartDiscountUgx?: number;
 };
 
-export function DraftCartSummary({ lang, stats, compact }: Props) {
+export function DraftCartSummary({ lang, stats, compact, payableUgx, cartDiscountUgx = 0 }: Props) {
   const unitShown =
     Number.isInteger(stats.unitCount) ? String(stats.unitCount) : stats.unitCount.toFixed(2).replace(/\.?0+$/, "");
+  const showPayable = payableUgx != null && cartDiscountUgx > 0;
+  const totalLabel = showPayable ? t(lang, "payableTotalLabel") : t(lang, "totalLabel");
+  const totalValue = showPayable ? payableUgx : stats.totalUgx;
 
   if (compact) {
     return (
@@ -18,6 +23,12 @@ export function DraftCartSummary({ lang, stats, compact }: Props) {
         {t(lang, "posCartProducts").replace("{{count}}", String(stats.productCount))}
         {" · "}
         {t(lang, "posCartUnits").replace("{{count}}", unitShown)}
+        {showPayable ? (
+          <>
+            {" · "}
+            {t(lang, "payableTotalLabel")}: UGX {payableUgx.toLocaleString()}
+          </>
+        ) : null}
       </p>
     );
   }
@@ -34,10 +45,15 @@ export function DraftCartSummary({ lang, stats, compact }: Props) {
           <p className="text-2xl font-black tabular-nums text-slate-900">{unitShown}</p>
         </div>
         <div>
-          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "totalLabel")}</p>
-          <p className="text-lg font-black tabular-nums text-waka-700">UGX {stats.totalUgx.toLocaleString()}</p>
+          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{totalLabel}</p>
+          <p className="text-lg font-black tabular-nums text-waka-700">UGX {totalValue.toLocaleString()}</p>
         </div>
       </div>
+      {showPayable ? (
+        <p className="mt-2 text-center text-xs font-semibold text-slate-500">
+          {t(lang, "cartDiscountOriginal")}: UGX {stats.totalUgx.toLocaleString()}
+        </p>
+      ) : null}
     </div>
   );
 }

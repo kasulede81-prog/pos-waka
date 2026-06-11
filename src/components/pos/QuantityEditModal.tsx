@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { PosScreenPortal } from "../layout/PosScreenPortal";
 
 const QtyNumpad = memo(function QtyNumpad({
   onDigit,
@@ -111,9 +112,10 @@ export function QuantityEditModal({
   if (!open) return null;
 
   return (
+    <PosScreenPortal>
     <AppModalOverlay
       clearNav={false}
-      className="z-[64] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
+      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}
@@ -154,5 +156,6 @@ export function QuantityEditModal({
         </div>
       </div>
     </AppModalOverlay>
+    </PosScreenPortal>
   );
 }

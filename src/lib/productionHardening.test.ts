@@ -6,7 +6,7 @@ import {
   pickAuthoritativeCompletedFinancial,
 } from "./saleFinancialMerge";
 import { activeDayCloseForDate, canRecordDayClose } from "./dayCloseIdempotency";
-import { validateDraftDiscount } from "./discountGovernance";
+import { validateCombinedDraftDiscount, validateDraftDiscount } from "./discountGovernance";
 import { buildArchiveForensicSummary } from "./archiveForensics";
 import { verifyCustomerDebtIntegrity } from "./customerDebtIntegrity";
 import {
@@ -158,6 +158,18 @@ describe("M1 discount governance", () => {
       lineSubtotalUgx: 100_000,
     });
     expect(r.ok).toBe(true);
+  });
+
+  it("combined line + cart discounts validate against list subtotal", () => {
+    const r = validateCombinedDraftDiscount({
+      prefs,
+      role: "cashier",
+      listSubtotalUgx: 100_000,
+      lineDiscountUgx: 5_000,
+      cartDiscountUgx: 8_000,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.errorKey).toBe("discountExceedsMaxPercent");
   });
 });
 

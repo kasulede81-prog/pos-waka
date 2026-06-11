@@ -11,6 +11,8 @@ import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { isLowStock } from "../lib/sellingEngine";
+import { catalogEventsForDay } from "../lib/catalogAudit";
+import { describeAuditLine } from "../lib/activityNarrative";
 import type { OwnerAlert } from "../lib/ownerAlerts";
 import {
   buildDailyOwnerSummaryLines,
@@ -126,6 +128,25 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       ),
     [auditLogs, todayKey],
   );
+
+  const todayCatalogEvents = useMemo(
+    () =>
+      catalogEventsForDay(auditLogs, todayKey)
+        .filter((e) => e.action !== "price_change")
+        .slice(0, 8),
+    [auditLogs, todayKey],
+  );
+
+  const todayStaffCatalogEvents = useMemo(
+    () =>
+      catalogEventsForDay(auditLogs, todayKey, { nonOwnerOnly: true }).filter(
+        (e) => e.action !== "price_change",
+      ),
+    [auditLogs, todayKey],
+  );
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
   const stats = useMemo(() => {
     const fin = getCompletedFinancials(sales, allReturnRecords, products, { day: todayKey });
@@ -534,6 +555,41 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
                   </p>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-[1.75rem] border border-violet-200 bg-violet-50/40 p-5 shadow-sm lg:col-span-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-black text-violet-950">{t(lang, "ownerCatalogChangesToday")}</h2>
+            <Link to="/owner/activity" className="text-sm font-bold text-violet-800 underline">
+              {t(lang, "staffActivityNav")} →
+            </Link>
+          </div>
+          {todayCatalogEvents.length === 0 ? (
+            <p className="mt-3 text-sm font-semibold text-violet-900/70">{t(lang, "ownerNoCatalogChangesToday")}</p>
+          ) : (
+            <div className="mt-3 space-y-3">
+              {todayStaffCatalogEvents.length > 0 ? (
+                <p className="rounded-2xl border border-violet-200 bg-white px-3 py-2 text-sm font-bold text-violet-900">
+                  {tTemplate(lang, "ownerStaffCatalogCount", { count: String(todayStaffCatalogEvents.length) })}
+                </p>
+              ) : null}
+              <ul className="space-y-2">
+                {todayCatalogEvents.map((e) => (
+                  <li key={e.id} className="rounded-2xl border border-violet-100 bg-white p-3">
+                    <p className="text-sm font-semibold text-slate-800">
+                      {describeAuditLine(lang, e, productById, customerById)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {e.actorName ?? e.actorUserId}
+                      {e.role !== "owner" ? ` · ${t(lang, `role_${e.role}`)}` : ""}
+                      {" · "}
+                      {new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </p>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>

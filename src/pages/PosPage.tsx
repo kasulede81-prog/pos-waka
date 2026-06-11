@@ -1323,7 +1323,7 @@ export function PosPage({ lang }: { lang: Language }) {
       {draftLines.length > 0 && !saleCheckoutMinimized ? (
         <PosScreenPortal>
         <div
-          className="waka-overlay-full fixed inset-0 z-[80] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
+          className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
           style={{
             paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
           }}
@@ -1359,7 +1359,7 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           ) : null}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
-            <DraftCartSummary lang={lang} stats={draftCartStats} />
+            <DraftCartSummary lang={lang} stats={draftCartStats} payableUgx={draftPayable} cartDiscountUgx={checkoutTotals.cartDiscountUgx} />
             <ul className="mt-3 space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
               {draftLines.map((line) => (
                 <DraftCartLineRow
@@ -1377,7 +1377,7 @@ export function PosPage({ lang }: { lang: Language }) {
             </ul>
             {draftDiscountTotal > 0 ? (
               <p className="mt-2 text-sm font-bold text-amber-800">
-                {t(lang, "ownerDiscountsToday")}: UGX {draftDiscountTotal.toLocaleString()}
+                {t(lang, "draftLineDiscountTotal")}: UGX {draftDiscountTotal.toLocaleString()}
               </p>
             ) : null}
             <div className="mt-4 rounded-2xl border border-waka-200 bg-waka-50/80 p-3">
@@ -1843,7 +1843,7 @@ export function PosPage({ lang }: { lang: Language }) {
           if (!discountLine) return;
           const r = applyDraftLineDiscount(discountLine.productId, "final", newSellingPriceUgx);
           if (!r.ok) {
-            setToast(t(lang, "saleError"));
+            setToast(t(lang, r.errorKey ?? "saleError"));
             window.setTimeout(() => setToast(null), 2200);
             return;
           }
@@ -1857,7 +1857,15 @@ export function PosPage({ lang }: { lang: Language }) {
         lineSubtotalUgx={checkoutTotals.lineSubtotalUgx}
         currentDiscountUgx={checkoutTotals.cartDiscountUgx}
         onClose={() => setCartSaleDiscountOpen(false)}
-        onApply={(discountUgx) => setDraftCartDiscount(discountUgx)}
+        onApply={(discountUgx) => {
+          const r = setDraftCartDiscount(discountUgx);
+          if (!r.ok) {
+            setToast(t(lang, r.errorKey ?? "saleError"));
+            window.setTimeout(() => setToast(null), 2200);
+            return;
+          }
+          setCartSaleDiscountOpen(false);
+        }}
       />
 
       <ShiftCloseModal

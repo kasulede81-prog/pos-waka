@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Language, SaleLine } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { MoneyInput } from "../ui/MoneyInput";
 import { listPriceForLine } from "../../lib/saleAdjustments";
 
@@ -42,9 +43,10 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
   };
 
   return (
+    <PosScreenPortal>
     <AppModalOverlay
       clearNav={false}
-      className="z-[64] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
+      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
       role="dialog"
       aria-modal
       onClick={onClose}
@@ -55,7 +57,7 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
       >
         <h2 className="text-xl font-black text-slate-900">{t(lang, "discountTitle")}</h2>
 
-        <p className="mt-4 text-2xl font-black text-slate-900">{line.name}</p>
+        <p className="mt-4 line-clamp-3 text-2xl font-black text-slate-900">{line.name}</p>
         <p className="mt-1 text-base font-semibold text-slate-600">
           {t(lang, "discountOriginal")}:{" "}
           <span className="font-black text-slate-900">UGX {list.toLocaleString()}</span>
@@ -122,5 +124,6 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
         </div>
       </div>
     </AppModalOverlay>
+    </PosScreenPortal>
   );
 }

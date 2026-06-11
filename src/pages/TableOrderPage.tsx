@@ -2,14 +2,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft } from "lucide-react";
-import type { Language, Product } from "../types";
+import type { BillSplitLine, Language, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { computeDraftCheckoutTotals } from "../lib/draftCart";
+import { computeDraftCheckoutTotals, formatDraftLineQty } from "../lib/draftCart";
+import { lineDiscountUgx } from "../lib/saleAdjustments";
 import { isNamedTabSession, sessionDisplayLabel } from "../lib/hospitality";
 import { formatUgx } from "../lib/formatUgx";
+import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
+import { DiscountLineModal } from "../components/pos/DiscountLineModal";
+import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
+import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import {
   CATEGORY_FILTER_ALL,
   distinctTrimmedCategories,
@@ -22,7 +27,6 @@ import { hapticTap } from "../lib/nativeFeedback";
 import { TableSettleSheet } from "../components/hospitality/TableSettleSheet";
 import { SplitBillSheet } from "../components/hospitality/SplitBillSheet";
 import { TableActionSheet } from "../components/hospitality/TableActionSheet";
-import type { BillSplitLine } from "../types";
 
 export function TableOrderPage({ lang }: { lang: Language }) {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -35,6 +39,11 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const resumeTableSession = usePosStore((s) => s.resumeTableSession);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
   const setDraftInput = usePosStore((s) => s.setDraftInput);
+  const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
+  const setDraftCartDiscount = usePosStore((s) => s.setDraftCartDiscount);
+  const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
+  const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
+  const removeDraftLine = usePosStore((s) => s.removeDraftLine);
   const finalizeDraftSale = usePosStore((s) => s.finalizeDraftSale);
   const clearActiveTableOrder = usePosStore((s) => s.clearActiveTableOrder);
   const transferTableSession = usePosStore((s) => s.transferTableSession);
@@ -56,7 +65,16 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitBreakdown, setSplitBreakdown] = useState<BillSplitLine[] | null>(null);
   const [tableAction, setTableAction] = useState<"transfer" | "merge" | null>(null);
+  const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
+  const [cartSaleDiscountOpen, setCartSaleDiscountOpen] = useState(false);
+  const [qtyEditLine, setQtyEditLine] = useState<SaleLine | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const draftLineDiscountTotal = useMemo(
+    () => draftLines.reduce((a, l) => a + lineDiscountUgx(l), 0),
+    [draftLines],
+  );
 
   const session = floor?.sessions.find((s) => s.id === sessionId);
   const isNamedTab = session ? isNamedTabSession(session) : false;
@@ -96,6 +114,25 @@ export function TableOrderPage({ lang }: { lang: Language }) {
       if (built.ok) saveTableBill();
     },
     [setDraftInput, addDraftLineFromInput, saveTableBill],
+  );
+
+  const showDiscountError = useCallback(
+    (errorKey?: string) => {
+      setToast(t(lang, errorKey ?? "saleError"));
+      window.setTimeout(() => setToast(null), 2200);
+    },
+    [lang],
+  );
+
+  const handleDraftQtyStep = useCallback(
+    (line: SaleLine, backwards: boolean) => {
+      const product = productById.get(line.productId);
+      if (!product) return;
+      const delta = backwards ? -1 : 1;
+      const r = adjustDraftLineQuantity(line.productId, delta);
+      if (r.ok) saveTableBill();
+    },
+    [adjustDraftLineQuantity, productById, saveTableBill],
   );
 
   if (!session || (!isNamedTab && !table)) {
@@ -236,17 +273,44 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             <span className="text-sm font-bold text-slate-600">{t(lang, "tableRunningBill")}</span>
             <span className="text-xl font-black text-stone-950">{formatUgx(checkout.payableUgx)}</span>
           </div>
+          {draftLineDiscountTotal > 0 ? (
+            <p className="text-xs font-bold text-amber-800">
+              {t(lang, "draftLineDiscountTotal")}: {formatUgx(draftLineDiscountTotal)}
+            </p>
+          ) : null}
+          {checkout.cartDiscountUgx > 0 ? (
+            <p className="text-xs font-bold text-emerald-900">
+              {t(lang, "cartDiscountApplied")}: − {formatUgx(checkout.cartDiscountUgx)}
+            </p>
+          ) : null}
           {draftLines.length > 0 ? (
-            <ul className="max-h-28 space-y-1 overflow-y-auto text-sm">
+            <ul className="max-h-40 space-y-2 overflow-y-auto">
               {draftLines.map((line) => (
-                <li key={line.productId} className="flex justify-between gap-2 font-medium text-slate-700">
-                  <span>
-                    {line.quantity}× {line.name}
-                  </span>
-                  <span>{formatUgx(line.lineTotalUgx)}</span>
-                </li>
+                <DraftCartLineRow
+                  key={line.productId}
+                  lang={lang}
+                  line={line}
+                  product={productById.get(line.productId)}
+                  onIncrement={() => handleDraftQtyStep(line, false)}
+                  onDecrement={() => handleDraftQtyStep(line, true)}
+                  onQtyTap={() => setQtyEditLine(line)}
+                  onDiscount={() => setDiscountLine(line)}
+                  onRemove={() => {
+                    removeDraftLine(line.productId);
+                    saveTableBill();
+                  }}
+                />
               ))}
             </ul>
+          ) : null}
+          {canSettle && draftLines.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setCartSaleDiscountOpen(true)}
+              className="min-h-10 w-full rounded-xl border-2 border-waka-300 bg-waka-50 text-sm font-black text-waka-900"
+            >
+              {t(lang, "cartDiscountBtn")}
+            </button>
           ) : null}
           <div className="grid grid-cols-2 gap-2">
             {manualKitchenFire ? (
@@ -328,6 +392,59 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           {toast}
         </div>
       ) : null}
+
+      <DiscountLineModal
+        lang={lang}
+        open={discountLine !== null}
+        line={discountLine}
+        onClose={() => setDiscountLine(null)}
+        onApply={(newSellingPriceUgx) => {
+          if (!discountLine) return;
+          const r = applyDraftLineDiscount(discountLine.productId, "final", newSellingPriceUgx);
+          if (!r.ok) {
+            showDiscountError(r.errorKey);
+            return;
+          }
+          saveTableBill();
+          setDiscountLine(null);
+        }}
+      />
+
+      <CartSaleDiscountModal
+        lang={lang}
+        open={cartSaleDiscountOpen}
+        lineSubtotalUgx={checkout.lineSubtotalUgx}
+        currentDiscountUgx={checkout.cartDiscountUgx}
+        onClose={() => setCartSaleDiscountOpen(false)}
+        onApply={(discountUgx) => {
+          const r = setDraftCartDiscount(discountUgx);
+          if (!r.ok) {
+            showDiscountError(r.errorKey);
+            return;
+          }
+          saveTableBill();
+          setCartSaleDiscountOpen(false);
+        }}
+      />
+
+      <QuantityEditModal
+        lang={lang}
+        open={qtyEditLine !== null}
+        productName={qtyEditLine?.name ?? ""}
+        qtyLabel={
+          qtyEditLine && productById.get(qtyEditLine.productId)
+            ? formatDraftLineQty(productById.get(qtyEditLine.productId)!, qtyEditLine)
+            : String(qtyEditLine?.quantity ?? "")
+        }
+        initialQuantity={qtyEditLine?.quantity ?? 0}
+        onClose={() => setQtyEditLine(null)}
+        onConfirm={(qty) => {
+          if (!qtyEditLine) return;
+          const r = setDraftLineQuantity(qtyEditLine.productId, qty);
+          if (r.ok) saveTableBill();
+          setQtyEditLine(null);
+        }}
+      />
     </div>
   );
 }

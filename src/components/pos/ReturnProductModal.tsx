@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
+import { formatPharmacySaleQtyLabel } from "../../lib/pharmacyPackaging";
 import { canPerformUnlinkedReturn } from "../../lib/returnPolicy";
 import {
   remainingRefundableAmount,
   remainingRefundableForLineQty,
   remainingReturnableQuantity,
+  suggestReturnRefundUgx,
 } from "../../lib/returnLimits";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 
 const REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
@@ -59,8 +62,8 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   const saleLine = sale?.lines.find((l) => l.productId === productId && !l.voided);
   const qtyN = Math.max(0, Number(qty.replace(/[^\d.]/g, "")) || 0);
   const suggestedRefund =
-    saleLine && saleLine.quantity > 0
-      ? Math.round((saleLine.lineTotalUgx / saleLine.quantity) * qtyN)
+    sale && productId && qtyN > 0
+      ? suggestReturnRefundUgx(sale, productId, qtyN, returnRecords)
       : product
         ? Math.round(pricePerBaseUnitUgx(product) * qtyN)
         : 0;
@@ -77,11 +80,16 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
       : null;
   const maxRefundUgx =
     maxRefundSale != null
-      ? Math.min(
-          maxRefundSale,
-          maxRefundLine ?? maxRefundSale,
-          suggestedRefund > 0 ? suggestedRefund : maxRefundSale,
-        )
+      ? Math.min(maxRefundSale, maxRefundLine ?? maxRefundSale)
+      : null;
+
+  const qtyUnitHint =
+    product?.pharmacyPackaging?.enabled
+      ? product.pharmacyPackaging.baseUnit || product.baseUnit
+      : product?.baseUnit ?? null;
+  const soldAsHint =
+    saleLine && product?.pharmacyPackaging?.enabled && saleLine.saleUnitType
+      ? formatPharmacySaleQtyLabel(product, saleLine, "short")
       : null;
 
   if (!open) return null;
@@ -106,7 +114,14 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   };
 
   return (
-    <AppModalOverlay className="z-[64] flex items-end justify-center bg-black/55 sm:items-center" role="dialog" aria-modal onClick={onClose}>
+    <PosScreenPortal>
+    <AppModalOverlay
+      clearNav={false}
+      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
+      role="dialog"
+      aria-modal
+      onClick={onClose}
+    >
       <div
         className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-[1.75rem] bg-white p-5 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
@@ -131,12 +146,23 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
 
         <label className="mt-3 block text-sm font-bold text-slate-800">
           {t(lang, "returnQtyLabel")}
+          {qtyUnitHint ? (
+            <span className="ml-1 text-xs font-semibold text-slate-500">
+              ({tTemplate(lang, "returnQtyUnitHint", { unit: qtyUnitHint })})
+            </span>
+          ) : null}
           <input
             value={qty}
             onChange={(e) => setQty(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
             inputMode="decimal"
             className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-2xl font-black"
           />
+          {maxQty != null ? (
+            <span className="mt-1 block text-xs font-semibold text-slate-500">
+              {tTemplate(lang, "returnMaxQtyHint", { qty: String(maxQty) })}
+              {soldAsHint ? ` · ${tTemplate(lang, "returnSoldAsHint", { qty: soldAsHint })}` : ""}
+            </span>
+          ) : null}
         </label>
 
         <label className="mt-3 block text-sm font-bold text-slate-800">
@@ -148,6 +174,11 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
             placeholder={String(suggestedRefund)}
             className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-2xl font-black"
           />
+          {maxRefundUgx != null && suggestedRefund > 0 ? (
+            <span className="mt-1 block text-xs font-semibold text-slate-500">
+              {tTemplate(lang, "returnSuggestedRefundHint", { amount: suggestedRefund.toLocaleString() })}
+            </span>
+          ) : null}
         </label>
 
         <p className="mt-4 text-sm font-bold text-slate-800">{t(lang, "returnReasonLabel")}</p>
@@ -190,5 +221,6 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
         </div>
       </div>
     </AppModalOverlay>
+    </PosScreenPortal>
   );
 }

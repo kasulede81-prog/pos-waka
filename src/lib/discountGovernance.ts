@@ -25,6 +25,21 @@ export function canRoleBypassDiscountApproval(role: UserRole): boolean {
   return MANAGER_ROLES.includes(role);
 }
 
+export function validateCombinedDraftDiscount(opts: {
+  prefs: ShopPreferences;
+  role: UserRole;
+  listSubtotalUgx: number;
+  lineDiscountUgx: number;
+  cartDiscountUgx: number;
+}): { ok: true } | { ok: false; errorKey: string } {
+  const totalDiscount = Math.max(0, opts.lineDiscountUgx) + Math.max(0, opts.cartDiscountUgx);
+  return validateDraftDiscount({
+    prefs: opts.prefs,
+    role: opts.role,
+    discountUgx: totalDiscount,
+    lineSubtotalUgx: opts.listSubtotalUgx,
+  });
+}
 export function validateDraftDiscount(opts: {
   prefs: ShopPreferences;
   role: UserRole;

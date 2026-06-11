@@ -1,5 +1,6 @@
 import type { AuditLogEntry, Language } from "../types";
 import { dateKeyKampala } from "./datesUg";
+import type { ProductFieldChange } from "./catalogAudit";
 import { t, tTemplate } from "./i18n";
 
 export function actorDisplayLabel(actorUserId: string, lang: Language): string {
@@ -16,10 +17,39 @@ function actorLabelFromParts(actorUserId: string, actorName: string | undefined,
   return actorDisplayLabel(actorUserId, lang);
 }
 
+function formatChangeLine(lang: Language, c: ProductFieldChange): string {
+  if (c.field === "price") {
+    return tTemplate(lang, "narrativeChangePrice", {
+      from: String(c.from ?? "—"),
+      to: String(c.to ?? "—"),
+    });
+  }
+  if (c.field === "stock") {
+    return tTemplate(lang, "narrativeChangeStock", {
+      from: String(c.from ?? "—"),
+      to: String(c.to ?? "—"),
+    });
+  }
+  if (c.field === "name") {
+    return tTemplate(lang, "narrativeChangeName", { name: String(c.to ?? "—") });
+  }
+  return `${c.field}: ${String(c.from ?? "—")} → ${String(c.to ?? "—")}`;
+}
+
+function changesFromPayload(pl: Record<string, unknown>): ProductFieldChange[] {
+  if (!Array.isArray(pl.changes)) return [];
+  return pl.changes.filter(
+    (c): c is ProductFieldChange =>
+      !!c &&
+      typeof c === "object" &&
+      typeof (c as ProductFieldChange).field === "string",
+  );
+}
 function productNameFromPayload(
   lang: Language,
   payload: Record<string, unknown>,
   productById: Map<string, { name: string }>,
+): string {
 ): string {
   const id = typeof payload.productId === "string" ? payload.productId : "";
   const fromMap = id ? productById.get(id)?.name : undefined;
@@ -85,10 +115,27 @@ export function describeAuditLine(
       return t(lang, "narrativeShiftEnd");
     case "product_add": {
       const name = typeof pl.name === "string" ? pl.name : productNameFromPayload(lang, pl, productById);
+      if (pl.bulk === true) {
+        const added = typeof pl.added === "number" ? pl.added : 0;
+        return tTemplate(lang, "narrativeBulkProductsAdded", { count: String(added) });
+      }
+      const stock = typeof pl.stock === "number" ? pl.stock : null;
+      const price = typeof pl.priceUgx === "number" ? pl.priceUgx : null;
+      if (stock != null && price != null) {
+        return tTemplate(lang, "narrativeProductAddedDetail", {
+          product: name,
+          stock: String(stock),
+          price: price.toLocaleString(),
+        });
+      }
       return tTemplate(lang, "narrativeProductAdded", { product: name });
     }
     case "product_remove": {
       const name = typeof pl.name === "string" ? pl.name : e.payloadSummary;
+      const stock = typeof pl.stock === "number" ? pl.stock : null;
+      if (stock != null) {
+        return tTemplate(lang, "narrativeProductRemovedDetail", { product: name, stock: String(stock) });
+      }
       return tTemplate(lang, "narrativeProductRemoved", { product: name });
     }
     case "product_presets": {
@@ -97,6 +144,24 @@ export function describeAuditLine(
     }
     case "product_update": {
       const name = productNameFromPayload(lang, pl, productById);
+      const changes = changesFromPayload(pl);
+      if (changes.length > 0) {
+        const detail = changes.slice(0, 2).map((c) => formatChangeLine(lang, c)).join(" · ");
+        return tTemplate(lang, "narrativeProductUpdatedDetail", { product: name, detail });
+      }
+      return tTemplate(lang, "narrativeProductUpdated", { product: name });
+    }
+    case "price_change": {
+      const name = productNameFromPayload(lang, pl, productById);
+      const before = typeof pl.priceBefore === "number" ? pl.priceBefore : null;
+      const after = typeof pl.priceAfter === "number" ? pl.priceAfter : null;
+      if (before != null && after != null) {
+        return tTemplate(lang, "narrativePriceChanged", {
+          product: name,
+          from: before.toLocaleString(),
+          to: after.toLocaleString(),
+        });
+      }
       return tTemplate(lang, "narrativeProductUpdated", { product: name });
     }
     case "customer_add": {

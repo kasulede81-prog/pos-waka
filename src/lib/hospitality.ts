@@ -7,7 +7,7 @@ import type {
   TableSession,
   TableSessionStatus,
 } from "../types";
-import { computeDraftCheckoutTotals } from "./draftCart";
+import { computeDraftCheckoutTotals, estimatedProfitAfterCartDiscount } from "./draftCart";
 import { ensureSaleLineId } from "./pendingSaleMerge";
 
 export const HOSPITALITY_BUSINESS_TYPES = [
@@ -214,7 +214,7 @@ export function buildPendingSaleFromDraft(input: {
     debtUgx: 0,
     discountTotalUgx: discountTotal,
     voidedTotalUgx: 0,
-    estimatedProfitUgx: saleLines.reduce((sum, l) => sum + l.estimatedProfitUgx, 0),
+    estimatedProfitUgx: estimatedProfitAfterCartDiscount(saleLines, checkout.cartDiscountUgx),
     createdAt: input.existing?.createdAt ?? now,
     pendingSync: true,
     lastSyncError: null,

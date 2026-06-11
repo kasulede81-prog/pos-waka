@@ -61,6 +61,15 @@ export function draftPayableTotal(lines: SaleLine[], cartDiscountUgx = 0): numbe
   return computeDraftCheckoutTotals(lines, cartDiscountUgx).payableUgx;
 }
 
+/** Scale aggregate line profit when a cart-level discount reduces net revenue. */
+export function estimatedProfitAfterCartDiscount(lines: SaleLine[], cartDiscountUgx = 0): number {
+  const lineSubtotalUgx = lines.reduce((a, l) => a + l.lineTotalUgx, 0);
+  const rawProfit = lines.reduce((a, l) => a + l.estimatedProfitUgx, 0);
+  if (cartDiscountUgx <= 0 || lineSubtotalUgx <= 0) return rawProfit;
+  const netRatio = Math.max(0, lineSubtotalUgx - cartDiscountUgx) / lineSubtotalUgx;
+  return Math.round(rawProfit * netRatio);
+}
+
 /** Restore whole-cart discount from a held/pending sale so checkout totals match the held bill. */
 export function cartDiscountFromPendingSale(sale: Sale): number {
   const lineSubtotalUgx = sale.lines.reduce((a, l) => a + l.lineTotalUgx, 0);

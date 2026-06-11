@@ -171,6 +171,7 @@ function rowToSaleLine(row: Record<string, unknown>): SaleLine {
   const quantity = Number(row.quantity ?? 0);
   const unitPriceUgx = Math.max(0, Math.floor(Number(row.unit_price_ugx ?? 0)));
   const lineTotalUgx = Math.max(0, Math.floor(Number(row.line_total_ugx ?? 0)));
+  const lineDiscountRaw = Math.max(0, Math.floor(Number(row.line_discount_ugx ?? 0)));
   const meta = (row.metadata ?? {}) as Record<string, unknown>;
   const line: SaleLine = {
     id: row.id != null ? String(row.id) : undefined,
@@ -185,6 +186,10 @@ function rowToSaleLine(row: Record<string, unknown>): SaleLine {
     estimatedProfitUgx: Math.max(0, Math.floor(Number(meta.estimatedProfitUgx ?? lineTotalUgx))),
     moneyAmountUgx: row.money_amount_ugx != null ? Math.floor(Number(row.money_amount_ugx)) : null,
   };
+  if (lineDiscountRaw > 0) {
+    line.discountUgx = lineDiscountRaw;
+    line.originalLineTotalUgx = lineTotalUgx + lineDiscountRaw;
+  }
   return ensureSaleLineId(line);
 }
 
@@ -599,7 +604,7 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       product_id: line.productId,
       quantity: line.quantity,
       unit_price_ugx: line.unitPriceUgx,
-      line_discount_ugx: 0,
+      line_discount_ugx: line.discountUgx ?? Math.max(0, (line.originalLineTotalUgx ?? line.lineTotalUgx) - line.lineTotalUgx),
       line_total_ugx: line.lineTotalUgx,
       line_input_mode: line.inputMode,
       money_amount_ugx: line.moneyAmountUgx ?? null,

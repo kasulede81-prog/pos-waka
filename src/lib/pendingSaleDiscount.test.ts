@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import type { Product, SaleLine } from "../types";
-import { cartDiscountFromPendingSale, computeDraftCheckoutTotals } from "./draftCart";
+import type { Product, Sale, SaleLine } from "../types";
+import { cartDiscountFromPendingSale, computeDraftCheckoutTotals, estimatedProfitAfterCartDiscount } from "./draftCart";
 import { buildPendingSaleFromDraft } from "./hospitality";
+import { mergePendingSales } from "./pendingSaleMerge";
 import { usePosStore } from "../store/usePosStore";
 
 const PRODUCT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -45,6 +46,41 @@ describe("cartDiscountFromPendingSale", () => {
     const checkout = computeDraftCheckoutTotals(held.lines, restored);
     expect(checkout.payableUgx).toBe(held.totalUgx);
     expect(restored).toBe(5_000);
+  });
+});
+
+describe("estimatedProfitAfterCartDiscount", () => {
+  it("scales profit down when cart discount applies", () => {
+    const profit = estimatedProfitAfterCartDiscount([draftLine], 5_000);
+    expect(profit).toBe(Math.round(14_000 * 0.75));
+  });
+});
+
+describe("mergePendingSales cart discount", () => {
+  it("preserves cart discount from newer held sale header", () => {
+    const lineB: SaleLine = {
+      ...draftLine,
+      id: "line-2",
+      productId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      name: "Rice",
+      lineTotalUgx: 10_000,
+      estimatedProfitUgx: 7_000,
+    };
+    const heldA = buildPendingSaleFromDraft({
+      saleId: "a",
+      lines: [draftLine],
+      cartDiscountUgx: 0,
+    });
+    const heldB = buildPendingSaleFromDraft({
+      saleId: "b",
+      lines: [lineB],
+      cartDiscountUgx: 2_000,
+    });
+    heldB.updatedAt = "2026-06-03T10:00:00.000Z";
+    heldA.updatedAt = "2026-06-02T10:00:00.000Z";
+    const merged = mergePendingSales(heldA, heldB);
+    expect(merged.totalUgx).toBe(28_000);
+    expect(cartDiscountFromPendingSale(merged)).toBe(2_000);
   });
 });
 

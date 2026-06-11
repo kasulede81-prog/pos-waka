@@ -1,5 +1,5 @@
 import type { Sale, SaleLine } from "../types";
-import { computeDraftCheckoutTotals } from "./draftCart";
+import { computeDraftCheckoutTotals, cartDiscountFromPendingSale, estimatedProfitAfterCartDiscount } from "./draftCart";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -44,7 +44,8 @@ export function mergePendingSales(a: Sale, b: Sale): Sale {
   const newerHeader = Number.isFinite(ta) && Number.isFinite(tb) && tb > ta ? b : a;
   const olderHeader = newerHeader === a ? b : a;
   const mergedLines = mergePendingSaleLines(olderHeader.lines, newerHeader.lines);
-  const checkout = computeDraftCheckoutTotals(mergedLines, newerHeader.discountTotalUgx ?? 0);
+  const cartDiscount = cartDiscountFromPendingSale(newerHeader);
+  const checkout = computeDraftCheckoutTotals(mergedLines, cartDiscount);
   const listSubtotal = mergedLines.reduce((sum, l) => sum + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
   const discountTotal = Math.max(0, listSubtotal - checkout.payableUgx);
   const now = new Date().toISOString();
@@ -55,7 +56,7 @@ export function mergePendingSales(a: Sale, b: Sale): Sale {
     subtotalUgx: listSubtotal,
     totalUgx: checkout.payableUgx,
     discountTotalUgx: discountTotal,
-    estimatedProfitUgx: mergedLines.reduce((sum, l) => sum + l.estimatedProfitUgx, 0),
+    estimatedProfitUgx: estimatedProfitAfterCartDiscount(mergedLines, checkout.cartDiscountUgx),
     updatedAt: now,
     pendingSync: true,
     lastSyncError: null,

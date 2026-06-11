@@ -84,11 +84,13 @@ export function reduceSaleTotalsByAmount(
   const amt = Math.max(0, Math.floor(amountUgx));
   const cashReduce = Math.min(amt, sale.cashPaidUgx);
   const debtReduce = amt - cashReduce;
+  const nextTotal = Math.max(0, sale.totalUgx - amt);
+  const profitScale = sale.totalUgx > 0 ? nextTotal / sale.totalUgx : 0;
   return {
-    totalUgx: Math.max(0, sale.totalUgx - amt),
+    totalUgx: nextTotal,
     cashPaidUgx: Math.max(0, sale.cashPaidUgx - cashReduce),
     debtUgx: Math.max(0, sale.debtUgx - debtReduce),
-    estimatedProfitUgx: sale.estimatedProfitUgx,
+    estimatedProfitUgx: Math.max(0, Math.round(sale.estimatedProfitUgx * profitScale)),
     voidedTotalUgx: (sale.voidedTotalUgx ?? 0) + amt,
   };
 }

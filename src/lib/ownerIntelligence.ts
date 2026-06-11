@@ -1,5 +1,6 @@
 import type { AuditLogEntry, DayCloseSummary, Language, Product, Sale, ShopPreferences } from "../types";
 import { dateKeyKampala } from "./datesUg";
+import { catalogEventsForDay, isSensitiveCatalogEvent } from "./catalogAudit";
 import { computeOwnerAlerts, type OwnerAlert } from "./ownerAlerts";
 import { t, tTemplate } from "./i18n";
 import { actorDisplayLabel } from "./activityNarrative";
@@ -52,12 +53,12 @@ export function computeCashierTrustRows(
 ): CashierTrustRow[] {
   const byUser = new Map<
     string,
-    { sales: number; debt: number; refunds: number; stock: number }
+    { sales: number; debt: number; refunds: number; stock: number; catalog: number }
   >();
 
   const touch = (uid: string) => {
     const id = uid || "unknown";
-    byUser.set(id, byUser.get(id) ?? { sales: 0, debt: 0, refunds: 0, stock: 0 });
+    byUser.set(id, byUser.get(id) ?? { sales: 0, debt: 0, refunds: 0, stock: 0, catalog: 0 });
     return byUser.get(id)!;
   };
 
@@ -70,20 +71,29 @@ export function computeCashierTrustRows(
   }
 
   for (const e of auditLogs) {
-    if (e.action !== "stock_adjust") continue;
-    const at = new Date(e.at).getTime();
-    if (Number.isNaN(at)) continue;
     if (dateKeyKampala(e.at) !== todayKey) continue;
     const uid = e.actorUserId || "unknown";
-    touch(uid).stock += 1;
+    if (e.action === "stock_adjust") {
+      touch(uid).stock += 1;
+      continue;
+    }
+    if (
+      e.action === "product_add" ||
+      e.action === "product_remove" ||
+      e.action === "product_update" ||
+      e.action === "price_change"
+    ) {
+      if (e.role !== "owner") touch(uid).catalog += 1;
+    }
   }
 
   const rows: CashierTrustRow[] = [...byUser.entries()].map(([userId, v]) => {
     let score = 88;
     score -= Math.min(28, v.stock * 4);
+    score -= Math.min(18, v.catalog * 3);
     score -= Math.min(22, Math.floor(v.debt / 75_000));
     score -= v.refunds * 18;
-    if (v.sales === 0 && v.stock > 6) score -= 12;
+    if (v.sales === 0 && (v.stock > 6 || v.catalog > 4)) score -= 12;
     score = Math.max(0, Math.min(100, Math.round(score)));
 
     const trustLevel = trustLevelFromScore(score);
@@ -91,7 +101,7 @@ export function computeCashierTrustRows(
       userId,
       displayLabel: actorDisplayLabel(userId, lang),
       salesHandled: v.sales,
-      stockEdits: v.stock,
+      stockEdits: v.stock + v.catalog,
       debtIssuedUgx: v.debt,
       refundLikeCount: v.refunds,
       reliabilityScore: score,
@@ -280,6 +290,20 @@ export function computeExtendedOwnerAlerts(params: {
       tone: "warn",
       title: "manualStockReviewTitle",
       detail: "manualStockReviewDetail",
+    });
+  }
+
+  const staffCatalogToday = catalogEventsForDay(auditLogs, todayKey, { nonOwnerOnly: true }).filter(
+    (e) => e.action !== "price_change",
+  );
+  if (staffCatalogToday.length > 0) {
+    const sensitive = staffCatalogToday.some(isSensitiveCatalogEvent);
+    extra.push({
+      id: "staff-catalog-today",
+      tone: sensitive ? "warn" : "info",
+      title: "staffCatalogAlertTitle",
+      detail: "staffCatalogAlertDetail",
+      detailVars: { count: staffCatalogToday.length },
     });
   }
 

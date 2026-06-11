@@ -1,4 +1,9 @@
-import type { UserRole } from "../types";
+import type { ReturnReason, UserRole } from "../types";
+
+/** Only sellable returns go back on the shelf; damaged/warm/broken stay out of stock. */
+export function returnRestocksInventory(reason: ReturnReason): boolean {
+  return reason === "wrong_item";
+}
 
 const UNLINKED_RETURN_ROLES: ReadonlySet<UserRole> = new Set(["owner", "manager"]);
 

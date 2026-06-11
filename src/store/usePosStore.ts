@@ -101,6 +101,7 @@ import {
 } from "../lib/sellingEngine";
 import {
   applyDiscountToLine,
+  lineDiscountUgx,
   listPriceForLine,
   applyCustomerDebtDelta,
   creditDebtReductionFromSaleAdjustment,
@@ -108,7 +109,7 @@ import {
   shiftExpectedCash,
   type DiscountMode,
 } from "../lib/saleAdjustments";
-import { cartDiscountFromPendingSale, mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
+import { cartDiscountFromPendingSale, estimatedProfitAfterCartDiscount, mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
 import { deletedLineIdsFromDraft, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
@@ -127,10 +128,11 @@ import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
 import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
-import { validateDraftDiscount } from "../lib/discountGovernance";
+import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
-import { validateReturnAuthorization } from "../lib/returnPolicy";
+import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
+import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
 import { saleStockMovementsFromSale } from "../lib/inventoryIntegrity";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
@@ -1363,11 +1365,17 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!next) return { ok: false, errorKey: "invalid" };
     const list = listPriceForLine(line);
     const discountUgx = Math.max(0, list - next.lineTotalUgx);
-    const policy = validateDraftDiscount({
+    const listSubtotal = state.draftLines.reduce((a, l) => a + listPriceForLine(l), 0);
+    const lineDiscountTotal = state.draftLines.reduce((sum, l) => {
+      if (l.productId === productId) return sum + discountUgx;
+      return sum + lineDiscountUgx(l);
+    }, 0);
+    const policy = validateCombinedDraftDiscount({
       prefs: state.preferences,
       role: actor.role,
-      discountUgx,
-      lineSubtotalUgx: list,
+      listSubtotalUgx: listSubtotal,
+      lineDiscountUgx: lineDiscountTotal,
+      cartDiscountUgx: state.draftCartDiscountUgx,
     });
     if (!policy.ok) return { ok: false, errorKey: policy.errorKey };
     set((s) => ({
@@ -1381,13 +1389,16 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const actor = state.sessionActor;
     const lineSubtotal = state.draftLines.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const listSubtotal = state.draftLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
+    const lineDiscountTotal = state.draftLines.reduce((a, l) => a + lineDiscountUgx(l), 0);
     const capped = Math.min(Math.max(0, Math.floor(amountUgx)), lineSubtotal);
     if (actor) {
-      const policy = validateDraftDiscount({
+      const policy = validateCombinedDraftDiscount({
         prefs: state.preferences,
         role: actor.role,
-        discountUgx: capped,
-        lineSubtotalUgx: lineSubtotal,
+        listSubtotalUgx: listSubtotal,
+        lineDiscountUgx: lineDiscountTotal,
+        cartDiscountUgx: capped,
       });
       if (!policy.ok) return { ok: false, errorKey: policy.errorKey };
     }
@@ -1716,10 +1727,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const targetSale = state.sales.find((s) => s.id === target.saleId);
     if (!sourceSale || !targetSale) return { ok: false, errorKey: "missingProduct" };
     const mergedLines = mergeSaleLines(targetSale.lines, sourceSale.lines);
+    const mergedLineSubtotal = mergedLines.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const combinedCartDiscount = Math.min(
+      mergedLineSubtotal,
+      cartDiscountFromPendingSale(targetSale) + cartDiscountFromPendingSale(sourceSale),
+    );
     const updatedTarget = buildPendingSaleFromDraft({
       saleId: targetSale.id,
       lines: mergedLines,
-      cartDiscountUgx: 0,
+      cartDiscountUgx: combinedCartDiscount,
       tableSessionId: target.id,
       referenceLabel: targetSale.referenceLabel,
       soldByUserId: targetSale.soldByUserId ?? null,
@@ -1731,6 +1747,7 @@ export const usePosStore = create<PosState>((set, get) => {
       sales: [updatedTarget, cancelledSource, ...state.sales.filter((s) => s.id !== targetSale.id && s.id !== sourceSale.id)],
       preferences: { ...state.preferences, hospitalityFloor: nextFloor, activeTableSessionId: targetSessionId },
       draftLines: mergedLines.map((l) => ({ ...ensureSaleLineId(l) })),
+      draftCartDiscountUgx: combinedCartDiscount,
       activePendingSaleId: targetSale.id,
     });
     void queueRemote("pending_sales", {
@@ -1964,11 +1981,13 @@ export const usePosStore = create<PosState>((set, get) => {
     const lineSubtotal = saleLines.reduce((a, l) => a + l.lineTotalUgx, 0);
     const cartDiscount = Math.min(Math.max(0, Math.floor(state.draftCartDiscountUgx)), lineSubtotal);
     const actorRole = state.sessionActor?.role ?? "cashier";
-    const discountPolicy = validateDraftDiscount({
+    const lineDiscountTotal = saleLines.reduce((a, l) => a + lineDiscountUgx(l), 0);
+    const discountPolicy = validateCombinedDraftDiscount({
       prefs: state.preferences,
       role: actorRole,
-      discountUgx: cartDiscount,
-      lineSubtotalUgx: lineSubtotal,
+      listSubtotalUgx: listSubtotal,
+      lineDiscountUgx: lineDiscountTotal,
+      cartDiscountUgx: cartDiscount,
     });
     if (!discountPolicy.ok) return { ok: false, errorKey: discountPolicy.errorKey };
 
@@ -2011,10 +2030,7 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
 
-    const estimatedProfitUgx = saleLines.reduce((sum, line) => {
-      const p = products.find((x) => x.id === line.productId)!;
-      return sum + estimatedProfitForLine(p, line);
-    }, 0);
+    const estimatedProfitUgx = estimatedProfitAfterCartDiscount(saleLines, cartDiscount);
 
     const actorId = state.sessionActor?.userId ?? null;
     const actor = state.sessionActor;
@@ -2352,23 +2368,27 @@ export const usePosStore = create<PosState>((set, get) => {
       createdAt: at,
     };
 
+    const restock = returnRestocksInventory(reason);
+
     const products = state.products.map((p) =>
-      p.id === productId
+      p.id === productId && restock
         ? { ...p, stockOnHand: p.stockOnHand + qty, updatedAt: at, version: p.version + 1 }
         : p,
     );
 
-    const movement: StockMovement = {
-      id: crypto.randomUUID(),
-      at,
-      productId,
-      productName: product.name,
-      deltaBaseUnits: qty,
-      kind: "adjust_other",
-      summary: `Return +${qty}`,
-      refId: returnRec.id,
-      supplierId: null,
-    };
+    const movement: StockMovement | null = restock
+      ? {
+          id: crypto.randomUUID(),
+          at,
+          productId,
+          productName: product.name,
+          deltaBaseUnits: qty,
+          kind: "adjust_other",
+          summary: `Return +${qty}`,
+          refId: returnRec.id,
+          supplierId: null,
+        }
+      : null;
 
     let sales = state.sales;
     let customers = state.customers;
@@ -2401,7 +2421,9 @@ export const usePosStore = create<PosState>((set, get) => {
       sales,
       customers,
       returnRecords: [returnRec, ...state.returnRecords],
-      stockMovements: mergeStockMovements([movement], state.stockMovements),
+      stockMovements: movement
+        ? mergeStockMovements([movement], state.stockMovements)
+        : state.stockMovements,
     });
 
     if (openShift) {
@@ -2565,6 +2587,14 @@ export const usePosStore = create<PosState>((set, get) => {
       if (r.ok) added += 1;
       else skipped += 1;
     }
+    if (added > 0) {
+      pushAudit("product_add", `Bulk added ${added} products`, {
+        bulk: true,
+        added,
+        skipped,
+        category: cat,
+      });
+    }
     return { added, skipped };
   },
 
@@ -2603,7 +2633,14 @@ export const usePosStore = create<PosState>((set, get) => {
     set((s) => ({ products: s.products.filter((x) => x.id !== productId) }));
     void import("../offline/incrementalPersist").then((m) => m.markProductDeleted(productId));
     void queueRemote("product", { id: productId, deleted: true });
-    pushAudit("product_remove", p?.name ?? productId, { productId, name: p?.name });
+    pushAudit("product_remove", p?.name ?? productId, {
+      productId,
+      name: p?.name,
+      stock: p?.stockOnHand ?? null,
+      priceUgx: p?.sellingPricePerUnitUgx ?? null,
+      costUgx: p?.costPricePerUnitUgx ?? null,
+      category: p?.category ?? null,
+    });
   },
 
   addProduct: (p) => {
@@ -2622,7 +2659,14 @@ export const usePosStore = create<PosState>((set, get) => {
     };
     set((s) => ({ products: [normalizeProduct(row), ...s.products] }));
     void queueRemote("product", { id: row.id, isNew: true });
-    pushAudit("product_add", row.name, { productId: row.id, name: row.name, category: row.category });
+    pushAudit("product_add", row.name, {
+      productId: row.id,
+      name: row.name,
+      category: row.category,
+      stock: row.stockOnHand,
+      priceUgx: row.sellingPricePerUnitUgx,
+      costUgx: row.costPricePerUnitUgx,
+    });
   },
 
   updateProductQuickPresets: (productId, presets) => {
@@ -2764,7 +2808,21 @@ export const usePosStore = create<PosState>((set, get) => {
       });
     }
     void queueRemote("product", { id: productId, catalogOnly: true });
-    pushAudit("product_update", merged.name, { productId, name: merged.name });
+    const changes = diffProductCatalog(prev, normalized);
+    const catalogPayload = {
+      productId,
+      name: merged.name,
+      changes,
+      stockBefore: prev.stockOnHand,
+      stockAfter: normalized.stockOnHand,
+      priceBefore: prev.sellingPricePerUnitUgx,
+      priceAfter: normalized.sellingPricePerUnitUgx,
+    };
+    const summary = changes.length > 0 ? formatCatalogAuditSummary(merged.name, changes) : merged.name;
+    pushAudit("product_update", summary, catalogPayload);
+    if (changes.some((c) => c.field === "price")) {
+      pushAudit("price_change", summary, catalogPayload);
+    }
     return { ok: true };
   },
 
@@ -2810,6 +2868,8 @@ export const usePosStore = create<PosState>((set, get) => {
       delta,
       reason: reason ?? "",
       productName: prev?.name,
+      stockBefore: prev?.stockOnHand ?? null,
+      stockAfter: prev != null ? Math.max(0, prev.stockOnHand + delta) : null,
     });
   },
 
