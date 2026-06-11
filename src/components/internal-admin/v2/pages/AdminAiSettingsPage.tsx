@@ -16,6 +16,8 @@ import {
   type AiPlatformMetrics,
 } from "../../../../lib/ai/platformAiAdmin";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
+import { AiStatusCard } from "../AiStatusCard";
+import { runAiHealthCheck, type AiHealthReport } from "../../../../lib/ai/aiHealthCheck";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -90,6 +92,27 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [healthReport, setHealthReport] = useState<AiHealthReport | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  const runHealth = useCallback(async (force = false) => {
+    if (previewMode) {
+      setHealthReport({
+        healthy: true,
+        checkedAt: new Date().toISOString(),
+        components: [
+          { id: "edge:ai-suggest-product", label: "ai-suggest-product", status: "ok" },
+          { id: "secret:DEEPSEEK_API_KEY", label: "DEEPSEEK_API_KEY", status: "ok" },
+          { id: "settings:platform_ai", label: "AI platform enabled", status: "ok" },
+        ],
+      });
+      return;
+    }
+    setHealthLoading(true);
+    const report = await runAiHealthCheck(force);
+    setHealthReport(report);
+    setHealthLoading(false);
+  }, [previewMode]);
 
   const load = useCallback(async () => {
     if (previewMode) {
@@ -130,7 +153,8 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
     setDraft(settings);
     setMetrics(m);
     setLoading(false);
-  }, [previewMode]);
+    void runHealth(true);
+  }, [previewMode, runHealth]);
 
   useEffect(() => {
     void load();
@@ -191,6 +215,12 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           {err}
         </div>
       ) : null}
+
+      <AiStatusCard
+        report={healthReport}
+        loading={healthLoading}
+        onRefresh={() => void runHealth(true)}
+      />
 
       {metrics ? (
         <section className="rounded-2xl border border-stone-200 bg-white p-4">
@@ -353,7 +383,8 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
           ))}
         </div>
         <p className="mt-3 text-xs text-stone-500">
-          Set <code className="rounded bg-stone-100 px-1">DEEPSEEK_API_KEY</code> in Supabase Edge secrets.
+          Set <code className="rounded bg-stone-100 px-1">DEEPSEEK_API_KEY</code> in Supabase Edge secrets, then run{" "}
+          <code className="rounded bg-stone-100 px-1">npm run supabase:deploy:ai</code>.
           Cache hits count toward request limits but not budget limits.
         </p>
       </section>

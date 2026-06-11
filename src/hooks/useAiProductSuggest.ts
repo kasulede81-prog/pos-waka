@@ -18,10 +18,12 @@ export function useAiProductSuggest() {
   const productAssistantEnabled = canUseAiAllowed("product_assistant", settings);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const inflight = useRef(new Map<string, Promise<AiSuggestOutcome>>());
 
   const reset = useCallback(() => {
     setError(null);
+    setErrorCode(null);
     setLoading(false);
   }, []);
 
@@ -47,6 +49,7 @@ export function useAiProductSuggest() {
       const run = (async (): Promise<AiSuggestOutcome> => {
         setLoading(true);
         setError(null);
+        setErrorCode(null);
         try {
           const local = await lookupLocalProductAiCache(name, String(businessType));
           if (local) {
@@ -65,6 +68,7 @@ export function useAiProductSuggest() {
 
           if (!remote.ok) {
             setError(remote.error);
+            setErrorCode(remote.errorCode ?? null);
             return { ok: false, error: remote.error, errorCode: remote.errorCode };
           }
 
@@ -92,6 +96,7 @@ export function useAiProductSuggest() {
     enabled: productAssistantEnabled,
     loading,
     error,
+    errorCode,
     suggest,
     reset,
   };

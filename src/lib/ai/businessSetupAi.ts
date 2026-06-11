@@ -1,5 +1,7 @@
 import { supabase } from "../supabase";
 import { invokeSupabaseEdgeFunction } from "../supabaseEdgeInvoke";
+import { normalizeAiErrorCode } from "./aiErrors";
+import { parseAiEdgeFailure } from "./parseAiEdgeResponse";
 import { parseAiBusinessSetup, type AiBusinessSetupResult } from "./aiBusinessSchemas";
 import { readLocalAiSetupTemplate, writeLocalAiSetupTemplate } from "./aiSetupTemplateStore";
 
@@ -80,16 +82,17 @@ export async function generateBusinessSetupWithAi(params: {
   });
 
   if (!res.ok) {
-    return { ok: false, error: res.message, errorCode: "invoke_failed" };
+    return {
+      ok: false,
+      error: res.message,
+      errorCode: res.errorCode ?? normalizeAiErrorCode("invoke_failed", res.message),
+    };
   }
 
   const data = res.data;
-  if (data.success === false || data.ok === false || data.error || data.reason) {
-    return {
-      ok: false,
-      error: String(data.reason ?? data.error ?? "ai_failed"),
-      errorCode: String(data.code ?? data.error ?? "ai_failed"),
-    };
+  const failure = parseAiEdgeFailure(data);
+  if (failure.failed) {
+    return { ok: false, error: failure.error, errorCode: failure.errorCode };
   }
 
   const setup = parseAiBusinessSetup(data.setup);

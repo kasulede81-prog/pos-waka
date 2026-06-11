@@ -24,6 +24,7 @@ export function useAiBusinessSetup(params: {
   const [setup, setSetup] = useState<AiBusinessSetupResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
   const booted = useRef(false);
 
@@ -52,6 +53,7 @@ export function useAiBusinessSetup(params: {
     if (!featureOn) return null;
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     try {
       const result = await generateBusinessSetupWithAi({
         shopId,
@@ -61,6 +63,7 @@ export function useAiBusinessSetup(params: {
       });
       if (!result.ok) {
         setError(result.error);
+        setErrorCode(result.errorCode ?? null);
         return null;
       }
       setShopId(result.shopId || shopId);
@@ -92,6 +95,7 @@ export function useAiBusinessSetup(params: {
     setup,
     loading,
     error,
+    errorCode,
     fromCache,
     generate,
     skip,

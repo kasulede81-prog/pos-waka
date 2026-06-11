@@ -1,6 +1,9 @@
+import { classifyInvokeMessage, type AiErrorCode } from "./ai/aiErrors";
 import { supabase } from "./supabase";
 
-export type EdgeInvokeResult<T> = { ok: true; data: T } | { ok: false; message: string };
+export type EdgeInvokeResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; message: string; errorCode?: AiErrorCode };
 
 /** Parse edge function JSON even when Supabase client reports a transport error. */
 async function readEdgeResponseBody(
@@ -18,7 +21,13 @@ async function readEdgeResponseBody(
 }
 
 function edgeNotDeployedMessage(functionName: string): string {
-  return `Deploy Supabase edge function "${functionName}" (run: npm run supabase:deploy:admin), then retry.`;
+  return `Deploy Supabase edge function "${functionName}" (run: npm run supabase:deploy:ai), then retry.`;
+}
+
+function isNotFoundBody(j: Record<string, unknown>): boolean {
+  const code = String(j.code ?? "").toUpperCase();
+  const message = String(j.message ?? j.error ?? "").toLowerCase();
+  return code === "NOT_FOUND" || message.includes("requested function was not found") || message.includes("not found");
 }
 
 /**
@@ -45,10 +54,18 @@ export async function invokeSupabaseEdgeFunction<T extends Record<string, unknow
     const { data, error } = await invokePromise;
     clearTimeout(timer);
     if (timedOut) {
-      return { ok: false, message: "Request timed out. Check your connection and retry." };
+      return { ok: false, message: "Request timed out. Check your connection and retry.", errorCode: "timeout" };
     }
 
     const j = (await readEdgeResponseBody(error, data)) as T & { ok?: boolean; error?: string; detail?: string; message?: string };
+
+    if (isNotFoundBody(j)) {
+      return {
+        ok: false,
+        message: edgeNotDeployedMessage(functionName),
+        errorCode: "function_not_deployed",
+      };
+    }
 
     if (error) {
       const msg = String(j.detail ?? j.message ?? j.error ?? error.message ?? "");
@@ -58,16 +75,23 @@ export async function invokeSupabaseEdgeFunction<T extends Record<string, unknow
         error.message?.includes("404") ||
         msg.includes("not found")
       ) {
-        return { ok: false, message: edgeNotDeployedMessage(functionName) };
+        return {
+          ok: false,
+          message: edgeNotDeployedMessage(functionName),
+          errorCode: "function_not_deployed",
+        };
       }
       if (j.ok === true) return { ok: true, data: j as T };
-      return { ok: false, message: msg || error.message || "Request failed." };
+      const errorCode = classifyInvokeMessage(msg || error.message || "", functionName);
+      return { ok: false, message: msg || error.message || "Request failed.", errorCode };
     }
 
     if (j.ok === false || j.error) {
+      const msg = String(j.detail ?? j.message ?? j.error ?? "Request failed.");
       return {
         ok: false,
-        message: String(j.detail ?? j.message ?? j.error ?? "Request failed."),
+        message: msg,
+        errorCode: classifyInvokeMessage(msg, functionName),
       };
     }
 
@@ -76,8 +100,12 @@ export async function invokeSupabaseEdgeFunction<T extends Record<string, unknow
     clearTimeout(timer);
     const msg = (err as Error).message ?? "Request failed.";
     if (msg.includes("Failed to send") || msg.includes("fetch")) {
-      return { ok: false, message: edgeNotDeployedMessage(functionName) };
+      return {
+        ok: false,
+        message: edgeNotDeployedMessage(functionName),
+        errorCode: "function_not_deployed",
+      };
     }
-    return { ok: false, message: msg };
+    return { ok: false, message: msg, errorCode: classifyInvokeMessage(msg, functionName) };
   }
 }

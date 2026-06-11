@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { formatAiErrorMessage } from "../../lib/ai/aiErrors";
 import {
   generateBulkInventoryWithAi,
   mapBulkRowsToQuickAdd,
@@ -32,6 +33,7 @@ export function BulkInventoryAiModal({
   const [rows, setRows] = useState<BulkInventoryPreviewRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export function BulkInventoryAiModal({
     setRows([]);
     setLoading(false);
     setError(null);
+    setErrorCode(null);
     setImportResult(null);
   }, [open, shopName, businessType]);
 
@@ -52,6 +55,7 @@ export function BulkInventoryAiModal({
   const handleGenerate = async () => {
     setLoading(true);
     setError(null);
+    setErrorCode(null);
     setImportResult(null);
     const result = await generateBulkInventoryWithAi({
       shopDescription: description,
@@ -60,6 +64,7 @@ export function BulkInventoryAiModal({
     setLoading(false);
     if (!result.ok) {
       setError(result.error);
+      setErrorCode(result.errorCode ?? null);
       return;
     }
     setRows(result.products);
@@ -133,7 +138,9 @@ export function BulkInventoryAiModal({
           ) : null}
 
           {error ? (
-            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">{error}</p>
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+              {formatAiErrorMessage({ code: errorCode, detail: error })}
+            </p>
           ) : null}
 
           {importResult ? (

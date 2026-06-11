@@ -3,6 +3,7 @@ import { Sparkles } from "lucide-react";
 import type { Language, BusinessType } from "../../types";
 import { t } from "../../lib/i18n";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { formatAiErrorMessage } from "../../lib/ai/aiErrors";
 import { useAiProductSuggest } from "../../hooks/useAiProductSuggest";
 import type { WizardPrefillFromAi } from "../../lib/ai/mapAiSuggestionToWizard";
 import type { AiProductSuggestion } from "../../lib/ai/aiProductSchemas";
@@ -36,7 +37,7 @@ export function AiProductAssistSheet({
   onContinue,
   onContinueManual,
 }: Props) {
-  const { enabled, loading, error, suggest, reset } = useAiProductSuggest();
+  const { enabled, loading, error, errorCode, suggest, reset } = useAiProductSuggest();
   const [name, setName] = useState("");
   const [preview, setPreview] = useState<ReturnType<typeof previewFromPrefill> | null>(null);
   const [prefill, setPrefill] = useState<WizardPrefillFromAi | null>(null);
@@ -149,7 +150,7 @@ export function AiProductAssistSheet({
 
           {failed && error ? (
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-              {t(lang, "aiProductAssistFailed")}
+              {formatAiErrorMessage({ code: errorCode, detail: error })}
             </p>
           ) : null}
 

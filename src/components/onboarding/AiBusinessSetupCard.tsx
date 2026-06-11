@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Sparkles } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
+import { formatAiErrorMessage } from "../../lib/ai/aiErrors";
 import { useAiBusinessSetup } from "../../hooks/useAiBusinessSetup";
 import type { AiStarterProductRow } from "../../lib/ai/aiBusinessSchemas";
 
@@ -24,7 +25,7 @@ export function AiBusinessSetupCard({
   onUseStarter,
   onSkipClassic,
 }: Props) {
-  const { featureOn, completed, setup, loading, error, fromCache, generate, skip, accept } = useAiBusinessSetup({
+  const { featureOn, completed, setup, loading, error, errorCode, fromCache, generate, skip, accept } = useAiBusinessSetup({
     shopName,
     businessType,
     businessDescription,
@@ -55,7 +56,9 @@ export function AiBusinessSetupCard({
       ) : null}
 
       {error ? (
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">{t(lang, "aiBusinessSetupFailed")}</p>
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+          {formatAiErrorMessage({ code: errorCode, detail: error })}
+        </p>
       ) : null}
 
       {setup ? (
