@@ -3,8 +3,31 @@
  */
 
 import type { CashExpense, DebtPayment, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
+import { externalReturnRefundsUgx } from "./canonicalRevenue";
 import { dateKeyKampala } from "./datesUg";
-import { getCompletedFinancials } from "./financialMetrics";
+import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
+
+/**
+ * Expected physical cash in drawer (Option A — single source of truth).
+ * Completed sale headers already reflect linked same-day returns in cashPaidUgx.
+ * Only external refunds (cross-day, unlinked, or sale outside day scope) reduce expected cash again.
+ */
+export function computeExpectedDrawerCashUgx(input: {
+  cashFromSalesUgx: number;
+  debtCollectedUgx: number;
+  expenseUgx: number;
+  supplierPaymentsUgx: number;
+  externalReturnRefundsUgx: number;
+}): number {
+  return Math.max(
+    0,
+    input.cashFromSalesUgx +
+      input.debtCollectedUgx -
+      input.expenseUgx -
+      input.supplierPaymentsUgx -
+      input.externalReturnRefundsUgx,
+  );
+}
 
 export function sumDebtPaymentsOnDay(debtPayments: DebtPayment[], day: string): number {
   return debtPayments
@@ -20,7 +43,7 @@ export function sumRefundsOnDay(returns: ReturnRecord[], day: string): number {
 
 export function sumCashExpensesOnDay(cashExpenses: CashExpense[], day: string): number {
   return cashExpenses
-    .filter((e) => !e.deletedAt && e.paidOn === day)
+    .filter((e) => !e.deletedAt && e.paidOn === day && (e.approvalStatus ?? "approved") === "approved")
     .reduce((sum, e) => sum + Math.max(0, e.amountUgx), 0);
 }
 
@@ -32,7 +55,7 @@ export function sumSupplierPaymentsOnDay(supplierPayments: SupplierPayment[], da
 
 export function sumCashExpensesInMonth(cashExpenses: CashExpense[], monthKey: string): number {
   return cashExpenses
-    .filter((e) => !e.deletedAt && e.paidOn.startsWith(monthKey))
+    .filter((e) => !e.deletedAt && e.paidOn.startsWith(monthKey) && (e.approvalStatus ?? "approved") === "approved")
     .reduce((sum, e) => sum + Math.max(0, e.amountUgx), 0);
 }
 
@@ -71,7 +94,7 @@ export type DrawerCashInput = {
 
 /**
  * Single canonical expected-cash figure (UGX) for a Kampala day.
- * Formula: cash from completed sales + debt payments collected − cash expenses − supplier payments − refunds.
+ * Formula: cash from completed sales + debt payments − expenses − supplier payments − external return refunds.
  */
 export function getExpectedCashForDay(input: DrawerCashInput): number {
   return getDrawerCashForDayInput(input).expectedDrawerCashUgx;
@@ -79,7 +102,7 @@ export function getExpectedCashForDay(input: DrawerCashInput): number {
 
 /**
  * Expected physical cash in drawer for a Kampala day:
- * cash from completed sales + debt payments − cash expenses − supplier payments − refund payouts.
+ * cash from completed sales + debt payments − expenses − supplier payments − external return refunds.
  */
 export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnapshot {
   const { sales, returns, products, debtPayments, cashExpenses, supplierPayments = [], day } = input;
@@ -88,7 +111,7 @@ export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnap
   return getDrawerCashForDay(sales, returns, products, debtPayments, day, expenseUgx, supplierPaymentsUgx);
 }
 
-/** Expected physical cash in drawer for a Kampala day (completed sales + debt payments − expenses − supplier payments − refunds). */
+/** Expected physical cash in drawer for a Kampala day (Option A — linked returns already in sale.cashPaidUgx). */
 export function getDrawerCashForDay(
   sales: Sale[],
   returns: ReturnRecord[],
@@ -99,13 +122,19 @@ export function getDrawerCashForDay(
   supplierPaymentsUgx = 0,
 ): DrawerCashSnapshot {
   const fin = getCompletedFinancials(sales, returns, products, { day });
+  const daySales = revenueSalesOnDay(sales, day);
+  const dayReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === day);
   const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, day);
   const refundsUgx = sumRefundsOnDay(returns, day);
+  const externalRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
   const cashFromSalesUgx = fin.cashCollectedUgx;
-  const expectedDrawerCashUgx = Math.max(
-    0,
-    cashFromSalesUgx + debtCollectedUgx - expenseUgx - supplierPaymentsUgx - refundsUgx,
-  );
+  const expectedDrawerCashUgx = computeExpectedDrawerCashUgx({
+    cashFromSalesUgx,
+    debtCollectedUgx,
+    expenseUgx,
+    supplierPaymentsUgx,
+    externalReturnRefundsUgx: externalRefundsUgx,
+  });
   return {
     cashFromSalesUgx,
     debtCollectedUgx,

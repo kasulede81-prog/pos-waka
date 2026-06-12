@@ -5,7 +5,8 @@ export const ANDROID_BACK_PRIORITY = {
   camera: 10,
   checkout: 20,
   productSheet: 30,
-  modal: 40,
+  modal: 35,
+  menuDrawer: 40,
 } as const;
 
 type HandlerEntry = {

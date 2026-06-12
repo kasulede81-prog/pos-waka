@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Language } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { PinInput } from "../ui/PinInput";
@@ -10,9 +10,10 @@ type Props = { lang: Language };
 
 export function BackOfficeUnlockModal({ lang }: Props) {
   const navigate = useNavigate();
-  const { unlockWithPin } = useBackOfficeSession();
+  const { unlockWithPin, unlockedRole, unlockedLabel } = useBackOfficeSession();
   const [pin, setPin] = useState("");
   const [err, setErr] = useState(false);
+  const [justUnlocked, setJustUnlocked] = useState(false);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -24,7 +25,24 @@ export function BackOfficeUnlockModal({ lang }: Props) {
       return;
     }
     setPin("");
+    setJustUnlocked(true);
   };
+
+  if (justUnlocked && unlockedRole) {
+    return (
+      <AppModalOverlay className="z-[100] flex items-end justify-center bg-stone-900/50 p-3 sm:items-center">
+        <div role="dialog" aria-modal className="w-full max-w-md rounded-3xl border border-emerald-200 bg-white p-6 shadow-waka">
+          <p className="text-xl font-black text-emerald-900">{t(lang, "unlockSuccessTitle")}</p>
+          <p className="mt-2 text-sm font-semibold text-stone-700">
+            {tTemplate(lang, "unlockSuccessRole", {
+              role: t(lang, `roleLabel_${unlockedRole}` as Parameters<typeof t>[1]),
+              name: unlockedLabel ?? "",
+            })}
+          </p>
+        </div>
+      </AppModalOverlay>
+    );
+  }
 
   return (
     <AppModalOverlay className="z-[100] flex items-end justify-center bg-stone-900/50 p-3 sm:items-center">

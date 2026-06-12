@@ -1,78 +1,50 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { PageHeader } from "../components/layout/PageHeader";
-import type { Language } from "../types";
+import type { AuditLogEntry, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
-import { isCatalogTamperAction } from "../lib/catalogAudit";
-import { dateKeyKampala } from "../lib/datesUg";
+import { groupAuditByStaff, STAFF_ACTIVITY_ACTIONS } from "../lib/auditSearch";
+import { auditActionLabel, formatAuditRowSummary } from "../lib/auditCenterDetails";
+import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
 
-const PAGE = 120;
+const PAGE = 300;
 
 export function StaffActivityPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
-  const [catalogOnly, setCatalogOnly] = useState(false);
+  const [selected, setSelected] = useState<AuditLogEntry | null>(null);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
-  const products = usePosStore((s) => s.products);
-  const customers = usePosStore((s) => s.customers);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
-  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
-
-  const trimmed = useMemo(() => {
-    const base = auditLogs.slice(0, PAGE);
-    if (!catalogOnly) return base;
-    const todayKey = dateKeyKampala(new Date());
-    return base.filter(
-      (e) =>
-        isCatalogTamperAction(e.action) &&
-        e.action !== "price_change" &&
-        dateKeyKampala(e.at) === todayKey,
-    );
-  }, [auditLogs, catalogOnly]);
-
-  const groups = useMemo(
-    () => buildGroupedActivityTimeline(lang, trimmed, productById, customerById, { maxGroups: 20 }),
-    [lang, trimmed, productById, customerById],
+  const filtered = useMemo(
+    () =>
+      auditLogs
+        .filter((e) => STAFF_ACTIVITY_ACTIONS.has(e.action))
+        .slice(0, PAGE),
+    [auditLogs],
   );
 
-  const sections = useMemo(() => {
-    const order: Array<typeof groups[number]["bucketKey"]> = ["lastHour", "todayEarlier", "older"];
-    const map = new Map<string, typeof groups>();
-    for (const g of groups) {
-      const cur = map.get(g.bucketKey) ?? [];
-      cur.push(g);
-      map.set(g.bucketKey, cur);
-    }
-    return order.flatMap((k) => {
-      const rows = map.get(k);
-      return rows?.length ? [{ key: k, label: rows[0]!.bucketLabel, rows }] : [];
-    });
-  }, [groups]);
+  const groups = useMemo(() => groupAuditByStaff(filtered), [filtered]);
 
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
         lang={lang}
         title={t(lang, "staffActivityTitle")}
-        subtitle={t(lang, "staffActivitySub")}
+        subtitle={t(lang, "staffActivitySubGrouped")}
         backLabel={t(lang, "officeBackToHub")}
       />
 
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
-
-      <button
-        type="button"
-        onClick={() => setCatalogOnly((v) => !v)}
-        className={`min-h-[44px] rounded-2xl border-2 px-4 text-sm font-black ${
-          catalogOnly ? "border-violet-500 bg-violet-50 text-violet-950" : "border-slate-200 bg-white text-slate-800"
-        }`}
+      <Link
+        to="/office/audit-center"
+        className="block rounded-2xl border-2 border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-950"
       >
-        {t(lang, "staffActivityCatalogOnly")}
-      </button>
+        {t(lang, "staffActivityOpenAuditCenter")} →
+      </Link>
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {groups.length === 0 ? (
         <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>
@@ -95,57 +67,54 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
                     <p className="mt-2 text-sm font-semibold text-slate-800">
                       UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
                     </p>
-                    {s.cashDifferenceUgx != null ? (
-                      <p
-                        className={`mt-1 text-xs font-bold ${
-                          s.cashDifferenceUgx === 0 ? "text-emerald-700" : s.cashDifferenceUgx > 0 ? "text-amber-800" : "text-rose-700"
-                        }`}
-                      >
-                        {t(lang, "shiftCloseExpected")}: UGX {(s.countedCashUgx ?? 0).toLocaleString()} ·{" "}
-                        {s.cashDifferenceUgx >= 0 ? "+" : ""}
-                        {s.cashDifferenceUgx.toLocaleString()}
-                      </p>
-                    ) : null}
                   </li>
                 ))}
               </ul>
             </section>
           ) : null}
-          {sections.map((sec) => (
-            <section key={sec.key}>
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{sec.label}</h2>
-              <ul className="mt-3 space-y-3">
-                {sec.rows.map((g) => (
-                  <li
-                    key={g.id}
-                    className="rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100/80"
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="font-black text-slate-900">{g.actorLabel}</p>
-                      <time className="text-xs font-semibold text-slate-500" dateTime={g.at}>
-                        {new Date(g.at).toLocaleString([], {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </time>
-                    </div>
-                    <ul className="mt-2 space-y-1.5 text-sm font-medium text-slate-800">
-                      {g.lines.map((line, i) => (
-                        <li key={i} className="flex gap-2">
-                          <span className="text-waka-600">·</span>
-                          <span>{line}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </li>
-                ))}
+
+          {groups.map((group) => (
+            <section key={group.actorId}>
+              <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{group.actorLabel}</h2>
+              <ul className="mt-3 space-y-2">
+                {group.entries.map((e) => {
+                  const when = new Date(e.at).toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                  return (
+                    <li key={e.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelected(e)}
+                        className="w-full rounded-[1.25rem] border border-slate-100 bg-white p-4 text-left shadow-sm ring-1 ring-slate-100/80 hover:border-waka-200"
+                      >
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <p className="text-xs font-bold uppercase tracking-wide text-waka-700">
+                            {auditActionLabel(lang, e.action)}
+                          </p>
+                          <time className="text-xs font-semibold text-slate-500" dateTime={e.at}>
+                            {when}
+                          </time>
+                        </div>
+                        <p className="mt-1 text-sm font-medium text-slate-800">{formatAuditRowSummary(lang, e)}</p>
+                        <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                          {e.role}
+                          {e.deviceId ? ` · ${e.deviceId.slice(0, 8)}…` : ""}
+                        </p>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           ))}
         </div>
       )}
+
+      <AuditDetailDrawer lang={lang} entry={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

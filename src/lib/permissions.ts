@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 14;
+const PERM_MATRIX_VERSION = 15;
 
 const HOSPITALITY_OWNER: Permission[] = [
   "hospitality.floor",
@@ -96,6 +96,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "pharmacy.expired_writeoff",
     "expenses.record",
     "expenses.edit",
+    "expenses.approve",
     "expenses.delete",
     ...HOSPITALITY_OWNER,
   ],
@@ -126,7 +127,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "pharmacy.expired_writeoff",
     "expenses.record",
     "expenses.edit",
-    "expenses.delete",
+    "expenses.approve",
     ...HOSPITALITY_OWNER,
   ],
   /** Sell-first: can sell, void, receipts, and record drawer expenses. */
@@ -180,6 +181,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.void",
     "expenses.record",
     "expenses.edit",
+    "expenses.approve",
     ...HOSPITALITY_OWNER,
   ],
   /** Table service — order and settle assigned tables; no back office. */

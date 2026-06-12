@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { dispatchAndroidBack } from "../lib/androidBackStack";
 import { getBackFallbackPath, historyCanGoBack } from "../lib/navigationBack";
+import { confirmLeaveActiveSaleIfNeeded } from "../lib/posLeaveGuard";
 
 const MINIMIZE_AT_ROOT_PATHS = new Set(["/", "/pos"]);
 
@@ -25,18 +26,23 @@ export function useAndroidBackButton() {
     void App.addListener("backButton", () => {
       if (dispatchAndroidBack()) return;
 
-      if (historyCanGoBack()) {
-        navigate(-1);
-        return;
-      }
+      void (async () => {
+        const leavingPos = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
+        if (leavingPos && !(await confirmLeaveActiveSaleIfNeeded())) return;
 
-      const fallback = getBackFallbackPath(location.pathname);
-      if (shouldMinimizeApp(location.pathname, fallback)) {
-        void App.minimizeApp();
-        return;
-      }
+        if (historyCanGoBack()) {
+          navigate(-1);
+          return;
+        }
 
-      navigate(fallback, { replace: false });
+        const fallback = getBackFallbackPath(location.pathname);
+        if (shouldMinimizeApp(location.pathname, fallback)) {
+          void App.minimizeApp();
+          return;
+        }
+
+        navigate(fallback, { replace: false });
+      })();
     }).then((h) => {
       handle = h;
     });

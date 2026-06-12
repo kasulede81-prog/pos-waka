@@ -95,11 +95,10 @@ export function reduceSaleTotalsByAmount(
   };
 }
 
+/** Shift running cash already reflects void/return payouts in estimatedCashUgx (Option A). */
 export function shiftExpectedCash(sh: ShiftRecord): number {
-  const voids = sh.voidsTotalUgx ?? 0;
-  const returns = sh.returnsTotalUgx ?? 0;
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
-  return Math.max(0, sh.estimatedCashUgx + debtPayments - voids - returns);
+  return Math.max(0, sh.estimatedCashUgx + debtPayments);
 }
 
 export function shiftExpectedCashLabelParts(sh: ShiftRecord): {

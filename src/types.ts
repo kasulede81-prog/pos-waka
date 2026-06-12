@@ -52,6 +52,8 @@ export type Permission =
   | "expenses.edit"
   /** Remove / void cash expense entries */
   | "expenses.delete"
+  /** Approve or reject pending cashier expenses */
+  | "expenses.approve"
   /** Restaurant/bar floor plan and table service */
   | "hospitality.floor"
   | "hospitality.order"
@@ -75,6 +77,8 @@ export type AuditAction =
   | "debt_reconcile"
   | "day_close"
   | "back_office_unlock"
+  | "back_office_unlock_success"
+  | "back_office_unlock_failed"
   | "shift_start"
   | "shift_end"
   | "product_add"
@@ -89,6 +93,8 @@ export type AuditAction =
   | "supplier_payment"
   | "cash_expense_created"
   | "cash_expense_voided"
+  | "cash_expense_approved"
+  | "cash_expense_rejected"
   | "auth_forbidden"
   | "archive_purge"
   | "day_close_override"
@@ -101,7 +107,15 @@ export type AuditAction =
   | "device_login_blocked"
   | "device_replacement_completed"
   | "device_new_activation"
-  | "device_suspicious_fingerprint";
+  | "device_suspicious_fingerprint"
+  | "receipt_reprint"
+  | "receipt_pdf_export"
+  | "debt_manual_adjust"
+  | "cash_expense_edited"
+  | "customer_merge"
+  | "product_restore"
+  | "staff_login"
+  | "staff_logout";
 
 export type AuditLogEntry = {
   id: string;
@@ -630,6 +644,9 @@ export type Expense = {
 };
 
 /** Money removed from the cash drawer (operational expenses). */
+export type CashExpenseApprovalStatus = "approved" | "pending" | "rejected";
+
+/** Money removed from the cash drawer (operational expenses). */
 export type CashExpense = {
   id: string;
   category: string;
@@ -640,6 +657,15 @@ export type CashExpense = {
   createdAt: string;
   createdByUserId: string;
   createdByLabel?: string;
+  deviceId?: string;
+  /** Defaults to approved for legacy rows and owner/manager entries. */
+  approvalStatus?: CashExpenseApprovalStatus;
+  approvedByUserId?: string | null;
+  approvedByLabel?: string | null;
+  approvedAt?: string | null;
+  rejectedByUserId?: string | null;
+  rejectedByLabel?: string | null;
+  rejectedAt?: string | null;
   pendingSync: boolean;
   lastSyncError?: string | null;
   deletedAt?: string | null;
@@ -753,8 +779,10 @@ export type ShopPreferences = {
   shopPhoneE164?: string | null;
   shopAddressLine?: string | null;
   shopCurrency?: string | null;
-  /** When false, cashiers cannot record drawer expenses (owners/managers always can). */
+  /** When false, cashiers cannot record drawer expenses (owners/managers always can). Default off. */
   staffCanRecordCashExpenses?: boolean;
+  /** When true, cashier-recorded expenses need owner/manager approval before affecting cash totals. */
+  requireCashierExpenseApproval?: boolean;
   /** Local multi-user profiles for fast shared-device switch. */
   staffAccounts?: StaffAccount[];
   /** Active staff profile on this device; null = auth role session. */

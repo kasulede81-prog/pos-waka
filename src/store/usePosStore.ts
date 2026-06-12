@@ -132,6 +132,8 @@ import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
+import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
+import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
 import { saleStockMovementsFromSale } from "../lib/inventoryIntegrity";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
@@ -476,7 +478,7 @@ export type PosState = {
     }>,
   ) => { added: number; skipped: number };
   duplicateProduct: (productId: string, nameSuffix: string) => { ok: boolean; errorKey?: string };
-  removeProduct: (productId: string) => void;
+  removeProduct: (productId: string, reason: string) => { ok: boolean; errorKey?: string };
   updateProductQuickPresets: (
     productId: string,
     presets: { quickPresetsMoneyUgx?: number[]; quickPresetsQty?: number[] },
@@ -506,8 +508,9 @@ export type PosState = {
         | "quickPresetsQty"
       >
     >,
+    opts?: { auditReason?: string },
   ) => { ok: boolean; errorKey?: string };
-  adjustStock: (productId: string, delta: number, reason?: string) => void;
+  adjustStock: (productId: string, delta: number, reason?: string) => { ok: boolean; errorKey?: string };
   /** Pharmacy: write off expired stock with audit trail and inventory loss value. */
   writeOffExpiredStock: (input: {
     productId: string;
@@ -526,8 +529,10 @@ export type PosState = {
     overrideReason?: string;
   }) => Promise<{ ok: boolean; errorKey?: string }>;
   repairCustomerDebtIntegrity: () => { ok: boolean; healedCount: number; mismatchCount: number };
-  addCashExpense: (input: { amountUgx: number; category: string; description?: string }) => { ok: boolean; errorKey?: string };
-  voidCashExpense: (id: string) => { ok: boolean };
+  addCashExpense: (input: { amountUgx: number; category: string; description?: string }) => { ok: boolean; errorKey?: string; expenseId?: string };
+  approveCashExpense: (id: string) => { ok: boolean; errorKey?: string };
+  rejectCashExpense: (id: string) => { ok: boolean; errorKey?: string };
+  voidCashExpense: (id: string, reason: string) => { ok: boolean; errorKey?: string };
 
   addSupplier: (input: { name: string; phone?: string; location?: string; notes?: string }) => void;
   updateSupplier: (
@@ -832,6 +837,8 @@ function normalizeCashExpense(e: CashExpense): CashExpense {
     pendingSync: e.pendingSync !== false,
     lastSyncError: e.lastSyncError ?? null,
     deletedAt: e.deletedAt ?? null,
+    approvalStatus: e.approvalStatus ?? "approved",
+    deviceId: e.deviceId ?? undefined,
   };
 }
 
@@ -1130,11 +1137,16 @@ export const usePosStore = create<PosState>((set, get) => {
 
   switchStaffAccount: (id) => {
     const prev = get().preferences.activeStaffId ?? null;
+    const staff = get().preferences.staffAccounts ?? [];
     if (prev && prev !== id) {
+      const prevStaff = staff.find((s) => s.id === prev);
+      pushAudit("staff_logout", prevStaff?.name ?? prev, { staffId: prev, staffName: prevStaff?.name });
       get().endActiveShift();
     }
     set((s) => ({ preferences: { ...s.preferences, activeStaffId: id } }));
     if (id && prev !== id) {
+      const nextStaff = staff.find((s) => s.id === id);
+      pushAudit("staff_login", nextStaff?.name ?? id, { staffId: id, staffName: nextStaff?.name, role: nextStaff?.role });
       get().beginShift();
     }
   },
@@ -1190,8 +1202,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const open = (s.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === uid);
     if (!open) return;
     const endAt = new Date().toISOString();
-    const startMs = new Date(open.startAt).getTime();
-    const endMs = new Date(endAt).getTime();
     set((st) => ({
       preferences: {
         ...st.preferences,
@@ -1204,11 +1214,6 @@ export const usePosStore = create<PosState>((set, get) => {
             : sh,
         ),
       },
-      auditLogs: st.auditLogs.filter((e) => {
-        const t = new Date(e.at).getTime();
-        if (Number.isNaN(t)) return true;
-        return t < startMs || t > endMs;
-      }),
     }));
     pushAudit("shift_end", `Shift end ${actor?.displayName ?? uid}`, { shiftId: open.id, actorUserId: uid });
   },
@@ -2624,10 +2629,12 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  removeProduct: (productId) => {
+  removeProduct: (productId, reason) => {
     const denied = denyUnlessPerm("products.remove", "removeProduct");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
 
+    const auditReason = normalizeAuditReason(reason);
     const p = get().products.find((x) => x.id === productId);
     set((s) => ({ products: s.products.filter((x) => x.id !== productId) }));
     void import("../offline/incrementalPersist").then((m) => m.markProductDeleted(productId));
@@ -2639,7 +2646,9 @@ export const usePosStore = create<PosState>((set, get) => {
       priceUgx: p?.sellingPricePerUnitUgx ?? null,
       costUgx: p?.costPricePerUnitUgx ?? null,
       category: p?.category ?? null,
+      reason: auditReason,
     });
+    return { ok: true };
   },
 
   addProduct: (p) => {
@@ -2690,12 +2699,22 @@ export const usePosStore = create<PosState>((set, get) => {
     pushAudit("product_presets", `Presets ${pn}`, { productId });
   },
 
-  updateProduct: (productId, patch) => {
+  updateProduct: (productId, patch, opts) => {
     const denied = denyUnlessPerm("stock.adjust", "updateProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const prev = get().products.find((p) => p.id === productId);
     if (!prev) return { ok: false, errorKey: "missingProduct" };
+
+    const priceChanging =
+      patch.sellingPricePerUnitUgx !== undefined &&
+      Math.floor(Number(patch.sellingPricePerUnitUgx)) !== prev.sellingPricePerUnitUgx;
+    const stockChanging =
+      patch.stockOnHand !== undefined && Math.abs(Number(patch.stockOnHand) - prev.stockOnHand) > 1e-6;
+    if ((priceChanging || stockChanging) && !validateAuditReason(opts?.auditReason)) {
+      return { ok: false, errorKey: auditReasonErrorKey() };
+    }
+    const auditReason = opts?.auditReason ? normalizeAuditReason(opts.auditReason) : undefined;
 
     const merged: Product = { ...prev };
 
@@ -2816,6 +2835,7 @@ export const usePosStore = create<PosState>((set, get) => {
       stockAfter: normalized.stockOnHand,
       priceBefore: prev.sellingPricePerUnitUgx,
       priceAfter: normalized.sellingPricePerUnitUgx,
+      reason: auditReason,
     };
     const summary = changes.length > 0 ? formatCatalogAuditSummary(merged.name, changes) : merged.name;
     pushAudit("product_update", summary, catalogPayload);
@@ -2827,7 +2847,10 @@ export const usePosStore = create<PosState>((set, get) => {
 
   adjustStock: (productId, delta, reason) => {
     const denied = denyUnlessPerm("stock.adjust", "adjustStock");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
+
+    const auditReason = normalizeAuditReason(reason ?? "");
 
     const prev = get().products.find((p) => p.id === productId);
     const at = new Date().toISOString();
@@ -2862,14 +2885,15 @@ export const usePosStore = create<PosState>((set, get) => {
       baseUpdatedAt: prev?.updatedAt ?? null,
       baseStockOnHand: prev?.stockOnHand,
     });
-    pushAudit("stock_adjust", `${reason ?? "adjust"} ${delta >= 0 ? "+" : ""}${delta} · ${prev?.name ?? productId}`, {
+    pushAudit("stock_adjust", `${auditReason} ${delta >= 0 ? "+" : ""}${delta} · ${prev?.name ?? productId}`, {
       productId,
       delta,
-      reason: reason ?? "",
+      reason: auditReason,
       productName: prev?.name,
       stockBefore: prev?.stockOnHand ?? null,
       stockAfter: prev != null ? Math.max(0, prev.stockOnHand + delta) : null,
     });
+    return { ok: true };
   },
 
   writeOffExpiredStock: ({ productId, quantity, note }) => {
@@ -3125,8 +3149,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessPerm("purchases.void", "voidPurchase");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
-    const trimmedReason = reason.trim();
-    if (!trimmedReason) return { ok: false, errorKey: "invalid" };
+    if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
+    const trimmedReason = normalizeAuditReason(reason);
 
     const state = get();
     const purchaseIdx = state.purchases.findIndex((p) => p.id === purchaseId);
@@ -3468,18 +3492,25 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addCashExpense: (input) => {
-    const denied = denyUnlessPerm("expenses.record", "addCashExpense");
-    if (denied) return { ok: false, errorKey: denied.errorKey };
-
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
+    if (!canRecordCashExpenses(actor.role, state.preferences)) {
+      pushAudit("auth_forbidden", "Denied addCashExpense", {
+        permission: "expenses.record",
+        action: "addCashExpense",
+        attemptedRole: actor.role,
+      });
+      return { ok: false, errorKey: "forbidden" };
+    }
+
     const amountUgx = Math.floor(input.amountUgx);
     if (amountUgx <= 0) return { ok: false, errorKey: "cashExpenseAmountRequired" };
     const category = input.category.trim().slice(0, 64);
     if (!category) return { ok: false, errorKey: "cashExpenseCategoryRequired" };
     const now = new Date().toISOString();
     const paidOn = dateKeyKampala(new Date());
+    const approvalStatus = resolveNewExpenseApprovalStatus(actor.role, state.preferences);
     const row: CashExpense = {
       id: crypto.randomUUID(),
       category,
@@ -3489,6 +3520,11 @@ export const usePosStore = create<PosState>((set, get) => {
       createdAt: now,
       createdByUserId: actor.userId,
       createdByLabel: actor.displayName,
+      deviceId: getOrCreateDeviceId(),
+      approvalStatus,
+      approvedByUserId: approvalStatus === "approved" ? actor.userId : null,
+      approvedByLabel: approvalStatus === "approved" ? actor.displayName ?? null : null,
+      approvedAt: approvalStatus === "approved" ? now : null,
       pendingSync: true,
       lastSyncError: null,
       deletedAt: null,
@@ -3498,23 +3534,102 @@ export const usePosStore = create<PosState>((set, get) => {
       expenseId: row.id,
       amountUgx,
       category,
+      description: row.description,
+      approvalStatus,
+      deviceId: row.deviceId,
+      createdByUserId: actor.userId,
+      createdByLabel: actor.displayName,
     });
     void queueRemote("pending_cash_expenses", { expenseId: row.id });
     if (hasSupabaseConfig) {
       void import("../offline/cloudSync").then((m) => m.syncCashExpenseImmediately(row.id));
     }
-    return { ok: true };
+    return { ok: true, expenseId: row.id };
   },
 
-  voidCashExpense: (id) => {
-    const denied = denyUnlessPerm("expenses.delete", "voidCashExpense");
-    if (denied) return { ok: false };
+  approveCashExpense: (id) => {
+    const denied = denyUnlessPerm("expenses.approve", "approveCashExpense");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
     const actor = state.sessionActor;
-    if (!actor) return { ok: false };
+    if (!actor) return { ok: false, errorKey: "noSelection" };
     const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
-    if (!row) return { ok: false };
+    if (!row) return { ok: false, errorKey: "invalid" };
+    if ((row.approvalStatus ?? "approved") !== "pending") return { ok: false, errorKey: "invalid" };
+    const now = new Date().toISOString();
+    set((s) => ({
+      cashExpenses: s.cashExpenses.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              approvalStatus: "approved" as const,
+              approvedByUserId: actor.userId,
+              approvedByLabel: actor.displayName ?? null,
+              approvedAt: now,
+              pendingSync: true,
+            }
+          : e,
+      ),
+    }));
+    pushAudit("cash_expense_approved", `Approved ${row.category} UGX ${row.amountUgx.toLocaleString()}`, {
+      expenseId: id,
+      amountUgx: row.amountUgx,
+      category: row.category,
+      approvedByUserId: actor.userId,
+      approvedByLabel: actor.displayName,
+    });
+    void queueRemote("pending_cash_expenses", { expenseId: id });
+    return { ok: true };
+  },
+
+  rejectCashExpense: (id) => {
+    const denied = denyUnlessPerm("expenses.approve", "rejectCashExpense");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
+    if (!row) return { ok: false, errorKey: "invalid" };
+    if ((row.approvalStatus ?? "approved") !== "pending") return { ok: false, errorKey: "invalid" };
+    const now = new Date().toISOString();
+    set((s) => ({
+      cashExpenses: s.cashExpenses.map((e) =>
+        e.id === id
+          ? {
+              ...e,
+              approvalStatus: "rejected" as const,
+              rejectedByUserId: actor.userId,
+              rejectedByLabel: actor.displayName ?? null,
+              rejectedAt: now,
+              pendingSync: true,
+            }
+          : e,
+      ),
+    }));
+    pushAudit("cash_expense_rejected", `Rejected ${row.category} UGX ${row.amountUgx.toLocaleString()}`, {
+      expenseId: id,
+      amountUgx: row.amountUgx,
+      category: row.category,
+      rejectedByUserId: actor.userId,
+      rejectedByLabel: actor.displayName,
+    });
+    void queueRemote("pending_cash_expenses", { expenseId: id });
+    return { ok: true };
+  },
+
+  voidCashExpense: (id, reason) => {
+    const denied = denyUnlessPerm("expenses.delete", "voidCashExpense");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
+
+    const auditReason = normalizeAuditReason(reason);
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const row = state.cashExpenses.find((e) => e.id === id && !e.deletedAt);
+    if (!row) return { ok: false, errorKey: "invalid" };
     const now = new Date().toISOString();
     set((s) => ({
       cashExpenses: s.cashExpenses.map((e) =>
@@ -3523,6 +3638,10 @@ export const usePosStore = create<PosState>((set, get) => {
     }));
     pushAudit("cash_expense_voided", `Removed ${row.category} UGX ${row.amountUgx.toLocaleString()}`, {
       expenseId: id,
+      amountUgx: row.amountUgx,
+      category: row.category,
+      description: row.description,
+      reason: auditReason,
     });
     void queueRemote("pending_cash_expenses", { expenseId: id, void: true });
     return { ok: true };
@@ -3648,10 +3767,16 @@ export const usePosStore = create<PosState>((set, get) => {
     if (result.healedCount > 0) {
       set({ customers: result.customers });
     }
-    pushAudit("debt_reconcile", `Debt reconciliation healed ${result.healedCount}`, {
+    pushAudit("debt_manual_adjust", `Debt reconciliation healed ${result.healedCount}`, {
       healedCount: result.healedCount,
       mismatchCountBefore: before.mismatches.length,
       mismatchCountAfter: result.mismatches.length,
+      mismatches: before.mismatches.map((m) => ({
+        customerId: m.customerId,
+        stored: m.stored,
+        expected: m.expected,
+      })),
+      reason: "debt_integrity_repair",
     });
     return {
       ok: result.ok,

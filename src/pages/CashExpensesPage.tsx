@@ -10,9 +10,12 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import {
   CASH_EXPENSE_CATEGORY_KEYS,
+  canApproveCashExpenses,
   canDeleteCashExpenses,
   canRecordCashExpenses,
+  canViewExpenseRow,
   cashExpenseCategoryLabel,
+  expenseCountsInDrawer,
 } from "../lib/cashExpenses";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 
@@ -24,8 +27,12 @@ export function CashExpensesPage({ lang }: Props) {
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const drawer = useDrawerCashForToday();
   const addCashExpense = usePosStore((s) => s.addCashExpense);
+  const approveCashExpense = usePosStore((s) => s.approveCashExpense);
+  const rejectCashExpense = usePosStore((s) => s.rejectCashExpense);
   const voidCashExpense = usePosStore((s) => s.voidCashExpense);
 
+  const [voidExpenseId, setVoidExpenseId] = useState<string | null>(null);
+  const [voidReason, setVoidReason] = useState("");
   const todayKey = dateKeyKampala(new Date());
   const [amount, setAmount] = useState("");
   const [categoryKey, setCategoryKey] = useState<string>("lunch");
@@ -37,15 +44,23 @@ export function CashExpensesPage({ lang }: Props) {
 
   const canRecord = canRecordCashExpenses(actor.role, preferences);
   const canDelete = canDeleteCashExpenses(actor.role);
+  const canApprove = canApproveCashExpenses(actor.role);
 
   const todayExpenses = useMemo(
     () =>
-      cashExpenses.filter((e) => !e.deletedAt && e.paidOn === todayKey).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [cashExpenses, todayKey],
+      cashExpenses
+        .filter((e) => !e.deletedAt && e.paidOn === todayKey && canViewExpenseRow(actor.role, e, actor.userId))
+        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [cashExpenses, todayKey, actor.role, actor.userId],
+  );
+
+  const pendingExpenses = useMemo(
+    () => todayExpenses.filter((e) => (e.approvalStatus ?? "approved") === "pending"),
+    [todayExpenses],
   );
 
   const todayExpenseTotal = useMemo(
-    () => todayExpenses.reduce((a, e) => a + e.amountUgx, 0),
+    () => todayExpenses.filter(expenseCountsInDrawer).reduce((a, e) => a + e.amountUgx, 0),
     [todayExpenses],
   );
 
@@ -116,6 +131,40 @@ export function CashExpensesPage({ lang }: Props) {
           </div>
         </div>
       </section>
+
+      {canApprove && pendingExpenses.length > 0 ? (
+        <section className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+          <h2 className="text-sm font-black uppercase tracking-wide text-amber-900">{t(lang, "expensePendingApprovalTitle")}</h2>
+          <ul className="mt-3 space-y-2">
+            {pendingExpenses.map((e) => (
+              <li key={e.id} className="rounded-2xl border border-amber-100 bg-white px-4 py-3">
+                <p className="font-bold text-stone-900">
+                  {e.category} · UGX {e.amountUgx.toLocaleString()}
+                </p>
+                <p className="text-xs text-stone-500">
+                  {e.createdByLabel ?? e.createdByUserId} · {new Date(e.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => approveCashExpense(e.id)}
+                    className="rounded-xl bg-emerald-600 px-3 py-1.5 text-xs font-black text-white"
+                  >
+                    {t(lang, "expenseApproveBtn")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rejectCashExpense(e.id)}
+                    className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-800"
+                  >
+                    {t(lang, "expenseRejectBtn")}
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {!showForm ? (
         <button
@@ -211,13 +260,26 @@ export function CashExpensesPage({ lang }: Props) {
                 <div className="min-w-0">
                   <p className="font-bold text-stone-900">{e.category}</p>
                   {e.description ? <p className="text-xs text-stone-500">{e.description}</p> : null}
+                  <p className="text-[10px] font-bold uppercase text-stone-400">
+                    {e.createdByLabel ?? e.createdByUserId}
+                    {(e.approvalStatus ?? "approved") === "pending"
+                      ? ` · ${t(lang, "expenseStatusPending")}`
+                      : (e.approvalStatus ?? "approved") === "rejected"
+                        ? ` · ${t(lang, "expenseStatusRejected")}`
+                        : e.approvedByLabel
+                          ? ` · ${t(lang, "expenseApprovedBy")} ${e.approvedByLabel}`
+                          : ""}
+                  </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <p className="font-black text-stone-900">UGX {e.amountUgx.toLocaleString()}</p>
                   {canDelete ? (
                     <button
                       type="button"
-                      onClick={() => voidCashExpense(e.id)}
+                      onClick={() => {
+                        setVoidExpenseId(e.id);
+                        setVoidReason("");
+                      }}
                       className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black uppercase text-rose-800"
                     >
                       {t(lang, "voidBtn")}
@@ -229,6 +291,47 @@ export function CashExpensesPage({ lang }: Props) {
           </ul>
         )}
       </section>
+
+      {voidExpenseId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal>
+          <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
+            <p className="text-lg font-black text-slate-900">{t(lang, "cashExpenseVoidConfirm")}</p>
+            <label className="mt-4 block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+              <textarea
+                value={voidReason}
+                onChange={(e) => setVoidReason(e.target.value)}
+                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+                placeholder={t(lang, "auditReasonPlaceholder")}
+              />
+            </label>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border-2 py-3 font-bold"
+                onClick={() => setVoidExpenseId(null)}
+              >
+                {t(lang, "cancel")}
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl bg-rose-600 py-3 font-black text-white"
+                onClick={() => {
+                  const r = voidCashExpense(voidExpenseId, voidReason);
+                  if (!r.ok) {
+                    window.alert(t(lang, r.errorKey === "auditReasonRequired" ? "auditReasonRequired" : (r.errorKey ?? "invalid")));
+                    return;
+                  }
+                  setVoidExpenseId(null);
+                  setVoidReason("");
+                }}
+              >
+                {t(lang, "voidBtn")}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <p className="text-center">
         <Link to="/close-day" className="text-sm font-bold text-waka-700 underline">

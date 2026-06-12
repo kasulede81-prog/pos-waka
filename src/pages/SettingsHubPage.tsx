@@ -1,5 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -156,6 +157,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubSystemHealth")}
             subtitle={t(lang, "settingsHubSystemHealthSub")}
             Icon={Activity}
+          />
+        ) : null}
+        {canShop && Capacitor.isNativePlatform() ? (
+          <OfficeNavCard
+            to="/settings/diagnostics"
+            title={t(lang, "settingsHubDiagnostics")}
+            subtitle={t(lang, "settingsHubDiagnosticsSub")}
+            Icon={Stethoscope}
           />
         ) : null}
         {canShop ? (

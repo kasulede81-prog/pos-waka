@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CashExpense, DebtPayment, Product, ReturnRecord, Sale } from "../types";
 import { getDrawerCashForDayInput, getExpectedCashForDay } from "./cashReconciliation";
 import { buildDailyReportText } from "./reportExport";
+import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 
 const DAY = "2026-05-31";
 
@@ -95,6 +96,7 @@ describe("expected cash — surface consistency", () => {
         createdAt: `${DAY}T12:00:00.000Z`,
       },
     ];
+    const adjusted = { ...completed, ...reduceSaleTotalsByAmount(completed, 5_000) };
     const debtPayments: DebtPayment[] = [
       { id: "p1", customerId: "c1", amountUgx: 25_000, createdAt: `${DAY}T14:00:00.000Z` },
     ];
@@ -111,11 +113,11 @@ describe("expected cash — surface consistency", () => {
         deletedAt: null,
       },
     ];
-    const input = drawerInput([completed], returns, debtPayments, cashExpenses);
+    const input = drawerInput([adjusted], returns, debtPayments, cashExpenses);
 
     const canonical = getExpectedCashForDay(input);
-    const closeDay = expectedCashAsOnCloseDay([completed], returns, debtPayments, cashExpenses);
-    const exportValue = expectedCashFromExport([completed], returns, debtPayments, cashExpenses);
+    const closeDay = expectedCashAsOnCloseDay([adjusted], returns, debtPayments, cashExpenses);
+    const exportValue = expectedCashFromExport([adjusted], returns, debtPayments, cashExpenses);
 
     expect(canonical).toBe(70_000);
     expect(closeDay).toBe(canonical);

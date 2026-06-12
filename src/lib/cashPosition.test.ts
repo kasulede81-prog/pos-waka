@@ -9,6 +9,7 @@ import {
   sumPaymentMethodAmounts,
 } from "./cashPosition";
 import { cashPositionToCsv, cashPositionToPlainText } from "./cashPositionExport";
+import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 
 const PRODUCT_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PRODUCT_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -204,11 +205,12 @@ describe("buildCashPositionReport", () => {
   });
 
   it("exposes refunds in cash position section", () => {
-    const sale = completedSale({ id: "s1", totalUgx: 100_000, cashPaidUgx: 100_000 });
+    const saleRow = completedSale({ id: "s1", totalUgx: 100_000, cashPaidUgx: 100_000 });
+    const adjusted = { ...saleRow, ...reduceSaleTotalsByAmount(saleRow, 15_000) };
     const returns: ReturnRecord[] = [
       {
         id: "r1",
-        saleId: sale.id,
+        saleId: saleRow.id,
         productId: PRODUCT_A,
         productName: "Soda",
         quantity: 1,
@@ -220,7 +222,7 @@ describe("buildCashPositionReport", () => {
         createdAt: `${DAY}T12:00:00.000Z`,
       },
     ];
-    const report = buildCashPositionReport(baseReportParams([sale], { returnRecords: returns }));
+    const report = buildCashPositionReport(baseReportParams([adjusted], { returnRecords: returns }));
     expect(report.cashPosition.refundsUgx).toBe(15_000);
     expect(report.cashPosition.expectedCashUgx).toBe(85_000);
   });

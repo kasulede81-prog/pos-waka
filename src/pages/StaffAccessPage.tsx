@@ -26,6 +26,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const canManage = hasPermission(actor.role, "settings.shop");
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const maxStaff = maxStaffAccountsForTier(planTier);
+  const preferences = usePosStore((s) => s.preferences);
   const staff = usePosStore((s) => s.preferences.staffAccounts ?? []);
   const addStaffAccount = usePosStore((s) => s.addStaffAccount);
   const setPreferences = usePosStore((s) => s.setPreferences);
@@ -128,6 +129,35 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         subtitle={t(lang, "staffAccessSub")}
         backLabel={t(lang, "officeBackToHub")}
       />
+
+      <section className="space-y-3 rounded-3xl border-2 border-slate-100 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-black uppercase tracking-wide text-slate-600">{t(lang, "staffPermissionsTitle")}</h2>
+        <label className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5"
+            checked={preferences.staffCanRecordCashExpenses === true}
+            onChange={(e) => setPreferences({ staffCanRecordCashExpenses: e.target.checked })}
+          />
+          <span>
+            <span className="block text-sm font-black text-slate-900">{t(lang, "staffAllowCashierExpenses")}</span>
+            <span className="mt-0.5 block text-xs font-medium text-slate-600">{t(lang, "staffAllowCashierExpensesSub")}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-3 rounded-2xl bg-slate-50 px-4 py-3">
+          <input
+            type="checkbox"
+            className="mt-1 h-5 w-5"
+            checked={preferences.requireCashierExpenseApproval === true}
+            disabled={preferences.staffCanRecordCashExpenses !== true}
+            onChange={(e) => setPreferences({ requireCashierExpenseApproval: e.target.checked })}
+          />
+          <span>
+            <span className="block text-sm font-black text-slate-900">{t(lang, "staffRequireExpenseApproval")}</span>
+            <span className="mt-0.5 block text-xs font-medium text-slate-600">{t(lang, "staffRequireExpenseApprovalSub")}</span>
+          </span>
+        </label>
+      </section>
 
       <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
         {t(lang, "staffDeviceLocalTrust")}

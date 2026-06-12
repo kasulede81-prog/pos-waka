@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useBlocker, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
@@ -46,6 +46,7 @@ import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { brandingFromSale } from "../lib/receiptBranding";
 import { canRecordCashExpenses } from "../lib/cashExpenses";
+import { RecordExpenseModal } from "../components/pos/RecordExpenseModal";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { gateExpiredMedicineSale } from "../lib/pharmacySaleGuard";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
@@ -70,11 +71,14 @@ import {
   buildSaleReceiptHtml,
   buildSaleReceiptText,
 } from "../lib/receiptPrint";
+import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditReceiptLog";
 import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../lib/receiptDocuments";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { posSearchAliases } from "../lib/pharmacyUx";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
+import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
+import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -288,6 +292,7 @@ export function PosPage({ lang }: { lang: Language }) {
   );
   const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
+  const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
 
   useEffect(() => {
@@ -988,6 +993,27 @@ export function PosPage({ lang }: { lang: Language }) {
     dismissFirstSale,
   });
 
+  useEffect(() => {
+    return registerPosLeaveGuard({
+      hasActiveSale: () => draftLines.length > 0,
+      confirmLeave: async () => window.confirm(t(lang, "posLeaveActiveSaleConfirm")),
+    });
+  }, [draftLines.length, lang]);
+
+  const leaveBlocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      draftLines.length > 0 &&
+      (currentLocation.pathname === "/pos" || currentLocation.pathname.startsWith("/pos/")) &&
+      nextLocation.pathname !== currentLocation.pathname,
+  );
+
+  useEffect(() => {
+    if (leaveBlocker.state !== "blocked") return;
+    const ok = window.confirm(t(lang, "posLeaveActiveSaleConfirm"));
+    if (ok) leaveBlocker.proceed();
+    else leaveBlocker.reset();
+  }, [leaveBlocker, lang]);
+
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
   const sellPresets = selected ? getPosSellPresets(selected) : [];
@@ -999,6 +1025,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-3">
+      <PosOfflineBanner lang={lang} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-950">{modeTerm("sell")}</h2>
@@ -1026,13 +1053,14 @@ export function PosPage({ lang }: { lang: Language }) {
             </Link>
           ) : null}
           {canRecordCashExpenses(actor.role, shopPreferences) ? (
-            <Link
-              to="/cash-expenses"
+            <button
+              type="button"
+              onClick={() => setExpenseModalOpen(true)}
               className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-950 shadow-sm active:bg-amber-100"
             >
               <Banknote className="h-4 w-4 shrink-0" aria-hidden />
-              {t(lang, "posCashExpenseBtn")}
-            </Link>
+              {t(lang, "posRecordExpenseBtn")}
+            </button>
           ) : null}
           {activeShift ? (
             <button
@@ -1785,6 +1813,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
                   });
                   void printSaleReceipt(ctx).then((r) => {
+                    if (r.ok) logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
                     if (!r.ok) window.alert(t(lang, "receiptPrintBlocked"));
                   });
                 }}
@@ -1801,6 +1830,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
                   });
                   void downloadSaleReceiptPdf(ctx).then((ok) => {
+                    if (ok) logReceiptPdfExportAudit(receiptSale, ctx.receiptNumber);
                     if (!ok) window.alert(t(lang, "receiptPdfFailed"));
                   });
                 }}
@@ -1885,6 +1915,8 @@ export function PosPage({ lang }: { lang: Language }) {
           return { ok: true };
         }}
       />
+
+      <RecordExpenseModal lang={lang} open={expenseModalOpen} onClose={() => setExpenseModalOpen(false)} />
 
       {qtyEditLine ? (
         <QuantityEditModal

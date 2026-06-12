@@ -30,6 +30,7 @@ import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
+import { computeBackOfficeAccessStats } from "../lib/backOfficeAccessStats";
 import { pendingSales } from "../lib/saleStatus";
 
 function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: string } {
@@ -86,10 +87,12 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const drawerToday = useDrawerCashForToday();
 
-  const [waCopied, setWaCopied] = useState(false);
-
   const todayKey = dateKeyKampala(new Date());
   const yesterdayKey = dateKeyDaysAgoKampala(1);
+
+  const backOfficeAccess = useMemo(() => computeBackOfficeAccessStats(auditLogs, todayKey), [auditLogs, todayKey]);
+
+  const [waCopied, setWaCopied] = useState(false);
 
   const today = useMemo(
     () => scanTodaySalesHead(sales, todayKey).todaySales,
@@ -405,6 +408,32 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
             </p>
           </article>
         </div>
+        <article className="mt-3 rounded-2xl border border-white bg-white p-4 shadow-sm">
+          <p className="text-xs font-bold text-slate-500">{t(lang, "ownerBackOfficeAccessTitle")}</p>
+          <p className="mt-1 text-sm font-semibold text-slate-800">
+            {backOfficeAccess.lastUnlockAt
+              ? tTemplate(lang, "ownerBackOfficeLastUnlock", {
+                  when: new Date(backOfficeAccess.lastUnlockAt).toLocaleString([], { hour: "2-digit", minute: "2-digit" }),
+                  role: backOfficeAccess.lastUnlockRole ?? "—",
+                  name: backOfficeAccess.lastUnlockActor ?? "",
+                })
+              : t(lang, "ownerBackOfficeNoUnlock")}
+          </p>
+          <ul className="mt-3 grid gap-2 text-xs font-bold text-slate-700 sm:grid-cols-3">
+            <li className="rounded-xl bg-slate-50 px-3 py-2">
+              {t(lang, "ownerBackOfficeFailedToday")}: {backOfficeAccess.failedAttemptsToday}
+            </li>
+            <li className="rounded-xl bg-slate-50 px-3 py-2">
+              {t(lang, "ownerBackOfficeOwnerToday")}: {backOfficeAccess.ownerUnlocksToday}
+            </li>
+            <li className="rounded-xl bg-slate-50 px-3 py-2">
+              {t(lang, "ownerBackOfficeManagerToday")}: {backOfficeAccess.managerUnlocksToday}
+            </li>
+          </ul>
+          <Link to="/office/audit-center" className="mt-3 inline-block text-xs font-black text-waka-700 underline">
+            {t(lang, "ownerBackOfficeViewAudit")} →
+          </Link>
+        </article>
       </section>
 
       {ownerAlertsResolved.length > 0 ? (

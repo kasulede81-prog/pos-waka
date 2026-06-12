@@ -127,6 +127,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const [listFilter, setListFilter] = useState<"all" | "low">("all");
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [removeId, setRemoveId] = useState<string | null>(null);
+  const [removeReason, setRemoveReason] = useState("");
   const [stockCategoryFilter, setStockCategoryFilter] = useState<string>(CATEGORY_FILTER_ALL);
   const [stockGroupByCategoryOverride, setStockGroupByCategoryOverride] = useState<boolean | null>(null);
 
@@ -409,8 +410,13 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const confirmRemove = (id: string) => {
     if (!canRemove) return;
-    removeProduct(id);
+    const r = removeProduct(id, removeReason);
+    if (!r.ok) {
+      window.alert(t(lang, r.errorKey === "auditReasonRequired" ? "auditReasonRequired" : (r.errorKey ?? "invalid")));
+      return;
+    }
     setRemoveId(null);
+    setRemoveReason("");
   };
 
   const handleRowAction = (p: Product, action: string) => {
@@ -956,8 +962,24 @@ export function StockPage({ lang }: { lang: Language }) {
             {onlyProductInStock ? (
               <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "removeLastProductConfirmBody")}</p>
             ) : null}
+            <label className="mt-4 block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+              <textarea
+                value={removeReason}
+                onChange={(e) => setRemoveReason(e.target.value)}
+                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+                placeholder={t(lang, "auditReasonPlaceholder")}
+              />
+            </label>
             <div className="mt-6 flex gap-3">
-              <button type="button" className="flex-1 rounded-2xl border-2 py-3 font-bold" onClick={() => setRemoveId(null)}>
+              <button
+                type="button"
+                className="flex-1 rounded-2xl border-2 py-3 font-bold"
+                onClick={() => {
+                  setRemoveId(null);
+                  setRemoveReason("");
+                }}
+              >
                 {t(lang, "cancel")}
               </button>
               <button type="button" className="flex-1 rounded-2xl bg-rose-600 py-3 font-black text-white" onClick={() => confirmRemove(removeId)}>

@@ -103,6 +103,27 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
       <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
       <p className="text-sm font-medium text-stone-600">{t(lang, "hardwareSettingsSub")}</p>
 
+      <article className="rounded-3xl border-2 border-emerald-200 bg-emerald-50/80 p-5 shadow-waka-sm">
+        <div className="flex items-center gap-2">
+          <Keyboard className="h-5 w-5 text-emerald-800" aria-hidden />
+          <p className="text-lg font-black text-emerald-950">{t(lang, "hardwareScannerSetupTitle")}</p>
+        </div>
+        <p className="mt-2 text-sm font-medium text-emerald-900/90">{t(lang, "hardwareScannerSetupBody")}</p>
+        <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm font-semibold text-emerald-950">
+          <li>{t(lang, "hardwareScannerSetupStepPlug")}</li>
+          <li>{t(lang, "hardwareScannerSetupStepKeyboard")}</li>
+          <li>{t(lang, "hardwareScannerSetupStepAuto")}</li>
+        </ol>
+        <p className="mt-4 text-xs font-black uppercase tracking-wide text-emerald-800">{t(lang, "hardwareScannerStatusLabel")}</p>
+        <p className="mt-1 text-sm font-bold text-emerald-950">
+          {barcodeCaps.hidWedge
+            ? t(lang, "hardwareScannerStatusReady")
+            : barcodeCaps.cameraScan
+              ? t(lang, "hardwareScannerStatusCamera")
+              : t(lang, "hardwareScannerStatusUnsupported")}
+        </p>
+      </article>
+
       <article className="rounded-3xl border-2 border-waka-100 bg-white p-5 shadow-waka-sm">
         <div className="flex items-center gap-2">
           <ScanLine className="h-5 w-5 text-waka-700" aria-hidden />

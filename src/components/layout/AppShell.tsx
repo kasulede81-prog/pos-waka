@@ -9,6 +9,8 @@ import { useSubscription } from "../../context/SubscriptionContext";
 import { useShopPresenceHeartbeat } from "../../hooks/useShopPresenceHeartbeat";
 import { AppShellSyncLabel } from "./AppShellSyncLabel";
 import { useAndroidBackButton } from "../../hooks/useAndroidBackButton";
+import { useAndroidBackHandler } from "../../hooks/useAndroidBackHandler";
+import { ANDROID_BACK_PRIORITY } from "../../lib/androidBackStack";
 import { useShallow } from "zustand/react/shallow";
 import { usePosStore } from "../../store/usePosStore";
 import type { ShopPreferences } from "../../types";
@@ -104,6 +106,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const endActiveShift = usePosStore((s) => s.endActiveShift);
   const [pwaUpdate, setPwaUpdate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
   const [lockStaffId, setLockStaffId] = useState(preferences.activeStaffId ?? "");
   const [lockSecret, setLockSecret] = useState("");
   const [lockError, setLockError] = useState<string | null>(null);
@@ -434,8 +437,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </div>
         </header>
-        <main className="mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 lg:px-6">
-          <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm lg:block xl:w-56">
+        <main className="mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6">
+          <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56">
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">
               {navDefs.map((item) => {
@@ -465,7 +468,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               })}
             </ul>
           </nav>
-          <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col lg:pb-0">
+          <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col md:pb-0">
             <div
               className={`scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] ${
                 location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : ""
@@ -482,7 +485,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         </main>
         {!internalAdminRoute ? (
         <nav
-          className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur lg:hidden"
+          className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur md:hidden"
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}
           aria-label="Main navigation"
         >

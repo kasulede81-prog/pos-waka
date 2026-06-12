@@ -13,7 +13,8 @@ import {
   sumSupplierPaymentsUgx,
 } from "../lib/purchaseReporting";
 import { supplierPaymentCreatedByLabel } from "../lib/purchaseCorrections";
-import { downloadSupplierStatementCsv, downloadSupplierStatementPdf } from "../lib/purchaseExport";
+import { downloadSupplierStatementCsv, downloadSupplierStatementPdf, printSupplierStatementReport } from "../lib/purchaseExport";
+import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
 
@@ -69,6 +70,19 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
         kind === "csv"
           ? await downloadSupplierStatementCsv(supplier.name, statement, stem)
           : await downloadSupplierStatementPdf(lang, shopName, supplier.name, statement, stem);
+      setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
+      window.setTimeout(() => setExportHint(null), 3500);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const runPrint = async () => {
+    if (!supplier) return;
+    setExportBusy(true);
+    try {
+      const stem = supplier.id.slice(0, 8);
+      const ok = await printSupplierStatementReport(lang, shopName, supplier.name, statement, stem);
       setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
       window.setTimeout(() => setExportHint(null), 3500);
     } finally {
@@ -216,6 +230,14 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-black text-waka-950">{t(lang, "supplierStatementTitle")}</h2>
           <div className="flex gap-2">
+            <button
+              type="button"
+              disabled={exportBusy || statement.length === 0}
+              onClick={() => void runPrint()}
+              className="min-h-[40px] rounded-2xl bg-slate-900 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
+            >
+              {receiptPrintActionLabel(lang)}
+            </button>
             <button
               type="button"
               disabled={exportBusy || statement.length === 0}

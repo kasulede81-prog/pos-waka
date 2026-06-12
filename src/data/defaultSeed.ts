@@ -21,6 +21,8 @@ export function createDefaultPreferences(): ShopPreferences {
     shopPhoneE164: null,
     shopAddressLine: null,
     shopCurrency: "UGX",
+    staffCanRecordCashExpenses: false,
+    requireCashierExpenseApproval: false,
     staffAccounts: [],
     activeStaffId: null,
     posLocked: false,

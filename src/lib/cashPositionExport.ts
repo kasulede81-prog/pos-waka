@@ -3,6 +3,7 @@ import type { Language } from "../types";
 import { t } from "./i18n";
 import { createPdfLayout, ensurePdfSpace, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
 import { downloadPdfBlob } from "./documentPrint";
+import { printDocumentNativeFallback } from "./nativePrintFallback";
 import { downloadTextFile } from "./monthlyBusinessReport";
 import type { CashPositionReconciliation, CashPositionReport } from "./cashPosition";
 
@@ -246,6 +247,27 @@ export async function downloadCashPositionPdf(
   const blob = buildCashPositionPdfBlob(lang, report, reconciliation);
   const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
   return downloadPdfBlob(`${stem}.pdf`, blob);
+}
+
+function cashPositionHtml(lang: Language, report: CashPositionReport, reconciliation?: CashPositionReconciliation | null): string {
+  const text = cashPositionToPlainText(lang, report, reconciliation);
+  return `<article><pre style="font-family:system-ui,sans-serif;white-space:pre-wrap">${text.replace(/</g, "&lt;")}</pre></article>`;
+}
+
+export async function printCashPositionReport(
+  lang: Language,
+  report: CashPositionReport,
+  reconciliation?: CashPositionReconciliation | null,
+): Promise<boolean> {
+  const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
+  return printDocumentNativeFallback({
+    pdfFilename: `${stem}.pdf`,
+    buildPdfBlob: () => buildCashPositionPdfBlob(lang, report, reconciliation),
+    htmlBody: cashPositionHtml(lang, report, reconciliation),
+    paper: "a4",
+    title: "Cash position",
+    shareDialogTitle: "Print or share cash position",
+  });
 }
 
 export async function downloadCashPositionCsv(

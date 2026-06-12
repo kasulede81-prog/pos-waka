@@ -2,8 +2,8 @@ import { jsPDF } from "jspdf";
 import type { DayCloseDocumentSnapshot, DayCloseSummary, Language } from "../types";
 import { t } from "./i18n";
 import { createPdfLayout, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
-import { downloadPdfBlob, printHtmlDocumentWithDesktop, sharePdfBlob } from "./documentPrint";
-import { isNativePrintPlatform } from "./nativeReceiptPrint";
+import { downloadPdfBlob, sharePdfBlob } from "./documentPrint";
+import { printDocumentNativeFallback } from "./nativePrintFallback";
 
 export function buildDayCloseSnapshot(params: {
   closedByUserId: string | null;
@@ -94,8 +94,12 @@ export async function shareDayClosePdf(lang: Language, close: DayCloseSummary, s
 }
 
 export async function printDayCloseReport(lang: Language, close: DayCloseSummary, shopName: string): Promise<boolean> {
-  if (isNativePrintPlatform()) {
-    return shareDayClosePdf(lang, close, shopName);
-  }
-  return printHtmlDocumentWithDesktop(dayCloseHtml(lang, close, shopName), "a4", "Day close");
+  return printDocumentNativeFallback({
+    pdfFilename: dayClosePdfFilename(close.dateKey),
+    buildPdfBlob: () => buildDayClosePdfBlob(lang, close, shopName),
+    htmlBody: dayCloseHtml(lang, close, shopName),
+    paper: "a4",
+    title: "Day close",
+    shareDialogTitle: "Print or share day close",
+  });
 }

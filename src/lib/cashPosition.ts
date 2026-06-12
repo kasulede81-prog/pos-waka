@@ -4,8 +4,9 @@
  */
 
 import type { CashExpense, DebtPayment, Language, Product, ReturnRecord, Sale, StaffAccount, SupplierPayment } from "../types";
-import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
+import { computeCanonicalRevenueUgx, externalReturnRefundsUgx } from "./canonicalRevenue";
 import {
+  computeExpectedDrawerCashUgx,
   sumCashExpensesOnDay,
   sumDebtPaymentsOnDay,
   sumRefundsOnDay,
@@ -274,12 +275,16 @@ export function buildCashPositionReport(params: {
   for (const s of daySales) cashFromSalesUgx += s.cashPaidUgx;
   const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, dayKey);
   const refundsUgx = sumRefundsOnDay(dayReturns, dayKey);
+  const externalRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
   const expensesUgx = sumCashExpensesOnDay(cashExpenses, dayKey);
   const supplierPaymentsUgx = sumSupplierPaymentsOnDay(supplierPayments, dayKey);
-  const expectedCashUgx = Math.max(
-    0,
-    cashFromSalesUgx + debtCollectedUgx - expensesUgx - supplierPaymentsUgx - refundsUgx,
-  );
+  const expectedCashUgx = computeExpectedDrawerCashUgx({
+    cashFromSalesUgx,
+    debtCollectedUgx,
+    expenseUgx: expensesUgx,
+    supplierPaymentsUgx,
+    externalReturnRefundsUgx: externalRefundsUgx,
+  });
 
   const paymentAgg = new Map<CashPositionPaymentKey, { amountUgx: number; transactionCount: number }>();
   for (const key of PAYMENT_KEYS) {

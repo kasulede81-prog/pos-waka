@@ -96,10 +96,12 @@ export async function downloadPdfBlob(filename: string, blob: Blob): Promise<boo
   return saveExportedFile(filename, blob, "application/pdf");
 }
 
-export async function sharePdfBlob(filename: string, blob: Blob): Promise<boolean> {
-  return saveExportedFile(filename, blob, "application/pdf", {
-    shareDialogTitle: "Print or share receipt",
-  });
+export async function sharePdfBlob(
+  filename: string,
+  blob: Blob,
+  shareDialogTitle = "Print or share receipt",
+): Promise<boolean> {
+  return saveExportedFile(filename, blob, "application/pdf", { shareDialogTitle });
 }
 
 export function downloadCsvText(filename: string, body: string): Promise<boolean> {

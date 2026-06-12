@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Product, ReturnRecord, Sale } from "../types";
 import { getDrawerCashForDay, getDrawerCashForDayInput } from "./cashReconciliation";
+import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 import { buildDailyReportText } from "./reportExport";
 import { getCompletedFinancials, getCompletedRevenue } from "./financialMetrics";
 import { localGetDailySalesSummary } from "./localReporting";
@@ -8,7 +9,6 @@ import { computePharmacyDashboardStats } from "./pharmacyStats";
 import { computeProfitGroupedByCategory } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 import { saleReportingDayKey } from "./datesUg";
-import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 
 const DAY = "2026-05-31";
 
@@ -103,9 +103,10 @@ describe("reporting consistency — expected cash", () => {
       shiftId: null,
       createdAt: `${DAY}T12:00:00.000Z`,
     };
-    const drawerA = getDrawerCashForDay([completed], [ret], products, [{ id: "p1", customerId: "c", amountUgx: 25_000, createdAt: `${DAY}T14:00:00.000Z` }], DAY, 10_000);
+    const adjusted = { ...completed, ...reduceSaleTotalsByAmount(completed, 5_000) };
+    const drawerA = getDrawerCashForDay([adjusted], [ret], products, [{ id: "p1", customerId: "c", amountUgx: 25_000, createdAt: `${DAY}T14:00:00.000Z` }], DAY, 10_000);
     const drawerB = getDrawerCashForDayInput({
-      sales: [completed],
+      sales: [adjusted],
       returns: [ret],
       products,
       debtPayments: [{ id: "p1", customerId: "c", amountUgx: 25_000, createdAt: `${DAY}T14:00:00.000Z` }],

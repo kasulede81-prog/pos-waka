@@ -117,7 +117,7 @@ describe("usePosStore — cashier mutation regression", () => {
         },
       ],
     });
-    const r = usePosStore.getState().voidCashExpense("exp-1");
+    const r = usePosStore.getState().voidCashExpense("exp-1", "wrong entry");
     expect(r.ok).toBe(false);
     expect(usePosStore.getState().auditLogs.some((a) => a.action === "auth_forbidden")).toBe(true);
   });

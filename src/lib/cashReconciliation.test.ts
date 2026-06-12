@@ -5,6 +5,7 @@ import {
   sumDebtPaymentsDuringShift,
   sumDebtPaymentsOnDay,
 } from "./cashReconciliation";
+import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 import { shiftExpectedCash, shiftExpectedCashLabelParts } from "./saleAdjustments";
 
 const DAY = "2026-05-31";
@@ -83,7 +84,7 @@ describe("debt cash reconciliation", () => {
     expect(drawer.refundsUgx).toBe(0);
   });
 
-  it("refunds reduce expected drawer cash", () => {
+  it("linked same-day return does not double-subtract when sale header is adjusted", () => {
     const completed = sale({ status: "completed", totalUgx: 100_000, cashPaidUgx: 60_000, debtUgx: 40_000 });
     const returns: ReturnRecord[] = [
       {
@@ -100,29 +101,53 @@ describe("debt cash reconciliation", () => {
         createdAt: `${DAY}T12:00:00.000Z`,
       },
     ];
-    const drawer = getDrawerCashForDay([completed], returns, products, [payment(25_000)], DAY, 10_000);
+    const adjusted = { ...completed, ...reduceSaleTotalsByAmount(completed, 5_000) };
+    const drawer = getDrawerCashForDay([adjusted], returns, products, [payment(25_000)], DAY, 10_000);
+    expect(adjusted.cashPaidUgx).toBe(55_000);
     expect(drawer.expectedDrawerCashUgx).toBe(70_000);
   });
 
-  it("shift expected cash includes debt payments collected", () => {
+  it("external unlinked return reduces expected drawer cash", () => {
+    const completed = sale({ status: "completed", totalUgx: 60_000, cashPaidUgx: 60_000, debtUgx: 0 });
+    const returns: ReturnRecord[] = [
+      {
+        id: crypto.randomUUID(),
+        saleId: null,
+        productId: "prod-1",
+        productName: "Item",
+        quantity: 1,
+        refundAmountUgx: 5_000,
+        reason: "other" as const,
+        actorUserId: "u1",
+        actorName: "Owner",
+        shiftId: null,
+        createdAt: `${DAY}T12:00:00.000Z`,
+      },
+    ];
+    const drawer = getDrawerCashForDay([completed], returns, products, [], DAY);
+    expect(drawer.expectedDrawerCashUgx).toBe(55_000);
+  });
+
+  it("shift expected cash after void/return already in estimatedCashUgx", () => {
     const shift: ShiftRecord = {
       id: "sh-1",
       actorUserId: "u1",
       role: "cashier",
       startAt: `${DAY}T08:00:00.000Z`,
       endAt: null,
-      salesTotalUgx: 100_000,
+      salesTotalUgx: 60_000,
       debtTotalUgx: 0,
-      refundsUgx: 0,
-      estimatedCashUgx: 80_000,
+      refundsUgx: 5_000,
+      estimatedCashUgx: 55_000,
       debtPaymentsTotalUgx: 20_000,
       voidsTotalUgx: 0,
-      returnsTotalUgx: 0,
+      returnsTotalUgx: 5_000,
     };
-    expect(shiftExpectedCash(shift)).toBe(100_000);
+    expect(shiftExpectedCash(shift)).toBe(75_000);
     const parts = shiftExpectedCashLabelParts(shift);
     expect(parts.debtPayments).toBe(20_000);
-    expect(parts.expected).toBe(100_000);
+    expect(parts.expected).toBe(75_000);
+    expect(parts.sales).toBe(60_000);
   });
 
   it("sumDebtPaymentsDuringShift respects shift window", () => {

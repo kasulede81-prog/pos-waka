@@ -61,4 +61,15 @@ describe("android back stack", () => {
     expect(dispatchAndroidBack()).toBe(true);
     expect(sheetClosed).toBe(true);
   });
+
+  it("closes menu drawer when registered", () => {
+    let menuClosed = false;
+    registerAndroidBackHandler("menu", ANDROID_BACK_PRIORITY.menuDrawer, () => {
+      menuClosed = true;
+      return true;
+    });
+
+    expect(dispatchAndroidBack()).toBe(true);
+    expect(menuClosed).toBe(true);
+  });
 });

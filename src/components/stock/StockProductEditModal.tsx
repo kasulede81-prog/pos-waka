@@ -14,6 +14,7 @@ import {
   type SellUnitKind,
 } from "../../lib/simpleProductWizard";
 import { formatStockLabel, stockBreakdown } from "../../lib/sellingEngine";
+import { validateAuditReason } from "../../lib/auditReasons";
 import { usePosStore } from "../../store/usePosStore";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { normalizeExpiryDate } from "../../lib/pharmacyExpiry";
@@ -64,6 +65,7 @@ type Props = {
         | "pharmacyPackaging"
       >
     >,
+    opts?: { auditReason?: string },
   ) => { ok: boolean; errorKey?: string };
 };
 
@@ -111,6 +113,8 @@ export function StockProductEditModal({
   const [packagingState, setPackagingState] = useState<PharmacyPackagingFieldState>(() =>
     packagingStateFromProduct(null),
   );
+  const [auditReason, setAuditReason] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -154,6 +158,8 @@ export function StockProductEditModal({
     ps.sellStrip = product.pharmacyPackaging?.sell.strip ?? ps.sellStrip;
     ps.sellBox = product.pharmacyPackaging?.sell.box ?? ps.sellBox;
     setPackagingState(ps);
+    setAuditReason("");
+    setSubmitError(null);
   }, [open, product]);
 
   const piecesN = Math.max(1, Math.floor(Number(piecesPerPack.replace(/[^\d.]/g, "")) || 0));
@@ -221,6 +227,15 @@ export function StockProductEditModal({
       }
     }
 
+    const nextStock = packagingEdit ? Math.max(0, Number(pieceOnlyStock.replace(/[^\d.]/g, "")) || 0) : totalStock;
+    const priceChanging = priceUgx !== product.sellingPricePerUnitUgx;
+    const stockChanging = Math.abs(nextStock - product.stockOnHand) > 1e-6;
+    if ((priceChanging || stockChanging) && !validateAuditReason(auditReason)) {
+      setSubmitError(t(lang, "auditReasonRequired"));
+      return;
+    }
+    setSubmitError(null);
+
     const patch: Parameters<typeof updateProduct>[1] = {
       name: name.trim(),
       baseUnit,
@@ -228,7 +243,7 @@ export function StockProductEditModal({
       conversionRate: patchConversion,
       sellingPricePerUnitUgx: priceUgx,
       costPricePerUnitUgx,
-      stockOnHand: packagingEdit ? Math.max(0, Number(pieceOnlyStock.replace(/[^\d.]/g, "")) || 0) : totalStock,
+      stockOnHand: nextStock,
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),
       sku: sku.trim() || product.sku,
@@ -249,8 +264,12 @@ export function StockProductEditModal({
         .filter((x) => x > 0);
     }
 
-    const r = updateProduct(product.id, patch);
-    if (r.ok) onClose();
+    const r = updateProduct(product.id, patch, { auditReason: auditReason || undefined });
+    if (!r.ok) {
+      setSubmitError(t(lang, r.errorKey === "auditReasonRequired" ? "auditReasonRequired" : (r.errorKey ?? "invalid")));
+      return;
+    }
+    onClose();
   };
 
   const inputClass =
@@ -617,6 +636,24 @@ export function StockProductEditModal({
         </div>
 
         <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          {product &&
+          (Math.floor(Number(price.replace(/\D/g, "")) || 0) !== product.sellingPricePerUnitUgx ||
+            Math.abs(
+              (packagingEdit
+                ? Math.max(0, Number(pieceOnlyStock.replace(/[^\d.]/g, "")) || 0)
+                : totalStock) - product.stockOnHand,
+            ) > 1e-6) ? (
+            <label className="mb-3 block">
+              <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+              <textarea
+                value={auditReason}
+                onChange={(e) => setAuditReason(e.target.value)}
+                className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+                placeholder={t(lang, "auditReasonPlaceholder")}
+              />
+            </label>
+          ) : null}
+          {submitError ? <p className="mb-2 text-sm font-bold text-rose-700">{submitError}</p> : null}
           <button
             type="submit"
             className="min-h-[56px] w-full rounded-2xl bg-waka-600 text-xl font-black text-white shadow-md active:bg-waka-700"

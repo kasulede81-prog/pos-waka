@@ -19,6 +19,7 @@ import { formatDateFilterChipDay } from "../lib/dateFilterLabels";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
+import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditReceiptLog";
 import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
 import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
@@ -225,15 +226,18 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   };
 
   const printSale = (sale: Sale) => {
-    void printSaleReceipt(receiptCtxFor(sale)).then((result) => {
-      if (!result.ok) window.alert(t(lang, "receiptPrintBlocked"));
+    const ctx = receiptCtxFor(sale);
+    void printSaleReceipt(ctx).then((result) => {
+      if (result.ok) logReceiptReprintAudit(sale, ctx.receiptNumber);
+      else window.alert(t(lang, "receiptPrintBlocked"));
     });
   };
 
   const receiptPdfSale = (sale: Sale) => {
     const ctx = receiptCtxFor(sale);
     void downloadSaleReceiptPdf(ctx).then((ok) => {
-      if (!ok) window.alert(t(lang, "receiptPdfFailed"));
+      if (ok) logReceiptPdfExportAudit(sale, ctx.receiptNumber);
+      else window.alert(t(lang, "receiptPdfFailed"));
     });
   };
 

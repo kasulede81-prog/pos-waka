@@ -70,6 +70,7 @@ export const swOverrides: Record<string, string> = {
   saveSale: "Hifadhi mauzo",
   saleSaved: "Mauzo yamehifadhiwa.",
   workingOfflineLabel: "Hakuna mtandao — bado unafanya kazi",
+  posOfflineConfidenceBanner: "Huna mtandao. Mauzo yanahifadhiwa salama kwenye kifaa hiki.",
   savedOffline: "Imehifadhiwa kwenye simu",
   syncingShort: "Inahifadhi mtandaoni…",
   willSyncLater: "Itahifadhi mtandaoni mtandao urudipo",

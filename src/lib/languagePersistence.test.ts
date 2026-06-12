@@ -39,7 +39,7 @@ vi.mock("@capacitor/preferences", () => ({
   },
 }));
 
-describe("uiLanguage persistence", () => {
+describe("language persistence", () => {
   beforeEach(() => {
     installLocalStorageMock();
     prefsStore.clear();
@@ -51,24 +51,33 @@ describe("uiLanguage persistence", () => {
     vi.unstubAllGlobals();
   });
 
-  it("validates language codes", () => {
+  it("validates supported language codes", () => {
+    expect(isUiLanguage("en")).toBe(true);
     expect(isUiLanguage("lg")).toBe(true);
+    expect(isUiLanguage("sw")).toBe(true);
     expect(isUiLanguage("fr")).toBe(false);
   });
 
-  it("reads synchronous cache from localStorage", () => {
+  it("reads synchronous cache from localStorage for instant boot", () => {
     localStorage.setItem(UI_LANGUAGE_STORAGE_KEY, "lg");
     expect(readUiLanguageCacheSync()).toBe("lg");
   });
 
-  it("restores persisted language on load", async () => {
-    await persistUiLanguage("lg");
-    const loaded = await loadPersistedUiLanguage();
-    expect(loaded).toBe("lg");
-    expect(readUiLanguageCacheSync()).toBe("lg");
+  it("survives persist and reload via Preferences + mirror", async () => {
+    await persistUiLanguage("sw");
+    expect(await loadPersistedUiLanguage()).toBe("sw");
+    expect(readUiLanguageCacheSync()).toBe("sw");
+    expect(prefsStore.get(UI_LANGUAGE_STORAGE_KEY)).toBe("sw");
   });
 
   it("defaults to English when nothing stored", async () => {
     expect(await loadPersistedUiLanguage()).toBe("en");
+  });
+
+  it("does not clear language when unrelated storage is cleared", async () => {
+    await persistUiLanguage("lg");
+    localStorage.removeItem("other-key");
+    expect(readUiLanguageCacheSync()).toBe("lg");
+    expect(await loadPersistedUiLanguage()).toBe("lg");
   });
 });

@@ -3,6 +3,7 @@ import type { Language } from "../types";
 import { t } from "./i18n";
 import { createPdfLayout, ensurePdfSpace, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
 import { downloadPdfBlob } from "./documentPrint";
+import { printDocumentNativeFallback } from "./nativePrintFallback";
 import { downloadTextFile } from "./monthlyBusinessReport";
 import type { PurchaseListRow, SupplierStatementEntry } from "./purchaseReporting";
 
@@ -59,6 +60,31 @@ export async function downloadPurchasesPdf(
 ): Promise<boolean> {
   const blob = buildPurchasesPdfBlob(lang, shopName, rows);
   return downloadPdfBlob(`${sanitizePdfStem(`purchases-${dayLabel}`)}.pdf`, blob);
+}
+
+function purchasesHtml(lang: Language, shopName: string, rows: PurchaseListRow[]): string {
+  const lines = rows.map(
+    (row) =>
+      `${row.dayKey} · ${row.purchase.supplierName}: UGX ${row.purchase.totalCostUgx.toLocaleString()} (paid ${row.purchase.amountPaidUgx.toLocaleString()})`,
+  );
+  return `<article><h2>${shopName}</h2><h3>${t(lang, "purchasesTitle")}</h3><pre>${lines.join("\n")}</pre></article>`;
+}
+
+export async function printPurchasesReport(
+  lang: Language,
+  shopName: string,
+  rows: PurchaseListRow[],
+  dayLabel: string,
+): Promise<boolean> {
+  const filename = `${sanitizePdfStem(`purchases-${dayLabel}`)}.pdf`;
+  return printDocumentNativeFallback({
+    pdfFilename: filename,
+    buildPdfBlob: () => buildPurchasesPdfBlob(lang, shopName, rows),
+    htmlBody: purchasesHtml(lang, shopName, rows),
+    paper: "a4",
+    title: "Purchases",
+    shareDialogTitle: "Print or share purchase statement",
+  });
 }
 
 export function supplierStatementToCsv(supplierName: string, entries: SupplierStatementEntry[]): string {
@@ -120,4 +146,35 @@ export async function downloadSupplierStatementPdf(
 ): Promise<boolean> {
   const blob = buildSupplierStatementPdfBlob(lang, shopName, supplierName, entries);
   return downloadPdfBlob(`${sanitizePdfStem(`supplier-statement-${stem}`)}.pdf`, blob);
+}
+
+function supplierStatementHtml(
+  lang: Language,
+  shopName: string,
+  supplierName: string,
+  entries: SupplierStatementEntry[],
+): string {
+  const lines = entries.map((e) => {
+    const sign = e.deltaUgx >= 0 ? "+" : "";
+    return `${e.dayKey} · ${e.kind}: ${sign}UGX ${e.deltaUgx.toLocaleString()} · ${t(lang, "supplierStatementBalance")} UGX ${e.runningBalanceUgx.toLocaleString()}`;
+  });
+  return `<article><h2>${shopName}</h2><h3>${t(lang, "supplierStatementTitle")}</h3><p>${supplierName}</p><pre>${lines.join("\n")}</pre></article>`;
+}
+
+export async function printSupplierStatementReport(
+  lang: Language,
+  shopName: string,
+  supplierName: string,
+  entries: SupplierStatementEntry[],
+  stem: string,
+): Promise<boolean> {
+  const filename = `${sanitizePdfStem(`supplier-statement-${stem}`)}.pdf`;
+  return printDocumentNativeFallback({
+    pdfFilename: filename,
+    buildPdfBlob: () => buildSupplierStatementPdfBlob(lang, shopName, supplierName, entries),
+    htmlBody: supplierStatementHtml(lang, shopName, supplierName, entries),
+    paper: "a4",
+    title: "Supplier statement",
+    shareDialogTitle: "Print or share supplier statement",
+  });
 }

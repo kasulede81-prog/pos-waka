@@ -19,7 +19,8 @@ import {
   type PurchaseListFilter,
 } from "../lib/purchaseReporting";
 import { isPurchaseVoided, supplierPaymentCreatedByLabel } from "../lib/purchaseCorrections";
-import { downloadPurchasesCsv, downloadPurchasesPdf } from "../lib/purchaseExport";
+import { downloadPurchasesCsv, downloadPurchasesPdf, printPurchasesReport } from "../lib/purchaseExport";
+import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { dateKeyKampala } from "../lib/datesUg";
 import type { DateFilterValue } from "../lib/dateFilters";
 
@@ -82,6 +83,17 @@ export function PurchasesPage({ lang }: { lang: Language }) {
         kind === "csv"
           ? await downloadPurchasesCsv(rows, exportStem)
           : await downloadPurchasesPdf(lang, shopName, rows, exportStem);
+      setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
+      window.setTimeout(() => setExportHint(null), 3500);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const runPrint = async () => {
+    setExportBusy(true);
+    try {
+      const ok = await printPurchasesReport(lang, shopName, rows, exportStem);
       setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
       window.setTimeout(() => setExportHint(null), 3500);
     } finally {
@@ -157,6 +169,14 @@ export function PurchasesPage({ lang }: { lang: Language }) {
       </div>
 
       <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={exportBusy || rows.length === 0}
+          onClick={() => void runPrint()}
+          className="min-h-[44px] rounded-2xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
+        >
+          {receiptPrintActionLabel(lang)}
+        </button>
         <button
           type="button"
           disabled={exportBusy || rows.length === 0}

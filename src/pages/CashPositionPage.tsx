@@ -19,7 +19,9 @@ import {
   downloadCashPositionCsv,
   downloadCashPositionExcel,
   downloadCashPositionPdf,
+  printCashPositionReport,
 } from "../lib/cashPositionExport";
+import { receiptPrintActionLabel } from "../lib/printActionLabels";
 
 function paymentLabel(lang: Language, key: CashPositionPaymentKey): string {
   const labels: Record<CashPositionPaymentKey, string> = {
@@ -110,6 +112,16 @@ export function CashPositionPage({ lang }: { lang: Language }) {
           : kind === "csv"
             ? await downloadCashPositionCsv(displayReport, exportReconciliation)
             : await downloadCashPositionExcel(displayReport, exportReconciliation);
+      showExportHint(ok);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+
+  const runPrint = async () => {
+    setExportBusy(true);
+    try {
+      const ok = await printCashPositionReport(lang, displayReport, exportReconciliation);
       showExportHint(ok);
     } finally {
       setExportBusy(false);
@@ -337,7 +349,15 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         <h2 className="text-lg font-black text-stone-900">{t(lang, "cashPositionSectionExport")}</h2>
         <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "cashPositionExportHint")}</p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <button
+            type="button"
+            disabled={exportBusy}
+            onClick={() => void runPrint()}
+            className="min-h-[48px] rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white disabled:opacity-60"
+          >
+            {receiptPrintActionLabel(lang)}
+          </button>
           <button
             type="button"
             disabled={exportBusy}

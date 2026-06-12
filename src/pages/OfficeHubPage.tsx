@@ -23,6 +23,7 @@ import {
   LayoutGrid,
   ChefHat,
   Pill,
+  Shield,
   ClipboardList,
 } from "lucide-react";
 import { canSeeOfficeProfit } from "../lib/homeProfit";
@@ -333,12 +334,20 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                 />
               ) : null}
               {can("owner.activity") ? (
-                <OfficeNavCard
-                  to="/owner/activity"
-                  title={t(lang, "officeCardActivity")}
-                  subtitle={t(lang, "officeCardActivitySub")}
-                  Icon={ScrollText}
-                />
+                <>
+                  <OfficeNavCard
+                    to="/office/audit-center"
+                    title={t(lang, "officeCardAuditCenter")}
+                    subtitle={t(lang, "officeCardAuditCenterSub")}
+                    Icon={Shield}
+                  />
+                  <OfficeNavCard
+                    to="/owner/activity"
+                    title={t(lang, "officeCardActivity")}
+                    subtitle={t(lang, "officeCardActivitySub")}
+                    Icon={ScrollText}
+                  />
+                </>
               ) : null}
             </OfficeNavSection>
           ) : null}
