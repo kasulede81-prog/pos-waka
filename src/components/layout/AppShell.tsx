@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
+import { Outlet, useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
 import { Home, ShoppingCart, Receipt, Briefcase, LayoutGrid, ChefHat, UtensilsCrossed, Package } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission, UserRole } from "../../types";
@@ -44,6 +44,7 @@ import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
+import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
 
 type Props = {
   lang: Language;
@@ -104,6 +105,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
   const beginShift = usePosStore((s) => s.beginShift);
   const endActiveShift = usePosStore((s) => s.endActiveShift);
+  const draftLineCount = usePosStore((s) => s.draftLines.length);
   const [pwaUpdate, setPwaUpdate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
@@ -116,6 +118,21 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const [roleReady, setRoleReady] = useState(() => authMode !== "supabase" || !user?.id);
   const prevActorRef = useRef<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const guardedNavigate = useCallback(
+    (to: string, options?: NavigateOptions) => {
+      const onPos = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
+      const leavingPos = onPos && draftLineCount > 0 && to !== location.pathname && !to.startsWith("/pos");
+      if (leavingPos) {
+        void confirmLeaveActiveSaleIfNeeded().then((ok) => {
+          if (ok) navigate(to, options);
+        });
+        return;
+      }
+      navigate(to, options);
+    },
+    [draftLineCount, location.pathname, navigate],
+  );
 
   useEffect(() => {
     const onUp = () => setPwaUpdate(true);
@@ -447,7 +464,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   <li key={item.path}>
                     <button
                       type="button"
-                      onClick={() => navigate(item.path, { preventScrollReset: true })}
+                      onClick={() => guardedNavigate(item.path, { preventScrollReset: true })}
                       className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
                         active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
                       }`}
@@ -505,7 +522,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       type="button"
                       aria-current={active ? "page" : undefined}
                       aria-label={t(lang, labelKey)}
-                      onClick={() => navigate(path, { preventScrollReset: true })}
+                      onClick={() => guardedNavigate(path, { preventScrollReset: true })}
                       className={`touch-manipulation -mt-1.5 flex min-h-[56px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 py-2 font-black text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[60px] sm:min-w-[60px] ${
                         active
                           ? "bg-waka-700 ring-2 ring-waka-300 ring-offset-2 ring-offset-white"
@@ -524,7 +541,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     key={path}
                     type="button"
                     aria-current={active ? "page" : undefined}
-                    onClick={() => navigate(path, { preventScrollReset: true })}
+                    onClick={() => guardedNavigate(path, { preventScrollReset: true })}
                     className={`touch-manipulation flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 text-[11px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[52px] sm:text-xs ${
                       active
                         ? "bg-waka-50 text-waka-900 ring-1 ring-waka-200/90"
@@ -545,7 +562,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   key={path}
                   type="button"
                   aria-current={active ? "page" : undefined}
-                  onClick={() => navigate(path, { preventScrollReset: true })}
+                  onClick={() => guardedNavigate(path, { preventScrollReset: true })}
                   className={`touch-manipulation flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 font-semibold transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[50px] ${
                     active
                       ? "bg-stone-100 text-waka-800 ring-1 ring-stone-200/80"

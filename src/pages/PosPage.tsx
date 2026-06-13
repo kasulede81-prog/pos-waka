@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { Link, Navigate, useBlocker, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
@@ -996,23 +996,13 @@ export function PosPage({ lang }: { lang: Language }) {
   useEffect(() => {
     return registerPosLeaveGuard({
       hasActiveSale: () => draftLines.length > 0,
-      confirmLeave: async () => window.confirm(t(lang, "posLeaveActiveSaleConfirm")),
+      confirmLeave: async () => {
+        const ok = window.confirm(t(lang, "posLeaveActiveSaleConfirm"));
+        if (ok) usePosStore.getState().clearDraft();
+        return ok;
+      },
     });
   }, [draftLines.length, lang]);
-
-  const leaveBlocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      draftLines.length > 0 &&
-      (currentLocation.pathname === "/pos" || currentLocation.pathname.startsWith("/pos/")) &&
-      nextLocation.pathname !== currentLocation.pathname,
-  );
-
-  useEffect(() => {
-    if (leaveBlocker.state !== "blocked") return;
-    const ok = window.confirm(t(lang, "posLeaveActiveSaleConfirm"));
-    if (ok) leaveBlocker.proceed();
-    else leaveBlocker.reset();
-  }, [leaveBlocker, lang]);
 
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
