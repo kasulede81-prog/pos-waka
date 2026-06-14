@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import clsx from "clsx";
+import { ChevronDown } from "lucide-react";
 import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { formatPharmacySaleQtyLabel } from "../../lib/pharmacyPackaging";
@@ -16,6 +17,7 @@ import { resolveReturnRefundUgx } from "../../lib/returnRefundInput";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 import { buildLineRefundBreakdown } from "../../lib/refundBreakdown";
 import { RefundBreakdownPanel } from "../returns/RefundBreakdownPanel";
+import { RefundReturnSummaryCard } from "../returns/RefundReturnSummaryCard";
 
 const REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
 
@@ -44,6 +46,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
   const [reason, setReason] = useState<ReturnReason>("damaged");
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [showCalcDetails, setShowCalcDetails] = useState(false);
 
   const allowUnlinked = canPerformUnlinkedReturn(actorRole);
   const lineOptions = sale?.lines.filter((l) => !l.voided) ?? [];
@@ -61,6 +64,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     setReason("damaged");
     setNote("");
     setSubmitError(null);
+    setShowCalcDetails(false);
   }, [open, sale?.id, pickList.length, pickList[0]?.id]);
 
   const product = products.find((p) => p.id === productId) ?? null;
@@ -96,7 +100,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
 
   const parsedRefund = Math.floor(Number(refund.replace(/\D/g, "")) || 0);
   const enteredRefundUgx = parsedRefund <= 0 ? null : parsedRefund;
-  const { refundUgx: finalRefundUgx, usedSuggestion } = resolveReturnRefundUgx({
+  const { refundUgx: finalRefundUgx } = resolveReturnRefundUgx({
     refundInput: refund,
     suggestedRefundUgx: suggestedRefund,
     maxRefundUgx,
@@ -124,6 +128,10 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
         })
       : null;
 
+  const customerPaidUgx = refundBreakdown?.customerPaidUgx ?? suggestedRefund;
+  const remainingAfterRefundUgx =
+    sale != null ? Math.max(0, sale.totalUgx - finalRefundUgx) : 0;
+
   const handleSubmit = () => {
     if (!canSubmit) return;
     setSubmitError(null);
@@ -144,6 +152,14 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
       key ? t(lang, key as Parameters<typeof t>[1]) : t(lang, "returnSubmitError"),
     );
   };
+
+  const refundInputClass = clsx(
+    "mt-2 min-h-[52px] w-full rounded-2xl border-2 px-4 text-xl font-black outline-none transition",
+    "border-slate-400 bg-white text-slate-900 caret-amber-600",
+    "placeholder:text-slate-400 placeholder:font-bold",
+    "focus:border-amber-500 focus:ring-2 focus:ring-amber-200",
+    exceedsMax && "border-rose-400 focus:border-rose-500 focus:ring-rose-100",
+  );
 
   return (
     <PosScreenPortal>
@@ -170,6 +186,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                   setProductId(e.target.value);
                   setRefund("");
                   setSubmitError(null);
+                  setShowCalcDetails(false);
                 }}
                 className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-3 text-base font-bold"
               >
@@ -210,52 +227,89 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
               ) : null}
             </label>
 
-            <label className="mt-3 block text-sm font-bold text-slate-800">
-              {t(lang, "returnRefundLabel")}
-              <input
-                value={refund}
-                onChange={(e) => {
-                  setRefund(e.target.value.replace(/\D/g, "").slice(0, 10));
-                  setSubmitError(null);
-                }}
-                inputMode="numeric"
-                placeholder={suggestedRefund > 0 ? String(suggestedRefund) : undefined}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-black"
-              />
-              {suggestedRefund > 0 && usedSuggestion ? (
-                <span className="mt-1 block text-xs font-semibold text-slate-600">
-                  {tTemplate(lang, "returnRefundToCustomer", { amount: finalRefundUgx.toLocaleString() })}
-                  {" · "}
-                  {tTemplate(lang, "returnSuggestedRefundHint", { amount: suggestedRefund.toLocaleString() })}
-                </span>
-              ) : null}
-              {maxRefundUgx != null && maxRefundUgx !== suggestedRefund ? (
-                <span className="mt-1 block text-xs font-semibold text-slate-500">
-                  {tTemplate(lang, "returnMaxRefundHint", { amount: maxRefundUgx.toLocaleString() })}
-                </span>
-              ) : null}
-            </label>
+            {sale && refundBreakdown ? (
+              <section className="mt-4 rounded-2xl border border-waka-200 bg-waka-50/50 p-3">
+                <h3 className="text-sm font-black text-slate-900">{t(lang, "returnRefundCustomerTitle")}</h3>
+                <dl className="mt-2 space-y-1.5 text-sm">
+                  <div className="flex justify-between gap-2">
+                    <dt className="font-semibold text-slate-700">{t(lang, "refundBreakdownCustomerPaid")}</dt>
+                    <dd className="font-black text-slate-900">UGX {customerPaidUgx.toLocaleString()}</dd>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <dt className="font-semibold text-slate-700">{t(lang, "returnRecommendedRefund")}</dt>
+                    <dd className="font-black text-waka-900">UGX {suggestedRefund.toLocaleString()}</dd>
+                  </div>
+                </dl>
 
-            {exceedsMax ? (
-              <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
-                {tTemplate(lang, "returnCapWarning", { max: (maxRefundUgx ?? 0).toLocaleString() })}
-              </p>
-            ) : null}
+                <label className="mt-3 block text-sm font-bold text-slate-800">
+                  {t(lang, "returnRefundAmountLabel")}
+                  <input
+                    value={refund}
+                    onChange={(e) => {
+                      setRefund(e.target.value.replace(/\D/g, "").slice(0, 10));
+                      setSubmitError(null);
+                    }}
+                    inputMode="numeric"
+                    placeholder={suggestedRefund > 0 ? String(suggestedRefund) : undefined}
+                    className={refundInputClass}
+                    aria-describedby="return-refund-hint"
+                  />
+                  <span id="return-refund-hint" className="mt-1 block text-xs font-semibold text-slate-600">
+                    {t(lang, "returnRefundLeaveUnchangedHint")}
+                  </span>
+                  {maxRefundUgx != null ? (
+                    <span className="mt-1 block text-xs font-semibold text-slate-500">
+                      {tTemplate(lang, "returnMaxRefundHint", { amount: maxRefundUgx.toLocaleString() })}
+                    </span>
+                  ) : null}
+                </label>
 
-            {customAmount ? (
-              <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs font-semibold text-amber-950">
-                <p>
-                  {t(lang, "returnFinalRefund")}: UGX {finalRefundUgx.toLocaleString()}
-                </p>
-                <p className="mt-1">
-                  {tTemplate(lang, "returnRefundCustomNote", { amount: suggestedRefund.toLocaleString() })}
-                </p>
-              </div>
-            ) : null}
+                {exceedsMax ? (
+                  <p className="mt-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-800">
+                    {tTemplate(lang, "returnCapWarning", { max: (maxRefundUgx ?? 0).toLocaleString() })}
+                  </p>
+                ) : null}
 
-            {refundBreakdown ? (
-              <RefundBreakdownPanel lang={lang} breakdown={refundBreakdown} />
-            ) : null}
+                <RefundReturnSummaryCard
+                  lang={lang}
+                  customerPaidUgx={customerPaidUgx}
+                  refundingUgx={finalRefundUgx}
+                  remainingAfterUgx={remainingAfterRefundUgx}
+                  customRefund={customAmount}
+                  recommendedUgx={suggestedRefund}
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowCalcDetails((v) => !v)}
+                  className="mt-3 flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700"
+                  aria-expanded={showCalcDetails}
+                >
+                  {t(lang, "returnShowCalcDetails")}
+                  <ChevronDown
+                    className={clsx("h-4 w-4 transition", showCalcDetails && "rotate-180")}
+                    aria-hidden
+                  />
+                </button>
+                {showCalcDetails && refundBreakdown ? (
+                  <RefundBreakdownPanel lang={lang} breakdown={refundBreakdown} detailsOnly compact />
+                ) : null}
+              </section>
+            ) : (
+              <label className="mt-3 block text-sm font-bold text-slate-800">
+                {t(lang, "returnRefundLabel")}
+                <input
+                  value={refund}
+                  onChange={(e) => {
+                    setRefund(e.target.value.replace(/\D/g, "").slice(0, 10));
+                    setSubmitError(null);
+                  }}
+                  inputMode="numeric"
+                  placeholder={suggestedRefund > 0 ? String(suggestedRefund) : undefined}
+                  className={refundInputClass}
+                />
+              </label>
+            )}
 
             <p className="mt-4 text-sm font-bold text-slate-800">{t(lang, "returnReasonLabel")}</p>
             <div className="mt-2 grid grid-cols-2 gap-2">

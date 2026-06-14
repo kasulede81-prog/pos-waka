@@ -5,6 +5,7 @@ import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
+import { customerPaidUgxForSaleLine } from "./refundBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
 import { isNativePrintPlatform, sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 
@@ -35,6 +36,9 @@ export type ReceiptDisplayLine = {
   quantityLabel: string;
   unitPriceUgx: number;
   lineTotalUgx: number;
+  listPriceUgx: number;
+  customerPaidUgx: number;
+  showCustomerPaid: boolean;
   showCalculation: boolean;
 };
 
@@ -55,6 +59,9 @@ export function resolveReceiptLineName(line: SaleLine, product?: Product): strin
 
 /** Qty/price line when unit breakdown is shown instead of per-unit math. */
 export function receiptLineDetailLabel(line: ReceiptDisplayLine): string {
+  if (line.showCustomerPaid && line.customerPaidUgx !== line.listPriceUgx) {
+    return `List UGX ${line.listPriceUgx.toLocaleString()} · Paid UGX ${line.customerPaidUgx.toLocaleString()}`;
+  }
   if (/UGX\s*[\d,]+/i.test(line.quantityLabel)) return line.quantityLabel;
   return `${line.quantityLabel} — UGX ${line.lineTotalUgx.toLocaleString()}`;
 }
@@ -188,11 +195,15 @@ export function buildReceiptDisplayData(params: {
     .map((ln) => {
       const product = productById?.get(ln.productId);
       const { quantityLabel, showCalculation } = buildReceiptLineQuantityDisplay(ln, product);
+      const paid = customerPaidUgxForSaleLine(sale, ln);
       return {
         name: resolveReceiptLineName(ln, product),
         quantityLabel,
         unitPriceUgx: ln.unitPriceUgx,
         lineTotalUgx: ln.lineTotalUgx,
+        listPriceUgx: paid.listPriceUgx,
+        customerPaidUgx: paid.customerPaidUgx,
+        showCustomerPaid: paid.showPaidBreakdown,
         showCalculation,
       };
     });
@@ -337,7 +348,12 @@ export function buildSaleReceiptText(params: {
     } else {
       const title = ln.name?.trim();
       if (title) lines.push(title);
-      lines.push(receiptLineDetailLabel(ln));
+      if (ln.showCustomerPaid) {
+        lines.push(ln.quantityLabel);
+        lines.push(`List UGX ${ln.listPriceUgx.toLocaleString()} · Paid UGX ${ln.customerPaidUgx.toLocaleString()}`);
+      } else {
+        lines.push(receiptLineDetailLabel(ln));
+      }
     }
   }
   lines.push("");
@@ -392,7 +408,11 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
             ln.showCalculation
               ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta">${esc(ln.quantityLabel)} x ${fmt(ln.unitPriceUgx)} = <strong>${fmt(ln.lineTotalUgx)}</strong></div>`
               : ln.name?.trim()
-                ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta"><strong>${esc(receiptLineDetailLabel(ln))}</strong></div>`
+                ? `<div class="line-name">${esc(ln.name)}</div>${
+                    ln.showCustomerPaid
+                      ? `<div class="line-meta">${esc(ln.quantityLabel)}</div><div class="line-meta"><strong>List ${fmt(ln.listPriceUgx)} · Paid ${fmt(ln.customerPaidUgx)}</strong></div>`
+                      : `<div class="line-meta"><strong>${esc(receiptLineDetailLabel(ln))}</strong></div>`
+                  }`
                 : `<div class="line-name">${esc(receiptLineDetailLabel(ln))}</div>`
           }
         </div>`,

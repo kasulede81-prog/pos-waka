@@ -3,7 +3,7 @@ import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Navigate } from "react-router-dom";
 import { CalendarDays, ChevronDown, FileDown, Printer } from "lucide-react";
-import type { Language, Sale, SaleLine } from "../types";
+import type { Language, ReturnRecord, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
@@ -38,6 +38,7 @@ import {
   partitionReceiptsSales,
 } from "../lib/receiptsGrouping";
 import { computeSaleDiscountBreakdown } from "../lib/discountBreakdown";
+import { customerPaidUgxForSaleLine } from "../lib/refundBreakdown";
 import { SaleDiscountSummary } from "../components/returns/SaleDiscountSummary";
 function formatReceiptsDayHeading(dateKey: string): string {
   const parts = dateKey.split("-").map(Number);
@@ -58,6 +59,7 @@ function formatReceiptsDayHeading(dateKey: string): string {
 type SaleArticleProps = {
   lang: Language;
   sale: Sale;
+  returnRecords: ReturnRecord[];
   canVoid: boolean;
   soldByLabel: (sale: Sale) => string;
   onPrint: (sale: Sale) => void;
@@ -67,12 +69,27 @@ type SaleArticleProps = {
   pendingBadge?: boolean;
 };
 
-function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, onVoidLine, onReturn, pendingBadge }: SaleArticleProps) {
+function SaleArticle({
+  lang,
+  sale,
+  returnRecords,
+  canVoid,
+  soldByLabel,
+  onPrint,
+  onReceiptPdf,
+  onVoidLine,
+  onReturn,
+  pendingBadge,
+}: SaleArticleProps) {
   const completed = isCompletedSale(sale);
   const allowAdjust = completed && canVoid;
   const discountBreakdown = useMemo(
     () => (completed ? computeSaleDiscountBreakdown(sale) : null),
     [completed, sale],
+  );
+  const saleReturns = useMemo(
+    () => returnRecords.filter((r) => r.saleId === sale.id),
+    [returnRecords, sale.id],
   );
 
   return (
@@ -102,23 +119,38 @@ function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, 
           </>
         ) : null}
       </p>
-      <ul className="mt-2 space-y-1 text-sm text-slate-700">
-        {sale.lines.map((line, lineIndex) => (
-          <li key={`${sale.id}-${line.productId}-${lineIndex}`} className="flex flex-wrap items-center justify-between gap-2">
-            <span className="min-w-0">
+      <ul className="mt-2 space-y-2 text-sm text-slate-700">
+        {sale.lines.map((line, lineIndex) => {
+          const paid = customerPaidUgxForSaleLine(sale, line, saleReturns);
+          return (
+          <li key={`${sale.id}-${line.productId}-${lineIndex}`} className="flex flex-wrap items-start justify-between gap-2">
+            <span className="min-w-0 flex-1">
               {line.voided ? (
                 <span className="font-bold text-rose-700 line-through">{line.name}</span>
+              ) : paid.showPaidBreakdown ? (
+                <span className="font-bold text-slate-900">{line.name}</span>
               ) : (
                 line.name
               )}{" "}
-              <span className="text-xs text-slate-500">
-                ({line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")})
-              </span>
+              {!line.voided && !paid.showPaidBreakdown ? (
+                <span className="text-xs text-slate-500">
+                  ({line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")})
+                </span>
+              ) : null}
+              {!line.voided && paid.showPaidBreakdown ? (
+                <span className="mt-0.5 block text-xs font-semibold text-slate-600">
+                  {t(lang, "refundBreakdownListPrice")}: UGX {paid.listPriceUgx.toLocaleString()}
+                  {" · "}
+                  {t(lang, "refundBreakdownCustomerPaid")}: UGX {paid.customerPaidUgx.toLocaleString()}
+                </span>
+              ) : null}
             </span>
             <div className="flex shrink-0 items-center gap-2">
-              <span className={line.voided ? "line-through text-slate-400" : ""}>
-                UGX {line.lineTotalUgx.toLocaleString()}
-              </span>
+              {!paid.showPaidBreakdown ? (
+                <span className={line.voided ? "line-through text-slate-400" : "font-bold"}>
+                  UGX {(line.voided ? line.lineTotalUgx : paid.customerPaidUgx).toLocaleString()}
+                </span>
+              ) : null}
               {!line.voided && allowAdjust ? (
                 <button
                   type="button"
@@ -130,7 +162,8 @@ function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, 
               ) : null}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
       <div className="mt-3 flex flex-wrap gap-2">
         <button
@@ -408,6 +441,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                     key={sale.id}
                     lang={lang}
                     sale={sale}
+                    returnRecords={allReturns}
                     canVoid={canVoid}
                     soldByLabel={soldByLabel}
                     onPrint={printSale}
@@ -448,6 +482,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                     key={sale.id}
                     lang={lang}
                     sale={sale}
+                    returnRecords={allReturns}
                     canVoid={false}
                     soldByLabel={soldByLabel}
                     onPrint={printSale}
@@ -478,6 +513,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
                   key={sale.id}
                   lang={lang}
                   sale={sale}
+                  returnRecords={allReturns}
                   canVoid={false}
                   soldByLabel={soldByLabel}
                   onPrint={printSale}

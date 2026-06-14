@@ -2,7 +2,7 @@
  * Read-only refund transparency — uses returnLimits outputs; does not alter formulas.
  */
 
-import type { ReturnRecord, Sale } from "../types";
+import type { ReturnRecord, Sale, SaleLine } from "../types";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { activeLines, lineDiscountUgx, listPriceForLine } from "./saleAdjustments";
 import {
@@ -59,6 +59,85 @@ export function saleRefundRoundingRemainderUgx(sale: Sale, returnRecords: Return
     0,
   );
   return Math.max(0, originalTotal - sumLinePaid);
+}
+
+export type SaleLineCustomerPaid = {
+  productId: string;
+  listPriceUgx: number;
+  customerPaidUgx: number;
+  /** True when list ≠ paid (cart or line discount). */
+  showPaidBreakdown: boolean;
+};
+
+/** Customer-paid for a sale line — uses originalLinePaidUgx (same as refund engine). */
+export function customerPaidUgxForSaleLine(
+  sale: Sale,
+  line: SaleLine,
+  returnRecords: ReturnRecord[] = [],
+): SaleLineCustomerPaid {
+  if (line.voided) {
+    return {
+      productId: line.productId,
+      listPriceUgx: listPriceForLine(line),
+      customerPaidUgx: 0,
+      showPaidBreakdown: false,
+    };
+  }
+  const listPriceUgx = listPriceForLine(line);
+  const customerPaidUgx = originalLinePaidUgx(sale, line.productId, returnRecords);
+  return {
+    productId: line.productId,
+    listPriceUgx,
+    customerPaidUgx,
+    showPaidBreakdown: listPriceUgx !== customerPaidUgx,
+  };
+}
+
+export type RefundDisplaySurface = {
+  surface: string;
+  listPriceUgx: number | null;
+  customerPaidUgx: number | null;
+  refundUgx: number | null;
+};
+
+/** Read-only consistency report for Part 5 audit. */
+export function buildRefundDisplayConsistencyReport(input: {
+  sale: Sale;
+  productId: string;
+  returnQty: number;
+  returnRecords: ReturnRecord[];
+  finalRefundUgx: number;
+}): RefundDisplaySurface[] {
+  const line = activeSaleLine(input.sale, input.productId);
+  if (!line) return [];
+  const paid = customerPaidUgxForSaleLine(input.sale, line, input.returnRecords);
+  const breakdown = buildLineRefundBreakdown({
+    sale: input.sale,
+    productId: input.productId,
+    returnQty: input.returnQty,
+    returnRecords: input.returnRecords,
+    finalRefundUgx: input.finalRefundUgx,
+  });
+  return [
+    {
+      surface: "sales_history",
+      listPriceUgx: paid.listPriceUgx,
+      customerPaidUgx: paid.customerPaidUgx,
+      refundUgx: null,
+    },
+    {
+      surface: "return_modal",
+      listPriceUgx: breakdown?.listPriceUgx ?? null,
+      customerPaidUgx: breakdown?.customerPaidUgx ?? null,
+      refundUgx: breakdown?.refundAmountUgx ?? null,
+    },
+    {
+      surface: "return_receipt",
+      listPriceUgx: breakdown?.listPriceUgx ?? null,
+      customerPaidUgx: breakdown?.customerPaidUgx ?? null,
+      refundUgx: input.finalRefundUgx,
+    },
+  ];
 }
 
 /** Breakdown for linked return modal — refund amount uses suggestReturnRefundUgx unchanged. */

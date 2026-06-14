@@ -6,13 +6,15 @@ type Props = {
   lang: Language;
   breakdown: LineRefundBreakdown;
   compact?: boolean;
+  /** Collapsed details section — no product header or refund footer. */
+  detailsOnly?: boolean;
 };
 
 function money(n: number): string {
   return n.toLocaleString();
 }
 
-export function RefundBreakdownPanel({ lang, breakdown, compact = false }: Props) {
+export function RefundBreakdownPanel({ lang, breakdown, compact = false, detailsOnly = false }: Props) {
   const rows: Array<{ label: string; value: string; bold?: boolean }> = [
     {
       label: t(lang, "refundBreakdownListPrice"),
@@ -48,15 +50,19 @@ export function RefundBreakdownPanel({ lang, breakdown, compact = false }: Props
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/90 p-3 text-sm">
-      <p className="font-black text-slate-900">{breakdown.productName}</p>
-      <p className="mt-0.5 text-xs font-semibold text-slate-600">
-        {tTemplate(lang, "refundBreakdownQtyReturning", {
-          sold: String(breakdown.quantitySold),
-          returning: String(breakdown.quantityReturning),
-        })}
-      </p>
-      <dl className="mt-2 space-y-1">
+    <div className={`rounded-2xl border border-slate-200 bg-slate-50/90 p-3 text-sm ${detailsOnly ? "mt-2" : "mt-3"}`}>
+      {!detailsOnly ? (
+        <>
+          <p className="font-black text-slate-900">{breakdown.productName}</p>
+          <p className="mt-0.5 text-xs font-semibold text-slate-600">
+            {tTemplate(lang, "refundBreakdownQtyReturning", {
+              sold: String(breakdown.quantitySold),
+              returning: String(breakdown.quantityReturning),
+            })}
+          </p>
+        </>
+      ) : null}
+      <dl className={`space-y-1 ${detailsOnly ? "" : "mt-2"}`}>
         {rows.map((row) => (
           <div key={row.label} className="flex justify-between gap-2 text-xs">
             <dt className="font-semibold text-slate-600">{row.label}</dt>
@@ -64,16 +70,18 @@ export function RefundBreakdownPanel({ lang, breakdown, compact = false }: Props
           </div>
         ))}
       </dl>
-      <div className="mt-2 border-t border-slate-200 pt-2">
-        <div className="flex justify-between gap-2">
-          <span className="text-xs font-black uppercase tracking-wide text-amber-900">
-            {t(lang, "refundBreakdownRefundAmount")}
-          </span>
-          <span className="text-base font-black text-amber-950">
-            UGX {money(breakdown.refundAmountUgx)}
-          </span>
+      {!detailsOnly && !compact ? (
+        <div className="mt-2 border-t border-slate-200 pt-2">
+          <div className="flex justify-between gap-2">
+            <span className="text-xs font-black uppercase tracking-wide text-amber-900">
+              {t(lang, "refundBreakdownRefundAmount")}
+            </span>
+            <span className="text-base font-black text-amber-950">
+              UGX {money(breakdown.refundAmountUgx)}
+            </span>
+          </div>
         </div>
-      </div>
+      ) : null}
       {breakdown.saleRoundingRemainderUgx > 0 ? (
         <p className="mt-2 rounded-lg border border-violet-200 bg-violet-50 px-2 py-1.5 text-xs font-semibold text-violet-900">
           {tTemplate(lang, "refundRoundingRemainderHint", {
