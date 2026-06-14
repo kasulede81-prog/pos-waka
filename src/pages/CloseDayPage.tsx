@@ -10,10 +10,13 @@ import { getCompletedFinancials } from "../lib/financialMetrics";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { PageHeader } from "../components/layout/PageHeader";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { downloadDayClosePdf, printDayCloseReport, shareDayClosePdf } from "../lib/dayCloseDocument";
+import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 
 export function CloseDayPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -31,6 +34,13 @@ export function CloseDayPage({ lang }: { lang: Language }) {
   const [closeErrorKey, setCloseErrorKey] = useState<string | null>(null);
   const [overrideMode, setOverrideMode] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
+
+  const historyBounds = useMemo(() => resolveDateFilterBounds(historyFilter), [historyFilter]);
+  const filteredDayCloses = useMemo(
+    () => dayCloses.filter((d) => dateMatchesFilter(d.dateKey, historyBounds)),
+    [dayCloses, historyBounds],
+  );
 
   const activeCloseToday = activeDayCloseForDate(dayCloses, todayKey);
 
@@ -274,8 +284,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       {hasPermission(actor.role, "owner.cash_history") ? (
         <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
           <h2 className="text-xl font-black text-slate-900">{t(lang, "closeHistoryTitle")}</h2>
+          <div className="mt-3 space-y-3">
+            <DateFilterBar lang={lang} value={historyFilter} onChange={setHistoryFilter} />
+            <DateFilterViewingLabel lang={lang} value={historyFilter} />
+          </div>
           <ul className="mt-3 space-y-3">
-            {dayCloses.slice(0, 20).map((d) => {
+            {filteredDayCloses.slice(0, 20).map((d) => {
               const flag = closeVarianceFlag(d.expectedCashUgx, d.differenceUgx);
               return (
                 <li key={d.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">

@@ -6,6 +6,8 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import {
   buildSupplierStatement,
   filterSupplierPayments,
@@ -17,6 +19,7 @@ import { downloadSupplierStatementCsv, downloadSupplierStatementPdf, printSuppli
 import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
+import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 
 export function SupplierDetailPage({ lang }: { lang: Language }) {
   const { supplierId } = useParams<{ supplierId: string }>();
@@ -40,6 +43,9 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
   const [editLocation, setEditLocation] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editSaved, setEditSaved] = useState(false);
+  const [statementFilter, setStatementFilter] = useState<DateFilterValue>({ kind: "preset", preset: "this_month" });
+
+  const statementBounds = useMemo(() => resolveDateFilterBounds(statementFilter), [statementFilter]);
 
   const supplier = useMemo(
     () => suppliers.find((s) => s.id === supplierId) ?? null,
@@ -56,6 +62,11 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
     return buildSupplierStatement(supplier.id, supplier.name, purchases, supplierPayments);
   }, [supplier, purchases, supplierPayments]);
 
+  const filteredStatement = useMemo(
+    () => statement.filter((entry) => dateMatchesFilter(entry.dayKey, statementBounds)),
+    [statement, statementBounds],
+  );
+
   const payments = useMemo(() => {
     if (!supplier) return [];
     return filterSupplierPayments(supplierPayments, allTimeBounds, supplier.id);
@@ -68,8 +79,8 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
       const stem = supplier.id.slice(0, 8);
       const ok =
         kind === "csv"
-          ? await downloadSupplierStatementCsv(supplier.name, statement, stem)
-          : await downloadSupplierStatementPdf(lang, shopName, supplier.name, statement, stem);
+          ? await downloadSupplierStatementCsv(supplier.name, filteredStatement, stem)
+          : await downloadSupplierStatementPdf(lang, shopName, supplier.name, filteredStatement, stem);
       setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
       window.setTimeout(() => setExportHint(null), 3500);
     } finally {
@@ -82,7 +93,7 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
     setExportBusy(true);
     try {
       const stem = supplier.id.slice(0, 8);
-      const ok = await printSupplierStatementReport(lang, shopName, supplier.name, statement, stem);
+      const ok = await printSupplierStatementReport(lang, shopName, supplier.name, filteredStatement, stem);
       setExportHint(ok ? t(lang, "purchasesExportOk") : t(lang, "purchasesExportFail"));
       window.setTimeout(() => setExportHint(null), 3500);
     } finally {
@@ -232,7 +243,7 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
           <div className="flex gap-2">
             <button
               type="button"
-              disabled={exportBusy || statement.length === 0}
+              disabled={exportBusy || filteredStatement.length === 0}
               onClick={() => void runPrint()}
               className="min-h-[40px] rounded-2xl bg-slate-900 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
             >
@@ -240,7 +251,7 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
             </button>
             <button
               type="button"
-              disabled={exportBusy || statement.length === 0}
+              disabled={exportBusy || filteredStatement.length === 0}
               onClick={() => void runExport("csv")}
               className="min-h-[40px] rounded-2xl border-2 border-stone-300 bg-white px-3 py-2 text-xs font-black disabled:opacity-50"
             >
@@ -248,7 +259,7 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
             </button>
             <button
               type="button"
-              disabled={exportBusy || statement.length === 0}
+              disabled={exportBusy || filteredStatement.length === 0}
               onClick={() => void runExport("pdf")}
               className="min-h-[40px] rounded-2xl bg-waka-600 px-3 py-2 text-xs font-black text-white disabled:opacity-50"
             >
@@ -257,11 +268,15 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
           </div>
         </div>
         {exportHint ? <p className="mt-2 text-sm font-bold text-waka-800">{exportHint}</p> : null}
-        {statement.length === 0 ? (
+        <div className="mt-3 space-y-3">
+          <DateFilterBar lang={lang} value={statementFilter} onChange={setStatementFilter} />
+          <DateFilterViewingLabel lang={lang} value={statementFilter} />
+        </div>
+        {filteredStatement.length === 0 ? (
           <p className="mt-3 text-sm text-stone-600">{t(lang, "purchasesEmpty")}</p>
         ) : (
           <ul className="mt-4 space-y-3">
-            {statement.map((entry) => (
+            {filteredStatement.map((entry) => (
               <li key={`${entry.kind}-${entry.id}`} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
                 <div className="flex items-start justify-between gap-3">
                   <div>

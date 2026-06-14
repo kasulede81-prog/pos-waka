@@ -3,18 +3,24 @@ import { Link } from "react-router-dom";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { PageHeader } from "../components/layout/PageHeader";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import type { AuditLogEntry, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { groupAuditByStaff, STAFF_ACTIVITY_ACTIONS } from "../lib/auditSearch";
 import { auditActionLabel, formatAuditRowSummary } from "../lib/auditCenterDetails";
 import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
+import { dateKeyKampala } from "../lib/datesUg";
+import { dateMatchesFilter } from "../lib/dateFilters";
 
 const PAGE = 300;
 
 export function StaffActivityPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
+  const { filter, setFilter, bounds } = useReportingDateFilter({ kind: "preset", preset: "today" });
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
@@ -27,8 +33,15 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
     () =>
       auditLogs
         .filter((e) => STAFF_ACTIVITY_ACTIONS.has(e.action))
+        .filter((e) => dateMatchesFilter(dateKeyKampala(e.at), bounds))
         .slice(0, PAGE),
-    [auditLogs],
+    [auditLogs, bounds],
+  );
+
+  const shiftsInRange = useMemo(
+    () =>
+      (shifts ?? []).filter((s) => dateMatchesFilter(dateKeyKampala(s.startAt), bounds)).slice(0, 10),
+    [shifts, bounds],
   );
 
   const groups = useMemo(() => groupAuditByStaff(filtered), [filtered]);
@@ -49,17 +62,20 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
         {t(lang, "staffActivityOpenAuditCenter")} →
       </Link>
 
+      <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
+      <DateFilterViewingLabel lang={lang} value={filter} />
+
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {groups.length === 0 ? (
         <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>
       ) : (
         <div className="space-y-8">
-          {shifts.length > 0 ? (
+          {shiftsInRange.length > 0 ? (
             <section>
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "shiftsTodayTitle")}</h2>
               <ul className="mt-3 space-y-3">
-                {shifts.slice(0, 10).map((s) => (
+                {shiftsInRange.map((s) => (
                   <li key={s.id} className="rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100/80">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-black text-slate-900">{s.actorName ?? s.actorUserId}</p>

@@ -4,6 +4,8 @@ import { Download, FileText, Search, ShieldCheck } from "lucide-react";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
+import { DateFilterBar } from "../components/shared/DateFilterBar";
+import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
 import { RefundCalculationDrawer } from "../components/returns/RefundCalculationDrawer";
@@ -24,13 +26,15 @@ import { formatAuditDeviceLabel } from "../lib/auditDeviceLabel";
 import { buildAuditCsv, buildAuditPdfBlob } from "../lib/auditExport";
 import { dateKeyKampala } from "../lib/datesUg";
 import { auditRefundIntegrity } from "../lib/auditRefundIntegrity";
+import { resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 
 const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 
-function defaultDateFrom(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 30);
-  return dateKeyKampala(d);
+function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue {
+  const from = searchParams.get("from");
+  const to = searchParams.get("to");
+  if (from && to && from === to) return { kind: "day", dateKey: from };
+  return { kind: "preset", preset: "this_month" };
 }
 
 export function AuditCenterPage({ lang }: { lang: Language }) {
@@ -42,8 +46,15 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const suppliers = usePosStore((s) => s.suppliers);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName ?? "Shop");
 
-  const [dateFrom, setDateFrom] = useState(() => searchParams.get("from") ?? defaultDateFrom());
-  const [dateTo, setDateTo] = useState(() => searchParams.get("to") ?? dateKeyKampala(new Date()));
+  const [quickFilter, setQuickFilter] = useState(() => initialAuditDateFilter(searchParams));
+  const monthBounds = useMemo(
+    () => resolveDateFilterBounds({ kind: "preset", preset: "this_month" }),
+    [],
+  );
+  const [dateFrom, setDateFrom] = useState(
+    () => searchParams.get("from") ?? monthBounds.fromKey,
+  );
+  const [dateTo, setDateTo] = useState(() => searchParams.get("to") ?? monthBounds.toKey);
   const [actorUserId, setActorUserId] = useState(() => searchParams.get("staff") ?? "all");
   const [action, setAction] = useState<AuditAction | "all">(
     () => (searchParams.get("action") as AuditAction | null) ?? "all",
@@ -137,6 +148,13 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const inputClass =
     "mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 text-sm font-semibold outline-none focus:border-waka-500";
 
+  const onQuickFilterChange = (next: DateFilterValue) => {
+    setQuickFilter(next);
+    const bounds = resolveDateFilterBounds(next);
+    setDateFrom(bounds.fromKey);
+    setDateTo(bounds.toKey);
+  };
+
   return (
     <div className="space-y-6 pb-12">
       <PageHeader
@@ -145,6 +163,9 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
         subtitle={t(lang, "auditCenterSub")}
         backLabel={t(lang, "officeBackToHub")}
       />
+
+      <DateFilterBar lang={lang} value={quickFilter} onChange={onQuickFilterChange} />
+      <DateFilterViewingLabel lang={lang} value={quickFilter} />
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
