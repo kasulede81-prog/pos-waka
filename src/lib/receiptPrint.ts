@@ -4,6 +4,7 @@ import { dateKeyKampala } from "./datesUg";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
+import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
 import { isNativePrintPlatform, sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 
@@ -24,6 +25,8 @@ export type ReceiptLabels = {
   change: string;
   subtotal: string;
   discount: string;
+  lineDiscounts?: string;
+  cartDiscount?: string;
   grandTotal: string;
 };
 
@@ -69,6 +72,8 @@ export type ReceiptDisplayData = {
   cashier: string;
   lines: ReceiptDisplayLine[];
   subtotalUgx: number;
+  lineDiscountsUgx: number;
+  cartDiscountUgx: number;
   discountUgx: number;
   totalUgx: number;
   paidUgx: number;
@@ -191,8 +196,11 @@ export function buildReceiptDisplayData(params: {
         showCalculation,
       };
     });
-  const subtotalUgx = Math.max(0, sale.subtotalUgx);
-  const discountUgx = Math.max(0, sale.discountTotalUgx ?? subtotalUgx - sale.totalUgx);
+  const discountBreakdown = computeSaleDiscountBreakdown(sale);
+  const subtotalUgx = discountBreakdown.listSubtotalUgx;
+  const discountUgx = discountBreakdown.totalDiscountUgx;
+  const lineDiscountsUgx = discountBreakdown.lineDiscountsUgx;
+  const cartDiscountUgx = discountBreakdown.cartDiscountUgx;
   const paidUgx = Math.max(
     0,
     Number.isFinite(sale.amountPaidUgx) ? Math.floor(sale.amountPaidUgx ?? 0) : sale.cashPaidUgx,
@@ -218,6 +226,8 @@ export function buildReceiptDisplayData(params: {
     cashier,
     lines,
     subtotalUgx,
+    lineDiscountsUgx,
+    cartDiscountUgx,
     discountUgx,
     totalUgx: Math.max(0, sale.totalUgx),
     paidUgx,
@@ -332,7 +342,15 @@ export function buildSaleReceiptText(params: {
   }
   lines.push("");
   lines.push(`${labels.subtotal}: UGX ${display.subtotalUgx.toLocaleString()}`);
-  if (display.discountUgx > 0) lines.push(`${labels.discount}: -UGX ${display.discountUgx.toLocaleString()}`);
+  if (display.lineDiscountsUgx > 0) {
+    lines.push(`${labels.lineDiscounts ?? "Line discounts"}: -UGX ${display.lineDiscountsUgx.toLocaleString()}`);
+  }
+  if (display.cartDiscountUgx > 0) {
+    lines.push(`${labels.cartDiscount ?? "Cart discount"}: -UGX ${display.cartDiscountUgx.toLocaleString()}`);
+  }
+  if (display.discountUgx > 0 && display.lineDiscountsUgx <= 0 && display.cartDiscountUgx <= 0) {
+    lines.push(`${labels.discount}: -UGX ${display.discountUgx.toLocaleString()}`);
+  }
   lines.push(`${labels.grandTotal}: UGX ${display.totalUgx.toLocaleString()}`);
   lines.push(`${labels.paid}: UGX ${(amountPaidUgx ?? display.paidUgx).toLocaleString()}`);
   lines.push(`${labels.change}: UGX ${(changeUgx ?? display.changeUgx).toLocaleString()}`);
@@ -380,10 +398,17 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
         </div>`,
     )
     .join("");
-  const discountBlock =
-    display.discountUgx > 0
+  const discountBlock = [
+    display.lineDiscountsUgx > 0
+      ? `<div class="row"><span>${esc(display.lineDiscountsUgx ? "Line discounts" : "Discount")}</span><span>- ${fmt(display.lineDiscountsUgx)}</span></div>`
+      : "",
+    display.cartDiscountUgx > 0
+      ? `<div class="row"><span>Cart discount</span><span>- ${fmt(display.cartDiscountUgx)}</span></div>`
+      : "",
+    display.discountUgx > 0 && display.lineDiscountsUgx <= 0 && display.cartDiscountUgx <= 0
       ? `<div class="row"><span>Discount</span><span>- ${fmt(display.discountUgx)}</span></div>`
-      : "";
+      : "",
+  ].join("");
   const policyBlock =
     display.returnPolicy && !display.footerLines.includes(display.returnPolicy)
       ? `<p class="policy">${esc(display.returnPolicy)}</p>`

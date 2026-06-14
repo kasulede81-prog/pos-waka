@@ -1,5 +1,5 @@
-import type { Sale } from "../types";
-import { dateKeyKampala, dateKeyDaysAgoKampala } from "./datesUg";
+import type { ReturnRecord, Sale } from "../types";
+import { dateKeyKampala, dateKeyDaysAgoKampala, saleReportingDayKey } from "./datesUg";
 
 /** Pre-index recent sales by Kampala day — avoids O(n × days) rescans on owner dashboard. */
 export type SalesDayIndex = {
@@ -42,6 +42,97 @@ export function buildSalesDayIndex(sales: Sale[], lookbackDays = DEFAULT_LOOKBAC
   }
 
   return { salesByDay, unitsByDayProduct, revenueByDay };
+}
+
+/**
+ * One pass over sales for revenue-day index + 14-day dashboard index.
+ * Used by owner dashboard to avoid repeated full-store scans.
+ */
+export function buildCombinedReportingIndex(
+  sales: Sale[],
+  returns: ReturnRecord[],
+  lookbackDays = DEFAULT_LOOKBACK_DAYS,
+  todayKey = dateKeyKampala(new Date()),
+): {
+  revenueIndex: import("./financialMetrics").RevenueSalesIndex;
+  dayIndex: SalesDayIndex;
+  todayAggregates: {
+    discountTotal: number;
+    debtSaleCount: number;
+    refundSaleCount: number;
+    productMap: Map<string, { name: string; qty: number; revenue: number }>;
+    cashierMap: Map<string, { count: number; revenue: number }>;
+  };
+} {
+  const minKey = dateKeyDaysAgoKampala(lookbackDays);
+  const salesByDay = new Map<string, Sale[]>();
+  const unitsByDayProduct = new Map<string, Map<string, number>>();
+  const revenueByDay = new Map<string, number>();
+  const revenueSalesByDay = new Map<string, Sale[]>();
+  const returnsByDay = new Map<string, ReturnRecord[]>();
+  const productMap = new Map<string, { name: string; qty: number; revenue: number }>();
+  const cashierMap = new Map<string, { count: number; revenue: number }>();
+  let discountTotal = 0;
+  let debtSaleCount = 0;
+  let refundSaleCount = 0;
+
+  for (const s of sales) {
+    if (s.status !== "pending" && s.status !== "cancelled") {
+      const dk = saleReportingDayKey(s);
+      const revBucket = revenueSalesByDay.get(dk);
+      if (revBucket) revBucket.push(s);
+      else revenueSalesByDay.set(dk, [s]);
+
+      if (dk === todayKey) {
+        discountTotal += s.discountTotalUgx ?? 0;
+        if (s.debtUgx > 0) debtSaleCount += 1;
+        if (s.totalUgx < 0) refundSaleCount += 1;
+        const uid = s.soldByUserId ?? "unknown";
+        const cashier = cashierMap.get(uid) ?? { count: 0, revenue: 0 };
+        cashierMap.set(uid, { count: cashier.count + 1, revenue: cashier.revenue + s.totalUgx });
+      }
+
+      if (dk >= minKey) {
+        let daySales = salesByDay.get(dk);
+        if (!daySales) {
+          daySales = [];
+          salesByDay.set(dk, daySales);
+        }
+        daySales.push(s);
+        revenueByDay.set(dk, (revenueByDay.get(dk) ?? 0) + s.totalUgx);
+        let dayUnits = unitsByDayProduct.get(dk);
+        if (!dayUnits) {
+          dayUnits = new Map();
+          unitsByDayProduct.set(dk, dayUnits);
+        }
+        for (const line of s.lines) {
+          if (line.voided) continue;
+          dayUnits.set(line.productId, (dayUnits.get(line.productId) ?? 0) + line.quantity);
+          if (dk === todayKey) {
+            const cur = productMap.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
+            productMap.set(line.productId, {
+              name: line.name,
+              qty: cur.qty + line.quantity,
+              revenue: cur.revenue + line.lineTotalUgx,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  for (const r of returns) {
+    const dk = dateKeyKampala(r.createdAt);
+    const bucket = returnsByDay.get(dk);
+    if (bucket) bucket.push(r);
+    else returnsByDay.set(dk, [r]);
+  }
+
+  return {
+    revenueIndex: { salesByDay: revenueSalesByDay, returnsByDay },
+    dayIndex: { salesByDay, unitsByDayProduct, revenueByDay },
+    todayAggregates: { discountTotal, debtSaleCount, refundSaleCount, productMap, cashierMap },
+  };
 }
 
 export function sumRevenueForDay(index: SalesDayIndex, dateKey: string): number {

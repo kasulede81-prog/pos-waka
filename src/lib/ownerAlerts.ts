@@ -23,9 +23,10 @@ export function computeOwnerAlerts(params: {
   auditLogs: AuditLogEntry[];
   preferences: ShopPreferences;
   todayDebtUgx: number;
+  recentStockAdjustments?: AuditLogEntry[];
 }): OwnerAlert[] {
   const alerts: OwnerAlert[] = [];
-  const { products, dayCloses, auditLogs, preferences, todayDebtUgx } = params;
+  const { products, dayCloses, auditLogs, preferences, todayDebtUgx, recentStockAdjustments } = params;
   const pct = preferences.cashVarianceThresholdPct ?? 5;
   const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
 
@@ -74,7 +75,8 @@ export function computeOwnerAlerts(params: {
     });
   }
 
-  const recentStock = auditLogs.filter((e) => e.action === "stock_adjust").slice(0, 40);
+  const recentStock =
+    recentStockAdjustments ?? auditLogs.filter((e) => e.action === "stock_adjust").slice(0, 40);
   let heavyRemoval = 0;
   for (const e of recentStock) {
     const pl = e.payload as Record<string, unknown>;

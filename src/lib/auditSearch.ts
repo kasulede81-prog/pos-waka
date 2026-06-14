@@ -1,5 +1,6 @@
-import type { AuditAction, AuditLogEntry, Customer, Product, Supplier } from "../types";
+import type { AuditAction, AuditLogEntry, Customer, Language, Product, Supplier } from "../types";
 import { dateKeyKampala } from "./datesUg";
+import { describeAuditLine } from "./activityNarrative";
 
 export type AuditSearchFilters = {
   dateFrom?: string;
@@ -11,6 +12,9 @@ export type AuditSearchFilters = {
   supplierId?: string;
   searchText?: string;
 };
+
+/** Max rows returned before expensive UI formatting (pagination-ready). */
+export const AUDIT_FILTER_RESULT_LIMIT = 200;
 
 /** Actions shown on the staff activity feed (grouped by staff member). */
 export const STAFF_ACTIVITY_ACTIONS: ReadonlySet<AuditAction> = new Set([
@@ -67,27 +71,106 @@ export const INVESTIGATION_ACTIONS: ReadonlySet<AuditAction> = new Set([
   "product_restore",
 ]);
 
-function haystack(entry: AuditLogEntry): string {
+export type AuditLogSearchIndex = {
+  entries: AuditLogEntry[];
+  haystacks: string[];
+  dateKeys: string[];
+  /** Entry indices sorted newest-first by `at`. */
+  sortedIndices: number[];
+  actors: Array<{ userId: string; name: string }>;
+};
+
+function haystack(
+  entry: AuditLogEntry,
+  ctx?: {
+    productById: Map<string, Product>;
+    customerById: Map<string, Customer>;
+    supplierById: Map<string, Supplier>;
+    lang?: Language;
+  },
+): string {
   const pl = entry.payload;
+  const pid = typeof pl.productId === "string" ? pl.productId : "";
+  const cid = typeof pl.customerId === "string" ? pl.customerId : "";
+  const sid = typeof pl.supplierId === "string" ? pl.supplierId : "";
+  const resolvedProduct = pid ? ctx?.productById.get(pid)?.name ?? "" : "";
+  const resolvedCustomer = cid ? ctx?.customerById.get(cid)?.name ?? "" : "";
+  const resolvedSupplier = sid ? ctx?.supplierById.get(sid)?.name ?? "" : "";
+  const narrative =
+    ctx?.lang != null
+      ? describeAuditLine(
+          ctx.lang,
+          entry,
+          new Map([...ctx.productById.entries()].map(([id, p]) => [id, { name: p.name }])),
+          new Map([...ctx.customerById.entries()].map(([id, c]) => [id, { name: c.name }])),
+        )
+      : "";
+
   const parts = [
     entry.payloadSummary,
     entry.actorName ?? "",
     entry.actorUserId,
     entry.action,
     entry.role,
-    entry.deviceId ?? "",
     typeof pl.name === "string" ? pl.name : "",
     typeof pl.productName === "string" ? pl.productName : "",
     typeof pl.supplierName === "string" ? pl.supplierName : "",
+    typeof pl.customerName === "string" ? pl.customerName : "",
+    resolvedProduct,
+    resolvedCustomer,
+    resolvedSupplier,
     typeof pl.reason === "string" ? pl.reason : "",
     typeof pl.note === "string" ? pl.note : "",
-    JSON.stringify(pl),
+    typeof pl.category === "string" ? pl.category : "",
+    narrative,
   ];
   return parts.join(" ").toLowerCase();
 }
 
-function matchesEntity(
+/** Precompute searchable fields once per audit log snapshot. */
+export function buildAuditLogSearchIndex(
+  auditLogs: AuditLogEntry[],
+  ctx?: {
+    products?: Product[];
+    customers?: Customer[];
+    suppliers?: Supplier[];
+    lang?: Language;
+  },
+): AuditLogSearchIndex {
+  const productById = new Map((ctx?.products ?? []).map((p) => [p.id, p]));
+  const customerById = new Map((ctx?.customers ?? []).map((c) => [c.id, c]));
+  const supplierById = new Map((ctx?.suppliers ?? []).map((s) => [s.id, s]));
+  const searchCtx = { productById, customerById, supplierById, lang: ctx?.lang };
+
+  const haystacks: string[] = new Array(auditLogs.length);
+  const dateKeys: string[] = new Array(auditLogs.length);
+  const sortedIndices = auditLogs.map((_, i) => i);
+
+  sortedIndices.sort((a, b) => {
+    const at = auditLogs[a]!.at;
+    const bt = auditLogs[b]!.at;
+    return at < bt ? 1 : at > bt ? -1 : 0;
+  });
+
+  const actorMap = new Map<string, string>();
+  for (let i = 0; i < auditLogs.length; i += 1) {
+    const e = auditLogs[i]!;
+    haystacks[i] = haystack(e, searchCtx);
+    dateKeys[i] = dateKeyKampala(e.at);
+    const id = e.actorUserId || "unknown";
+    if (!actorMap.has(id)) actorMap.set(id, e.actorName?.trim() || id);
+  }
+
+  const actors = [...actorMap.entries()]
+    .map(([userId, name]) => ({ userId, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { entries: auditLogs, haystacks, dateKeys, sortedIndices, actors };
+}
+
+function matchesEntityIndexed(
   entry: AuditLogEntry,
+  hay: string,
   filters: AuditSearchFilters,
   productById: Map<string, Product>,
   customerById: Map<string, Customer>,
@@ -98,22 +181,56 @@ function matchesEntity(
     const pid = typeof pl.productId === "string" ? pl.productId : "";
     if (pid === filters.productId) return true;
     const name = productById.get(filters.productId)?.name?.toLowerCase() ?? "";
-    if (name && haystack(entry).includes(name)) return true;
+    if (name && hay.includes(name)) return true;
     return false;
   }
   if (filters.customerId) {
     const cid = typeof pl.customerId === "string" ? pl.customerId : "";
     if (cid === filters.customerId) return true;
     const name = customerById.get(filters.customerId)?.name?.toLowerCase() ?? "";
-    return name ? haystack(entry).includes(name) : false;
+    return name ? hay.includes(name) : false;
   }
   if (filters.supplierId) {
     const sid = typeof pl.supplierId === "string" ? pl.supplierId : "";
     if (sid === filters.supplierId) return true;
     const name = supplierById.get(filters.supplierId)?.name?.toLowerCase() ?? "";
-    return name ? haystack(entry).includes(name) : false;
+    return name ? hay.includes(name) : false;
   }
   return true;
+}
+
+export function filterAuditLogsIndexed(
+  index: AuditLogSearchIndex,
+  filters: AuditSearchFilters,
+  ctx?: {
+    products?: Product[];
+    customers?: Customer[];
+    suppliers?: Supplier[];
+    lang?: Language;
+  },
+  limit: number = AUDIT_FILTER_RESULT_LIMIT,
+): AuditLogEntry[] {
+  const productById = new Map((ctx?.products ?? []).map((p) => [p.id, p]));
+  const customerById = new Map((ctx?.customers ?? []).map((c) => [c.id, c]));
+  const supplierById = new Map((ctx?.suppliers ?? []).map((s) => [s.id, s]));
+  const q = (filters.searchText ?? "").trim().toLowerCase();
+  const actorFilter = filters.actorUserId && filters.actorUserId !== "all" ? filters.actorUserId : null;
+  const actionFilter = filters.action && filters.action !== "all" ? filters.action : null;
+
+  const out: AuditLogEntry[] = [];
+  for (const idx of index.sortedIndices) {
+    if (out.length >= limit) break;
+    const e = index.entries[idx]!;
+    const dk = index.dateKeys[idx]!;
+    if (filters.dateFrom && dk < filters.dateFrom) continue;
+    if (filters.dateTo && dk > filters.dateTo) continue;
+    if (actorFilter && e.actorUserId !== actorFilter) continue;
+    if (actionFilter && e.action !== actionFilter) continue;
+    if (!matchesEntityIndexed(e, index.haystacks[idx]!, filters, productById, customerById, supplierById)) continue;
+    if (q && !index.haystacks[idx]!.includes(q)) continue;
+    out.push(e);
+  }
+  return out;
 }
 
 export function filterAuditLogs(
@@ -123,37 +240,17 @@ export function filterAuditLogs(
     products?: Product[];
     customers?: Customer[];
     suppliers?: Supplier[];
+    lang?: Language;
   },
+  limit?: number,
 ): AuditLogEntry[] {
-  const productById = new Map((ctx?.products ?? []).map((p) => [p.id, p]));
-  const customerById = new Map((ctx?.customers ?? []).map((c) => [c.id, c]));
-  const supplierById = new Map((ctx?.suppliers ?? []).map((s) => [s.id, s]));
-  const q = (filters.searchText ?? "").trim().toLowerCase();
-
-  return auditLogs
-    .filter((e) => {
-      if (filters.dateFrom && dateKeyKampala(e.at) < filters.dateFrom) return false;
-      if (filters.dateTo && dateKeyKampala(e.at) > filters.dateTo) return false;
-      if (filters.actorUserId && filters.actorUserId !== "all" && e.actorUserId !== filters.actorUserId) {
-        return false;
-      }
-      if (filters.action && filters.action !== "all" && e.action !== filters.action) return false;
-      if (!matchesEntity(e, filters, productById, customerById, supplierById)) return false;
-      if (q && !haystack(e).includes(q)) return false;
-      return true;
-    })
-    .sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
+  if (auditLogs.length === 0) return [];
+  const index = buildAuditLogSearchIndex(auditLogs, ctx);
+  return filterAuditLogsIndexed(index, filters, ctx, limit ?? Number.MAX_SAFE_INTEGER);
 }
 
 export function uniqueAuditActors(logs: AuditLogEntry[]): Array<{ userId: string; name: string }> {
-  const map = new Map<string, string>();
-  for (const e of logs) {
-    const id = e.actorUserId || "unknown";
-    if (!map.has(id)) map.set(id, e.actorName?.trim() || id);
-  }
-  return [...map.entries()]
-    .map(([userId, name]) => ({ userId, name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return buildAuditLogSearchIndex(logs).actors;
 }
 
 export function groupAuditByStaff(logs: AuditLogEntry[]): Array<{ actorId: string; actorLabel: string; entries: AuditLogEntry[] }> {

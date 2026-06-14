@@ -193,9 +193,76 @@ export function describeAuditLine(
         supplier: supplier || t(lang, "supplierGeneric"),
       });
     }
+    case "sale_void": {
+      const name = typeof pl.productName === "string" ? pl.productName : typeof pl.name === "string" ? pl.name : e.payloadSummary;
+      const amount = typeof pl.amountUgx === "number" ? pl.amountUgx : 0;
+      return tTemplate(lang, "narrativeSaleVoid", { product: name, amount: amount.toLocaleString() });
+    }
+    case "sale_return": {
+      const name = typeof pl.productName === "string" ? pl.productName : typeof pl.name === "string" ? pl.name : e.payloadSummary;
+      const amount = typeof pl.refundAmountUgx === "number" ? pl.refundAmountUgx : typeof pl.amountUgx === "number" ? pl.amountUgx : 0;
+      return tTemplate(lang, "narrativeSaleReturn", { product: name, amount: amount.toLocaleString() });
+    }
+    case "discount_given": {
+      const amount = typeof pl.discountUgx === "number" ? pl.discountUgx : 0;
+      return tTemplate(lang, "narrativeDiscountGiven", { amount: amount.toLocaleString() });
+    }
+    case "cash_expense_created":
+    case "cash_expense_approved": {
+      const category = typeof pl.category === "string" ? pl.category : e.payloadSummary;
+      const amount = typeof pl.amountUgx === "number" ? pl.amountUgx : 0;
+      const verb = e.action === "cash_expense_approved" ? "approved" : "recorded";
+      return tTemplate(lang, verb === "approved" ? "narrativeExpenseApproved" : "narrativeExpenseRecorded", {
+        category,
+        amount: amount.toLocaleString(),
+      });
+    }
+    case "cash_expense_voided": {
+      const category = typeof pl.category === "string" ? pl.category : e.payloadSummary;
+      const amount = typeof pl.amountUgx === "number" ? pl.amountUgx : 0;
+      return tTemplate(lang, "narrativeExpenseVoided", { category, amount: amount.toLocaleString() });
+    }
+    case "cash_expense_rejected": {
+      const category = typeof pl.category === "string" ? pl.category : e.payloadSummary;
+      return tTemplate(lang, "narrativeExpenseRejected", { category });
+    }
+    case "back_office_unlock_failed":
+      return t(lang, "narrativeBackOfficeUnlockFailed");
+    case "supplier_edit": {
+      const name = typeof pl.name === "string" ? pl.name : typeof pl.supplierName === "string" ? pl.supplierName : e.payloadSummary;
+      return tTemplate(lang, "narrativeSupplierEdited", { name });
+    }
+    case "purchase_void": {
+      const supplier = typeof pl.supplierName === "string" ? pl.supplierName : "";
+      const total = typeof pl.totalCostUgx === "number" ? pl.totalCostUgx : 0;
+      return tTemplate(lang, "narrativePurchaseVoided", { supplier: supplier || "—", amount: total.toLocaleString() });
+    }
     default:
       return e.payloadSummary;
   }
+}
+
+/** Short entity label for audit list rows (product, customer, supplier name — no UUIDs). */
+export function extractAuditEntityLabel(
+  e: AuditLogEntry,
+  productById: Map<string, { name: string }>,
+  customerById: Map<string, { name: string }>,
+): string | null {
+  const pl = e.payload;
+  if (typeof pl.name === "string" && pl.name.trim()) return pl.name.trim();
+  if (typeof pl.productName === "string" && pl.productName.trim()) return pl.productName.trim();
+  if (typeof pl.supplierName === "string" && pl.supplierName.trim()) return pl.supplierName.trim();
+  if (typeof pl.customerName === "string" && pl.customerName.trim()) return pl.customerName.trim();
+  const pid = typeof pl.productId === "string" ? pl.productId : "";
+  if (pid && productById.get(pid)?.name) return productById.get(pid)!.name;
+  const cid = typeof pl.customerId === "string" ? pl.customerId : "";
+  if (cid && customerById.get(cid)?.name) return customerById.get(cid)!.name;
+  if (e.action === "discount_given" || e.action === "sale_void" || e.action === "sale_return") {
+    return null;
+  }
+  const summary = e.payloadSummary?.trim();
+  if (summary && summary.length < 64 && !/^[0-9a-f-]{20,}$/i.test(summary)) return summary;
+  return null;
 }
 
 export type ActivityTimelineGroup = {

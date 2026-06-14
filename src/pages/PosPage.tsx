@@ -1420,6 +1420,30 @@ export function PosPage({ lang }: { lang: Language }) {
                 {t(lang, "cartDiscountOriginal")}: UGX {checkoutTotals.lineSubtotalUgx.toLocaleString()}
               </p>
             ) : null}
+            {(draftDiscountTotal > 0 || checkoutTotals.cartDiscountUgx > 0) && (
+              <div className="mt-3 space-y-1 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-sm font-semibold text-slate-700">
+                <p className="flex justify-between gap-2">
+                  <span>{t(lang, "checkoutSubtotalLabel")}</span>
+                  <span>UGX {(checkoutTotals.lineSubtotalUgx + draftDiscountTotal).toLocaleString()}</span>
+                </p>
+                {draftDiscountTotal > 0 ? (
+                  <p className="flex justify-between gap-2 text-amber-900">
+                    <span>{t(lang, "checkoutLineDiscountsLabel")}</span>
+                    <span>− UGX {draftDiscountTotal.toLocaleString()}</span>
+                  </p>
+                ) : null}
+                {checkoutTotals.cartDiscountUgx > 0 ? (
+                  <p className="flex justify-between gap-2 text-emerald-900">
+                    <span>{t(lang, "checkoutCartDiscountLabel")}</span>
+                    <span>− UGX {checkoutTotals.cartDiscountUgx.toLocaleString()}</span>
+                  </p>
+                ) : null}
+                <p className="flex justify-between gap-2 border-t border-slate-200 pt-2 font-black text-slate-900">
+                  <span>{t(lang, "checkoutFinalTotalLabel")}</span>
+                  <span>UGX {draftPayable.toLocaleString()}</span>
+                </p>
+              </div>
+            )}
             <p className="mt-4 text-3xl font-black text-slate-900">
               {checkoutTotals.cartDiscountUgx > 0 ? t(lang, "payableTotalLabel") : t(lang, "totalLabel")}{" "}
               <span className="text-waka-700">UGX {draftPayable.toLocaleString()}</span>

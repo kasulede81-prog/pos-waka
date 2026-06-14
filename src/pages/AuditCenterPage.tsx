@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Download, FileText, Search } from "lucide-react";
 import type { AuditAction, AuditLogEntry, Language } from "../types";
 import { t } from "../lib/i18n";
@@ -6,19 +7,22 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { usePosStore } from "../store/usePosStore";
 import {
-  filterAuditLogs,
+  AUDIT_FILTER_RESULT_LIMIT,
+  buildAuditLogSearchIndex,
+  filterAuditLogsIndexed,
   INVESTIGATION_ACTIONS,
-  uniqueAuditActors,
   type AuditSearchFilters,
 } from "../lib/auditSearch";
+import { extractAuditEntityLabel, actorDisplayLabel } from "../lib/activityNarrative";
 import { auditActionLabel, formatAuditRowSummary } from "../lib/auditCenterDetails";
-import { actorDisplayLabel } from "../lib/activityNarrative";
+import { formatAuditDeviceLabel } from "../lib/auditDeviceLabel";
 import { buildAuditCsv, buildAuditPdfBlob } from "../lib/auditExport";
 import { dateKeyKampala } from "../lib/datesUg";
 
-const PAGE_SIZE = 200;
+const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 
 function defaultDateFrom(): string {
   const d = new Date();
@@ -27,6 +31,7 @@ function defaultDateFrom(): string {
 }
 
 export function AuditCenterPage({ lang }: { lang: Language }) {
+  const [searchParams] = useSearchParams();
   const [includeArchived, setIncludeArchived] = useState(false);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
@@ -34,17 +39,27 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const suppliers = usePosStore((s) => s.suppliers);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName ?? "Shop");
 
-  const [dateFrom, setDateFrom] = useState(defaultDateFrom);
-  const [dateTo, setDateTo] = useState(() => dateKeyKampala(new Date()));
-  const [actorUserId, setActorUserId] = useState("all");
-  const [action, setAction] = useState<AuditAction | "all">("all");
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get("from") ?? defaultDateFrom());
+  const [dateTo, setDateTo] = useState(() => searchParams.get("to") ?? dateKeyKampala(new Date()));
+  const [actorUserId, setActorUserId] = useState(() => searchParams.get("staff") ?? "all");
+  const [action, setAction] = useState<AuditAction | "all">(
+    () => (searchParams.get("action") as AuditAction | null) ?? "all",
+  );
   const [productId, setProductId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [supplierId, setSupplierId] = useState("");
-  const [searchText, setSearchText] = useState("");
+  const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "");
+  const debouncedSearchText = useDebouncedValue(searchText, 250);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
 
-  const actors = useMemo(() => uniqueAuditActors(auditLogs), [auditLogs]);
+  const auditIndex = useMemo(
+    () => buildAuditLogSearchIndex(auditLogs, { products, customers, suppliers, lang }),
+    [auditLogs, products, customers, suppliers, lang],
+  );
+  const actors = auditIndex.actors;
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, { name: p.name }])), [products]);
+  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, { name: c.name }])), [customers]);
 
   const filters: AuditSearchFilters = useMemo(
     () => ({
@@ -55,14 +70,20 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
       productId: productId || undefined,
       customerId: customerId || undefined,
       supplierId: supplierId || undefined,
-      searchText,
+      searchText: debouncedSearchText,
     }),
-    [dateFrom, dateTo, actorUserId, action, productId, customerId, supplierId, searchText],
+    [dateFrom, dateTo, actorUserId, action, productId, customerId, supplierId, debouncedSearchText],
   );
 
   const filtered = useMemo(
-    () => filterAuditLogs(auditLogs, filters, { products, customers, suppliers }).slice(0, PAGE_SIZE),
-    [auditLogs, filters, products, customers, suppliers],
+    () =>
+      filterAuditLogsIndexed(
+        auditIndex,
+        filters,
+        { products, customers, suppliers, lang },
+        PAGE_SIZE,
+      ),
+    [auditIndex, filters, products, customers, suppliers, lang],
   );
 
   const actionOptions = useMemo(() => [...INVESTIGATION_ACTIONS].sort(), []);
@@ -225,6 +246,9 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
           {filtered.map((e) => {
             const staff = e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang);
             const when = new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+            const narrative = formatAuditRowSummary(lang, e, { productById, customerById });
+            const entity = extractAuditEntityLabel(e, productById, customerById);
+            const deviceLabel = formatAuditDeviceLabel(e.deviceId, e.payload);
             return (
               <li key={e.id}>
                 <button
@@ -239,10 +263,13 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
                     </time>
                   </div>
                   <p className="mt-1 text-xs font-bold uppercase tracking-wide text-waka-700">
-                    {auditActionLabel(lang, e.action)} · {e.role}
-                    {e.deviceId ? ` · ${e.deviceId.slice(0, 8)}…` : ""}
+                    {auditActionLabel(lang, e.action)}
+                    {entity ? ` · ${entity}` : ""}
                   </p>
-                  <p className="mt-1 text-sm font-medium text-slate-800">{formatAuditRowSummary(lang, e)}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-800">{narrative}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {t(lang, `role_${e.role}`)} · {deviceLabel}
+                  </p>
                 </button>
               </li>
             );
@@ -250,7 +277,13 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
         </ul>
       )}
 
-      <AuditDetailDrawer lang={lang} entry={selected} onClose={() => setSelected(null)} />
+      <AuditDetailDrawer
+        lang={lang}
+        entry={selected}
+        productById={productById}
+        customerById={customerById}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }

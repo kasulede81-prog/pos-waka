@@ -8,21 +8,10 @@ import { Building2, ClipboardList, Sparkles } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { dateKeyKampala, dateKeyDaysAgoKampala } from "../lib/datesUg";
-import { scanTodaySalesHead } from "../lib/salesDayIndex";
-import { isLowStock } from "../lib/sellingEngine";
-import { catalogEventsForDay } from "../lib/catalogAudit";
 import { describeAuditLine } from "../lib/activityNarrative";
 import type { OwnerAlert } from "../lib/ownerAlerts";
-import {
-  buildDailyOwnerSummaryLines,
-  buildWhatsAppOwnerSummaryLine,
-  computeBusinessPulse,
-  computeCashierTrustRows,
-  computeExtendedOwnerAlerts,
-  formatVsYesterday,
-} from "../lib/ownerIntelligence";
-import { getCompletedFinancials } from "../lib/financialMetrics";
+import { buildOwnerDashboardData, buildOwnerSummaryLines } from "../lib/ownerDashboardData";
+import { auditCenterLinkFromFilter, type OwnerRiskCardKind } from "../lib/ownerRiskDashboard";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
@@ -30,8 +19,6 @@ import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
-import { computeBackOfficeAccessStats } from "../lib/backOfficeAccessStats";
-import { pendingSales } from "../lib/saleStatus";
 
 function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: string } {
   const title = a.titleVars ? tTemplate(lang, a.title, a.titleVars) : t(lang, a.title);
@@ -39,13 +26,13 @@ function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: str
   return { title, detail };
 }
 
-function pulseStyles(pulse: ReturnType<typeof computeBusinessPulse>): string {
+function pulseStyles(pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
   if (pulse === "strong") return "from-waka-600 to-teal-700 text-white";
   if (pulse === "steady") return "from-slate-700 to-slate-900 text-white";
   return "from-amber-500 to-orange-600 text-amber-950";
 }
 
-function pulseLabel(lang: Language, pulse: ReturnType<typeof computeBusinessPulse>): string {
+function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
   if (pulse === "strong") return t(lang, "ownerPulseStrong");
   if (pulse === "steady") return t(lang, "ownerPulseSteady");
   return t(lang, "ownerPulseWatch");
@@ -55,6 +42,20 @@ function trustBadgeClass(level: "good" | "warning" | "risky"): string {
   if (level === "good") return "bg-waka-500";
   if (level === "warning") return "bg-amber-400";
   return "bg-rose-500";
+}
+
+function riskCardTitle(lang: Language, kind: OwnerRiskCardKind): string {
+  const keys: Record<OwnerRiskCardKind, Parameters<typeof t>[1]> = {
+    product_deletions: "ownerRiskProductDeletions",
+    price_changes: "ownerRiskPriceChanges",
+    large_discounts: "ownerRiskLargeDiscounts",
+    returns: "ownerRiskReturns",
+    voids: "ownerRiskVoids",
+    expenses: "ownerRiskExpenses",
+    back_office_failed: "ownerRiskBackOfficeFailed",
+    stock_adjustments: "ownerRiskStockAdjustments",
+  };
+  return t(lang, keys[kind]);
 }
 
 function trustLabel(lang: Language, level: "good" | "warning" | "risky"): string {
@@ -82,212 +83,76 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
-  const allVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
-  const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+  const reportingVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
+  const reportingReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const drawerToday = useDrawerCashForToday();
 
-  const todayKey = dateKeyKampala(new Date());
-  const yesterdayKey = dateKeyDaysAgoKampala(1);
-
-  const backOfficeAccess = useMemo(() => computeBackOfficeAccessStats(auditLogs, todayKey), [auditLogs, todayKey]);
-
-  const [waCopied, setWaCopied] = useState(false);
-
-  const today = useMemo(
-    () => scanTodaySalesHead(sales, todayKey).todaySales,
-    [sales, todayKey],
-  );
-
-  const todayVoids = useMemo(
-    () => allVoidRecords.filter((v) => dateKeyKampala(v.createdAt) === todayKey),
-    [allVoidRecords, todayKey],
-  );
-
-  const todayReturns = useMemo(
-    () => allReturnRecords.filter((r) => dateKeyKampala(r.createdAt) === todayKey),
-    [allReturnRecords, todayKey],
-  );
-
-  const todayDiscountTotal = useMemo(
-    () => today.reduce((a, s) => a + (s.discountTotalUgx ?? 0), 0),
-    [today],
-  );
-
-  const openBillsCount = useMemo(() => {
-    if (!hospitalityMode) return 0;
-    return pendingSales(sales).length;
-  }, [hospitalityMode, sales]);
-
-  const expiringMedicinesCount = useMemo(() => {
-    if (!pharmacyMode) return 0;
-    return products.filter((p) => p.expiryDate && new Date(p.expiryDate).getTime() <= Date.now() + 30 * 86400000).length;
-  }, [pharmacyMode, products]);
-
-  const todayDiscountEvents = useMemo(
+  const dashboard = useMemo(
     () =>
-      auditLogs.filter(
-        (e) => e.action === "discount_given" && dateKeyKampala(e.at) === todayKey,
-      ),
-    [auditLogs, todayKey],
+      buildOwnerDashboardData({
+        lang,
+        sales,
+        products,
+        auditLogs,
+        returnRecords: reportingReturnRecords,
+        voidRecords: reportingVoidRecords,
+        dayCloses,
+        preferences,
+        drawerToday,
+        hospitalityMode,
+        pharmacyMode,
+      }),
+    [
+      lang,
+      sales,
+      products,
+      auditLogs,
+      reportingReturnRecords,
+      reportingVoidRecords,
+      dayCloses,
+      preferences,
+      drawerToday,
+      hospitalityMode,
+      pharmacyMode,
+    ],
   );
 
-  const todayCatalogEvents = useMemo(
-    () =>
-      catalogEventsForDay(auditLogs, todayKey)
-        .filter((e) => e.action !== "price_change")
-        .slice(0, 8),
-    [auditLogs, todayKey],
+  const { summaryLines, waLine, trendLine } = useMemo(
+    () => buildOwnerSummaryLines(lang, dashboard),
+    [lang, dashboard],
   );
 
-  const todayStaffCatalogEvents = useMemo(
-    () =>
-      catalogEventsForDay(auditLogs, todayKey, { nonOwnerOnly: true }).filter(
-        (e) => e.action !== "price_change",
-      ),
-    [auditLogs, todayKey],
-  );
+  const {
+    stats,
+    todayVoids,
+    todayReturns,
+    todayDiscountTotal,
+    todayDiscountEvents,
+    todayCatalogEvents,
+    todayStaffCatalogEvents,
+    fastMovers,
+    cashierPerf,
+    lowStock,
+    ownerAlertsResolved,
+    pulse,
+    trustRows,
+    backOfficeAccess,
+    openBillsCount,
+    expiringMedicinesCount,
+    riskCards,
+    yesterdaySalesUgx,
+  } = dashboard;
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
-  const stats = useMemo(() => {
-    const fin = getCompletedFinancials(sales, allReturnRecords, products, { day: todayKey });
-    const totalSalesUgx = fin.revenueUgx;
-    const voidsTotalUgx = todayVoids.reduce((a, v) => a + Math.max(0, v.amountUgx), 0);
-    const debtCollectedUgx = drawerToday.debtCollectedUgx;
-    const expectedCashUgx = drawerToday.expectedDrawerCashUgx;
-    const debtTodayUgx = fin.debtIssuedUgx;
-    const estProfitUgx = fin.profitUgx;
-    const returnsTotalUgx = todayReturns.reduce((a, r) => a + Math.max(0, r.refundAmountUgx), 0);
-    const grossSalesUgx = totalSalesUgx + voidsTotalUgx + returnsTotalUgx;
-    const closeToday = dayCloses.find((d) => d.dateKey === todayKey && !d.supersededAt);
-    const countedCashUgx = closeToday?.countedCashUgx ?? null;
-    const todayCloseDiff = closeToday?.differenceUgx ?? null;
-    const shortageUgx = closeToday && closeToday.differenceUgx < 0 ? -closeToday.differenceUgx : null;
-    return {
-      totalSalesUgx,
-      grossSalesUgx,
-      voidsTotalUgx,
-      expectedCashUgx,
-      debtTodayUgx,
-      debtCollectedUgx,
-      estProfitUgx,
-      returnsTotalUgx,
-      countedCashUgx,
-      todayCloseDiff,
-      shortageUgx,
-      saleCount: fin.transactionCount,
-    };
-  }, [sales, allReturnRecords, products, todayReturns, todayVoids, dayCloses, todayKey, drawerToday]);
-
-  const yesterdaySalesUgx = useMemo(
-    () => getCompletedFinancials(sales, allReturnRecords, products, { day: yesterdayKey }).revenueUgx,
-    [sales, allReturnRecords, products, yesterdayKey],
-  );
-
-  const lowStock = useMemo(() => products.filter((p) => isLowStock(p)), [products]);
-
-  const fastMovers = useMemo(() => {
-    const map = new Map<string, { name: string; qty: number; revenue: number }>();
-    for (const sale of today) {
-      for (const line of sale.lines) {
-        if (line.voided) continue;
-        const cur = map.get(line.productId) ?? { name: line.name, qty: 0, revenue: 0 };
-        map.set(line.productId, {
-          name: line.name,
-          qty: cur.qty + line.quantity,
-          revenue: cur.revenue + line.lineTotalUgx,
-        });
-      }
-    }
-    return [...map.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-  }, [today]);
-
-  const cashierPerf = useMemo(() => {
-    const map = new Map<string, { count: number; revenue: number }>();
-    for (const s of today) {
-      const uid = s.soldByUserId ?? "unknown";
-      const cur = map.get(uid) ?? { count: 0, revenue: 0 };
-      map.set(uid, { count: cur.count + 1, revenue: cur.revenue + s.totalUgx });
-    }
-    return [...map.entries()]
-      .map(([userId, v]) => ({
-        userId,
-        label: userId.startsWith("local:") ? userId.replace("local:", "") : userId.slice(0, 8) + "…",
-        ...v,
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
-  }, [today]);
+  const [waCopied, setWaCopied] = useState(false);
 
   const pct = preferences.cashVarianceThresholdPct ?? 5;
   const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
-
   const lastClose = dayCloses[0];
-
-  const ownerAlertsResolved = useMemo(
-    () =>
-      computeExtendedOwnerAlerts({
-        products,
-        dayCloses,
-        auditLogs: auditLogs,
-        preferences,
-        todayDebtUgx: stats.debtTodayUgx,
-        sales,
-        todayKey,
-      }),
-    [products, dayCloses, auditLogs, preferences, stats.debtTodayUgx, sales, todayKey],
-  );
-
-  const dangerCount = ownerAlertsResolved.filter((a) => a.tone === "danger").length;
-  const warnCount = ownerAlertsResolved.filter((a) => a.tone === "warn").length;
-
-  const pulse = useMemo(
-    () =>
-      computeBusinessPulse({
-        todaySalesUgx: stats.totalSalesUgx,
-        yesterdaySalesUgx,
-        alertDangerCount: dangerCount,
-        alertWarnCount: warnCount,
-      }),
-    [stats.totalSalesUgx, yesterdaySalesUgx, dangerCount, warnCount],
-  );
-
-  const topProduct = fastMovers[0]?.name ?? null;
-  const lowProduct = lowStock[0]?.name ?? null;
-  const debtSaleCount = useMemo(
-    () => today.filter((s) => s.debtUgx > 0).length,
-    [today],
-  );
-
-  const summaryInput = useMemo(
-    () => ({
-      totalSalesUgx: stats.totalSalesUgx,
-      estProfitUgx: stats.estProfitUgx,
-      debtTodayUgx: stats.debtTodayUgx,
-      saleCount: stats.saleCount,
-      debtSaleCount,
-      topProductName: topProduct,
-      lowProductName: lowProduct,
-      cashShortUgx: stats.shortageUgx,
-      yesterdaySalesUgx,
-    }),
-    [stats, debtSaleCount, topProduct, lowProduct, yesterdaySalesUgx],
-  );
-
-  const summaryLines = useMemo(() => buildDailyOwnerSummaryLines(lang, summaryInput), [lang, summaryInput]);
-  const waLine = useMemo(() => buildWhatsAppOwnerSummaryLine(lang, summaryInput), [lang, summaryInput]);
-
-  const trustRows = useMemo(
-    () => computeCashierTrustRows(lang, today, auditLogs, todayKey),
-    [lang, today, auditLogs, todayKey],
-  );
   const activeShift = useMemo(() => shifts.find((s) => !s.endAt) ?? null, [shifts]);
-
-  const trendLine = useMemo(
-    () => formatVsYesterday(lang, stats.totalSalesUgx, yesterdaySalesUgx),
-    [lang, stats.totalSalesUgx, yesterdaySalesUgx],
-  );
 
   const quickAnswers = useMemo(() => {
     const didWell = stats.totalSalesUgx >= yesterdaySalesUgx * 0.85 || stats.totalSalesUgx >= 100_000;
@@ -348,6 +213,44 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           {t(lang, "closeDay")}
         </Link>
       </div>
+
+      <section className="rounded-[1.75rem] border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-rose-50/40 p-5 shadow-sm">
+        <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerNeedsAttentionTitle")}</h2>
+        <p className="mt-1 text-sm font-medium text-slate-600">{t(lang, "ownerNeedsAttentionSub")}</p>
+        {riskCards.length === 0 ? (
+          <p className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm font-semibold text-emerald-900">
+            {t(lang, "ownerRiskNone")}
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {riskCards.map((card) => (
+              <article
+                key={card.kind}
+                className="flex flex-col rounded-2xl border border-white bg-white/90 p-4 shadow-sm ring-1 ring-slate-100/80"
+              >
+                <p className="text-xs font-black uppercase tracking-wide text-amber-900">{riskCardTitle(lang, card.kind)}</p>
+                <p className="mt-2 text-3xl font-black tabular-nums text-slate-900">{card.count}</p>
+                {card.impactUgx > 0 ? (
+                  <p className="mt-1 text-sm font-bold text-rose-800">
+                    {tTemplate(lang, "ownerRiskImpact", { amount: card.impactUgx.toLocaleString() })}
+                  </p>
+                ) : null}
+                {card.staffLabels.length > 0 ? (
+                  <p className="mt-2 text-xs font-semibold text-slate-600">
+                    {tTemplate(lang, "ownerRiskStaff", { names: card.staffLabels.join(", ") })}
+                  </p>
+                ) : null}
+                <Link
+                  to={auditCenterLinkFromFilter(card.auditFilter)}
+                  className="mt-auto pt-3 text-xs font-black text-waka-700 underline"
+                >
+                  {t(lang, "ownerRiskInvestigate")} →
+                </Link>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className={`rounded-[1.75rem] bg-gradient-to-br p-6 shadow-md ${pulseStyles(pulse)}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -578,7 +481,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
               ) : null}
               {todayDiscountEvents.slice(0, 6).map((e) => (
                 <div key={e.id} className="rounded-2xl border border-amber-100 bg-white p-3 text-sm font-semibold text-slate-700">
-                  {e.payloadSummary}
+                  {describeAuditLine(lang, e, productById, customerById)}
                   <p className="mt-1 text-xs text-slate-500">
                     {e.actorName ?? e.actorUserId} · {new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </p>

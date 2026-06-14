@@ -16,7 +16,12 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
   const [includeArchived, setIncludeArchived] = useState(false);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
+  const products = usePosStore((s) => s.products);
+  const customers = usePosStore((s) => s.customers);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, { name: p.name }])), [products]);
+  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, { name: c.name }])), [customers]);
 
   const filtered = useMemo(
     () =>
@@ -99,7 +104,9 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
                             {when}
                           </time>
                         </div>
-                        <p className="mt-1 text-sm font-medium text-slate-800">{formatAuditRowSummary(lang, e)}</p>
+                        <p className="mt-1 text-sm font-medium text-slate-800">
+                          {formatAuditRowSummary(lang, e, { productById, customerById })}
+                        </p>
                         <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">
                           {e.role}
                           {e.deviceId ? ` · ${e.deviceId.slice(0, 8)}…` : ""}
@@ -114,7 +121,13 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
         </div>
       )}
 
-      <AuditDetailDrawer lang={lang} entry={selected} onClose={() => setSelected(null)} />
+      <AuditDetailDrawer
+        lang={lang}
+        entry={selected}
+        productById={productById}
+        customerById={customerById}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }

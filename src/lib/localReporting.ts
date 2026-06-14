@@ -11,9 +11,10 @@ import {
 } from "./dateFilters";
 import { sumCashExpensesInMonth } from "./cashReconciliation";
 import type { CashExpense } from "../types";
-import { getCompletedFinancials, isRevenueSale } from "./financialMetrics";
+import { getCompletedFinancials, getCompletedFinancialsFromScoped, isRevenueSale } from "./financialMetrics";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isLowStock } from "./sellingEngine";
+import { createReportFinancialCache, cachedCompletedFinancials, type ReportFinancialCache } from "./reportFinancialCache";
 
 export type ProductRank = {
   productId: string;
@@ -96,6 +97,66 @@ function salesForFilter(sales: Sale[], filter: DateFilterValue): Sale[] {
 function returnsForFilter(returns: ReturnRecord[], filter: DateFilterValue): ReturnRecord[] {
   const bounds = resolveDateFilterBounds(filter);
   return returnsInBounds(returns, bounds);
+}
+
+function rankProductsBoth(
+  sales: Sale[],
+  returns: ReturnRecord[],
+  products: Product[],
+  topLimit: number,
+  slowLimit: number,
+): { top: ProductRank[]; slow: ProductRank[] } {
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const map = new Map<string, ProductRank>();
+  for (const sale of sales) {
+    for (const line of sale.lines) {
+      if (line.voided) continue;
+      const cur = map.get(line.productId) ?? {
+        productId: line.productId,
+        name: line.name,
+        quantity: 0,
+        revenueUgx: 0,
+        profitUgx: 0,
+      };
+      const unitCost =
+        Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
+          ? line.unitCostUgx
+          : (productById.get(line.productId)?.costPricePerUnitUgx ?? 0);
+      const lineProfit = Number.isFinite(line.estimatedProfitUgx)
+        ? line.estimatedProfitUgx
+        : Math.round(line.lineTotalUgx - line.quantity * unitCost);
+      map.set(line.productId, {
+        productId: line.productId,
+        name: line.name,
+        quantity: cur.quantity + line.quantity,
+        revenueUgx: cur.revenueUgx + line.lineTotalUgx,
+        profitUgx: cur.profitUgx + lineProfit,
+      });
+    }
+  }
+  for (const ret of returns) {
+    const cur = map.get(ret.productId) ?? {
+      productId: ret.productId,
+      name: ret.productName,
+      quantity: 0,
+      revenueUgx: 0,
+      profitUgx: 0,
+    };
+    const product = productById.get(ret.productId);
+    const returnCost = Math.round(Math.max(0, ret.quantity) * Math.max(0, product?.costPricePerUnitUgx ?? 0));
+    const returnProfit = Math.max(0, ret.refundAmountUgx) - returnCost;
+    map.set(ret.productId, {
+      productId: ret.productId,
+      name: ret.productName || cur.name,
+      quantity: cur.quantity - Math.max(0, ret.quantity),
+      revenueUgx: cur.revenueUgx - Math.max(0, ret.refundAmountUgx),
+      profitUgx: cur.profitUgx - returnProfit,
+    });
+  }
+  const rows = [...map.values()].filter((r) => r.revenueUgx > 0);
+  const top = [...rows].sort((a, b) => b.revenueUgx - a.revenueUgx).slice(0, topLimit);
+  const slow = [...rows].sort((a, b) => a.revenueUgx - b.revenueUgx).slice(0, slowLimit);
+  return { top, slow };
 }
 
 function rankProducts(
@@ -196,7 +257,8 @@ export function localGetRollingSevenDaySalesSummary(
   });
   const keys: string[] = [];
   for (let i = 6; i >= 0; i--) keys.push(dateKeyDaysAgoKampala(i));
-  return buildWeeklySummaryFromFiltered(sales, products, returns, filtered, filteredReturns, startDay, endDay, keys);
+  const finCache = createReportFinancialCache(sales, returns, products);
+  return buildWeeklySummaryFromFiltered(products, filtered, filteredReturns, startDay, endDay, keys, finCache);
 }
 
 export function localGetWeeklySalesSummary(
@@ -204,28 +266,29 @@ export function localGetWeeklySalesSummary(
   products: Product[],
   returns: ReturnRecord[],
   now: Date = new Date(),
+  finCache?: ReportFinancialCache,
 ): WeeklySalesSummary {
+  const cache = finCache ?? createReportFinancialCache(sales, returns, products);
   const bounds = resolveDateFilterBounds({ kind: "preset", preset: "this_week" }, now);
   const startDay = bounds.fromKey;
   const endDay = bounds.toKey;
   const filtered = revenueSalesInBounds(sales, bounds);
   const filteredReturns = returnsInBounds(returns, bounds);
   const keys = enumerateDaysInBounds(bounds);
-  return buildWeeklySummaryFromFiltered(sales, products, returns, filtered, filteredReturns, startDay, endDay, keys);
+  return buildWeeklySummaryFromFiltered(products, filtered, filteredReturns, startDay, endDay, keys, cache);
 }
 
 function buildWeeklySummaryFromFiltered(
-  sales: Sale[],
   products: Product[],
-  returns: ReturnRecord[],
   filtered: Sale[],
   filteredReturns: ReturnRecord[],
   startDay: string,
   endDay: string,
   keys: string[],
+  finCache: ReportFinancialCache,
 ): WeeklySalesSummary {
   const dailyTrend = keys.map((day) => {
-    const dayFin = getCompletedFinancials(sales, returns, products, { day });
+    const dayFin = cachedCompletedFinancials(finCache, { day });
     return {
       day,
       revenueUgx: dayFin.revenueUgx,
@@ -253,12 +316,14 @@ export function localGetMonthlySalesSummary(
   returns: ReturnRecord[],
   month = monthKeyKampala(new Date()),
   cashExpenses: CashExpense[] = [],
+  finCache?: ReportFinancialCache,
 ): MonthlySalesSummary {
-  const fin = getCompletedFinancials(sales, returns, products, { monthKey: month });
+  const cache = finCache ?? createReportFinancialCache(sales, returns, products);
+  const fin = cachedCompletedFinancials(cache, { monthKey: month });
   const prevParts = month.split("-").map(Number);
   const prevDate = new Date(prevParts[0] ?? 2020, (prevParts[1] ?? 1) - 2, 1);
   const prevMonth = monthKeyKampala(prevDate);
-  const prevRevenue = getCompletedFinancials(sales, returns, products, { monthKey: prevMonth }).revenueUgx;
+  const prevRevenue = cachedCompletedFinancials(cache, { monthKey: prevMonth }).revenueUgx;
   const revenue = fin.revenueUgx;
   const expensesUgx = sumCashExpensesInMonth(cashExpenses, month);
   const grossProfitUgx = fin.profitUgx;
@@ -365,29 +430,45 @@ export function localGetRangeSummary(
   cashExpenses: CashExpense[] = [],
 ) {
   const bounds = resolveDateFilterBounds(filter);
-  const weekly = localGetWeeklySalesSummary(sales, products, returns);
-  const monthly = localGetMonthlySalesSummary(
-    sales,
-    products,
-    returns,
-    monthKeyKampala(bounds.toKey),
-    cashExpenses,
-  );
+  const isMonth = filter.kind === "preset" && filter.preset === "this_month";
+  const isWeek = filter.kind === "preset" && filter.preset === "this_week";
+  const needsMultiDayFin = isMonth || isWeek;
+
+  const finCache = needsMultiDayFin ? createReportFinancialCache(sales, returns, products) : null;
+  const filteredSales = salesForFilter(sales, filter);
+  const filteredReturns = returnsForFilter(returns, filter);
+  const productById = finCache?.productById ?? new Map(products.map((p) => [p.id, p]));
+
   let summary: DailySalesSummary | WeeklySalesSummary | MonthlySalesSummary;
-  let dailyTrend = weekly.dailyTrend;
-  if (filter.kind === "preset" && filter.preset === "this_month") {
-    summary = monthly;
+  let dailyTrend: { day: string; revenueUgx: number; transactionCount: number }[];
+  let weekly: WeeklySalesSummary | undefined;
+
+  if (isMonth) {
+    summary = localGetMonthlySalesSummary(
+      sales,
+      products,
+      returns,
+      monthKeyKampala(bounds.toKey),
+      cashExpenses,
+      finCache ?? undefined,
+    );
     const monthBounds = resolveDateFilterBounds({ kind: "preset", preset: "this_month" });
     dailyTrend = enumerateDaysInBounds(monthBounds).map((day) => {
-      const fin = getCompletedFinancials(sales, returns, products, { day });
+      const fin = finCache
+        ? cachedCompletedFinancials(finCache, { day })
+        : getCompletedFinancials(sales, returns, products, { day });
       return { day, revenueUgx: fin.revenueUgx, transactionCount: fin.transactionCount };
     });
-  } else if (filter.kind === "preset" && filter.preset === "this_week") {
+  } else if (isWeek) {
+    weekly = localGetWeeklySalesSummary(sales, products, returns, new Date(), finCache ?? undefined);
     summary = weekly;
     dailyTrend = weekly.dailyTrend;
   } else {
     const dayKey = bounds.fromKey;
-    const dayFin = getCompletedFinancials(sales, returns, products, { day: dayKey });
+    const dayFin =
+      finCache != null
+        ? cachedCompletedFinancials(finCache, { day: dayKey })
+        : getCompletedFinancialsFromScoped(filteredSales, filteredReturns, products);
     summary = {
       day: dayKey,
       transactionCount: dayFin.transactionCount,
@@ -402,19 +483,25 @@ export function localGetRangeSummary(
     dailyTrend = [{ day: dayKey, revenueUgx: dayFin.revenueUgx, transactionCount: dayFin.transactionCount }];
   }
 
-  const filteredSales = salesForFilter(sales, filter);
-  const filteredReturns = returnsForFilter(returns, filter);
+  const { top: topProducts, slow: slowProducts } = rankProductsBoth(
+    filteredSales,
+    filteredReturns,
+    products,
+    10,
+    8,
+  );
+
+  const profitUgx =
+    !needsMultiDayFin && !isWeek
+      ? (summary as DailySalesSummary).estimatedProfitUgx
+      : computeTodayProfitBreakdown(filteredSales, productById, filteredReturns).profitUgx;
 
   return {
     summary,
-    profitUgx: computeTodayProfitBreakdown(
-      filteredSales,
-      new Map(products.map((p) => [p.id, p])),
-      filteredReturns,
-    ).profitUgx,
+    profitUgx,
     weekly,
-    topProducts: localGetTopProducts(sales, returns, products, filter, "top", 10),
-    slowProducts: localGetTopProducts(sales, returns, products, filter, "slow", 8),
+    topProducts,
+    slowProducts,
     inventory: localGetInventoryInsights(products),
     customers: localGetCustomerInsights(sales, customers, filter),
     supplierDebtTotal: suppliers.reduce((a, s) => a + Math.max(0, s.balanceOwedUgx), 0),

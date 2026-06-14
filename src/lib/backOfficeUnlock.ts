@@ -1,5 +1,6 @@
-import type { SessionActor } from "../lib/sessionActor";
+import type { SessionActor } from "./sessionActor";
 import type { ShopPreferences, StaffAccount, UserRole } from "../types";
+import { staffHasBackOfficeUnlockSecret, staffSecretMatches } from "./staffSecret";
 
 export type BackOfficeUnlockVia = "staff_pin" | "shop_pin" | "open_no_pin";
 
@@ -19,15 +20,17 @@ export type BackOfficeUnlockFailure = {
 
 export type BackOfficeUnlockResult = BackOfficeUnlockSuccess | BackOfficeUnlockFailure;
 
-function matchingStaff(staff: StaffAccount[], digits: string, normalized: string): StaffAccount | null {
-  return (
-    staff.find(
-      (s) =>
-        s.active &&
-        (s.role === "owner" || s.role === "manager") &&
-        ((s.pin && s.pin === digits) || (s.password && s.password === normalized)),
-    ) ?? null
-  );
+const UNLOCK_STAFF_ROLES = new Set<UserRole>(["owner", "manager"]);
+
+function matchingStaff(staff: StaffAccount[], pin: string): StaffAccount | null {
+  return staff.find((s) => s.active && UNLOCK_STAFF_ROLES.has(s.role) && staffSecretMatches(s, pin)) ?? null;
+}
+
+/** Whether Back Office requires a PIN modal before access. */
+export function isBackOfficePinRequired(preferences: Pick<ShopPreferences, "backOfficePin" | "staffAccounts">): boolean {
+  const stored = preferences.backOfficePin?.trim() ?? "";
+  if (stored.length > 0) return true;
+  return (preferences.staffAccounts ?? []).some(staffHasBackOfficeUnlockSecret);
 }
 
 /** Resolve Back Office unlock — staff PIN (owner/manager) takes precedence over shop PIN. */
@@ -40,7 +43,7 @@ export function resolveBackOfficeUnlock(
   const staff = preferences.staffAccounts ?? [];
   const normalized = pin.trim();
   const digits = normalized.replace(/\D/g, "");
-  const matched = matchingStaff(staff, digits, normalized);
+  const matched = matchingStaff(staff, normalized);
 
   if (matched) {
     return {

@@ -9,6 +9,68 @@ import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { isCompletedSale } from "./saleStatus";
 
+/** Pre-index revenue sales and returns by Kampala day — one pass, identical scoped results. */
+export type RevenueSalesIndex = {
+  salesByDay: Map<string, Sale[]>;
+  returnsByDay: Map<string, ReturnRecord[]>;
+};
+
+export function buildRevenueSalesIndex(sales: Sale[], returns: ReturnRecord[]): RevenueSalesIndex {
+  const salesByDay = new Map<string, Sale[]>();
+  for (const s of sales) {
+    if (!isCompletedSale(s)) continue;
+    const dk = saleReportingDayKey(s);
+    const bucket = salesByDay.get(dk);
+    if (bucket) bucket.push(s);
+    else salesByDay.set(dk, [s]);
+  }
+  const returnsByDay = new Map<string, ReturnRecord[]>();
+  for (const r of returns) {
+    const dk = dateKeyKampala(r.createdAt);
+    const bucket = returnsByDay.get(dk);
+    if (bucket) bucket.push(r);
+    else returnsByDay.set(dk, [r]);
+  }
+  return { salesByDay, returnsByDay };
+}
+
+function scopedSalesFromIndex(
+  sales: Sale[],
+  index: RevenueSalesIndex | undefined,
+  opts?: { day?: string; monthKey?: string },
+): Sale[] {
+  if (index && opts?.day) return index.salesByDay.get(opts.day) ?? [];
+  if (index && opts?.monthKey) {
+    const out: Sale[] = [];
+    for (const [dk, list] of index.salesByDay) {
+      if (dk.startsWith(opts.monthKey)) out.push(...list);
+    }
+    return out;
+  }
+  let scoped = revenueSales(sales);
+  if (opts?.day) scoped = scoped.filter((s) => saleReportingDayKey(s) === opts.day);
+  else if (opts?.monthKey) scoped = scoped.filter((s) => saleReportingDayKey(s).startsWith(opts.monthKey!));
+  return scoped;
+}
+
+function scopedReturnsFromIndex(
+  returns: ReturnRecord[],
+  index: RevenueSalesIndex | undefined,
+  opts?: { day?: string; monthKey?: string },
+): ReturnRecord[] {
+  if (index && opts?.day) return index.returnsByDay.get(opts.day) ?? [];
+  if (index && opts?.monthKey) {
+    const out: ReturnRecord[] = [];
+    for (const [dk, list] of index.returnsByDay) {
+      if (dk.startsWith(opts.monthKey)) out.push(...list);
+    }
+    return out;
+  }
+  if (opts?.day) return returns.filter((r) => dateKeyKampala(r.createdAt) === opts.day);
+  if (opts?.monthKey) return returns.filter((r) => dateKeyKampala(r.createdAt).startsWith(opts.monthKey!));
+  return returns;
+}
+
 /** Sales that count toward revenue (completed only). */
 export function isRevenueSale(s: Sale): boolean {
   return isCompletedSale(s);
@@ -36,25 +98,12 @@ export type CompletedFinancialSnapshot = {
   averageTransactionUgx: number;
 };
 
-export function getCompletedFinancials(
-  sales: Sale[],
-  returns: ReturnRecord[],
+export function getCompletedFinancialsFromScoped(
+  scoped: Sale[],
+  returnScoped: ReturnRecord[],
   products: Product[],
-  opts?: { day?: string; monthKey?: string; skipProfit?: boolean },
+  opts?: { skipProfit?: boolean },
 ): CompletedFinancialSnapshot {
-  let scoped = revenueSales(sales);
-  if (opts?.day) {
-    scoped = scoped.filter((s) => saleReportingDayKey(s) === opts.day);
-  } else if (opts?.monthKey) {
-    scoped = scoped.filter((s) => saleReportingDayKey(s).startsWith(opts.monthKey!));
-  }
-
-  const returnScoped = opts?.day
-    ? returns.filter((r) => dateKeyKampala(r.createdAt) === opts.day)
-    : opts?.monthKey
-      ? returns.filter((r) => dateKeyKampala(r.createdAt).startsWith(opts.monthKey!))
-      : returns;
-
   const productById = new Map(products.map((p) => [p.id, p]));
   const breakdown = opts?.skipProfit
     ? { profitUgx: 0, salesUgx: 0, costUgx: 0, linesMissingCost: 0 }
@@ -62,15 +111,36 @@ export function getCompletedFinancials(
   const tx = scoped.length;
   const revenue = computeCanonicalRevenueUgx(scoped, returnScoped);
 
+  let cashCollectedUgx = 0;
+  let debtIssuedUgx = 0;
+  let discountsUgx = 0;
+  for (const s of scoped) {
+    cashCollectedUgx += s.cashPaidUgx;
+    debtIssuedUgx += s.debtUgx;
+    discountsUgx += s.discountTotalUgx ?? 0;
+  }
+
   return {
     revenueUgx: revenue,
     profitUgx: breakdown.profitUgx,
     transactionCount: tx,
-    cashCollectedUgx: scoped.reduce((a, s) => a + s.cashPaidUgx, 0),
-    debtIssuedUgx: scoped.reduce((a, s) => a + s.debtUgx, 0),
-    discountsUgx: scoped.reduce((a, s) => a + (s.discountTotalUgx ?? 0), 0),
+    cashCollectedUgx,
+    debtIssuedUgx,
+    discountsUgx,
     averageTransactionUgx: tx > 0 ? Math.round(revenue / tx) : 0,
   };
+}
+
+export function getCompletedFinancials(
+  sales: Sale[],
+  returns: ReturnRecord[],
+  products: Product[],
+  opts?: { day?: string; monthKey?: string; skipProfit?: boolean },
+  index?: RevenueSalesIndex,
+): CompletedFinancialSnapshot {
+  const scoped = scopedSalesFromIndex(sales, index, opts);
+  const returnScoped = scopedReturnsFromIndex(returns, index, opts);
+  return getCompletedFinancialsFromScoped(scoped, returnScoped, products, opts);
 }
 
 export function getCompletedRevenue(

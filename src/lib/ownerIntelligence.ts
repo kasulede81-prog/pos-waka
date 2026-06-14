@@ -4,7 +4,7 @@ import { catalogEventsForDay, isSensitiveCatalogEvent } from "./catalogAudit";
 import { computeOwnerAlerts, type OwnerAlert } from "./ownerAlerts";
 import { t, tTemplate } from "./i18n";
 import { actorDisplayLabel } from "./activityNarrative";
-import { avgDailyUnitsFromIndex, buildSalesDayIndex, salesForDay, sumRevenueForDay } from "./salesDayIndex";
+import { avgDailyUnitsFromIndex, buildSalesDayIndex, salesForDay, sumRevenueForDay, type SalesDayIndex } from "./salesDayIndex";
 
 export type BusinessPulse = "strong" | "steady" | "watch";
 
@@ -50,6 +50,7 @@ export function computeCashierTrustRows(
   todaySales: Sale[],
   auditLogs: AuditLogEntry[],
   todayKey: string,
+  todayAuditLogs?: AuditLogEntry[],
 ): CashierTrustRow[] {
   const byUser = new Map<
     string,
@@ -70,8 +71,8 @@ export function computeCashierTrustRows(
     if (s.totalUgx < 0) row.refunds += 1;
   }
 
-  for (const e of auditLogs) {
-    if (dateKeyKampala(e.at) !== todayKey) continue;
+  for (const e of todayAuditLogs ?? auditLogs) {
+    if (todayAuditLogs == null && dateKeyKampala(e.at) !== todayKey) continue;
     const uid = e.actorUserId || "unknown";
     if (e.action === "stock_adjust") {
       touch(uid).stock += 1;
@@ -185,15 +186,39 @@ export function computeExtendedOwnerAlerts(params: {
   todayDebtUgx: number;
   sales: Sale[];
   todayKey: string;
+  salesIndex?: SalesDayIndex;
+  staffCatalogTodayCount?: number;
+  staffCatalogTodaySensitive?: boolean;
+  refundsTodayCount?: number;
+  auditWeekMetrics?: {
+    productRemoves14d: number;
+    manualStockHits7d: number;
+  };
+  recentStockAdjustments?: AuditLogEntry[];
 }): OwnerAlert[] {
-  const { products, dayCloses, auditLogs, preferences, todayDebtUgx, sales, todayKey } = params;
-  const salesIndex = buildSalesDayIndex(sales);
+  const {
+    products,
+    dayCloses,
+    auditLogs,
+    preferences,
+    todayDebtUgx,
+    sales,
+    todayKey,
+    salesIndex,
+    staffCatalogTodayCount,
+    staffCatalogTodaySensitive,
+    refundsTodayCount,
+    auditWeekMetrics,
+    recentStockAdjustments,
+  } = params;
+  const resolvedSalesIndex = salesIndex ?? buildSalesDayIndex(sales);
   const base = computeOwnerAlerts({
     products,
     dayCloses,
     auditLogs,
     preferences,
     todayDebtUgx,
+    recentStockAdjustments,
   });
 
   const extra: OwnerAlert[] = [];
@@ -216,8 +241,8 @@ export function computeExtendedOwnerAlerts(params: {
   }
 
   const yKey = yesterdayKey();
-  const todayRev = sumRevenueForDay(salesIndex, todayKey);
-  const yRev = sumRevenueForDay(salesIndex, yKey);
+  const todayRev = sumRevenueForDay(resolvedSalesIndex, todayKey);
+  const yRev = sumRevenueForDay(resolvedSalesIndex, yKey);
   if (yRev >= 60_000 && todayRev < yRev * 0.55 && todayRev < yRev - 40_000) {
     extra.push({
       id: "sales-soft-today",
@@ -231,7 +256,8 @@ export function computeExtendedOwnerAlerts(params: {
     });
   }
 
-  const refundsToday = salesForDay(salesIndex, todayKey).filter((s) => s.totalUgx < 0).length;
+  const refundsToday =
+    refundsTodayCount ?? salesForDay(resolvedSalesIndex, todayKey).filter((s) => s.totalUgx < 0).length;
   if (refundsToday >= 2) {
     extra.push({
       id: "refunds-many",
@@ -243,9 +269,9 @@ export function computeExtendedOwnerAlerts(params: {
   }
 
   const cutoff = Date.now() - 14 * 86400000;
-  const removesWeek = auditLogs.filter(
-    (e) => e.action === "product_remove" && new Date(e.at).getTime() >= cutoff,
-  ).length;
+  const removesWeek =
+    auditWeekMetrics?.productRemoves14d ??
+    auditLogs.filter((e) => e.action === "product_remove" && new Date(e.at).getTime() >= cutoff).length;
   if (removesWeek >= 2) {
     extra.push({
       id: "products-removed-review",
@@ -256,11 +282,11 @@ export function computeExtendedOwnerAlerts(params: {
     });
   }
 
-  const todayUnits = salesIndex.unitsByDayProduct.get(todayKey);
+  const todayUnits = resolvedSalesIndex.unitsByDayProduct.get(todayKey);
   if (todayUnits) {
   for (const [pid, qtyToday] of todayUnits) {
     if (qtyToday < 4) continue;
-    const avg = avgDailyUnitsFromIndex(salesIndex, pid, todayKey, 7);
+    const avg = avgDailyUnitsFromIndex(resolvedSalesIndex, pid, todayKey, 7);
     if (avg >= 0.35 && qtyToday > avg * 2.4) {
       const name = products.find((p) => p.id === pid)?.name ?? pid;
       extra.push({
@@ -276,14 +302,16 @@ export function computeExtendedOwnerAlerts(params: {
   }
 
   const weekMs = Date.now() - 7 * 86400000;
-  const manualStockHits = auditLogs.filter((e) => {
-    if (new Date(e.at).getTime() < weekMs) return false;
-    if (e.action !== "stock_adjust") return false;
-    const pl = e.payload as Record<string, unknown>;
-    const reason = typeof pl.reason === "string" ? pl.reason : "";
-    const d = typeof pl.delta === "number" ? pl.delta : 0;
-    return d < -15 && /damaged|waste|spoiled|broken|theft|missing|adjust|count/i.test(reason);
-  }).length;
+  const manualStockHits =
+    auditWeekMetrics?.manualStockHits7d ??
+    auditLogs.filter((e) => {
+      if (new Date(e.at).getTime() < weekMs) return false;
+      if (e.action !== "stock_adjust") return false;
+      const pl = e.payload as Record<string, unknown>;
+      const reason = typeof pl.reason === "string" ? pl.reason : "";
+      const d = typeof pl.delta === "number" ? pl.delta : 0;
+      return d < -15 && /damaged|waste|spoiled|broken|theft|missing|adjust|count/i.test(reason);
+    }).length;
   if (manualStockHits >= 4) {
     extra.push({
       id: "manual-stock-review",
@@ -293,18 +321,28 @@ export function computeExtendedOwnerAlerts(params: {
     });
   }
 
-  const staffCatalogToday = catalogEventsForDay(auditLogs, todayKey, { nonOwnerOnly: true }).filter(
-    (e) => e.action !== "price_change",
-  );
-  if (staffCatalogToday.length > 0) {
-    const sensitive = staffCatalogToday.some(isSensitiveCatalogEvent);
+  if ((staffCatalogTodayCount ?? 0) > 0) {
     extra.push({
       id: "staff-catalog-today",
-      tone: sensitive ? "warn" : "info",
+      tone: staffCatalogTodaySensitive ? "warn" : "info",
       title: "staffCatalogAlertTitle",
       detail: "staffCatalogAlertDetail",
-      detailVars: { count: staffCatalogToday.length },
+      detailVars: { count: staffCatalogTodayCount! },
     });
+  } else if (staffCatalogTodayCount === undefined) {
+    const staffCatalogToday = catalogEventsForDay(auditLogs, todayKey, { nonOwnerOnly: true }).filter(
+      (e) => e.action !== "price_change",
+    );
+    if (staffCatalogToday.length > 0) {
+      const sensitive = staffCatalogToday.some(isSensitiveCatalogEvent);
+      extra.push({
+        id: "staff-catalog-today",
+        tone: sensitive ? "warn" : "info",
+        title: "staffCatalogAlertTitle",
+        detail: "staffCatalogAlertDetail",
+        detailVars: { count: staffCatalogToday.length },
+      });
+    }
   }
 
   const seen = new Set<string>();

@@ -1,16 +1,26 @@
+import { useEffect, useState } from "react";
 import type { AuditLogEntry, Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { auditActionLabel, extractAuditDetails } from "../../lib/auditCenterDetails";
+import { auditActionLabel, extractAuditDetails, formatAuditBeforeAfter, formatAuditRowSummary } from "../../lib/auditCenterDetails";
 import { actorDisplayLabel } from "../../lib/activityNarrative";
+import { formatAuditDeviceLabel } from "../../lib/auditDeviceLabel";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 
 type Props = {
   lang: Language;
   entry: AuditLogEntry | null;
+  productById: Map<string, { name: string }>;
+  customerById: Map<string, { name: string }>;
   onClose: () => void;
 };
 
-export function AuditDetailDrawer({ lang, entry, onClose }: Props) {
+export function AuditDetailDrawer({ lang, entry, productById, customerById, onClose }: Props) {
+  const [showTechnical, setShowTechnical] = useState(false);
+
+  useEffect(() => {
+    setShowTechnical(false);
+  }, [entry?.id]);
+
   if (!entry) return null;
 
   const detail = extractAuditDetails(entry);
@@ -19,6 +29,9 @@ export function AuditDetailDrawer({ lang, entry, onClose }: Props) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+  const summary = formatAuditRowSummary(lang, entry, { productById, customerById });
+  const { before, after } = formatAuditBeforeAfter(detail.before, detail.after);
+  const deviceLabel = formatAuditDeviceLabel(detail.deviceId ?? entry.deviceId, entry.payload);
 
   const row = (label: string, value: string | null) =>
     value ? (
@@ -42,24 +55,37 @@ export function AuditDetailDrawer({ lang, entry, onClose }: Props) {
         </header>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-          {row(t(lang, "auditColWho"), staff)}
-          {row(t(lang, "auditColWhen"), when)}
-          {row(t(lang, "auditColAction"), auditActionLabel(lang, entry.action))}
-          {row(t(lang, "auditColRole"), entry.role)}
-          {row(t(lang, "auditColDevice"), detail.deviceId ?? entry.deviceId ?? null)}
-          {row(t(lang, "auditColSummary"), entry.payloadSummary)}
-          {row(t(lang, "auditExportColBefore"), detail.before)}
-          {row(t(lang, "auditExportColAfter"), detail.after)}
+          {row(t(lang, "auditColSummary"), summary)}
+          {row(t(lang, "auditExportColBefore"), before)}
+          {row(t(lang, "auditExportColAfter"), after)}
           {row(t(lang, "auditExportColReason"), detail.reason)}
+          {row(t(lang, "auditColDevice"), deviceLabel)}
+          {row(t(lang, "auditColWho"), staff)}
+          {row(t(lang, "auditColRole"), entry.role)}
           {detail.entityLabel
             ? row(
                 t(lang, "auditColEntity"),
                 detail.entityType ? `${detail.entityType}: ${detail.entityLabel}` : detail.entityLabel,
               )
             : null}
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">{t(lang, "auditColPayload")}</p>
-            <pre className="mt-2 max-h-64 overflow-auto text-xs font-mono text-slate-800">{detail.payloadJson}</pre>
+          {row(t(lang, "auditColWhen"), when)}
+          {row(t(lang, "auditColAction"), auditActionLabel(lang, entry.action))}
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80">
+            <button
+              type="button"
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-600"
+              onClick={() => setShowTechnical((v) => !v)}
+              aria-expanded={showTechnical}
+            >
+              {t(lang, "auditTechnicalDetails")}
+              <span aria-hidden>{showTechnical ? "−" : "+"}</span>
+            </button>
+            {showTechnical ? (
+              <pre className="max-h-64 overflow-auto border-t border-slate-200 px-3 py-2 text-xs font-mono text-slate-800">
+                {detail.payloadJson}
+              </pre>
+            ) : null}
           </div>
         </div>
       </div>

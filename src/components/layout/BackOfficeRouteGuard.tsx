@@ -5,6 +5,7 @@ import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { usePosStore } from "../../store/usePosStore";
 import { isBackOfficePath, isStockKeeperPath, stockKeeperPathPermission } from "../../lib/backOfficePaths";
+import { isBackOfficePinRequired } from "../../lib/backOfficeUnlock";
 import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
 import { BackOfficeUnlockModal } from "./BackOfficeUnlockModal";
 import { BackOfficeUnlockBanner } from "./BackOfficeUnlockBanner";
@@ -14,8 +15,7 @@ type Props = { children: ReactNode; lang: Language };
 export function BackOfficeRouteGuard({ children, lang }: Props) {
   const location = useLocation();
   const actor = useSessionActor();
-  const pin = usePosStore((s) => s.preferences.backOfficePin);
-  const staffAccounts = usePosStore((s) => s.preferences.staffAccounts ?? []);
+  const preferences = usePosStore((s) => s.preferences);
   const { isUnlocked, lock, touch, unlockedRole, unlockedLabel } = useBackOfficeSession();
 
   const needs = isBackOfficePath(location.pathname);
@@ -54,9 +54,7 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
     return <Navigate to="/" replace state={{ backOfficeDenied: true }} />;
   }
 
-  const pinRequired =
-    Boolean(pin && String(pin).length > 0) ||
-    staffAccounts.some((s) => s.active && (s.role === "owner" || s.role === "manager") && Boolean(s.pin?.trim()));
+  const pinRequired = isBackOfficePinRequired(preferences);
   const skipPinForStockKeeper = hasStockKeeperAccess && !hasFullBackOffice;
   if (pinRequired && !isUnlocked && !skipPinForStockKeeper) {
     return (

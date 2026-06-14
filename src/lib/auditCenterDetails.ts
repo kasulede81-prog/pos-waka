@@ -1,5 +1,6 @@
 import type { AuditLogEntry, Language } from "../types";
-import { t, tTemplate } from "./i18n";
+import { describeAuditLine } from "./activityNarrative";
+import { t } from "./i18n";
 
 export type AuditDetailRow = {
   before: string | null;
@@ -92,13 +93,25 @@ export function auditActionLabel(lang: Language, action: string): string {
   return label === key ? action : label;
 }
 
-export function formatAuditRowSummary(lang: Language, entry: AuditLogEntry): string {
-  const detail = extractAuditDetails(entry);
-  if (detail.reason) {
-    return tTemplate(lang, "auditRowWithReason", {
-      summary: entry.payloadSummary,
-      reason: detail.reason,
-    });
-  }
-  return entry.payloadSummary;
+export function formatAuditRowSummary(
+  lang: Language,
+  entry: AuditLogEntry,
+  ctx?: {
+    productById?: Map<string, { name: string }>;
+    customerById?: Map<string, { name: string }>;
+  },
+): string {
+  const products = ctx?.productById ?? new Map<string, { name: string }>();
+  const customers = ctx?.customerById ?? new Map<string, { name: string }>();
+  return describeAuditLine(lang, entry, products, customers);
+}
+
+export function formatAuditBeforeAfter(before: string | null, after: string | null): { before: string | null; after: string | null } {
+  const fmt = (v: string | null) => {
+    if (v == null) return null;
+    const n = Number(v);
+    if (Number.isFinite(n) && String(n) === v.trim()) return `UGX ${Math.round(n).toLocaleString()}`;
+    return v;
+  };
+  return { before: fmt(before), after: fmt(after) };
 }

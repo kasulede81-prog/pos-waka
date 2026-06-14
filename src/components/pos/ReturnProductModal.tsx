@@ -12,6 +12,7 @@ import {
 } from "../../lib/returnLimits";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { PosScreenPortal } from "../layout/PosScreenPortal";
+import { resolveReturnRefundUgx } from "../../lib/returnRefundInput";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
 
 const REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
@@ -94,11 +95,24 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
 
   if (!open) return null;
 
+  const parsedRefund = Math.floor(Number(refund.replace(/\D/g, "")) || 0);
+  const enteredRefundUgx = parsedRefund <= 0 ? null : parsedRefund;
+  const { refundUgx: finalRefundUgx, wasCapped } = resolveReturnRefundUgx({
+    refundInput: refund,
+    suggestedRefundUgx: suggestedRefund,
+    maxRefundUgx,
+  });
+  const exceedsMax = maxRefundUgx != null && parsedRefund > 0 && parsedRefund > maxRefundUgx;
+
   const handleSubmit = () => {
     if (!productId || qtyN <= 0) return;
     if (maxQty != null && qtyN > maxQty) return;
-    let refundN = Math.floor(Number(refund.replace(/\D/g, "")) || 0) || suggestedRefund;
-    if (maxRefundUgx != null) refundN = Math.min(refundN, maxRefundUgx);
+    if (exceedsMax) return;
+    const { refundUgx: refundN } = resolveReturnRefundUgx({
+      refundInput: refund,
+      suggestedRefundUgx: suggestedRefund,
+      maxRefundUgx,
+    });
     if (!sale && !allowUnlinked) return;
     if (!sale && note.trim().length < 3) return;
 
@@ -179,7 +193,30 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
               {tTemplate(lang, "returnSuggestedRefundHint", { amount: suggestedRefund.toLocaleString() })}
             </span>
           ) : null}
+          {maxRefundUgx != null ? (
+            <span className="mt-1 block text-xs font-semibold text-slate-500">
+              {tTemplate(lang, "returnMaxRefundHint", { amount: maxRefundUgx.toLocaleString() })}
+            </span>
+          ) : null}
         </label>
+
+        <div className="mt-3 rounded-2xl border border-amber-100 bg-amber-50/60 p-3 text-sm">
+          <p className="font-semibold text-slate-800">
+            {t(lang, "returnSuggestedRefund")}: UGX {suggestedRefund.toLocaleString()}
+          </p>
+          <p className="mt-1 font-semibold text-slate-800">
+            {t(lang, "returnEnteredRefund")}: UGX {(enteredRefundUgx ?? suggestedRefund).toLocaleString()}
+            {enteredRefundUgx == null ? ` (${t(lang, "returnSuggestedRefund").toLowerCase()})` : ""}
+          </p>
+          <p className="mt-1 font-black text-amber-950">
+            {t(lang, "returnFinalRefund")}: UGX {finalRefundUgx.toLocaleString()}
+          </p>
+          {exceedsMax || wasCapped ? (
+            <p className="mt-2 text-xs font-bold text-rose-800">
+              {tTemplate(lang, "returnCapWarning", { max: (maxRefundUgx ?? 0).toLocaleString() })}
+            </p>
+          ) : null}
+        </div>
 
         <p className="mt-4 text-sm font-bold text-slate-800">{t(lang, "returnReasonLabel")}</p>
         <div className="mt-2 grid grid-cols-1 gap-2">
@@ -215,7 +252,12 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
           <button type="button" onClick={onClose} className="min-h-[52px] rounded-2xl border-2 font-bold">
             {t(lang, "cancel")}
           </button>
-          <button type="button" onClick={handleSubmit} className="min-h-[52px] rounded-2xl bg-amber-600 font-black text-white">
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={exceedsMax}
+            className="min-h-[52px] rounded-2xl bg-amber-600 font-black text-white disabled:opacity-40"
+          >
             {t(lang, "returnConfirm")}
           </button>
         </div>

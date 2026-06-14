@@ -27,21 +27,20 @@ export function computeBackOfficeAccessStats(auditLogs: AuditLogEntry[], todayKe
   let ownerUnlocksToday = 0;
   let managerUnlocksToday = 0;
 
-  const sorted = [...auditLogs].sort((a, b) => (a.at < b.at ? 1 : -1));
-
-  for (const e of sorted) {
-    if (isUnlockFailed(e.action) && dateKeyKampala(e.at) === today) {
+  for (const e of auditLogs) {
+    const day = dateKeyKampala(e.at);
+    if (isUnlockFailed(e.action) && day === today) {
       failedAttemptsToday += 1;
     }
     if (isUnlockSuccess(e.action)) {
-      if (!lastUnlockAt) {
+      if (!lastUnlockAt || e.at > lastUnlockAt) {
         lastUnlockAt = e.at;
         lastUnlockRole = typeof e.payload.unlockRole === "string" ? e.payload.unlockRole : e.role;
         lastUnlockActor =
           e.actorName?.trim() ||
           (typeof e.payload.unlockLabel === "string" ? e.payload.unlockLabel : e.actorUserId);
       }
-      if (dateKeyKampala(e.at) === today) {
+      if (day === today) {
         const unlockRole = typeof e.payload.unlockRole === "string" ? e.payload.unlockRole : e.role;
         if (unlockRole === "owner") ownerUnlocksToday += 1;
         if (unlockRole === "manager") managerUnlocksToday += 1;
