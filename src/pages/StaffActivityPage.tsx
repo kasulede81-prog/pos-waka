@@ -62,6 +62,10 @@ export function StaffActivityPage({ lang }: { lang: Language }) {
         {t(lang, "staffActivityOpenAuditCenter")} →
       </Link>
 
+      <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+        {t(lang, "staffActivityDeprecationBanner")}
+      </p>
+
       <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
       <DateFilterViewingLabel lang={lang} value={filter} />
 

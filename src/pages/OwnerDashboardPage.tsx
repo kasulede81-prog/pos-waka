@@ -2,37 +2,24 @@ import { useMemo, useState } from "react";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { Link } from "react-router-dom";
 import { PageBackBar } from "../components/layout/PageBackBar";
-import { Building2, ClipboardList, Sparkles } from "lucide-react";
+import { Building2 } from "lucide-react";
 import type { Language } from "../types";
-import { t, tTemplate } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { describeAuditLine } from "../lib/activityNarrative";
-import type { OwnerAlert } from "../lib/ownerAlerts";
 import { buildOwnerDashboardData, buildOwnerSummaryLines } from "../lib/ownerDashboardData";
-import { buildRefundActivityStats } from "../lib/refundActivityStats";
-import { dateKeyKampala } from "../lib/datesUg";
-import { auditCenterLinkFromFilter, type OwnerRiskCardKind } from "../lib/ownerRiskDashboard";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
-import { usePharmacyTerms } from "../lib/pharmacyTerms";
-import { useHospitalityTerms } from "../lib/hospitalityTerms";
-import { isWholesaleMode } from "../lib/wholesale";
-import { useWholesaleTerms } from "../lib/wholesaleTerms";
-
-function alertLines(lang: Language, a: OwnerAlert): { title: string; detail: string } {
-  const title = a.titleVars ? tTemplate(lang, a.title, a.titleVars) : t(lang, a.title);
-  const detail = a.detailVars ? tTemplate(lang, a.detail, a.detailVars) : t(lang, a.detail);
-  return { title, detail };
-}
-
-function pulseStyles(pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
-  if (pulse === "strong") return "from-waka-600 to-teal-700 text-white";
-  if (pulse === "steady") return "from-slate-700 to-slate-900 text-white";
-  return "from-amber-500 to-orange-600 text-amber-950";
-}
+import { dateKeyKampala } from "../lib/datesUg";
+import { buildOwnerStaffPerformanceRows } from "../lib/ownerStaffMetrics";
+import { canRecordCashExpenses } from "../lib/cashExpenses";
+import { useSessionActor } from "../context/SessionActorContext";
+import { OwnerNeedsAttentionSection } from "../components/owner/OwnerNeedsAttentionSection";
+import { OwnerBusinessTodaySection } from "../components/owner/OwnerBusinessTodaySection";
+import { OwnerStaffPerformanceSection } from "../components/owner/OwnerStaffPerformanceSection";
+import { OwnerInventoryHealthSection } from "../components/owner/OwnerInventoryHealthSection";
+import { OwnerQuickActionsRow } from "../components/owner/OwnerQuickActionsRow";
 
 function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
   if (pulse === "strong") return t(lang, "ownerPulseStrong");
@@ -40,33 +27,8 @@ function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboard
   return t(lang, "ownerPulseWatch");
 }
 
-function trustBadgeClass(level: "good" | "warning" | "risky"): string {
-  if (level === "good") return "bg-waka-500";
-  if (level === "warning") return "bg-amber-400";
-  return "bg-rose-500";
-}
-
-function riskCardTitle(lang: Language, kind: OwnerRiskCardKind): string {
-  const keys: Record<OwnerRiskCardKind, Parameters<typeof t>[1]> = {
-    product_deletions: "ownerRiskProductDeletions",
-    price_changes: "ownerRiskPriceChanges",
-    large_discounts: "ownerRiskLargeDiscounts",
-    returns: "ownerRiskReturns",
-    voids: "ownerRiskVoids",
-    expenses: "ownerRiskExpenses",
-    back_office_failed: "ownerRiskBackOfficeFailed",
-    stock_adjustments: "ownerRiskStockAdjustments",
-  };
-  return t(lang, keys[kind]);
-}
-
-function trustLabel(lang: Language, level: "good" | "warning" | "risky"): string {
-  if (level === "good") return t(lang, "trustGood");
-  if (level === "warning") return t(lang, "trustWarning");
-  return t(lang, "trustRisky");
-}
-
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
   const [includeArchived, setIncludeArchived] = useState(false);
   const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
@@ -75,11 +37,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const wholesaleMode = isWholesaleMode(preferences.businessType);
-  const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
-  const ht = useHospitalityTerms(lang, preferences.businessType, preferences.hospitalityModeEnabled);
-  const wt = useWholesaleTerms(lang, preferences.businessType);
-  const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const voidRecords = usePosStore((s) => s.voidRecords);
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
@@ -87,7 +44,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const reportingVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
   const reportingReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
-  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const drawerToday = useDrawerCashForToday();
 
   const dashboard = useMemo(
@@ -125,64 +81,27 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [lang, dashboard],
   );
 
-  const {
-    stats,
-    todayVoids,
-    todayReturns,
-    todayDiscountTotal,
-    todayDiscountEvents,
-    todayCatalogEvents,
-    todayStaffCatalogEvents,
-    fastMovers,
-    cashierPerf,
-    lowStock,
-    ownerAlertsResolved,
-    pulse,
-    trustRows,
-    backOfficeAccess,
-    openBillsCount,
-    expiringMedicinesCount,
-    riskCards,
-    yesterdaySalesUgx,
-  } = dashboard;
+  const { stats, fastMovers, cashierPerf, lowStock, trustRows, pulse, riskCards, todayKey } = dashboard;
 
-  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
-
-  const refundActivity = useMemo(
-    () => buildRefundActivityStats(reportingReturnRecords, dateKeyKampala(new Date())),
-    [reportingReturnRecords],
+  const todayAuditLogs = useMemo(
+    () => auditLogs.filter((e) => dateKeyKampala(e.at) === todayKey),
+    [auditLogs, todayKey],
   );
 
-  const [waCopied, setWaCopied] = useState(false);
+  const staffRows = useMemo(
+    () => buildOwnerStaffPerformanceRows(lang, trustRows, cashierPerf, todayAuditLogs),
+    [lang, trustRows, cashierPerf, todayAuditLogs],
+  );
 
-  const pct = preferences.cashVarianceThresholdPct ?? 5;
-  const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
-  const lastClose = dayCloses[0];
-  const activeShift = useMemo(() => shifts.find((s) => !s.endAt) ?? null, [shifts]);
+  const totalDebtUgx = useMemo(
+    () => customers.reduce((a, c) => a + c.debtBalanceUgx, 0),
+    [customers],
+  );
 
-  const quickAnswers = useMemo(() => {
-    const didWell = stats.totalSalesUgx >= yesterdaySalesUgx * 0.85 || stats.totalSalesUgx >= 100_000;
-    const moneyOk = stats.shortageUgx === null || stats.shortageUgx === 0;
-    const fast = fastMovers[0]?.name ?? "—";
-    const finishing = lowStock[0]?.name ?? t(lang, "allStockOk");
-    const unusual = ownerAlertsResolved.length > 0 ? t(lang, "ownerPulseWatch") : t(lang, "ownerVarianceOk");
-    const best = cashierPerf[0]?.label ?? "—";
-    return { didWell, moneyOk, fast, finishing, unusual, best };
-  }, [stats, yesterdaySalesUgx, fastMovers, lowStock, ownerAlertsResolved, cashierPerf, lang]);
-
-  const copyWa = () => {
-    void navigator.clipboard.writeText(waLine).then(
-      () => {
-        setWaCopied(true);
-        window.setTimeout(() => setWaCopied(false), 2500);
-      },
-      () => {},
-    );
-  };
+  const showRecordExpense = canRecordCashExpenses(actor.role, preferences);
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-12">
       <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
       <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-waka-50/40 p-6 shadow-sm">
         <div className="flex flex-wrap items-start gap-4">
@@ -199,557 +118,25 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <div className="flex flex-wrap gap-2">
-        <Link
-          to="/owner/activity"
-          className="inline-flex items-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-800 shadow-sm"
-        >
-          <ClipboardList className="h-4 w-4" aria-hidden />
-          {t(lang, "staffActivityNav")}
-        </Link>
-        <Link
-          to="/reports"
-          className="inline-flex items-center gap-2 rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 py-3 text-sm font-bold text-waka-950"
-        >
-          {t(lang, "reports")}
-        </Link>
-        <Link
-          to="/close-day"
-          className="rounded-2xl border-2 border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-950"
-        >
-          {t(lang, "closeDay")}
-        </Link>
-      </div>
+      <OwnerNeedsAttentionSection lang={lang} cards={riskCards} todayKey={todayKey} />
 
-      <section className="rounded-[1.75rem] border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-rose-50/40 p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerNeedsAttentionTitle")}</h2>
-        <p className="mt-1 text-sm font-medium text-slate-600">{t(lang, "ownerNeedsAttentionSub")}</p>
-        {riskCards.length === 0 ? (
-          <p className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm font-semibold text-emerald-900">
-            {t(lang, "ownerRiskNone")}
-          </p>
-        ) : (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {riskCards.map((card) => (
-              <article
-                key={card.kind}
-                className="flex flex-col rounded-2xl border border-white bg-white/90 p-4 shadow-sm ring-1 ring-slate-100/80"
-              >
-                <p className="text-xs font-black uppercase tracking-wide text-amber-900">{riskCardTitle(lang, card.kind)}</p>
-                <p className="mt-2 text-3xl font-black tabular-nums text-slate-900">{card.count}</p>
-                {card.impactUgx > 0 ? (
-                  <p className="mt-1 text-sm font-bold text-rose-800">
-                    {tTemplate(lang, "ownerRiskImpact", { amount: card.impactUgx.toLocaleString() })}
-                  </p>
-                ) : null}
-                {card.staffLabels.length > 0 ? (
-                  <p className="mt-2 text-xs font-semibold text-slate-600">
-                    {tTemplate(lang, "ownerRiskStaff", { names: card.staffLabels.join(", ") })}
-                  </p>
-                ) : null}
-                <Link
-                  to={auditCenterLinkFromFilter(card.auditFilter)}
-                  className="mt-auto pt-3 text-xs font-black text-waka-700 underline"
-                >
-                  {t(lang, "ownerRiskInvestigate")} →
-                </Link>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <OwnerBusinessTodaySection
+        lang={lang}
+        stats={stats}
+        trendLine={trendLine}
+        pulseLabel={pulseLabel(lang, pulse)}
+        customersCount={customers.length}
+        totalDebtUgx={totalDebtUgx}
+        fastMovers={fastMovers}
+        summaryLines={summaryLines}
+        waLine={waLine}
+      />
 
-      <section className="rounded-[1.75rem] border border-amber-200/90 bg-gradient-to-br from-amber-50/60 via-white to-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerRefundActivityTitle")}</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">{t(lang, "ownerRefundActivityCount")}</p>
-            <p className="mt-1 text-3xl font-black text-slate-900">{refundActivity.countToday}</p>
-          </article>
-          <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">{t(lang, "ownerRefundActivityValue")}</p>
-            <p className="mt-1 text-3xl font-black text-amber-950">
-              UGX {refundActivity.valueTodayUgx.toLocaleString()}
-            </p>
-          </article>
-        </div>
-        {refundActivity.topStaff.length > 0 ? (
-          <div className="mt-4">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "ownerRefundTopStaff")}</p>
-            <ul className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
-              {refundActivity.topStaff.map((s) => (
-                <li key={s.actorUserId} className="flex justify-between rounded-lg bg-white/80 px-2 py-1">
-                  <span>{s.label}</span>
-                  <span>
-                    {s.count} · UGX {s.valueUgx.toLocaleString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        {refundActivity.topProducts.length > 0 ? (
-          <div className="mt-4">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
-              {t(lang, "ownerRefundTopProducts")}
-            </p>
-            <ul className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
-              {refundActivity.topProducts.map((p) => (
-                <li key={p.productId} className="flex justify-between rounded-lg bg-white/80 px-2 py-1">
-                  <span>{p.name}</span>
-                  <span>
-                    {p.count} · UGX {p.valueUgx.toLocaleString()}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-        <Link
-          to="/office/audit-center"
-          className="mt-4 inline-block text-sm font-black text-waka-700 underline"
-        >
-          {t(lang, "ownerRefundInvestigate")} →
-        </Link>
-      </section>
+      <OwnerStaffPerformanceSection lang={lang} rows={staffRows} todayKey={todayKey} />
 
-      <section className={`rounded-[1.75rem] bg-gradient-to-br p-6 shadow-md ${pulseStyles(pulse)}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-6 w-6 shrink-0 opacity-90" aria-hidden />
-            <p className="text-lg font-black">{pulseLabel(lang, pulse)}</p>
-          </div>
-          <p className={`text-sm font-semibold ${pulse === "watch" ? "text-amber-950/90" : "text-white/90"}`}>
-            {trendLine}
-          </p>
-        </div>
-        <p className={`mt-2 text-sm font-medium ${pulse === "watch" ? "text-amber-950/80" : "text-white/85"}`}>
-          UGX {stats.totalSalesUgx.toLocaleString()} · {stats.saleCount} {t(lang, "salesCount")}
-        </p>
-        <p className={`mt-1 text-xs font-semibold ${pulse === "watch" ? "text-amber-950/80" : "text-white/80"}`}>
-          Net sales: UGX {stats.grossSalesUgx.toLocaleString()} - UGX {stats.voidsTotalUgx.toLocaleString()} - UGX{" "}
-          {stats.returnsTotalUgx.toLocaleString()} = UGX {stats.totalSalesUgx.toLocaleString()}
-        </p>
-      </section>
+      <OwnerInventoryHealthSection lang={lang} lowStock={lowStock} fastMovers={fastMovers} />
 
-      <section className="rounded-[1.75rem] border border-slate-200/90 bg-white p-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerDailySummaryTitle")}</h2>
-          <button
-            type="button"
-            onClick={() => copyWa()}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white"
-          >
-            {t(lang, "ownerCopyWaSummary")}
-          </button>
-        </div>
-        {waCopied ? <p className="mt-2 text-sm font-semibold text-waka-700">{t(lang, "ownerCopiedWa")}</p> : null}
-        <ul className="mt-4 space-y-2 text-sm font-semibold text-slate-800">
-          {summaryLines.map((line) => (
-            <li key={line} className="flex gap-2 rounded-xl bg-slate-50 px-3 py-2">
-              <span className="text-waka-600">●</span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="rounded-[1.75rem] border border-slate-100 bg-slate-50/80 p-5">
-        <h2 className="text-sm font-black uppercase tracking-wide text-slate-600">{t(lang, "ownerHealthTitle")}</h2>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">{t(lang, "ownerCardSalesToday")}</p>
-            <p className="mt-1 text-2xl font-black text-slate-900">UGX {stats.totalSalesUgx.toLocaleString()}</p>
-            <p className="mt-1 text-xs font-semibold text-slate-500">{t(lang, "ownerVsYesterday")}: {trendLine}</p>
-          </article>
-          <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold text-slate-500">{t(lang, "estimatedProfit")}</p>
-            <p className={`mt-1 text-2xl font-black ${stats.estProfitUgx < 0 ? "text-slate-600" : "text-waka-800"}`}>
-              UGX {stats.estProfitUgx.toLocaleString()}
-            </p>
-            <p className="mt-1 text-xs font-medium text-slate-500">
-              {stats.estProfitUgx < 0 ? t(lang, "estimatedProfitNegativeHint") : t(lang, "estimatedProfitHint")}
-            </p>
-          </article>
-        </div>
-        <article className="mt-3 rounded-2xl border border-white bg-white p-4 shadow-sm">
-          <p className="text-xs font-bold text-slate-500">{t(lang, "ownerBackOfficeAccessTitle")}</p>
-          <p className="mt-1 text-sm font-semibold text-slate-800">
-            {backOfficeAccess.lastUnlockAt
-              ? tTemplate(lang, "ownerBackOfficeLastUnlock", {
-                  when: new Date(backOfficeAccess.lastUnlockAt).toLocaleString([], { hour: "2-digit", minute: "2-digit" }),
-                  role: backOfficeAccess.lastUnlockRole ?? "—",
-                  name: backOfficeAccess.lastUnlockActor ?? "",
-                })
-              : t(lang, "ownerBackOfficeNoUnlock")}
-          </p>
-          <ul className="mt-3 grid gap-2 text-xs font-bold text-slate-700 sm:grid-cols-3">
-            <li className="rounded-xl bg-slate-50 px-3 py-2">
-              {t(lang, "ownerBackOfficeFailedToday")}: {backOfficeAccess.failedAttemptsToday}
-            </li>
-            <li className="rounded-xl bg-slate-50 px-3 py-2">
-              {t(lang, "ownerBackOfficeOwnerToday")}: {backOfficeAccess.ownerUnlocksToday}
-            </li>
-            <li className="rounded-xl bg-slate-50 px-3 py-2">
-              {t(lang, "ownerBackOfficeManagerToday")}: {backOfficeAccess.managerUnlocksToday}
-            </li>
-          </ul>
-          <Link to="/office/audit-center" className="mt-3 inline-block text-xs font-black text-waka-700 underline">
-            {t(lang, "ownerBackOfficeViewAudit")} →
-          </Link>
-        </article>
-      </section>
-
-      {ownerAlertsResolved.length > 0 ? (
-        <section>
-          <p className="mb-2 text-sm font-black uppercase tracking-wide text-amber-900">{t(lang, "ownerAlertsTitle")}</p>
-          <div className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-2 md:mx-0 md:flex-wrap">
-            {ownerAlertsResolved.map((a) => {
-              const { title, detail } = alertLines(lang, a);
-              return (
-                <div
-                  key={a.id}
-                  className={`min-w-[min(100%,280px)] shrink-0 snap-start rounded-2xl border-2 px-4 py-3 shadow-sm md:min-w-0 md:flex-1 ${
-                    a.tone === "danger"
-                      ? "border-rose-200 bg-rose-50"
-                      : a.tone === "warn"
-                        ? "border-amber-200 bg-amber-50"
-                        : "border-slate-200 bg-white"
-                  }`}
-                >
-                  <p className="text-sm font-black text-slate-900">{title}</p>
-                  <p className="mt-1 text-xs font-medium text-slate-700">{detail}</p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerQuestionsTitle")}</h2>
-        <dl className="mt-4 space-y-3 text-sm">
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <dt className="font-bold text-slate-500">{t(lang, "ownerQDidWell")}</dt>
-            <dd className="font-semibold text-slate-900">
-              {quickAnswers.didWell ? t(lang, "ownerPulseStrong") : t(lang, "ownerPulseWatch")}
-            </dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <dt className="font-bold text-slate-500">{t(lang, "ownerQMoney")}</dt>
-            <dd className="font-semibold text-slate-900">{quickAnswers.moneyOk ? t(lang, "ownerSummaryCashOk") : t(lang, "ownerPulseWatch")}</dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <dt className="font-bold text-slate-500">{t(lang, "ownerQFast")}</dt>
-            <dd className="font-semibold text-slate-900">{quickAnswers.fast}</dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <dt className="font-bold text-slate-500">{t(lang, "ownerQFinishing")}</dt>
-            <dd className="font-semibold text-slate-900">{quickAnswers.finishing}</dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <dt className="font-bold text-slate-500">{t(lang, "ownerQSuspicious")}</dt>
-            <dd className="font-semibold text-slate-900">{quickAnswers.unusual}</dd>
-          </div>
-          <div className="rounded-xl bg-slate-50 px-3 py-2">
-            <dt className="font-bold text-slate-500">{t(lang, "ownerQBest")}</dt>
-            <dd className="font-semibold text-slate-900">{quickAnswers.best}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="rounded-[1.75rem] border border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-white p-5">
-        <h2 className="text-base font-black text-slate-800">{t(lang, "branchCardTitle")}</h2>
-        <p className="mt-2 text-sm text-slate-600">{t(lang, "branchCardSub")}</p>
-        {preferences.branchDisplayName ? (
-          <p className="mt-3 text-sm font-bold text-waka-800">{preferences.branchDisplayName}</p>
-        ) : null}
-      </section>
-
-      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-900">{t(lang, "trustTitle")}</h2>
-        {trustRows.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-500">{t(lang, "noSalesYet")}</p>
-        ) : (
-          <ul className="mt-4 space-y-3">
-            {trustRows.map((row) => (
-              <li
-                key={row.userId}
-                className="flex flex-wrap items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3"
-              >
-                <span className={`inline-block h-10 w-1.5 rounded-full ${trustBadgeClass(row.trustLevel)}`} aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-black text-slate-900" title={row.userId}>
-                    {row.displayLabel}
-                  </p>
-                  <p className="text-xs font-medium text-slate-600">
-                    {t(lang, "trustSales")}: {row.salesHandled} · {t(lang, "trustStockEdits")}: {row.stockEdits} ·{" "}
-                    {t(lang, "trustDebtIssued")}: UGX {row.debtIssuedUgx.toLocaleString()}
-                    {row.refundLikeCount > 0 ? (
-                      <>
-                        {" "}
-                        · {t(lang, "trustRefunds")}: {row.refundLikeCount}
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "trustScore")}</p>
-                  <p className="text-lg font-black text-slate-900">{row.reliabilityScore}</p>
-                  <p className="text-xs font-bold text-slate-600">{trustLabel(lang, row.trustLevel)}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-[1.75rem] border border-rose-100 bg-rose-50/40 p-5 shadow-sm">
-          <h2 className="text-lg font-black text-rose-950">{t(lang, "ownerVoidsToday")}</h2>
-          {todayVoids.length === 0 ? (
-            <p className="mt-3 text-sm font-semibold text-rose-900/70">{t(lang, "ownerNoVoidsToday")}</p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {todayVoids.slice(0, 8).map((v) => (
-                <li key={v.id} className="rounded-2xl border border-rose-100 bg-white p-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-rose-700">{t(lang, "voidBtn")}</p>
-                  <p className="mt-1 font-black text-slate-900">
-                    {v.productName} · UGX {v.amountUgx.toLocaleString()}
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-slate-600">
-                    {tTemplate(lang, "ownerVoidBy", { name: v.actorName ?? v.actorUserId })}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {t(lang, `voidReason_${v.reason}`)} · {new Date(v.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="rounded-[1.75rem] border border-amber-100 bg-amber-50/40 p-5 shadow-sm">
-          <h2 className="text-lg font-black text-amber-950">{t(lang, "ownerDiscountsToday")}</h2>
-          {todayDiscountTotal <= 0 && todayDiscountEvents.length === 0 ? (
-            <p className="mt-3 text-sm font-semibold text-amber-900/70">{t(lang, "ownerNoDiscountsToday")}</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              {todayDiscountTotal > 0 ? (
-                <p className="rounded-2xl border border-amber-100 bg-white p-3 text-xl font-black text-amber-950">
-                  UGX {todayDiscountTotal.toLocaleString()}
-                </p>
-              ) : null}
-              {todayDiscountEvents.slice(0, 6).map((e) => (
-                <div key={e.id} className="rounded-2xl border border-amber-100 bg-white p-3 text-sm font-semibold text-slate-700">
-                  {describeAuditLine(lang, e, productById, customerById)}
-                  <p className="mt-1 text-xs text-slate-500">
-                    {e.actorName ?? e.actorUserId} · {new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-[1.75rem] border border-violet-200 bg-violet-50/40 p-5 shadow-sm lg:col-span-2">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-black text-violet-950">{t(lang, "ownerCatalogChangesToday")}</h2>
-            <Link to="/owner/activity" className="text-sm font-bold text-violet-800 underline">
-              {t(lang, "staffActivityNav")} →
-            </Link>
-          </div>
-          {todayCatalogEvents.length === 0 ? (
-            <p className="mt-3 text-sm font-semibold text-violet-900/70">{t(lang, "ownerNoCatalogChangesToday")}</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              {todayStaffCatalogEvents.length > 0 ? (
-                <p className="rounded-2xl border border-violet-200 bg-white px-3 py-2 text-sm font-bold text-violet-900">
-                  {tTemplate(lang, "ownerStaffCatalogCount", { count: String(todayStaffCatalogEvents.length) })}
-                </p>
-              ) : null}
-              <ul className="space-y-2">
-                {todayCatalogEvents.map((e) => (
-                  <li key={e.id} className="rounded-2xl border border-violet-100 bg-white p-3">
-                    <p className="text-sm font-semibold text-slate-800">
-                      {describeAuditLine(lang, e, productById, customerById)}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      {e.actorName ?? e.actorUserId}
-                      {e.role !== "owner" ? ` · ${t(lang, `role_${e.role}`)}` : ""}
-                      {" · "}
-                      {new Date(e.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50/60 p-5 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">{t(lang, "returnRefundLabel")}</h2>
-          {todayReturns.length === 0 ? (
-            <p className="mt-3 text-sm font-semibold text-slate-600">{t(lang, "noSalesYet")}</p>
-          ) : (
-            <div className="mt-3 space-y-3">
-              <p className="rounded-2xl border border-slate-200 bg-white p-3 text-xl font-black text-slate-900">
-                UGX {stats.returnsTotalUgx.toLocaleString()}
-              </p>
-              <ul className="space-y-2">
-                {todayReturns.slice(0, 6).map((r) => (
-                  <li key={r.id} className="rounded-2xl border border-slate-200 bg-white p-3">
-                    <p className="font-black text-slate-900">
-                      {r.productName} · UGX {r.refundAmountUgx.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">{t(lang, "fastToday")}</h2>
-          {fastMovers.length === 0 ? (
-            <p className="mt-3 text-slate-500">{t(lang, "noSalesYet")}</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {fastMovers.map((m) => (
-                <li key={m.name} className="flex justify-between text-sm font-semibold">
-                  <span>{m.name}</span>
-                  <span className="text-waka-700">UGX {m.revenue.toLocaleString()}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerCashierPerf")}</h2>
-          {cashierPerf.length === 0 ? (
-            <p className="mt-3 text-slate-500">{t(lang, "noSalesYet")}</p>
-          ) : (
-            <>
-              <p className="mt-1 text-xs font-bold text-waka-800">
-                {t(lang, "ownerBestCashier")}: {cashierPerf[0]?.label}
-              </p>
-              <ul className="mt-3 space-y-2">
-                {cashierPerf.map((row) => (
-                  <li key={row.userId} className="flex justify-between text-sm font-semibold">
-                    <span className="truncate pr-2" title={row.userId}>
-                      {row.label}
-                    </span>
-                    <span className="shrink-0 text-slate-600">
-                      {row.count} · UGX {row.revenue.toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-          <p className="mt-3 text-xs text-slate-500">{t(lang, "ownerCashierPerfHint")}</p>
-        </div>
-      </section>
-
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "ownerCardExpectedCash")}</p>
-          <p className="mt-1 text-xl font-black text-slate-900">UGX {stats.expectedCashUgx.toLocaleString()}</p>
-        </article>
-        <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "ownerCardCountedCash")}</p>
-          <p className="mt-1 text-xl font-black text-slate-900">
-            {stats.countedCashUgx !== null ? `UGX ${stats.countedCashUgx.toLocaleString()}` : "—"}
-          </p>
-          {stats.todayCloseDiff !== null ? (
-            <p
-              className={`mt-1 text-xs font-bold ${
-                stats.todayCloseDiff === 0 ? "text-waka-700" : stats.todayCloseDiff > 0 ? "text-amber-800" : "text-rose-700"
-              }`}
-            >
-              {t(lang, "ownerShortOver")}: UGX {stats.todayCloseDiff.toLocaleString()}
-            </p>
-          ) : (
-            <p className="mt-1 text-xs text-slate-500">{t(lang, "ownerNoCloseYet")}</p>
-          )}
-        </article>
-        <article className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
-          <p className="text-xs font-bold uppercase text-amber-900">{t(lang, "debtToday")}</p>
-          <p className="mt-1 text-xl font-black text-amber-900">UGX {stats.debtTodayUgx.toLocaleString()}</p>
-        </article>
-        <article className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 shadow-sm sm:col-span-2 lg:col-span-1">
-          <p className="text-xs font-bold uppercase text-teal-900">{t(lang, "ownerDebtCollectedToday")}</p>
-          <p className="mt-1 text-xl font-black text-teal-950">UGX {stats.debtCollectedUgx.toLocaleString()}</p>
-        </article>
-        <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "activeCashierCard")}</p>
-          <p className="mt-1 text-xl font-black text-slate-900">{activeShift?.actorName ?? "—"}</p>
-        </article>
-        <article className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "currentShiftCard")}</p>
-          <p className="mt-1 text-xl font-black text-slate-900">
-            {activeShift ? new Date(activeShift.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
-          </p>
-        </article>
-      </section>
-
-      {lastClose ? (
-        <section className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5">
-          <p className="font-black text-slate-900">{t(lang, "ownerLastClose")}</p>
-          <p className="mt-1 text-sm text-slate-600">
-            {lastClose.dateKey} · {t(lang, "ownerExpectedVsCounted")}: UGX {lastClose.expectedCashUgx.toLocaleString()} / UGX{" "}
-            {lastClose.countedCashUgx.toLocaleString()}
-          </p>
-          {(() => {
-            const exp = Math.max(1, lastClose.expectedCashUgx);
-            const absDiff = Math.abs(lastClose.differenceUgx);
-            const threshold = Math.max((pct / 100) * exp, fixed);
-            const suspicious = absDiff > threshold;
-            return suspicious ? (
-              <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950 ring-1 ring-amber-200">
-                {t(lang, "ownerVarianceFlag")} (±{pct}% / UGX {fixed.toLocaleString()})
-              </p>
-            ) : (
-              <p className="mt-2 text-sm font-semibold text-waka-800">{t(lang, "ownerVarianceOk")}</p>
-            );
-          })()}
-        </section>
-      ) : null}
-
-      <section className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-black text-slate-900">
-          {hospitalityMode || pharmacyMode || wholesaleMode ? modeTerm("customers") : t(lang, "customers")}
-        </h2>
-        <p className="mt-1 text-sm text-slate-600">
-          {hospitalityMode
-            ? t(lang, "hospitalityPage_guestTabs")
-            : pharmacyMode || wholesaleMode
-              ? modeTerm("debts")
-              : t(lang, "ownerDebtHint")}
-          :{" "}
-          <span className="font-bold text-amber-800">
-            UGX {customers.reduce((a, c) => a + c.debtBalanceUgx, 0).toLocaleString()}
-          </span>
-        </p>
-        {hospitalityMode && openBillsCount > 0 ? (
-          <p className="mt-2 rounded-xl bg-teal-50 px-3 py-2 text-sm font-bold text-teal-950">
-            {modeTerm("pendingSale")}: {openBillsCount}
-          </p>
-        ) : null}
-        {pharmacyMode && expiringMedicinesCount > 0 ? (
-          <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-            {t(lang, "pharmacyDashExpiring30")}: {expiringMedicinesCount}
-          </p>
-        ) : null}
-        <Link to="/customers" className="mt-3 inline-block text-sm font-bold text-waka-700 underline">
-          {hospitalityMode || pharmacyMode || wholesaleMode ? modeTerm("customers") : t(lang, "customers")} →
-        </Link>
-      </section>
+      <OwnerQuickActionsRow lang={lang} showRecordExpense={showRecordExpense} />
     </div>
   );
 }

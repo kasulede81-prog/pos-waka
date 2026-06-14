@@ -39,6 +39,8 @@ import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
 import { OfficeSupplierSummaryCard } from "../components/office/OfficeSupplierSummaryCard";
 import { OfficeRestockSuggestionsCard } from "../components/office/OfficeRestockSuggestionsCard";
+import { OfficeNeedsAttentionBadge } from "../components/office/OfficeNeedsAttentionBadge";
+import { useOwnerRiskCards } from "../hooks/useOwnerRiskCards";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -119,6 +121,8 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const canProfit =
     canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit");
   const canShopSettings = can("settings.shop");
+  const canOwnerDashboard = can("owner.dashboard");
+  const { totalCount: ownerRiskCount } = useOwnerRiskCards(lang, false);
 
   const hasDaily =
     can("customers.view") ||
@@ -154,6 +158,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         <div className="mt-2">
           <OfficeSyncStatusChip lang={lang} />
         </div>
+        {canOwnerDashboard ? <div className="mt-3"><OfficeNeedsAttentionBadge lang={lang} totalCount={ownerRiskCount} /></div> : null}
       </header>
 
       <OfficePremiumSection lang={lang} />

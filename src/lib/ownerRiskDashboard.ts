@@ -2,6 +2,7 @@ import type { AuditLogEntry, ReturnRecord, VoidRecord } from "../types";
 import type { AuditSearchFilters } from "./auditSearch";
 import { actorDisplayLabel } from "./activityNarrative";
 import type { Language } from "../types";
+import { t } from "./i18n";
 
 /** Individual discount audit events at or above this UGX count as "large". */
 export const LARGE_DISCOUNT_UGX_THRESHOLD = 10_000;
@@ -137,6 +138,25 @@ export function buildOwnerRiskCards(input: {
   ];
 
   return cards.filter((c) => c.count > 0);
+}
+
+export function sumOwnerRiskCardCounts(cards: OwnerRiskCard[]): number {
+  return cards.reduce((sum, c) => sum + c.count, 0);
+}
+
+const RISK_TITLE_KEYS: Record<OwnerRiskCardKind, Parameters<typeof t>[1]> = {
+  product_deletions: "ownerRiskProductDeletions",
+  price_changes: "ownerRiskPriceChanges",
+  large_discounts: "ownerRiskLargeDiscounts",
+  returns: "ownerRiskReturns",
+  voids: "ownerRiskVoids",
+  expenses: "ownerRiskExpenses",
+  back_office_failed: "ownerRiskBackOfficeFailed",
+  stock_adjustments: "ownerRiskStockAdjustments",
+};
+
+export function ownerRiskCardTitle(lang: Language, kind: OwnerRiskCardKind): string {
+  return t(lang, RISK_TITLE_KEYS[kind]);
 }
 
 export function auditCenterLinkFromFilter(filter: Partial<AuditSearchFilters>): string {
