@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Download, FileText, Search } from "lucide-react";
-import type { AuditAction, AuditLogEntry, Language } from "../types";
-import { t } from "../lib/i18n";
+import { Download, FileText, Search, ShieldCheck } from "lucide-react";
+import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
+import { t, tTemplate } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
+import { RefundCalculationDrawer } from "../components/returns/RefundCalculationDrawer";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
+import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import { usePosStore } from "../store/usePosStore";
 import {
@@ -21,6 +23,7 @@ import { auditActionLabel, formatAuditRowSummary } from "../lib/auditCenterDetai
 import { formatAuditDeviceLabel } from "../lib/auditDeviceLabel";
 import { buildAuditCsv, buildAuditPdfBlob } from "../lib/auditExport";
 import { dateKeyKampala } from "../lib/datesUg";
+import { auditRefundIntegrity } from "../lib/auditRefundIntegrity";
 
 const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 
@@ -51,6 +54,28 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "");
   const debouncedSearchText = useDebouncedValue(searchText, 250);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
+  const [traceReturn, setTraceReturn] = useState<ReturnRecord | null>(null);
+  const sales = useDeferredReportingSales(includeArchived);
+  const returnRecords = usePosStore((s) => s.returnRecords);
+  const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
+  const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+
+  const integrityReport = useMemo(
+    () => auditRefundIntegrity({ sales, returnRecords: allReturns }),
+    [sales, allReturns],
+  );
+
+  const saleById = useMemo(() => new Map(sales.map((s) => [s.id, s])), [sales]);
+
+  const returnsInRange = useMemo(() => {
+    return allReturns
+      .filter((r) => {
+        const key = dateKeyKampala(r.createdAt);
+        return key >= dateFrom && key <= dateTo;
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 25);
+  }, [allReturns, dateFrom, dateTo]);
 
   const auditIndex = useMemo(
     () => buildAuditLogSearchIndex(auditLogs, { products, customers, suppliers, lang }),
@@ -122,6 +147,82 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
       />
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+
+      <section className="rounded-[1.5rem] border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-white p-4 shadow-sm">
+        <div className="flex items-start gap-3">
+          <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-black text-slate-900">{t(lang, "refundIntegrityTitle")}</h2>
+            <p className="mt-0.5 text-xs font-medium text-slate-600">{t(lang, "refundIntegritySub")}</p>
+            <p
+              className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}
+            >
+              {integrityReport.ok
+                ? t(lang, "refundIntegrityOk")
+                : tTemplate(lang, "refundIntegrityViolations", {
+                    count: String(integrityReport.violations.length),
+                  })}
+            </p>
+            {!integrityReport.ok ? (
+              <ul className="mt-2 space-y-1 text-xs font-semibold text-rose-900">
+                {integrityReport.violations.slice(0, 8).map((v, i) => (
+                  <li key={`${v.code}-${i}`} className="rounded-lg bg-rose-50 px-2 py-1">
+                    {v.message}
+                    {v.saleId ? ` · ${v.saleId.slice(0, 8)}` : ""}
+                    {v.expected != null && v.actual != null
+                      ? ` (${v.actual} / max ${v.expected})`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="mt-2 text-[10px] font-semibold text-slate-500">
+              {integrityReport.returnsScanned} returns · {integrityReport.salesScanned} sales scanned
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "refundHistoryTitle")}</h2>
+        {returnsInRange.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-600">{t(lang, "refundHistoryEmpty")}</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {returnsInRange.map((r) => {
+              const staff = r.actorName?.trim() || actorDisplayLabel(r.actorUserId, lang);
+              const when = new Date(r.createdAt).toLocaleString([], {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              return (
+                <li
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-black text-slate-900">
+                      {r.productName} · UGX {r.refundAmountUgx.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      {staff} · {when}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTraceReturn(r)}
+                    className="shrink-0 rounded-xl border border-waka-200 bg-waka-50 px-3 py-1.5 text-xs font-black text-waka-900"
+                  >
+                    {t(lang, "refundTraceView")}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <section className="space-y-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "auditFiltersTitle")}</h2>
@@ -283,6 +384,20 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
         productById={productById}
         customerById={customerById}
         onClose={() => setSelected(null)}
+      />
+
+      <RefundCalculationDrawer
+        lang={lang}
+        open={traceReturn !== null}
+        sale={traceReturn?.saleId ? saleById.get(traceReturn.saleId) ?? null : null}
+        returnRecord={traceReturn}
+        returnRecords={allReturns}
+        actorLabel={
+          traceReturn
+            ? traceReturn.actorName?.trim() || actorDisplayLabel(traceReturn.actorUserId, lang)
+            : ""
+        }
+        onClose={() => setTraceReturn(null)}
       />
     </div>
   );

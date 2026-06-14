@@ -14,6 +14,8 @@ import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { resolveReturnRefundUgx } from "../../lib/returnRefundInput";
 import { pricePerBaseUnitUgx } from "../../lib/sellingEngine";
+import { buildLineRefundBreakdown } from "../../lib/refundBreakdown";
+import { RefundBreakdownPanel } from "../returns/RefundBreakdownPanel";
 
 const REASONS: ReturnReason[] = ["damaged", "warm_bad", "broken", "wrong_item", "other"];
 
@@ -110,6 +112,17 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
     !exceedsMax &&
     finalRefundUgx > 0 &&
     (sale != null || (allowUnlinked && note.trim().length >= 3));
+
+  const refundBreakdown =
+    sale && productId && qtyN > 0 && !qtyInvalid
+      ? buildLineRefundBreakdown({
+          sale,
+          productId,
+          returnQty: qtyN,
+          returnRecords,
+          finalRefundUgx: finalRefundUgx,
+        })
+      : null;
 
   const handleSubmit = () => {
     if (!canSubmit) return;
@@ -238,6 +251,10 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
                   {tTemplate(lang, "returnRefundCustomNote", { amount: suggestedRefund.toLocaleString() })}
                 </p>
               </div>
+            ) : null}
+
+            {refundBreakdown ? (
+              <RefundBreakdownPanel lang={lang} breakdown={refundBreakdown} />
             ) : null}
 
             <p className="mt-4 text-sm font-bold text-slate-800">{t(lang, "returnReasonLabel")}</p>

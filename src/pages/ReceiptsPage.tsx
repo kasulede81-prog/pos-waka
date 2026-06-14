@@ -37,6 +37,8 @@ import {
   groupPendingSalesByKampalaDay,
   partitionReceiptsSales,
 } from "../lib/receiptsGrouping";
+import { computeSaleDiscountBreakdown } from "../lib/discountBreakdown";
+import { SaleDiscountSummary } from "../components/returns/SaleDiscountSummary";
 function formatReceiptsDayHeading(dateKey: string): string {
   const parts = dateKey.split("-").map(Number);
   const y = parts[0];
@@ -68,6 +70,10 @@ type SaleArticleProps = {
 function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, onVoidLine, onReturn, pendingBadge }: SaleArticleProps) {
   const completed = isCompletedSale(sale);
   const allowAdjust = completed && canVoid;
+  const discountBreakdown = useMemo(
+    () => (completed ? computeSaleDiscountBreakdown(sale) : null),
+    [completed, sale],
+  );
 
   return (
     <article
@@ -84,6 +90,9 @@ function SaleArticle({ lang, sale, canVoid, soldByLabel, onPrint, onReceiptPdf, 
         {t(lang, "receiptCashier")}: {soldByLabel(sale)}
       </p>
       <p className="mt-1 text-lg font-black text-slate-950">UGX {sale.totalUgx.toLocaleString()}</p>
+      {discountBreakdown ? (
+        <SaleDiscountSummary lang={lang} breakdown={discountBreakdown} className="mt-2" />
+      ) : null}
       <p className="text-xs font-medium text-slate-500">
         {t(lang, "cashLabel")}: UGX {sale.cashPaidUgx.toLocaleString()}
         {sale.debtUgx > 0 ? (

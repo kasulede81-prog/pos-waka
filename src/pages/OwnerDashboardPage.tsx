@@ -11,6 +11,8 @@ import { usePosStore } from "../store/usePosStore";
 import { describeAuditLine } from "../lib/activityNarrative";
 import type { OwnerAlert } from "../lib/ownerAlerts";
 import { buildOwnerDashboardData, buildOwnerSummaryLines } from "../lib/ownerDashboardData";
+import { buildRefundActivityStats } from "../lib/refundActivityStats";
+import { dateKeyKampala } from "../lib/datesUg";
 import { auditCenterLinkFromFilter, type OwnerRiskCardKind } from "../lib/ownerRiskDashboard";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -147,6 +149,11 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
 
+  const refundActivity = useMemo(
+    () => buildRefundActivityStats(reportingReturnRecords, dateKeyKampala(new Date())),
+    [reportingReturnRecords],
+  );
+
   const [waCopied, setWaCopied] = useState(false);
 
   const pct = preferences.cashVarianceThresholdPct ?? 5;
@@ -250,6 +257,60 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="rounded-[1.75rem] border border-amber-200/90 bg-gradient-to-br from-amber-50/60 via-white to-white p-5 shadow-sm">
+        <h2 className="text-lg font-black text-slate-900">{t(lang, "ownerRefundActivityTitle")}</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+            <p className="text-xs font-bold text-slate-500">{t(lang, "ownerRefundActivityCount")}</p>
+            <p className="mt-1 text-3xl font-black text-slate-900">{refundActivity.countToday}</p>
+          </article>
+          <article className="rounded-2xl border border-white bg-white p-4 shadow-sm">
+            <p className="text-xs font-bold text-slate-500">{t(lang, "ownerRefundActivityValue")}</p>
+            <p className="mt-1 text-3xl font-black text-amber-950">
+              UGX {refundActivity.valueTodayUgx.toLocaleString()}
+            </p>
+          </article>
+        </div>
+        {refundActivity.topStaff.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "ownerRefundTopStaff")}</p>
+            <ul className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
+              {refundActivity.topStaff.map((s) => (
+                <li key={s.actorUserId} className="flex justify-between rounded-lg bg-white/80 px-2 py-1">
+                  <span>{s.label}</span>
+                  <span>
+                    {s.count} · UGX {s.valueUgx.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {refundActivity.topProducts.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">
+              {t(lang, "ownerRefundTopProducts")}
+            </p>
+            <ul className="mt-2 space-y-1 text-sm font-semibold text-slate-800">
+              {refundActivity.topProducts.map((p) => (
+                <li key={p.productId} className="flex justify-between rounded-lg bg-white/80 px-2 py-1">
+                  <span>{p.name}</span>
+                  <span>
+                    {p.count} · UGX {p.valueUgx.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        <Link
+          to="/office/audit-center"
+          className="mt-4 inline-block text-sm font-black text-waka-700 underline"
+        >
+          {t(lang, "ownerRefundInvestigate")} →
+        </Link>
       </section>
 
       <section className={`rounded-[1.75rem] bg-gradient-to-br p-6 shadow-md ${pulseStyles(pulse)}`}>
