@@ -46,6 +46,7 @@ import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
 import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
+import { DesktopTerminalBackBar } from "./DesktopTerminalBackBar";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 
 type Props = {
@@ -261,6 +262,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
   const desktopPosSell =
     isDesktopLayout && (location.pathname === "/pos" || location.pathname.startsWith("/pos/"));
+  /** lg+ terminal: launcher is primary nav — hide duplicate sidebar. Mobile/tablet unchanged below lg. */
+  const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
+  const showDesktopTerminalBack =
+    desktopTerminalMode && !desktopTerminalHome && !desktopPosSell;
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const hospitalityKitchenNav = hospitalityNav
@@ -452,13 +457,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6",
-            desktopTerminalHome ? "max-w-none" : "max-w-6xl",
+            desktopTerminalMode || desktopTerminalHome ? "max-w-none" : "max-w-6xl",
+            desktopTerminalMode && !desktopTerminalHome && "lg:px-8 xl:px-10",
           )}
         >
           <nav
             className={clsx(
               "hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56",
-              desktopTerminalHome && "md:hidden",
+              (desktopTerminalHome || desktopTerminalMode) && "md:hidden",
               desktopPosSell && "lg:hidden",
             )}
           >
@@ -498,6 +504,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               }`}
             >
               <BackOfficeRouteGuard lang={lang}>
+                {showDesktopTerminalBack ? <DesktopTerminalBackBar lang={lang} /> : null}
                 <RouteErrorBoundary scope="page">
                   <Outlet />
                 </RouteErrorBoundary>
