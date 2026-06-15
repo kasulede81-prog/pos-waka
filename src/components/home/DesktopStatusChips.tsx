@@ -43,12 +43,15 @@ export function DesktopStatusChips({ lang }: Props) {
   const showRisks = hasPermission(actor.role, "owner.activity") && riskCount > 0;
   const showLowStock = hasPermission(actor.role, "stock.view") && lowStockCount > 0;
 
+  const chipClass =
+    "inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-900";
+
   return (
     <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
       {showRisks ? (
         <Link
           to="/office/audit-center"
-          className="inline-flex min-h-[36px] items-center gap-2 rounded-full border border-rose-200 bg-rose-50 px-4 py-1.5 text-sm font-bold text-rose-900 transition-colors hover:bg-rose-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+          className={`${chipClass} border-rose-500/50 bg-rose-950/80 text-rose-100 hover:bg-rose-900/90`}
         >
           <span aria-hidden>🔴</span>
           {tTemplate(lang, "desktopHomeStatusRisks", { count: String(riskCount) })}
@@ -57,7 +60,7 @@ export function DesktopStatusChips({ lang }: Props) {
       {showLowStock ? (
         <Link
           to="/stock"
-          className="inline-flex min-h-[36px] items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-4 py-1.5 text-sm font-bold text-amber-950 transition-colors hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+          className={`${chipClass} border-amber-500/50 bg-amber-950/80 text-amber-100 hover:bg-amber-900/90`}
         >
           <span aria-hidden>🟠</span>
           {tTemplate(lang, "desktopHomeStatusLowStock", { count: String(lowStockCount) })}
@@ -65,10 +68,10 @@ export function DesktopStatusChips({ lang }: Props) {
       ) : null}
       <Link
         to="/office/backup"
-        className={`inline-flex min-h-[36px] items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${
+        className={`${chipClass} ${
           synced
-            ? "border-emerald-200 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 focus-visible:ring-emerald-400"
-            : "border-amber-200 bg-amber-50 text-amber-950 hover:bg-amber-100 focus-visible:ring-amber-400"
+            ? "border-emerald-500/50 bg-emerald-950/80 text-emerald-100 hover:bg-emerald-900/90"
+            : "border-amber-500/50 bg-amber-950/80 text-amber-100 hover:bg-amber-900/90"
         }`}
       >
         <span aria-hidden>{synced ? "🟢" : "🟠"}</span>

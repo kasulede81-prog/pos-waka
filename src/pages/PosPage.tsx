@@ -8,6 +8,7 @@ import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
+import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { usePosDesktopLayout } from "../hooks/usePosDesktopLayout";
 import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
 import { resolveScanToCartInput } from "../lib/posScanToCart";
@@ -181,6 +182,13 @@ export function PosPage({ lang }: { lang: Language }) {
   const hospitalityMode = isHospitalityMode(shopPreferences.businessType, shopPreferences.hospitalityModeEnabled);
   const wholesaleMode = isWholesaleMode(shopPreferences.businessType);
   const modeTerm = hospitalityMode ? ht : wholesaleMode ? wt : pt;
+  const sellNavLabelKey = hospitalityMode
+    ? "navSell"
+    : pharmacyMode
+      ? "navDispense"
+      : wholesaleMode
+        ? "navInvoiceDesk"
+        : "navSell";
   const { snapshot, authMode } = useSubscription();
   const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const location = useLocation();
@@ -1246,6 +1254,7 @@ export function PosPage({ lang }: { lang: Language }) {
   return (
     <div className="space-y-3">
       <PosOfflineBanner lang={lang} />
+      <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-3xl font-black tracking-tight text-slate-950">{modeTerm("sell")}</h2>

@@ -1,15 +1,15 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import {
   ShoppingCart,
   Package,
   Users,
-  Receipt,
   BarChart3,
   Search,
   Banknote,
   Settings,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 import type { Language, Permission } from "../../types";
@@ -22,6 +22,7 @@ import { isLowStock } from "../../lib/sellingEngine";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
+import { POS_SELL_ROUTE, POS_SHOP_ROUTE } from "../../lib/posNavigation";
 
 type TileDef = {
   id: string;
@@ -30,14 +31,40 @@ type TileDef = {
   Icon: LucideIcon;
   perm?: Permission;
   badge?: number;
+  /** Grid placement */
+  area: string;
+  variant: "primary" | "secondary";
 };
 
 type Props = { lang: Language };
 
+const FOCUS_ORDER = [
+  "sell",
+  "inventory",
+  "customers",
+  "shop",
+  "reports",
+  "investigation",
+  "cash",
+  "settings",
+] as const;
+
+function tileButtonClass(variant: TileDef["variant"], extra?: string): string {
+  return clsx(
+    "relative touch-manipulation rounded-2xl border-2 text-center shadow-md transition-all",
+    "hover:shadow-lg active:scale-[0.98] motion-reduce:active:scale-100",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-900/5",
+    variant === "primary"
+      ? "flex min-h-[260px] flex-col items-center justify-center gap-4 border-waka-500/80 bg-gradient-to-br from-waka-600 to-waka-700 px-6 py-8 text-white shadow-[0_8px_32px_rgba(234,88,12,0.45)] hover:from-waka-500 hover:to-waka-600"
+      : "flex min-h-[120px] flex-col items-center justify-center gap-2.5 border-stone-600/40 bg-stone-800/90 px-4 py-4 text-stone-50 hover:border-waka-500/50 hover:bg-stone-800",
+    extra,
+  );
+}
+
 export function DesktopHomeTiles({ lang }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
-  const tileRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const { totalCount: riskCount } = useOwnerRiskCards(lang, false);
   const products = usePosStore((s) => s.products);
   const { snapshot } = useSubscription();
@@ -59,7 +86,15 @@ export function DesktopHomeTiles({ lang }: Props) {
 
   const tiles = useMemo((): TileDef[] => {
     const all: TileDef[] = [
-      { id: "sell", labelKey: "desktopHomeTileSell", to: "/pos", Icon: ShoppingCart, perm: "pos.sell" },
+      {
+        id: "sell",
+        labelKey: "desktopHomeTileSell",
+        to: POS_SELL_ROUTE,
+        Icon: ShoppingCart,
+        perm: "pos.sell",
+        area: "sell",
+        variant: "primary",
+      },
       {
         id: "inventory",
         labelKey: "desktopHomeTileInventory",
@@ -67,10 +102,36 @@ export function DesktopHomeTiles({ lang }: Props) {
         Icon: Package,
         perm: "stock.view",
         badge: lowStockCount > 0 ? lowStockCount : undefined,
+        area: "inventory",
+        variant: "secondary",
       },
-      { id: "customers", labelKey: "desktopHomeTileCustomers", to: "/customers", Icon: Users, perm: "customers.view" },
-      { id: "receipts", labelKey: "desktopHomeTileReceipts", to: "/receipts", Icon: Receipt, perm: "receipts.view" },
-      { id: "reports", labelKey: "desktopHomeTileReports", to: "/reports", Icon: BarChart3, perm: "reports.view" },
+      {
+        id: "customers",
+        labelKey: "desktopHomeTileCustomers",
+        to: "/customers",
+        Icon: Users,
+        perm: "customers.view",
+        area: "customers",
+        variant: "secondary",
+      },
+      {
+        id: "shop",
+        labelKey: "desktopHomeTileShop",
+        to: POS_SHOP_ROUTE,
+        Icon: Briefcase,
+        perm: "back_office.access",
+        area: "shop",
+        variant: "secondary",
+      },
+      {
+        id: "reports",
+        labelKey: "desktopHomeTileReports",
+        to: "/reports",
+        Icon: BarChart3,
+        perm: "reports.view",
+        area: "reports",
+        variant: "secondary",
+      },
       {
         id: "investigation",
         labelKey: "desktopHomeTileInvestigation",
@@ -78,64 +139,108 @@ export function DesktopHomeTiles({ lang }: Props) {
         Icon: Search,
         perm: "owner.activity",
         badge: riskCount > 0 ? riskCount : undefined,
+        area: "investigation",
+        variant: "secondary",
       },
-      { id: "cash", labelKey: "desktopHomeTileCash", to: "/office/cash-position", Icon: Banknote, perm: "day.close" },
-      { id: "settings", labelKey: "desktopHomeTileSettings", to: "/settings", Icon: Settings, perm: "settings.view" },
+      {
+        id: "cash",
+        labelKey: "desktopHomeTileCash",
+        to: "/office/cash-position",
+        Icon: Banknote,
+        perm: "day.close",
+        area: "cash",
+        variant: "secondary",
+      },
+      {
+        id: "settings",
+        labelKey: "desktopHomeTileSettings",
+        to: "/settings",
+        Icon: Settings,
+        perm: "settings.view",
+        area: "settings",
+        variant: "secondary",
+      },
     ];
     return all.filter((tile) => !tile.perm || hasPermission(actor.role, tile.perm));
   }, [actor.role, lowStockCount, riskCount]);
 
-  const onTileKeyDown = useCallback(
-    (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
-      const cols = 2;
-      let next = index;
-      if (event.key === "ArrowRight") next = Math.min(index + 1, tiles.length - 1);
-      else if (event.key === "ArrowLeft") next = Math.max(index - 1, 0);
-      else if (event.key === "ArrowDown") next = Math.min(index + cols, tiles.length - 1);
-      else if (event.key === "ArrowUp") next = Math.max(index - cols, 0);
-      else return;
-      event.preventDefault();
-      tileRefs.current[next]?.focus();
-    },
-    [tiles.length],
+  const focusableIds = useMemo(
+    () => FOCUS_ORDER.filter((id) => tiles.some((t) => t.id === id)),
+    [tiles],
   );
+
+  useEffect(() => {
+    const first = focusableIds[0];
+    if (first) tileRefs.current[first]?.focus();
+  }, [focusableIds]);
+
+  const onTileKeyDown = useCallback(
+    (id: string, event: React.KeyboardEvent<HTMLButtonElement>) => {
+      const neighbors: Record<string, Partial<Record<string, string>>> = {
+        sell: { ArrowRight: "inventory", ArrowDown: "reports" },
+        inventory: { ArrowLeft: "sell", ArrowDown: "customers", ArrowRight: "customers" },
+        customers: { ArrowLeft: "inventory", ArrowDown: "shop" },
+        shop: { ArrowLeft: "customers", ArrowUp: "inventory", ArrowDown: "investigation" },
+        reports: { ArrowUp: "sell", ArrowRight: "investigation" },
+        investigation: { ArrowLeft: "reports", ArrowRight: "cash" },
+        cash: { ArrowLeft: "investigation", ArrowRight: "settings" },
+        settings: { ArrowLeft: "cash" },
+      };
+
+      const nextId = neighbors[id]?.[event.key];
+      if (!nextId || !tileRefs.current[nextId]) return;
+      event.preventDefault();
+      tileRefs.current[nextId]?.focus();
+    },
+    [],
+  );
+
+  const renderTile = (tile: TileDef) => {
+    const isPrimary = tile.variant === "primary";
+    return (
+      <button
+        key={tile.id}
+        ref={(el) => {
+          tileRefs.current[tile.id] = el;
+        }}
+        type="button"
+        onClick={() => navigate(tile.to)}
+        onKeyDown={(e) => onTileKeyDown(tile.id, e)}
+        style={{ gridArea: tile.area }}
+        className={tileButtonClass(tile.variant)}
+      >
+        {tile.badge !== undefined && tile.badge > 0 ? (
+          <span className="absolute right-3 top-3 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-black text-white">
+            {tile.badge > 99 ? "99+" : tile.badge}
+          </span>
+        ) : null}
+        <tile.Icon
+          className={isPrimary ? "h-16 w-16 shrink-0" : "h-9 w-9 shrink-0 text-waka-300"}
+          strokeWidth={isPrimary ? 2.5 : 2}
+          aria-hidden
+        />
+        <span className={isPrimary ? "text-3xl font-black uppercase tracking-wide" : "text-lg font-black leading-tight"}>
+          {t(lang, tile.labelKey)}
+        </span>
+      </button>
+    );
+  };
 
   if (tiles.length === 0) {
     return (
-      <p className="text-center text-base font-semibold text-stone-600">{t(lang, "desktopHomeNoTiles")}</p>
+      <p className="text-center text-base font-semibold text-stone-300">{t(lang, "desktopHomeNoTiles")}</p>
     );
   }
 
+  const tileById = Object.fromEntries(tiles.map((tile) => [tile.id, tile]));
+
   return (
     <div
-      className="grid w-full max-w-2xl grid-cols-2 gap-4 lg:grid-cols-2 xl:grid-cols-2"
+      className="w-full max-w-4xl [grid-template-areas:'sell_sell_inventory_customers''sell_sell_shop_shop''reports_investigation_cash_settings'] grid grid-cols-4 grid-rows-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,auto)] gap-3 sm:gap-4"
       role="navigation"
       aria-label={t(lang, "desktopHomeNavLabel")}
     >
-      {tiles.map((tile, index) => (
-        <button
-          key={tile.id}
-          ref={(el) => {
-            tileRefs.current[index] = el;
-          }}
-          type="button"
-          onClick={() => navigate(tile.to)}
-          onKeyDown={(e) => onTileKeyDown(index, e)}
-          className={clsx(
-            "relative flex min-h-[120px] touch-manipulation flex-col items-center justify-center gap-3 rounded-2xl border-2 border-stone-200/90 bg-white/90 px-4 py-5 text-center shadow-md transition-all",
-            "hover:border-waka-300 hover:bg-waka-50/60 hover:shadow-lg active:scale-[0.98] motion-reduce:active:scale-100",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2",
-          )}
-        >
-          {tile.badge !== undefined && tile.badge > 0 ? (
-            <span className="absolute right-3 top-3 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-black text-white">
-              {tile.badge > 99 ? "99+" : tile.badge}
-            </span>
-          ) : null}
-          <tile.Icon className="h-10 w-10 text-waka-700" strokeWidth={2} aria-hidden />
-          <span className="text-lg font-black leading-tight text-stone-900">{t(lang, tile.labelKey)}</span>
-        </button>
-      ))}
+      {FOCUS_ORDER.map((id) => (tileById[id] ? renderTile(tileById[id]!) : null))}
     </div>
   );
 }
