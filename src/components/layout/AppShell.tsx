@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Outlet, useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
+import clsx from "clsx";
 import { Home, ShoppingCart, Receipt, Briefcase, LayoutGrid, ChefHat, UtensilsCrossed, Package } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission, UserRole } from "../../types";
@@ -45,6 +46,7 @@ import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
 import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
+import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 
 type Props = {
   lang: Language;
@@ -255,6 +257,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   };
 
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
+  const desktopTerminalHome = usePosDesktopLayout() && location.pathname === "/";
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const hospitalityKitchenNav = hospitalityNav
@@ -454,8 +457,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </div>
         </header>
-        <main className="mx-auto box-border flex min-h-0 w-full max-w-6xl flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6">
-          <nav className="hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56">
+        <main
+          className={clsx(
+            "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6",
+            desktopTerminalHome ? "max-w-none" : "max-w-6xl",
+          )}
+        >
+          <nav
+            className={clsx(
+              "hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56",
+              desktopTerminalHome && "md:hidden",
+            )}
+          >
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
             <ul className="space-y-1">
               {navDefs.map((item) => {

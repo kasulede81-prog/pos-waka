@@ -97,7 +97,7 @@ const HardwareSettingsPage = lazy(() =>
 const MarketingAgentPage = lazy(() =>
   import("./pages/MarketingAgentPage").then((m) => ({ default: m.MarketingAgentPage })),
 );
-const DashboardPage = lazy(() => import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
+const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const PosPage = lazy(() => import("./pages/PosPage").then((m) => ({ default: m.PosPage })));
 const OfficeHubPage = lazy(() => import("./pages/OfficeHubPage").then((m) => ({ default: m.OfficeHubPage })));
 const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage").then((m) => ({ default: m.ReceiptsPage })));
@@ -329,7 +329,7 @@ function AppRoutes() {
               index
               element={
                 <Suspense fallback={<LazyWait />}>
-                  <DashboardPage lang={lang} />
+                  <HomePage lang={lang} />
                 </Suspense>
               }
             />
@@ -359,6 +359,7 @@ function AppRoutes() {
                 </RoleProtectedRoute>
               }
             />
+            <Route path="office/cash" element={<Navigate to="/office/cash-position" replace />} />
             <Route
               path="office/purchases"
               element={

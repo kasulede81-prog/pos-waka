@@ -7,6 +7,22 @@ import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine }
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
+import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
+import { usePosDesktopLayout } from "../hooks/usePosDesktopLayout";
+import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
+import { resolveScanToCartInput } from "../lib/posScanToCart";
+import {
+  applyMoneyInputKey,
+  isActiveMoneyInput,
+  isPosShortcutModalOpen,
+  resolvePosShortcutAction,
+  shouldBlockPosShortcutAction,
+  type PosShortcutModalState,
+} from "../lib/posKeyboardShortcuts";
+import {
+  shouldMountDesktopCheckoutSidebar,
+  shouldMountMobileCheckoutOverlay,
+} from "../lib/posCheckoutMount";
 import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
@@ -41,7 +57,6 @@ import {
 } from "../lib/pharmacyPackaging";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
 import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
-import { DraftCartLineRow } from "../components/pos/DraftCartLineRow";
 import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { brandingFromSale } from "../lib/receiptBranding";
@@ -286,6 +301,11 @@ export function PosPage({ lang }: { lang: Language }) {
   const [qtyEditLine, setQtyEditLine] = useState<SaleLine | null>(null);
   const [cartSaleDiscountOpen, setCartSaleDiscountOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const catalogRef = useRef<HTMLDivElement>(null);
+  const customerSelectRef = useRef<HTMLSelectElement>(null);
+  const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const isDesktopPos = usePosDesktopLayout();
+  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
     [preferences.shifts, actor.userId],
@@ -621,7 +641,7 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           bumpRecentProduct(p.id);
           if (hapticsOn) void hapticTap();
-          setSaleCheckoutMinimized(true);
+          if (!isDesktopPos) setSaleCheckoutMinimized(true);
           setToast(t(lang, "posAddedToCart"));
           window.setTimeout(() => setToast(null), 1200);
           searchInputRef.current?.focus();
@@ -637,7 +657,43 @@ export function PosPage({ lang }: { lang: Language }) {
       setDraftInput(null);
       setSheetOpen(true);
     },
-    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, lang, lockedIds, runWithExpiredGuard, setDraftInput],
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, isDesktopPos, lang, lockedIds, runWithExpiredGuard, setDraftInput],
+  );
+
+  const fastAddFromScan = useCallback(
+    (p: Product) => {
+      const fast = resolveScanToCartInput(p);
+      if (!fast) return false;
+      runWithExpiredGuard(p, () => {
+        setDraftInput({ product: p, inputMode: fast.inputMode, value: fast.value });
+        const res = addDraftLineFromInput();
+        if (!res.ok) {
+          setToast(t(lang, res.errorKey ?? "saleError"));
+          window.setTimeout(() => setToast(null), 2200);
+          return;
+        }
+        bumpRecentProduct(p.id);
+        if (hapticsOn) void hapticTap();
+        if (!isDesktopPos) setSaleCheckoutMinimized(true);
+        setToast(t(lang, "posScanAdded"));
+        window.setTimeout(() => setToast(null), 1200);
+        searchInputRef.current?.focus();
+      });
+      return true;
+    },
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, isDesktopPos, lang, runWithExpiredGuard, setDraftInput],
+  );
+
+  const handleBarcodeProduct = useCallback(
+    (p: Product) => {
+      if (isProductPlanLocked(p.id, lockedIds)) {
+        setProductLockedOpen(true);
+        return;
+      }
+      if (fastAddFromScan(p)) return;
+      openProduct(p);
+    },
+    [fastAddFromScan, lockedIds, openProduct],
   );
 
   useEffect(() => {
@@ -647,13 +703,13 @@ export function PosPage({ lang }: { lang: Language }) {
       onScan: (code) => {
         setSearchQuery(code);
         const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
-        if (exact) openProduct(exact);
+        if (exact) handleBarcodeProduct(exact);
       },
     });
     return () => {
       void stopBarcodeSession();
     };
-  }, [products, openProduct]);
+  }, [products, handleBarcodeProduct]);
 
   useEffect(() => {
     if (!cameraScanOpen) return;
@@ -664,7 +720,7 @@ export function PosPage({ lang }: { lang: Language }) {
         setSearchQuery(code);
         setCameraScanStatus(`Scanned: ${code}`);
         const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
-        if (exact) openProduct(exact);
+        if (exact) handleBarcodeProduct(exact);
         void stopBarcodeSession();
         setCameraScanOpen(false);
       },
@@ -675,7 +731,7 @@ export function PosPage({ lang }: { lang: Language }) {
     return () => {
       void stopBarcodeSession();
     };
-  }, [cameraScanOpen, lang, openProduct, products]);
+  }, [cameraScanOpen, handleBarcodeProduct, lang, products]);
 
   useEffect(() => {
     if (draftLines.length === 0) setSaleCheckoutMinimized(false);
@@ -727,7 +783,7 @@ export function PosPage({ lang }: { lang: Language }) {
       if (hapticsOn) void hapticTap();
       setDisplay("");
       setDraftInput(null);
-      setSaleCheckoutMinimized(true);
+      if (!isDesktopPos) setSaleCheckoutMinimized(true);
       if (opts?.closeSheet !== false) {
         setSheetOpen(false);
         setSelected(null);
@@ -736,7 +792,7 @@ export function PosPage({ lang }: { lang: Language }) {
       window.setTimeout(() => setToast(null), 1200);
       window.requestAnimationFrame(() => searchInputRef.current?.focus());
     },
-    [bumpRecentProduct, hapticsOn, setDraftInput, lang],
+    [bumpRecentProduct, hapticsOn, isDesktopPos, setDraftInput, lang],
   );
 
   const applyDraftInput = useCallback(() => {
@@ -966,10 +1022,18 @@ export function PosPage({ lang }: { lang: Language }) {
     setExpiryWarnProduct(null);
   }, []);
 
+  const mobileCheckoutOpen = draftLines.length > 0 && !saleCheckoutMinimized && !isDesktopPos;
+  const mountDesktopCheckoutSidebar = shouldMountDesktopCheckoutSidebar(isDesktopPos, products.length > 0);
+  const mountMobileCheckoutOverlay = shouldMountMobileCheckoutOverlay(
+    isDesktopPos,
+    draftLines.length,
+    saleCheckoutMinimized,
+  );
+
   usePosAndroidBackStack({
     cameraScanOpen,
     setCameraScanOpen,
-    checkoutOverlayOpen: draftLines.length > 0 && !saleCheckoutMinimized,
+    checkoutOverlayOpen: mobileCheckoutOpen,
     setSaleCheckoutMinimized,
     sheetOpen,
     setSheetOpen,
@@ -1008,6 +1072,172 @@ export function PosPage({ lang }: { lang: Language }) {
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
   const sellPresets = selected ? getPosSellPresets(selected) : [];
   const keyboardInset = useVisualViewportInset();
+
+  const adjustFocusedCartQty = useCallback(
+    (backwards: boolean) => {
+      const lastLine = draftLines[draftLines.length - 1];
+      if (!lastLine) return;
+      handleDraftQtyStep(lastLine, backwards);
+    },
+    [draftLines, handleDraftQtyStep],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isActiveMoneyInput(event.target)) {
+        if (applyMoneyInputKey(event.target as HTMLInputElement, event.key)) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      const shortcutModalState: PosShortcutModalState = {
+        sheetOpen,
+        qtyEditOpen: qtyEditLine !== null,
+        discountLineOpen: discountLine !== null,
+        cartSaleDiscountOpen,
+        cameraScanOpen,
+        expenseModalOpen,
+        firstSaleOpen,
+        productLockedOpen,
+        expiryWarnOpen: expiryWarnProduct !== null,
+        checkoutBlockModalOpen,
+        receiptOpen: receiptSaleId !== null,
+        shiftCloseOpen,
+      };
+      const modalOpen = isPosShortcutModalOpen(shortcutModalState);
+
+      const action = resolvePosShortcutAction(event);
+      if (!action) return;
+      if (shouldBlockPosShortcutAction(action, modalOpen)) return;
+      event.preventDefault();
+
+      switch (action) {
+        case "focus_search":
+          searchInputRef.current?.focus();
+          break;
+        case "focus_checkout":
+          if (isDesktopPos) {
+            saveButtonRef.current?.focus();
+          } else if (draftLines.length > 0) {
+            setSaleCheckoutMinimized(false);
+          }
+          break;
+        case "open_cart_discount":
+          if (draftLines.length > 0) setCartSaleDiscountOpen(true);
+          break;
+        case "focus_customer":
+          if (draftLines.length > 0) {
+            setPaymentMethod("credit");
+            setCheckoutAmountField("cash");
+            window.requestAnimationFrame(() => customerSelectRef.current?.focus());
+          }
+          break;
+        case "confirm":
+          if (sheetOpen && selected) {
+            if (!(quickSell && !showAdvanced && sellPresets.length > 0)) applyDraftInput();
+          } else if (mobileCheckoutOpen || (isDesktopPos && draftLines.length > 0)) {
+            finishSale();
+          }
+          break;
+        case "close":
+          if (receiptSaleId) setReceiptSaleId(null);
+          else if (cameraScanOpen) setCameraScanOpen(false);
+          else if (checkoutBlockModalOpen) setCheckoutBlockModalOpen(false);
+          else if (cartSaleDiscountOpen) setCartSaleDiscountOpen(false);
+          else if (discountLine) setDiscountLine(null);
+          else if (qtyEditLine) setQtyEditLine(null);
+          else if (sheetOpen) setSheetOpen(false);
+          else if (mobileCheckoutOpen) setSaleCheckoutMinimized(true);
+          else if (productLockedOpen) setProductLockedOpen(false);
+          else if (expiryWarnProduct) closeExpiryWarn();
+          else if (firstSaleOpen) dismissFirstSale();
+          else if (shiftCloseOpen) setShiftCloseOpen(false);
+          else if (expenseModalOpen) setExpenseModalOpen(false);
+          break;
+        case "increment_qty":
+          adjustFocusedCartQty(false);
+          break;
+        case "decrement_qty":
+          adjustFocusedCartQty(true);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    adjustFocusedCartQty,
+    applyDraftInput,
+    cameraScanOpen,
+    cartSaleDiscountOpen,
+    checkoutBlockModalOpen,
+    closeExpiryWarn,
+    discountLine,
+    dismissFirstSale,
+    draftLines.length,
+    expenseModalOpen,
+    expiryWarnProduct,
+    finishSale,
+    firstSaleOpen,
+    isDesktopPos,
+    mobileCheckoutOpen,
+    productLockedOpen,
+    qtyEditLine,
+    quickSell,
+    receiptSaleId,
+    selected,
+    sellPresets.length,
+    sheetOpen,
+    shiftCloseOpen,
+    showAdvanced,
+  ]);
+
+  const checkoutPanelCommon = {
+    lang,
+    saleTitle: hospitalityMode ? ht("thisSale") : t(lang, "thisSale"),
+    clearSaleLabel: modeTerm("clearSale"),
+    saveSaleLabel: modeTerm("saveSale"),
+    draftLines,
+    draftCartStats,
+    checkoutTotals,
+    draftPayable,
+    draftDiscountTotal,
+    productById,
+    checkoutBlockMessage,
+    paymentMethod,
+    checkoutMethods,
+    cashInput,
+    mobileMoneyInput,
+    checkoutAmountField,
+    changeDue,
+    computedDebt,
+    saleCustomerId,
+    saleCustomerName,
+    saleCustomerPhone,
+    customers,
+    canSavePending,
+    savePendingLabel: t(lang, "saveAsPending"),
+    customerSelectRef,
+    saveButtonRef,
+    onClearDraft: clearDraft,
+    onIncrement: (line: SaleLine) => handleDraftQtyStep(line, false),
+    onDecrement: (line: SaleLine) => handleDraftQtyStep(line, true),
+    onQtyTap: setQtyEditLine,
+    onLineDiscount: setDiscountLine,
+    onRemoveLine: removeDraftLine,
+    onOpenCartDiscount: () => setCartSaleDiscountOpen(true),
+    onPaymentMethod: setPaymentMethod,
+    onCheckoutAmountField: setCheckoutAmountField,
+    onAppendCheckoutDigit: appendCheckoutDigit,
+    onClearCheckoutAmount: clearCheckoutAmount,
+    onSaleCustomerId: setSaleCustomerId,
+    onSaleCustomerName: setSaleCustomerName,
+    onSaleCustomerPhone: setSaleCustomerPhone,
+    onSavePending: handleSavePending,
+    onFinishSale: finishSale,
+  };
 
   if (!hasPermission(actor.role, "pos.sell")) {
     return <Navigate to="/" replace />;
@@ -1071,6 +1301,14 @@ export function PosPage({ lang }: { lang: Language }) {
             .replace("{{limit}}", String(productLimit ?? 7))}
         </div>
       ) : null}
+
+      <div
+        className={clsx(
+          products.length > 0 && "lg:grid lg:items-start lg:gap-4",
+          products.length > 0 && "lg:grid-cols-[minmax(0,1fr)_min(400px,36%)]",
+        )}
+      >
+        <div ref={catalogRef} className="min-w-0 space-y-3">
 
       {products.length > 0 ? (
         <div className="space-y-2 rounded-[1.35rem] border border-stone-200 bg-white p-2.5 shadow-waka-sm">
@@ -1267,6 +1505,7 @@ export function PosPage({ lang }: { lang: Language }) {
           {filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
             <VirtualizedProductGrid
               products={filteredProducts}
+              columnCount={productGridCols}
               onPick={openProduct}
               stockLabel={t(lang, "stockLabel")}
               noShelfLabel={t(lang, "posNoShelf")}
@@ -1274,7 +1513,10 @@ export function PosPage({ lang }: { lang: Language }) {
               lockedBadge={t(lang, "productLockedBadge")}
             />
           ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            <div
+              className="grid gap-2.5"
+              style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+            >
               {filteredProducts.map((p) => {
                 const locked = isProductPlanLocked(p.id, lockedIds);
                 return (
@@ -1338,256 +1580,37 @@ export function PosPage({ lang }: { lang: Language }) {
         </section>
       )}
 
-      {draftLines.length > 0 && !saleCheckoutMinimized ? (
-        <PosScreenPortal>
-        <div
-          className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)]"
-          style={{
-            paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
-          }}
-          role="dialog"
-          aria-modal
-          aria-labelledby="pos-checkout-title"
-        >
-          <header className="flex shrink-0 items-center gap-2 border-b border-waka-200 bg-waka-50 px-3 py-3">
-            <button
-              type="button"
-              onClick={() => clearDraft()}
-              className="shrink-0 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
-            >
-              {modeTerm("clearSale")}
-            </button>
-            <h2 id="pos-checkout-title" className="min-w-0 flex-1 truncate text-center text-lg font-black text-waka-950">
-              {hospitalityMode ? ht("thisSale") : t(lang, "thisSale")}
-            </h2>
-            <button
-              type="button"
-              onClick={() => setSaleCheckoutMinimized(true)}
-              className="shrink-0 rounded-full border border-waka-300 bg-white px-3 py-2 text-sm font-bold text-waka-900 shadow-sm active:bg-waka-50"
-            >
-              {t(lang, "posAddMoreItems")}
-            </button>
-          </header>
-          {checkoutBlockMessage ? (
-            <div
-              className="mx-3 shrink-0 rounded-xl bg-red-600 px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
-              role="alert"
-            >
-              {checkoutBlockMessage}
-            </div>
-          ) : null}
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 [-webkit-overflow-scrolling:touch]">
-            <DraftCartSummary lang={lang} stats={draftCartStats} payableUgx={draftPayable} cartDiscountUgx={checkoutTotals.cartDiscountUgx} />
-            <ul className="mt-3 space-y-2 rounded-2xl border border-waka-200 bg-white p-3 shadow-sm">
-              {draftLines.map((line) => (
-                <DraftCartLineRow
-                  key={line.productId}
-                  lang={lang}
-                  line={line}
-                  product={productById.get(line.productId)}
-                  onIncrement={() => handleDraftQtyStep(line, false)}
-                  onDecrement={() => handleDraftQtyStep(line, true)}
-                  onQtyTap={() => setQtyEditLine(line)}
-                  onDiscount={() => setDiscountLine(line)}
-                  onRemove={() => removeDraftLine(line.productId)}
-                />
-              ))}
-            </ul>
-            {draftDiscountTotal > 0 ? (
-              <p className="mt-2 text-sm font-bold text-amber-800">
-                {t(lang, "draftLineDiscountTotal")}: UGX {draftDiscountTotal.toLocaleString()}
-              </p>
-            ) : null}
-            <div className="mt-4 rounded-2xl border border-waka-200 bg-waka-50/80 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-black text-slate-800">{t(lang, "cartDiscountApplied")}</p>
-                <button
-                  type="button"
-                  onClick={() => setCartSaleDiscountOpen(true)}
-                  className="min-h-[44px] shrink-0 rounded-2xl border-2 border-waka-400 bg-white px-4 text-sm font-black text-waka-900 active:bg-waka-100"
-                >
-                  {t(lang, "cartDiscountBtn")}
-                </button>
-              </div>
-              {checkoutTotals.cartDiscountUgx > 0 ? (
-                <p className="mt-2 text-sm font-bold text-emerald-900">
-                  − UGX {checkoutTotals.cartDiscountUgx.toLocaleString()}
-                </p>
-              ) : null}
-            </div>
-            {checkoutTotals.cartDiscountUgx > 0 ? (
-              <p className="mt-3 text-sm font-semibold text-slate-600">
-                {t(lang, "cartDiscountOriginal")}: UGX {checkoutTotals.lineSubtotalUgx.toLocaleString()}
-              </p>
-            ) : null}
-            {(draftDiscountTotal > 0 || checkoutTotals.cartDiscountUgx > 0) && (
-              <div className="mt-3 space-y-1 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 text-sm font-semibold text-slate-700">
-                <p className="flex justify-between gap-2">
-                  <span>{t(lang, "checkoutSubtotalLabel")}</span>
-                  <span>UGX {(checkoutTotals.lineSubtotalUgx + draftDiscountTotal).toLocaleString()}</span>
-                </p>
-                {draftDiscountTotal > 0 ? (
-                  <p className="flex justify-between gap-2 text-amber-900">
-                    <span>{t(lang, "checkoutLineDiscountsLabel")}</span>
-                    <span>− UGX {draftDiscountTotal.toLocaleString()}</span>
-                  </p>
-                ) : null}
-                {checkoutTotals.cartDiscountUgx > 0 ? (
-                  <p className="flex justify-between gap-2 text-emerald-900">
-                    <span>{t(lang, "checkoutCartDiscountLabel")}</span>
-                    <span>− UGX {checkoutTotals.cartDiscountUgx.toLocaleString()}</span>
-                  </p>
-                ) : null}
-                <p className="flex justify-between gap-2 border-t border-slate-200 pt-2 font-black text-slate-900">
-                  <span>{t(lang, "checkoutFinalTotalLabel")}</span>
-                  <span>UGX {draftPayable.toLocaleString()}</span>
-                </p>
-              </div>
-            )}
-            <p className="mt-4 text-3xl font-black text-slate-900">
-              {checkoutTotals.cartDiscountUgx > 0 ? t(lang, "payableTotalLabel") : t(lang, "totalLabel")}{" "}
-              <span className="text-waka-700">UGX {draftPayable.toLocaleString()}</span>
-            </p>
-
-            <div className="mt-4">
-              <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "paymentMethodLabel")}</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {checkoutMethods.map((method) => (
-                  <button
-                    key={method}
-                    type="button"
-                    onClick={() => {
-                      setPaymentMethod(method);
-                      if (method === "cash" || method === "credit") setCheckoutAmountField("cash");
-                    }}
-                    className={clsx(
-                      "min-h-[48px] rounded-2xl border text-sm font-black",
-                      paymentMethod === method ? "border-waka-400 bg-waka-100 text-waka-950" : "border-stone-200 bg-white text-stone-700",
-                    )}
-                  >
-                    {t(lang, `paymentMethod_${method}`)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {paymentMethod === "cash" || paymentMethod === "credit" ? (
-              <div className="mt-4">
-                <p className="text-base font-semibold text-slate-800">
-                  {paymentMethod === "cash" ? t(lang, "paymentCashReceivedLabel") : t(lang, "paymentCashLabel")}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setCheckoutAmountField("cash")}
-                  className={clsx(
-                    "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black",
-                    checkoutAmountField === "cash" ? "border-waka-500 bg-waka-50 text-slate-900" : "border-slate-200 bg-white text-slate-900",
-                  )}
-                >
-                  UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                </button>
-              </div>
-            ) : null}
-
-            {paymentMethod === "credit" ? (
-              <div className="mt-4">
-                <p className="text-base font-semibold text-slate-800">{t(lang, "paymentMobileMoneyLabel")}</p>
-                <button
-                  type="button"
-                  onClick={() => setCheckoutAmountField("mobile")}
-                  className={clsx(
-                    "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black",
-                    checkoutAmountField === "mobile" ? "border-waka-500 bg-waka-50 text-slate-900" : "border-slate-200 bg-white text-slate-900",
-                  )}
-                >
-                  UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                </button>
-              </div>
-            ) : null}
-
-            {(paymentMethod === "cash" || paymentMethod === "credit") && (
-              <div className="mt-4">
-                <Numpad allowDecimal={false} onDigit={appendCheckoutDigit} onClear={clearCheckoutAmount} />
-              </div>
-            )}
-
-            {(paymentMethod === "cash" || paymentMethod === "credit") && (cashInput || changeDue > 0) ? (
-              <p className="mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base font-black text-emerald-900">
-                {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
-              </p>
-            ) : null}
-
-            {paymentMethod === "credit" ? (
-              <>
-                <p className="mt-3 rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-900">
-                  {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
-                </p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <label className="block text-base font-semibold text-slate-800">
-                    {t(lang, "paymentDebtNameLabel")}
-                    <input
-                      value={saleCustomerName}
-                      onChange={(e) => setSaleCustomerName(e.target.value)}
-                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
-                      placeholder={t(lang, "paymentDebtNamePlaceholder")}
-                    />
-                  </label>
-                  <label className="block text-base font-semibold text-slate-800">
-                    {t(lang, "paymentDebtPhoneLabel")}
-                    <input
-                      value={saleCustomerPhone}
-                      onChange={(e) => setSaleCustomerPhone(e.target.value)}
-                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-lg font-semibold"
-                      placeholder={t(lang, "personPhonePh")}
-                      inputMode="tel"
-                    />
-                  </label>
-                </div>
-                {customers.length > 0 ? (
-                  <label className="mt-4 block text-base font-semibold text-slate-800">
-                    {t(lang, "paymentPickExistingDebt")}
-                    <select
-                      value={saleCustomerId}
-                      onChange={(e) => setSaleCustomerId(e.target.value)}
-                      className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-4 text-lg font-medium"
-                    >
-                      <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                          {c.debtBalanceUgx > 0 ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-              </>
-            ) : null}
-            <div aria-hidden className="h-4 shrink-0" />
-          </div>
-          <footer className="shrink-0 border-t border-waka-200 bg-waka-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
-            {canSavePending && paymentMethod !== "credit" ? (
-              <button
-                type="button"
-                onClick={handleSavePending}
-                className="mb-2 min-h-[48px] w-full rounded-2xl border-2 border-amber-300 bg-amber-50 text-lg font-black text-amber-950 active:bg-amber-100"
-              >
-                {t(lang, "saveAsPending")}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={finishSale}
-              className="min-h-[56px] w-full rounded-3xl bg-waka-600 py-4 text-2xl font-black text-white shadow-lg active:bg-waka-700"
-            >
-              {modeTerm("saveSale")}
-            </button>
-          </footer>
+        <PosPageScrollSpacer minimizedCheckout={!isDesktopPos && draftLines.length > 0 && saleCheckoutMinimized} />
         </div>
+
+        {mountDesktopCheckoutSidebar ? (
+          <aside className="sticky top-3">
+            <PosCheckoutPanel variant="sidebar" {...checkoutPanelCommon} />
+          </aside>
+        ) : null}
+      </div>
+
+      {mountMobileCheckoutOverlay ? (
+        <PosScreenPortal>
+          <div
+            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col pt-[env(safe-area-inset-top,0px)] lg:hidden"
+            style={{
+              paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
+            }}
+            role="dialog"
+            aria-modal
+            aria-labelledby="pos-checkout-title"
+          >
+            <PosCheckoutPanel
+              variant="overlay"
+              {...checkoutPanelCommon}
+              onMinimize={() => setSaleCheckoutMinimized(true)}
+            />
+          </div>
         </PosScreenPortal>
       ) : null}
 
-      {draftLines.length > 0 && saleCheckoutMinimized ? (
+      {draftLines.length > 0 && saleCheckoutMinimized && !isDesktopPos ? (
         <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
             <div className="min-w-0">
@@ -2060,8 +2083,6 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         </AppModalOverlay>
       ) : null}
-
-      <PosPageScrollSpacer minimizedCheckout={draftLines.length > 0 && saleCheckoutMinimized} />
     </div>
   );
 }

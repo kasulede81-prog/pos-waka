@@ -9,12 +9,12 @@ import { shelfIconFor } from "../../lib/productCategories";
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../lib/pharmacy";
 
-const COLS = 2;
 const ROW_ESTIMATE = 132;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
   products: Product[];
+  columnCount: number;
   onPick: (p: Product) => void;
   stockLabel: string;
   noShelfLabel: string;
@@ -22,10 +22,19 @@ type Props = {
   lockedBadge?: string;
 };
 
-/** Scrolls long product lists smoothly on low-RAM phones (two columns). */
-function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabel, isLocked, lockedBadge }: Props) {
+/** Scrolls long product lists smoothly; column count is set by viewport (desktop: 4–8 cols). */
+function VirtualizedProductGridInner({
+  products,
+  columnCount,
+  onPick,
+  stockLabel,
+  noShelfLabel,
+  isLocked,
+  lockedBadge,
+}: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
-  const rowCount = Math.ceil(products.length / COLS);
+  const cols = Math.max(2, columnCount);
+  const rowCount = Math.ceil(products.length / cols);
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -45,13 +54,14 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
         }}
       >
         {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-          const start = virtualRow.index * COLS;
-          const slice = products.slice(start, start + COLS);
+          const start = virtualRow.index * cols;
+          const slice = products.slice(start, start + cols);
           return (
             <div
               key={virtualRow.key}
-              className="absolute left-0 top-0 grid w-full grid-cols-2 gap-2.5 px-0.5"
+              className="absolute left-0 top-0 grid w-full gap-2.5 px-0.5"
               style={{
+                gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                 transform: `translateY(${virtualRow.start}px)`,
                 height: `${virtualRow.size}px`,
               }}
@@ -62,41 +72,45 @@ function VirtualizedProductGridInner({ products, onPick, stockLabel, noShelfLabe
                 const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
                 const detail = pharmacyMode ? formatMedicineListSecondary(p) : null;
                 return (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => onPick(p)}
-                  className={clsx(
-                    "relative flex min-h-[122px] flex-col justify-between rounded-[1.35rem] border p-3 text-left shadow-sm motion-reduce:transition-none",
-                    locked
-                      ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-                      : "border-slate-200 bg-white active:scale-[0.98] active:border-waka-500",
-                  )}
-                  style={{ contentVisibility: "auto" }}
-                >
-                  {locked && lockedBadge ? (
-                    <span className="absolute right-2 top-2 rounded-full bg-stone-800/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
-                      {lockedBadge}
-                    </span>
-                  ) : null}
-                  <span>
-                    <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">
-                      {formatMedicineListPrimary(p)}
-                    </span>
-                    {detail ? (
-                      <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-600">{detail}</span>
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => onPick(p)}
+                    className={clsx(
+                      "relative flex min-h-[122px] flex-col justify-between rounded-[1.35rem] border p-3 text-left shadow-sm motion-reduce:transition-none",
+                      locked
+                        ? "border-stone-200/80 bg-stone-50/90 opacity-55"
+                        : "border-slate-200 bg-white active:scale-[0.98] active:border-waka-500",
+                    )}
+                    style={{ contentVisibility: "auto" }}
+                  >
+                    {locked && lockedBadge ? (
+                      <span className="absolute right-2 top-2 rounded-full bg-stone-800/90 px-1.5 py-0.5 text-[9px] font-black uppercase text-white">
+                        {lockedBadge}
+                      </span>
                     ) : null}
-                    <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-500">
-                      {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
-                      {(p.category ?? "").trim() || noShelfLabel}
+                    <span>
+                      <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">
+                        {formatMedicineListPrimary(p)}
+                      </span>
+                      {detail ? (
+                        <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-600">{detail}</span>
+                      ) : null}
+                      <span className="mt-0.5 block truncate text-[11px] font-bold text-stone-500">
+                        {shelfIconFor(p.category ?? "") ? (
+                          <span className="mr-1" aria-hidden>
+                            {shelfIconFor(p.category ?? "")}
+                          </span>
+                        ) : null}
+                        {(p.category ?? "").trim() || noShelfLabel}
+                      </span>
+                      <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-slate-600">
+                        {stockLabel}: {formatStockLabel(p)}
+                      </span>
                     </span>
-                    <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-slate-600">
-                      {stockLabel}: {formatStockLabel(p)}
-                    </span>
-                  </span>
-                  <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>
-                </button>
-              );
+                    <span className="mt-2 text-sm font-black text-waka-700">{formatProductPriceLabel(p)}</span>
+                  </button>
+                );
               })}
             </div>
           );

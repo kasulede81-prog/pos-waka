@@ -19,6 +19,24 @@ let activeStopper: SessionStopper | null = null;
 
 const WEDGE_IDLE_MS = 45;
 
+function isDedicatedBarcodeField(target: EventTarget | null): boolean {
+  if (!target || typeof target !== "object") return false;
+  const el = target as HTMLElement;
+  return el.dataset?.barcodeScan === "true";
+}
+
+/** Skip HID wedge buffering while typing in form fields (search, customer, discounts). */
+export function shouldBufferHidWedgeKey(event: Pick<KeyboardEvent, "target">): boolean {
+  if (isDedicatedBarcodeField(event.target)) return true;
+  if (!event.target || typeof event.target !== "object") return true;
+  const el = event.target as HTMLElement;
+  if (typeof el.tagName !== "string") return true;
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return false;
+  if (el.isContentEditable) return false;
+  return true;
+}
+
 function resolvePlatform(): BarcodeCapabilities["platform"] {
   if (typeof navigator === "undefined") return "unknown";
   const ua = navigator.userAgent.toLowerCase();
@@ -63,6 +81,7 @@ async function startHidWedgeSession(options: BarcodeSessionOptions): Promise<{ o
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    if (!shouldBufferHidWedgeKey(event)) return;
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     if (event.key === "Enter" || event.key === "Tab") {
       if (buffer.length > 0) {
