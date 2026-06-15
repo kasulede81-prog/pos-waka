@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Navigate } from "react-router-dom";
-import { CalendarDays, ChevronDown, FileDown, Printer } from "lucide-react";
+import { CalendarDays, FileDown, Printer } from "lucide-react";
 import type { Language, ReturnRecord, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -10,6 +10,8 @@ import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala } from "../lib/datesUg";
+import { ReceiptsDayGroup } from "../components/receipts/ReceiptsDayGroup";
+import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
 import { saleMatchesFilter } from "../lib/dateFilters";
 import { DateFilterBar } from "../components/shared/DateFilterBar";
 import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
@@ -169,7 +171,7 @@ function SaleArticle({
         <button
           type="button"
           onClick={() => onPrint(sale)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
         >
           <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {receiptPrintActionLabel(lang)}
@@ -177,7 +179,7 @@ function SaleArticle({
         <button
           type="button"
           onClick={() => onReceiptPdf(sale)}
-          className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-waka-200 bg-waka-50 px-3 text-xs font-black text-waka-800"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-waka-200 bg-waka-50 px-3 text-xs font-black text-waka-800"
         >
           <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
           {t(lang, "receiptDownloadPdf")}
@@ -186,7 +188,7 @@ function SaleArticle({
           <button
             type="button"
             onClick={() => onReturn(sale)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-950"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-950"
           >
             {t(lang, "returnBtn")}
           </button>
@@ -329,6 +331,25 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     });
   };
 
+  const todayKey = dateKeyKampala(new Date());
+  const dayFilterKey = filter.kind === "day" ? filter.dateKey : null;
+
+  const renderSaleArticle = (sale: Sale, canAdjust: boolean, pendingBadge?: boolean) => (
+    <SaleArticle
+      key={sale.id}
+      lang={lang}
+      sale={sale}
+      returnRecords={allReturns}
+      canVoid={canAdjust && canVoid}
+      soldByLabel={soldByLabel}
+      onPrint={printSale}
+      onReceiptPdf={receiptPdfSale}
+      onVoidLine={(s, lineIndex, line) => setVoidTarget({ sale: s, lineIndex, line })}
+      onReturn={canAdjust ? setReturnSale : () => undefined}
+      pendingBadge={pendingBadge}
+    />
+  );
+
   const hasAnyInRange = filteredInRange.length > 0;
 
   return (
@@ -342,7 +363,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={onDownloadAll}
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-waka-200 bg-white px-3 text-xs font-black text-waka-800 shadow-sm transition-waka active:bg-waka-50"
+            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-waka-200 bg-white px-3 text-xs font-black text-waka-800 shadow-sm transition-waka active:bg-waka-50"
           >
             <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t(lang, "receiptsDownloadPdf")}
@@ -408,50 +429,22 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         <section className="space-y-2">
           <h3 className="px-1 text-sm font-black uppercase tracking-wide text-stone-600">{t(lang, "receiptsCompletedSection")}</h3>
           {completedByDay.map((group) => (
-            <details
+            <ReceiptsDayGroup
               key={group.dateKey}
-              open
-              className="group overflow-hidden rounded-[1.35rem] border border-stone-200/90 bg-white shadow-waka-sm open:ring-1 open:ring-waka-100"
+              lang={lang}
+              dateKey={group.dateKey}
+              dayHeading={formatReceiptsDayHeading(group.dateKey)}
+              saleCount={group.sales.length}
+              dayAmountLabel={group.dayRevenueUgx.toLocaleString()}
+              defaultOpen={dayFilterKey === group.dateKey || (dayFilterKey === null && group.dateKey === todayKey)}
+              onDownloadDay={() => void onDownloadDay(group.sales, group.dateKey)}
             >
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 marker:content-none [&::-webkit-details-marker]:hidden">
-                <ChevronDown className="h-4 w-4 shrink-0 text-stone-400 transition-transform group-open:rotate-180" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-black text-stone-950">{formatReceiptsDayHeading(group.dateKey)}</p>
-                  <p className="mt-0.5 text-sm font-medium text-slate-500">
-                    {tTemplate(lang, "receiptsDayGroupMeta", {
-                      count: group.sales.length,
-                      amount: group.dayRevenueUgx.toLocaleString(),
-                    })}
-                  </p>
-                </div>
-              </summary>
-              <div className="space-y-2 border-t border-stone-100 bg-stone-50/50 px-3 py-3 sm:px-4">
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => onDownloadDay(group.sales, group.dateKey)}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-black text-waka-700 ring-1 ring-stone-200"
-                  >
-                    <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                    {t(lang, "receiptsDownloadDayPdf")}
-                  </button>
-                </div>
-                {group.sales.map((sale) => (
-                  <SaleArticle
-                    key={sale.id}
-                    lang={lang}
-                    sale={sale}
-                    returnRecords={allReturns}
-                    canVoid={canVoid}
-                    soldByLabel={soldByLabel}
-                    onPrint={printSale}
-                    onReceiptPdf={receiptPdfSale}
-                    onVoidLine={(s, lineIndex, line) => setVoidTarget({ sale: s, lineIndex, line })}
-                    onReturn={setReturnSale}
-                  />
-                ))}
-              </div>
-            </details>
+              <VirtualizedReceiptList
+                items={group.sales}
+                getKey={(sale) => sale.id}
+                renderItem={(sale) => renderSaleArticle(sale, true)}
+              />
+            </ReceiptsDayGroup>
           ))}
         </section>
       ) : null}
@@ -460,40 +453,22 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         <section className="space-y-2">
           <h3 className="px-1 text-sm font-black uppercase tracking-wide text-amber-800">{t(lang, "receiptsPendingSection")}</h3>
           {pendingByDay.map((group) => (
-            <details
+            <ReceiptsDayGroup
               key={`pending-${group.dateKey}`}
-              className="group overflow-hidden rounded-[1.35rem] border border-amber-200/90 bg-amber-50/30 shadow-waka-sm"
+              lang={lang}
+              dateKey={group.dateKey}
+              dayHeading={formatReceiptsDayHeading(group.dateKey)}
+              saleCount={group.sales.length}
+              dayAmountLabel={group.sales.reduce((a, s) => a + s.totalUgx, 0).toLocaleString()}
+              defaultOpen={dayFilterKey === group.dateKey}
+              tone="pending"
             >
-              <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3.5 marker:content-none [&::-webkit-details-marker]:hidden">
-                <ChevronDown className="h-4 w-4 shrink-0 text-amber-600 transition-transform group-open:rotate-180" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-black text-stone-950">{formatReceiptsDayHeading(group.dateKey)}</p>
-                  <p className="mt-0.5 text-sm font-medium text-amber-900">
-                    {tTemplate(lang, "receiptsDayGroupMeta", {
-                      count: group.sales.length,
-                      amount: group.sales.reduce((a, s) => a + s.totalUgx, 0).toLocaleString(),
-                    })}
-                  </p>
-                </div>
-              </summary>
-              <div className="space-y-2 border-t border-amber-100 px-3 py-3 sm:px-4">
-                {group.sales.map((sale) => (
-                  <SaleArticle
-                    key={sale.id}
-                    lang={lang}
-                    sale={sale}
-                    returnRecords={allReturns}
-                    canVoid={false}
-                    soldByLabel={soldByLabel}
-                    onPrint={printSale}
-                    onReceiptPdf={receiptPdfSale}
-                    onVoidLine={() => undefined}
-                    onReturn={() => undefined}
-                    pendingBadge
-                  />
-                ))}
-              </div>
-            </details>
+              <VirtualizedReceiptList
+                items={group.sales}
+                getKey={(sale) => sale.id}
+                renderItem={(sale) => renderSaleArticle(sale, false, true)}
+              />
+            </ReceiptsDayGroup>
           ))}
         </section>
       ) : null}

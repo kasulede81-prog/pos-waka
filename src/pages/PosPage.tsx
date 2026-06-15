@@ -11,6 +11,7 @@ import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { usePosDesktopLayout } from "../hooks/usePosDesktopLayout";
 import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
+import { resolveConfirmSaleAction } from "../lib/posCheckoutFocus";
 import { resolveScanToCartInput } from "../lib/posScanToCart";
 import {
   applyMoneyInputKey,
@@ -312,6 +313,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const catalogRef = useRef<HTMLDivElement>(null);
   const customerSelectRef = useRef<HTMLSelectElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
+  const checkoutPanelRef = useRef<HTMLDivElement>(null);
   const isDesktopPos = usePosDesktopLayout();
   const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef);
   const activeShift = useMemo(
@@ -685,7 +687,7 @@ export function PosPage({ lang }: { lang: Language }) {
         if (!isDesktopPos) setSaleCheckoutMinimized(true);
         setToast(t(lang, "posScanAdded"));
         window.setTimeout(() => setToast(null), 1200);
-        searchInputRef.current?.focus();
+        searchInputRef.current?.blur();
       });
       return true;
     },
@@ -711,13 +713,19 @@ export function PosPage({ lang }: { lang: Language }) {
       onScan: (code) => {
         setSearchQuery(code);
         const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
-        if (exact) handleBarcodeProduct(exact);
+        if (exact) {
+          handleBarcodeProduct(exact);
+        } else {
+          setToast(t(lang, "posBarcodeNotFound"));
+          window.setTimeout(() => setToast(null), 2200);
+          searchInputRef.current?.blur();
+        }
       },
     });
     return () => {
       void stopBarcodeSession();
     };
-  }, [products, handleBarcodeProduct]);
+  }, [products, handleBarcodeProduct, lang]);
 
   useEffect(() => {
     if (!cameraScanOpen) return;
@@ -728,7 +736,12 @@ export function PosPage({ lang }: { lang: Language }) {
         setSearchQuery(code);
         setCameraScanStatus(`Scanned: ${code}`);
         const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
-        if (exact) handleBarcodeProduct(exact);
+        if (exact) {
+          handleBarcodeProduct(exact);
+        } else {
+          setToast(t(lang, "posBarcodeNotFound"));
+          window.setTimeout(() => setToast(null), 2200);
+        }
         void stopBarcodeSession();
         setCameraScanOpen(false);
       },
@@ -1144,8 +1157,17 @@ export function PosPage({ lang }: { lang: Language }) {
         case "confirm":
           if (sheetOpen && selected) {
             if (!(quickSell && !showAdvanced && sellPresets.length > 0)) applyDraftInput();
-          } else if (mobileCheckoutOpen || (isDesktopPos && draftLines.length > 0)) {
-            finishSale();
+          } else {
+            const confirmAction = resolveConfirmSaleAction({
+              isDesktopPos,
+              draftLineCount: draftLines.length,
+              mobileCheckoutOpen,
+              activeElement: document.activeElement,
+              checkoutRoot: checkoutPanelRef.current,
+              saveButton: saveButtonRef.current,
+            });
+            if (confirmAction === "finish") finishSale();
+            else if (confirmAction === "focus_checkout") saveButtonRef.current?.focus();
           }
           break;
         case "close":
@@ -1229,6 +1251,7 @@ export function PosPage({ lang }: { lang: Language }) {
     savePendingLabel: t(lang, "saveAsPending"),
     customerSelectRef,
     saveButtonRef,
+    checkoutPanelRef,
     onClearDraft: clearDraft,
     onIncrement: (line: SaleLine) => handleDraftQtyStep(line, false),
     onDecrement: (line: SaleLine) => handleDraftQtyStep(line, true),

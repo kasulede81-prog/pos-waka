@@ -46,11 +46,14 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const debtPayments = usePosStore((s) => s.debtPayments);
   const addCustomer = usePosStore((s) => s.addCustomer);
   const addDebtPayment = usePosStore((s) => s.addDebtPayment);
+  const assignOrphanDebtSale = usePosStore((s) => s.assignOrphanDebtSale);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [payOpen, setPayOpen] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState("");
+  const [assignCustomerBySale, setAssignCustomerBySale] = useState<Record<string, string>>({});
+  const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const [debtReceiptCtx, setDebtReceiptCtx] = useState<DebtPaymentReceiptContext | null>(null);
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
   const { snapshot, authMode } = useSubscription();
@@ -65,8 +68,6 @@ export function CustomersPage({ lang }: { lang: Language }) {
     setName("");
     setPhone("");
   };
-
-  const paymentsFor = (customerId: string) => debtPayments.filter((d) => d.customerId === customerId);
 
   const submitPay = (customerId: string) => {
     const n = Math.floor(Number(payAmount.replace(/\D/g, "")) || 0);
@@ -93,6 +94,27 @@ export function CustomersPage({ lang }: { lang: Language }) {
     }
   };
 
+  const paymentsFor = (customerId: string) => debtPayments.filter((d) => d.customerId === customerId);
+
+  const submitAssignOrphan = (saleId: string) => {
+    const customerId = assignCustomerBySale[saleId]?.trim();
+    if (!customerId) {
+      setAssignMessage(t(lang, "orphanDebtNeedCustomer"));
+      return;
+    }
+    const result = assignOrphanDebtSale(saleId, customerId);
+    if (result.ok) {
+      setAssignMessage(t(lang, "orphanDebtAssigned"));
+      setAssignCustomerBySale((prev) => {
+        const next = { ...prev };
+        delete next[saleId];
+        return next;
+      });
+    } else {
+      setAssignMessage(t(lang, result.errorKey ?? "orphanDebtAssignFailed"));
+    }
+  };
+
   if (!canView) {
     return <Navigate to="/" replace />;
   }
@@ -110,14 +132,45 @@ export function CustomersPage({ lang }: { lang: Language }) {
             UGX {orphanDebtTotal.toLocaleString()} · {orphanDebts.length}{" "}
             {orphanDebts.length === 1 ? t(lang, "orphanDebtSaleOne") : t(lang, "orphanDebtSaleMany")}
           </p>
-          <ul className="mt-3 max-h-40 space-y-1 overflow-y-auto text-sm text-red-900">
+          {assignMessage ? <p className="mt-2 text-sm font-bold text-red-900">{assignMessage}</p> : null}
+          <ul className="mt-3 space-y-3">
             {orphanDebts.map((o) => (
-              <li key={o.saleId} className="flex justify-between gap-2">
-                <span>
-                  {new Date(o.createdAt).toLocaleString()}
-                  {o.receiptSeq != null ? ` · #${o.receiptSeq}` : ""}
-                </span>
-                <span className="font-bold">UGX {o.debtUgx.toLocaleString()}</span>
+              <li key={o.saleId} className="rounded-2xl border border-red-200 bg-white/80 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-red-950">
+                      {new Date(o.createdAt).toLocaleString()}
+                      {o.receiptSeq != null ? ` · #${o.receiptSeq}` : ""}
+                    </p>
+                    <p className="mt-1 text-lg font-black text-red-950">UGX {o.debtUgx.toLocaleString()}</p>
+                  </div>
+                </div>
+                {canDebt && customers.length > 0 ? (
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <select
+                      value={assignCustomerBySale[o.saleId] ?? ""}
+                      onChange={(e) =>
+                        setAssignCustomerBySale((prev) => ({ ...prev, [o.saleId]: e.target.value }))
+                      }
+                      className="min-h-[44px] flex-1 rounded-xl border-2 border-red-200 bg-white px-3 text-sm font-semibold text-slate-900"
+                      aria-label={t(lang, "orphanDebtAssignCustomer")}
+                    >
+                      <option value="">{t(lang, "orphanDebtAssignCustomer")}</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => submitAssignOrphan(o.saleId)}
+                      className="min-h-[44px] rounded-xl bg-red-900 px-4 text-sm font-black text-white"
+                    >
+                      {t(lang, "orphanDebtAssign")}
+                    </button>
+                  </div>
+                ) : null}
               </li>
             ))}
           </ul>

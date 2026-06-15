@@ -208,3 +208,23 @@ describe("usePosStore finalizeDraftSale — debt identity", () => {
     expect(usePosStore.getState().sales[0]!.customerId).toBeNull();
   });
 });
+
+describe("assignOrphanDebtSale", () => {
+  beforeEach(() => {
+    usePosStore.setState({
+      _hydrated: true,
+      sessionActor: { userId: "owner-1", role: "owner", displayName: "Owner" },
+      customers: [customer({ id: CUSTOMER_ID, name: "Jane", debtBalanceUgx: 2_000 })],
+      sales: [sale({ id: "orphan-sale", customerId: null, debtUgx: 5_000 })],
+      debtPayments: [],
+    });
+  });
+
+  it("links orphan credit sale and updates customer balance", () => {
+    const r = usePosStore.getState().assignOrphanDebtSale("orphan-sale", CUSTOMER_ID);
+    expect(r.ok).toBe(true);
+    const st = usePosStore.getState();
+    expect(st.sales[0]!.customerId).toBe(CUSTOMER_ID);
+    expect(st.customers[0]!.debtBalanceUgx).toBe(7_000);
+  });
+});

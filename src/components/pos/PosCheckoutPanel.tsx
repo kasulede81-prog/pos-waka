@@ -90,6 +90,7 @@ export type PosCheckoutPanelProps = {
   savePendingLabel: string;
   customerSelectRef?: RefObject<HTMLSelectElement | null>;
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
+  checkoutPanelRef?: RefObject<HTMLDivElement | null>;
   onClearDraft: () => void;
   onMinimize?: () => void;
   onIncrement: (line: SaleLine) => void;
@@ -137,6 +138,7 @@ export function PosCheckoutPanel({
   savePendingLabel,
   customerSelectRef,
   saveButtonRef,
+  checkoutPanelRef,
   onClearDraft,
   onMinimize,
   onIncrement,
@@ -160,6 +162,7 @@ export function PosCheckoutPanel({
 
   return (
     <div
+      ref={checkoutPanelRef}
       className={clsx(
         "flex min-h-0 flex-col",
         isSidebar

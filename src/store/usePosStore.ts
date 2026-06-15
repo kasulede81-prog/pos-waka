@@ -124,6 +124,7 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
+import { draftQuantityExceedsStock, mergedDraftQuantity } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
 import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
@@ -131,6 +132,7 @@ import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
+import { isCompletedSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
 import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
@@ -518,6 +520,7 @@ export type PosState = {
     note?: string;
   }) => { ok: boolean; errorKey?: string; lossValueUgx?: number };
   addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
+  assignOrphanDebtSale: (saleId: string, customerId: string) => { ok: boolean; errorKey?: string };
   addDebtPayment: (
     customerId: string,
     amountUgx: number,
@@ -1311,8 +1314,12 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!built.line || built.error) {
       return { ok: false, errorKey: built.error ?? "invalid" };
     }
+    const existing = get().draftLines.find((l) => l.productId === built.line!.productId);
+    const nextQty = mergedDraftQuantity(existing, built.line!.quantity);
+    if (draftQuantityExceedsStock(d.product, nextQty)) {
+      return { ok: false, errorKey: "noStock" };
+    }
     set((state) => {
-      const existing = state.draftLines.find((l) => l.productId === built.line!.productId);
       const merged = mergeDraftSaleLine(existing, built.line!, d.product);
       return {
         draftLines: [
@@ -1340,6 +1347,9 @@ export const usePosStore = create<PosState>((set, get) => {
       set((s) => ({ draftLines: s.draftLines.filter((l) => l.productId !== productId) }));
       scheduleDraftPersist(get);
       return { ok: true };
+    }
+    if (draftQuantityExceedsStock(product, quantity)) {
+      return { ok: false, errorKey: "noStock" };
     }
     const next = rebuildDraftLineQuantity(product, quantity, line);
     if (!next) return { ok: false, errorKey: "invalidQty" };
@@ -2992,6 +3002,42 @@ export const usePosStore = create<PosState>((set, get) => {
     void queueRemote("customer", { id: row.id });
     pushAudit("customer_add", row.name, { customerId: row.id, name: row.name });
     return row;
+  },
+
+  assignOrphanDebtSale: (saleId, customerId) => {
+    const denied = denyUnlessPerm("customers.debt", "assignOrphanDebtSale");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const sale = state.sales.find((s) => s.id === saleId);
+    if (!sale || !isCompletedSale(sale)) return { ok: false, errorKey: "saleNotFound" };
+    if (sale.customerId) return { ok: false, errorKey: "saleAlreadyLinked" };
+    if (sale.debtUgx <= 0) return { ok: false, errorKey: "saleNoDebt" };
+
+    const customer = state.customers.find((c) => c.id === customerId);
+    if (!customer) return { ok: false, errorKey: "customerNotFound" };
+
+    const debtUgx = sale.debtUgx;
+    set({
+      sales: state.sales.map((s) =>
+        s.id === saleId ? { ...s, customerId, updatedAt: new Date().toISOString() } : s,
+      ),
+      customers: state.customers.map((c) =>
+        c.id === customerId
+          ? { ...c, debtBalanceUgx: c.debtBalanceUgx + debtUgx, version: c.version + 1 }
+          : c,
+      ),
+    });
+
+    void queueRemote("sale", { saleId });
+    void queueRemote("customer", { id: customerId });
+    pushAudit("debt_reconcile", `Linked credit sale to ${customer.name}`, {
+      saleId,
+      customerId,
+      debtUgx,
+      receiptSeq: sale.receiptSeq ?? null,
+    });
+    return { ok: true };
   },
 
   addDebtPayment: (customerId, amountUgx) => {
