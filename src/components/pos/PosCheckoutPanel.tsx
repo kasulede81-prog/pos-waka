@@ -64,9 +64,6 @@ const Numpad = memo(function Numpad({
   );
 });
 
-  );
-});
-
 /** Italian-style numpad with clear + confirm on the right — always visible on mobile checkout. */
 const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   onDigit,

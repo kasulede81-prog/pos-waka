@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Check, Minus, Plus } from "lucide-react";
+import { Minus, Plus } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatDraftLineQty, formatDraftLineUnitPrice } from "../../lib/draftCart";
