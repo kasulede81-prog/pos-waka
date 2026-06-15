@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
+import { shouldShowHeaderExit, hasNestedModuleBack } from "../../lib/headerExit";
 import { getBackFallbackPath, historyCanGoBack } from "../../lib/navigationBack";
 
 type Props = {
@@ -35,11 +36,15 @@ export function PageBackBar({ lang, fallbackTo, label, className = "" }: Props) 
       ? t(lang, "posNavMainMenu")
       : t(lang, "pageBack"));
 
+  if (shouldShowHeaderExit(location.pathname) && !hasNestedModuleBack(location.pathname)) {
+    return null;
+  }
+
   return (
     <button
       type="button"
       onClick={handleBack}
-      className={`inline-flex min-h-[44px] items-center gap-1.5 text-sm font-bold text-waka-800 active:opacity-70 lg:hidden ${className}`}
+      className={`inline-flex min-h-[44px] items-center gap-1.5 text-sm font-bold text-waka-800 active:opacity-70 ${className}`}
     >
       <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden />
       {displayLabel}

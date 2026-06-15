@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
+import { ArrowLeft, Banknote, ChevronDown, ChevronUp, Pin, ScanLine, Search, X } from "lucide-react";
 import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
@@ -96,6 +96,12 @@ import { posSearchAliases } from "../lib/pharmacyUx";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
 import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
+import {
+  movePinnedShelfKey,
+  soldTodayUnitsByCategory,
+  sortPosShelfCards,
+  togglePinnedShelfKey,
+} from "../lib/posShelfOrder";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -206,6 +212,7 @@ export function PosPage({ lang }: { lang: Language }) {
       shifts: s.preferences.shifts,
       posLocked: s.preferences.posLocked,
       posSellCategoryFilter: s.preferences.posSellCategoryFilter,
+      posPinnedShelfKeys: s.preferences.posPinnedShelfKeys,
       favoriteProductIds: s.preferences.favoriteProductIds,
       recentProductIds: s.preferences.recentProductIds,
       staffAccounts: s.preferences.staffAccounts,
@@ -347,9 +354,12 @@ export function PosPage({ lang }: { lang: Language }) {
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [cameraScanOpen, setCameraScanOpen] = useState(false);
   const [cameraScanStatus, setCameraScanStatus] = useState("");
+  const [shelfArrangeMode, setShelfArrangeMode] = useState(false);
   const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
+  const pinnedShelfKeys = preferences.posPinnedShelfKeys ?? [];
+  const pinnedShelfSet = useMemo(() => new Set(pinnedShelfKeys), [pinnedShelfKeys]);
 
   const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(products), [products]);
   const sellHasUncategorized = useMemo(() => products.some((p) => !(p.category ?? "").trim()), [products]);
@@ -517,6 +527,22 @@ export function PosPage({ lang }: { lang: Language }) {
     [products, soldTodayByProduct, sellCategoryKey],
   );
 
+  const togglePinShelf = useCallback(
+    (key: string) => {
+      const cur = usePosStore.getState().preferences.posPinnedShelfKeys ?? [];
+      setPreferences({ posPinnedShelfKeys: togglePinnedShelfKey(cur, key) });
+    },
+    [setPreferences],
+  );
+
+  const movePinnedShelf = useCallback(
+    (key: string, direction: "up" | "down") => {
+      const cur = usePosStore.getState().preferences.posPinnedShelfKeys ?? [];
+      setPreferences({ posPinnedShelfKeys: movePinnedShelfKey(cur, key, direction) });
+    },
+    [setPreferences],
+  );
+
   const setSellCategoryFilter = useCallback(
     (next: string) => {
       setPreferences({
@@ -587,6 +613,11 @@ export function PosPage({ lang }: { lang: Language }) {
     });
   }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
+  const soldTodayByCategory = useMemo(
+    () => soldTodayUnitsByCategory(products, soldTodayByProduct),
+    [products, soldTodayByProduct],
+  );
+
   const shelfCards = useMemo(() => {
     const categoryCounts = new Map<string, number>();
     let uncategorizedCount = 0;
@@ -612,8 +643,8 @@ export function PosPage({ lang }: { lang: Language }) {
         icon: null,
       });
     }
-    return cards;
-  }, [products, sellCategoryOptions, sellHasUncategorized, lang]);
+    return sortPosShelfCards(cards, pinnedShelfKeys, soldTodayByCategory);
+  }, [products, sellCategoryOptions, sellHasUncategorized, lang, pinnedShelfKeys, soldTodayByCategory]);
 
   const showShelfBoxes =
     products.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
@@ -1460,39 +1491,106 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : showShelfBoxes ? (
         <section className="space-y-3">
           <div className="flex items-end justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
                 {t(lang, "posSellCategoryHeading")}
               </p>
-              <p className="text-sm font-bold text-stone-600">{t(lang, "posShelvesHint")}</p>
+              <p className="text-sm font-bold text-stone-600">
+                {shelfArrangeMode ? t(lang, "posShelfPinned") : t(lang, "posShelvesHint")}
+              </p>
             </div>
-            <p className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
-              {products.length}
-            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShelfArrangeMode((v) => !v)}
+                className={clsx(
+                  "min-h-[36px] rounded-full px-3 text-xs font-black",
+                  shelfArrangeMode
+                    ? "bg-waka-600 text-white"
+                    : "border border-stone-200 bg-white text-stone-700",
+                )}
+              >
+                {shelfArrangeMode ? t(lang, "posDoneArrange") : t(lang, "posArrangeShelves")}
+              </button>
+              <p className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
+                {products.length}
+              </p>
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-            {shelfCards.map((shelf) => (
-              <button
-                key={shelf.key}
-                type="button"
-                onClick={() => setSellCategoryFilter(shelf.key)}
-                className="min-h-[116px] rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
-              >
-                <span className="flex h-full flex-col justify-between">
-                  <span>
-                    <span className="text-2xl" aria-hidden>
-                      {shelf.icon ?? "▣"}
+            {shelfCards.map((shelf) => {
+              const pinned = pinnedShelfSet.has(shelf.key);
+              const pinIndex = pinnedShelfKeys.indexOf(shelf.key);
+              return (
+                <div key={shelf.key} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSellCategoryFilter(shelf.key)}
+                    className={clsx(
+                      "min-h-[116px] w-full rounded-[1.35rem] border p-3 text-left shadow-sm active:border-waka-400 active:bg-waka-50",
+                      pinned ? "border-waka-300 bg-waka-50/80" : "border-slate-200 bg-white",
+                    )}
+                  >
+                    <span className="flex h-full flex-col justify-between">
+                      <span>
+                        <span className="text-2xl" aria-hidden>
+                          {shelf.icon ?? "▣"}
+                        </span>
+                        <span className="mt-2 line-clamp-2 block text-lg font-black leading-tight text-slate-950">
+                          {shelf.label}
+                        </span>
+                      </span>
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-stone-500">
+                          {t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
+                        </span>
+                        {pinned ? (
+                          <span className="text-[10px] font-black uppercase tracking-wide text-waka-700">
+                            {t(lang, "posShelfPinned")}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
-                    <span className="mt-2 line-clamp-2 block text-lg font-black leading-tight text-slate-950">
-                      {shelf.label}
-                    </span>
-                  </span>
-                  <span className="text-xs font-bold text-stone-500">
-                    {t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
-                  </span>
-                </span>
-              </button>
-            ))}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => togglePinShelf(shelf.key)}
+                    aria-label={pinned ? t(lang, "posUnpinShelf") : t(lang, "posPinShelf")}
+                    aria-pressed={pinned}
+                    className={clsx(
+                      "absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-xl border shadow-sm active:scale-95",
+                      pinned
+                        ? "border-waka-400 bg-waka-600 text-white"
+                        : "border-stone-200 bg-white text-stone-600",
+                    )}
+                  >
+                    <Pin className={clsx("h-4 w-4", pinned && "fill-current")} aria-hidden />
+                  </button>
+                  {shelfArrangeMode && pinned ? (
+                    <div className="absolute bottom-2 right-2 flex gap-1">
+                      <button
+                        type="button"
+                        disabled={pinIndex <= 0}
+                        onClick={() => movePinnedShelf(shelf.key, "up")}
+                        aria-label={t(lang, "posMoveShelfUp")}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-800 shadow-sm disabled:opacity-30"
+                      >
+                        <ChevronUp className="h-4 w-4" aria-hidden />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={pinIndex < 0 || pinIndex >= pinnedShelfKeys.length - 1}
+                        onClick={() => movePinnedShelf(shelf.key, "down")}
+                        aria-label={t(lang, "posMoveShelfDown")}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-800 shadow-sm disabled:opacity-30"
+                      >
+                        <ChevronDown className="h-4 w-4" aria-hidden />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </section>
       ) : filteredProducts.length === 0 ? (

@@ -3952,6 +3952,9 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       p.posSellCategoryFilter === undefined || p.posSellCategoryFilter === null || String(p.posSellCategoryFilter).trim() === ""
         ? undefined
         : String(p.posSellCategoryFilter).trim().slice(0, 120),
+    posPinnedShelfKeys: Array.isArray(p.posPinnedShelfKeys)
+      ? (p.posPinnedShelfKeys as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 40)
+      : base.posPinnedShelfKeys ?? [],
     receiptPaperSize:
       p.receiptPaperSize === "58mm" || p.receiptPaperSize === "80mm" || p.receiptPaperSize === "a4"
         ? p.receiptPaperSize

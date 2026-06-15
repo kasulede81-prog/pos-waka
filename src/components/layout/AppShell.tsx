@@ -46,8 +46,10 @@ import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
 import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
-import { DesktopTerminalBackBar } from "./DesktopTerminalBackBar";
+import { lockPosAfterSellExit } from "../../lib/posSellExit";
+import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
+import { shouldShowHeaderExit } from "../../lib/headerExit";
 
 type Props = {
   lang: Language;
@@ -128,7 +130,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       const leavingPos = onPos && draftLineCount > 0 && to !== location.pathname && !to.startsWith("/pos");
       if (leavingPos) {
         void confirmLeaveActiveSaleIfNeeded().then((ok) => {
-          if (ok) navigate(to, options);
+          if (ok) {
+            lockPosAfterSellExit();
+            navigate(to, options);
+          }
         });
         return;
       }
@@ -264,8 +269,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     isDesktopLayout && (location.pathname === "/pos" || location.pathname.startsWith("/pos/"));
   /** lg+ terminal: launcher is primary nav — hide duplicate sidebar. Mobile/tablet unchanged below lg. */
   const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
-  const showDesktopTerminalBack =
-    desktopTerminalMode && !desktopTerminalHome && !desktopPosSell;
+  const showHeaderExit = shouldShowHeaderExit(location.pathname);
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const hospitalityKitchenNav = hospitalityNav
@@ -355,8 +359,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         ) : null}
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
         <header className="relative z-20 shrink-0 overflow-visible border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
-          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4">
+          <div
+            className={clsx(
+              "mx-auto flex flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
+              desktopTerminalMode || desktopTerminalHome ? "max-w-none lg:px-8 xl:px-10" : "max-w-6xl",
+            )}
+          >
             <div className="flex min-w-0 flex-1 items-center gap-2">
+              {showHeaderExit ? <HeaderExitButton lang={lang} /> : null}
               <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
               <div className="min-w-0">
                 <AppShellSyncLabel lang={lang} />
@@ -504,7 +514,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               }`}
             >
               <BackOfficeRouteGuard lang={lang}>
-                {showDesktopTerminalBack ? <DesktopTerminalBackBar lang={lang} /> : null}
                 <RouteErrorBoundary scope="page">
                   <Outlet />
                 </RouteErrorBoundary>

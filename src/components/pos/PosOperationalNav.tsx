@@ -7,6 +7,7 @@ import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
 import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
+import { lockPosAfterSellExit } from "../../lib/posSellExit";
 import { usePosStore } from "../../store/usePosStore";
 import { POS_HOME_ROUTE, POS_SELL_ROUTE } from "../../lib/posNavigation";
 
@@ -30,7 +31,10 @@ export function PosOperationalNav({ lang, sellLabelKey }: Props) {
         onSell && draftLineCount > 0 && to !== location.pathname && !to.startsWith(POS_SELL_ROUTE);
       if (leavingPos) {
         void confirmLeaveActiveSaleIfNeeded().then((ok) => {
-          if (ok) navigate(to, { preventScrollReset: true });
+          if (ok) {
+            lockPosAfterSellExit();
+            navigate(to, { preventScrollReset: true });
+          }
         });
         return;
       }
