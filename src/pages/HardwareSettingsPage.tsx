@@ -99,7 +99,7 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 pb-16 pt-2">
-      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+      <PageBackBar lang={lang} fallbackTo="/settings" />
       <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "hardwareSettingsTitle")}</h1>
       <p className="text-sm font-medium text-stone-600">{t(lang, "hardwareSettingsSub")}</p>
 

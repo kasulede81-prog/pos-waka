@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope, UserCog } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -48,7 +48,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-8">
-      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+      <PageBackBar lang={lang} />
       <div>
         <h1 className="text-2xl font-black text-stone-950">{t(lang, "settingsHubTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
@@ -64,6 +64,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
+        {canShop ? (
+          <OfficeNavCard
+            to="/staff-access"
+            title={t(lang, "officeCardStaffAccess")}
+            subtitle={t(lang, "officeCardStaffAccessSub")}
+            Icon={UserCog}
+          />
+        ) : null}
         {canShop ? (
           <OfficeNavCard
             to="/settings/shop"

@@ -8,15 +8,18 @@ export function historyCanGoBack(): boolean {
 
 /** Where to go when there is no in-app history to pop. */
 export function getBackFallbackPath(pathname: string, opts?: { desktopTerminal?: boolean }): string {
+  if (pathname === "/staff-access" || pathname.startsWith("/office/hardware")) return "/settings";
+  if (pathname.startsWith("/settings/")) return "/settings";
+  if (pathname === "/settings") return "/";
+
   if (opts?.desktopTerminal) {
-    if (pathname.startsWith("/settings/")) return "/settings";
-    if (pathname === "/settings") return "/";
     if (pathname.startsWith("/owner/")) return "/owner";
     if (pathname === "/owner") return "/";
+    if (pathname.startsWith("/office/")) return "/office";
+    if (pathname === "/office") return "/";
+    if (isBackOfficePath(pathname)) return "/office";
     return "/";
   }
-  if (pathname.startsWith("/settings/")) return "/settings";
-  if (pathname === "/settings") return "/office";
   if (pathname.startsWith("/owner/")) return "/owner";
   if (pathname === "/owner") return "/office";
   if (pathname.startsWith("/office/")) return "/office";

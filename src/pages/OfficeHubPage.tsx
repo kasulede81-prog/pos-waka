@@ -9,10 +9,8 @@ import {
   Truck,
   Users,
   BarChart3,
-  Settings,
   LayoutDashboard,
   ScrollText,
-  UserCog,
   Cloud,
   Share2,
   TrendingUp,
@@ -20,7 +18,6 @@ import {
   HelpCircle,
   User,
   Banknote,
-  LayoutGrid,
   ChefHat,
   Pill,
   Shield,
@@ -120,7 +117,6 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const canRecordExpense = canRecordCashExpenses(actor.role, preferences);
   const canProfit =
     canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit");
-  const canShopSettings = can("settings.shop");
   const canOwnerDashboard = can("owner.dashboard");
   const { totalCount: ownerRiskCount } = useOwnerRiskCards(lang, false);
 
@@ -131,18 +127,16 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     can("suppliers.view") ||
     can("day.close") ||
     canRecordExpense ||
-    (hospitalityMode && (can("hospitality.floor") || can("hospitality.kitchen") || can("pending_sales.manage"))) ||
-    (pharmacyMode && canShopSettings);
+    (hospitalityMode && (can("hospitality.kitchen") || can("pending_sales.manage")));
   const hasInsights =
     can("reports.view") ||
     canProfit ||
     can("owner.dashboard") ||
     can("owner.activity");
-  const hasShopControl = can("settings.view") || canShopSettings;
   const hasData = can("settings.view") && canBackup;
   const hasHelp = true;
 
-  const empty = !hasDaily && !hasInsights && !hasShopControl && !hasData && !hasHelp;
+  const empty = !hasDaily && !hasInsights && !hasData && !hasHelp;
 
   const highlightCustomers = !pharmacyMode && !hospitalityMode && !wholesaleMode;
   const highlightPharmacyPatients = pharmacyMode;
@@ -169,15 +163,6 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         <div className="space-y-6">
           {hasDaily ? (
             <OfficeNavSection title={t(lang, "officeSectionDaily")}>
-              {hospitalityMode && can("hospitality.floor") ? (
-                <OfficeNavCard
-                  to="/settings/floor"
-                  title={t(lang, "floorSetupTitle")}
-                  subtitle={t(lang, "floorSetupSub")}
-                  Icon={LayoutGrid}
-                  highlight
-                />
-              ) : null}
               {hospitalityMode && can("hospitality.kitchen") ? (
                 <OfficeNavCard
                   to="/kitchen"
@@ -220,15 +205,6 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   title={wt("customers")}
                   subtitle={t(lang, "wholesalePage_receivables")}
                   Icon={Users}
-                  highlight
-                />
-              ) : null}
-              {pharmacyMode && canShopSettings ? (
-                <OfficeNavCard
-                  to="/settings/pharmacy"
-                  title={t(lang, "settingsHubPharmacy")}
-                  subtitle={t(lang, "settingsHubPharmacySub")}
-                  Icon={Pill}
                   highlight
                 />
               ) : null}
@@ -353,27 +329,6 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                     Icon={ScrollText}
                   />
                 </>
-              ) : null}
-            </OfficeNavSection>
-          ) : null}
-
-          {hasShopControl ? (
-            <OfficeNavSection title={t(lang, "officeSectionShopControl")}>
-              {canShopSettings ? (
-                <OfficeNavCard
-                  to="/staff-access"
-                  title={t(lang, "officeCardStaffAccess")}
-                  subtitle={t(lang, "officeCardStaffAccessSub")}
-                  Icon={UserCog}
-                />
-              ) : null}
-              {can("settings.view") ? (
-                <OfficeNavCard
-                  to="/settings"
-                  title={t(lang, "officeCardAppSettings")}
-                  subtitle={t(lang, "officeCardAppSettingsSub")}
-                  Icon={Settings}
-                />
               ) : null}
             </OfficeNavSection>
           ) : null}

@@ -18,6 +18,16 @@ const PREFIXES = [
 /** Stock workflows reachable without full Back Office access (stock keeper role). */
 const STOCK_KEEPER_PREFIXES = ["/stock", "/suppliers", "/restock"] as const;
 
+/** Routes that belong to Settings (main-menu launcher), not the shop/back-office hub. */
+export function isSettingsLauncherPath(pathname: string): boolean {
+  return (
+    pathname === "/settings" ||
+    pathname.startsWith("/settings/") ||
+    pathname === "/staff-access" ||
+    pathname === "/office/hardware"
+  );
+}
+
 export function isBackOfficePath(pathname: string): boolean {
   return PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }

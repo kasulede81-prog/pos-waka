@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
-import { shouldShowHeaderExit, hasNestedModuleBack } from "../../lib/headerExit";
+import { labelKeyForBackFallback, shouldHidePageBackBar } from "../../lib/headerBack";
 import { getBackFallbackPath, historyCanGoBack } from "../../lib/navigationBack";
 
 type Props = {
@@ -30,13 +30,12 @@ export function PageBackBar({ lang, fallbackTo, label, className = "" }: Props) 
     }
   }, [navigate, location.pathname, fallbackTo, isDesktopTerminal]);
 
+  const resolvedFallback =
+    fallbackTo ?? getBackFallbackPath(location.pathname, { desktopTerminal: isDesktopTerminal });
   const displayLabel =
-    label ??
-    (isDesktopTerminal && !location.pathname.startsWith("/settings/")
-      ? t(lang, "posNavMainMenu")
-      : t(lang, "pageBack"));
+    label ?? t(lang, labelKeyForBackFallback(resolvedFallback, location.pathname));
 
-  if (shouldShowHeaderExit(location.pathname) && !hasNestedModuleBack(location.pathname)) {
+  if (shouldHidePageBackBar(location.pathname, isDesktopTerminal)) {
     return null;
   }
 

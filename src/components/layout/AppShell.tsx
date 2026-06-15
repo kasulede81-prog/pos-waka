@@ -21,7 +21,8 @@ import { SessionHydrationProvider } from "../../context/SessionHydrationContext"
 import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
-import { isBackOfficePath } from "../../lib/backOfficePaths";
+import { isBackOfficePath, isSettingsLauncherPath } from "../../lib/backOfficePaths";
+import { BackOfficeMasterSearch } from "../office/BackOfficeMasterSearch";
 import { isHospitalityMode, isKitchenEnabledForHospitality } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
@@ -48,6 +49,7 @@ import { PinInput } from "../ui/PinInput";
 import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
 import { lockPosAfterSellExit } from "../../lib/posSellExit";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
+import { HeaderBackButton } from "./HeaderBackButton";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { shouldShowHeaderExit } from "../../lib/headerExit";
 
@@ -270,6 +272,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   /** lg+ terminal: launcher is primary nav — hide duplicate sidebar. Mobile/tablet unchanged below lg. */
   const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
   const showHeaderExit = shouldShowHeaderExit(location.pathname);
+  const showBackOfficeSearch =
+    isBackOfficePath(location.pathname) && !isSettingsLauncherPath(location.pathname) && !internalAdminRoute;
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const hospitalityKitchenNav = hospitalityNav
@@ -367,6 +371,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           >
             <div className="flex min-w-0 flex-1 items-center gap-2">
               {showHeaderExit ? <HeaderExitButton lang={lang} /> : null}
+              {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
               <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
               <div className="min-w-0">
                 <AppShellSyncLabel lang={lang} />
@@ -464,6 +469,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </div>
         </header>
+        {showBackOfficeSearch ? (
+          <div
+            className={clsx(
+              "relative z-10 shrink-0 border-b border-stone-200/80 bg-white/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:px-4",
+              desktopTerminalMode || desktopTerminalHome ? "lg:px-8 xl:px-10" : "",
+            )}
+          >
+            <div className={clsx("mx-auto w-full", desktopTerminalMode ? "max-w-none" : "max-w-6xl")}>
+              <BackOfficeMasterSearch lang={lang} className="max-w-3xl" />
+            </div>
+          </div>
+        ) : null}
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6",

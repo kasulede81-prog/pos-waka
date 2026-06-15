@@ -1,4 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { getBackFallbackPath } from "./navigationBack";
+
+describe("getBackFallbackPath", () => {
+  it("returns main menu for settings hub on desktop and mobile", () => {
+    expect(getBackFallbackPath("/settings", { desktopTerminal: true })).toBe("/");
+    expect(getBackFallbackPath("/settings")).toBe("/");
+  });
+
+  it("returns settings hub for settings subpages and staff access", () => {
+    expect(getBackFallbackPath("/settings/shop", { desktopTerminal: true })).toBe("/settings");
+    expect(getBackFallbackPath("/staff-access")).toBe("/settings");
+    expect(getBackFallbackPath("/office/hardware")).toBe("/settings");
+  });
+});
 
 /** Mirrors minimize-at-root logic in useAndroidBackButton. */
 function shouldMinimizeApp(pathname: string, fallback: string): boolean {

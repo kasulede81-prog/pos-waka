@@ -109,7 +109,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           lang={lang}
           title={t(lang, "staffAccessTitle")}
           subtitle={t(lang, "staffAccessSub")}
-          backLabel={t(lang, "officeBackToHub")}
+          backFallback="/settings"
         />
         <p className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4 text-sm font-semibold text-orange-950">
           {t(lang, "upgradeWhyStaff")} → {t(lang, "upgradeWhyStaffPlan")}
@@ -127,7 +127,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         lang={lang}
         title={t(lang, "staffAccessTitle")}
         subtitle={t(lang, "staffAccessSub")}
-        backLabel={t(lang, "officeBackToHub")}
+        backFallback="/settings"
       />
 
       <section className="space-y-3 rounded-3xl border-2 border-slate-100 bg-white p-4 shadow-sm">
