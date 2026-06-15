@@ -6,16 +6,32 @@ type Props = {
   lang: Language;
   stats: DraftCartStats;
   compact?: boolean;
+  /** Single-line stats bar for mobile checkout dock. */
+  dock?: boolean;
   payableUgx?: number;
   cartDiscountUgx?: number;
 };
 
-export function DraftCartSummary({ lang, stats, compact, payableUgx, cartDiscountUgx = 0 }: Props) {
+export function DraftCartSummary({ lang, stats, compact, dock, payableUgx, cartDiscountUgx = 0 }: Props) {
   const unitShown =
     Number.isInteger(stats.unitCount) ? String(stats.unitCount) : stats.unitCount.toFixed(2).replace(/\.?0+$/, "");
   const showPayable = payableUgx != null && cartDiscountUgx > 0;
   const totalLabel = showPayable ? t(lang, "payableTotalLabel") : t(lang, "totalLabel");
   const totalValue = showPayable ? payableUgx : stats.totalUgx;
+
+  if (dock) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-waka-200 bg-waka-50/90 px-2.5 py-1.5 text-[11px] font-bold text-stone-700">
+        <span>
+          {stats.productCount} {t(lang, "posCartProductsShort").toLowerCase()} · {unitShown}{" "}
+          {t(lang, "posCartUnitsShort").toLowerCase()}
+        </span>
+        <span className="shrink-0 font-black text-waka-700">
+          {totalLabel}: UGX {totalValue.toLocaleString()}
+        </span>
+      </div>
+    );
+  }
 
   if (compact) {
     return (

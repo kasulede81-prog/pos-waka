@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -26,6 +26,7 @@ import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSec
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
+import { PosShelfArrangePanel } from "../components/stock/PosShelfArrangePanel";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { shelfIconFor } from "../lib/productCategories";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -63,6 +64,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const canPresets = hasPermission(actor.role, "products.edit_presets");
   const canSell = hasPermission(actor.role, "pos.sell");
   const canRestock = hasPermission(actor.role, "purchases.record");
+  const canArrangeShelves = hasPermission(actor.role, "settings.shop");
 
   const products = usePosStore((s) => s.products);
   const suppliers = usePosStore((s) => s.suppliers);
@@ -119,6 +121,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const [starterRows, setStarterRows] = useState<StarterRowState[]>([]);
   const [stockTab, setStockTab] = useState<StockHubTab>("overview");
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
 
   const navigate = useNavigate();
@@ -144,6 +147,13 @@ export function StockPage({ lang }: { lang: Language }) {
       void stopBarcodeSession();
     };
   }, []);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "shelves" || tab === "products" || tab === "low" || tab === "movements" || tab === "overview") {
+      setStockTab(tab);
+    }
+  }, [searchParams]);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -685,6 +695,7 @@ export function StockPage({ lang }: { lang: Language }) {
                 </>
               ) : (
                 <>
+                  {canArrangeShelves ? <PosShelfArrangePanel lang={lang} products={products} /> : null}
                   <p className="text-sm text-slate-600">{t(lang, "stockShelvesHint")}</p>
                   <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {shelfFolders.map((shelf) => {

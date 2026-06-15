@@ -796,7 +796,7 @@ export type ShopPreferences = {
   recentProductIds?: string[];
   /** Sell screen category chip: real category name, or `__waka_uncategorized__`; omit / null = All */
   posSellCategoryFilter?: string | null;
-  /** Pinned shelf category keys on Sell screen (display order). */
+  /** Shop-wide Sell screen shelf order (set in stock/back office). */
   posPinnedShelfKeys?: string[];
   /** Waka public shop ID (A001, …) cached after first online load. */
   wakaShopId?: string | null;

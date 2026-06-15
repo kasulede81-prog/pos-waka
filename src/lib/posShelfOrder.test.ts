@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { sortPosShelfCards, togglePinnedShelfKey, movePinnedShelfKey } from "./posShelfOrder";
+import {
+  effectiveShelfOrderKeys,
+  sortPosShelfCards,
+  togglePinnedShelfKey,
+  movePinnedShelfKey,
+} from "./posShelfOrder";
 
 describe("posShelfOrder", () => {
   const cards = [
@@ -8,10 +13,13 @@ describe("posShelfOrder", () => {
     { key: "C", label: "C", count: 3, icon: null },
   ];
 
-  it("sorts pinned shelves before others", () => {
-    const sold = new Map([["B", 10], ["C", 1], ["A", 5]]);
-    const sorted = sortPosShelfCards(cards, ["C", "A"], sold);
+  it("sorts shelves by saved shop order then name", () => {
+    const sorted = sortPosShelfCards(cards, ["C", "A"]);
     expect(sorted.map((c) => c.key)).toEqual(["C", "A", "B"]);
+  });
+
+  it("appends new shelves alphabetically after saved order", () => {
+    expect(effectiveShelfOrderKeys(["B", "A", "C"], ["C"])).toEqual(["C", "A", "B"]);
   });
 
   it("toggles pin keys", () => {

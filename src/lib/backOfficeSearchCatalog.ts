@@ -33,6 +33,7 @@ export type ResolvedBackOfficeSearchEntry = {
 const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "shop-hub", path: "/office", titleKey: "officeHubNav", subtitleKey: "officeHubSub", sectionKey: "officeSectionDaily", keywords: ["shop", "office", "hub", "home"] },
   { id: "stock", path: "/stock", titleKey: "officeCardStock", subtitleKey: "officeCardStockSub", sectionKey: "officeSectionDaily", perm: "stock.view", keywords: ["inventory", "products", "items", "medicine", "warehouse"] },
+  { id: "shelf-arrange", path: "/stock?tab=shelves", titleKey: "officeCardShelfArrange", subtitleKey: "officeCardShelfArrangeSub", sectionKey: "officeSectionDaily", perm: "settings.shop", keywords: ["shelf", "arrange", "order", "sell", "category"] },
   { id: "restock", path: "/restock", titleKey: "officeCardRestock", subtitleKey: "officeCardRestockSub", sectionKey: "officeSectionDaily", perm: "purchases.record", keywords: ["purchase", "buy", "stock in"] },
   { id: "suppliers", path: "/suppliers", titleKey: "officeCardSuppliers", subtitleKey: "officeCardSuppliersSub", sectionKey: "officeSectionDaily", perm: "suppliers.view", keywords: ["vendor", "supplier"] },
   { id: "purchases", path: "/office/purchases", titleKey: "officeCardPurchases", subtitleKey: "officeCardPurchasesSub", sectionKey: "officeSectionDaily", perm: "purchases.view", keywords: ["purchase history", "orders"] },

@@ -1,5 +1,3 @@
-import { UNCATEGORIZED_SENTINEL } from "./productCategories";
-
 export type PosShelfCard = {
   key: string;
   label: string;
@@ -7,22 +5,22 @@ export type PosShelfCard = {
   icon: string | null;
 };
 
-/** Pinned shelves first (user order), then by today's sales, then name. */
-export function sortPosShelfCards(
-  cards: PosShelfCard[],
-  pinnedKeys: string[],
-  soldTodayByCategory: Map<string, number>,
-): PosShelfCard[] {
-  const pinRank = new Map(pinnedKeys.map((key, index) => [key, index]));
+/** Shop-wide shelf order (set in stock/back office), then alphabetical for any new shelves. */
+export function effectiveShelfOrderKeys(allKeys: string[], savedOrder: string[]): string[] {
+  const ordered = savedOrder.filter((key) => allKeys.includes(key));
+  const rest = allKeys
+    .filter((key) => !ordered.includes(key))
+    .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return [...ordered, ...rest];
+}
+
+export function sortPosShelfCards(cards: PosShelfCard[], orderKeys: string[]): PosShelfCard[] {
+  const allKeys = cards.map((c) => c.key);
+  const rank = new Map(effectiveShelfOrderKeys(allKeys, orderKeys).map((key, index) => [key, index]));
   return [...cards].sort((a, b) => {
-    const aPinned = pinRank.get(a.key);
-    const bPinned = pinRank.get(b.key);
-    const aRank = aPinned ?? Number.POSITIVE_INFINITY;
-    const bRank = bPinned ?? Number.POSITIVE_INFINITY;
+    const aRank = rank.get(a.key) ?? Number.POSITIVE_INFINITY;
+    const bRank = rank.get(b.key) ?? Number.POSITIVE_INFINITY;
     if (aRank !== bRank) return aRank - bRank;
-    const aSold = soldTodayByCategory.get(a.key) ?? 0;
-    const bSold = soldTodayByCategory.get(b.key) ?? 0;
-    if (aSold !== bSold) return bSold - aSold;
     return a.label.localeCompare(b.label, undefined, { sensitivity: "base" });
   });
 }
@@ -40,18 +38,4 @@ export function movePinnedShelfKey(pinnedKeys: string[], key: string, direction:
   const next = [...pinnedKeys];
   [next[index], next[swap]] = [next[swap]!, next[index]!];
   return next;
-}
-
-export function soldTodayUnitsByCategory(
-  products: { id: string; category?: string | null }[],
-  soldTodayByProduct: Map<string, number>,
-): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const p of products) {
-    const qty = soldTodayByProduct.get(p.id) ?? 0;
-    if (qty <= 0) continue;
-    const key = (p.category ?? "").trim() || UNCATEGORIZED_SENTINEL;
-    out.set(key, (out.get(key) ?? 0) + qty);
-  }
-  return out;
 }

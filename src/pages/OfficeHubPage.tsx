@@ -22,6 +22,7 @@ import {
   Pill,
   Shield,
   ClipboardList,
+  LayoutGrid,
 } from "lucide-react";
 import { canSeeOfficeProfit } from "../lib/homeProfit";
 import type { Language, Permission } from "../types";
@@ -118,6 +119,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const canProfit =
     canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit");
   const canOwnerDashboard = can("owner.dashboard");
+  const canArrangeShelves = can("settings.shop") && can("stock.view");
   const { totalCount: ownerRiskCount } = useOwnerRiskCards(lang, false);
 
   const hasDaily =
@@ -215,6 +217,14 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   subtitle={modeTerm("officeCardStockSub")}
                   Icon={Package}
                   highlight={highlightStock}
+                />
+              ) : null}
+              {canArrangeShelves ? (
+                <OfficeNavCard
+                  to="/stock?tab=shelves"
+                  title={t(lang, "officeCardShelfArrange")}
+                  subtitle={t(lang, "officeCardShelfArrangeSub")}
+                  Icon={LayoutGrid}
                 />
               ) : null}
               {can("purchases.record") ? (

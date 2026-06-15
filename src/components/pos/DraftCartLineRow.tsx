@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { Minus, Plus } from "lucide-react";
+import { Check, Minus, Plus } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatDraftLineQty, formatDraftLineUnitPrice } from "../../lib/draftCart";
@@ -10,6 +10,8 @@ type Props = {
   line: SaleLine;
   product: Product | undefined;
   compact?: boolean;
+  /** Ultra-compact row for mobile checkout dock (fits with numpad on screen). */
+  dock?: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
   onQtyTap: () => void;
@@ -22,6 +24,7 @@ export function DraftCartLineRow({
   line,
   product,
   compact = false,
+  dock = false,
   onIncrement,
   onDecrement,
   onQtyTap,
@@ -30,6 +33,47 @@ export function DraftCartLineRow({
 }: Props) {
   const qtyLabel = product ? formatDraftLineQty(product, line) : String(line.quantity);
   const unitHint = product ? formatDraftLineUnitPrice(product, line) : null;
+
+  if (dock) {
+    return (
+      <li className="flex items-center gap-1 border-b border-slate-100 py-1.5 last:border-0">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-bold leading-tight text-slate-900">{line.name}</p>
+          <p className="truncate text-[10px] font-semibold text-slate-500">
+            {qtyLabel}
+            {unitHint ? ` · ${unitHint}` : ""}
+            {" · "}
+            UGX {line.lineTotalUgx.toLocaleString()}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          <button
+            type="button"
+            onClick={onDecrement}
+            aria-label={t(lang, "posQtyDecrease")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-900 active:bg-slate-100"
+          >
+            <Minus className="h-3.5 w-3.5 stroke-[3]" aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={onQtyTap}
+            className="flex h-8 min-w-[2.25rem] items-center justify-center rounded-lg border border-waka-300 bg-waka-50 px-1 text-xs font-black tabular-nums text-waka-950 active:bg-waka-100"
+          >
+            {qtyLabel}
+          </button>
+          <button
+            type="button"
+            onClick={onIncrement}
+            aria-label={t(lang, "posQtyIncrease")}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-waka-400 bg-waka-600 text-white active:brightness-95"
+          >
+            <Plus className="h-3.5 w-3.5 stroke-[3]" aria-hidden />
+          </button>
+        </div>
+      </li>
+    );
+  }
 
   if (compact) {
     return (
