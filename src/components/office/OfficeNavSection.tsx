@@ -1,25 +1,45 @@
 import type { ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import clsx from "clsx";
 
 type Props = {
   title: string;
   children: ReactNode;
   /** Multi-column grid on desktop terminal (lg+). */
   desktopGrid?: boolean;
+  /** Collapsible on mobile; always expanded on lg+. */
+  collapsible?: boolean;
 };
 
-export function OfficeNavSection({ title, children, desktopGrid = true }: Props) {
+export function OfficeNavSection({ title, children, desktopGrid = true, collapsible = true }: Props) {
+  const listClass = desktopGrid
+    ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3"
+    : "space-y-2";
+
+  if (!collapsible) {
+    return (
+      <section className="space-y-2">
+        <h2 className="px-0.5 text-xs font-black uppercase tracking-wider text-stone-500">{title}</h2>
+        <ul className={listClass}>{children}</ul>
+      </section>
+    );
+  }
+
   return (
-    <section className="space-y-2">
-      <h2 className="px-0.5 text-xs font-black uppercase tracking-wider text-stone-500">{title}</h2>
-      <ul
-        className={
-          desktopGrid
-            ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3"
-            : "space-y-2"
-        }
+    <details open className="group space-y-2 rounded-2xl border border-stone-100 bg-white/60 p-3 lg:border-0 lg:bg-transparent lg:p-0">
+      <summary
+        className={clsx(
+          "flex cursor-pointer list-none items-center justify-between gap-2 px-0.5 marker:content-none [&::-webkit-details-marker]:hidden",
+          "lg:pointer-events-none lg:cursor-default",
+        )}
       >
-        {children}
-      </ul>
-    </section>
+        <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{title}</h2>
+        <ChevronDown
+          className="h-4 w-4 shrink-0 text-stone-400 transition-transform group-open:rotate-180 lg:hidden"
+          aria-hidden
+        />
+      </summary>
+      <ul className={listClass}>{children}</ul>
+    </details>
   );
 }

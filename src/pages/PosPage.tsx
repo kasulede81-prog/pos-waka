@@ -45,7 +45,6 @@ import { useDeferredSales } from "../hooks/useDeferredSales";
 import {
   CATEGORY_FILTER_ALL,
   UNCATEGORIZED_SENTINEL,
-  distinctTrimmedCategories,
   productMatchesCategoryFilter,
   productMatchesSellSearch,
   shelfIconFor,
@@ -96,7 +95,8 @@ import { posSearchAliases } from "../lib/pharmacyUx";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
 import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
-import { sortPosShelfCards } from "../lib/posShelfOrder";
+import { sortPosShelfCards, buildPosShelfCards } from "../lib/posShelfOrder";
+import { PosShelfTile } from "../components/pos/PosShelfTile";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
@@ -353,10 +353,6 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
   const shelfOrderKeys = preferences.posPinnedShelfKeys ?? [];
-
-  const sellCategoryOptions = useMemo(() => distinctTrimmedCategories(products), [products]);
-  const sellHasUncategorized = useMemo(() => products.some((p) => !(p.category ?? "").trim()), [products]);
-
   const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p] as const)), [products]);
   const favoriteIdSet = useMemo(() => new Set(preferences.favoriteProductIds ?? []), [preferences.favoriteProductIds]);
@@ -591,32 +587,8 @@ export function PosPage({ lang }: { lang: Language }) {
   }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
   const shelfCards = useMemo(() => {
-    const categoryCounts = new Map<string, number>();
-    let uncategorizedCount = 0;
-    for (const p of products) {
-      const cat = (p.category ?? "").trim();
-      if (!cat) {
-        uncategorizedCount += 1;
-      } else {
-        categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
-      }
-    }
-    const cards = sellCategoryOptions.map((cat) => ({
-      key: cat,
-      label: cat,
-      count: categoryCounts.get(cat) ?? 0,
-      icon: shelfIconFor(cat),
-    }));
-    if (sellHasUncategorized) {
-      cards.push({
-        key: UNCATEGORIZED_SENTINEL,
-        label: t(lang, "posNoShelf"),
-        count: uncategorizedCount,
-        icon: null,
-      });
-    }
-    return sortPosShelfCards(cards, shelfOrderKeys);
-  }, [products, sellCategoryOptions, sellHasUncategorized, lang, shelfOrderKeys]);
+    return sortPosShelfCards(buildPosShelfCards(products, t(lang, "posNoShelf")), shelfOrderKeys);
+  }, [products, lang, shelfOrderKeys]);
 
   const showShelfBoxes =
     products.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
@@ -1475,26 +1447,13 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
             {shelfCards.map((shelf) => (
-              <button
+              <PosShelfTile
                 key={shelf.key}
-                type="button"
+                shelf={shelf}
+                mode="sell"
+                countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
                 onClick={() => setSellCategoryFilter(shelf.key)}
-                className="min-h-[116px] w-full rounded-[1.35rem] border border-slate-200 bg-white p-3 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
-              >
-                <span className="flex h-full flex-col justify-between">
-                  <span>
-                    <span className="text-2xl" aria-hidden>
-                      {shelf.icon ?? "▣"}
-                    </span>
-                    <span className="mt-2 line-clamp-2 block text-lg font-black leading-tight text-slate-950">
-                      {shelf.label}
-                    </span>
-                  </span>
-                  <span className="text-xs font-bold text-stone-500">
-                    {t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
-                  </span>
-                </span>
-              </button>
+              />
             ))}
           </div>
         </section>

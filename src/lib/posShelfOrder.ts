@@ -1,9 +1,61 @@
+import {
+  UNCATEGORIZED_SENTINEL,
+  distinctTrimmedCategories,
+  shelfIconFor,
+} from "./productCategories";
+import type { Product } from "../types";
+
 export type PosShelfCard = {
   key: string;
   label: string;
   count: number;
   icon: string | null;
 };
+
+export function buildPosShelfCards(
+  products: Product[],
+  noShelfLabel: string,
+): PosShelfCard[] {
+  const categoryOptions = distinctTrimmedCategories(products);
+  const hasUncategorized = products.some((p) => !(p.category ?? "").trim());
+  const categoryCounts = new Map<string, number>();
+  let uncategorizedCount = 0;
+  for (const p of products) {
+    const cat = (p.category ?? "").trim();
+    if (!cat) {
+      uncategorizedCount += 1;
+    } else {
+      categoryCounts.set(cat, (categoryCounts.get(cat) ?? 0) + 1);
+    }
+  }
+  const cards = categoryOptions.map((cat) => ({
+    key: cat,
+    label: cat,
+    count: categoryCounts.get(cat) ?? 0,
+    icon: shelfIconFor(cat),
+  }));
+  if (hasUncategorized) {
+    cards.push({
+      key: UNCATEGORIZED_SENTINEL,
+      label: noShelfLabel,
+      count: uncategorizedCount,
+      icon: null,
+    });
+  }
+  return cards;
+}
+
+/** Reorder shelf keys by moving one key before another (drag-and-drop). */
+export function reorderShelfKeys(orderKeys: string[], activeKey: string, overKey: string): string[] {
+  if (activeKey === overKey) return orderKeys;
+  const from = orderKeys.indexOf(activeKey);
+  const to = orderKeys.indexOf(overKey);
+  if (from < 0 || to < 0) return orderKeys;
+  const next = [...orderKeys];
+  next.splice(from, 1);
+  next.splice(to, 0, activeKey);
+  return next;
+}
 
 /** Shop-wide shelf order (set in stock/back office), then alphabetical for any new shelves. */
 export function effectiveShelfOrderKeys(allKeys: string[], savedOrder: string[]): string[] {

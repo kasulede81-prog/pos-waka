@@ -31,7 +31,6 @@ type TileDef = {
   Icon: LucideIcon;
   perm?: Permission;
   badge?: number;
-  /** Grid placement */
   area: string;
   variant: "primary" | "secondary";
 };
@@ -49,15 +48,23 @@ const FOCUS_ORDER = [
   "settings",
 ] as const;
 
-function tileButtonClass(variant: TileDef["variant"], extra?: string): string {
+function tileButtonClass(variant: TileDef["variant"], tileId: string): string {
+  const isPrimary = variant === "primary";
   return clsx(
     "relative touch-manipulation rounded-2xl border-2 text-center shadow-md transition-all",
     "hover:shadow-lg active:scale-[0.98] motion-reduce:active:scale-100",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-900/5",
-    variant === "primary"
-      ? "flex min-h-[260px] flex-col items-center justify-center gap-4 border-waka-500/80 bg-gradient-to-br from-waka-600 to-waka-700 px-6 py-8 text-white shadow-[0_8px_32px_rgba(234,88,12,0.45)] hover:from-waka-500 hover:to-waka-600"
-      : "flex min-h-[120px] flex-col items-center justify-center gap-2.5 border-stone-600/40 bg-stone-800/90 px-4 py-4 text-stone-50 hover:border-waka-500/50 hover:bg-stone-800",
-    extra,
+    isPrimary
+      ? clsx(
+          "col-span-2 flex flex-col items-center justify-center gap-3 border-waka-500/80 bg-gradient-to-br from-waka-600 to-waka-700 px-4 py-6 text-white",
+          "min-h-[140px] shadow-[0_8px_32px_rgba(234,88,12,0.45)] hover:from-waka-500 hover:to-waka-600",
+          "lg:min-h-[260px] lg:gap-4 lg:px-6 lg:py-8",
+        )
+      : clsx(
+          "flex min-h-[108px] flex-col items-center justify-center gap-2 border-stone-600/40 bg-stone-800/90 px-3 py-3 text-stone-50",
+          "hover:border-waka-500/50 hover:bg-stone-800 sm:min-h-[120px] sm:gap-2.5 sm:px-4 sm:py-4",
+        ),
+    tileId !== "sell" && "lg:[grid-area:var(--tile-area)]",
   );
 }
 
@@ -165,7 +172,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   }, [actor.role, lowStockCount, riskCount]);
 
   const focusableIds = useMemo(
-    () => FOCUS_ORDER.filter((id) => tiles.some((t) => t.id === id)),
+    () => FOCUS_ORDER.filter((id) => tiles.some((tile) => tile.id === id)),
     [tiles],
   );
 
@@ -206,8 +213,8 @@ export function DesktopHomeTiles({ lang }: Props) {
         type="button"
         onClick={() => navigate(tile.to)}
         onKeyDown={(e) => onTileKeyDown(tile.id, e)}
-        style={{ gridArea: tile.area }}
-        className={tileButtonClass(tile.variant)}
+        style={{ ["--tile-area" as string]: tile.area }}
+        className={tileButtonClass(tile.variant, tile.id)}
       >
         {tile.badge !== undefined && tile.badge > 0 ? (
           <span className="absolute right-3 top-3 flex h-7 min-w-[1.75rem] items-center justify-center rounded-full bg-rose-600 px-1.5 text-xs font-black text-white">
@@ -215,11 +222,17 @@ export function DesktopHomeTiles({ lang }: Props) {
           </span>
         ) : null}
         <tile.Icon
-          className={isPrimary ? "h-16 w-16 shrink-0" : "h-9 w-9 shrink-0 text-waka-300"}
+          className={isPrimary ? "h-12 w-12 shrink-0 lg:h-16 lg:w-16" : "h-8 w-8 shrink-0 text-waka-300 sm:h-9 sm:w-9"}
           strokeWidth={isPrimary ? 2.5 : 2}
           aria-hidden
         />
-        <span className={isPrimary ? "text-3xl font-black uppercase tracking-wide" : "text-lg font-black leading-tight"}>
+        <span
+          className={
+            isPrimary
+              ? "text-2xl font-black uppercase tracking-wide lg:text-3xl"
+              : "text-base font-black leading-tight sm:text-lg"
+          }
+        >
           {t(lang, tile.labelKey)}
         </span>
       </button>
@@ -236,7 +249,11 @@ export function DesktopHomeTiles({ lang }: Props) {
 
   return (
     <div
-      className="w-full max-w-4xl [grid-template-areas:'sell_sell_inventory_customers''sell_sell_shop_shop''reports_investigation_cash_settings'] grid grid-cols-4 grid-rows-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,auto)] gap-3 sm:gap-4"
+      className={clsx(
+        "w-full max-w-lg grid grid-cols-2 gap-3 sm:max-w-2xl sm:gap-4",
+        "lg:max-w-4xl lg:grid-cols-4 lg:grid-rows-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,auto)] lg:gap-4",
+        "lg:[grid-template-areas:'sell_sell_inventory_customers''sell_sell_shop_shop''reports_investigation_cash_settings']",
+      )}
       role="navigation"
       aria-label={t(lang, "desktopHomeNavLabel")}
     >

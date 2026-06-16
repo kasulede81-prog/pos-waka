@@ -118,19 +118,21 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <OwnerNeedsAttentionSection lang={lang} cards={riskCards} todayKey={todayKey} />
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <OwnerNeedsAttentionSection lang={lang} cards={riskCards} todayKey={todayKey} />
 
-      <OwnerBusinessTodaySection
-        lang={lang}
-        stats={stats}
-        trendLine={trendLine}
-        pulseLabel={pulseLabel(lang, pulse)}
-        customersCount={customers.length}
-        totalDebtUgx={totalDebtUgx}
-        fastMovers={fastMovers}
-        summaryLines={summaryLines}
-        waLine={waLine}
-      />
+        <OwnerBusinessTodaySection
+          lang={lang}
+          stats={stats}
+          trendLine={trendLine}
+          pulseLabel={pulseLabel(lang, pulse)}
+          customersCount={customers.length}
+          totalDebtUgx={totalDebtUgx}
+          fastMovers={fastMovers}
+          summaryLines={summaryLines}
+          waLine={waLine}
+        />
+      </div>
 
       <OwnerStaffPerformanceSection lang={lang} rows={staffRows} todayKey={todayKey} />
 

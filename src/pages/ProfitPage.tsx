@@ -19,9 +19,9 @@ import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { formatDateFilterChipDay } from "../lib/dateFilterLabels";
 import { tTemplate } from "../lib/i18n";
 
-type Props = { lang: Language };
+type Props = { lang: Language; embedded?: boolean };
 
-export function ProfitPage({ lang }: Props) {
+export function ProfitPage({ lang, embedded }: Props) {
   const actor = useSessionActor();
   const { authMode, snapshot } = useSubscription();
   const {
@@ -66,13 +66,15 @@ export function ProfitPage({ lang }: Props) {
   const showDayChip = filter.kind === "day";
 
   return (
-    <div className="space-y-5 pb-12">
-      <PageHeader
-        lang={lang}
-        title={t(lang, "profitPageTitle")}
-        subtitle={t(lang, "profitPageSub")}
-        backLabel={t(lang, "officeBackToHub")}
-      />
+    <div className={embedded ? "space-y-5" : "space-y-5 pb-12"}>
+      {!embedded ? (
+        <PageHeader
+          lang={lang}
+          title={t(lang, "profitPageTitle")}
+          subtitle={t(lang, "profitPageSub")}
+          backLabel={t(lang, "officeBackToHub")}
+        />
+      ) : null}
 
       <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
       <DateFilterViewingLabel lang={lang} value={filter} />

@@ -5,6 +5,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { PosShelfArrangePanel } from "../components/pos/PosShelfArrangePanel";
 import type { DiscountControlMode } from "../lib/discountGovernance";
 
 const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
@@ -26,6 +27,7 @@ function discountModeLabelKey(mode: DiscountControlMode): string {
 export function SettingsSellingPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
+  const products = usePosStore((s) => s.products);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
   if (!hasPermission(actor.role, "settings.shop")) {
@@ -41,6 +43,11 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
         title={t(lang, "settingsHubSelling")}
         subtitle={t(lang, "settingsHubSellingSub")}
       />
+
+      <article id="sell-shelves" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
+        <PosShelfArrangePanel lang={lang} products={products} embedded />
+      </article>
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-base font-black text-stone-950">{t(lang, "settingsDiscountTitle")}</p>

@@ -4,6 +4,7 @@ import {
   sortPosShelfCards,
   togglePinnedShelfKey,
   movePinnedShelfKey,
+  reorderShelfKeys,
 } from "./posShelfOrder";
 
 describe("posShelfOrder", () => {
@@ -25,6 +26,11 @@ describe("posShelfOrder", () => {
   it("toggles pin keys", () => {
     expect(togglePinnedShelfKey(["A"], "B")).toEqual(["A", "B"]);
     expect(togglePinnedShelfKey(["A", "B"], "A")).toEqual(["B"]);
+  });
+
+  it("reorders shelf keys for drag-and-drop", () => {
+    expect(reorderShelfKeys(["A", "B", "C"], "A", "C")).toEqual(["B", "C", "A"]);
+    expect(reorderShelfKeys(["A", "B", "C"], "C", "A")).toEqual(["C", "A", "B"]);
   });
 
   it("moves pinned shelf order", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Outlet, useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
 import clsx from "clsx";
-import { Home, ShoppingCart, Receipt, Briefcase, LayoutGrid, ChefHat, UtensilsCrossed, Package, ChevronDown } from "lucide-react";
+import { Home, ShoppingCart, Briefcase, Package, ChevronDown } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
 import type { Language, Permission, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
@@ -23,10 +23,11 @@ import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath, isSettingsLauncherPath } from "../../lib/backOfficePaths";
 import { BackOfficeMasterSearch } from "../office/BackOfficeMasterSearch";
-import { isHospitalityMode, isKitchenEnabledForHospitality } from "../../lib/hospitality";
+import { isHospitalityMode } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
+import { orderNavByPaths, unifiedThirdNavPath } from "../../lib/unifiedNav";
 
 /** Shorter labels on mobile bottom tabs so pharmacy terms are not clipped. */
 function mobileBottomNavLabelKey(labelKey: string, pharmacyNav: boolean): string {
@@ -68,9 +69,6 @@ type Props = {
 };
 
 type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
-
-/** Mobile tab order: Home and Sell adjacent (cashier primary pair). */
-const MOBILE_NAV_ORDER = ["/", "/pos", "/receipts", "/office"] as const;
 
 function navItemActive(path: string, pathname: string): boolean {
   if (path === "/floor") {
@@ -269,81 +267,51 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
   const desktopPosSell =
     isDesktopLayout && (location.pathname === "/pos" || location.pathname.startsWith("/pos/"));
-  /** lg+ terminal: launcher is primary nav — hide duplicate sidebar. Mobile/tablet unchanged below lg. */
+  /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
   const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
+  /** lg+ POS sell: hide sidebar for full-width checkout. */
   const showHeaderExit = shouldShowHeaderExit(location.pathname);
   const showBackOfficeSearch =
     isBackOfficePath(location.pathname) && !isSettingsLauncherPath(location.pathname) && !internalAdminRoute;
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
-  const hospitalityKitchenNav = hospitalityNav
-    && isKitchenEnabledForHospitality(preferences.businessType, preferences.hospitalityKitchenEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const wholesaleNav = isWholesaleMode(preferences.businessType);
   const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
 
   const navDefs = useMemo((): NavDef[] => {
-    if (hospitalityNav) {
-      const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
-      if (hasPermission(actor.role, "hospitality.floor")) {
-        items.push({ path: "/floor", labelKey: "navFloor", Icon: LayoutGrid, perm: "hospitality.floor" });
-      }
-      if (hospitalityKitchenNav && hasPermission(actor.role, "hospitality.kitchen")) {
-        items.push({ path: "/kitchen", labelKey: "navKitchen", Icon: ChefHat, perm: "hospitality.kitchen" });
-      }
-      if (hasPermission(actor.role, "stock.view")) {
-        items.push({ path: "/stock", labelKey: "navMenu", Icon: UtensilsCrossed, perm: "stock.view" });
-      }
-      if (hasPermission(actor.role, "back_office.access")) {
-        items.push({ path: "/office", labelKey: "navMore", Icon: Briefcase, perm: "back_office.access" });
-      } else if (hasPermission(actor.role, "purchases.record")) {
-        items.push({ path: "/restock", labelKey: "officeCardRestock", Icon: Package, perm: "purchases.record" });
-      }
-      return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-    }
-    const items: NavDef[] = [{ path: "/", labelKey: "navHome", Icon: Home }];
+    const items: NavDef[] = [{ path: "/", labelKey: "posNavMainMenu", Icon: Home }];
     if (hasPermission(actor.role, "pos.sell")) {
       items.push({ path: "/pos", labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
     }
-    if (hasPermission(actor.role, "receipts.view")) {
-      items.push({
-        path: "/receipts",
-        labelKey: pharmacyNav && !hospitalityNav ? "pharmacyTerm_dispensingReceipts" : wholesaleNav ? "navInvoices" : "receipts",
-        Icon: Receipt,
-        perm: "receipts.view",
-      });
-    }
-    if (hasPermission(actor.role, "stock.view") && !hasPermission(actor.role, "back_office.access")) {
+    const hasShop = hasPermission(actor.role, "back_office.access");
+    const stockOnly = hasPermission(actor.role, "stock.view") && !hasShop;
+    const thirdPath = unifiedThirdNavPath(hasShop, stockOnly);
+    if (thirdPath === "/office") {
+      items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
+    } else if (stockOnly) {
       items.push({
         path: "/stock",
-        labelKey: pharmacyNav && !hospitalityNav ? "pharmacyTerm_medicineStock" : wholesaleNav ? "navWarehouse" : "navStock",
+        labelKey:
+          pharmacyNav && !hospitalityNav
+            ? "pharmacyTerm_medicineStock"
+            : wholesaleNav
+              ? "navWarehouse"
+              : "navStock",
         Icon: Package,
         perm: "stock.view",
       });
     }
-    if (hasPermission(actor.role, "back_office.access")) {
-      items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
-    }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, hospitalityNav, hospitalityKitchenNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
+  }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
 
   const mobileNavDefs = useMemo(() => {
-    const stockKeeperOnly =
-      hasPermission(actor.role, "stock.view") && !hasPermission(actor.role, "back_office.access");
-    const order = hospitalityNav
-      ? stockKeeperOnly
-        ? hospitalityKitchenNav
-          ? (["/", "/floor", "/kitchen", "/stock", "/restock"] as const)
-          : (["/", "/floor", "/stock", "/restock"] as const)
-        : hospitalityKitchenNav
-          ? (["/", "/floor", "/kitchen", "/stock", "/office"] as const)
-          : (["/", "/floor", "/stock", "/office"] as const)
-      : stockKeeperOnly
-        ? (["/", "/stock", "/restock"] as const)
-        : MOBILE_NAV_ORDER;
-    const byPath = new Map(navDefs.map((item) => [item.path, item]));
-    return order.map((path) => byPath.get(path)).filter((item): item is NavDef => Boolean(item));
-  }, [navDefs, hospitalityNav, hospitalityKitchenNav]);
+    const paths: string[] = ["/"];
+    if (navDefs.some((item) => item.path === "/pos")) paths.push("/pos");
+    const third = navDefs.find((item) => item.path === "/office" || item.path === "/stock");
+    if (third) paths.push(third.path);
+    return orderNavByPaths(navDefs, paths);
+  }, [navDefs]);
 
   return (
     <SessionHydrationProvider roleReady={roleReady}>
@@ -491,7 +459,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           <nav
             className={clsx(
               "hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56",
-              (desktopTerminalHome || desktopTerminalMode) && "md:hidden",
               desktopPosSell && "lg:hidden",
             )}
           >

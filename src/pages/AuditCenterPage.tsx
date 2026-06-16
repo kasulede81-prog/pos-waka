@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import clsx from "clsx";
 import { Download, FileText, Search, ShieldCheck } from "lucide-react";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { PageHeader } from "../components/layout/PageHeader";
+import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
 import { DateFilterBar } from "../components/shared/DateFilterBar";
 import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
@@ -17,6 +19,7 @@ import {
   AUDIT_FILTER_RESULT_LIMIT,
   buildAuditLogSearchIndex,
   filterAuditLogsIndexed,
+  groupAuditByStaff,
   INVESTIGATION_ACTIONS,
   type AuditSearchFilters,
 } from "../lib/auditSearch";
@@ -30,6 +33,15 @@ import { resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilter
 
 const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 
+type AuditTab = "timeline" | "staff" | "refunds" | "search" | "exports";
+
+const AUDIT_TABS: AuditTab[] = ["timeline", "staff", "refunds", "search", "exports"];
+
+function parseAuditTab(raw: string | null): AuditTab {
+  if (raw && AUDIT_TABS.includes(raw as AuditTab)) return raw as AuditTab;
+  return "timeline";
+}
+
 function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
@@ -37,23 +49,84 @@ function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue 
   return { kind: "preset", preset: "this_month" };
 }
 
+function AuditTimelineList({
+  lang,
+  entries,
+  productById,
+  customerById,
+  onSelect,
+}: {
+  lang: Language;
+  entries: AuditLogEntry[];
+  productById: Map<string, { name: string }>;
+  customerById: Map<string, { name: string }>;
+  onSelect: (entry: AuditLogEntry) => void;
+}) {
+  if (entries.length === 0) {
+    return (
+      <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "auditEmpty")}</p>
+    );
+  }
+
+  return (
+    <ul className="space-y-2">
+      {entries.map((e) => {
+        const staff = e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang);
+        const when = new Date(e.at).toLocaleString([], {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        const narrative = formatAuditRowSummary(lang, e, { productById, customerById });
+        const entity = extractAuditEntityLabel(e, productById, customerById);
+        const deviceLabel = formatAuditDeviceLabel(e.deviceId, e.payload);
+        return (
+          <li key={e.id}>
+            <button
+              type="button"
+              onClick={() => onSelect(e)}
+              className="w-full rounded-[1.25rem] border border-slate-100 bg-white p-4 text-left shadow-sm ring-1 ring-slate-100/80 transition hover:border-waka-200"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="font-black text-slate-900">{staff}</p>
+                <time className="text-xs font-semibold text-slate-500" dateTime={e.at}>
+                  {when}
+                </time>
+              </div>
+              <p className="mt-1 text-xs font-bold uppercase tracking-wide text-waka-700">
+                {auditActionLabel(lang, e.action)}
+                {entity ? ` · ${entity}` : ""}
+              </p>
+              <p className="mt-1 text-sm font-medium text-slate-800">{narrative}</p>
+              <p className="mt-1 text-xs text-slate-500">
+                {t(lang, `role_${e.role}`)} · {deviceLabel}
+              </p>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function AuditCenterPage({ lang }: { lang: Language }) {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseAuditTab(searchParams.get("tab"));
   const [includeArchived, setIncludeArchived] = useState(false);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const suppliers = usePosStore((s) => s.suppliers);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName ?? "Shop");
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const [quickFilter, setQuickFilter] = useState(() => initialAuditDateFilter(searchParams));
   const monthBounds = useMemo(
     () => resolveDateFilterBounds({ kind: "preset", preset: "this_month" }),
     [],
   );
-  const [dateFrom, setDateFrom] = useState(
-    () => searchParams.get("from") ?? monthBounds.fromKey,
-  );
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get("from") ?? monthBounds.fromKey);
   const [dateTo, setDateTo] = useState(() => searchParams.get("to") ?? monthBounds.toKey);
   const [actorUserId, setActorUserId] = useState(() => searchParams.get("staff") ?? "all");
   const [action, setAction] = useState<AuditAction | "all">(
@@ -113,16 +186,30 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
 
   const filtered = useMemo(
     () =>
-      filterAuditLogsIndexed(
-        auditIndex,
-        filters,
-        { products, customers, suppliers, lang },
-        PAGE_SIZE,
-      ),
+      filterAuditLogsIndexed(auditIndex, filters, { products, customers, suppliers, lang }, PAGE_SIZE),
     [auditIndex, filters, products, customers, suppliers, lang],
   );
 
+  const staffGroups = useMemo(() => groupAuditByStaff(filtered), [filtered]);
+
+  const shiftsInRange = useMemo(
+    () =>
+      (shifts ?? [])
+        .filter((s) => {
+          const key = dateKeyKampala(s.startAt);
+          return key >= dateFrom && key <= dateTo;
+        })
+        .slice(0, 10),
+    [shifts, dateFrom, dateTo],
+  );
+
   const actionOptions = useMemo(() => [...INVESTIGATION_ACTIONS].sort(), []);
+
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
 
   const downloadCsv = () => {
     const csv = buildAuditCsv(lang, filtered);
@@ -155,29 +242,123 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
     setDateTo(bounds.toKey);
   };
 
-  return (
-    <div className="space-y-6 pb-12">
-      <PageHeader
-        lang={lang}
-        title={t(lang, "auditCenterTitle")}
-        subtitle={t(lang, "auditCenterSub")}
-        backLabel={t(lang, "officeBackToHub")}
-      />
+  const tabDefs = useMemo(
+    () => [
+      { id: "timeline", label: t(lang, "auditTabTimeline") },
+      { id: "staff", label: t(lang, "auditTabStaff") },
+      { id: "refunds", label: t(lang, "auditTabRefunds") },
+      { id: "search", label: t(lang, "auditTabSearch") },
+      { id: "exports", label: t(lang, "auditTabExports") },
+    ],
+    [lang],
+  );
 
-      <DateFilterBar lang={lang} value={quickFilter} onChange={onQuickFilterChange} />
-      <DateFilterViewingLabel lang={lang} value={quickFilter} />
+  const showSplitLayout = activeTab === "timeline" || activeTab === "staff";
+  const showFiltersSidebar = showSplitLayout || activeTab === "search";
 
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+  const filtersPanel = (
+    <section className="space-y-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "auditFiltersTitle")}</h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+        <label className="block text-sm font-bold text-slate-800">
+          {t(lang, "auditFilterDateFrom")}
+          <input type="date" className={inputClass} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+        </label>
+        <label className="block text-sm font-bold text-slate-800">
+          {t(lang, "auditFilterDateTo")}
+          <input type="date" className={inputClass} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+        </label>
+        <label className="block text-sm font-bold text-slate-800">
+          {t(lang, "auditFilterStaff")}
+          <select className={inputClass} value={actorUserId} onChange={(e) => setActorUserId(e.target.value)}>
+            <option value="all">{t(lang, "auditFilterAll")}</option>
+            {actors.map((a) => (
+              <option key={a.userId} value={a.userId}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-bold text-slate-800">
+          {t(lang, "auditFilterAction")}
+          <select
+            className={inputClass}
+            value={action}
+            onChange={(e) => setAction(e.target.value as AuditAction | "all")}
+          >
+            <option value="all">{t(lang, "auditFilterAll")}</option>
+            {actionOptions.map((a) => (
+              <option key={a} value={a}>
+                {auditActionLabel(lang, a)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm font-bold text-slate-800">
+          {t(lang, "auditFilterProduct")}
+          <select className={inputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
+            <option value="">{t(lang, "auditFilterAll")}</option>
+            {[...products]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="block text-sm font-bold text-slate-800">
+          {t(lang, "auditFilterCustomer")}
+          <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
+            <option value="">{t(lang, "auditFilterAll")}</option>
+            {[...customers]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="block text-sm font-bold text-slate-800 sm:col-span-2 lg:col-span-1">
+          {t(lang, "auditFilterSupplier")}
+          <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+            <option value="">{t(lang, "auditFilterAll")}</option>
+            {[...suppliers]
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="block text-sm font-bold text-slate-800 sm:col-span-2 lg:col-span-1">
+          <span className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-slate-400" aria-hidden />
+            {t(lang, "auditFilterSearch")}
+          </span>
+          <input
+            type="search"
+            className={inputClass}
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder={t(lang, "auditFilterSearchPlaceholder")}
+          />
+        </label>
+      </div>
+    </section>
+  );
 
+  const refundsPanel = (
+    <div className="space-y-4">
       <section className="rounded-[1.5rem] border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-white p-4 shadow-sm">
         <div className="flex items-start gap-3">
           <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden />
           <div className="min-w-0 flex-1">
             <h2 className="text-sm font-black text-slate-900">{t(lang, "refundIntegrityTitle")}</h2>
             <p className="mt-0.5 text-xs font-medium text-slate-600">{t(lang, "refundIntegritySub")}</p>
-            <p
-              className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}
-            >
+            <p className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}>
               {integrityReport.ok
                 ? t(lang, "refundIntegrityOk")
                 : tTemplate(lang, "refundIntegrityViolations", {
@@ -190,9 +371,7 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
                   <li key={`${v.code}-${i}`} className="rounded-lg bg-rose-50 px-2 py-1">
                     {v.message}
                     {v.saleId ? ` · ${v.saleId.slice(0, 8)}` : ""}
-                    {v.expected != null && v.actual != null
-                      ? ` (${v.actual} / max ${v.expected})`
-                      : ""}
+                    {v.expected != null && v.actual != null ? ` (${v.actual} / max ${v.expected})` : ""}
                   </li>
                 ))}
               </ul>
@@ -244,160 +423,141 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
           </ul>
         )}
       </section>
+    </div>
+  );
 
-      <section className="space-y-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "auditFiltersTitle")}</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm font-bold text-slate-800">
-            {t(lang, "auditFilterDateFrom")}
-            <input type="date" className={inputClass} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-          </label>
-          <label className="block text-sm font-bold text-slate-800">
-            {t(lang, "auditFilterDateTo")}
-            <input type="date" className={inputClass} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-          </label>
-          <label className="block text-sm font-bold text-slate-800">
-            {t(lang, "auditFilterStaff")}
-            <select className={inputClass} value={actorUserId} onChange={(e) => setActorUserId(e.target.value)}>
-              <option value="all">{t(lang, "auditFilterAll")}</option>
-              {actors.map((a) => (
-                <option key={a.userId} value={a.userId}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-bold text-slate-800">
-            {t(lang, "auditFilterAction")}
-            <select
-              className={inputClass}
-              value={action}
-              onChange={(e) => setAction(e.target.value as AuditAction | "all")}
-            >
-              <option value="all">{t(lang, "auditFilterAll")}</option>
-              {actionOptions.map((a) => (
-                <option key={a} value={a}>
-                  {auditActionLabel(lang, a)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-bold text-slate-800">
-            {t(lang, "auditFilterProduct")}
-            <select className={inputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">{t(lang, "auditFilterAll")}</option>
-              {[...products]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="block text-sm font-bold text-slate-800">
-            {t(lang, "auditFilterCustomer")}
-            <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-              <option value="">{t(lang, "auditFilterAll")}</option>
-              {[...customers]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="block text-sm font-bold text-slate-800 sm:col-span-2">
-            {t(lang, "auditFilterSupplier")}
-            <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">{t(lang, "auditFilterAll")}</option>
-              {[...suppliers]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <label className="block text-sm font-bold text-slate-800 sm:col-span-2">
-            <span className="flex items-center gap-2">
-              <Search className="h-4 w-4 text-slate-400" aria-hidden />
-              {t(lang, "auditFilterSearch")}
-            </span>
-            <input
-              type="search"
-              className={inputClass}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              placeholder={t(lang, "auditFilterSearchPlaceholder")}
-            />
-          </label>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            type="button"
-            onClick={downloadCsv}
-            disabled={filtered.length === 0}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-800 disabled:opacity-40"
-          >
-            <Download className="h-4 w-4" aria-hidden />
-            {t(lang, "auditExportCsv")}
-          </button>
-          <button
-            type="button"
-            onClick={() => void downloadPdf()}
-            disabled={filtered.length === 0}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-waka-600 bg-waka-50 px-4 text-sm font-black text-waka-900 disabled:opacity-40"
-          >
-            <FileText className="h-4 w-4" aria-hidden />
-            {t(lang, "auditExportPdf")}
-          </button>
-        </div>
-      </section>
-
-      <p className="text-sm font-semibold text-slate-600">
+  const exportsPanel = (
+    <section className="space-y-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-sm font-semibold text-slate-700">
         {t(lang, "auditResultCount")}: {filtered.length}
       </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={downloadCsv}
+          disabled={filtered.length === 0}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-800 disabled:opacity-40"
+        >
+          <Download className="h-4 w-4" aria-hidden />
+          {t(lang, "auditExportCsv")}
+        </button>
+        <button
+          type="button"
+          onClick={() => void downloadPdf()}
+          disabled={filtered.length === 0}
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-waka-600 bg-waka-50 px-4 text-sm font-black text-waka-900 disabled:opacity-40"
+        >
+          <FileText className="h-4 w-4" aria-hidden />
+          {t(lang, "auditExportPdf")}
+        </button>
+      </div>
+    </section>
+  );
 
-      {filtered.length === 0 ? (
-        <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "auditEmpty")}</p>
-      ) : (
-        <ul className="space-y-2">
-          {filtered.map((e) => {
-            const staff = e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang);
-            const when = new Date(e.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-            const narrative = formatAuditRowSummary(lang, e, { productById, customerById });
-            const entity = extractAuditEntityLabel(e, productById, customerById);
-            const deviceLabel = formatAuditDeviceLabel(e.deviceId, e.payload);
-            return (
-              <li key={e.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelected(e)}
-                  className="w-full rounded-[1.25rem] border border-slate-100 bg-white p-4 text-left shadow-sm ring-1 ring-slate-100/80 transition hover:border-waka-200"
+  const staffPanel =
+    staffGroups.length === 0 ? (
+      <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>
+    ) : (
+      <div className="space-y-8">
+        {shiftsInRange.length > 0 ? (
+          <section>
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "shiftsTodayTitle")}</h2>
+            <ul className="mt-3 space-y-3">
+              {shiftsInRange.map((s) => (
+                <li
+                  key={s.id}
+                  className="rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100/80"
                 >
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="font-black text-slate-900">{staff}</p>
-                    <time className="text-xs font-semibold text-slate-500" dateTime={e.at}>
-                      {when}
-                    </time>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-black text-slate-900">{s.actorName ?? s.actorUserId}</p>
+                    <p className="text-xs font-semibold text-slate-500">
+                      {s.endAt ? t(lang, "shiftClosed") : t(lang, "shiftOpen")}
+                    </p>
                   </div>
-                  <p className="mt-1 text-xs font-bold uppercase tracking-wide text-waka-700">
-                    {auditActionLabel(lang, e.action)}
-                    {entity ? ` · ${entity}` : ""}
+                  <p className="mt-1 text-xs text-slate-600">
+                    {new Date(s.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
+                    {s.endAt ? new Date(s.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
                   </p>
-                  <p className="mt-1 text-sm font-medium text-slate-800">{narrative}</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {t(lang, `role_${e.role}`)} · {deviceLabel}
+                  <p className="mt-2 text-sm font-semibold text-slate-800">
+                    UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
                   </p>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+        {staffGroups.map((group) => (
+          <section key={group.actorId}>
+            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{group.actorLabel}</h2>
+            <AuditTimelineList
+              lang={lang}
+              entries={group.entries}
+              productById={productById}
+              customerById={customerById}
+              onSelect={setSelected}
+            />
+          </section>
+        ))}
+      </div>
+    );
+
+  const mainPanel = (
+    <div className="space-y-4">
+      {activeTab === "timeline" ? (
+        <>
+          <p className="text-sm font-semibold text-slate-600">
+            {t(lang, "auditResultCount")}: {filtered.length}
+          </p>
+          <AuditTimelineList
+            lang={lang}
+            entries={filtered}
+            productById={productById}
+            customerById={customerById}
+            onSelect={setSelected}
+          />
+        </>
+      ) : null}
+      {activeTab === "staff" ? staffPanel : null}
+      {activeTab === "refunds" ? refundsPanel : null}
+      {activeTab === "search" ? filtersPanel : null}
+      {activeTab === "exports" ? exportsPanel : null}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6 pb-12">
+      <PageHeader
+        lang={lang}
+        title={t(lang, "auditCenterTitle")}
+        subtitle={t(lang, "auditCenterSub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
+
+      <DateFilterBar lang={lang} value={quickFilter} onChange={onQuickFilterChange} />
+      <DateFilterViewingLabel lang={lang} value={quickFilter} />
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+
+      <HorizontalTabBar
+        tabs={tabDefs}
+        activeId={activeTab}
+        onChange={setActiveTab}
+        ariaLabel={t(lang, "auditCenterTitle")}
+      />
+
+      <div
+        className={clsx(
+          showSplitLayout && "lg:grid lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] lg:items-start lg:gap-6",
+        )}
+      >
+        {showFiltersSidebar ? (
+          <div className={clsx(showSplitLayout && "hidden lg:block", activeTab === "search" && "block")}>
+            {filtersPanel}
+          </div>
+        ) : null}
+
+        <div className={clsx(activeTab === "search" && "hidden lg:block")}>{mainPanel}</div>
+      </div>
 
       <AuditDetailDrawer
         lang={lang}
@@ -414,9 +574,7 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
         returnRecord={traceReturn}
         returnRecords={allReturns}
         actorLabel={
-          traceReturn
-            ? traceReturn.actorName?.trim() || actorDisplayLabel(traceReturn.actorUserId, lang)
-            : ""
+          traceReturn ? traceReturn.actorName?.trim() || actorDisplayLabel(traceReturn.actorUserId, lang) : ""
         }
         onClose={() => setTraceReturn(null)}
       />

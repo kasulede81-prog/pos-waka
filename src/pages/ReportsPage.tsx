@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -44,8 +44,21 @@ import { isWholesaleMode } from "../lib/wholesale";
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
 import { ExpiryStatusBadge } from "../components/pharmacy/ExpiryStatusBadge";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
+import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
+import { MonthlyReportsPanel } from "../components/reports/MonthlyReportsPanel";
+import { ProfitPage } from "./ProfitPage";
+
+type ReportTab = "summary" | "profit" | "monthly" | "products";
+
+function parseReportTab(raw: string | null, canProfit: boolean): ReportTab {
+  if (raw === "profit" && canProfit) return "profit";
+  if (raw === "monthly") return "monthly";
+  if (raw === "products") return "products";
+  return "summary";
+}
 
 export function ReportsPage({ lang }: { lang: Language }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const products = usePosStore((s) => s.products);
@@ -126,6 +139,22 @@ export function ReportsPage({ lang }: { lang: Language }) {
       .sort((a, b) => b.debt - a.debt)
       .slice(0, 10);
   }, [customers]);
+
+  const activeTab = parseReportTab(searchParams.get("tab"), canProfit);
+  const reportTabs = useMemo(
+    () => [
+      { id: "summary", label: t(lang, "reportsTabSummary") },
+      ...(canProfit ? [{ id: "profit", label: t(lang, "reportsTabProfit") }] : []),
+      { id: "monthly", label: t(lang, "reportsTabMonthly") },
+      { id: "products", label: t(lang, "reportsTabProducts") },
+    ],
+    [lang, canProfit],
+  );
+  const setActiveTab = (tab: string) => {
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  };
 
   if (!canViewReports) {
     return <Navigate to="/" replace />;
@@ -335,6 +364,15 @@ export function ReportsPage({ lang }: { lang: Language }) {
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
+      <HorizontalTabBar
+        tabs={reportTabs}
+        activeId={activeTab}
+        onChange={setActiveTab}
+        ariaLabel={t(lang, "reports")}
+      />
+
+      {activeTab === "summary" ? (
+        <>
       {pharmacyMode && pharmacyExpirySection ? pharmacyExpirySection : null}
       {wholesaleSection}
 
@@ -544,7 +582,11 @@ export function ReportsPage({ lang }: { lang: Language }) {
         <p className="text-sm font-semibold text-amber-950">{t(lang, "reportsDebtOutstanding")}</p>
         <p className="mt-1 text-2xl font-black text-amber-900">UGX {debtOutstanding.toLocaleString()}</p>
       </section>
+        </>
+      ) : null}
 
+      {activeTab === "profit" && canProfit ? (
+        <>
       {canPurchasesView || canSuppliersView || canProfit ? (
         <section className="grid gap-3 sm:grid-cols-2">
           {canPurchasesView ? (
@@ -593,6 +635,14 @@ export function ReportsPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
+      <ProfitPage lang={lang} embedded />
+        </>
+      ) : null}
+
+      {activeTab === "monthly" ? <MonthlyReportsPanel lang={lang} /> : null}
+
+      {activeTab === "products" ? (
+        <>
       <section className={`rounded-3xl border bg-white p-4 ${pharmacyMode ? "opacity-90" : ""}`}>
         <p className="font-semibold text-slate-800">
           {pharmacyMode ? t(lang, "pharmacyReportsTopMedicines") : wholesaleMode ? t(lang, "wholesaleReportsTopAccounts") : t(lang, "topProducts")}
@@ -638,6 +688,8 @@ export function ReportsPage({ lang }: { lang: Language }) {
           ))}
         </ul>
       </section>
+        </>
+      ) : null}
     </div>
   );
 }

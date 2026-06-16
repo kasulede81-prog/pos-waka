@@ -29,7 +29,6 @@ import { ConnectedDevicesPage } from "./pages/ConnectedDevicesPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
-import { MonthlyReportsPage } from "./pages/MonthlyReportsPage";
 import { BackupSyncPage } from "./pages/BackupSyncPage";
 import { AccountPage } from "./pages/AccountPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
@@ -723,11 +722,7 @@ function AppRoutes() {
             />
             <Route
               path="office/monthly-reports"
-              element={
-                <RoleProtectedRoute permission="reports.view">
-                  <MonthlyReportsPage lang={lang} />
-                </RoleProtectedRoute>
-              }
+              element={<Navigate to="/reports?tab=monthly" replace />}
             />
                 </Route>
               </Route>

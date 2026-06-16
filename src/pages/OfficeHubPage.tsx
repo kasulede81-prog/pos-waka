@@ -221,7 +221,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
               ) : null}
               {canArrangeShelves ? (
                 <OfficeNavCard
-                  to="/stock?tab=shelves"
+                  to="/settings/selling#sell-shelves"
                   title={t(lang, "officeCardShelfArrange")}
                   subtitle={t(lang, "officeCardShelfArrangeSub")}
                   Icon={LayoutGrid}

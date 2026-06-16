@@ -26,7 +26,7 @@ import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSec
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
-import { PosShelfArrangePanel } from "../components/stock/PosShelfArrangePanel";
+import { PosShelfArrangePanel } from "../components/pos/PosShelfArrangePanel";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { shelfIconFor } from "../lib/productCategories";
 import { PageHeader } from "../components/layout/PageHeader";
