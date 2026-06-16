@@ -30,10 +30,10 @@ export function PharmacyMarginReportPage({ lang }: Props) {
   const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
   const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
 
+  const rows = useMemo(() => sortMedicineMarginRows(computeMedicineMarginRows(products), sort), [products, sort]);
+
   if (!pharmacy) return <Navigate to="/office" replace />;
   if (!canReports || !canProfit) return <Navigate to="/upgrade" replace />;
-
-  const rows = useMemo(() => sortMedicineMarginRows(computeMedicineMarginRows(products), sort), [products, sort]);
 
   const sortOptions: { id: MedicineMarginSort; labelKey: string }[] = [
     { id: "highest_margin", labelKey: "pharmacyMarginSortHigh" },

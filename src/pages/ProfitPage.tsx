@@ -37,12 +37,11 @@ export function ProfitPage({ lang, embedded }: Props) {
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
-  const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const products = usePosStore((s) => s.products);
 
-  if (!canSeeOfficeProfit(actor.role, authMode) || !hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode)) {
-    return <Navigate to="/upgrade" replace />;
-  }
+  const canViewProfit =
+    canSeeOfficeProfit(actor.role, authMode) &&
+    hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const generalLabel = t(lang, "uncategorized");
@@ -53,14 +52,21 @@ export function ProfitPage({ lang, embedded }: Props) {
   );
 
   const filteredReturns = useMemo(
-    () => allReturnRecords.filter((r) => returnMatchesFilter(r, bounds)),
-    [allReturnRecords, bounds],
+    () => {
+      const allReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+      return allReturnRecords.filter((r) => returnMatchesFilter(r, bounds));
+    },
+    [includeArchived, returnRecords, archivedReturnRecords, bounds],
   );
 
   const report = useMemo(
     () => computeProfitGroupedByCategory(filteredSales, productById, generalLabel, filteredReturns),
     [filteredSales, productById, generalLabel, filteredReturns],
   );
+
+  if (!canViewProfit) {
+    return <Navigate to="/upgrade" replace />;
+  }
 
   const { groups, total } = report;
   const showDayChip = filter.kind === "day";

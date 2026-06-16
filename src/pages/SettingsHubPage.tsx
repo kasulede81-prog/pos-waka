@@ -28,6 +28,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const { userId, snapshot, authMode } = useSubscription();
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const appVersion = import.meta.env.VITE_APP_VERSION?.trim() || "—";
+  const preferences = usePosStore((s) => s.preferences);
 
   if (searchParams.get("onboard") === "1") {
     return <Navigate to="/settings/shop?onboard=1" replace />;
@@ -40,7 +41,6 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const canShop = hasPermission(actor.role, "settings.shop");
   const canReceipt = hasPermission(actor.role, "settings.receipt");
   const canDevices = hasPermission(actor.role, "settings.devices");
-  const preferences = usePosStore((s) => s.preferences);
   const pilotActive = isPilotModeActive(actor.role, preferences);
   const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
   const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);

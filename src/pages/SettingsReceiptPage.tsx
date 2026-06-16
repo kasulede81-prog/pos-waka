@@ -22,17 +22,19 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
   const setPreferences = usePosStore((s) => s.setPreferences);
   const { snapshot, authMode } = useSubscription();
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
+  const canEditReceipt = hasPermission(actor.role, "settings.receipt");
 
-  if (!hasPermission(actor.role, "settings.receipt")) {
+  const displayOpts = useMemo(
+    () => ({ ...defaultReceiptDisplayOptions(), ...preferences.receiptDisplayOptions }),
+    [preferences.receiptDisplayOptions],
+  );
+
+  if (!canEditReceipt) {
     return <Navigate to="/settings" replace />;
   }
 
   const header = resolveReceiptHeaderConfig(preferences);
   const footerLines = padReceiptFooterSlots(preferences.receiptFooterLines);
-  const displayOpts = useMemo(
-    () => ({ ...defaultReceiptDisplayOptions(), ...preferences.receiptDisplayOptions }),
-    [preferences.receiptDisplayOptions],
-  );
   const canHidePowered = canHideWakaReceiptBranding(planTier);
 
   const patchHeader = (patch: Partial<ReceiptHeaderConfig>) => {

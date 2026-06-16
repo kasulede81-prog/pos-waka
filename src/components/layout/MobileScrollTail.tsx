@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { isBackOfficePath } from "../../lib/backOfficePaths";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
+import { isIndependentModuleRoute } from "../../lib/headerExit";
 
 /**
  * Real block at the end of the scroll column (not padding on the scroller).
@@ -12,9 +13,14 @@ export function MobileScrollTail() {
   const isStock = pathname === "/stock" || pathname.startsWith("/stock/");
   const isBackOffice = isBackOfficePath(pathname);
   const isInternalAdmin = isInternalAdminAppPath(pathname);
+  const independentModule = isIndependentModuleRoute(pathname);
 
   if (isInternalAdmin) {
     return null;
+  }
+
+  if (independentModule) {
+    return <div aria-hidden className="h-[calc(var(--waka-safe-bottom)+0.75rem)] shrink-0 md:hidden" />;
   }
 
   let tailClass = "h-[var(--waka-scroll-tail-default)] shrink-0 lg:hidden";

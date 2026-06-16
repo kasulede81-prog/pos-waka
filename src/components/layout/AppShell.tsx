@@ -52,7 +52,7 @@ import { lockPosAfterSellExit } from "../../lib/posSellExit";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
-import { shouldShowHeaderExit } from "../../lib/headerExit";
+import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
 
 type Props = {
   lang: Language;
@@ -267,9 +267,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
   const desktopPosSell =
     isDesktopLayout && (location.pathname === "/pos" || location.pathname.startsWith("/pos/"));
+  const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
   const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
-  /** lg+ POS sell: hide sidebar for full-width checkout. */
+  const fullWidthChrome = desktopTerminalMode || desktopTerminalHome || independentModule;
   const showHeaderExit = shouldShowHeaderExit(location.pathname);
   const showBackOfficeSearch =
     isBackOfficePath(location.pathname) && !isSettingsLauncherPath(location.pathname) && !internalAdminRoute;
@@ -334,7 +335,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           <div
             className={clsx(
               "mx-auto flex flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
-              desktopTerminalMode || desktopTerminalHome ? "max-w-none lg:px-8 xl:px-10" : "max-w-6xl",
+              desktopTerminalMode || desktopTerminalHome || independentModule ? "max-w-none lg:px-8 xl:px-10" : "max-w-6xl",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -441,10 +442,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           <div
             className={clsx(
               "relative z-10 shrink-0 border-b border-stone-200/80 bg-white/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:px-4",
-              desktopTerminalMode || desktopTerminalHome ? "lg:px-8 xl:px-10" : "",
+              desktopTerminalMode || desktopTerminalHome || independentModule ? "lg:px-8 xl:px-10" : "",
             )}
           >
-            <div className={clsx("mx-auto w-full", desktopTerminalMode ? "max-w-none" : "max-w-6xl")}>
+            <div className={clsx("mx-auto w-full", fullWidthChrome ? "max-w-none" : "max-w-6xl")}>
               <BackOfficeMasterSearch lang={lang} className="max-w-3xl" />
             </div>
           </div>
@@ -452,10 +453,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6",
-            desktopTerminalMode || desktopTerminalHome ? "max-w-none" : "max-w-6xl",
-            desktopTerminalMode && !desktopTerminalHome && "lg:px-8 xl:px-10",
+            fullWidthChrome ? "max-w-none" : "max-w-6xl",
+            fullWidthChrome && !desktopTerminalHome && "lg:px-8 xl:px-10",
           )}
         >
+          {!independentModule ? (
           <nav
             className={clsx(
               "hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56",
@@ -491,7 +493,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               })}
             </ul>
           </nav>
-          <section className="flex min-h-0 min-w-0 max-w-full flex-1 flex-col md:pb-0">
+          ) : null}
+          <section className={clsx("flex min-h-0 min-w-0 max-w-full flex-1 flex-col", independentModule ? "pb-0" : "md:pb-0")}>
             <div
               className={`scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] ${
                 location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : ""
@@ -506,7 +509,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </section>
         </main>
-        {!internalAdminRoute ? (
+        {!internalAdminRoute && !independentModule ? (
         <nav
           className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur md:hidden"
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}

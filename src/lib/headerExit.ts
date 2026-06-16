@@ -8,6 +8,11 @@ export function shouldShowHeaderExit(pathname: string): boolean {
   return true;
 }
 
+/** Opened from the launcher or back office — full width, no primary sidebar/bottom tabs. */
+export function isIndependentModuleRoute(pathname: string): boolean {
+  return shouldShowHeaderExit(pathname);
+}
+
 /** Nested module pages keep an in-page back link (e.g. settings sub-screens). */
 export function hasNestedModuleBack(pathname: string): boolean {
   return (

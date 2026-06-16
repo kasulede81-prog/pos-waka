@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { purchaseLineCostTotalUgx } from "../lib/sellingEngine";
 import { WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
 import { RestockLineCard, type RestockLineRow } from "../components/stock/RestockLineCard";
@@ -16,11 +14,6 @@ import { RestockProductPicker } from "../components/stock/RestockProductPicker";
 type BuySource = "town" | "supplier";
 
 export function RestockPage({ lang }: { lang: Language }) {
-  const actor = useSessionActor();
-  if (!hasPermission(actor.role, "purchases.record")) {
-    return <Navigate to="/" replace />;
-  }
-
   const suppliers = usePosStore((s) => s.suppliers);
   const products = usePosStore((s) => s.products);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
