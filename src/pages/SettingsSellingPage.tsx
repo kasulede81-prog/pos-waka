@@ -1,11 +1,10 @@
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
-import { PosShelfArrangePanel } from "../components/pos/PosShelfArrangePanel";
 import type { DiscountControlMode } from "../lib/discountGovernance";
 
 const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
@@ -27,8 +26,8 @@ function discountModeLabelKey(mode: DiscountControlMode): string {
 export function SettingsSellingPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
-  const products = usePosStore((s) => s.products);
   const setPreferences = usePosStore((s) => s.setPreferences);
+  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
 
   if (!hasPermission(actor.role, "settings.shop")) {
     return <Navigate to="/settings" replace />;
@@ -44,10 +43,18 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
         subtitle={t(lang, "settingsHubSellingSub")}
       />
 
-      <article id="sell-shelves" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
-        <PosShelfArrangePanel lang={lang} products={products} embedded />
-      </article>
+      {canArrangeShelves ? (
+        <article id="sell-shelves" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+          <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "stockShelfArrangeSub")}</p>
+          <Link
+            to="/stock?tab=shelves"
+            className="mt-4 inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-2.5 text-sm font-black text-white"
+          >
+            {t(lang, "officeCardShelfArrange")}
+          </Link>
+        </article>
+      ) : null}
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-base font-black text-stone-950">{t(lang, "settingsDiscountTitle")}</p>

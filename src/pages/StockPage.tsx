@@ -64,7 +64,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const canPresets = hasPermission(actor.role, "products.edit_presets");
   const canSell = hasPermission(actor.role, "pos.sell");
   const canRestock = hasPermission(actor.role, "purchases.record");
-  const canArrangeShelves = hasPermission(actor.role, "settings.shop");
+  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
 
   const products = usePosStore((s) => s.products);
   const suppliers = usePosStore((s) => s.suppliers);

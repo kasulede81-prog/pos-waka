@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 15;
+const PERM_MATRIX_VERSION = 16;
 
 const HOSPITALITY_OWNER: Permission[] = [
   "hospitality.floor",
@@ -74,6 +74,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "products.add",
     "products.remove",
     "products.edit_presets",
+    "shelves.customize",
     "customers.view",
     "customers.debt",
     "day.close",
@@ -109,6 +110,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "stock.adjust",
     "products.add",
     "products.edit_presets",
+    "shelves.customize",
     "customers.view",
     "customers.debt",
     "day.close",
@@ -149,6 +151,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "stock.adjust",
     "products.add",
     "products.edit_presets",
+    "shelves.customize",
     "suppliers.view",
     "suppliers.manage",
     "purchases.record",
@@ -164,6 +167,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "stock.adjust",
     "products.add",
     "products.edit_presets",
+    "shelves.customize",
     "customers.view",
     "customers.debt",
     "day.close",

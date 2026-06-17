@@ -93,6 +93,13 @@ body {
     --waka-z-pos-receipt: 85;
   }
 
+  /** Sell screen on mobile — no bottom tab bar; checkout strip sits on safe area only. */
+  @media (max-width: 767px) {
+    .app-shell--sell-focus {
+      --waka-bottom-nav-h: 0px;
+    }
+  }
+
   /** Full-screen overlays that must cover the mobile bottom tab bar */
   .waka-overlay-full {
     z-index: var(--waka-z-pos-overlay);

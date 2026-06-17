@@ -61,7 +61,9 @@ export type Permission =
   | "hospitality.transfer"
   | "hospitality.kitchen"
   /** Hold cart / open table bill without completing */
-  | "pending_sales.manage";
+  | "pending_sales.manage"
+  /** Customize Sell screen shelf layout (owner, manager, stock keeper) */
+  | "shelves.customize";
 
 export type AuditAction =
   | "sale_completed"
@@ -728,6 +730,45 @@ export type ReceiptFooterSnapshot = {
 /** How long sales / activity stay in active lists before moving to archive. */
 export type DataRetentionPolicy = "forever" | "3m" | "6m" | "12m";
 
+/** Sell screen shelf tile size (grid span). */
+export type PosShelfSize = "small" | "medium" | "large";
+
+/** Shelf accent color on Sell screen. */
+export type PosShelfColor = "default" | "red" | "orange" | "blue" | "green" | "purple";
+
+/** Optional shelf badge on Sell screen. */
+export type PosShelfBadge = "fast_moving" | "promotion";
+
+/** Per-shelf visual layout (keyed by category name or sentinel). */
+export type PosShelfLayoutConfig = {
+  displayName?: string;
+  icon?: string;
+  color?: PosShelfColor;
+  size?: PosShelfSize;
+  featured?: boolean;
+  badge?: PosShelfBadge | null;
+};
+
+/** Shop template for initial shelf layout. */
+export type PosShelfPresetId =
+  | "retail"
+  | "supermarket"
+  | "pharmacy"
+  | "restaurant"
+  | "bar"
+  | "hardware"
+  | "boutique";
+
+/** Main menu launcher tile accent (reuse shelf palette). */
+export type LauncherTileColor = PosShelfColor;
+
+/** Per-tile launcher customization. */
+export type LauncherTileConfig = {
+  hidden?: boolean;
+  pinned?: boolean;
+  color?: LauncherTileColor;
+};
+
 export type ShopPreferences = {
   businessType: BusinessType;
   /** Giant one-hand sell screen */
@@ -798,6 +839,16 @@ export type ShopPreferences = {
   posSellCategoryFilter?: string | null;
   /** Shop-wide Sell screen shelf order (set in stock/back office). */
   posPinnedShelfKeys?: string[];
+  /** Per-shelf display overrides (name, color, icon, size, featured). */
+  posShelfLayout?: Record<string, PosShelfLayoutConfig>;
+  /** Product ids on the Quick Sell strip (one-tap add on Sell screen). */
+  posQuickSellProductIds?: string[];
+  /** Last applied shop shelf preset id. */
+  posShelfPresetId?: PosShelfPresetId | null;
+  /** Main menu launcher tile order (excludes Sell hero). */
+  launcherTileOrder?: string[];
+  /** Main menu tile overrides — hide, pin, accent color. */
+  launcherTileLayout?: Record<string, LauncherTileConfig>;
   /** Waka public shop ID (A001, …) cached after first online load. */
   wakaShopId?: string | null;
   /** Thermal / AirPrint receipt width (Settings → Receipts). */

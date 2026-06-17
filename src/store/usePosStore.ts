@@ -84,6 +84,10 @@ import {
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
+import { normalizePosShelfLayout } from "../lib/posShelfLayout";
+import { POS_SHELF_PRESET_IDS } from "../lib/posShelfPresets";
+import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
+import type { PosShelfPresetId } from "../types";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
 import { clearPersistedDraft, readPersistedDraft, resolveDraftFromPersisted, writePersistedDraft } from "../offline/draftStorage";
@@ -238,6 +242,14 @@ function normalizeShifts(raw: unknown): ShiftRecord[] {
       };
     })
     .filter(Boolean) as ShiftRecord[];
+}
+
+function isPosShelfPresetId(v: unknown): v is PosShelfPresetId {
+  return typeof v === "string" && (POS_SHELF_PRESET_IDS as string[]).includes(v);
+}
+
+function normalizePosShelfLayoutFromStore(raw: unknown) {
+  return normalizePosShelfLayout(raw);
 }
 
 type DraftLineInput = {
@@ -3955,6 +3967,26 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
     posPinnedShelfKeys: Array.isArray(p.posPinnedShelfKeys)
       ? (p.posPinnedShelfKeys as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 40)
       : base.posPinnedShelfKeys ?? [],
+    posShelfLayout:
+      p.posShelfLayout === undefined ? (base.posShelfLayout ?? {}) : normalizePosShelfLayoutFromStore(p.posShelfLayout),
+    posQuickSellProductIds: Array.isArray(p.posQuickSellProductIds)
+      ? (p.posQuickSellProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 24)
+      : base.posQuickSellProductIds ?? [],
+    posShelfPresetId:
+      p.posShelfPresetId === undefined
+        ? (base.posShelfPresetId ?? null)
+        : p.posShelfPresetId === null
+          ? null
+          : isPosShelfPresetId(p.posShelfPresetId)
+            ? p.posShelfPresetId
+            : (base.posShelfPresetId ?? null),
+    launcherTileOrder: Array.isArray(p.launcherTileOrder)
+      ? (p.launcherTileOrder as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 20)
+      : base.launcherTileOrder ?? [],
+    launcherTileLayout:
+      p.launcherTileLayout === undefined
+        ? (base.launcherTileLayout ?? {})
+        : normalizeLauncherTileLayout(p.launcherTileLayout),
     receiptPaperSize:
       p.receiptPaperSize === "58mm" || p.receiptPaperSize === "80mm" || p.receiptPaperSize === "a4"
         ? p.receiptPaperSize

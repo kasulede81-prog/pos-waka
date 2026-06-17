@@ -10,6 +10,7 @@ import {
   Banknote,
   Settings,
   Briefcase,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 import type { Language, Permission } from "../../types";
@@ -22,7 +23,7 @@ import { isLowStock } from "../../lib/sellingEngine";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
-import { POS_SELL_ROUTE, POS_SHOP_ROUTE } from "../../lib/posNavigation";
+import { POS_RECEIPTS_ROUTE, POS_SELL_ROUTE, POS_SHOP_ROUTE } from "../../lib/posNavigation";
 
 type TileDef = {
   id: string;
@@ -42,6 +43,7 @@ const FOCUS_ORDER = [
   "inventory",
   "customers",
   "shop",
+  "salesHistory",
   "reports",
   "investigation",
   "cash",
@@ -131,6 +133,15 @@ export function DesktopHomeTiles({ lang }: Props) {
         variant: "secondary",
       },
       {
+        id: "salesHistory",
+        labelKey: "receipts",
+        to: POS_RECEIPTS_ROUTE,
+        Icon: Receipt,
+        perm: "receipts.view",
+        area: "salesHistory",
+        variant: "secondary",
+      },
+      {
         id: "reports",
         labelKey: "desktopHomeTileReports",
         to: "/reports",
@@ -184,14 +195,15 @@ export function DesktopHomeTiles({ lang }: Props) {
   const onTileKeyDown = useCallback(
     (id: string, event: React.KeyboardEvent<HTMLButtonElement>) => {
       const neighbors: Record<string, Partial<Record<string, string>>> = {
-        sell: { ArrowRight: "inventory", ArrowDown: "reports" },
+        sell: { ArrowRight: "inventory", ArrowDown: "shop" },
         inventory: { ArrowLeft: "sell", ArrowDown: "customers", ArrowRight: "customers" },
-        customers: { ArrowLeft: "inventory", ArrowDown: "shop" },
-        shop: { ArrowLeft: "customers", ArrowUp: "inventory", ArrowDown: "investigation" },
+        customers: { ArrowLeft: "inventory", ArrowDown: "salesHistory" },
+        shop: { ArrowLeft: "inventory", ArrowUp: "inventory", ArrowDown: "investigation", ArrowRight: "salesHistory" },
+        salesHistory: { ArrowLeft: "shop", ArrowUp: "customers", ArrowDown: "settings" },
         reports: { ArrowUp: "sell", ArrowRight: "investigation" },
-        investigation: { ArrowLeft: "reports", ArrowRight: "cash" },
+        investigation: { ArrowLeft: "reports", ArrowRight: "cash", ArrowUp: "shop" },
         cash: { ArrowLeft: "investigation", ArrowRight: "settings" },
-        settings: { ArrowLeft: "cash" },
+        settings: { ArrowLeft: "cash", ArrowUp: "salesHistory" },
       };
 
       const nextId = neighbors[id]?.[event.key];
@@ -252,7 +264,7 @@ export function DesktopHomeTiles({ lang }: Props) {
       className={clsx(
         "w-full max-w-lg grid grid-cols-2 gap-3 sm:max-w-2xl sm:gap-4",
         "lg:max-w-4xl lg:grid-cols-4 lg:grid-rows-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,auto)] lg:gap-4",
-        "lg:[grid-template-areas:'sell_sell_inventory_customers''sell_sell_shop_shop''reports_investigation_cash_settings']",
+        "lg:[grid-template-areas:'sell_sell_inventory_customers''sell_sell_shop_salesHistory''reports_investigation_cash_settings']",
       )}
       role="navigation"
       aria-label={t(lang, "desktopHomeNavLabel")}

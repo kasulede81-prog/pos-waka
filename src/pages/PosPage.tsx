@@ -3,7 +3,7 @@ import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, Banknote, ScanLine, Search, X } from "lucide-react";
-import type { Language, LineInputMode, PharmacySaleUnitType, Product, SaleLine } from "../types";
+import type { Language, LineInputMode, PharmacySaleUnitType, PosShelfLayoutConfig, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
@@ -95,12 +95,19 @@ import { posSearchAliases } from "../lib/pharmacyUx";
 import { usePosAndroidBackStack } from "../hooks/usePosAndroidBackStack";
 import { PosOfflineBanner } from "../components/trust/PosOfflineBanner";
 import { registerPosLeaveGuard } from "../lib/posLeaveGuard";
-import { sortPosShelfCards, buildPosShelfCards } from "../lib/posShelfOrder";
+import {
+  buildPosShelfDisplayCards,
+  buildQuickSellShelfCard,
+  QUICK_SELL_SHELF_KEY,
+} from "../lib/posShelfLayout";
 import { PosShelfTile } from "../components/pos/PosShelfTile";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
 
 const POS_CHECKOUT_METHODS: PaymentMethod[] = ["cash", "atm", "mobile_money", "credit"];
+
+const EMPTY_SHELF_LAYOUT: Record<string, PosShelfLayoutConfig> = {};
+const EMPTY_QUICK_SELL_IDS: string[] = [];
 
 type CheckoutAmountField = "cash" | "mobile";
 
@@ -208,6 +215,8 @@ export function PosPage({ lang }: { lang: Language }) {
       posLocked: s.preferences.posLocked,
       posSellCategoryFilter: s.preferences.posSellCategoryFilter,
       posPinnedShelfKeys: s.preferences.posPinnedShelfKeys,
+      posShelfLayout: s.preferences.posShelfLayout,
+      posQuickSellProductIds: s.preferences.posQuickSellProductIds,
       favoriteProductIds: s.preferences.favoriteProductIds,
       recentProductIds: s.preferences.recentProductIds,
       staffAccounts: s.preferences.staffAccounts,
@@ -353,6 +362,8 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
   const shelfOrderKeys = preferences.posPinnedShelfKeys ?? [];
+  const shelfLayout = preferences.posShelfLayout ?? EMPTY_SHELF_LAYOUT;
+  const quickSellProductIds = preferences.posQuickSellProductIds ?? EMPTY_QUICK_SELL_IDS;
   const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p] as const)), [products]);
   const favoriteIdSet = useMemo(() => new Set(preferences.favoriteProductIds ?? []), [preferences.favoriteProductIds]);
@@ -587,8 +598,27 @@ export function PosPage({ lang }: { lang: Language }) {
   }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
   const shelfCards = useMemo(() => {
-    return sortPosShelfCards(buildPosShelfCards(products, t(lang, "posNoShelf")), shelfOrderKeys);
-  }, [products, lang, shelfOrderKeys]);
+    return buildPosShelfDisplayCards(products, t(lang, "posNoShelf"), shelfLayout, shelfOrderKeys);
+  }, [products, lang, shelfLayout, shelfOrderKeys]);
+
+  const quickSellProducts = useMemo(
+    () =>
+      quickSellProductIds
+        .map((id) => productById.get(id))
+        .filter((p): p is Product => p != null && !isProductPlanLocked(p.id, lockedIds)),
+    [quickSellProductIds, productById, lockedIds],
+  );
+
+  const quickSellShelf = useMemo(
+    () =>
+      buildQuickSellShelfCard(
+        quickSellProductIds,
+        products,
+        t(lang, "posQuickSellShelf"),
+        shelfLayout[QUICK_SELL_SHELF_KEY],
+      ),
+    [quickSellProductIds, products, lang, shelfLayout],
+  );
 
   const showShelfBoxes =
     products.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
@@ -670,6 +700,18 @@ export function PosPage({ lang }: { lang: Language }) {
   );
 
   const handleBarcodeProduct = useCallback(
+    (p: Product) => {
+      if (isProductPlanLocked(p.id, lockedIds)) {
+        setProductLockedOpen(true);
+        return;
+      }
+      if (fastAddFromScan(p)) return;
+      openProduct(p);
+    },
+    [fastAddFromScan, lockedIds, openProduct],
+  );
+
+  const quickTapAddProduct = useCallback(
     (p: Product) => {
       if (isProductPlanLocked(p.id, lockedIds)) {
         setProductLockedOpen(true);
@@ -1253,53 +1295,54 @@ export function PosPage({ lang }: { lang: Language }) {
     <div className="space-y-3">
       <PosOfflineBanner lang={lang} />
       <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-3xl font-black tracking-tight text-slate-950">{modeTerm("sell")}</h2>
-          {quickSell ? <p className="text-sm font-black text-waka-800">{t(lang, "quickSellBadge")}</p> : null}
-        </div>
-        {draftLines.length > 0 && (
-          <button
-            type="button"
-            onClick={() => clearDraft()}
-            className="min-h-[48px] rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
-          >
-            {modeTerm("clearSale")}
-          </button>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          {canSavePending ? (
-            <Link
-              to="/pending-sales"
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm active:bg-slate-50"
-            >
-              {t(lang, "pendingSalesLink")}
-              {pendingCount > 0 ? (
-                <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-black text-white">{pendingCount}</span>
-              ) : null}
-            </Link>
-          ) : null}
-          {canRecordCashExpenses(actor.role, shopPreferences) ? (
+      {draftLines.length > 0 ||
+      canSavePending ||
+      canRecordCashExpenses(actor.role, shopPreferences) ||
+      activeShift ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {draftLines.length > 0 ? (
             <button
               type="button"
-              onClick={() => setExpenseModalOpen(true)}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-950 shadow-sm active:bg-amber-100"
+              onClick={() => clearDraft()}
+              className="min-h-[48px] rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
             >
-              <Banknote className="h-4 w-4 shrink-0" aria-hidden />
-              {t(lang, "posRecordExpenseBtn")}
+              {modeTerm("clearSale")}
             </button>
           ) : null}
-          {activeShift ? (
-            <button
-              type="button"
-              onClick={() => setShiftCloseOpen(true)}
-              className="min-h-[48px] rounded-full border border-waka-300 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900 shadow-sm active:bg-waka-100"
-            >
-              {t(lang, "shiftCloseBtn")}
-            </button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {canSavePending ? (
+              <Link
+                to="/pending-sales"
+                className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm active:bg-slate-50"
+              >
+                {t(lang, "pendingSalesLink")}
+                {pendingCount > 0 ? (
+                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-black text-white">{pendingCount}</span>
+                ) : null}
+              </Link>
+            ) : null}
+            {canRecordCashExpenses(actor.role, shopPreferences) ? (
+              <button
+                type="button"
+                onClick={() => setExpenseModalOpen(true)}
+                className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-950 shadow-sm active:bg-amber-100"
+              >
+                <Banknote className="h-4 w-4 shrink-0" aria-hidden />
+                {t(lang, "posRecordExpenseBtn")}
+              </button>
+            ) : null}
+            {activeShift ? (
+              <button
+                type="button"
+                onClick={() => setShiftCloseOpen(true)}
+                className="min-h-[48px] rounded-full border border-waka-300 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900 shadow-sm active:bg-waka-100"
+              >
+                {t(lang, "shiftCloseBtn")}
+              </button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {lockedProductCount > 0 ? (
         <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950">
@@ -1433,23 +1476,45 @@ export function PosPage({ lang }: { lang: Language }) {
           )}
         </section>
       ) : showShelfBoxes ? (
-        <section className="space-y-3">
-          <div className="flex items-end justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
-                {t(lang, "posSellCategoryHeading")}
-              </p>
-              <p className="text-sm font-bold text-stone-600">{t(lang, "posShelvesHint")}</p>
-            </div>
-            <p className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs font-black text-stone-700">
+        <section className="space-y-2.5">
+          <div className="flex items-center justify-end gap-2">
+            <p className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-[11px] font-black text-stone-700">
               {products.length}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+
+          {quickSellProducts.length > 0 ? (
+            <div className="rounded-2xl border border-waka-200 bg-gradient-to-br from-waka-50 to-orange-50/80 p-2.5">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-lg" aria-hidden>
+                  {quickSellShelf?.icon ?? "⚡"}
+                </span>
+                <p className="text-xs font-black uppercase tracking-wide text-waka-900">
+                  {quickSellShelf?.label ?? t(lang, "posQuickSellShelf")}
+                </p>
+              </div>
+              <div className="flex gap-2 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
+                {quickSellProducts.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => quickTapAddProduct(p)}
+                    className="shrink-0 rounded-xl border border-waka-200/90 bg-white px-3 py-2 text-left shadow-sm active:border-waka-400 active:bg-waka-50"
+                  >
+                    <span className="block max-w-[7rem] truncate text-sm font-black text-stone-950">{p.name}</span>
+                    <span className="text-[10px] font-bold text-waka-700">UGX {p.sellingPricePerUnitUgx.toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="grid grid-flow-dense grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {shelfCards.map((shelf) => (
               <PosShelfTile
                 key={shelf.key}
                 shelf={shelf}
+                lang={lang}
                 mode="sell"
                 countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
                 onClick={() => setSellCategoryFilter(shelf.key)}
@@ -2077,6 +2142,7 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         </AppModalOverlay>
       ) : null}
+
     </div>
   );
 }

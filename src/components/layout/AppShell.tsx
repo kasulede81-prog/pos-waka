@@ -265,13 +265,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
   const isDesktopLayout = usePosDesktopLayout();
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
-  const desktopPosSell =
-    isDesktopLayout && (location.pathname === "/pos" || location.pathname.startsWith("/pos/"));
+  const onSellScreen = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
   const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
   const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
   const fullWidthChrome = desktopTerminalMode || desktopTerminalHome || independentModule;
-  const showHeaderExit = shouldShowHeaderExit(location.pathname);
+  const showHeaderExit =
+    shouldShowHeaderExit(location.pathname) || (onSellScreen && !isDesktopLayout);
   const showBackOfficeSearch =
     isBackOfficePath(location.pathname) && !isSettingsLauncherPath(location.pathname) && !internalAdminRoute;
 
@@ -317,7 +317,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   return (
     <SessionHydrationProvider roleReady={roleReady}>
     <SessionActorProvider value={actor}>
-      <div className="app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300">
+      <div
+        className={clsx(
+          "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300",
+          onSellScreen && "app-shell--sell-focus",
+        )}
+      >
         {pwaUpdate ? (
           <div className="z-40 shrink-0 border-b border-waka-200 bg-waka-50 px-3 py-2 text-center shadow-sm">
             <p className="text-sm font-bold text-waka-950">{t(lang, "pwaUpdateTitle")}</p>
@@ -461,7 +466,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           <nav
             className={clsx(
               "hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56",
-              desktopPosSell && "lg:hidden",
+              onSellScreen && "md:hidden",
             )}
           >
             <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
@@ -509,7 +514,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </section>
         </main>
-        {!internalAdminRoute && !independentModule ? (
+        {!internalAdminRoute && !independentModule && !onSellScreen ? (
         <nav
           className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur md:hidden"
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}
