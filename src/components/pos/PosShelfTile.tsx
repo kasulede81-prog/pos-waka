@@ -1,10 +1,13 @@
 import clsx from "clsx";
-import type { PointerEvent } from "react";
+import type { CSSProperties, PointerEvent, ReactNode } from "react";
 import type { PosShelfDisplayCard } from "../../lib/posShelfLayout";
 import {
+  scaleToShelfSize,
   shelfColorClasses,
-  shelfGridSpanClass,
+  shelfGridSpanStyle,
   shelfMinHeightClass,
+  shelfTileSurfaceStyle,
+  shelfTypographyFromScale,
 } from "../../lib/posShelfLayout";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -29,6 +32,76 @@ function badgeLabel(lang: Language, shelf: PosShelfDisplayCard): string | null {
   return null;
 }
 
+function ShelfTileBody({
+  shelf,
+  countLabel,
+  isArrange,
+  typo,
+}: {
+  shelf: PosShelfDisplayCard;
+  countLabel: string;
+  isArrange: boolean;
+  typo: ReturnType<typeof shelfTypographyFromScale>;
+}): ReactNode {
+  const layoutSize = scaleToShelfSize(shelf.scale);
+  const arrangePad = isArrange ? "pr-7" : "";
+  const titleStyle: CSSProperties = { fontSize: `${typo.titleRem}rem`, fontWeight: 900, lineHeight: 1.1 };
+  const countStyle: CSSProperties = { fontSize: `${typo.countRem}rem`, fontWeight: 700, opacity: 0.78 };
+  const iconStyle: CSSProperties = { fontSize: `${typo.iconRem}rem`, lineHeight: 1 };
+
+  if (layoutSize === "large") {
+    return (
+      <span className={clsx("flex h-full min-h-0 flex-col justify-between", arrangePad)}>
+        <span className="flex flex-1 items-center justify-center pt-0.5" aria-hidden>
+          <span style={iconStyle}>{shelf.icon ?? "📦"}</span>
+        </span>
+        <span className="min-w-0">
+          <span className="block break-words" style={titleStyle}>
+            {shelf.label}
+          </span>
+          <span className="mt-1 block" style={countStyle}>
+            {countLabel}
+          </span>
+        </span>
+      </span>
+    );
+  }
+
+  if (layoutSize === "medium") {
+    return (
+      <span className={clsx("flex h-full min-h-0 items-stretch gap-2.5 sm:gap-3", arrangePad)}>
+        <span className="flex shrink-0 items-center self-center" style={iconStyle} aria-hidden>
+          {shelf.icon ?? "📦"}
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col justify-center">
+          <span className="line-clamp-2 break-words" style={titleStyle}>
+            {shelf.label}
+          </span>
+          <span className="mt-0.5" style={countStyle}>
+            {countLabel}
+          </span>
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className={clsx("flex h-full min-h-0 flex-col justify-between gap-1", arrangePad)}>
+      <span style={iconStyle} aria-hidden>
+        {shelf.icon ?? "📦"}
+      </span>
+      <span className="min-w-0">
+        <span className="line-clamp-2 break-words" style={titleStyle}>
+          {shelf.label}
+        </span>
+        <span className="mt-0.5 block" style={countStyle}>
+          {countLabel}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 export function PosShelfTile({
   shelf,
   countLabel,
@@ -42,32 +115,26 @@ export function PosShelfTile({
 }: Props) {
   const isArrange = mode === "arrange";
   const badge = badgeLabel(lang, shelf);
-  const colorClass = shelfColorClasses(shelf.color, shelf.featured);
-  const spanClass = shelfGridSpanClass(shelf.size);
+  const typo = shelfTypographyFromScale(shelf.scale);
+  const customStyle = shelfTileSurfaceStyle(shelf);
+  const colorClass = customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured);
   const heightClass = shelfMinHeightClass(shelf.size);
-  const titleClass =
-    shelf.size === "large"
-      ? "text-base font-black leading-tight sm:text-lg"
-      : shelf.size === "medium"
-        ? "text-sm font-black leading-tight sm:text-base"
-        : "text-xs font-black leading-tight sm:text-sm";
+  const layoutSize = scaleToShelfSize(shelf.scale);
+  const tilePadding: CSSProperties = { padding: `${typo.paddingRem}rem` };
 
   const inner = (
     <>
       {badge ? (
-        <span className="absolute right-2 top-2 max-w-[46%] truncate rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wide">
+        <span
+          className={clsx(
+            "absolute right-2 top-2 max-w-[46%] truncate rounded-full bg-black/10 px-1.5 py-0.5 font-black uppercase tracking-wide",
+            layoutSize === "large" ? "text-[10px] sm:text-xs" : "text-[9px]",
+          )}
+        >
           {badge}
         </span>
       ) : null}
-      <span className={clsx("flex h-full flex-col justify-between gap-1", isArrange && "pr-7")}>
-        <span className="flex min-w-0 items-start gap-1.5">
-          <span className={clsx("shrink-0", shelf.size === "large" ? "text-2xl" : "text-lg")} aria-hidden>
-            {shelf.icon ?? "📦"}
-          </span>
-          <span className={clsx("line-clamp-2 min-w-0 flex-1", titleClass)}>{shelf.label}</span>
-        </span>
-        <span className="text-[10px] font-bold opacity-70 sm:text-[11px]">{countLabel}</span>
-      </span>
+      <ShelfTileBody shelf={shelf} countLabel={countLabel} isArrange={isArrange} typo={typo} />
       {isArrange ? (
         <span
           className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg bg-black/5 text-stone-500"
@@ -80,8 +147,7 @@ export function PosShelfTile({
   );
 
   const sharedClass = clsx(
-    "relative w-full touch-manipulation rounded-2xl border p-2.5 text-left shadow-sm transition-all",
-    spanClass,
+    "relative w-full touch-manipulation rounded-2xl border text-left shadow-sm transition-all",
     heightClass,
     colorClass,
     selected && "ring-2 ring-waka-500 ring-offset-1",
@@ -89,6 +155,12 @@ export function PosShelfTile({
     dragOver && "ring-2 ring-waka-400",
     !isArrange && "active:scale-[0.98]",
   );
+
+  const sharedStyle: CSSProperties = {
+    ...shelfGridSpanStyle(shelf.scale),
+    ...tilePadding,
+    ...customStyle,
+  };
 
   if (isArrange) {
     return (
@@ -99,6 +171,7 @@ export function PosShelfTile({
         aria-grabbed={dragging}
         aria-selected={selected}
         className={clsx(sharedClass, "cursor-grab active:cursor-grabbing select-none")}
+        style={sharedStyle}
         onPointerDown={onDragPointerDown}
         onClick={onClick}
       >
@@ -108,7 +181,7 @@ export function PosShelfTile({
   }
 
   return (
-    <button type="button" onClick={onClick} className={sharedClass}>
+    <button type="button" onClick={onClick} className={sharedClass} style={sharedStyle}>
       {inner}
     </button>
   );

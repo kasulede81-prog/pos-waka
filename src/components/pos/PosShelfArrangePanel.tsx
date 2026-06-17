@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import clsx from "clsx";
-import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, PosShelfSize, Product } from "../../types";
+import type { Language, PosShelfColor, PosShelfLayoutConfig, PosShelfPresetId, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { useShelfDragReorder } from "../../hooks/useShelfDragReorder";
@@ -10,10 +10,15 @@ import {
   buildQuickSellShelfCard,
   effectiveShelfOrderKeys,
   QUICK_SELL_SHELF_KEY,
+  shelfMasonryGridClass,
+  shelfScaleFromConfig,
   updateShelfLayoutEntry,
 } from "../../lib/posShelfLayout";
 import { POS_SHELF_PRESET_IDS, applyShelfPreset } from "../../lib/posShelfPresets";
+import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { PosShelfTile } from "./PosShelfTile";
+import { ShelfColorWheel } from "./ShelfColorWheel";
+import { ShelfScaleSlider } from "./ShelfScaleSlider";
 
 const PRESET_LABEL_KEY: Record<
   PosShelfPresetId,
@@ -42,7 +47,6 @@ type Props = {
 };
 
 const COLORS: PosShelfColor[] = ["default", "red", "orange", "blue", "green", "purple"];
-const SIZES: PosShelfSize[] = ["small", "medium", "large"];
 const EMPTY_SHELF_ORDER: string[] = [];
 const EMPTY_SHELF_LAYOUT: Record<string, PosShelfLayoutConfig> = {};
 
@@ -85,6 +89,14 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   const selectedConfig = selectedKey ? (shelfLayout[selectedKey] ?? {}) : null;
   const isQuickSellSelected = selectedKey === QUICK_SELL_SHELF_KEY;
+
+  const selectedCard = selectedKey ? shelfCards.find((c) => c.key === selectedKey) : null;
+  const selectedScale = selectedConfig
+    ? shelfScaleFromConfig(selectedConfig, Boolean(selectedConfig.featured))
+    : 55;
+  const selectedPreviewHex = selectedConfig
+    ? resolveShelfHex(selectedConfig.customColor, selectedConfig.color ?? selectedCard?.color ?? "default")
+    : PRESET_SHELF_HEX.default;
 
   const patchSelected = useCallback(
     (patch: Partial<PosShelfLayoutConfig>) => {
@@ -153,7 +165,7 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
       <p className="text-sm font-medium text-stone-600">{t(lang, "stockShelfArrangeSub")}</p>
 
-      <div className="grid grid-flow-dense grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      <div className={shelfMasonryGridClass()}>
         {shelfCards.map((shelf) => (
           <PosShelfTile
             key={shelf.key}
@@ -191,23 +203,37 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
           <div>
             <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditColor")}</p>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {COLORS.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  aria-pressed={selectedConfig.color === color || (!selectedConfig.color && color === "default")}
-                  onClick={() => patchSelected({ color })}
-                  className={clsx(
-                    "rounded-full border px-3 py-1 text-xs font-black capitalize",
-                    selectedConfig.color === color || (!selectedConfig.color && color === "default")
-                      ? "border-waka-500 bg-waka-50 text-waka-900"
-                      : "border-stone-200 bg-white text-stone-700",
-                  )}
-                >
-                  {t(lang, `posShelfColor_${color}` as "posShelfColor_default")}
-                </button>
-              ))}
+            <p className="mt-0.5 text-[11px] font-medium text-stone-500">{t(lang, "posShelfColorWheelHint")}</p>
+            <div className="mt-2 flex flex-col items-center gap-3 sm:flex-row sm:items-start">
+              <ShelfColorWheel
+                value={selectedPreviewHex}
+                onChange={(hex) => {
+                  if (hex) patchSelected({ customColor: hex });
+                  else patchSelected({ customColor: undefined, color: "default" });
+                }}
+              />
+              <div className="flex flex-wrap justify-center gap-2 sm:max-w-[10rem]">
+                {COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    aria-pressed={
+                      !selectedConfig.customColor &&
+                      (selectedConfig.color === color || (!selectedConfig.color && color === "default"))
+                    }
+                    onClick={() => patchSelected({ color, customColor: undefined })}
+                    className={clsx(
+                      "h-9 w-9 rounded-full border-2 shadow-sm",
+                      !selectedConfig.customColor &&
+                        (selectedConfig.color === color || (!selectedConfig.color && color === "default"))
+                        ? "border-waka-600 ring-2 ring-waka-200"
+                        : "border-white",
+                    )}
+                    style={{ backgroundColor: PRESET_SHELF_HEX[color] }}
+                    title={t(lang, `posShelfColor_${color}` as "posShelfColor_default")}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -231,25 +257,12 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
             </div>
           </div>
 
-          <div>
-            <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditSize")}</p>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {SIZES.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  aria-pressed={selectedConfig.size === size}
-                  onClick={() => patchSelected({ size })}
-                  className={clsx(
-                    "rounded-full border px-3 py-1 text-xs font-black capitalize",
-                    selectedConfig.size === size ? "border-waka-500 bg-waka-50 text-waka-900" : "border-stone-200 bg-white",
-                  )}
-                >
-                  {t(lang, `posShelfSize_${size}` as "posShelfSize_small")}
-                </button>
-              ))}
-            </div>
-          </div>
+          <ShelfScaleSlider
+            lang={lang}
+            value={selectedScale}
+            previewHex={selectedPreviewHex}
+            onChange={(scale) => patchSelected({ scale })}
+          />
 
           <label className="flex items-center gap-2">
             <input

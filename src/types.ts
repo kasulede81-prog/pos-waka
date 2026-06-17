@@ -744,7 +744,11 @@ export type PosShelfLayoutConfig = {
   displayName?: string;
   icon?: string;
   color?: PosShelfColor;
+  /** Full-spectrum pick from color wheel (#RRGGBB). Overrides preset color when set. */
+  customColor?: string;
   size?: PosShelfSize;
+  /** Continuous tile scale 25–100 (replaces discrete size when set). */
+  scale?: number;
   featured?: boolean;
   badge?: PosShelfBadge | null;
 };

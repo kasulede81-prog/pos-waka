@@ -44,14 +44,14 @@ export function DesktopStatusChips({ lang }: Props) {
   const showLowStock = hasPermission(actor.role, "stock.view") && lowStockCount > 0;
 
   const chipClass =
-    "inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-900";
+    "inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white";
 
   return (
     <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
       {showRisks ? (
         <Link
           to="/office/audit-center"
-          className={`${chipClass} border-rose-500/50 bg-rose-950/80 text-rose-100 hover:bg-rose-900/90`}
+          className={`${chipClass} border-rose-200 bg-white text-rose-800 shadow-sm hover:border-rose-300 hover:bg-rose-50`}
         >
           <span aria-hidden>🔴</span>
           {tTemplate(lang, "desktopHomeStatusRisks", { count: String(riskCount) })}
@@ -60,7 +60,7 @@ export function DesktopStatusChips({ lang }: Props) {
       {showLowStock ? (
         <Link
           to="/stock"
-          className={`${chipClass} border-amber-500/50 bg-amber-950/80 text-amber-100 hover:bg-amber-900/90`}
+          className={`${chipClass} border-waka-300 bg-waka-50 text-waka-900 shadow-sm hover:border-waka-400 hover:bg-waka-100`}
         >
           <span aria-hidden>🟠</span>
           {tTemplate(lang, "desktopHomeStatusLowStock", { count: String(lowStockCount) })}
@@ -70,8 +70,8 @@ export function DesktopStatusChips({ lang }: Props) {
         to="/office/backup"
         className={`${chipClass} ${
           synced
-            ? "border-emerald-500/50 bg-emerald-950/80 text-emerald-100 hover:bg-emerald-900/90"
-            : "border-amber-500/50 bg-amber-950/80 text-amber-100 hover:bg-amber-900/90"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-900 shadow-sm hover:border-emerald-300 hover:bg-emerald-100"
+            : "border-waka-300 bg-waka-50 text-waka-900 shadow-sm hover:border-waka-400 hover:bg-waka-100"
         }`}
       >
         <span aria-hidden>{synced ? "🟢" : "🟠"}</span>

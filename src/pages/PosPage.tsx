@@ -99,6 +99,7 @@ import {
   buildPosShelfDisplayCards,
   buildQuickSellShelfCard,
   QUICK_SELL_SHELF_KEY,
+  shelfMasonryGridClass,
 } from "../lib/posShelfLayout";
 import { PosShelfTile } from "../components/pos/PosShelfTile";
 
@@ -1509,7 +1510,7 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           ) : null}
 
-          <div className="grid grid-flow-dense grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+          <div className={shelfMasonryGridClass()}>
             {shelfCards.map((shelf) => (
               <PosShelfTile
                 key={shelf.key}

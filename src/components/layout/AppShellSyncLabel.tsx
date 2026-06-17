@@ -41,7 +41,13 @@ function label(
 }
 
 /** Isolated sync strip — updates here do not re-render the whole AppShell / POS tree. */
-export const AppShellSyncLabel = memo(function AppShellSyncLabel({ lang }: { lang: Language }) {
+export const AppShellSyncLabel = memo(function AppShellSyncLabel({
+  lang,
+  inverted = false,
+}: {
+  lang: Language;
+  inverted?: boolean;
+}) {
   const { isOnline } = useOfflineStatus();
   const { syncing, pendingCount, health } = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
@@ -65,23 +71,33 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({ lang }: { lan
   return (
     <div className="min-w-0">
       <p
-        className={`truncate text-[11px] font-medium ${needsAction ? "text-rose-800" : "text-waka-800/90"}`}
+        className={`truncate text-[11px] font-medium ${
+          needsAction
+            ? inverted
+              ? "text-rose-100"
+              : "text-rose-800"
+            : inverted
+              ? "text-waka-50"
+              : "text-waka-800/90"
+        }`}
         title={needsAction ? t(lang, "syncErrorBanner") : undefined}
       >
         {syncLine}
       </p>
       {offlineDur ? (
-        <p className="truncate text-[10px] font-semibold text-stone-600">
+        <p className={`truncate text-[10px] font-semibold ${inverted ? "text-waka-100/90" : "text-stone-600"}`}>
           {tTemplate(lang, "autoSyncOfflineDuration", { duration: offlineDur })}
         </p>
       ) : null}
       {isOnline && lastSuccess && !syncing && pendingCount === 0 && syncErrors === 0 ? (
-        <p className="truncate text-[10px] font-medium text-emerald-800">
+        <p className={`truncate text-[10px] font-medium ${inverted ? "text-emerald-100" : "text-emerald-800"}`}>
           {tTemplate(lang, "autoSyncLastSuccess", { time: lastSuccess })}
         </p>
       ) : null}
       {hydrationLine ? (
-        <p className="truncate text-[10px] font-semibold text-amber-800">{hydrationLine}</p>
+        <p className={`truncate text-[10px] font-semibold ${inverted ? "text-amber-100" : "text-amber-800"}`}>
+          {hydrationLine}
+        </p>
       ) : null}
     </div>
   );

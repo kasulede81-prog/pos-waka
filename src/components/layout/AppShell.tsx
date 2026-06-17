@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { Outlet, useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
 import clsx from "clsx";
 import { Home, ShoppingCart, Briefcase, Package, ChevronDown } from "lucide-react";
@@ -22,7 +22,7 @@ import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath, isSettingsLauncherPath } from "../../lib/backOfficePaths";
-import { BackOfficeMasterSearch } from "../office/BackOfficeMasterSearch";
+import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
 import { isHospitalityMode } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
@@ -53,6 +53,10 @@ import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
+
+const BackOfficeMasterSearch = lazy(() =>
+  import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
+);
 
 type Props = {
   lang: Language;
@@ -265,6 +269,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
   const isDesktopLayout = usePosDesktopLayout();
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
+  const isLauncherHome = location.pathname === "/";
   const onSellScreen = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
   const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
@@ -273,7 +278,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const showHeaderExit =
     shouldShowHeaderExit(location.pathname) || (onSellScreen && !isDesktopLayout);
   const showBackOfficeSearch =
-    isBackOfficePath(location.pathname) && !isSettingsLauncherPath(location.pathname) && !internalAdminRoute;
+    isBackOfficePath(location.pathname) &&
+    location.pathname !== "/office" &&
+    !isSettingsLauncherPath(location.pathname) &&
+    !internalAdminRoute;
 
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -319,8 +327,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     <SessionActorProvider value={actor}>
       <div
         className={clsx(
-          "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden bg-stone-50 text-stone-900 transition-colors duration-300",
+          "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden text-stone-900 transition-colors duration-300",
+          isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-white" : "bg-stone-50",
           onSellScreen && "app-shell--sell-focus",
+          isLauncherHome && "app-shell--launcher",
         )}
       >
         {pwaUpdate ? (
@@ -336,7 +346,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           </div>
         ) : null}
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
-        <header className="relative z-20 shrink-0 overflow-visible border-b border-stone-200/90 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/90">
+        <header
+          className={clsx(
+            "relative z-20 shrink-0 overflow-visible border-b shadow-sm backdrop-blur",
+            isLauncherHome
+              ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
+              : "border-stone-200/90 bg-white/95 supports-[backdrop-filter]:bg-white/90",
+          )}
+        >
           <div
             className={clsx(
               "mx-auto flex flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
@@ -348,7 +365,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
               <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
               <div className="min-w-0">
-                <AppShellSyncLabel lang={lang} />
+                <AppShellSyncLabel lang={lang} inverted={isLauncherHome} />
               </div>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1.5">
@@ -358,11 +375,20 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   aria-expanded={menuOpen}
                   aria-haspopup="menu"
                   onClick={() => setMenuOpen((v) => !v)}
-                  className="flex min-h-[38px] max-w-[12rem] touch-manipulation items-center gap-1.5 truncate rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50 sm:max-w-[14rem]"
+                  className={clsx(
+                    "flex min-h-[38px] max-w-[12rem] touch-manipulation items-center gap-1.5 truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm sm:max-w-[14rem]",
+                    isLauncherHome
+                      ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
+                      : "border-stone-200 bg-white text-stone-800 active:bg-stone-50",
+                  )}
                 >
                   <span className="truncate">{actor.displayName ?? actor.role}</span>
                   <ChevronDown
-                    className={clsx("h-3.5 w-3.5 shrink-0 text-stone-500 transition-transform", menuOpen && "rotate-180")}
+                    className={clsx(
+                      "h-3.5 w-3.5 shrink-0 transition-transform",
+                      isLauncherHome ? "text-waka-100" : "text-stone-500",
+                      menuOpen && "rotate-180",
+                    )}
                     aria-hidden
                   />
                 </button>
@@ -435,7 +461,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               <button
                 type="button"
                 onClick={() => setLang(nextLanguage(lang))}
-                className="min-h-[38px] max-w-[7.5rem] truncate rounded-xl border border-stone-200 bg-white px-3 py-1.5 text-xs font-bold text-stone-800 shadow-sm active:bg-stone-50"
+                className={clsx(
+                  "min-h-[38px] max-w-[7.5rem] truncate rounded-xl border px-3 py-1.5 text-xs font-bold shadow-sm",
+                  isLauncherHome
+                    ? "border-waka-400/50 bg-waka-700/50 text-white active:bg-waka-700"
+                    : "border-stone-200 bg-white text-stone-800 active:bg-stone-50",
+                )}
                 aria-label={t(lang, "langEnglish")}
               >
                 {languageToggleLabel(lang)}
@@ -451,15 +482,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             )}
           >
             <div className={clsx("mx-auto w-full", fullWidthChrome ? "max-w-none" : "max-w-6xl")}>
-              <BackOfficeMasterSearch lang={lang} className="max-w-3xl" />
+              <Suspense fallback={null}>
+                <BackOfficeMasterSearch lang={lang} className="max-w-3xl" />
+              </Suspense>
             </div>
           </div>
         ) : null}
         <main
           className={clsx(
-            "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden px-3 py-3 sm:px-4 md:px-6",
-            fullWidthChrome ? "max-w-none" : "max-w-6xl",
-            fullWidthChrome && !desktopTerminalHome && "lg:px-8 xl:px-10",
+            "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden",
+            isLauncherHome ? "px-0 py-0" : "px-3 py-3 sm:px-4 md:px-6",
+            fullWidthChrome || isLauncherHome ? "max-w-none" : "max-w-6xl",
+            fullWidthChrome && !desktopTerminalHome && !isLauncherHome && "lg:px-8 xl:px-10",
           )}
         >
           {!independentModule ? (
@@ -516,7 +550,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         </main>
         {!internalAdminRoute && !independentModule && !onSellScreen ? (
         <nav
-          className="fixed bottom-0 left-0 right-0 border-t border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)] backdrop-blur md:hidden"
+          className={clsx(
+            "fixed bottom-0 left-0 right-0 border-t shadow-[0_-4px_24px_rgb(234_88_12/0.08)] backdrop-blur md:hidden",
+            isLauncherHome
+              ? "border-waka-200/80 bg-waka-50/95"
+              : "border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)]",
+          )}
           style={{ zIndex: "var(--waka-z-bottom-nav)" }}
           aria-label="Main navigation"
         >
@@ -576,6 +615,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   key={path}
                   type="button"
                   aria-current={active ? "page" : undefined}
+                  onPointerDown={() => {
+                    if (path === "/office") prefetchOfficeHub();
+                  }}
                   onClick={() => guardedNavigate(path, { preventScrollReset: true })}
                   className={`touch-manipulation flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 font-semibold transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[50px] ${
                     active

@@ -24,6 +24,7 @@ import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
 import { POS_RECEIPTS_ROUTE, POS_SELL_ROUTE, POS_SHOP_ROUTE } from "../../lib/posNavigation";
+import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
 
 type TileDef = {
   id: string;
@@ -55,16 +56,16 @@ function tileButtonClass(variant: TileDef["variant"], tileId: string): string {
   return clsx(
     "relative touch-manipulation rounded-2xl border-2 text-center shadow-md transition-all",
     "hover:shadow-lg active:scale-[0.98] motion-reduce:active:scale-100",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-400 focus-visible:ring-offset-2 focus-visible:ring-offset-stone-900/5",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2 focus-visible:ring-offset-waka-50",
     isPrimary
       ? clsx(
-          "col-span-2 flex flex-col items-center justify-center gap-3 border-waka-500/80 bg-gradient-to-br from-waka-600 to-waka-700 px-4 py-6 text-white",
-          "min-h-[140px] shadow-[0_8px_32px_rgba(234,88,12,0.45)] hover:from-waka-500 hover:to-waka-600",
+          "col-span-2 flex flex-col items-center justify-center gap-3 border-white/30 bg-gradient-to-br from-waka-600 to-waka-700 px-4 py-6 text-white",
+          "min-h-[140px] shadow-[0_8px_32px_rgba(234,88,12,0.4)] hover:from-waka-500 hover:to-waka-600",
           "lg:min-h-[260px] lg:gap-4 lg:px-6 lg:py-8",
         )
       : clsx(
-          "flex min-h-[108px] flex-col items-center justify-center gap-2 border-stone-600/40 bg-stone-800/90 px-3 py-3 text-stone-50",
-          "hover:border-waka-500/50 hover:bg-stone-800 sm:min-h-[120px] sm:gap-2.5 sm:px-4 sm:py-4",
+          "flex min-h-[108px] flex-col items-center justify-center gap-2 border-waka-200/90 bg-white px-3 py-3 text-waka-950",
+          "shadow-waka-sm hover:border-waka-400 hover:bg-waka-50/80 sm:min-h-[120px] sm:gap-2.5 sm:px-4 sm:py-4",
         ),
     tileId !== "sell" && "lg:[grid-area:var(--tile-area)]",
   );
@@ -223,6 +224,9 @@ export function DesktopHomeTiles({ lang }: Props) {
           tileRefs.current[tile.id] = el;
         }}
         type="button"
+        onPointerDown={() => {
+          if (tile.to === POS_SHOP_ROUTE) prefetchOfficeHub();
+        }}
         onClick={() => navigate(tile.to)}
         onKeyDown={(e) => onTileKeyDown(tile.id, e)}
         style={{ ["--tile-area" as string]: tile.area }}
@@ -234,7 +238,9 @@ export function DesktopHomeTiles({ lang }: Props) {
           </span>
         ) : null}
         <tile.Icon
-          className={isPrimary ? "h-12 w-12 shrink-0 lg:h-16 lg:w-16" : "h-8 w-8 shrink-0 text-waka-300 sm:h-9 sm:w-9"}
+          className={
+            isPrimary ? "h-12 w-12 shrink-0 lg:h-16 lg:w-16" : "h-8 w-8 shrink-0 text-waka-600 sm:h-9 sm:w-9"
+          }
           strokeWidth={isPrimary ? 2.5 : 2}
           aria-hidden
         />
@@ -253,7 +259,7 @@ export function DesktopHomeTiles({ lang }: Props) {
 
   if (tiles.length === 0) {
     return (
-      <p className="text-center text-base font-semibold text-stone-300">{t(lang, "desktopHomeNoTiles")}</p>
+      <p className="text-center text-base font-semibold text-waka-800">{t(lang, "desktopHomeNoTiles")}</p>
     );
   }
 

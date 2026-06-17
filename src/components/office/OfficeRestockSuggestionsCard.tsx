@@ -4,7 +4,7 @@ import { Package } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
-import { useReportingSales } from "../../hooks/useReportingSales";
+import { useDeferredSales } from "../../hooks/useDeferredSales";
 import { buildRestockProductSuggestions } from "../../lib/purchaseReporting";
 import { buildRestockSuggestions } from "../../lib/restockSuggestions";
 import { hasPermission } from "../../lib/permissions";
@@ -15,7 +15,7 @@ export function OfficeRestockSuggestionsCard({ lang }: { lang: Language }) {
   const canRestock = hasPermission(actor.role, "purchases.record");
   const products = usePosStore((s) => s.products);
   const purchases = usePosStore((s) => s.purchases);
-  const sales = useReportingSales(false);
+  const sales = useDeferredSales();
 
   const suggestions = useMemo(
     () => buildRestockProductSuggestions(products, sales, 6),

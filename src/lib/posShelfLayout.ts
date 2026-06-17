@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import type { PosShelfBadge, PosShelfColor, PosShelfLayoutConfig, PosShelfSize, Product } from "../types";
+import { normalizeShelfHex, shelfTileColorStyle } from "./shelfColor";
 import {
   UNCATEGORIZED_SENTINEL,
   distinctTrimmedCategories,
@@ -11,11 +13,16 @@ export const QUICK_SELL_SHELF_KEY = "__waka_quick_sell__";
 
 export type PosShelfDisplayCard = PosShelfCard & {
   color: PosShelfColor;
+  customColor: string | null;
+  scale: number;
   size: PosShelfSize;
   featured: boolean;
   badge: PosShelfBadge | null;
   isQuickSell?: boolean;
 };
+
+const SHELF_SCALE_MIN = 25;
+const SHELF_SCALE_MAX = 100;
 
 const SHELF_COLORS: PosShelfColor[] = ["default", "red", "orange", "blue", "green", "purple"];
 const SHELF_SIZES: PosShelfSize[] = ["small", "medium", "large"];
@@ -51,6 +58,53 @@ export function isPosShelfBadge(v: unknown): v is PosShelfBadge {
   return v === "fast_moving" || v === "promotion";
 }
 
+export function clampShelfScale(value: number): number {
+  return Math.max(SHELF_SCALE_MIN, Math.min(SHELF_SCALE_MAX, Math.round(value)));
+}
+
+export function shelfScaleFromConfig(config?: PosShelfLayoutConfig, featured = false): number {
+  if (typeof config?.scale === "number" && Number.isFinite(config.scale)) {
+    return clampShelfScale(config.scale);
+  }
+  if (config?.size === "large") return 85;
+  if (config?.size === "medium") return 55;
+  if (config?.size === "small") return 35;
+  return featured ? 85 : 35;
+}
+
+export function scaleToShelfSize(scale: number): PosShelfSize {
+  if (scale >= 72) return "large";
+  if (scale >= 42) return "medium";
+  return "small";
+}
+
+export function shelfGridSpanFromScale(scale: number): { col: number; row: number } {
+  const s = clampShelfScale(scale);
+  const col = s >= 45 ? 2 : 1;
+  const row = s >= 78 ? 2 : 1;
+  return { col, row };
+}
+
+export function shelfGridSpanStyle(scale: number): CSSProperties {
+  const { col, row } = shelfGridSpanFromScale(scale);
+  return { gridColumn: `span ${col}`, gridRow: `span ${row}` };
+}
+
+export function shelfTypographyFromScale(scale: number): {
+  iconRem: number;
+  titleRem: number;
+  countRem: number;
+  paddingRem: number;
+} {
+  const t = clampShelfScale(scale) / 100;
+  return {
+    iconRem: 1.05 + t * 2.25,
+    titleRem: 0.7 + t * 1.15,
+    countRem: 0.58 + t * 0.38,
+    paddingRem: 0.5 + t * 0.9,
+  };
+}
+
 export function normalizePosShelfLayout(
   raw: unknown,
 ): Record<string, PosShelfLayoutConfig> {
@@ -68,7 +122,12 @@ export function normalizePosShelfLayout(
       entry.icon = v.icon.trim().slice(0, 8);
     }
     if (isPosShelfColor(v.color)) entry.color = v.color;
+    const customColor = normalizeShelfHex(v.customColor);
+    if (customColor) entry.customColor = customColor;
     if (isPosShelfSize(v.size)) entry.size = v.size;
+    if (typeof v.scale === "number" && Number.isFinite(v.scale)) {
+      entry.scale = clampShelfScale(v.scale);
+    }
     if (typeof v.featured === "boolean") entry.featured = v.featured;
     if (v.badge === null) entry.badge = null;
     else if (isPosShelfBadge(v.badge)) entry.badge = v.badge;
@@ -82,12 +141,16 @@ export function mergeShelfLayout(
   config?: PosShelfLayoutConfig,
 ): PosShelfDisplayCard {
   const featured = Boolean(config?.featured);
+  const scale = shelfScaleFromConfig(config, featured);
+  const color = config?.color ?? (featured ? "orange" : "default");
   return {
     ...card,
     label: config?.displayName?.trim() || card.label,
     icon: config?.icon?.trim() || card.icon,
-    color: config?.color ?? (featured ? "orange" : "default"),
-    size: config?.size ?? (featured ? "large" : "small"),
+    color,
+    customColor: normalizeShelfHex(config?.customColor),
+    scale,
+    size: scaleToShelfSize(scale),
     featured,
     badge: config?.badge ?? (featured ? "fast_moving" : null),
   };
@@ -178,6 +241,13 @@ export function shelfColorClasses(color: PosShelfColor, featured: boolean): stri
   }
 }
 
+export function shelfTileSurfaceStyle(
+  shelf: Pick<PosShelfDisplayCard, "color" | "customColor" | "featured">,
+): CSSProperties | undefined {
+  if (!shelf.customColor) return undefined;
+  return shelfTileColorStyle(shelf.customColor, shelf.featured);
+}
+
 /** Tailwind grid span classes for masonry shelf grid. */
 export function shelfGridSpanClass(size: PosShelfSize): string {
   switch (size) {
@@ -190,14 +260,56 @@ export function shelfGridSpanClass(size: PosShelfSize): string {
   }
 }
 
-export function shelfMinHeightClass(size: PosShelfSize): string {
+/** Shared masonry grid: fixed row tracks so row-span-2 large tiles get real height. */
+export function shelfMasonryGridClass(): string {
+  return "grid grid-flow-dense auto-rows-[4.75rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5rem] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6";
+}
+
+export function shelfMinHeightClass(_size: PosShelfSize): string {
+  return "h-full min-h-0";
+}
+
+export function shelfPaddingClass(size: PosShelfSize): string {
   switch (size) {
     case "large":
-      return "min-h-[132px] sm:min-h-[148px] lg:min-h-[160px]";
+      return "p-3.5 sm:p-4";
     case "medium":
-      return "min-h-[88px] sm:min-h-[96px]";
+      return "p-3";
     default:
-      return "min-h-[72px] sm:min-h-[76px]";
+      return "p-2.5";
+  }
+}
+
+export function shelfIconClass(size: PosShelfSize): string {
+  switch (size) {
+    case "large":
+      return "text-[2.75rem] leading-none sm:text-5xl";
+    case "medium":
+      return "text-3xl leading-none sm:text-4xl";
+    default:
+      return "text-xl leading-none sm:text-2xl";
+  }
+}
+
+export function shelfTitleClass(size: PosShelfSize): string {
+  switch (size) {
+    case "large":
+      return "text-xl font-black leading-[1.05] sm:text-2xl lg:text-[1.65rem]";
+    case "medium":
+      return "text-base font-black leading-tight sm:text-lg lg:text-xl";
+    default:
+      return "text-xs font-black leading-tight sm:text-sm";
+  }
+}
+
+export function shelfCountClass(size: PosShelfSize): string {
+  switch (size) {
+    case "large":
+      return "text-xs font-bold opacity-80 sm:text-sm";
+    case "medium":
+      return "text-[11px] font-bold opacity-75 sm:text-xs";
+    default:
+      return "text-[10px] font-bold opacity-70 sm:text-[11px]";
   }
 }
 
@@ -209,6 +321,7 @@ export function updateShelfLayoutEntry(
   const prev = layout[key] ?? {};
   const next: PosShelfLayoutConfig = { ...prev, ...patch };
   if (patch.badge === null) next.badge = null;
+  if ("customColor" in patch && patch.customColor === undefined) delete next.customColor;
   return { ...layout, [key]: next };
 }
 

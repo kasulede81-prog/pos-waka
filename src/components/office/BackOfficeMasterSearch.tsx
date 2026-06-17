@@ -49,19 +49,18 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
     [lang, modeTerm],
   );
 
-  const catalog = useMemo(
-    () =>
-      buildBackOfficeSearchCatalog({
-        lang,
-        role: actor.role,
-        preferences,
-        snapshot,
-        authMode,
-        t: translate,
-        canRecordExpense: canRecordCashExpenses(actor.role, preferences),
-      }),
-    [lang, actor.role, preferences, snapshot, authMode, translate],
-  );
+  const catalog = useMemo(() => {
+    if (!open && !query.trim()) return [] as ResolvedBackOfficeSearchEntry[];
+    return buildBackOfficeSearchCatalog({
+      lang,
+      role: actor.role,
+      preferences,
+      snapshot,
+      authMode,
+      t: translate,
+      canRecordExpense: canRecordCashExpenses(actor.role, preferences),
+    });
+  }, [lang, actor.role, preferences, snapshot, authMode, translate, open, query]);
 
   const results = useMemo(() => filterBackOfficeSearch(catalog, query), [catalog, query]);
 

@@ -222,7 +222,7 @@ function PaymentBlock({
               }}
               className={clsx(
                 "rounded-xl border font-black leading-tight",
-                dockMode || compact ? "min-h-[34px] px-1 text-[10px]" : "min-h-[48px] rounded-2xl text-sm",
+                dockMode ? "min-h-[38px] px-1 text-[11px]" : compact ? "min-h-[34px] px-1 text-[10px]" : "min-h-[48px] rounded-2xl text-sm",
                 paymentMethod === method
                   ? "border-waka-400 bg-waka-100 text-waka-950"
                   : "border-stone-200 bg-white text-stone-700",
@@ -252,7 +252,7 @@ function PaymentBlock({
             onClick={() => onCheckoutAmountField("cash")}
             className={clsx(
               amountBtnClass,
-              dockMode && "mt-1 min-h-[36px] rounded-lg px-2.5 py-1.5 text-base",
+              dockMode && "mt-1 min-h-[42px] rounded-lg px-2.5 py-2 text-lg",
               checkoutAmountField === "cash"
                 ? "border-waka-500 bg-waka-50 text-slate-900"
                 : "border-slate-200 bg-white text-slate-900",
@@ -774,7 +774,7 @@ export function PosCheckoutPanel({
         </div>
       ) : isCompact ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="max-h-[min(28dvh,11rem)] min-h-0 shrink-0 overflow-y-auto overscroll-y-contain border-b border-waka-200 px-3 py-2 [-webkit-overflow-scrolling:touch]">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain border-b border-waka-200 px-3 py-2.5 [-webkit-overflow-scrolling:touch]">
             <CartDockBody
               lang={lang}
               draftLines={draftLines}
@@ -790,10 +790,10 @@ export function PosCheckoutPanel({
               onOpenCartDiscount={onOpenCartDiscount}
             />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 pt-2 [-webkit-overflow-scrolling:touch]">
+          <div className="shrink-0 px-3 py-1.5">
             <PaymentBlock {...paymentProps} />
           </div>
-          <div className="mt-auto shrink-0 border-t border-waka-200 bg-white px-3 py-2 pb-[max(0.375rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+          <div className="shrink-0 border-t border-waka-200 bg-white px-3 py-2 pb-[max(0.375rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
             {canSavePending && paymentMethod !== "credit" ? (
               <button
                 type="button"

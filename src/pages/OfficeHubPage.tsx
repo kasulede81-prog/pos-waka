@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
@@ -23,6 +23,9 @@ import {
   Shield,
   ClipboardList,
   LayoutGrid,
+  Settings,
+  UserCog,
+  Receipt,
 } from "lucide-react";
 import { canSeeOfficeProfit } from "../lib/homeProfit";
 import type { Language, Permission } from "../types";
@@ -35,10 +38,7 @@ import { OfficePremiumSection } from "../components/office/OfficePremiumSection"
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { OfficeCloseDayCard } from "../components/office/OfficeCloseDayCard";
-import { OfficeSupplierSummaryCard } from "../components/office/OfficeSupplierSummaryCard";
-import { OfficeRestockSuggestionsCard } from "../components/office/OfficeRestockSuggestionsCard";
-import { OfficeNeedsAttentionBadge } from "../components/office/OfficeNeedsAttentionBadge";
-import { useOwnerRiskCards } from "../hooks/useOwnerRiskCards";
+import { runWhenIdle } from "../lib/uiYield";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -49,6 +49,13 @@ import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { tTemplate } from "../lib/i18n";
+
+const OfficeHubDeferredCards = lazy(() =>
+  import("../components/office/OfficeHubDeferredCards").then((m) => ({ default: m.OfficeHubDeferredCards })),
+);
+const OfficeHubRiskBadge = lazy(() =>
+  import("../components/office/OfficeHubRiskBadge").then((m) => ({ default: m.OfficeHubRiskBadge })),
+);
 
 /** One-line upload status in the office header — details live under Save & upload. */
 function OfficeSyncStatusChip({ lang }: { lang: Language }) {
@@ -94,20 +101,29 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const syncAttention = sync.pendingCount > 0 || countSalesWithSyncErrors() > 0;
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
   const [showAgentPortal, setShowAgentPortal] = useState(false);
+  const [showDeferredHub, setShowDeferredHub] = useState(false);
+
+  useEffect(() => {
+    runWhenIdle(() => setShowDeferredHub(true));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
-      if (!supabase) {
-        setShowInternalAdmin(false);
-        setShowAgentPortal(false);
-        return;
-      }
-      const [me, agent] = await Promise.all([fetchWakaInternalAdminMe(), fetchMarketingAgentMe()]);
-      if (cancelled) return;
-      setShowInternalAdmin(Boolean(me));
-      setShowAgentPortal(Boolean(agent));
-    })();
+    runWhenIdle(() => {
+      void (async () => {
+        if (!supabase) {
+          if (!cancelled) {
+            setShowInternalAdmin(false);
+            setShowAgentPortal(false);
+          }
+          return;
+        }
+        const [me, agent] = await Promise.all([fetchWakaInternalAdminMe(), fetchMarketingAgentMe()]);
+        if (cancelled) return;
+        setShowInternalAdmin(Boolean(me));
+        setShowAgentPortal(Boolean(agent));
+      })();
+    });
     return () => {
       cancelled = true;
     };
@@ -118,9 +134,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const canRecordExpense = canRecordCashExpenses(actor.role, preferences);
   const canProfit =
     canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit");
+  const canShopSettings = can("settings.shop");
   const canOwnerDashboard = can("owner.dashboard");
   const canArrangeShelves = can("settings.shop") && can("stock.view");
-  const { totalCount: ownerRiskCount } = useOwnerRiskCards(lang, false);
+  const [showRiskBadge, setShowRiskBadge] = useState(false);
+
+  useEffect(() => {
+    if (!canOwnerDashboard) return;
+    runWhenIdle(() => setShowRiskBadge(true));
+  }, [canOwnerDashboard]);
 
   const hasDaily =
     can("customers.view") ||
@@ -129,16 +151,19 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     can("suppliers.view") ||
     can("day.close") ||
     canRecordExpense ||
-    (hospitalityMode && (can("hospitality.kitchen") || can("pending_sales.manage")));
+    (hospitalityMode && (can("hospitality.floor") || can("hospitality.kitchen") || can("pending_sales.manage"))) ||
+    (pharmacyMode && canShopSettings);
   const hasInsights =
     can("reports.view") ||
+    can("receipts.view") ||
     canProfit ||
     can("owner.dashboard") ||
     can("owner.activity");
+  const hasShopControl = can("settings.view") || canShopSettings;
   const hasData = can("settings.view") && canBackup;
   const hasHelp = true;
 
-  const empty = !hasDaily && !hasInsights && !hasData && !hasHelp;
+  const empty = !hasDaily && !hasInsights && !hasShopControl && !hasData && !hasHelp;
 
   const highlightCustomers = !pharmacyMode && !hospitalityMode && !wholesaleMode;
   const highlightPharmacyPatients = pharmacyMode;
@@ -154,7 +179,13 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         <div className="mt-2">
           <OfficeSyncStatusChip lang={lang} />
         </div>
-        {canOwnerDashboard ? <div className="mt-3"><OfficeNeedsAttentionBadge lang={lang} totalCount={ownerRiskCount} /></div> : null}
+        {canOwnerDashboard && showRiskBadge ? (
+          <div className="mt-3">
+            <Suspense fallback={null}>
+              <OfficeHubRiskBadge lang={lang} />
+            </Suspense>
+          </div>
+        ) : null}
       </header>
 
       <OfficePremiumSection lang={lang} />
@@ -165,6 +196,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         <div className="space-y-6">
           {hasDaily ? (
             <OfficeNavSection title={t(lang, "officeSectionDaily")}>
+              {hospitalityMode && can("hospitality.floor") ? (
+                <OfficeNavCard
+                  to="/settings/floor"
+                  title={t(lang, "floorSetupTitle")}
+                  subtitle={t(lang, "floorSetupSub")}
+                  Icon={LayoutGrid}
+                  highlight
+                />
+              ) : null}
               {hospitalityMode && can("hospitality.kitchen") ? (
                 <OfficeNavCard
                   to="/kitchen"
@@ -184,13 +224,22 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                 />
               ) : null}
               {can("customers.view") && highlightCustomers ? (
-                <OfficeNavCard
-                  to="/debts"
-                  title={t(lang, "debts")}
-                  subtitle={t(lang, "debtsHelp")}
-                  Icon={Banknote}
-                  highlight
-                />
+                <>
+                  <OfficeNavCard
+                    to="/customers"
+                    title={t(lang, "customers")}
+                    subtitle={t(lang, "officeCardCustomersSub")}
+                    Icon={Users}
+                    highlight
+                  />
+                  <OfficeNavCard
+                    to="/debts"
+                    title={t(lang, "debts")}
+                    subtitle={t(lang, "debtsHelp")}
+                    Icon={Banknote}
+                    highlight
+                  />
+                </>
               ) : null}
               {can("customers.view") && highlightPharmacyPatients ? (
                 <OfficeNavCard
@@ -207,6 +256,15 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   title={wt("customers")}
                   subtitle={t(lang, "wholesalePage_receivables")}
                   Icon={Users}
+                  highlight
+                />
+              ) : null}
+              {pharmacyMode && canShopSettings ? (
+                <OfficeNavCard
+                  to="/settings/pharmacy"
+                  title={t(lang, "settingsHubPharmacy")}
+                  subtitle={t(lang, "settingsHubPharmacySub")}
+                  Icon={Pill}
                   highlight
                 />
               ) : null}
@@ -274,13 +332,28 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                   <OfficeCloseDayCard lang={lang} highlight={highlightCloseDay} />
                 </>
               ) : null}
-              {can("suppliers.view") ? <OfficeSupplierSummaryCard lang={lang} /> : null}
-              {can("purchases.record") ? <OfficeRestockSuggestionsCard lang={lang} /> : null}
+              {showDeferredHub ? (
+                <Suspense fallback={null}>
+                  <OfficeHubDeferredCards
+                    lang={lang}
+                    showSuppliers={can("suppliers.view")}
+                    showRestock={can("purchases.record")}
+                  />
+                </Suspense>
+              ) : null}
             </OfficeNavSection>
           ) : null}
 
           {hasInsights ? (
             <OfficeNavSection title={t(lang, "officeSectionInsights")}>
+              {can("receipts.view") ? (
+                <OfficeNavCard
+                  to="/receipts"
+                  title={t(lang, "receipts")}
+                  subtitle={t(lang, "officeCardReceiptsSub")}
+                  Icon={Receipt}
+                />
+              ) : null}
               {can("reports.view") ? (
                 <OfficeNavCard
                   to="/reports"
@@ -339,6 +412,27 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
                     Icon={ScrollText}
                   />
                 </>
+              ) : null}
+            </OfficeNavSection>
+          ) : null}
+
+          {hasShopControl ? (
+            <OfficeNavSection title={t(lang, "officeSectionShopControl")}>
+              {canShopSettings ? (
+                <OfficeNavCard
+                  to="/staff-access"
+                  title={t(lang, "officeCardStaffAccess")}
+                  subtitle={t(lang, "officeCardStaffAccessSub")}
+                  Icon={UserCog}
+                />
+              ) : null}
+              {can("settings.view") ? (
+                <OfficeNavCard
+                  to="/settings"
+                  title={t(lang, "officeCardAppSettings")}
+                  subtitle={t(lang, "officeCardAppSettingsSub")}
+                  Icon={Settings}
+                />
               ) : null}
             </OfficeNavSection>
           ) : null}

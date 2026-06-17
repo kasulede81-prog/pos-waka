@@ -3,6 +3,8 @@ import {
   buildPosShelfDisplayCards,
   mergeShelfLayout,
   shelfGridSpanClass,
+  shelfGridSpanFromScale,
+  shelfMasonryGridClass,
   sortShelvesForDisplay,
   updateShelfLayoutEntry,
 } from "./posShelfLayout";
@@ -32,11 +34,13 @@ describe("posShelfLayout", () => {
   it("merges custom display name and featured size", () => {
     const merged = mergeShelfLayout(
       { key: "Drinks", label: "Drinks", count: 3, icon: "🥤" },
-      { displayName: "Soft Drinks", featured: true, size: "large", color: "blue" },
+      { displayName: "Soft Drinks", featured: true, scale: 88, color: "blue", customColor: "#3366cc" },
     );
     expect(merged.label).toBe("Soft Drinks");
     expect(merged.featured).toBe(true);
+    expect(merged.scale).toBe(88);
     expect(merged.size).toBe("large");
+    expect(merged.customColor).toBe("#3366cc");
     expect(merged.color).toBe("blue");
   });
 
@@ -64,6 +68,17 @@ describe("posShelfLayout", () => {
     expect(shelfGridSpanClass("large")).toContain("col-span-2");
     expect(shelfGridSpanClass("medium")).toContain("col-span-2");
     expect(shelfGridSpanClass("small")).toContain("col-span-1");
+  });
+
+  it("maps grid span from continuous scale", () => {
+    expect(shelfGridSpanFromScale(30)).toEqual({ col: 1, row: 1 });
+    expect(shelfGridSpanFromScale(55)).toEqual({ col: 2, row: 1 });
+    expect(shelfGridSpanFromScale(90)).toEqual({ col: 2, row: 2 });
+  });
+
+  it("exposes masonry grid with fixed row tracks", () => {
+    expect(shelfMasonryGridClass()).toContain("auto-rows-");
+    expect(shelfMasonryGridClass()).toContain("grid-flow-dense");
   });
 
   it("updates layout entry immutably", () => {
