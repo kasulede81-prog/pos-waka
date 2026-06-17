@@ -3,6 +3,9 @@
  */
 
 import type { Customer, DebtPayment, Sale } from "../types";
+import { dateKeyKampala } from "./datesUg";
+import type { DateFilterBounds } from "./dateFilters";
+import { dateMatchesFilter, saleMatchesFilter } from "./dateFilters";
 import { isCompletedSale } from "./saleStatus";
 
 export type CreditActivityKind = "credit_sale" | "debt_payment";
@@ -101,6 +104,28 @@ export function findOrphanDebtSales(sales: Sale[]): OrphanDebtSale[] {
       receiptSeq: s.receiptSeq,
     }))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function filterCreditActivityByBounds(
+  entries: CreditActivityEntry[],
+  bounds: DateFilterBounds,
+): CreditActivityEntry[] {
+  return entries.filter((e) => dateMatchesFilter(dateKeyKampala(e.at), bounds));
+}
+
+export function sumDebtPaymentsInBounds(
+  payments: DebtPayment[],
+  bounds: DateFilterBounds,
+): number {
+  return payments
+    .filter((p) => p.amountUgx > 0 && dateMatchesFilter(dateKeyKampala(p.createdAt), bounds))
+    .reduce((sum, p) => sum + p.amountUgx, 0);
+}
+
+export function sumCreditIssuedInBounds(sales: Sale[], bounds: DateFilterBounds): number {
+  return sales
+    .filter((s) => isCompletedSale(s) && s.debtUgx > 0 && saleMatchesFilter(s, bounds))
+    .reduce((sum, s) => sum + s.debtUgx, 0);
 }
 
 export function sumOrphanDebtUgx(sales: Sale[]): number {

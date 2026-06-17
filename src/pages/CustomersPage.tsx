@@ -1,10 +1,14 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
+import { ChevronDown, Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
   buildCreditActivityTimeline,
+  filterCreditActivityByBounds,
   findOrphanDebtSales,
+  sumCreditIssuedInBounds,
+  sumDebtPaymentsInBounds,
   sumOrphanDebtUgx,
 } from "../lib/customerDebtActivity";
 import { usePosStore } from "../store/usePosStore";
@@ -27,6 +31,11 @@ import { brandingFromDebtPayment } from "../lib/receiptBranding";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
+import { DebtsHeroCard } from "../components/debts/DebtsHeroCard";
+import { DebtCustomerRow } from "../components/debts/DebtCustomerRow";
+import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
+import { dateMatchesFilter } from "../lib/dateFilters";
+import { dateKeyKampala } from "../lib/datesUg";
 
 export function CustomersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -47,11 +56,11 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const addCustomer = usePosStore((s) => s.addCustomer);
   const addDebtPayment = usePosStore((s) => s.addDebtPayment);
   const assignOrphanDebtSale = usePosStore((s) => s.assignOrphanDebtSale);
+  const { filter, setFilter, bounds } = useReportingDateFilter();
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [payOpen, setPayOpen] = useState<string | null>(null);
-  const [payAmount, setPayAmount] = useState("");
+  const [orphanOpen, setOrphanOpen] = useState(false);
   const [assignCustomerBySale, setAssignCustomerBySale] = useState<Record<string, string>>({});
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const [debtReceiptCtx, setDebtReceiptCtx] = useState<DebtPaymentReceiptContext | null>(null);
@@ -62,6 +71,37 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const orphanDebts = useMemo(() => findOrphanDebtSales(sales), [sales]);
   const orphanDebtTotal = useMemo(() => sumOrphanDebtUgx(sales), [sales]);
 
+  const totalDebtUgx = useMemo(
+    () => customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
+    [customers],
+  );
+
+  const collectedUgx = useMemo(
+    () => sumDebtPaymentsInBounds(debtPayments, bounds),
+    [debtPayments, bounds],
+  );
+
+  const creditIssuedUgx = useMemo(
+    () => sumCreditIssuedInBounds(sales, bounds),
+    [sales, bounds],
+  );
+
+  const sortedCustomers = useMemo(() => {
+    return [...customers].sort((a, b) => {
+      if (b.debtBalanceUgx !== a.debtBalanceUgx) return b.debtBalanceUgx - a.debtBalanceUgx;
+      return a.name.localeCompare(b.name);
+    });
+  }, [customers]);
+
+  const customerTimelines = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof buildCreditActivityTimeline>>();
+    for (const c of customers) {
+      const full = buildCreditActivityTimeline(c.id, sales, debtPayments);
+      map.set(c.id, filterCreditActivityByBounds(full, bounds));
+    }
+    return map;
+  }, [customers, sales, debtPayments, bounds]);
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     addCustomer({ name: name.trim(), phone: phone.trim(), location: "Uganda" });
@@ -69,9 +109,8 @@ export function CustomersPage({ lang }: { lang: Language }) {
     setPhone("");
   };
 
-  const submitPay = (customerId: string) => {
-    const n = Math.floor(Number(payAmount.replace(/\D/g, "")) || 0);
-    const r = addDebtPayment(customerId, n);
+  const submitPay = (customerId: string, amountUgx: number) => {
+    const r = addDebtPayment(customerId, amountUgx);
     if (r.ok && r.payment) {
       const customer = usePosStore.getState().customers.find((c) => c.id === customerId);
       if (customer) {
@@ -89,12 +128,8 @@ export function CustomersPage({ lang }: { lang: Language }) {
           paper: preferences.receiptPaperSize ?? "80mm",
         });
       }
-      setPayOpen(null);
-      setPayAmount("");
     }
   };
-
-  const paymentsFor = (customerId: string) => debtPayments.filter((d) => d.customerId === customerId);
 
   const submitAssignOrphan = (saleId: string) => {
     const customerId = assignCustomerBySale[saleId]?.trim();
@@ -115,199 +150,152 @@ export function CustomersPage({ lang }: { lang: Language }) {
     }
   };
 
+  const orphanInRange = useMemo(
+    () => orphanDebts.filter((o) => dateMatchesFilter(dateKeyKampala(o.createdAt), bounds)),
+    [orphanDebts, bounds],
+  );
+
   if (!canView) {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <div className="space-y-5 pb-8">
-      <h1 className="text-3xl font-black text-slate-900">{modeTerm("debts")}</h1>
-      <p className="text-lg text-slate-600">{t(lang, "debtsHelp")}</p>
+    <div className="space-y-4 pb-8">
+      <div>
+        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{modeTerm("debts")}</h1>
+        <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "debtsHelp")}</p>
+      </div>
+
+      <DebtsHeroCard
+        lang={lang}
+        totalDebtUgx={totalDebtUgx}
+        collectedUgx={collectedUgx}
+        creditIssuedUgx={creditIssuedUgx}
+        filter={filter}
+        onFilterChange={setFilter}
+      />
 
       {orphanDebts.length > 0 ? (
-        <section className="rounded-3xl border-2 border-red-200 bg-red-50 p-5">
-          <p className="text-lg font-black text-red-950">{t(lang, "orphanDebtTitle")}</p>
-          <p className="mt-2 text-sm text-red-900">{t(lang, "orphanDebtHelp")}</p>
-          <p className="mt-3 text-2xl font-black text-red-950">
-            UGX {orphanDebtTotal.toLocaleString()} · {orphanDebts.length}{" "}
-            {orphanDebts.length === 1 ? t(lang, "orphanDebtSaleOne") : t(lang, "orphanDebtSaleMany")}
-          </p>
-          {assignMessage ? <p className="mt-2 text-sm font-bold text-red-900">{assignMessage}</p> : null}
-          <ul className="mt-3 space-y-3">
-            {orphanDebts.map((o) => (
-              <li key={o.saleId} className="rounded-2xl border border-red-200 bg-white/80 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-semibold text-red-950">
-                      {new Date(o.createdAt).toLocaleString()}
-                      {o.receiptSeq != null ? ` · #${o.receiptSeq}` : ""}
-                    </p>
-                    <p className="mt-1 text-lg font-black text-red-950">UGX {o.debtUgx.toLocaleString()}</p>
-                  </div>
-                </div>
-                {canDebt && customers.length > 0 ? (
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                    <select
-                      value={assignCustomerBySale[o.saleId] ?? ""}
-                      onChange={(e) =>
-                        setAssignCustomerBySale((prev) => ({ ...prev, [o.saleId]: e.target.value }))
-                      }
-                      className="min-h-[44px] flex-1 rounded-xl border-2 border-red-200 bg-white px-3 text-sm font-semibold text-slate-900"
-                      aria-label={t(lang, "orphanDebtAssignCustomer")}
-                    >
-                      <option value="">{t(lang, "orphanDebtAssignCustomer")}</option>
-                      {customers.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => submitAssignOrphan(o.saleId)}
-                      className="min-h-[44px] rounded-xl bg-red-900 px-4 text-sm font-black text-white"
-                    >
-                      {t(lang, "orphanDebtAssign")}
-                    </button>
-                  </div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <details
+          open={orphanOpen}
+          onToggle={(e) => setOrphanOpen((e.currentTarget as HTMLDetailsElement).open)}
+          className="overflow-hidden rounded-[1.35rem] border-2 border-red-200 bg-red-50"
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-red-950">{t(lang, "orphanDebtTitle")}</p>
+              <p className="text-xs font-semibold text-red-800">
+                UGX {orphanDebtTotal.toLocaleString()} · {orphanDebts.length}{" "}
+                {orphanDebts.length === 1 ? t(lang, "orphanDebtSaleOne") : t(lang, "orphanDebtSaleMany")}
+              </p>
+            </div>
+            <ChevronDown className={`h-5 w-5 shrink-0 text-red-700 transition-transform ${orphanOpen ? "rotate-180" : ""}`} />
+          </summary>
+          <div className="space-y-3 border-t border-red-200 px-4 py-3">
+            <p className="text-xs text-red-900">{t(lang, "orphanDebtHelp")}</p>
+            {assignMessage ? <p className="text-xs font-bold text-red-900">{assignMessage}</p> : null}
+            <ul className="space-y-2">
+              {(orphanInRange.length > 0 ? orphanInRange : orphanDebts).map((o) => (
+                <li key={o.saleId} className="rounded-xl border border-red-200 bg-white/90 p-3">
+                  <p className="text-xs font-semibold text-red-950">
+                    {new Date(o.createdAt).toLocaleString()}
+                    {o.receiptSeq != null ? ` · #${String(o.receiptSeq).padStart(3, "0")}` : ""}
+                  </p>
+                  <p className="mt-1 text-base font-black text-red-950">UGX {o.debtUgx.toLocaleString()}</p>
+                  {canDebt && customers.length > 0 ? (
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+                      <select
+                        value={assignCustomerBySale[o.saleId] ?? ""}
+                        onChange={(e) =>
+                          setAssignCustomerBySale((prev) => ({ ...prev, [o.saleId]: e.target.value }))
+                        }
+                        className="min-h-[44px] flex-1 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold"
+                        aria-label={t(lang, "orphanDebtAssignCustomer")}
+                      >
+                        <option value="">{t(lang, "orphanDebtAssignCustomer")}</option>
+                        {customers.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => submitAssignOrphan(o.saleId)}
+                        className="min-h-[44px] rounded-xl bg-red-900 px-4 text-sm font-black text-white"
+                      >
+                        {t(lang, "orphanDebtAssign")}
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
       ) : null}
+
+      <details className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2 text-sm font-black text-slate-900">
+            <Plus className="h-4 w-4 text-waka-600" aria-hidden />
+            {t(lang, "debtsAddPerson")}
+          </span>
+          <ChevronDown className="h-5 w-5 text-stone-400" />
+        </summary>
+        <form onSubmit={submit} className="space-y-3 border-t border-stone-100 px-4 py-4">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t(lang, "personNamePh")}
+            required
+            className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-semibold"
+          />
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder={t(lang, "personPhonePh")}
+            className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-semibold"
+          />
+          <button type="submit" className="w-full rounded-xl bg-slate-900 py-3 text-base font-black text-white">
+            {modeTerm("addCustomer")}
+          </button>
+        </form>
+      </details>
 
       {customers.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-amber-200 bg-amber-50/50 p-6 text-center">
-          <p className="text-xl font-black text-slate-900">{modeTerm("customersEmptyTitle")}</p>
-          <p className="mt-2 text-base text-slate-700">{modeTerm("customersEmptySub")}</p>
+        <section className="rounded-[1.35rem] border border-dashed border-amber-200 bg-amber-50/50 p-6 text-center">
+          <p className="text-lg font-black text-slate-900">{modeTerm("customersEmptyTitle")}</p>
+          <p className="mt-1 text-sm text-slate-600">{modeTerm("customersEmptySub")}</p>
         </section>
       ) : null}
 
-      <form onSubmit={submit} className="space-y-3 rounded-3xl border-2 border-slate-100 bg-white p-5">
-        <p className="font-black text-slate-900">{t(lang, "addPersonShort")}</p>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t(lang, "personNamePh")}
-          required
-          className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-        />
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder={t(lang, "personPhonePh")}
-          className="w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
-        />
-        <button type="submit" className="w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white">
-          {modeTerm("addCustomer")}
-        </button>
-      </form>
-
-      {customers.map((c) => {
-        const timeline = buildCreditActivityTimeline(c.id, sales, debtPayments);
-        const repaymentOnly = paymentsFor(c.id);
-        return (
-          <article key={c.id} className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-2xl font-black text-slate-900">{c.name}</p>
-                <p className="text-slate-500">{c.phone || t(lang, "debtNoPhone")}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold uppercase text-amber-800">{t(lang, "debtBalanceLabel")}</p>
-                <p className="text-3xl font-black text-amber-900">UGX {c.debtBalanceUgx.toLocaleString()}</p>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
-              <p className="font-bold text-slate-900">{t(lang, "creditActivityTitle")}</p>
-              <p className="mt-1 text-sm text-slate-600">
-                {t(lang, "creditActivityBalance")}: UGX {c.debtBalanceUgx.toLocaleString()}
-              </p>
-              {timeline.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-500">{t(lang, "creditActivityEmpty")}</p>
-              ) : (
-                <ul className="mt-3 space-y-2">
-                  {timeline.map((entry) => (
-                    <li
-                      key={`${entry.kind}-${entry.id}`}
-                      className="flex items-start justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm"
-                    >
-                      <div>
-                        <p className="font-bold text-slate-800">
-                          {entry.kind === "credit_sale"
-                            ? t(lang, "creditSaleActivity")
-                            : t(lang, "debtPaymentActivity")}
-                          {entry.receiptSeq != null ? ` #${entry.receiptSeq}` : ""}
-                        </p>
-                        <p className="text-slate-500">{new Date(entry.at).toLocaleString()}</p>
-                      </div>
-                      <span
-                        className={`shrink-0 font-black ${
-                          entry.deltaUgx >= 0 ? "text-amber-900" : "text-waka-800"
-                        }`}
-                      >
-                        {entry.deltaUgx >= 0 ? "+" : "−"}UGX {entry.amountUgx.toLocaleString()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {canDebt ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPayOpen(payOpen === c.id ? null : c.id);
-                    setPayAmount("");
-                  }}
-                  className="mt-4 w-full rounded-2xl bg-waka-600 py-3 text-lg font-black text-white"
-                >
-                  {t(lang, "repayDebt")}
-                </button>
-                {payOpen === c.id && (
-                  <div className="mt-4 rounded-2xl border-2 border-waka-200 bg-waka-50 p-4">
-                    <label className="block font-bold text-waka-950">{t(lang, "payDown")}</label>
-                    <input
-                      value={payAmount}
-                      onChange={(e) => setPayAmount(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                      inputMode="numeric"
-                      className="mt-2 w-full rounded-xl border-2 border-waka-300 px-3 py-3 text-2xl font-black"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => submitPay(c.id)}
-                      className="mt-3 w-full rounded-xl bg-waka-700 py-3 font-black text-white"
-                    >
-                      {t(lang, "saveSale")}
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : null}
-
-            {repaymentOnly.length > 0 ? (
-              <div className="mt-4">
-                <p className="font-bold text-slate-800">{t(lang, "repaymentHistory")}</p>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {repaymentOnly.map((p) => (
-                    <li key={p.id} className="flex justify-between text-slate-600">
-                      <span>{new Date(p.createdAt).toLocaleString()}</span>
-                      <span className="font-bold text-waka-800">−UGX {p.amountUgx.toLocaleString()}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </article>
-        );
-      })}
+      {sortedCustomers.length > 0 ? (
+        <section className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
+          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+            <h2 className="text-base font-black text-slate-950">{modeTerm("customers")}</h2>
+            <p className="text-xs font-bold text-slate-500">{sortedCustomers.length}</p>
+          </div>
+          {sortedCustomers.map((c, index) => (
+            <DebtCustomerRow
+              key={c.id}
+              lang={lang}
+              customer={c}
+              timeline={customerTimelines.get(c.id) ?? []}
+              canDebt={canDebt}
+              toneIndex={index}
+              onSubmitPay={submitPay}
+            />
+          ))}
+        </section>
+      ) : null}
 
       {debtReceiptCtx ? (
-        <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center" role="dialog" aria-modal>
+        <div
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal
+        >
           <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
             <h2 className="text-lg font-black text-stone-900">{t(lang, "payDown")}</h2>
             <p className="mt-1 text-sm text-stone-600">{debtReceiptCtx.customer.name}</p>
@@ -315,12 +303,20 @@ export function CustomersPage({ lang }: { lang: Language }) {
               <DocumentActionsBar
                 lang={lang}
                 compact
-                onPrint={() => void printDebtPaymentReceipt(debtReceiptCtx).then((r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")))}
+                onPrint={() =>
+                  void printDebtPaymentReceipt(debtReceiptCtx).then(
+                    (r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")),
+                  )
+                }
                 onDownloadPdf={() =>
-                  void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+                  void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then(
+                    (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
+                  )
                 }
                 onSharePdf={() =>
-                  void shareDebtPaymentReceiptPdf(debtReceiptCtx).then((ok) => !ok && window.alert(t(lang, "receiptPdfFailed")))
+                  void shareDebtPaymentReceiptPdf(debtReceiptCtx).then(
+                    (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
+                  )
                 }
               />
             </div>
