@@ -1,6 +1,9 @@
 import type { Language, SellingMode } from "../types";
+import type { Product } from "../types";
 import { t } from "./i18n";
 import { inferFromProductName } from "./smartProductGuess";
+import { stockBreakdown } from "./sellingEngine";
+import type { WizardPrefillFromAi } from "./ai/mapAiSuggestionToWizard";
 
 /** How customers buy one item at the till. */
 export type SellUnitKind = "piece" | "bottle" | "packet" | "kg" | "litre" | "custom";
@@ -64,6 +67,41 @@ export function packKindLabel(kind: PackKind, custom: string, lang: Language): s
   if (kind === "custom") return custom.trim() || t(lang, "packKind_custom");
   const row = PACK_TYPE_OPTIONS.find((o) => o.id === kind);
   return row ? t(lang, row.labelKey as "packKind_crate") : kind;
+}
+
+export function packKindFromBuyingUnit(raw: string | null | undefined): { kind: PackKind; custom: string } {
+  if (!raw) return { kind: "crate", custom: "" };
+  const label = raw.split("·")[0]?.trim().toLowerCase() ?? "";
+  const found = PACK_TYPE_OPTIONS.find((o) => o.id === label);
+  if (found) return { kind: found.id, custom: "" };
+  return { kind: "custom", custom: label };
+}
+
+/** Prefill the simple add wizard when editing an existing product. */
+export function productToWizardPrefill(product: Product, _lang: Language): WizardPrefillFromAi {
+  const su = parseSellUnitFromBaseUnit(product.baseUnit);
+  const breakdown = stockBreakdown(product);
+  const pk = packKindFromBuyingUnit(product.buyingUnit);
+  const hasPack = breakdown.hasPackTracking;
+  const rate = product.conversionRate && product.conversionRate > 1 ? product.conversionRate : 24;
+  const stockCount = hasPack ? String(breakdown.fullPacks) : String(Math.floor(product.stockOnHand));
+  let buyPackPrice = "";
+  if (hasPack && rate > 0 && product.costPricePerUnitUgx >= 0) {
+    buyPackPrice = String(Math.floor(product.costPricePerUnitUgx * rate));
+  }
+  return {
+    name: product.name,
+    shelf: (product.category ?? "").trim(),
+    sellUnit: su.kind,
+    sellUnitCustom: su.custom,
+    hasPack,
+    packKind: pk.kind,
+    packCustom: pk.custom,
+    piecesPerPack: hasPack ? String(rate) : "",
+    stockCount,
+    sellPrice: String(Math.floor(product.sellingPricePerUnitUgx)),
+    buyPackPrice,
+  };
 }
 
 export function baseUnitFromSellKind(kind: SellUnitKind): string {

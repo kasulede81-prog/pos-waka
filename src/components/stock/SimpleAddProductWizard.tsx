@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 import clsx from "clsx";
-import type { Language } from "../../types";
+import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { shelfIconFor } from "../../lib/productCategories";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
@@ -19,6 +19,7 @@ import {
   type PackKind,
   type SellUnitKind,
 } from "../../lib/simpleProductWizard";
+import { validateAuditReason } from "../../lib/auditReasons";
 import type { WizardPrefillFromAi } from "../../lib/ai/mapAiSuggestionToWizard";
 
 export type SimpleAddWizardStep =
@@ -44,9 +45,10 @@ type Props = {
   shelves: string[];
   generalCategoryLabel: string;
   disabled?: boolean;
-  onSave: (payload: BuiltWizardProduct | null) => boolean;
+  onSave: (payload: BuiltWizardProduct | null, opts?: { auditReason?: string }) => boolean;
   prefill?: SimpleAddWizardPrefill;
   initialStep?: SimpleAddWizardStep;
+  editingProduct?: Product | null;
 };
 
 function applyWizardPrefill(
@@ -93,9 +95,9 @@ function applyWizardPrefill(
   setters.setPackKind(prefill.packKind ?? "crate");
   setters.setPackCustom(prefill.packCustom ?? "");
   setters.setPiecesPerPack(prefill.piecesPerPack ?? "");
-  setters.setStockCount("");
-  setters.setSellPrice("");
-  setters.setBuyPackPrice("");
+  setters.setStockCount(prefill.stockCount ?? "");
+  setters.setSellPrice(prefill.sellPrice ?? "");
+  setters.setBuyPackPrice(prefill.buyPackPrice ?? "");
   setters.setSavedFlash(false);
 }
 
@@ -109,6 +111,7 @@ export function SimpleAddProductWizard({
   onSave,
   prefill,
   initialStep,
+  editingProduct = null,
 }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const [step, setStep] = useState<Step>("name");
@@ -125,7 +128,9 @@ export function SimpleAddProductWizard({
   const [stockCount, setStockCount] = useState("");
   const [sellPrice, setSellPrice] = useState("");
   const [buyPackPrice, setBuyPackPrice] = useState("");
+  const [auditReason, setAuditReason] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
+  const isEdit = editingProduct != null;
 
   const unitLabel = sellUnitLabel(sellUnit, lang, sellUnitCustom);
   const packLabel = packKindLabel(packKind, packCustom, lang);
@@ -139,6 +144,13 @@ export function SimpleAddProductWizard({
   const costPerUnit = wizardCostPerSellUnitUgx(packPriceN, piecesN);
   const profitPerUnit = profitPerSellUnitUgx(sellPriceN, costPerUnit);
   const totalPieces = hasPack ? stockN * piecesN : stockN;
+
+  const needsAuditReason = useMemo(() => {
+    if (!editingProduct) return false;
+    const priceChanged = sellPriceN !== Math.floor(editingProduct.sellingPricePerUnitUgx);
+    const stockChanged = totalPieces !== Math.floor(editingProduct.stockOnHand);
+    return priceChanged || stockChanged;
+  }, [editingProduct, sellPriceN, totalPieces]);
 
   const reset = () => {
     setStep("name");
@@ -155,6 +167,7 @@ export function SimpleAddProductWizard({
     setStockCount("");
     setSellPrice("");
     setBuyPackPrice("");
+    setAuditReason("");
     setSavedFlash(false);
   };
 
@@ -223,9 +236,11 @@ export function SimpleAddProductWizard({
       case "stock":
         return true;
       case "sellPrice":
-        return sellPriceN > 0;
-      case "buyPrice":
+        if (sellPriceN <= 0) return false;
+        if (!hasPack && needsAuditReason) return validateAuditReason(auditReason);
         return true;
+      case "buyPrice":
+        return !needsAuditReason || validateAuditReason(auditReason);
       default:
         return false;
     }
@@ -249,7 +264,7 @@ export function SimpleAddProductWizard({
       lang,
     );
     if (!built) return;
-    const ok = onSave(built);
+    const ok = onSave(built, needsAuditReason ? { auditReason } : undefined);
     if (!ok) return;
     if (addAnother) {
       setSavedFlash(true);
@@ -306,7 +321,9 @@ export function SimpleAddProductWizard({
               <p className="text-xs font-bold uppercase tracking-wide text-waka-700">
                 {tTemplate(lang, "simpleAddStepOf", { n: String(stepIndex + 1), total: String(STEPS.length) })}
               </p>
-              <p className="truncate text-lg font-black text-slate-900">{t(lang, "simpleAddTitle")}</p>
+              <p className="truncate text-lg font-black text-slate-900">
+                {t(lang, isEdit ? "simpleAddEditTitle" : "simpleAddTitle")}
+              </p>
             </div>
             <button
               type="button"
@@ -564,6 +581,17 @@ export function SimpleAddProductWizard({
                   })}
                 </p>
               ) : null}
+              {step === "sellPrice" && !hasPack && needsAuditReason ? (
+                <label className="mt-3 block space-y-1">
+                  <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+                  <textarea
+                    value={auditReason}
+                    onChange={(e) => setAuditReason(e.target.value)}
+                    className="min-h-[72px] w-full rounded-2xl border-2 border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-waka-500"
+                    placeholder={t(lang, "auditReasonPlaceholder")}
+                  />
+                </label>
+              ) : null}
             </div>
           ) : null}
 
@@ -603,6 +631,17 @@ export function SimpleAddProductWizard({
                   })}
                 </p>
               ) : null}
+              {isLastStep && needsAuditReason ? (
+                <label className="mt-3 block space-y-1">
+                  <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+                  <textarea
+                    value={auditReason}
+                    onChange={(e) => setAuditReason(e.target.value)}
+                    className="min-h-[72px] w-full rounded-2xl border-2 border-slate-200 px-3 py-2 text-sm font-semibold outline-none focus:border-waka-500"
+                    placeholder={t(lang, "auditReasonPlaceholder")}
+                  />
+                </label>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -616,16 +655,18 @@ export function SimpleAddProductWizard({
                 onClick={() => handleSave(false)}
                 className="min-h-[56px] rounded-2xl bg-waka-600 text-xl font-black text-white shadow-md disabled:opacity-50"
               >
-                {t(lang, "simpleAddSave")}
+                {t(lang, isEdit ? "simpleAddSaveChanges" : "simpleAddSave")}
               </button>
-              <button
-                type="button"
-                disabled={disabled || !canNext()}
-                onClick={() => handleSave(true)}
-                className="min-h-[48px] rounded-2xl border-2 border-waka-300 text-base font-black text-waka-900 disabled:opacity-50"
-              >
-                {t(lang, "simpleAddAddAnother")}
-              </button>
+              {!isEdit ? (
+                <button
+                  type="button"
+                  disabled={disabled || !canNext()}
+                  onClick={() => handleSave(true)}
+                  className="min-h-[48px] rounded-2xl border-2 border-waka-300 text-base font-black text-waka-900 disabled:opacity-50"
+                >
+                  {t(lang, "simpleAddAddAnother")}
+                </button>
+              ) : null}
             </div>
           ) : (
             <button

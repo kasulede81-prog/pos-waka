@@ -10,6 +10,9 @@ export type WizardPrefillFromAi = {
   packKind: PackKind;
   packCustom: string;
   piecesPerPack: string;
+  stockCount?: string;
+  sellPrice?: string;
+  buyPackPrice?: string;
 };
 
 const PACK_KINDS: PackKind[] = ["crate", "carton", "box", "sack", "pack", "tray", "bale", "custom"];

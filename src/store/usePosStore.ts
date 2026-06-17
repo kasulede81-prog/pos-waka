@@ -3908,6 +3908,12 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         ? p.cashVarianceThresholdUgxFixed
         : base.cashVarianceThresholdUgxFixed ?? 10_000,
     lastAutoBackupDateKey: p.lastAutoBackupDateKey ?? base.lastAutoBackupDateKey,
+    ownerRisksReviewedAt:
+      p.ownerRisksReviewedAt === undefined
+        ? (base.ownerRisksReviewedAt ?? null)
+        : p.ownerRisksReviewedAt === null
+          ? null
+          : String(p.ownerRisksReviewedAt),
     activeBranchId:
       p.activeBranchId === undefined
         ? (base.activeBranchId ?? null)

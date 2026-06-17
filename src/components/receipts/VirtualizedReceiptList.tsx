@@ -2,20 +2,26 @@ import { useRef, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
 const VIRTUALIZE_THRESHOLD = 15;
-const ESTIMATE_ROW_PX = 220;
+const DEFAULT_ESTIMATE_ROW_PX = 220;
 
 type Props<T> = {
   items: T[];
   renderItem: (item: T, index: number) => ReactNode;
   getKey: (item: T, index: number) => string;
+  estimateRowPx?: number;
 };
 
-export function VirtualizedReceiptList<T>({ items, renderItem, getKey }: Props<T>) {
+export function VirtualizedReceiptList<T>({
+  items,
+  renderItem,
+  getKey,
+  estimateRowPx = DEFAULT_ESTIMATE_ROW_PX,
+}: Props<T>) {
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => ESTIMATE_ROW_PX,
+    estimateSize: () => estimateRowPx,
     overscan: 4,
   });
 

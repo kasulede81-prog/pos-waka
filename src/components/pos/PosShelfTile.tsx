@@ -45,56 +45,36 @@ function ShelfTileBody({
 }): ReactNode {
   const layoutSize = scaleToShelfSize(shelf.scale);
   const arrangePad = isArrange ? "pr-7" : "";
-  const titleStyle: CSSProperties = { fontSize: `${typo.titleRem}rem`, fontWeight: 900, lineHeight: 1.1 };
+  const titleStyle: CSSProperties = { fontSize: `${typo.titleRem}rem`, fontWeight: 900, lineHeight: 1.08 };
   const countStyle: CSSProperties = { fontSize: `${typo.countRem}rem`, fontWeight: 700, opacity: 0.78 };
   const iconStyle: CSSProperties = { fontSize: `${typo.iconRem}rem`, lineHeight: 1 };
 
   if (layoutSize === "large") {
     return (
-      <span className={clsx("flex h-full min-h-0 flex-col justify-between", arrangePad)}>
-        <span className="flex flex-1 items-center justify-center pt-0.5" aria-hidden>
-          <span style={iconStyle}>{shelf.icon ?? "📦"}</span>
+      <span className={clsx("flex h-full min-h-0 flex-col justify-center overflow-hidden text-center", arrangePad)}>
+        <span className="line-clamp-3 break-words" style={titleStyle}>
+          {shelf.label}
         </span>
-        <span className="min-w-0">
-          <span className="block break-words" style={titleStyle}>
-            {shelf.label}
-          </span>
-          <span className="mt-1 block" style={countStyle}>
-            {countLabel}
-          </span>
-        </span>
-      </span>
-    );
-  }
-
-  if (layoutSize === "medium") {
-    return (
-      <span className={clsx("flex h-full min-h-0 items-stretch gap-2.5 sm:gap-3", arrangePad)}>
-        <span className="flex shrink-0 items-center self-center" style={iconStyle} aria-hidden>
+        <span className="mt-1 shrink-0 opacity-80" style={iconStyle} aria-hidden>
           {shelf.icon ?? "📦"}
         </span>
-        <span className="flex min-w-0 flex-1 flex-col justify-center">
-          <span className="line-clamp-2 break-words" style={titleStyle}>
-            {shelf.label}
-          </span>
-          <span className="mt-0.5" style={countStyle}>
-            {countLabel}
-          </span>
+        <span className="mt-1 shrink-0 truncate" style={countStyle}>
+          {countLabel}
         </span>
       </span>
     );
   }
 
   return (
-    <span className={clsx("flex h-full min-h-0 flex-col justify-between gap-1", arrangePad)}>
-      <span style={iconStyle} aria-hidden>
+    <span className={clsx("flex h-full min-h-0 items-center gap-1.5 overflow-hidden sm:gap-2", arrangePad)}>
+      <span className="shrink-0 leading-none opacity-85" style={iconStyle} aria-hidden>
         {shelf.icon ?? "📦"}
       </span>
-      <span className="min-w-0">
+      <span className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
         <span className="line-clamp-2 break-words" style={titleStyle}>
           {shelf.label}
         </span>
-        <span className="mt-0.5 block" style={countStyle}>
+        <span className="mt-0.5 truncate" style={countStyle}>
           {countLabel}
         </span>
       </span>
@@ -147,7 +127,7 @@ export function PosShelfTile({
   );
 
   const sharedClass = clsx(
-    "relative w-full touch-manipulation rounded-2xl border text-left shadow-sm transition-all",
+    "relative w-full touch-manipulation overflow-hidden rounded-2xl border text-left shadow-sm transition-all",
     heightClass,
     colorClass,
     selected && "ring-2 ring-waka-500 ring-offset-1",

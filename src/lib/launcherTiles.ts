@@ -46,9 +46,9 @@ export const LAUNCHER_TILE_CATALOG: LauncherTileDef[] = [
     hideable: true,
   },
   {
-    id: "customers",
-    labelKey: "desktopHomeTileCustomers",
-    to: "/customers",
+    id: "debts",
+    labelKey: "debts",
+    to: "/debts",
     Icon: Users,
     perm: "customers.view",
     group: "operational",

@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Download, FileText, Search, ShieldCheck } from "lucide-react";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
 import { t, tTemplate } from "../lib/i18n";
+import { useMarkOwnerRisksReviewed } from "../hooks/useMarkOwnerRisksReviewed";
 import { PageHeader } from "../components/layout/PageHeader";
 import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
 import { DateFilterBar } from "../components/shared/DateFilterBar";
@@ -111,6 +112,7 @@ function AuditTimelineList({
 }
 
 export function AuditCenterPage({ lang }: { lang: Language }) {
+  useMarkOwnerRisksReviewed();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseAuditTab(searchParams.get("tab"));
   const [includeArchived, setIncludeArchived] = useState(false);

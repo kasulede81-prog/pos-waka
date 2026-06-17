@@ -808,6 +808,8 @@ export type ShopPreferences = {
   cashVarianceThresholdUgxFixed?: number;
   /** Kampala date key (YYYY-MM-DD) of last automatic daily backup written */
   lastAutoBackupDateKey?: string;
+  /** When the owner last opened Investigation / risks (ISO). Hides launcher badges until new events. */
+  ownerRisksReviewedAt?: string | null;
   /**
    * Multi-branch (future): when set, rows may be tagged with this id for sync and dashboards.
    * Single-shop installs leave these unset.

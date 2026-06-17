@@ -144,6 +144,58 @@ export function sumOwnerRiskCardCounts(cards: OwnerRiskCard[]): number {
   return cards.reduce((sum, c) => sum + c.count, 0);
 }
 
+function payloadNum(pl: Record<string, unknown>, key: string): number {
+  const v = pl[key];
+  return typeof v === "number" && Number.isFinite(v) ? Math.max(0, v) : 0;
+}
+
+function isRiskAuditEntry(entry: AuditLogEntry): boolean {
+  switch (entry.action) {
+    case "product_remove":
+    case "price_change":
+    case "stock_adjust":
+    case "back_office_unlock_failed":
+    case "cash_expense_created":
+    case "cash_expense_approved":
+    case "cash_expense_voided":
+      return true;
+    case "discount_given":
+      return payloadNum(entry.payload, "discountUgx") >= LARGE_DISCOUNT_UGX_THRESHOLD;
+    default:
+      return false;
+  }
+}
+
+/** Risk events after the owner last opened Investigation. */
+export function countUnseenOwnerRiskEvents(input: {
+  todayAuditLogs: AuditLogEntry[];
+  todayReturns: ReturnRecord[];
+  todayVoids: VoidRecord[];
+  reviewedAt?: string | null;
+}): number {
+  const reviewedMs = input.reviewedAt ? Date.parse(input.reviewedAt) : Number.NaN;
+  if (!Number.isFinite(reviewedMs)) {
+    return (
+      input.todayAuditLogs.filter(isRiskAuditEntry).length +
+      input.todayReturns.length +
+      input.todayVoids.length
+    );
+  }
+
+  let count = 0;
+  for (const entry of input.todayAuditLogs) {
+    if (!isRiskAuditEntry(entry)) continue;
+    if (Date.parse(entry.at) > reviewedMs) count += 1;
+  }
+  for (const record of input.todayReturns) {
+    if (Date.parse(record.createdAt) > reviewedMs) count += 1;
+  }
+  for (const record of input.todayVoids) {
+    if (Date.parse(record.createdAt) > reviewedMs) count += 1;
+  }
+  return count;
+}
+
 const RISK_TITLE_KEYS: Record<OwnerRiskCardKind, Parameters<typeof t>[1]> = {
   product_deletions: "ownerRiskProductDeletions",
   price_changes: "ownerRiskPriceChanges",

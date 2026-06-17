@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuditLogEntry, ReturnRecord, VoidRecord } from "../types";
-import { buildOwnerRiskCards, LARGE_DISCOUNT_UGX_THRESHOLD } from "./ownerRiskDashboard";
+import { buildOwnerRiskCards, countUnseenOwnerRiskEvents, LARGE_DISCOUNT_UGX_THRESHOLD } from "./ownerRiskDashboard";
 
 const TODAY = "2026-06-11";
 
@@ -91,5 +91,27 @@ describe("owner risk dashboard", () => {
     });
     expect(cards.find((c) => c.kind === "returns")?.impactUgx).toBe(3_000);
     expect(cards.find((c) => c.kind === "voids")?.impactUgx).toBe(2_000);
+  });
+
+  it("hides reviewed risk events from unseen launcher count", () => {
+    const todayAuditLogs: AuditLogEntry[] = [
+      audit({ action: "price_change", at: `${TODAY}T09:00:00.000Z` }),
+      audit({ action: "product_remove", at: `${TODAY}T11:00:00.000Z` }),
+    ];
+    const unseenBefore = countUnseenOwnerRiskEvents({
+      todayAuditLogs,
+      todayReturns: [],
+      todayVoids: [],
+      reviewedAt: null,
+    });
+    expect(unseenBefore).toBe(2);
+
+    const unseenAfter = countUnseenOwnerRiskEvents({
+      todayAuditLogs,
+      todayReturns: [],
+      todayVoids: [],
+      reviewedAt: `${TODAY}T10:30:00.000Z`,
+    });
+    expect(unseenAfter).toBe(1);
   });
 });

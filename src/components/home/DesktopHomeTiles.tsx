@@ -42,7 +42,7 @@ type Props = { lang: Language };
 const FOCUS_ORDER = [
   "sell",
   "inventory",
-  "customers",
+  "debts",
   "shop",
   "salesHistory",
   "reports",
@@ -75,7 +75,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const { totalCount: riskCount } = useOwnerRiskCards(lang, false);
+  const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const products = usePosStore((s) => s.products);
   const { snapshot } = useSubscription();
 
@@ -116,12 +116,12 @@ export function DesktopHomeTiles({ lang }: Props) {
         variant: "secondary",
       },
       {
-        id: "customers",
-        labelKey: "desktopHomeTileCustomers",
-        to: "/customers",
+        id: "debts",
+        labelKey: "debts",
+        to: "/debts",
         Icon: Users,
         perm: "customers.view",
-        area: "customers",
+        area: "debts",
         variant: "secondary",
       },
       {
@@ -197,10 +197,10 @@ export function DesktopHomeTiles({ lang }: Props) {
     (id: string, event: React.KeyboardEvent<HTMLButtonElement>) => {
       const neighbors: Record<string, Partial<Record<string, string>>> = {
         sell: { ArrowRight: "inventory", ArrowDown: "shop" },
-        inventory: { ArrowLeft: "sell", ArrowDown: "customers", ArrowRight: "customers" },
-        customers: { ArrowLeft: "inventory", ArrowDown: "salesHistory" },
+        inventory: { ArrowLeft: "sell", ArrowDown: "debts", ArrowRight: "debts" },
+        debts: { ArrowLeft: "inventory", ArrowDown: "salesHistory" },
         shop: { ArrowLeft: "inventory", ArrowUp: "inventory", ArrowDown: "investigation", ArrowRight: "salesHistory" },
-        salesHistory: { ArrowLeft: "shop", ArrowUp: "customers", ArrowDown: "settings" },
+        salesHistory: { ArrowLeft: "shop", ArrowUp: "debts", ArrowDown: "settings" },
         reports: { ArrowUp: "sell", ArrowRight: "investigation" },
         investigation: { ArrowLeft: "reports", ArrowRight: "cash", ArrowUp: "shop" },
         cash: { ArrowLeft: "investigation", ArrowRight: "settings" },
@@ -270,7 +270,7 @@ export function DesktopHomeTiles({ lang }: Props) {
       className={clsx(
         "w-full max-w-lg grid grid-cols-2 gap-3 sm:max-w-2xl sm:gap-4",
         "lg:max-w-4xl lg:grid-cols-4 lg:grid-rows-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,auto)] lg:gap-4",
-        "lg:[grid-template-areas:'sell_sell_inventory_customers''sell_sell_shop_salesHistory''reports_investigation_cash_settings']",
+        "lg:[grid-template-areas:'sell_sell_inventory_debts''sell_sell_shop_salesHistory''reports_investigation_cash_settings']",
       )}
       role="navigation"
       aria-label={t(lang, "desktopHomeNavLabel")}

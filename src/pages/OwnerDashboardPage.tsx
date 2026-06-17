@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useMarkOwnerRisksReviewed } from "../hooks/useMarkOwnerRisksReviewed";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
@@ -28,6 +29,7 @@ function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboard
 }
 
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
+  useMarkOwnerRisksReviewed();
   const actor = useSessionActor();
   const [includeArchived, setIncludeArchived] = useState(false);
   const sales = useDeferredReportingSales(includeArchived);

@@ -17,7 +17,7 @@ type Props = { lang: Language };
 
 export function DesktopStatusChips({ lang }: Props) {
   const actor = useSessionActor();
-  const { totalCount: riskCount } = useOwnerRiskCards(lang, false);
+  const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const products = usePosStore((s) => s.products);
   const { snapshot } = useSubscription();
   const sync = useSyncStatus();

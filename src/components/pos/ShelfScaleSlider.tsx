@@ -46,7 +46,7 @@ export function ShelfScaleSlider({ lang, value, previewHex, onChange }: Props) {
           aria-hidden
         >
           <div
-            className="flex flex-col justify-between rounded-lg border shadow-sm"
+            className="flex flex-col justify-center overflow-hidden rounded-lg border shadow-sm"
             style={{
               gridColumn: `span ${col}`,
               gridRow: `span ${row}`,
@@ -56,11 +56,11 @@ export function ShelfScaleSlider({ lang, value, previewHex, onChange }: Props) {
               borderColor: `${previewHex}66`,
             }}
           >
-            <span style={{ fontSize: `${typo.iconRem}rem` }} aria-hidden>
-              📦
-            </span>
             <span className="font-black leading-tight" style={{ fontSize: `${typo.titleRem}rem` }}>
               Aa
+            </span>
+            <span className="mt-1 opacity-80" style={{ fontSize: `${typo.iconRem}rem` }} aria-hidden>
+              📦
             </span>
           </div>
         </div>

@@ -5,6 +5,7 @@ import {
   shelfGridSpanClass,
   shelfGridSpanFromScale,
   shelfMasonryGridClass,
+  shelfTypographyFromScale,
   sortShelvesForDisplay,
   updateShelfLayoutEntry,
 } from "./posShelfLayout";
@@ -79,6 +80,13 @@ describe("posShelfLayout", () => {
   it("exposes masonry grid with fixed row tracks", () => {
     expect(shelfMasonryGridClass()).toContain("auto-rows-");
     expect(shelfMasonryGridClass()).toContain("grid-flow-dense");
+  });
+
+  it("keeps shelf title typography larger than the icon", () => {
+    for (const scale of [25, 50, 75, 100]) {
+      const { titleRem, iconRem } = shelfTypographyFromScale(scale);
+      expect(titleRem).toBeGreaterThan(iconRem);
+    }
   });
 
   it("updates layout entry immutably", () => {

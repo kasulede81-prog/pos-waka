@@ -2,28 +2,23 @@ import { useMemo, useState } from "react";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Navigate } from "react-router-dom";
-import { CalendarDays, FileDown, Printer } from "lucide-react";
-import type { Language, ReturnRecord, Sale, SaleLine } from "../types";
+import { CalendarDays, FileDown } from "lucide-react";
+import type { Language, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala } from "../lib/datesUg";
-import { ReceiptsDayGroup } from "../components/receipts/ReceiptsDayGroup";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
 import { saleMatchesFilter } from "../lib/dateFilters";
-import { DateFilterBar } from "../components/shared/DateFilterBar";
-import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
-import { formatDateFilterChipDay } from "../lib/dateFilterLabels";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditReceiptLog";
 import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
-import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
@@ -32,171 +27,16 @@ import { countSalesWithSyncErrors } from "../offline/cloudSync";
 import { VoidLineModal } from "../components/pos/VoidLineModal";
 import { ReturnProductModal } from "../components/pos/ReturnProductModal";
 import type { VoidReason } from "../types";
-import { getCompletedRevenue } from "../lib/financialMetrics";
+import { getCompletedFinancialsFromScoped, getCompletedRevenue } from "../lib/financialMetrics";
+import { partitionReceiptsSales } from "../lib/receiptsGrouping";
+import { canSeeOfficeProfit } from "../lib/homeProfit";
+import { expenseCountsInDrawer } from "../lib/cashExpenses";
+import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
 import { isCompletedSale } from "../lib/saleStatus";
-import {
-  groupCompletedSalesByKampalaDay,
-  groupPendingSalesByKampalaDay,
-  partitionReceiptsSales,
-} from "../lib/receiptsGrouping";
-import { computeSaleDiscountBreakdown } from "../lib/discountBreakdown";
-import { customerPaidUgxForSaleLine } from "../lib/refundBreakdown";
-import { SaleDiscountSummary } from "../components/returns/SaleDiscountSummary";
-function formatReceiptsDayHeading(dateKey: string): string {
-  const parts = dateKey.split("-").map(Number);
-  const y = parts[0];
-  const m = parts[1];
-  const d = parts[2];
-  if (!y || !m || !d) return dateKey;
-  const anchor = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
-  return new Intl.DateTimeFormat("en-UG", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "Africa/Kampala",
-  }).format(anchor);
-}
-
-type SaleArticleProps = {
-  lang: Language;
-  sale: Sale;
-  returnRecords: ReturnRecord[];
-  canVoid: boolean;
-  soldByLabel: (sale: Sale) => string;
-  onPrint: (sale: Sale) => void;
-  onReceiptPdf: (sale: Sale) => void;
-  onVoidLine: (sale: Sale, lineIndex: number, line: SaleLine) => void;
-  onReturn: (sale: Sale) => void;
-  pendingBadge?: boolean;
-};
-
-function SaleArticle({
-  lang,
-  sale,
-  returnRecords,
-  canVoid,
-  soldByLabel,
-  onPrint,
-  onReceiptPdf,
-  onVoidLine,
-  onReturn,
-  pendingBadge,
-}: SaleArticleProps) {
-  const completed = isCompletedSale(sale);
-  const allowAdjust = completed && canVoid;
-  const discountBreakdown = useMemo(
-    () => (completed ? computeSaleDiscountBreakdown(sale) : null),
-    [completed, sale],
-  );
-  const saleReturns = useMemo(
-    () => returnRecords.filter((r) => r.saleId === sale.id),
-    [returnRecords, sale.id],
-  );
-
-  return (
-    <article
-      className={`rounded-2xl border p-3 ${pendingBadge ? "border-amber-200 bg-amber-50/40" : "border-stone-100 bg-white"}`}
-    >
-      <div className="flex justify-between gap-2">
-        <p className="font-mono text-xs font-bold text-slate-500">#{sale.id.slice(0, 8)}</p>
-        <p className="text-xs font-medium text-slate-500">{new Date(sale.createdAt).toLocaleString()}</p>
-      </div>
-      {pendingBadge ? (
-        <p className="mt-1 text-[10px] font-black uppercase tracking-wide text-amber-800">{t(lang, "receiptsPendingSection")}</p>
-      ) : null}
-      <p className="mt-1 text-xs font-semibold text-slate-500">
-        {t(lang, "receiptCashier")}: {soldByLabel(sale)}
-      </p>
-      <p className="mt-1 text-lg font-black text-slate-950">UGX {sale.totalUgx.toLocaleString()}</p>
-      {discountBreakdown ? (
-        <SaleDiscountSummary lang={lang} breakdown={discountBreakdown} className="mt-2" />
-      ) : null}
-      <p className="text-xs font-medium text-slate-500">
-        {t(lang, "cashLabel")}: UGX {sale.cashPaidUgx.toLocaleString()}
-        {sale.debtUgx > 0 ? (
-          <>
-            {" · "}
-            {t(lang, "creditLabel")}: UGX {sale.debtUgx.toLocaleString()}
-          </>
-        ) : null}
-      </p>
-      <ul className="mt-2 space-y-2 text-sm text-slate-700">
-        {sale.lines.map((line, lineIndex) => {
-          const paid = customerPaidUgxForSaleLine(sale, line, saleReturns);
-          return (
-          <li key={`${sale.id}-${line.productId}-${lineIndex}`} className="flex flex-wrap items-start justify-between gap-2">
-            <span className="min-w-0 flex-1">
-              {line.voided ? (
-                <span className="font-bold text-rose-700 line-through">{line.name}</span>
-              ) : paid.showPaidBreakdown ? (
-                <span className="font-bold text-slate-900">{line.name}</span>
-              ) : (
-                line.name
-              )}{" "}
-              {!line.voided && !paid.showPaidBreakdown ? (
-                <span className="text-xs text-slate-500">
-                  ({line.inputMode === "money" ? t(lang, "byMoney") : t(lang, "byQuantity")})
-                </span>
-              ) : null}
-              {!line.voided && paid.showPaidBreakdown ? (
-                <span className="mt-0.5 block text-xs font-semibold text-slate-600">
-                  {t(lang, "refundBreakdownListPrice")}: UGX {paid.listPriceUgx.toLocaleString()}
-                  {" · "}
-                  {t(lang, "refundBreakdownCustomerPaid")}: UGX {paid.customerPaidUgx.toLocaleString()}
-                </span>
-              ) : null}
-            </span>
-            <div className="flex shrink-0 items-center gap-2">
-              {!paid.showPaidBreakdown ? (
-                <span className={line.voided ? "line-through text-slate-400" : "font-bold"}>
-                  UGX {(line.voided ? line.lineTotalUgx : paid.customerPaidUgx).toLocaleString()}
-                </span>
-              ) : null}
-              {!line.voided && allowAdjust ? (
-                <button
-                  type="button"
-                  onClick={() => onVoidLine(sale, lineIndex, line)}
-                  className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-black uppercase text-rose-800"
-                >
-                  {t(lang, "voidBtn")}
-                </button>
-              ) : null}
-            </div>
-          </li>
-          );
-        })}
-      </ul>
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => onPrint(sale)}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800"
-        >
-          <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {receiptPrintActionLabel(lang)}
-        </button>
-        <button
-          type="button"
-          onClick={() => onReceiptPdf(sale)}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-waka-200 bg-waka-50 px-3 text-xs font-black text-waka-800"
-        >
-          <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {t(lang, "receiptDownloadPdf")}
-        </button>
-        {allowAdjust ? (
-          <button
-            type="button"
-            onClick={() => onReturn(sale)}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 text-xs font-black text-amber-950"
-          >
-            {t(lang, "returnBtn")}
-          </button>
-        ) : null}
-      </div>
-    </article>
-  );
-}
+import { SalesHistoryHeroCard } from "../components/receipts/SalesHistoryHeroCard";
+import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
+import { SalesHistorySummaryStrip } from "../components/receipts/SalesHistorySummaryStrip";
+import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -215,6 +55,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const preferences = usePosStore((s) => s.preferences);
+  const cashExpenses = usePosStore((s) => s.cashExpenses);
   const { authMode, snapshot } = useSubscription();
   const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
@@ -223,6 +64,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const term = hospitalityMode ? ht : pharmacyMode ? pt : null;
   const canVoid = hasPermission(actor.role, "sale_void");
+  const showProfit = canSeeOfficeProfit(actor.role, authMode);
   const products = usePosStore((s) => s.products);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
@@ -251,6 +93,12 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       return staffNameById.get(staffId) ?? t(lang, "role_cashier");
     }
     return t(lang, "role_owner");
+  };
+
+  const customerNameFor = (sale: Sale): string => {
+    if (sale.receiptCustomerName?.trim()) return sale.receiptCustomerName.trim();
+    const cust = sale.customerId ? customers.find((c) => c.id === sale.customerId) : null;
+    return cust?.name?.trim() || t(lang, "salesHistoryWalkIn");
   };
 
   const receiptCtxFor = (sale: Sale) => {
@@ -293,17 +141,63 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const partitioned = useMemo(() => partitionReceiptsSales(filteredInRange), [filteredInRange]);
 
+  const rangeFinancials = useMemo(
+    () =>
+      getCompletedFinancialsFromScoped(partitioned.completed, allReturns, products, {
+        skipProfit: !showProfit,
+      }),
+    [partitioned.completed, allReturns, products, showProfit],
+  );
+
   const rangeRevenueUgx = useMemo(
     () => getCompletedRevenue(partitioned.completed, allReturns, products),
     [partitioned.completed, allReturns, products],
   );
 
-  const completedByDay = useMemo(
-    () => groupCompletedSalesByKampalaDay(partitioned.completed, allReturns, products),
-    [partitioned.completed, allReturns, products],
+  const listSales = useMemo(() => {
+    const primary = [...partitioned.completed, ...partitioned.pending];
+    primary.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+    return primary;
+  }, [partitioned.completed, partitioned.pending]);
+
+  const sparklinePoints = useMemo(() => {
+    if (!showProfit) return [];
+    const dayMap = new Map<string, Sale[]>();
+    for (const sale of partitioned.completed) {
+      const key = dateKeyKampala(sale.createdAt);
+      const bucket = dayMap.get(key);
+      if (bucket) bucket.push(sale);
+      else dayMap.set(key, [sale]);
+    }
+    const keys = [...dayMap.keys()].sort();
+    return keys.map((dayKey) => {
+      const daySales = dayMap.get(dayKey) ?? [];
+      const dayReturns = allReturns.filter((r) => dateKeyKampala(r.createdAt) === dayKey);
+      return getCompletedFinancialsFromScoped(daySales, dayReturns, products).profitUgx;
+    });
+  }, [partitioned.completed, allReturns, products, showProfit]);
+
+  const selectedDay = selectedDayKeyForFilter(filter);
+  const isSingleDay = selectedDay != null;
+
+  const expensesUgx = useMemo(() => {
+    const visible = cashExpenses.filter((e) => !e.deletedAt && expenseCountsInDrawer(e));
+    const inRange = visible.filter((e) => {
+      if (isSingleDay) return e.paidOn === selectedDay;
+      const paidOn = e.paidOn;
+      return paidOn >= bounds.fromKey && paidOn <= bounds.toKey;
+    });
+    return inRange.reduce((sum, e) => sum + e.amountUgx, 0);
+  }, [cashExpenses, bounds.fromKey, bounds.toKey, isSingleDay, selectedDay]);
+
+  const stockValueUgx = useMemo(() => inventoryValueAtCostUgx(products), [products]);
+
+  const totalDebtUgx = useMemo(
+    () => customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
+    [customers],
   );
 
-  const pendingByDay = useMemo(() => groupPendingSalesByKampalaDay(partitioned.pending), [partitioned.pending]);
+  const canViewDebts = hasPermission(actor.role, "customers.view");
 
   const syncErrorCount = countSalesWithSyncErrors();
 
@@ -321,39 +215,30 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     });
   };
 
-  const onDownloadDay = async (daySales: Sale[], dateKey: string) => {
-    const { saveSalesListPdf } = await import("../lib/receiptsPdf");
-    await saveSalesListPdf({
-      sales: daySales,
-      title: tTemplate(lang, "receiptsPdfDayTitle", { date: formatReceiptsDayHeading(dateKey) }),
-      subtitle: shopLabel,
-      fileStem: `waka-past-sales-${dateKey}`,
-    });
-  };
+  const hasAnyInRange = filteredInRange.length > 0;
+  const salesHeroLabel = isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange");
+  const expensesLabel = isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange");
 
-  const todayKey = dateKeyKampala(new Date());
-  const dayFilterKey = filter.kind === "day" ? filter.dateKey : null;
-
-  const renderSaleArticle = (sale: Sale, canAdjust: boolean, pendingBadge?: boolean) => (
-    <SaleArticle
+  const renderSaleRow = (sale: Sale, index: number) => (
+    <SalesHistoryRow
       key={sale.id}
       lang={lang}
       sale={sale}
+      allSales={sales}
       returnRecords={allReturns}
-      canVoid={canAdjust && canVoid}
-      soldByLabel={soldByLabel}
+      customerName={customerNameFor(sale)}
+      cashierLabel={soldByLabel(sale)}
+      canVoid={canVoid && isCompletedSale(sale)}
+      toneIndex={index}
       onPrint={printSale}
       onReceiptPdf={receiptPdfSale}
+      onReturn={setReturnSale}
       onVoidLine={(s, lineIndex, line) => setVoidTarget({ sale: s, lineIndex, line })}
-      onReturn={canAdjust ? setReturnSale : () => undefined}
-      pendingBadge={pendingBadge}
     />
   );
 
-  const hasAnyInRange = filteredInRange.length > 0;
-
   return (
-    <div className="space-y-3 pb-8 md:pb-4">
+    <div className="space-y-4 pb-8 md:pb-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-2xl font-black tracking-tight text-slate-950">{term ? term("receipts") : t(lang, "receipts")}</h2>
@@ -362,11 +247,12 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         {partitioned.completed.length > 0 ? (
           <button
             type="button"
-            onClick={onDownloadAll}
+            onClick={() => void onDownloadAll()}
             className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-waka-200 bg-white px-3 text-xs font-black text-waka-800 shadow-sm transition-waka active:bg-waka-50"
+            title={t(lang, "receiptsDownloadPdf")}
           >
-            <FileDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            {t(lang, "receiptsDownloadPdf")}
+            <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="hidden sm:inline">{t(lang, "receiptsDownloadPdf")}</span>
           </button>
         ) : null}
       </div>
@@ -379,15 +265,19 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
       {sales.length > 0 ? (
         <>
-          <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
-          <DateFilterViewingLabel lang={lang} value={filter} />
-          {filter.kind === "day" ? (
-            <p className="text-xs font-bold text-waka-800">
-              {tTemplate(lang, "dateFilterSelectedDayChip", {
-                label: formatDateFilterChipDay(filter.dateKey, lang),
-              })}
-            </p>
-          ) : null}
+          <SalesHistoryHeroCard
+            lang={lang}
+            salesLabel={salesHeroLabel}
+            salesUgx={rangeRevenueUgx}
+            profitUgx={showProfit ? rangeFinancials.profitUgx : null}
+            showProfit={showProfit}
+            totalDebtUgx={totalDebtUgx}
+            showDebtsLink={canViewDebts}
+            filter={filter}
+            onFilterChange={setFilter}
+            sparklinePoints={sparklinePoints}
+          />
+
           {archiveNotice ? (
             <DateFilterArchiveNotice
               lang={lang}
@@ -406,12 +296,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      {hasAnyInRange ? (
-        <p className="rounded-xl border border-waka-100 bg-waka-50/80 px-3 py-2 text-sm font-bold text-waka-950">
-          {t(lang, "receiptsRangeRevenue")}: UGX {rangeRevenueUgx.toLocaleString()}
-        </p>
-      ) : null}
-
       {sales.length > 0 && !hasAnyInRange ? (
         <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-bold text-stone-600">
           {t(lang, "receiptsNoSalesInRange")}
@@ -425,52 +309,34 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {completedByDay.length > 0 ? (
-        <section className="space-y-2">
-          <h3 className="px-1 text-sm font-black uppercase tracking-wide text-stone-600">{t(lang, "receiptsCompletedSection")}</h3>
-          {completedByDay.map((group) => (
-            <ReceiptsDayGroup
-              key={group.dateKey}
-              lang={lang}
-              dateKey={group.dateKey}
-              dayHeading={formatReceiptsDayHeading(group.dateKey)}
-              saleCount={group.sales.length}
-              dayAmountLabel={group.dayRevenueUgx.toLocaleString()}
-              defaultOpen={dayFilterKey === group.dateKey || (dayFilterKey === null && group.dateKey === todayKey)}
-              onDownloadDay={() => void onDownloadDay(group.sales, group.dateKey)}
-            >
-              <VirtualizedReceiptList
-                items={group.sales}
-                getKey={(sale) => sale.id}
-                renderItem={(sale) => renderSaleArticle(sale, true)}
-              />
-            </ReceiptsDayGroup>
-          ))}
+      {listSales.length > 0 ? (
+        <section className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
+          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+            <h3 className="text-base font-black text-slate-950">{t(lang, "salesHistoryRecentSales")}</h3>
+            <p className="text-xs font-bold text-slate-500">
+              {tTemplate(lang, "receiptsDayGroupMeta", {
+                count: String(listSales.length),
+                amount: rangeRevenueUgx.toLocaleString(),
+              })}
+            </p>
+          </div>
+          <VirtualizedReceiptList
+            items={listSales}
+            getKey={(sale) => sale.id}
+            renderItem={(sale, index) => renderSaleRow(sale, index)}
+            estimateRowPx={76}
+          />
         </section>
       ) : null}
 
-      {pendingByDay.length > 0 ? (
-        <section className="space-y-2">
-          <h3 className="px-1 text-sm font-black uppercase tracking-wide text-amber-800">{t(lang, "receiptsPendingSection")}</h3>
-          {pendingByDay.map((group) => (
-            <ReceiptsDayGroup
-              key={`pending-${group.dateKey}`}
-              lang={lang}
-              dateKey={group.dateKey}
-              dayHeading={formatReceiptsDayHeading(group.dateKey)}
-              saleCount={group.sales.length}
-              dayAmountLabel={group.sales.reduce((a, s) => a + s.totalUgx, 0).toLocaleString()}
-              defaultOpen={dayFilterKey === group.dateKey}
-              tone="pending"
-            >
-              <VirtualizedReceiptList
-                items={group.sales}
-                getKey={(sale) => sale.id}
-                renderItem={(sale) => renderSaleArticle(sale, false, true)}
-              />
-            </ReceiptsDayGroup>
-          ))}
-        </section>
+      {hasAnyInRange ? (
+        <SalesHistorySummaryStrip
+          lang={lang}
+          cashInHandUgx={rangeFinancials.cashCollectedUgx}
+          expensesUgx={expensesUgx}
+          expensesLabel={expensesLabel}
+          stockValueUgx={stockValueUgx}
+        />
       ) : null}
 
       {partitioned.cancelled.length > 0 ? (
@@ -482,22 +348,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           >
             {showCancelled ? t(lang, "receiptsHideCancelled") : t(lang, "receiptsShowCancelled")} ({partitioned.cancelled.length})
           </button>
-          {showCancelled
-            ? partitioned.cancelled.map((sale) => (
-                <SaleArticle
-                  key={sale.id}
-                  lang={lang}
-                  sale={sale}
-                  returnRecords={allReturns}
-                  canVoid={false}
-                  soldByLabel={soldByLabel}
-                  onPrint={printSale}
-                  onReceiptPdf={receiptPdfSale}
-                  onVoidLine={() => undefined}
-                  onReturn={() => undefined}
-                />
-              ))
-            : null}
+          {showCancelled ? (
+            <div className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
+              {partitioned.cancelled.map((sale, index) => renderSaleRow(sale, index))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -556,4 +411,3 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     </div>
   );
 }
-

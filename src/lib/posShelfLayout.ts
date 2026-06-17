@@ -98,10 +98,10 @@ export function shelfTypographyFromScale(scale: number): {
 } {
   const t = clampShelfScale(scale) / 100;
   return {
-    iconRem: 1.05 + t * 2.25,
-    titleRem: 0.7 + t * 1.15,
-    countRem: 0.58 + t * 0.38,
-    paddingRem: 0.5 + t * 0.9,
+    iconRem: 0.72 + t * 0.48,
+    titleRem: 0.92 + t * 1.05,
+    countRem: 0.58 + t * 0.28,
+    paddingRem: 0.5 + t * 0.65,
   };
 }
 
@@ -262,7 +262,7 @@ export function shelfGridSpanClass(size: PosShelfSize): string {
 
 /** Shared masonry grid: fixed row tracks so row-span-2 large tiles get real height. */
 export function shelfMasonryGridClass(): string {
-  return "grid grid-flow-dense auto-rows-[4.75rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5rem] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6";
+  return "grid grid-flow-dense auto-rows-[5.5rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5.75rem] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6";
 }
 
 export function shelfMinHeightClass(_size: PosShelfSize): string {

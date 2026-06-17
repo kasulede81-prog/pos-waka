@@ -26,11 +26,11 @@ import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSec
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
+import { productToWizardPrefill, type BuiltWizardProduct } from "../lib/simpleProductWizard";
 import { PosShelfArrangePanel } from "../components/pos/PosShelfArrangePanel";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { shelfIconFor } from "../lib/productCategories";
 import { PageHeader } from "../components/layout/PageHeader";
-import type { BuiltWizardProduct } from "../lib/simpleProductWizard";
 import {
   costPerUnitFromPackAndStock,
   resolveQuickAddSellUnit,
@@ -109,6 +109,7 @@ export function StockPage({ lang }: { lang: Language }) {
   const [bulkAiOpen, setBulkAiOpen] = useState(false);
   const [wizardPrefill, setWizardPrefill] = useState<SimpleAddWizardPrefill | undefined>();
   const [wizardInitialStep, setWizardInitialStep] = useState<SimpleAddWizardStep | undefined>();
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const [qaName, setQaName] = useState("");
   const [qaUnitPreset, setQaUnitPreset] = useState("piece");
@@ -307,6 +308,7 @@ export function StockPage({ lang }: { lang: Language }) {
     setBulkOpen(false);
     setWizardPrefill(undefined);
     setWizardInitialStep(undefined);
+    setEditingProduct(null);
   };
 
   const openAddProductSheet = () => {
@@ -382,8 +384,35 @@ export function StockPage({ lang }: { lang: Language }) {
     setStarterOpen(false);
   };
 
-  const saveFromSimpleWizard = (built: BuiltWizardProduct | null): boolean => {
-    if (!built || freeProductLimitReached) return false;
+  const saveFromSimpleWizard = (
+    built: BuiltWizardProduct | null,
+    opts?: { auditReason?: string },
+  ): boolean => {
+    if (!built) return false;
+    if (editingProduct) {
+      const r = updateProduct(
+        editingProduct.id,
+        {
+          name: built.name,
+          category: built.category || t(lang, "generalCategory"),
+          baseUnit: built.baseUnit,
+          buyingUnit: built.buyingUnit ?? null,
+          conversionRate: built.conversionRate ?? null,
+          sellingPricePerUnitUgx: built.priceUgx,
+          costPricePerUnitUgx: built.costPricePerUnitUgx ?? undefined,
+          stockOnHand: built.stockQty,
+          sellingMode: built.sellingMode,
+          quickPresetsMoneyUgx: built.quickPresetsMoneyUgx,
+          quickPresetsQty: built.quickPresetsQty,
+        },
+        opts?.auditReason ? { auditReason: opts.auditReason } : undefined,
+      );
+      if (!r.ok) {
+        window.alert(t(lang, r.errorKey === "auditReasonRequired" ? "auditReasonRequired" : (r.errorKey ?? "invalid")));
+      }
+      return r.ok;
+    }
+    if (freeProductLimitReached) return false;
     const r = quickAddProduct({
       name: built.name,
       priceUgx: built.priceUgx,
@@ -399,6 +428,17 @@ export function StockPage({ lang }: { lang: Language }) {
       inferName: built.inferName,
     });
     return r.ok;
+  };
+
+  const openEditProduct = (p: Product) => {
+    if (pharmacyMode) {
+      setEditProduct(p);
+      return;
+    }
+    setEditingProduct(p);
+    setWizardPrefill(productToWizardPrefill(p, lang));
+    setWizardInitialStep("name");
+    setBulkOpen(true);
   };
 
   const openDuplicateToQuick = (p: Product) => {
@@ -436,7 +476,7 @@ export function StockPage({ lang }: { lang: Language }) {
     }
     switch (action) {
       case "edit":
-        if (canAdd) setEditProduct(p);
+        if (canAdd) openEditProduct(p);
         break;
       case "add10":
         if (canAdjust) adjustStock(p.id, 10, "added");
@@ -897,7 +937,7 @@ export function StockPage({ lang }: { lang: Language }) {
         </AppModalOverlay>
       ) : null}
 
-      {pharmacyMode && !wizardPrefill ? (
+      {pharmacyMode && !wizardPrefill && !editingProduct ? (
         <PharmacyAddMedicineWizard
           lang={lang}
           open={bulkOpen}
@@ -913,10 +953,11 @@ export function StockPage({ lang }: { lang: Language }) {
           onClose={closeAddProductWizard}
           shelves={stockCategoryPicklist}
           generalCategoryLabel={t(lang, "generalCategory")}
-          disabled={freeProductLimitReached}
+          disabled={freeProductLimitReached && !editingProduct}
           onSave={saveFromSimpleWizard}
           prefill={wizardPrefill}
           initialStep={wizardInitialStep}
+          editingProduct={editingProduct}
         />
       )}
 
@@ -943,15 +984,17 @@ export function StockPage({ lang }: { lang: Language }) {
         />
       ) : null}
 
-      <StockProductEditModal
-        lang={lang}
-        product={editProduct}
-        open={editProduct !== null}
-        onClose={() => setEditProduct(null)}
-        canPresets={canPresets}
-        updateProduct={updateProduct}
-        categorySuggestions={stockCategoryPicklist}
-      />
+      {pharmacyMode ? (
+        <StockProductEditModal
+          lang={lang}
+          product={editProduct}
+          open={editProduct !== null}
+          onClose={() => setEditProduct(null)}
+          canPresets={canPresets}
+          updateProduct={updateProduct}
+          categorySuggestions={stockCategoryPicklist}
+        />
+      ) : null}
 
       <SimpleProductRestockModal
         lang={lang}
