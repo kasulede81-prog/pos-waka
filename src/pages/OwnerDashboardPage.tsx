@@ -1,10 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useMarkOwnerRisksReviewed } from "../hooks/useMarkOwnerRisksReviewed";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { PageBackBar } from "../components/layout/PageBackBar";
-import { Building2 } from "lucide-react";
+import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -21,6 +20,12 @@ import { OwnerBusinessTodaySection } from "../components/owner/OwnerBusinessToda
 import { OwnerStaffPerformanceSection } from "../components/owner/OwnerStaffPerformanceSection";
 import { OwnerInventoryHealthSection } from "../components/owner/OwnerInventoryHealthSection";
 import { OwnerQuickActionsRow } from "../components/owner/OwnerQuickActionsRow";
+import { OwnerDashboardHeroCard } from "../components/owner/OwnerDashboardHeroCard";
+import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
+import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
+import { isCompletedSale } from "../lib/saleStatus";
+import { getCompletedFinancialsFromScoped } from "../lib/financialMetrics";
+import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 
 function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
   if (pulse === "strong") return t(lang, "ownerPulseStrong");
@@ -31,7 +36,16 @@ function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboard
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
   useMarkOwnerRisksReviewed();
   const actor = useSessionActor();
-  const [includeArchived, setIncludeArchived] = useState(false);
+  const {
+    filter,
+    setFilter,
+    bounds,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+  } = useReportingDateFilter();
   const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
@@ -78,12 +92,25 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     ],
   );
 
+  const heroFinancials = useMemo(() => {
+    const filteredSales = sales.filter((s) => isCompletedSale(s) && saleMatchesFilter(s, bounds));
+    const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
+    const filteredReturns = allReturns.filter((r) => returnMatchesFilter(r, bounds));
+    return getCompletedFinancialsFromScoped(filteredSales, filteredReturns, products);
+  }, [sales, bounds, products, includeArchived, returnRecords, archivedReturnRecords]);
+
+  const selectedDay = selectedDayKeyForFilter(filter);
+  const heroExpectedCash =
+    selectedDay === dashboard.todayKey ? dashboard.stats.expectedCashUgx : heroFinancials.cashCollectedUgx;
+  const heroCountedCash =
+    selectedDay === dashboard.todayKey ? dashboard.stats.countedCashUgx : null;
+
   const { summaryLines, waLine, trendLine } = useMemo(
     () => buildOwnerSummaryLines(lang, dashboard),
     [lang, dashboard],
   );
 
-  const { stats, fastMovers, cashierPerf, lowStock, trustRows, pulse, riskCards, todayKey } = dashboard;
+  const { stats, fastMovers, cashierPerf, lowStock, pulse, riskCards, todayKey } = dashboard;
 
   const todayAuditLogs = useMemo(
     () => auditLogs.filter((e) => dateKeyKampala(e.at) === todayKey),
@@ -91,8 +118,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   );
 
   const staffRows = useMemo(
-    () => buildOwnerStaffPerformanceRows(lang, trustRows, cashierPerf, todayAuditLogs),
-    [lang, trustRows, cashierPerf, todayAuditLogs],
+    () => buildOwnerStaffPerformanceRows(lang, dashboard.trustRows, cashierPerf, todayAuditLogs),
+    [lang, dashboard.trustRows, cashierPerf, todayAuditLogs],
   );
 
   const totalDebtUgx = useMemo(
@@ -103,38 +130,49 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const showRecordExpense = canRecordCashExpenses(actor.role, preferences);
 
   return (
-    <div className="space-y-4 pb-12">
-      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
-      <header className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-gradient-to-br from-slate-50 via-white to-waka-50/40 p-6 shadow-sm">
-        <div className="flex flex-wrap items-start gap-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-waka-600 text-white shadow-md">
-            <Building2 className="h-8 w-8" aria-hidden />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-bold uppercase tracking-wider text-waka-800">{t(lang, "ownerControlTitle")}</p>
-            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">{t(lang, "ownerDashboardTitle")}</h1>
-            <p className="mt-1 max-w-prose text-slate-600">{t(lang, "ownerControlSub")}</p>
-          </div>
-        </div>
-      </header>
+    <div className="space-y-4 pb-8">
+      <div>
+        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{t(lang, "ownerDashboardTitle")}</h1>
+        <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "ownerDashboardSub")}</p>
+      </div>
+
+      <OwnerDashboardHeroCard
+        lang={lang}
+        salesUgx={heroFinancials.revenueUgx}
+        profitUgx={heroFinancials.profitUgx}
+        expectedCashUgx={heroExpectedCash}
+        saleCount={heroFinancials.transactionCount}
+        countedCashUgx={heroCountedCash}
+        filter={filter}
+        onFilterChange={setFilter}
+      />
+
+      {archiveNotice ? (
+        <DateFilterArchiveNotice
+          lang={lang}
+          archivedCount={archivedSalesCount}
+          onEnableArchived={() => setIncludeArchived(true)}
+        />
+      ) : null}
+      {needsArchive && includeArchived && archivedSalesCount > 0 ? (
+        <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+      ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <OwnerNeedsAttentionSection lang={lang} cards={riskCards} todayKey={todayKey} />
+      <OwnerNeedsAttentionSection lang={lang} cards={riskCards} todayKey={todayKey} />
 
-        <OwnerBusinessTodaySection
-          lang={lang}
-          stats={stats}
-          trendLine={trendLine}
-          pulseLabel={pulseLabel(lang, pulse)}
-          customersCount={customers.length}
-          totalDebtUgx={totalDebtUgx}
-          fastMovers={fastMovers}
-          summaryLines={summaryLines}
-          waLine={waLine}
-        />
-      </div>
+      <OwnerBusinessTodaySection
+        lang={lang}
+        stats={stats}
+        trendLine={trendLine}
+        pulseLabel={pulseLabel(lang, pulse)}
+        customersCount={customers.length}
+        totalDebtUgx={totalDebtUgx}
+        fastMovers={fastMovers}
+        summaryLines={summaryLines}
+        waLine={waLine}
+      />
 
       <OwnerStaffPerformanceSection lang={lang} rows={staffRows} todayKey={todayKey} />
 

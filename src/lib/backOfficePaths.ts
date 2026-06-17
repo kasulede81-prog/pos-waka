@@ -15,6 +15,9 @@ const PREFIXES = [
   "/cash-expenses",
 ] as const;
 
+/** Debt / customer credit workflows reachable without full Back Office access. */
+const DEBT_PREFIXES = ["/customers", "/debts"] as const;
+
 /** Stock workflows reachable without full Back Office access (stock keeper role). */
 const STOCK_KEEPER_PREFIXES = ["/stock", "/suppliers", "/restock"] as const;
 
@@ -30,6 +33,16 @@ export function isSettingsLauncherPath(pathname: string): boolean {
 
 export function isBackOfficePath(pathname: string): boolean {
   return PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+export function isDebtPath(pathname: string): boolean {
+  return DEBT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
+/** Permission required for debt/customer credit paths, or null if not a debt path. */
+export function debtPathPermission(pathname: string): Permission | null {
+  if (isDebtPath(pathname)) return "customers.view";
+  return null;
 }
 
 export function isStockKeeperPath(pathname: string): boolean {

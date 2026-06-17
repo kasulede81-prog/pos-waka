@@ -20,6 +20,7 @@ import { SettingsShopPage } from "./pages/SettingsShopPage";
 import { SettingsReceiptPage } from "./pages/SettingsReceiptPage";
 import { SettingsSellingPage } from "./pages/SettingsSellingPage";
 import { SettingsHomeMenuPage } from "./pages/SettingsHomeMenuPage";
+import { SettingsOfficeMenuPage } from "./pages/SettingsOfficeMenuPage";
 import { SettingsShelvesPage } from "./pages/SettingsShelvesPage";
 import { SettingsPinPage } from "./pages/SettingsPinPage";
 import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
@@ -646,6 +647,14 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsHomeMenuPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/office-menu"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsOfficeMenuPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

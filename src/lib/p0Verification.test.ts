@@ -159,7 +159,7 @@ describe("P0-4 Credit permissions", () => {
     });
   });
 
-  it("cashier debt finalize rejected with forbidden", () => {
+  it("cashier debt finalize allowed with customer", () => {
     const res = usePosStore.getState().finalizeDraftSale({
       debtUgx: 10_000,
       paymentMethod: "credit",
@@ -167,9 +167,9 @@ describe("P0-4 Credit permissions", () => {
       changeGivenUgx: 0,
       customerName: "Test Customer",
     });
-    expect(res.ok).toBe(false);
-    expect(res.errorKey).toBe("forbidden");
-    expect(usePosStore.getState().sales).toHaveLength(0);
+    expect(res.ok).toBe(true);
+    expect(usePosStore.getState().sales).toHaveLength(1);
+    expect(usePosStore.getState().sales[0]?.debtUgx).toBe(10_000);
   });
 });
 

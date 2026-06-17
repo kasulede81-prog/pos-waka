@@ -87,6 +87,7 @@ import { partitionForArchive } from "../lib/recordArchive";
 import { normalizePosShelfLayout, clampShelfScale } from "../lib/posShelfLayout";
 import { POS_SHELF_PRESET_IDS } from "../lib/posShelfPresets";
 import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
+import { normalizeOfficeHubTileLayout } from "../lib/officeHubSections";
 import type { PosShelfPresetId } from "../types";
 import { assertBackupRestoreNotAborted, cancelBackupRestoreSession } from "../lib/backupRestoreSession";
 import { maybeAppendDailyAutoBackup } from "../offline/backupEngine";
@@ -3997,6 +3998,13 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       p.launcherTileLayout === undefined
         ? (base.launcherTileLayout ?? {})
         : normalizeLauncherTileLayout(p.launcherTileLayout),
+    officeHubTileOrder: Array.isArray(p.officeHubTileOrder)
+      ? (p.officeHubTileOrder as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 10)
+      : base.officeHubTileOrder ?? [],
+    officeHubTileLayout:
+      p.officeHubTileLayout === undefined
+        ? (base.officeHubTileLayout ?? {})
+        : normalizeOfficeHubTileLayout(p.officeHubTileLayout),
     receiptPaperSize:
       p.receiptPaperSize === "58mm" || p.receiptPaperSize === "80mm" || p.receiptPaperSize === "a4"
         ? p.receiptPaperSize

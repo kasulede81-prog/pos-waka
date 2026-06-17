@@ -4,7 +4,7 @@ import type { Language } from "../../types";
 import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { usePosStore } from "../../store/usePosStore";
-import { isBackOfficePath, isStockKeeperPath, stockKeeperPathPermission } from "../../lib/backOfficePaths";
+import { isBackOfficePath, isStockKeeperPath, stockKeeperPathPermission, debtPathPermission } from "../../lib/backOfficePaths";
 import { isBackOfficePinRequired } from "../../lib/backOfficeUnlock";
 import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
 import { BackOfficeUnlockModal } from "./BackOfficeUnlockModal";
@@ -48,15 +48,18 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
 
   const stockPerm = isStockKeeperPath(location.pathname) ? stockKeeperPathPermission(location.pathname) : null;
   const hasStockKeeperAccess = stockPerm != null && hasPermission(actor.role, stockPerm);
+  const debtPerm = debtPathPermission(location.pathname);
+  const hasDebtAccess = debtPerm != null && hasPermission(actor.role, debtPerm);
   const hasFullBackOffice = hasPermission(actor.role, "back_office.access");
 
-  if (!hasFullBackOffice && !hasStockKeeperAccess) {
+  if (!hasFullBackOffice && !hasStockKeeperAccess && !hasDebtAccess) {
     return <Navigate to="/" replace state={{ backOfficeDenied: true }} />;
   }
 
   const pinRequired = isBackOfficePinRequired(preferences);
-  const skipPinForStockKeeper = hasStockKeeperAccess && !hasFullBackOffice;
-  if (pinRequired && !isUnlocked && !skipPinForStockKeeper) {
+  const skipPinForLimitedAccess =
+    !hasFullBackOffice && (hasStockKeeperAccess || hasDebtAccess);
+  if (pinRequired && !isUnlocked && !skipPinForLimitedAccess) {
     return (
       <>
         <BackOfficeUnlockModal lang={lang} />

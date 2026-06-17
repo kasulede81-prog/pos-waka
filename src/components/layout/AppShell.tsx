@@ -22,20 +22,11 @@ import { hasPermission } from "../../lib/permissions";
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath, isSettingsLauncherPath } from "../../lib/backOfficePaths";
-import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
 import { isHospitalityMode } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
-import { orderNavByPaths, unifiedThirdNavPath } from "../../lib/unifiedNav";
-
-/** Shorter labels on mobile bottom tabs so pharmacy terms are not clipped. */
-function mobileBottomNavLabelKey(labelKey: string, pharmacyNav: boolean): string {
-  if (!pharmacyNav) return labelKey;
-  if (labelKey === "pharmacyTerm_dispensingReceipts") return "pharmacyNav_receipts";
-  if (labelKey === "pharmacyTerm_medicineStock") return "pharmacyNav_stock";
-  return labelKey;
-}
+import { unifiedThirdNavPath } from "../../lib/unifiedNav";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { RouteErrorBoundary } from "../RouteErrorBoundary";
 import { PilotModeBanner } from "../pilot/PilotModeBanner";
@@ -51,8 +42,10 @@ import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
 import { lockPosAfterSellExit } from "../../lib/posSellExit";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
+import { MobileModuleExitBar } from "./MobileModuleExitBar";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
+import { resolveModuleExit } from "../../lib/moduleExit";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -277,6 +270,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const fullWidthChrome = desktopTerminalMode || desktopTerminalHome || independentModule;
   const showHeaderExit =
     shouldShowHeaderExit(location.pathname) || (onSellScreen && !isDesktopLayout);
+  const showMobileModuleExit = Boolean(resolveModuleExit(location.pathname)) && !internalAdminRoute;
+  const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout);
   const showBackOfficeSearch =
     isBackOfficePath(location.pathname) &&
     location.pathname !== "/office" &&
@@ -314,14 +309,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
   }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
 
-  const mobileNavDefs = useMemo(() => {
-    const paths: string[] = ["/"];
-    if (navDefs.some((item) => item.path === "/pos")) paths.push("/pos");
-    const third = navDefs.find((item) => item.path === "/office" || item.path === "/stock");
-    if (third) paths.push(third.path);
-    return orderNavByPaths(navDefs, paths);
-  }, [navDefs]);
-
   return (
     <SessionHydrationProvider roleReady={roleReady}>
     <SessionActorProvider value={actor}>
@@ -331,6 +318,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-white" : "bg-stone-50",
           onSellScreen && "app-shell--sell-focus",
           isLauncherHome && "app-shell--launcher",
+          showMobileModuleExit && "app-shell--module-exit",
         )}
       >
         {pwaUpdate ? (
@@ -361,7 +349,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              {showHeaderExit ? <HeaderExitButton lang={lang} /> : null}
+              {showHeaderExitButton ? <HeaderExitButton lang={lang} /> : null}
               {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
               <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
               <div className="min-w-0">
@@ -548,95 +536,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </section>
         </main>
-        {!internalAdminRoute && !independentModule && !onSellScreen ? (
-        <nav
-          className={clsx(
-            "fixed bottom-0 left-0 right-0 border-t shadow-[0_-4px_24px_rgb(234_88_12/0.08)] backdrop-blur md:hidden",
-            isLauncherHome
-              ? "border-waka-200/80 bg-waka-50/95"
-              : "border-stone-200/90 bg-white/95 shadow-[0_-4px_24px_rgb(28_25_23/0.06)]",
-          )}
-          style={{ zIndex: "var(--waka-z-bottom-nav)" }}
-          aria-label="Main navigation"
-        >
-          <div
-            className="mx-auto grid max-w-lg min-h-[var(--waka-bottom-nav-h)] items-end gap-0 px-1.5 pt-1.5 pb-[max(0.375rem,var(--waka-safe-bottom))]"
-            style={{ gridTemplateColumns: `repeat(${Math.min(mobileNavDefs.length, 5)}, minmax(0, 1fr))` }}
-          >
-            {mobileNavDefs.map(({ path, labelKey, Icon }) => {
-              const navLabelKey = mobileBottomNavLabelKey(labelKey, pharmacyNav);
-              const active = navItemActive(path, location.pathname);
-              const isSell = path === "/pos";
-              const isHome = path === "/";
-              if (isSell) {
-                return (
-                  <div key={path} className="flex flex-col items-center justify-end">
-                    <button
-                      type="button"
-                      aria-current={active ? "page" : undefined}
-                      aria-label={t(lang, labelKey)}
-                      onClick={() => guardedNavigate(path, { preventScrollReset: true })}
-                      className={`touch-manipulation -mt-1.5 flex min-h-[56px] min-w-[56px] flex-col items-center justify-center gap-0.5 rounded-full px-2.5 py-2 font-black text-white shadow-[0_4px_16px_rgba(234,88,12,0.42)] transition-waka active:scale-[0.96] motion-reduce:active:scale-100 sm:min-h-[60px] sm:min-w-[60px] ${
-                        active
-                          ? "bg-waka-700 ring-2 ring-waka-300 ring-offset-2 ring-offset-white"
-                          : "bg-waka-600 hover:bg-waka-700"
-                      }`}
-                    >
-                      <Icon className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" strokeWidth={2.75} aria-hidden />
-                      <span className="waka-mobile-nav-label max-w-[4.75rem] font-black">{t(lang, navLabelKey)}</span>
-                    </button>
-                  </div>
-                );
-              }
-              if (isHome) {
-                return (
-                  <button
-                    key={path}
-                    type="button"
-                    aria-current={active ? "page" : undefined}
-                    onClick={() => guardedNavigate(path, { preventScrollReset: true })}
-                    className={`touch-manipulation flex min-h-[50px] flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 text-[11px] font-bold leading-tight transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[52px] sm:text-xs ${
-                      active
-                        ? "bg-waka-50 text-waka-900 ring-1 ring-waka-200/90"
-                        : "text-stone-600 hover:bg-stone-50 hover:text-stone-800"
-                    }`}
-                  >
-                    <Icon
-                      className={`h-6 w-6 shrink-0 sm:h-7 sm:w-7 ${active ? "text-waka-700" : ""}`}
-                      strokeWidth={active ? 2.5 : 2.25}
-                      aria-hidden
-                    />
-                    <span className="waka-mobile-nav-label max-w-[4.75rem] font-bold">{t(lang, navLabelKey)}</span>
-                  </button>
-                );
-              }
-              return (
-                <button
-                  key={path}
-                  type="button"
-                  aria-current={active ? "page" : undefined}
-                  onPointerDown={() => {
-                    if (path === "/office") prefetchOfficeHub();
-                  }}
-                  onClick={() => guardedNavigate(path, { preventScrollReset: true })}
-                  className={`touch-manipulation flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 font-semibold transition-waka active:scale-[0.97] motion-reduce:active:scale-100 sm:min-h-[50px] ${
-                    active
-                      ? "bg-stone-100 text-waka-800 ring-1 ring-stone-200/80"
-                      : "text-stone-500 hover:bg-stone-50 hover:text-stone-700"
-                  }`}
-                >
-                  <Icon
-                    className={`h-5 w-5 shrink-0 sm:h-[1.35rem] sm:w-[1.35rem] ${active ? "text-waka-700" : ""}`}
-                    strokeWidth={active ? 2.4 : 2}
-                    aria-hidden
-                  />
-                  <span className="waka-mobile-nav-label max-w-[4.5rem]">{t(lang, navLabelKey)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-        ) : null}
+        {showMobileModuleExit ? <MobileModuleExitBar lang={lang} /> : null}
         {preferences.posLocked ? (
           <AppModalOverlay className="z-[120] flex items-center justify-center bg-stone-950/85 p-4">
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">

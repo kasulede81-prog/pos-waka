@@ -42,12 +42,12 @@ describe("storeAuthorization — permission matrix", () => {
     }
   });
 
-  it("cashier may sell but not manage stock, debt, products, or backup", () => {
+  it("cashier may sell and manage customer credit but not stock, products, or backup", () => {
     expect(roleMayPerformStoreAction("cashier", "finalizeDraftSale")).toBe(true);
     expect(roleMayPerformStoreAction("cashier", "addCashExpense")).toBe(true);
+    expect(roleMayPerformStoreAction("cashier", "addDebtPayment")).toBe(true);
     expect(roleMayPerformStoreAction("cashier", "adjustStock")).toBe(false);
     expect(roleMayPerformStoreAction("cashier", "updateProduct")).toBe(false);
-    expect(roleMayPerformStoreAction("cashier", "addDebtPayment")).toBe(false);
     expect(roleMayPerformStoreAction("cashier", "recordPurchase")).toBe(false);
     expect(roleMayPerformStoreAction("cashier", "backupRestore")).toBe(false);
     expect(roleMayPerformStoreAction("cashier", "removeProduct")).toBe(false);
@@ -98,8 +98,8 @@ describe("storeAuthorization — cashier regression", () => {
     expect(checkStorePermission(cashier, "stock.adjust").ok).toBe(false);
   });
 
-  it("cashier -> debt payment denied", () => {
-    expect(checkStorePermission(cashier, "customers.debt").ok).toBe(false);
+  it("cashier -> debt payment allowed", () => {
+    expect(checkStorePermission(cashier, "customers.debt").ok).toBe(true);
   });
 
   it("cashier -> product edit denied", () => {

@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope, UserCog, Home } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope, UserCog, Home, Briefcase } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -160,6 +160,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubHomeMenu")}
             subtitle={t(lang, "settingsHubHomeMenuSub")}
             Icon={Home}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/office-menu"
+            title={t(lang, "settingsHubOfficeMenu")}
+            subtitle={t(lang, "settingsHubOfficeMenuSub")}
+            Icon={Briefcase}
           />
         ) : null}
         {canShop && canArrangeShelves ? (

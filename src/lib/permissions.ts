@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 16;
+const PERM_MATRIX_VERSION = 17;
 
 const HOSPITALITY_OWNER: Permission[] = [
   "hospitality.floor",
@@ -132,12 +132,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "expenses.approve",
     ...HOSPITALITY_OWNER,
   ],
-  /** Sell-first: can sell, void, receipts, and record drawer expenses. */
+  /** Sell-first: can sell, void, receipts, credit/debt, and record drawer expenses. */
   cashier: [
     "pos.sell",
     "sale_void",
     "receipts.view",
     "customers.view",
+    "customers.debt",
     "expenses.record",
     "hospitality.floor",
     "hospitality.order",

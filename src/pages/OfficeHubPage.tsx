@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cloud } from "lucide-react";
 import type { Language } from "../types";
@@ -8,8 +8,9 @@ import { OfficeHubSectionTile } from "../components/office/OfficeHubSectionTile"
 import { runWhenIdle } from "../lib/uiYield";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
+import { usePosStore } from "../store/usePosStore";
 import { useOfficeHubAccess, fetchOfficeHubAdminFlags } from "../hooks/useOfficeHubAccess";
-import { OFFICE_HUB_SECTIONS, officeHubSectionPath } from "../lib/officeHubSections";
+import { resolveOfficeHubSections } from "../lib/officeHubSections";
 import { internalAdminPreviewHref, isInternalAdminPreviewEnabled } from "../lib/internalAdminPreview";
 
 const OfficeHubRiskBadge = lazy(() =>
@@ -45,10 +46,15 @@ function OfficeSyncStatusChip({ lang }: { lang: Language }) {
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const { sectionVisible, canOwnerDashboard } = useOfficeHubAccess();
+  const savedOrder = usePosStore((s) => s.preferences.officeHubTileOrder) ?? [];
+  const layout = usePosStore((s) => s.preferences.officeHubTileLayout) ?? {};
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
   const [showRiskBadge, setShowRiskBadge] = useState(false);
 
-  const visibleSections = OFFICE_HUB_SECTIONS.filter((s) => sectionVisible[s.id]);
+  const visibleSections = useMemo(
+    () => resolveOfficeHubSections({ savedOrder, layout, sectionVisible }),
+    [savedOrder, layout, sectionVisible],
+  );
   const empty = visibleSections.length === 0;
 
   useEffect(() => {
@@ -94,10 +100,9 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
           {visibleSections.map((section, index) => (
             <OfficeHubSectionTile
               key={section.id}
-              to={officeHubSectionPath(section.id)}
-              title={t(lang, section.titleKey)}
-              subtitle={t(lang, section.subKey)}
-              Icon={section.Icon}
+              section={section}
+              lang={lang}
+              mode="live"
               className={visibleSections.length % 2 === 1 && index === visibleSections.length - 1 ? "col-span-2" : undefined}
             />
           ))}

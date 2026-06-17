@@ -77,7 +77,8 @@ body {
   :root {
     --waka-safe-bottom: env(safe-area-inset-bottom, 0px);
     --waka-safe-top: env(safe-area-inset-top, 0px);
-    --waka-bottom-nav-h: 5.5rem;
+    --waka-bottom-nav-h: 0px;
+    --waka-module-exit-h: 4.5rem;
     --waka-pos-checkout-strip-h: 4rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
@@ -97,6 +98,13 @@ body {
   @media (max-width: 767px) {
     .app-shell--sell-focus {
       --waka-bottom-nav-h: 0px;
+    }
+  }
+
+  /** Back office / settings modules — fixed red exit bar on mobile. */
+  @media (max-width: 1023px) {
+    .app-shell--module-exit {
+      --waka-bottom-nav-h: var(--waka-module-exit-h);
     }
   }
 

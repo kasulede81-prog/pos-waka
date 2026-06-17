@@ -860,6 +860,10 @@ export type ShopPreferences = {
   launcherTileOrder?: string[];
   /** Main menu tile overrides — hide, pin, accent color. */
   launcherTileLayout?: Record<string, LauncherTileConfig>;
+  /** Back office hub section tile order. */
+  officeHubTileOrder?: string[];
+  /** Back office hub section colors and visibility. */
+  officeHubTileLayout?: Record<string, LauncherTileConfig>;
   /** Waka public shop ID (A001, …) cached after first online load. */
   wakaShopId?: string | null;
   /** Thermal / AirPrint receipt width (Settings → Receipts). */

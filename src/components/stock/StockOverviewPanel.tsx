@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../../types";
-import { t, tTemplate } from "../../lib/i18n";
+import { t } from "../../lib/i18n";
+import { InventoryHeroCard } from "./InventoryHeroCard";
+import { HistoryListCard } from "../shared/HistoryListCard";
 
 type Props = {
   lang: Language;
@@ -31,67 +33,61 @@ export function StockOverviewPanel({
   onAddProductWithAi,
   onBulkInventoryWithAi,
 }: Props) {
-  const cards = [
-    { label: t(lang, "stockStatTotalProducts"), value: String(totalProducts) },
-    { label: t(lang, "stockStatLow"), value: String(lowStockCount) },
-    { label: t(lang, "stockStatOut"), value: String(outOfStockCount) },
-    {
-      label: t(lang, "stockStatValue"),
-      value: tTemplate(lang, "stockStatValueAmount", { amount: inventoryValueUgx.toLocaleString() }),
-    },
-  ];
-
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-3">
-        {cards.map((c) => (
-          <article key={c.label} className="rounded-[1.35rem] border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{c.label}</p>
-            <p className="mt-2 text-xl font-black text-slate-900">{c.value}</p>
-          </article>
-        ))}
-      </div>
+    <div className="space-y-4">
+      <InventoryHeroCard
+        lang={lang}
+        totalProducts={totalProducts}
+        lowStockCount={lowStockCount}
+        outOfStockCount={outOfStockCount}
+        inventoryValueUgx={inventoryValueUgx}
+      />
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        {canAdd ? (
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={onAddProduct}
-            className="min-h-[56px] rounded-2xl bg-waka-600 text-lg font-black text-white shadow-md disabled:opacity-50"
-          >
-            {t(lang, "stockAddProductBtn")}
-          </button>
-        ) : null}
-        {canAdd && aiProductAssistantEnabled && onAddProductWithAi ? (
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={onAddProductWithAi}
-            className="min-h-[56px] rounded-2xl border-2 border-violet-300 bg-violet-50 text-lg font-black text-violet-950 shadow-sm disabled:opacity-50"
-          >
-            {t(lang, "aiProductAssistBtn")}
-          </button>
-        ) : null}
-        {canAdd && onBulkInventoryWithAi ? (
-          <button
-            type="button"
-            disabled={freeProductLimitReached}
-            onClick={onBulkInventoryWithAi}
-            className="min-h-[56px] rounded-2xl border-2 border-violet-200 bg-white text-lg font-black text-violet-900 shadow-sm disabled:opacity-50 sm:col-span-2"
-          >
-            {t(lang, "aiBulkBtn")}
-          </button>
-        ) : null}
-        {canRestock ? (
-          <Link
-            to="/restock"
-            className="flex min-h-[56px] items-center justify-center rounded-2xl border-2 border-waka-300 bg-waka-50 text-lg font-black text-waka-950"
-          >
-            {t(lang, "stockGoRestock")}
-          </Link>
-        ) : null}
-      </div>
+      <HistoryListCard>
+        <div className="border-b border-stone-100 px-4 py-3">
+          <h3 className="text-base font-black text-slate-950">{t(lang, "ownerSectionQuickActions")}</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+          {canAdd ? (
+            <button
+              type="button"
+              disabled={freeProductLimitReached}
+              onClick={onAddProduct}
+              className="min-h-[52px] rounded-2xl bg-waka-600 text-base font-black text-white shadow-md disabled:opacity-50"
+            >
+              {t(lang, "stockAddProductBtn")}
+            </button>
+          ) : null}
+          {canAdd && aiProductAssistantEnabled && onAddProductWithAi ? (
+            <button
+              type="button"
+              disabled={freeProductLimitReached}
+              onClick={onAddProductWithAi}
+              className="min-h-[52px] rounded-2xl border-2 border-violet-300 bg-violet-50 text-base font-black text-violet-950 shadow-sm disabled:opacity-50"
+            >
+              {t(lang, "aiProductAssistBtn")}
+            </button>
+          ) : null}
+          {canAdd && onBulkInventoryWithAi ? (
+            <button
+              type="button"
+              disabled={freeProductLimitReached}
+              onClick={onBulkInventoryWithAi}
+              className="min-h-[52px] rounded-2xl border-2 border-violet-200 bg-white text-base font-black text-violet-900 shadow-sm disabled:opacity-50 sm:col-span-2"
+            >
+              {t(lang, "aiBulkBtn")}
+            </button>
+          ) : null}
+          {canRestock ? (
+            <Link
+              to="/restock"
+              className="flex min-h-[52px] items-center justify-center rounded-2xl border-2 border-waka-300 bg-waka-50 text-base font-black text-waka-950 sm:col-span-2"
+            >
+              {t(lang, "stockGoRestock")}
+            </Link>
+          ) : null}
+        </div>
+      </HistoryListCard>
     </div>
   );
 }

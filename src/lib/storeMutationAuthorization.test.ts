@@ -66,14 +66,13 @@ describe("usePosStore — cashier mutation regression", () => {
     expect(usePosStore.getState().auditLogs.some((a) => a.action === "auth_forbidden")).toBe(true);
   });
 
-  it("cashier addDebtPayment fails", () => {
+  it("cashier addDebtPayment succeeds", () => {
     const r = usePosStore.getState().addDebtPayment(CUSTOMER_ID, 1_000);
-    expect(r.ok).toBe(false);
-    expect(r.errorKey).toBe("forbidden");
-    expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(5_000);
+    expect(r.ok).toBe(true);
+    expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(4_000);
   });
 
-  it("cashier finalizeDraftSale with debt is denied", () => {
+  it("cashier finalizeDraftSale with credit succeeds", () => {
     usePosStore.setState({
       draftLines: [
         {
@@ -96,10 +95,11 @@ describe("usePosStore — cashier mutation regression", () => {
       paymentMethod: "credit",
       amountPaidUgx: 0,
       changeGivenUgx: 0,
+      customerName: "Walk-in debtor",
     });
-    expect(r.ok).toBe(false);
-    expect(r.errorKey).toBe("forbidden");
-    expect(usePosStore.getState().sales).toHaveLength(0);
+    expect(r.ok).toBe(true);
+    expect(usePosStore.getState().sales).toHaveLength(1);
+    expect(usePosStore.getState().sales[0]?.debtUgx).toBe(1_000);
   });
 
   it("cashier voidCashExpense is denied with auth_forbidden audit", () => {
