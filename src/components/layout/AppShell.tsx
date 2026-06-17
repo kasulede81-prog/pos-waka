@@ -344,16 +344,23 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         >
           <div
             className={clsx(
-              "mx-auto flex flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
-              desktopTerminalMode || desktopTerminalHome || independentModule ? "max-w-none lg:px-8 xl:px-10" : "max-w-6xl",
+              "mx-auto flex flex-wrap items-center justify-between gap-2 sm:px-4",
+              onSellScreen && !isDesktopLayout
+                ? "max-w-none px-2 pb-1 pt-[max(0.25rem,env(safe-area-inset-top,0px))]"
+                : "px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
+              desktopTerminalMode || desktopTerminalHome || independentModule ? "max-w-none lg:px-8 xl:px-10" : !onSellScreen || isDesktopLayout ? "max-w-6xl" : "",
             )}
           >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
               {showHeaderExitButton ? <HeaderExitButton lang={lang} /> : null}
               {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
-              <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />
+              {onSellScreen && !isDesktopLayout ? null : <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />}
               <div className="min-w-0">
-                <AppShellSyncLabel lang={lang} inverted={isLauncherHome} />
+                {onSellScreen && !isDesktopLayout ? (
+                  <p className="truncate text-xs font-bold text-stone-700">{t(lang, sellNavLabelKey)}</p>
+                ) : (
+                  <AppShellSyncLabel lang={lang} inverted={isLauncherHome} />
+                )}
               </div>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1.5">
@@ -479,7 +486,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden",
-            isLauncherHome ? "px-0 py-0" : "px-3 py-3 sm:px-4 md:px-6",
+            isLauncherHome ? "px-0 py-0" : onSellScreen && !isDesktopLayout ? "px-2 py-1" : "px-3 py-3 sm:px-4 md:px-6",
             fullWidthChrome || isLauncherHome ? "max-w-none" : "max-w-6xl",
             fullWidthChrome && !desktopTerminalHome && !isLauncherHome && "lg:px-8 xl:px-10",
           )}

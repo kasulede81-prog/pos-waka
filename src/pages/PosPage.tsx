@@ -9,6 +9,8 @@ import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid";
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
+import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
+import { summarizeTodaySales } from "../lib/todaySalesSummary";
 import { usePosDesktopLayout } from "../hooks/usePosDesktopLayout";
 import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
 import { resolveConfirmSaleAction } from "../lib/posCheckoutFocus";
@@ -58,7 +60,6 @@ import {
 } from "../lib/pharmacyPackaging";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep, formatDraftLineQty } from "../lib/draftCart";
 import { CartSaleDiscountModal } from "../components/pos/CartSaleDiscountModal";
-import { DraftCartSummary } from "../components/pos/DraftCartSummary";
 import { QuantityEditModal } from "../components/pos/QuantityEditModal";
 import { brandingFromSale } from "../lib/receiptBranding";
 import { canRecordCashExpenses } from "../lib/cashExpenses";
@@ -206,6 +207,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const products = usePosStore(useShallow((s) => s.products));
   const sales = useDeferredSales();
   const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
+  const todaySalesSummary = useMemo(() => summarizeTodaySales(sales), [sales]);
   const customers = usePosStore(useShallow((s) => s.customers));
   const preferences = usePosStore(
     useShallow((s) => ({
@@ -1302,57 +1304,70 @@ export function PosPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <PosOfflineBanner lang={lang} />
       <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} />
-      {draftLines.length > 0 ||
-      canSavePending ||
-      canRecordCashExpenses(actor.role, shopPreferences) ||
-      activeShift ? (
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          {draftLines.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => clearDraft()}
-              className="min-h-[48px] rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm active:bg-slate-50"
-            >
-              {modeTerm("clearSale")}
-            </button>
-          ) : null}
-          <div className="flex flex-wrap items-center gap-2">
-            {canSavePending ? (
-              <Link
-                to="/pending-sales"
-                className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm active:bg-slate-50"
-              >
-                {t(lang, "pendingSalesLink")}
-                {pendingCount > 0 ? (
-                  <span className="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-black text-white">{pendingCount}</span>
-                ) : null}
-              </Link>
-            ) : null}
-            {canRecordCashExpenses(actor.role, shopPreferences) ? (
-              <button
-                type="button"
-                onClick={() => setExpenseModalOpen(true)}
-                className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-black text-amber-950 shadow-sm active:bg-amber-100"
-              >
-                <Banknote className="h-4 w-4 shrink-0" aria-hidden />
-                {t(lang, "posRecordExpenseBtn")}
-              </button>
-            ) : null}
-            {activeShift ? (
-              <button
-                type="button"
-                onClick={() => setShiftCloseOpen(true)}
-                className="min-h-[48px] rounded-full border border-waka-300 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900 shadow-sm active:bg-waka-100"
-              >
-                {t(lang, "shiftCloseBtn")}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <PosSellHeroCard
+        lang={lang}
+        sellLabel={t(lang, sellNavLabelKey)}
+        cartStats={draftCartStats}
+        cartHasItems={draftLines.length > 0}
+        payableUgx={draftPayable}
+        cartDiscountUgx={draftCartDiscountUgx}
+        todaySaleCount={todaySalesSummary.count}
+        todaySalesUgx={todaySalesSummary.total}
+        pendingCount={pendingCount}
+        actionFooter={
+          draftLines.length > 0 ||
+          canSavePending ||
+          canRecordCashExpenses(actor.role, shopPreferences) ||
+          activeShift ? (
+            <div className="flex max-w-full gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
+              {draftLines.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => clearDraft()}
+                  className="inline-flex shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                >
+                  {modeTerm("clearSale")}
+                </button>
+              ) : null}
+              {canSavePending ? (
+                <Link
+                  to="/pending-sales"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                >
+                  {t(lang, "pendingSalesLink")}
+                  {pendingCount > 0 ? (
+                    <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
+                      {pendingCount}
+                    </span>
+                  ) : null}
+                </Link>
+              ) : null}
+              {canRecordCashExpenses(actor.role, shopPreferences) ? (
+                <button
+                  type="button"
+                  onClick={() => setExpenseModalOpen(true)}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                >
+                  <Banknote className="h-3 w-3 shrink-0" aria-hidden />
+                  {t(lang, "posRecordExpenseBtn")}
+                </button>
+              ) : null}
+              {activeShift ? (
+                <button
+                  type="button"
+                  onClick={() => setShiftCloseOpen(true)}
+                  className="inline-flex shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                >
+                  {t(lang, "shiftCloseBtn")}
+                </button>
+              ) : null}
+            </div>
+          ) : undefined
+        }
+      />
 
       {lockedProductCount > 0 ? (
         <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950">
@@ -1368,10 +1383,10 @@ export function PosPage({ lang }: { lang: Language }) {
           products.length > 0 && "lg:grid-cols-[minmax(0,1fr)_min(400px,36%)]",
         )}
       >
-        <div ref={catalogRef} className="min-w-0 space-y-3">
+        <div ref={catalogRef} className="min-w-0 space-y-2">
 
       {products.length > 0 ? (
-        <div className="space-y-2 rounded-[1.35rem] border border-stone-200 bg-white p-2.5 shadow-waka-sm">
+        <div className="space-y-1.5 rounded-[1.35rem] border border-stone-200 bg-white p-2 shadow-waka-sm">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
@@ -1680,16 +1695,22 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {draftLines.length > 0 && saleCheckoutMinimized && !isDesktopPos ? (
-        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-waka-200 bg-white px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
+        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-waka-200 bg-white px-3 py-2 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto flex max-w-lg items-center justify-between gap-2">
             <div className="min-w-0">
-              <DraftCartSummary lang={lang} stats={draftCartStats} compact />
-              <p className="truncate text-xl font-black text-waka-700">UGX {draftPayable.toLocaleString()}</p>
+              <p className="text-[11px] font-bold text-stone-600">
+                {draftCartStats.productCount} {t(lang, "posCartProductsShort").toLowerCase()} ·{" "}
+                {Number.isInteger(draftCartStats.unitCount)
+                  ? draftCartStats.unitCount
+                  : draftCartStats.unitCount.toFixed(2).replace(/\.?0+$/, "")}{" "}
+                {t(lang, "posCartUnitsShort").toLowerCase()}
+              </p>
+              <p className="truncate text-lg font-black leading-tight text-waka-700">UGX {draftPayable.toLocaleString()}</p>
             </div>
             <button
               type="button"
               onClick={() => setSaleCheckoutMinimized(false)}
-              className="shrink-0 rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-md active:bg-waka-700"
+              className="shrink-0 rounded-xl bg-waka-600 px-3.5 py-2.5 text-sm font-black text-white shadow-md active:bg-waka-700"
             >
               {t(lang, "posReviewPay")}
             </button>

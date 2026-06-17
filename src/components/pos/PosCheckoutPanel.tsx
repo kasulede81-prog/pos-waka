@@ -81,19 +81,19 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
 }) {
   const keyClass =
-    "min-h-[40px] rounded-lg bg-slate-100 py-1 text-lg font-semibold text-slate-900 active:bg-slate-200";
+    "min-h-[52px] rounded-xl bg-slate-100 py-1.5 text-2xl font-bold text-slate-900 active:bg-slate-200";
 
   return (
-    <div className="grid grid-cols-[1fr_4.25rem] gap-1.5">
-      <div className="space-y-1.5">
-        <div className="grid grid-cols-3 gap-1.5">
+    <div className="grid grid-cols-[1fr_5rem] gap-2">
+      <div className="space-y-2">
+        <div className="grid grid-cols-3 gap-2">
           {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
             <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
               {k}
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-1.5">
+        <div className="grid grid-cols-3 gap-2">
           {(["00", "0", "⌫"] as const).map((k) => (
             <button
               key={k}
@@ -109,11 +109,11 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           ))}
         </div>
       </div>
-      <div className="flex min-h-0 flex-col gap-1.5">
+      <div className="flex min-h-0 flex-col gap-2">
         <button
           type="button"
           onClick={onClear}
-          className="min-h-[40px] rounded-lg bg-rose-500 text-lg font-black text-white active:bg-rose-600"
+          className="min-h-[52px] rounded-xl bg-rose-500 text-xl font-black text-white active:bg-rose-600"
         >
           C
         </button>
@@ -122,9 +122,9 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           type="button"
           onClick={onSave}
           disabled={saveDisabled}
-          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg bg-emerald-600 px-1 py-2 text-xs font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
+          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-1 py-2 text-sm font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
         >
-          <Check className="h-6 w-6 stroke-[3]" aria-hidden />
+          <Check className="h-7 w-7 stroke-[3]" aria-hidden />
           <span className="text-center">{saveLabel}</span>
         </button>
       </div>
@@ -208,10 +208,10 @@ function PaymentBlock({
       ) : null}
 
       <div className={dockMode ? "mt-0" : compact ? "mt-2" : "mt-4"}>
-        <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+        <p className="text-xs font-black uppercase tracking-wide text-stone-600 sm:text-sm">
           {t(lang, "paymentMethodLabel")}
         </p>
-        <div className={clsx("mt-1.5 grid gap-1.5", dockMode || compact ? "grid-cols-4" : "grid-cols-2 gap-2 mt-2")}>
+        <div className={clsx("mt-2 grid gap-2", dockMode || compact ? "grid-cols-4" : "grid-cols-2 gap-2 mt-2")}>
           {checkoutMethods.map((method) => (
             <button
               key={method}
@@ -222,7 +222,7 @@ function PaymentBlock({
               }}
               className={clsx(
                 "rounded-xl border font-black leading-tight",
-                dockMode ? "min-h-[38px] px-1 text-[11px]" : compact ? "min-h-[34px] px-1 text-[10px]" : "min-h-[48px] rounded-2xl text-sm",
+                dockMode ? "min-h-[44px] px-1 text-sm" : compact ? "min-h-[34px] px-1 text-[10px]" : "min-h-[48px] rounded-2xl text-sm",
                 paymentMethod === method
                   ? "border-waka-400 bg-waka-100 text-waka-950"
                   : "border-stone-200 bg-white text-stone-700",
@@ -235,11 +235,11 @@ function PaymentBlock({
       </div>
 
       {paymentMethod === "cash" || paymentMethod === "credit" ? (
-        <div className={dockMode ? "mt-1.5" : compact ? "mt-2" : "mt-4"}>
+        <div className={dockMode ? "mt-2" : compact ? "mt-2" : "mt-4"}>
           <p
             className={
               dockMode
-                ? "text-[10px] font-semibold text-slate-700"
+                ? "text-sm font-semibold text-slate-800"
                 : compact
                   ? "text-xs font-semibold text-slate-800"
                   : "text-base font-semibold text-slate-800"
@@ -252,7 +252,7 @@ function PaymentBlock({
             onClick={() => onCheckoutAmountField("cash")}
             className={clsx(
               amountBtnClass,
-              dockMode && "mt-1 min-h-[42px] rounded-lg px-2.5 py-2 text-lg",
+              dockMode && "mt-1.5 min-h-[48px] rounded-xl px-3 py-2 text-xl",
               checkoutAmountField === "cash"
                 ? "border-waka-500 bg-waka-50 text-slate-900"
                 : "border-slate-200 bg-white text-slate-900",
@@ -299,7 +299,7 @@ function PaymentBlock({
           className={clsx(
             "font-black text-emerald-900",
             dockMode
-              ? "mt-1 rounded-md bg-emerald-50 px-2 py-1 text-[11px]"
+              ? "mt-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-sm"
               : compact
                 ? "mt-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm"
                 : "mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base",
@@ -582,7 +582,7 @@ function CartDockBody({
         <button
           type="button"
           onClick={onOpenCartDiscount}
-          className="shrink-0 rounded-lg border border-waka-300 bg-white px-2 py-1 text-[10px] font-black text-waka-900 active:bg-waka-50"
+          className="shrink-0 rounded-lg border border-waka-300 bg-white px-2.5 py-1.5 text-xs font-black text-waka-900 active:bg-waka-50"
         >
           {t(lang, "cartDiscountBtn")}
         </button>
@@ -716,7 +716,7 @@ export function PosCheckoutPanel({
       <header
         className={clsx(
           "flex shrink-0 items-center gap-2 border-b border-waka-200 bg-waka-50",
-          isCompact ? "px-3 py-2" : "px-3 py-3",
+          isCompact ? "px-3 py-2.5" : "px-3 py-3",
           isSidebar && "rounded-t-[1.35rem]",
         )}
       >
@@ -726,7 +726,7 @@ export function PosCheckoutPanel({
           disabled={emptyCart}
           className={clsx(
             "shrink-0 rounded-full border border-slate-200 bg-white font-semibold text-slate-600 shadow-sm active:bg-slate-50 disabled:opacity-40",
-            isCompact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm",
+            isCompact ? "px-3 py-2 text-sm" : "px-3 py-2 text-sm",
           )}
         >
           {clearSaleLabel}
@@ -735,7 +735,7 @@ export function PosCheckoutPanel({
           id="pos-checkout-title"
           className={clsx(
             "min-w-0 flex-1 truncate text-center font-black text-waka-950",
-            isCompact ? "text-base" : "text-lg",
+            isCompact ? "text-lg" : "text-lg",
           )}
         >
           {saleTitle}
@@ -746,7 +746,7 @@ export function PosCheckoutPanel({
             onClick={onMinimize}
             className={clsx(
               "shrink-0 rounded-full border border-waka-300 bg-white font-bold text-waka-900 shadow-sm active:bg-waka-50",
-              isCompact ? "px-2.5 py-1.5 text-xs" : "px-3 py-2 text-sm",
+              isCompact ? "px-3 py-2 text-sm" : "px-3 py-2 text-sm",
             )}
           >
             {t(lang, "posAddMoreItems")}
@@ -774,7 +774,7 @@ export function PosCheckoutPanel({
         </div>
       ) : isCompact ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain border-b border-waka-200 px-3 py-2.5 [-webkit-overflow-scrolling:touch]">
+          <div className="max-h-[min(36dvh,14rem)] shrink-0 overflow-y-auto overscroll-y-contain border-b border-waka-200 px-3 py-2 [-webkit-overflow-scrolling:touch]">
             <CartDockBody
               lang={lang}
               draftLines={draftLines}
@@ -790,15 +790,15 @@ export function PosCheckoutPanel({
               onOpenCartDiscount={onOpenCartDiscount}
             />
           </div>
-          <div className="shrink-0 px-3 py-1.5">
+          <div className="min-h-0 shrink-0 overflow-y-auto px-3 py-2">
             <PaymentBlock {...paymentProps} />
           </div>
-          <div className="shrink-0 border-t border-waka-200 bg-white px-3 py-2 pb-[max(0.375rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+          <div className="shrink-0 border-t border-waka-200 bg-white px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
             {canSavePending && paymentMethod !== "credit" ? (
               <button
                 type="button"
                 onClick={onSavePending}
-                className="mb-1.5 w-full rounded-xl border border-amber-300 bg-amber-50 py-1.5 text-xs font-black text-amber-950 active:bg-amber-100"
+                className="mb-2 w-full rounded-xl border border-amber-300 bg-amber-50 py-2 text-sm font-black text-amber-950 active:bg-amber-100"
               >
                 {savePendingLabel}
               </button>

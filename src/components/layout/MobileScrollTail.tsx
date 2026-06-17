@@ -21,7 +21,7 @@ export function MobileScrollTail() {
   }
 
   if (isPos) {
-    return <div aria-hidden className="h-[var(--waka-scroll-tail-pos)] shrink-0 lg:hidden" />;
+    return <div aria-hidden className="h-[var(--waka-scroll-tail-pos-sale)] shrink-0 lg:hidden" />;
   }
 
   return <div aria-hidden className="h-[calc(var(--waka-safe-bottom)+0.75rem)] shrink-0 lg:hidden" />;

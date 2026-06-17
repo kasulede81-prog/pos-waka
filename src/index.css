@@ -79,7 +79,7 @@ body {
     --waka-safe-top: env(safe-area-inset-top, 0px);
     --waka-bottom-nav-h: 0px;
     --waka-module-exit-h: 4.5rem;
-    --waka-pos-checkout-strip-h: 4rem;
+    --waka-pos-checkout-strip-h: 3.25rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
     --waka-scroll-tail-stock: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 1.5rem);

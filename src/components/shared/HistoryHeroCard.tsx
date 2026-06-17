@@ -20,6 +20,8 @@ type Props = {
   onFilterChange?: (next: DateFilterValue) => void;
   dateLabelOverride?: string;
   datePickerFooter?: ReactNode;
+  /** Compact strip below metrics (e.g. POS action chips). */
+  footer?: ReactNode;
 };
 
 export function HistoryHeroCard({
@@ -29,6 +31,7 @@ export function HistoryHeroCard({
   onFilterChange,
   dateLabelOverride,
   datePickerFooter,
+  footer,
 }: Props) {
   const count = Math.min(3, Math.max(1, metrics.length));
   const gridClass = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3";
@@ -56,6 +59,9 @@ export function HistoryHeroCard({
           );
         })}
       </div>
+      {footer ? (
+        <div className="border-t border-white/15 px-2 py-1.5 sm:px-3 sm:py-2">{footer}</div>
+      ) : null}
       {filter && onFilterChange ? (
         <HistoryDatePickerStrip
           lang={lang}

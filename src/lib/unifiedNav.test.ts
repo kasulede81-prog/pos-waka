@@ -9,7 +9,7 @@ describe("unifiedNav", () => {
 
   it("orders nav items by primary paths", () => {
     const items = [
-      { path: "/office", label: "Shop" },
+      { path: "/office", label: "Back office" },
       { path: "/", label: "Menu" },
       { path: "/pos", label: "Sell" },
     ];

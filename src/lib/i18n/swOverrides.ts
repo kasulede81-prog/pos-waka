@@ -7,7 +7,7 @@ export const swOverrides: Record<string, string> = {
   navSell: "Uza",
   sellTitle: "Uza",
   receipts: "Risiti",
-  officeHubNav: "Duka",
+  officeHubNav: "Ofisi ya nyuma",
   reports: "Ripoti",
   closeDay: "Funga siku",
   signIn: "Ingia",

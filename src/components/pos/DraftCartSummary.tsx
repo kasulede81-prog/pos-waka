@@ -21,7 +21,7 @@ export function DraftCartSummary({ lang, stats, compact, dock, payableUgx, cartD
 
   if (dock) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-waka-200 bg-waka-50/90 px-2.5 py-1.5 text-[11px] font-bold text-stone-700">
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-waka-200 bg-waka-50/90 px-3 py-2 text-sm font-bold text-stone-700">
         <span>
           {stats.productCount} {t(lang, "posCartProductsShort").toLowerCase()} · {unitShown}{" "}
           {t(lang, "posCartUnitsShort").toLowerCase()}
