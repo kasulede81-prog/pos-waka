@@ -1,8 +1,12 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { reorderShelfKeys } from "../lib/posShelfOrder";
 
-/** Drag-to-reorder shelves using document pointermove + elementFromPoint (works on touch). */
-export function useShelfDragReorder(orderKeys: string[], onReorder: (next: string[]) => void) {
+/** Drag-to-reorder shelves or launcher tiles using pointermove + elementFromPoint (works on touch). */
+export function useShelfDragReorder(
+  orderKeys: string[],
+  onReorder: (next: string[]) => void,
+  dragAttr = "data-shelf-key",
+) {
   const orderKeysRef = useRef(orderKeys);
   orderKeysRef.current = orderKeys;
   const dragKeyRef = useRef<string | null>(null);
@@ -44,8 +48,8 @@ export function useShelfDragReorder(orderKeys: string[], onReorder: (next: strin
         const active = dragKeyRef.current;
         if (!active) return;
         const el = document.elementFromPoint(ev.clientX, ev.clientY);
-        const host = el?.closest("[data-shelf-key]");
-        const targetKey = host?.getAttribute("data-shelf-key");
+        const host = el?.closest(`[${dragAttr}]`);
+        const targetKey = host?.getAttribute(dragAttr);
         if (!targetKey || targetKey === active) return;
         setOverKey(targetKey);
         applyReorder(active, targetKey);

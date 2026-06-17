@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { Package, Receipt, Truck } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
-import { DateFilterBar } from "../components/shared/DateFilterBar";
-import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
+import { HistoryListCard } from "../components/shared/HistoryListCard";
+import { formatHistoryPickerDate } from "../components/shared/HistoryDatePickerStrip";
 import {
   buildPurchaseListRows,
   filterPurchases,
@@ -101,6 +103,15 @@ export function PurchasesPage({ lang }: { lang: Language }) {
     }
   };
 
+  const purchaseTotals = useMemo(
+    () => ({
+      cost: rows.reduce((sum, row) => sum + row.purchase.totalCostUgx, 0),
+      paid: rows.reduce((sum, row) => sum + row.purchase.amountPaidUgx, 0),
+      payments: sumSupplierPaymentsUgx(paymentsInPeriod),
+    }),
+    [rows, paymentsInPeriod],
+  );
+
   if (!canView) {
     return <Navigate to="/" replace />;
   }
@@ -115,37 +126,61 @@ export function PurchasesPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
-      <div className="space-y-3">
-        <DateFilterBar lang={lang} value={presetFilter} onChange={setPresetFilter} showCustomDate={!useRange} />
-        <label className="flex items-center gap-2 text-sm font-bold text-stone-700">
-          <input type="checkbox" checked={useRange} onChange={(e) => setUseRange(e.target.checked)} />
-          {t(lang, "purchasesFilterRange")}
-        </label>
-        {useRange ? (
-          <div className="grid gap-2 sm:grid-cols-2">
-            <label className="block text-sm font-bold text-stone-700">
-              {t(lang, "purchasesFilterFrom")}
-              <input
-                type="date"
-                value={fromKey}
-                onChange={(e) => setFromKey(e.target.value)}
-                className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-3 py-2"
-              />
+      <HistoryHeroCard
+        lang={lang}
+        filter={presetFilter}
+        onFilterChange={setPresetFilter}
+        dateLabelOverride={
+          useRange ? `${formatHistoryPickerDate(fromKey, lang)} – ${formatHistoryPickerDate(toKey, lang)}` : undefined
+        }
+        datePickerFooter={
+          <div className="space-y-3">
+            <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
+              <input type="checkbox" checked={useRange} onChange={(e) => setUseRange(e.target.checked)} />
+              {t(lang, "purchasesFilterRange")}
             </label>
-            <label className="block text-sm font-bold text-stone-700">
-              {t(lang, "purchasesFilterTo")}
-              <input
-                type="date"
-                value={toKey}
-                onChange={(e) => setToKey(e.target.value)}
-                className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-3 py-2"
-              />
-            </label>
+            {useRange ? (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block text-xs font-bold text-stone-600">
+                  {t(lang, "purchasesFilterFrom")}
+                  <input
+                    type="date"
+                    value={fromKey}
+                    onChange={(e) => setFromKey(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs font-semibold"
+                  />
+                </label>
+                <label className="block text-xs font-bold text-stone-600">
+                  {t(lang, "purchasesFilterTo")}
+                  <input
+                    type="date"
+                    value={toKey}
+                    onChange={(e) => setToKey(e.target.value)}
+                    className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-2 py-1.5 text-xs font-semibold"
+                  />
+                </label>
+              </div>
+            ) : null}
           </div>
-        ) : (
-          <DateFilterViewingLabel lang={lang} value={presetFilter} />
-        )}
-      </div>
+        }
+        metrics={[
+          {
+            label: t(lang, "purchasesColTotal"),
+            icon: Package,
+            value: `UGX ${purchaseTotals.cost.toLocaleString()}`,
+          },
+          {
+            label: t(lang, "purchasesColPaid"),
+            icon: Receipt,
+            value: `UGX ${purchaseTotals.paid.toLocaleString()}`,
+          },
+          {
+            label: t(lang, "supplierPaymentHistory"),
+            icon: Truck,
+            value: `UGX ${purchaseTotals.payments.toLocaleString()}`,
+          },
+        ]}
+      />
 
       <div className="grid gap-2 sm:grid-cols-3">
         <input
@@ -197,49 +232,45 @@ export function PurchasesPage({ lang }: { lang: Language }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-stone-200 bg-stone-50 p-6 text-center font-medium text-stone-600">
-          {t(lang, "purchasesEmpty")}
-        </p>
+        <HistoryListCard
+          isEmpty
+          empty={<p className="text-sm font-medium text-stone-600">{t(lang, "purchasesEmpty")}</p>}
+        />
       ) : (
-        <ul className="space-y-3">
+        <HistoryListCard>
+          <ul>
           {rows.map((row) => (
-            <li key={row.purchase.id}>
+            <li key={row.purchase.id} className="border-b border-stone-100 last:border-b-0">
               <Link
                 to={`/office/purchases/${row.purchase.id}`}
-                className="block rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-colors hover:border-waka-200"
+                className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 active:bg-stone-50 sm:px-4"
               >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div>
-                    <p className="text-xs font-bold uppercase text-stone-500">{row.dayKey}</p>
-                    <p className="mt-1 text-lg font-black text-stone-900">
-                      {row.purchase.supplierName}
-                      {isPurchaseVoided(row.purchase) ? (
-                        <span className="ml-2 rounded-lg bg-rose-100 px-2 py-0.5 text-xs font-black text-rose-800">
-                          {t(lang, "purchaseStatusVoided")}
-                        </span>
-                      ) : null}
-                    </p>
-                    <p className="mt-1 text-xs font-semibold text-stone-500">
-                      {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()} · {row.quantityReceived}{" "}
-                      {t(lang, "purchasesColQty").toLowerCase()}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xl font-black text-waka-800">UGX {row.purchase.totalCostUgx.toLocaleString()}</p>
-                    <p className="text-xs font-semibold text-stone-500">
-                      {t(lang, "purchasesColPaid")}: UGX {row.purchase.amountPaidUgx.toLocaleString()}
-                    </p>
-                    {row.balanceRemainingUgx > 0 ? (
-                      <p className="text-xs font-bold text-amber-800">
-                        {t(lang, "purchasesColBalance")}: UGX {row.balanceRemainingUgx.toLocaleString()}
-                      </p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] font-bold uppercase text-stone-500">{row.dayKey}</p>
+                  <p className="mt-0.5 truncate text-sm font-black text-stone-950">
+                    {row.purchase.supplierName}
+                    {isPurchaseVoided(row.purchase) ? (
+                      <span className="ml-2 rounded-lg bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-800">
+                        {t(lang, "purchaseStatusVoided")}
+                      </span>
                     ) : null}
-                  </div>
+                  </p>
+                  <p className="mt-0.5 text-xs font-semibold text-stone-500">
+                    {row.productCount} {t(lang, "purchasesColProducts").toLowerCase()} · {row.quantityReceived}{" "}
+                    {t(lang, "purchasesColQty").toLowerCase()}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-black text-waka-800">UGX {row.purchase.totalCostUgx.toLocaleString()}</p>
+                  <p className="text-[11px] font-semibold text-stone-500">
+                    {t(lang, "purchasesColPaid")}: UGX {row.purchase.amountPaidUgx.toLocaleString()}
+                  </p>
                 </div>
               </Link>
             </li>
           ))}
-        </ul>
+          </ul>
+        </HistoryListCard>
       )}
 
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">

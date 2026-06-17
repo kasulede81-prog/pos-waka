@@ -766,11 +766,14 @@ export type PosShelfPresetId =
 /** Main menu launcher tile accent (reuse shelf palette). */
 export type LauncherTileColor = PosShelfColor;
 
-/** Per-tile launcher customization. */
+/** Per-tile launcher customization. Sell hero is always orange and not customized. */
 export type LauncherTileConfig = {
   hidden?: boolean;
   pinned?: boolean;
   color?: LauncherTileColor;
+  /** 25–100 continuous scale (small → large tile). */
+  scale?: number;
+  customColor?: string | null;
 };
 
 export type ShopPreferences = {
@@ -851,6 +854,8 @@ export type ShopPreferences = {
   posQuickSellProductIds?: string[];
   /** Last applied shop shelf preset id. */
   posShelfPresetId?: PosShelfPresetId | null;
+  /** Default tile scale (25–100) for shelves without a per-shelf size. */
+  posShelfDefaultScale?: number;
   /** Main menu launcher tile order (excludes Sell hero). */
   launcherTileOrder?: string[];
   /** Main menu tile overrides — hide, pin, accent color. */

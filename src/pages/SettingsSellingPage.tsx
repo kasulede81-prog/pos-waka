@@ -48,7 +48,7 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
           <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
           <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "stockShelfArrangeSub")}</p>
           <Link
-            to="/stock?tab=shelves"
+            to="/settings/shelves"
             className="mt-4 inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-2.5 text-sm font-black text-white"
           >
             {t(lang, "officeCardShelfArrange")}

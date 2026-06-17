@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
-import { Download, FileText, Search, ShieldCheck } from "lucide-react";
+import { Download, FileText, RotateCcw, Search, ShieldCheck, Users } from "lucide-react";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useMarkOwnerRisksReviewed } from "../hooks/useMarkOwnerRisksReviewed";
 import { PageHeader } from "../components/layout/PageHeader";
 import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
-import { DateFilterBar } from "../components/shared/DateFilterBar";
-import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
+import { HistoryListCard } from "../components/shared/HistoryListCard";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
 import { RefundCalculationDrawer } from "../components/returns/RefundCalculationDrawer";
@@ -26,7 +26,6 @@ import {
 } from "../lib/auditSearch";
 import { extractAuditEntityLabel, actorDisplayLabel } from "../lib/activityNarrative";
 import { auditActionLabel, formatAuditRowSummary } from "../lib/auditCenterDetails";
-import { formatAuditDeviceLabel } from "../lib/auditDeviceLabel";
 import { buildAuditCsv, buildAuditPdfBlob } from "../lib/auditExport";
 import { dateKeyKampala } from "../lib/datesUg";
 import { auditRefundIntegrity } from "../lib/auditRefundIntegrity";
@@ -65,12 +64,16 @@ function AuditTimelineList({
 }) {
   if (entries.length === 0) {
     return (
-      <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "auditEmpty")}</p>
+      <HistoryListCard
+        isEmpty
+        empty={<p className="text-sm font-semibold text-slate-600">{t(lang, "auditEmpty")}</p>}
+      />
     );
   }
 
   return (
-    <ul className="space-y-2">
+    <HistoryListCard>
+      <ul>
       {entries.map((e) => {
         const staff = e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang);
         const when = new Date(e.at).toLocaleString([], {
@@ -81,33 +84,33 @@ function AuditTimelineList({
         });
         const narrative = formatAuditRowSummary(lang, e, { productById, customerById });
         const entity = extractAuditEntityLabel(e, productById, customerById);
-        const deviceLabel = formatAuditDeviceLabel(e.deviceId, e.payload);
         return (
-          <li key={e.id}>
+          <li key={e.id} className="border-b border-stone-100 last:border-b-0">
             <button
               type="button"
               onClick={() => onSelect(e)}
-              className="w-full rounded-[1.25rem] border border-slate-100 bg-white p-4 text-left shadow-sm ring-1 ring-slate-100/80 transition hover:border-waka-200"
+              className="flex w-full items-center gap-3 px-3 py-3 text-left active:bg-stone-50 sm:px-4"
             >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="font-black text-slate-900">{staff}</p>
-                <time className="text-xs font-semibold text-slate-500" dateTime={e.at}>
-                  {when}
-                </time>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-waka-100 text-waka-700">
+                <ShieldCheck className="h-5 w-5" aria-hidden />
               </div>
-              <p className="mt-1 text-xs font-bold uppercase tracking-wide text-waka-700">
-                {auditActionLabel(lang, e.action)}
-                {entity ? ` · ${entity}` : ""}
-              </p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{narrative}</p>
-              <p className="mt-1 text-xs text-slate-500">
-                {t(lang, `role_${e.role}`)} · {deviceLabel}
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black text-slate-950">{staff}</p>
+                <p className="truncate text-xs font-semibold text-waka-700">
+                  {auditActionLabel(lang, e.action)}
+                  {entity ? ` · ${entity}` : ""}
+                </p>
+                <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-500">{narrative}</p>
+              </div>
+              <time className="shrink-0 text-[11px] font-semibold text-slate-500" dateTime={e.at}>
+                {when}
+              </time>
             </button>
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </HistoryListCard>
   );
 }
 
@@ -535,8 +538,29 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
-      <DateFilterBar lang={lang} value={quickFilter} onChange={onQuickFilterChange} />
-      <DateFilterViewingLabel lang={lang} value={quickFilter} />
+      <HistoryHeroCard
+        lang={lang}
+        filter={quickFilter}
+        onFilterChange={onQuickFilterChange}
+        metrics={[
+          {
+            label: t(lang, "auditTabTimeline"),
+            icon: Search,
+            value: String(filtered.length),
+            hint: `${t(lang, "auditResultCount")} ${filtered.length}`,
+          },
+          {
+            label: t(lang, "auditTabRefunds"),
+            icon: RotateCcw,
+            value: String(returnsInRange.length),
+          },
+          {
+            label: t(lang, "auditTabStaff"),
+            icon: Users,
+            value: String(staffGroups.length),
+          },
+        ]}
+      />
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 

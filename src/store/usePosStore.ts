@@ -84,7 +84,7 @@ import {
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
-import { normalizePosShelfLayout } from "../lib/posShelfLayout";
+import { normalizePosShelfLayout, clampShelfScale } from "../lib/posShelfLayout";
 import { POS_SHELF_PRESET_IDS } from "../lib/posShelfPresets";
 import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
 import type { PosShelfPresetId } from "../types";
@@ -3986,6 +3986,10 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           : isPosShelfPresetId(p.posShelfPresetId)
             ? p.posShelfPresetId
             : (base.posShelfPresetId ?? null),
+    posShelfDefaultScale:
+      p.posShelfDefaultScale === undefined
+        ? (base.posShelfDefaultScale ?? 35)
+        : clampShelfScale(Number(p.posShelfDefaultScale) || 35),
     launcherTileOrder: Array.isArray(p.launcherTileOrder)
       ? (p.launcherTileOrder as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 20)
       : base.launcherTileOrder ?? [],

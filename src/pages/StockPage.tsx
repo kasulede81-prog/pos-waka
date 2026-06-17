@@ -27,7 +27,6 @@ import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
 import { productToWizardPrefill, type BuiltWizardProduct } from "../lib/simpleProductWizard";
-import { PosShelfArrangePanel } from "../components/pos/PosShelfArrangePanel";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { shelfIconFor } from "../lib/productCategories";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -735,7 +734,14 @@ export function StockPage({ lang }: { lang: Language }) {
                 </>
               ) : (
                 <>
-                  {canArrangeShelves ? <PosShelfArrangePanel lang={lang} products={products} /> : null}
+                  {canArrangeShelves ? (
+                    <Link
+                      to="/settings/shelves"
+                      className="inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-2.5 text-sm font-black text-white shadow-waka-sm"
+                    >
+                      {t(lang, "officeCardShelfArrange")}
+                    </Link>
+                  ) : null}
                   <p className="text-sm text-slate-600">{t(lang, "stockShelvesHint")}</p>
                   <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {shelfFolders.map((shelf) => {

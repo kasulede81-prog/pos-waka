@@ -19,6 +19,8 @@ import { SettingsHubPage } from "./pages/SettingsHubPage";
 import { SettingsShopPage } from "./pages/SettingsShopPage";
 import { SettingsReceiptPage } from "./pages/SettingsReceiptPage";
 import { SettingsSellingPage } from "./pages/SettingsSellingPage";
+import { SettingsHomeMenuPage } from "./pages/SettingsHomeMenuPage";
+import { SettingsShelvesPage } from "./pages/SettingsShelvesPage";
 import { SettingsPinPage } from "./pages/SettingsPinPage";
 import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
@@ -99,6 +101,9 @@ const MarketingAgentPage = lazy(() =>
 const HomePage = lazy(() => import("./pages/HomePage").then((m) => ({ default: m.HomePage })));
 const PosPage = lazy(() => import("./pages/PosPage").then((m) => ({ default: m.PosPage })));
 const OfficeHubPage = lazy(() => import("./pages/OfficeHubPage").then((m) => ({ default: m.OfficeHubPage })));
+const OfficeHubSectionPage = lazy(() =>
+  import("./pages/OfficeHubSectionPage").then((m) => ({ default: m.OfficeHubSectionPage })),
+);
 const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage").then((m) => ({ default: m.ReceiptsPage })));
 const FloorPlanPage = lazy(() => import("./pages/FloorPlanPage").then((m) => ({ default: m.FloorPlanPage })));
 const TableOrderPage = lazy(() => import("./pages/TableOrderPage").then((m) => ({ default: m.TableOrderPage })));
@@ -338,6 +343,16 @@ function AppRoutes() {
                 <RoleProtectedRoute permission="back_office.access">
                   <Suspense fallback={<LazyWait />}>
                     <OfficeHubPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/section/:sectionId"
+              element={
+                <RoleProtectedRoute permission="back_office.access">
+                  <Suspense fallback={<LazyWait />}>
+                    <OfficeHubSectionPage lang={lang} />
                   </Suspense>
                 </RoleProtectedRoute>
               }
@@ -623,6 +638,22 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsSellingPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/home-menu"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsHomeMenuPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/shelves"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsShelvesPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

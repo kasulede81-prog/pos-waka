@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { PosShelfBadge, PosShelfColor, PosShelfLayoutConfig, PosShelfSize, Product } from "../types";
-import { normalizeShelfHex, shelfTileColorStyle } from "./shelfColor";
+import { normalizeShelfHex, launcherBoldTileColorStyle } from "./shelfColor";
 import {
   UNCATEGORIZED_SENTINEL,
   distinctTrimmedCategories,
@@ -62,14 +62,19 @@ export function clampShelfScale(value: number): number {
   return Math.max(SHELF_SCALE_MIN, Math.min(SHELF_SCALE_MAX, Math.round(value)));
 }
 
-export function shelfScaleFromConfig(config?: PosShelfLayoutConfig, featured = false): number {
+export function shelfScaleFromConfig(
+  config?: PosShelfLayoutConfig,
+  featured = false,
+  defaultScale = 35,
+): number {
   if (typeof config?.scale === "number" && Number.isFinite(config.scale)) {
     return clampShelfScale(config.scale);
   }
   if (config?.size === "large") return 85;
   if (config?.size === "medium") return 55;
   if (config?.size === "small") return 35;
-  return featured ? 85 : 35;
+  const base = clampShelfScale(defaultScale);
+  return featured ? Math.max(base, 72) : base;
 }
 
 export function scaleToShelfSize(scale: number): PosShelfSize {
@@ -139,9 +144,10 @@ export function normalizePosShelfLayout(
 export function mergeShelfLayout(
   card: PosShelfCard,
   config?: PosShelfLayoutConfig,
+  defaultScale = 35,
 ): PosShelfDisplayCard {
   const featured = Boolean(config?.featured);
-  const scale = shelfScaleFromConfig(config, featured);
+  const scale = shelfScaleFromConfig(config, featured, defaultScale);
   const color = config?.color ?? (featured ? "orange" : "default");
   return {
     ...card,
@@ -169,6 +175,7 @@ export function buildPosShelfDisplayCards(
   noShelfLabel: string,
   layout: Record<string, PosShelfLayoutConfig>,
   orderKeys: string[],
+  defaultScale = 35,
 ): PosShelfDisplayCard[] {
   const categoryOptions = distinctTrimmedCategories(products);
   const hasUncategorized = products.some((p) => !(p.category ?? "").trim());
@@ -195,7 +202,7 @@ export function buildPosShelfDisplayCards(
     });
   }
 
-  const merged = baseCards.map((card) => mergeShelfLayout(card, layout[card.key]));
+  const merged = baseCards.map((card) => mergeShelfLayout(card, layout[card.key], defaultScale));
   return sortShelvesForDisplay(merged, orderKeys);
 }
 
@@ -204,6 +211,7 @@ export function buildQuickSellShelfCard(
   products: Product[],
   label: string,
   layout?: PosShelfLayoutConfig,
+  defaultScale = 35,
 ): PosShelfDisplayCard | null {
   const valid = productIds.filter((id) => products.some((p) => p.id === id));
   if (valid.length === 0) return null;
@@ -213,31 +221,37 @@ export function buildQuickSellShelfCard(
     count: valid.length,
     icon: "⚡",
   };
-  const merged = mergeShelfLayout(base, {
-    ...layout,
-    size: layout?.size ?? "medium",
-    color: layout?.color ?? "orange",
-    featured: true,
-    icon: layout?.icon ?? "⚡",
-  });
+  const merged = mergeShelfLayout(
+    base,
+    {
+      ...layout,
+      size: layout?.size ?? "medium",
+      color: layout?.color ?? "orange",
+      featured: true,
+      icon: layout?.icon ?? "⚡",
+    },
+    defaultScale,
+  );
   return { ...merged, isQuickSell: true };
 }
 
 export function shelfColorClasses(color: PosShelfColor, featured: boolean): string {
-  const boost = featured ? "ring-1 ring-inset" : "";
+  const ring = featured ? "ring-2 ring-inset ring-white/40" : "";
+  const bold =
+    "border-white/30 text-white shadow-md hover:brightness-110 active:scale-[0.98]";
   switch (color) {
     case "red":
-      return `border-rose-300/80 bg-gradient-to-br from-rose-50 to-rose-100/90 text-rose-950 ${boost} ring-rose-200/80`;
+      return `${bold} bg-gradient-to-br from-rose-500 to-rose-700 shadow-[0_6px_20px_rgba(225,29,72,0.38)] ${ring}`;
     case "orange":
-      return `border-waka-300/80 bg-gradient-to-br from-waka-50 to-orange-100/90 text-waka-950 ${boost} ring-waka-200/80`;
+      return `${bold} bg-gradient-to-br from-waka-500 to-waka-700 shadow-[0_6px_24px_rgba(234,88,12,0.38)] ${ring}`;
     case "blue":
-      return `border-sky-300/80 bg-gradient-to-br from-sky-50 to-sky-100/90 text-sky-950 ${boost} ring-sky-200/80`;
+      return `${bold} bg-gradient-to-br from-sky-500 to-sky-700 shadow-[0_6px_20px_rgba(2,132,199,0.38)] ${ring}`;
     case "green":
-      return `border-emerald-300/80 bg-gradient-to-br from-emerald-50 to-emerald-100/90 text-emerald-950 ${boost} ring-emerald-200/80`;
+      return `${bold} bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-[0_6px_20px_rgba(5,150,105,0.38)] ${ring}`;
     case "purple":
-      return `border-violet-300/80 bg-gradient-to-br from-violet-50 to-violet-100/90 text-violet-950 ${boost} ring-violet-200/80`;
+      return `${bold} bg-gradient-to-br from-violet-500 to-violet-700 shadow-[0_6px_20px_rgba(124,58,237,0.38)] ${ring}`;
     default:
-      return `border-stone-200/90 bg-gradient-to-br from-white to-stone-50 text-stone-950 ${featured ? "ring-stone-200/80" : ""}`;
+      return `border-stone-200/90 bg-gradient-to-br from-white to-stone-50 text-stone-950 shadow-sm ${featured ? "ring-2 ring-stone-200/80" : ""}`;
   }
 }
 
@@ -245,7 +259,24 @@ export function shelfTileSurfaceStyle(
   shelf: Pick<PosShelfDisplayCard, "color" | "customColor" | "featured">,
 ): CSSProperties | undefined {
   if (!shelf.customColor) return undefined;
-  return shelfTileColorStyle(shelf.customColor, shelf.featured);
+  const bold = launcherBoldTileColorStyle(shelf.customColor, shelf.featured);
+  return {
+    background: bold.background,
+    borderColor: bold.borderColor,
+    color: bold.color,
+    boxShadow: bold.boxShadow,
+  };
+}
+
+export function clearShelfScaleOverrides(
+  layout: Record<string, PosShelfLayoutConfig>,
+): Record<string, PosShelfLayoutConfig> {
+  const out: Record<string, PosShelfLayoutConfig> = {};
+  for (const [key, cfg] of Object.entries(layout)) {
+    const { scale: _scale, size: _size, ...rest } = cfg;
+    out[key] = rest;
+  }
+  return out;
 }
 
 /** Tailwind grid span classes for masonry shelf grid. */

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
+import { BarChart3, HandCoins, Wallet } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -8,9 +9,8 @@ import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { useShopReportBundle } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala } from "../lib/datesUg";
-import { DateFilterBar } from "../components/shared/DateFilterBar";
-import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { isSingleDayFilter, selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -340,14 +340,36 @@ export function ReportsPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
-      <DateFilterBar
+      <HistoryHeroCard
         lang={lang}
-        value={filter}
-        onChange={setFilter}
-        activeClassName="border-slate-800 bg-slate-900 text-white shadow-sm"
-        inactiveClassName="border-slate-200 bg-white text-slate-700 ring-1 ring-slate-200"
+        filter={filter}
+        onFilterChange={setFilter}
+        metrics={[
+          {
+            label: t(lang, "receiptsRangeRevenue"),
+            icon: BarChart3,
+            value: `UGX ${totals.revenue.toLocaleString()}`,
+          },
+          canProfit
+            ? {
+                label: t(lang, "estimatedProfit"),
+                icon: Wallet,
+                value: `UGX ${totals.profit.toLocaleString()}`,
+                hint: t(lang, "estimatedProfitHint"),
+              }
+            : {
+                label: t(lang, "cashInHand"),
+                icon: Wallet,
+                value: `UGX ${totals.cash.toLocaleString()}`,
+              },
+          {
+            label: t(lang, "salesCount"),
+            icon: HandCoins,
+            value: String(totals.count),
+            hint: `${t(lang, "debtToday")}: UGX ${totals.debt.toLocaleString()}`,
+          },
+        ]}
       />
-      <DateFilterViewingLabel lang={lang} value={filter} />
       {archiveNotice ? (
         <DateFilterArchiveNotice
           lang={lang}
@@ -536,33 +558,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <article className="rounded-3xl border bg-white p-4">
-          <p className="text-xs text-slate-500">{t(lang, "cashInHand")}</p>
-          <p className="text-2xl font-bold">UGX {totals.cash.toLocaleString()}</p>
-        </article>
-        {canProfit ? (
-          <article className="rounded-3xl border bg-white p-4">
-            <p className="text-xs text-slate-500">{t(lang, "estimatedProfit")}</p>
-            <p
-              className={`text-2xl font-bold ${totals.profit < 0 ? "text-slate-600" : "text-waka-700"}`}
-            >
-              UGX {totals.profit.toLocaleString()}
-            </p>
-            <p className="mt-2 text-xs text-slate-500">{t(lang, "estimatedProfitHint")}</p>
-          </article>
-        ) : null}
-        <article className="rounded-3xl border bg-white p-4">
-          <p className="text-xs text-slate-500">{t(lang, "debtToday")}</p>
-          <p className="text-2xl font-bold text-amber-800">UGX {totals.debt.toLocaleString()}</p>
-        </article>
-        <article className="rounded-3xl border bg-white p-4">
-          <p className="text-xs text-slate-500">{t(lang, "salesCount")}</p>
-          <p className="text-2xl font-bold">{totals.count}</p>
-        </article>
-      </div>
-
-      <section className="rounded-3xl border border-slate-200 bg-white p-4">
+      <section className="rounded-[1.35rem] border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-sm font-semibold text-slate-800">{t(lang, "reportsWeekTrend")}</p>
         <div className="mt-4 flex h-28 items-end justify-between gap-1 px-1">
           {last7DayBars.map((b) => (

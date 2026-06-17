@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope, UserCog } from "lucide-react";
+import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope, UserCog, Home } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -39,6 +39,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   }
 
   const canShop = hasPermission(actor.role, "settings.shop");
+  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
   const canReceipt = hasPermission(actor.role, "settings.receipt");
   const canDevices = hasPermission(actor.role, "settings.devices");
   const pilotActive = isPilotModeActive(actor.role, preferences);
@@ -153,6 +154,22 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
       </OfficeNavSection>
 
       <OfficeNavSection title={t(lang, "settingsHubGroupApp")}>
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/home-menu"
+            title={t(lang, "settingsHubHomeMenu")}
+            subtitle={t(lang, "settingsHubHomeMenuSub")}
+            Icon={Home}
+          />
+        ) : null}
+        {canShop && canArrangeShelves ? (
+          <OfficeNavCard
+            to="/settings/shelves"
+            title={t(lang, "settingsHubShelves")}
+            subtitle={t(lang, "settingsHubShelvesSub")}
+            Icon={LayoutGrid}
+          />
+        ) : null}
         <OfficeNavCard
           to="/settings/notifications"
           title={t(lang, "settingsHubNotifications")}

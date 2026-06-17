@@ -217,6 +217,7 @@ export function PosPage({ lang }: { lang: Language }) {
       posSellCategoryFilter: s.preferences.posSellCategoryFilter,
       posPinnedShelfKeys: s.preferences.posPinnedShelfKeys,
       posShelfLayout: s.preferences.posShelfLayout,
+      posShelfDefaultScale: s.preferences.posShelfDefaultScale,
       posQuickSellProductIds: s.preferences.posQuickSellProductIds,
       favoriteProductIds: s.preferences.favoriteProductIds,
       recentProductIds: s.preferences.recentProductIds,
@@ -364,6 +365,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellCategoryKey = preferences.posSellCategoryFilter ?? CATEGORY_FILTER_ALL;
   const shelfOrderKeys = preferences.posPinnedShelfKeys ?? [];
   const shelfLayout = preferences.posShelfLayout ?? EMPTY_SHELF_LAYOUT;
+  const shelfDefaultScale = preferences.posShelfDefaultScale ?? 35;
   const quickSellProductIds = preferences.posQuickSellProductIds ?? EMPTY_QUICK_SELL_IDS;
   const soldTodayByProduct = useMemo(() => scanTodaySalesHead(sales).unitsByProduct, [sales]);
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p] as const)), [products]);
@@ -599,8 +601,14 @@ export function PosPage({ lang }: { lang: Language }) {
   }, [products, sellSearchContext, sellCategoryKey, favoriteIdSet]);
 
   const shelfCards = useMemo(() => {
-    return buildPosShelfDisplayCards(products, t(lang, "posNoShelf"), shelfLayout, shelfOrderKeys);
-  }, [products, lang, shelfLayout, shelfOrderKeys]);
+    return buildPosShelfDisplayCards(
+      products,
+      t(lang, "posNoShelf"),
+      shelfLayout,
+      shelfOrderKeys,
+      shelfDefaultScale,
+    );
+  }, [products, lang, shelfLayout, shelfOrderKeys, shelfDefaultScale]);
 
   const quickSellProducts = useMemo(
     () =>
@@ -617,8 +625,9 @@ export function PosPage({ lang }: { lang: Language }) {
         products,
         t(lang, "posQuickSellShelf"),
         shelfLayout[QUICK_SELL_SHELF_KEY],
+        shelfDefaultScale,
       ),
-    [quickSellProductIds, products, lang, shelfLayout],
+    [quickSellProductIds, products, lang, shelfLayout, shelfDefaultScale],
   );
 
   const showShelfBoxes =

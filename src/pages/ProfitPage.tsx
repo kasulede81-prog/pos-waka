@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -12,12 +13,9 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { canSeeOfficeProfit, computeProfitGroupedByCategory } from "../lib/homeProfit";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { PageHeader } from "../components/layout/PageHeader";
-import { DateFilterBar } from "../components/shared/DateFilterBar";
-import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
-import { formatDateFilterChipDay } from "../lib/dateFilterLabels";
-import { tTemplate } from "../lib/i18n";
 
 type Props = { lang: Language; embedded?: boolean };
 
@@ -69,7 +67,6 @@ export function ProfitPage({ lang, embedded }: Props) {
   }
 
   const { groups, total } = report;
-  const showDayChip = filter.kind === "day";
 
   return (
     <div className={embedded ? "space-y-5" : "space-y-5 pb-12"}>
@@ -82,15 +79,28 @@ export function ProfitPage({ lang, embedded }: Props) {
         />
       ) : null}
 
-      <DateFilterBar lang={lang} value={filter} onChange={setFilter} />
-      <DateFilterViewingLabel lang={lang} value={filter} />
-      {showDayChip ? (
-        <p className="text-xs font-bold text-waka-800">
-          {tTemplate(lang, "dateFilterSelectedDayChip", {
-            label: formatDateFilterChipDay(filter.dateKey, lang),
-          })}
-        </p>
-      ) : null}
+      <HistoryHeroCard
+        lang={lang}
+        filter={filter}
+        onFilterChange={setFilter}
+        metrics={[
+          {
+            label: t(lang, "profitPageTotalLabel"),
+            icon: TrendingUp,
+            value: `UGX ${total.profitUgx.toLocaleString()}`,
+          },
+          {
+            label: t(lang, "homeProfitSalesLabel"),
+            icon: Wallet,
+            value: `UGX ${total.salesUgx.toLocaleString()}`,
+          },
+          {
+            label: t(lang, "homeProfitCostLabel"),
+            icon: TrendingDown,
+            value: `UGX ${total.costUgx.toLocaleString()}`,
+          },
+        ]}
+      />
       {archiveNotice ? (
         <DateFilterArchiveNotice
           lang={lang}
@@ -107,30 +117,14 @@ export function ProfitPage({ lang, embedded }: Props) {
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <section className="rounded-3xl border-2 border-waka-200 bg-gradient-to-br from-waka-50 to-white p-5 shadow-waka-sm">
-        <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "profitPageTotalLabel")}</p>
-        <p className={`mt-1 text-4xl font-black ${total.profitUgx < 0 ? "text-stone-600" : "text-waka-950"}`}>
-          UGX {total.profitUgx.toLocaleString()}
+      {total.linesMissingCost > 0 ? (
+        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+          {t(lang, "homeProfitMissingCost").replace("{{count}}", String(total.linesMissingCost))}{" "}
+          <Link to="/stock" className="font-black text-waka-800 underline">
+            {t(lang, "homeProfitAddCostCta")}
+          </Link>
         </p>
-        <dl className="mt-4 grid grid-cols-2 gap-2 text-sm">
-          <div className="rounded-2xl bg-white/90 px-3 py-2 ring-1 ring-waka-100">
-            <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "homeProfitSalesLabel")}</dt>
-            <dd className="font-black text-stone-900">UGX {total.salesUgx.toLocaleString()}</dd>
-          </div>
-          <div className="rounded-2xl bg-white/90 px-3 py-2 ring-1 ring-waka-100">
-            <dt className="text-[10px] font-black uppercase text-stone-500">{t(lang, "homeProfitCostLabel")}</dt>
-            <dd className="font-black text-stone-900">UGX {total.costUgx.toLocaleString()}</dd>
-          </div>
-        </dl>
-        {total.linesMissingCost > 0 ? (
-          <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
-            {t(lang, "homeProfitMissingCost").replace("{{count}}", String(total.linesMissingCost))}{" "}
-            <Link to="/stock" className="font-black text-waka-800 underline">
-              {t(lang, "homeProfitAddCostCta")}
-            </Link>
-          </p>
-        ) : null}
-      </section>
+      ) : null}
 
       {groups.length === 0 ? (
         <p className="rounded-3xl border border-stone-200 bg-white p-6 text-center text-base font-semibold text-stone-600">

@@ -8,6 +8,8 @@ import {
   SHELF_ICON_OPTIONS,
   buildPosShelfDisplayCards,
   buildQuickSellShelfCard,
+  clearShelfScaleOverrides,
+  clampShelfScale,
   effectiveShelfOrderKeys,
   QUICK_SELL_SHELF_KEY,
   shelfMasonryGridClass,
@@ -54,24 +56,33 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
   const savedOrderRaw = usePosStore((s) => s.preferences.posPinnedShelfKeys);
   const shelfLayoutRaw = usePosStore((s) => s.preferences.posShelfLayout);
   const quickSellIdsRaw = usePosStore((s) => s.preferences.posQuickSellProductIds);
+  const defaultScaleRaw = usePosStore((s) => s.preferences.posShelfDefaultScale);
   const savedOrder = savedOrderRaw ?? EMPTY_SHELF_ORDER;
   const shelfLayout = shelfLayoutRaw ?? EMPTY_SHELF_LAYOUT;
   const quickSellIds = quickSellIdsRaw ?? EMPTY_SHELF_ORDER;
+  const defaultScale = clampShelfScale(defaultScaleRaw ?? 35);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [quickPickerOpen, setQuickPickerOpen] = useState(false);
 
   const shelfCards = useMemo(() => {
-    const cards = buildPosShelfDisplayCards(products, t(lang, "posNoShelf"), shelfLayout, savedOrder);
+    const cards = buildPosShelfDisplayCards(
+      products,
+      t(lang, "posNoShelf"),
+      shelfLayout,
+      savedOrder,
+      defaultScale,
+    );
     const quick = buildQuickSellShelfCard(
       quickSellIds,
       products,
       t(lang, "posQuickSellShelf"),
       shelfLayout[QUICK_SELL_SHELF_KEY],
+      defaultScale,
     );
     return quick ? [quick, ...cards] : cards;
-  }, [products, lang, shelfLayout, savedOrder, quickSellIds]);
+  }, [products, lang, shelfLayout, savedOrder, quickSellIds, defaultScale]);
 
   const orderKeys = useMemo(() => {
     const keys = shelfCards.map((c) => c.key);
@@ -92,8 +103,8 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   const selectedCard = selectedKey ? shelfCards.find((c) => c.key === selectedKey) : null;
   const selectedScale = selectedConfig
-    ? shelfScaleFromConfig(selectedConfig, Boolean(selectedConfig.featured))
-    : 55;
+    ? shelfScaleFromConfig(selectedConfig, Boolean(selectedConfig.featured), defaultScale)
+    : defaultScale;
   const selectedPreviewHex = selectedConfig
     ? resolveShelfHex(selectedConfig.customColor, selectedConfig.color ?? selectedCard?.color ?? "default")
     : PRESET_SHELF_HEX.default;
@@ -147,6 +158,31 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
 
   const content = (
     <div className="space-y-4">
+      <section className="rounded-2xl border border-stone-200 bg-white p-3">
+        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posShelfDefaultScaleTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "posShelfDefaultScaleSub")}</p>
+        <div className="mt-3">
+          <ShelfScaleSlider
+            lang={lang}
+            value={defaultScale}
+            previewHex={PRESET_SHELF_HEX.orange}
+            onChange={(scale) => setPreferences({ posShelfDefaultScale: scale })}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            setPreferences({
+              posShelfDefaultScale: defaultScale,
+              posShelfLayout: clearShelfScaleOverrides(shelfLayout),
+            })
+          }
+          className="mt-3 min-h-[40px] rounded-xl border border-waka-300 bg-waka-50 px-3 text-xs font-black text-waka-900 active:bg-waka-100"
+        >
+          {t(lang, "posShelfApplyDefaultToAll")}
+        </button>
+      </section>
+
       <section className="rounded-2xl border border-stone-200 bg-white p-3">
         <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posShelfPresetHeading")}</p>
         <div className="mt-2 flex flex-wrap gap-2">

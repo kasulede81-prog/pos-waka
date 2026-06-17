@@ -97,6 +97,7 @@ export function PosShelfTile({
   const badge = badgeLabel(lang, shelf);
   const typo = shelfTypographyFromScale(shelf.scale);
   const customStyle = shelfTileSurfaceStyle(shelf);
+  const isBold = Boolean(customStyle) || shelf.color !== "default";
   const colorClass = customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured);
   const heightClass = shelfMinHeightClass(shelf.size);
   const layoutSize = scaleToShelfSize(shelf.scale);
@@ -107,8 +108,9 @@ export function PosShelfTile({
       {badge ? (
         <span
           className={clsx(
-            "absolute right-2 top-2 max-w-[46%] truncate rounded-full bg-black/10 px-1.5 py-0.5 font-black uppercase tracking-wide",
+            "absolute right-2 top-2 max-w-[46%] truncate rounded-full px-1.5 py-0.5 font-black uppercase tracking-wide",
             layoutSize === "large" ? "text-[10px] sm:text-xs" : "text-[9px]",
+            isBold ? "bg-white/20 text-white" : "bg-black/10 text-stone-800",
           )}
         >
           {badge}
@@ -117,7 +119,10 @@ export function PosShelfTile({
       <ShelfTileBody shelf={shelf} countLabel={countLabel} isArrange={isArrange} typo={typo} />
       {isArrange ? (
         <span
-          className="absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg bg-black/5 text-stone-500"
+          className={clsx(
+            "absolute bottom-2 right-2 flex h-7 w-7 items-center justify-center rounded-lg",
+            isBold ? "bg-white/20 text-white" : "bg-black/5 text-stone-500",
+          )}
           aria-hidden
         >
           ⠿

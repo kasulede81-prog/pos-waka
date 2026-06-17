@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
+import { AlertTriangle, Banknote, CalendarCheck } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { activeDayCloseForDate } from "../lib/dayCloseIdempotency";
@@ -10,8 +11,8 @@ import { getCompletedFinancials } from "../lib/financialMetrics";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { PageHeader } from "../components/layout/PageHeader";
-import { DateFilterBar } from "../components/shared/DateFilterBar";
-import { DateFilterViewingLabel } from "../components/shared/DateFilterViewingLabel";
+import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
+import { HistoryListCard } from "../components/shared/HistoryListCard";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
@@ -91,6 +92,16 @@ export function CloseDayPage({ lang }: { lang: Language }) {
     const absDiff = Math.abs(diff);
     return absDiff > Math.max((pct / 100) * exp, fixed);
   };
+
+  const historySummary = useMemo(() => {
+    let profit = 0;
+    let varianceCount = 0;
+    for (const d of filteredDayCloses) {
+      profit += d.profitEstimateUgx;
+      if (closeVarianceFlag(d.expectedCashUgx, d.differenceUgx)) varianceCount += 1;
+    }
+    return { count: filteredDayCloses.length, profit, varianceCount };
+  }, [filteredDayCloses, pct, fixed]);
 
   if (!hasPermission(actor.role, "day.close")) {
     return (
@@ -282,34 +293,66 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       ) : null}
 
       {hasPermission(actor.role, "owner.cash_history") ? (
-        <section className="rounded-3xl border-2 border-slate-100 bg-white p-5 shadow-sm">
+        <section className="space-y-4">
           <h2 className="text-xl font-black text-slate-900">{t(lang, "closeHistoryTitle")}</h2>
-          <div className="mt-3 space-y-3">
-            <DateFilterBar lang={lang} value={historyFilter} onChange={setHistoryFilter} />
-            <DateFilterViewingLabel lang={lang} value={historyFilter} />
-          </div>
-          <ul className="mt-3 space-y-3">
+          <HistoryHeroCard
+            lang={lang}
+            filter={historyFilter}
+            onFilterChange={setHistoryFilter}
+            metrics={[
+              {
+                label: t(lang, "closeHistoryTitle"),
+                icon: CalendarCheck,
+                value: String(historySummary.count),
+              },
+              {
+                label: t(lang, "closeHistoryProfit"),
+                icon: Banknote,
+                value: `UGX ${historySummary.profit.toLocaleString()}`,
+              },
+              {
+                label: t(lang, "ownerVarianceFlag"),
+                icon: AlertTriangle,
+                value: String(historySummary.varianceCount),
+              },
+            ]}
+          />
+          <HistoryListCard
+            isEmpty={filteredDayCloses.length === 0}
+            empty={<p className="text-sm font-semibold text-slate-600">{t(lang, "closeHistoryTitle")}</p>}
+          >
+            <ul>
             {filteredDayCloses.slice(0, 20).map((d) => {
               const flag = closeVarianceFlag(d.expectedCashUgx, d.differenceUgx);
               return (
-                <li key={d.id} className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="font-black text-slate-900">{d.dateKey}</span>
-                    {flag ? (
-                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-xs font-bold text-rose-900">!</span>
-                    ) : null}
+                <li key={d.id} className="border-b border-stone-100 last:border-b-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-black text-slate-950">{d.dateKey}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                        {t(lang, "ownerExpectedVsCounted")}: UGX {d.expectedCashUgx.toLocaleString()} / UGX{" "}
+                        {d.countedCashUgx.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      {flag ? (
+                        <span className="mb-1 inline-flex rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-black text-rose-900">
+                          !
+                        </span>
+                      ) : null}
+                      <p className="text-sm font-black text-slate-900">
+                        UGX {d.differenceUgx.toLocaleString()}
+                      </p>
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        {t(lang, "closeHistoryProfit")}: UGX {d.profitEstimateUgx.toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {t(lang, "ownerExpectedVsCounted")}: UGX {d.expectedCashUgx.toLocaleString()} / UGX {d.countedCashUgx.toLocaleString()}
-                  </p>
-                  <p className="text-sm font-bold text-slate-800">
-                    {t(lang, "closeHistoryDifference")}: UGX {d.differenceUgx.toLocaleString()} · {t(lang, "closeHistoryProfit")}: UGX{" "}
-                    {d.profitEstimateUgx.toLocaleString()}
-                  </p>
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </HistoryListCard>
         </section>
       ) : null}
     </div>

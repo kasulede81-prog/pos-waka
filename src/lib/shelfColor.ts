@@ -109,6 +109,27 @@ export function shelfTileColorStyle(hex: string, featured: boolean): {
   };
 }
 
+/** Bold tile background + white text (home menu tiles — like the Sell hero). */
+export function launcherBoldTileColorStyle(hex: string, pinned: boolean): {
+  background: string;
+  borderColor: string;
+  color: string;
+  boxShadow: string;
+} {
+  const base = hexToRgb(hex);
+  const gradientFrom = mixRgb(base, { r: 255, g: 255, b: 255 }, 0.12);
+  const gradientTo = mixRgb(base, { r: 0, g: 0, b: 0 }, 0.22);
+  const glow = mixRgb(base, { r: 0, g: 0, b: 0 }, 0.35);
+  return {
+    background: `linear-gradient(to bottom right, ${rgbToHex(gradientFrom)}, ${rgbToHex(gradientTo)})`,
+    borderColor: "rgba(255,255,255,0.3)",
+    color: "#ffffff",
+    boxShadow: pinned
+      ? `0 8px 28px ${rgbToHex(glow)}66, inset 0 0 0 2px rgba(255,255,255,0.35)`
+      : `0 8px 28px ${rgbToHex(glow)}55`,
+  };
+}
+
 export function resolveShelfHex(customColor: string | null | undefined, preset: PosShelfColor): string {
   return normalizeShelfHex(customColor) ?? PRESET_SHELF_HEX[preset];
 }
