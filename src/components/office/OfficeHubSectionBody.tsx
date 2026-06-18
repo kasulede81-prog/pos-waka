@@ -22,6 +22,7 @@ import {
   UserCog,
   Receipt,
   Clock,
+  Sun,
 } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -189,6 +190,15 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             title={t(lang, "officeCardCashExpenses")}
             subtitle={t(lang, "officeCardCashExpensesSub")}
             Icon={Banknote}
+          />
+        ) : null}
+        {access.can("day.open_drawer") ? (
+          <OfficeNavCard
+            to="/office/day-open"
+            title={t(lang, "officeCardDayOpen")}
+            subtitle={t(lang, "officeCardDayOpenSub")}
+            Icon={Sun}
+            highlight
           />
         ) : null}
         {access.can("day.close") ? (

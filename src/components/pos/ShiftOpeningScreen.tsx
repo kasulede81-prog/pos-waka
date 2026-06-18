@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSessionActor } from "../../context/SessionActorContext";
+import { hasPermission } from "../../lib/permissions";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
@@ -24,6 +26,8 @@ type Props = {
 /** Blocks sell flows until the cashier opens a shift with optional opening float. */
 export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
   const navigate = useNavigate();
+  const actor = useSessionActor();
+  const canOpenDay = hasPermission(actor.role, "day.open_drawer");
   const beginShift = usePosStore((s) => s.beginShift);
   const beginShiftV2 = usePosStore((s) => s.beginShiftV2);
   const preferences = usePosStore((s) => s.preferences);
@@ -94,10 +98,19 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
           <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
             {t(lang, "dayDrawerNotOpen")}
           </p>
+          {canOpenDay ? (
+            <button
+              type="button"
+              onClick={() => navigate("/office/day-open")}
+              className="mt-4 min-h-[52px] w-full rounded-2xl bg-waka-600 font-black text-white"
+            >
+              {t(lang, "dayOpenGoBtn")}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => navigate(POS_HOME_ROUTE)}
-            className="mt-6 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 font-bold"
+            className="mt-3 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 font-bold"
           >
             {t(lang, "cancel")}
           </button>
