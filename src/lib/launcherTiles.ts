@@ -120,9 +120,42 @@ export const LAUNCHER_TILE_CATALOG: LauncherTileDef[] = [
   },
 ];
 
-export const DEFAULT_LAUNCHER_TILE_ORDER = LAUNCHER_TILE_CATALOG.filter((t) => t.group !== "primary").map(
-  (t) => t.id,
-);
+export const DEFAULT_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [
+  "inventory",
+  "debts",
+  "cash",
+  "investigation",
+  "salesHistory",
+  "shop",
+  "reports",
+  "settings",
+];
+
+/** Branded home menu defaults — merged under saved layout; user edits override per tile. */
+export const DEFAULT_LAUNCHER_TILE_LAYOUT: Record<string, LauncherTileConfig> = {
+  inventory: { color: "purple", customColor: "#db2777" },
+  debts: { color: "purple" },
+  cash: { color: "blue" },
+  investigation: { color: "red" },
+  salesHistory: { color: "green" },
+  shop: { color: "orange" },
+  reports: { color: "green", customColor: "#0d9488", scale: 50 },
+  settings: { color: "orange" },
+};
+
+export function mergeLauncherTileLayout(
+  saved: Record<string, LauncherTileConfig>,
+): Record<string, LauncherTileConfig> {
+  const merged: Record<string, LauncherTileConfig> = {};
+  for (const [id, cfg] of Object.entries(DEFAULT_LAUNCHER_TILE_LAYOUT)) {
+    merged[id] = { ...cfg };
+  }
+  for (const [key, value] of Object.entries(saved)) {
+    const id = migrateLauncherTileId(key);
+    merged[id] = { ...merged[id], ...value };
+  }
+  return merged;
+}
 
 export type ResolvedLauncherTile = LauncherTileDef & {
   color: LauncherTileColor;
@@ -248,19 +281,20 @@ export function resolveHomeMenuTiles(params: {
   /** When true, include hidden tiles (settings arrange preview). */
   includeHidden?: boolean;
 }): { hero: ResolvedHomeTile | null; secondary: ResolvedHomeTile[] } {
+  const effectiveLayout = mergeLauncherTileLayout(params.layout);
   const visible = LAUNCHER_TILE_CATALOG.filter((tile) => !tile.perm || params.hasPermission(tile.perm));
   const heroDef = visible.find((t) => t.id === "sell") ?? null;
   const secondaryDefs = visible.filter((t) => t.group !== "primary");
 
   const secondaryIds = secondaryDefs
-    .filter((t) => params.includeHidden || !launcherTileLayoutEntry(params.layout, t.id)?.hidden)
+    .filter((t) => params.includeHidden || !launcherTileLayoutEntry(effectiveLayout, t.id)?.hidden)
     .map((t) => t.id);
 
   const arrangeIds = secondaryDefs.map((t) => t.id);
   const order = effectiveLauncherTileOrder(params.savedOrder, params.includeHidden ? arrangeIds : secondaryIds);
 
   const resolveOne = (def: LauncherTileDef): ResolvedHomeTile => {
-    const cfg = launcherTileLayoutEntry(params.layout, def.id);
+    const cfg = launcherTileLayoutEntry(effectiveLayout, def.id);
     return {
       ...def,
       color: cfg?.color ?? "default",

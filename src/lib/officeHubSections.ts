@@ -39,6 +39,28 @@ export const OFFICE_HUB_SECTIONS: OfficeHubSectionDef[] = [
 
 export const DEFAULT_OFFICE_HUB_TILE_ORDER = OFFICE_HUB_SECTIONS.map((s) => s.id);
 
+/** Branded office hub defaults — merged under saved layout; user edits override per section. */
+export const DEFAULT_OFFICE_HUB_TILE_LAYOUT: Record<string, LauncherTileConfig> = {
+  daily: { color: "blue" },
+  insights: { color: "green" },
+  "shop-control": { color: "default", customColor: "#6b7280" },
+  data: { color: "green", customColor: "#0f766e" },
+  help: { color: "blue" },
+};
+
+export function mergeOfficeHubTileLayout(
+  saved: Record<string, LauncherTileConfig>,
+): Record<string, LauncherTileConfig> {
+  const merged: Record<string, LauncherTileConfig> = {};
+  for (const [id, cfg] of Object.entries(DEFAULT_OFFICE_HUB_TILE_LAYOUT)) {
+    merged[id] = { ...cfg };
+  }
+  for (const [key, value] of Object.entries(saved)) {
+    merged[key] = { ...merged[key], ...value };
+  }
+  return merged;
+}
+
 export type ResolvedOfficeHubSection = OfficeHubSectionDef & {
   color: LauncherTileColor;
   customColor: string | null;
@@ -72,9 +94,10 @@ export function resolveOfficeHubSections(params: {
   /** When true, include hidden tiles (settings arrange preview). */
   includeHidden?: boolean;
 }): ResolvedOfficeHubSection[] {
+  const effectiveLayout = mergeOfficeHubTileLayout(params.layout);
   const permitted = OFFICE_HUB_SECTIONS.filter((s) => params.sectionVisible[s.id]);
   const hubIds = permitted
-    .filter((s) => params.includeHidden || !launcherTileLayoutEntry(params.layout, s.id)?.hidden)
+    .filter((s) => params.includeHidden || !launcherTileLayoutEntry(effectiveLayout, s.id)?.hidden)
     .map((s) => s.id);
 
   const order = effectiveOfficeHubTileOrder(params.savedOrder, hubIds);
@@ -83,7 +106,7 @@ export function resolveOfficeHubSections(params: {
     .map((id) => permitted.find((s) => s.id === id))
     .filter((s): s is OfficeHubSectionDef => Boolean(s))
     .map((def) => {
-      const cfg = launcherTileLayoutEntry(params.layout, def.id);
+      const cfg = launcherTileLayoutEntry(effectiveLayout, def.id);
       return {
         ...def,
         color: cfg?.color ?? "orange",
