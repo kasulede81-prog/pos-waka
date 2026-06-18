@@ -3,10 +3,10 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { fetchProductionMigrationHealth, type MigrationCheckResult } from "../../lib/migrationHealth";
 import { usePosStore } from "../../store/usePosStore";
-import { readSyncQueue } from "../../offline/localDb";
 import { runProductionReadinessSelfTest } from "../../lib/productionReadiness";
+import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
-export function SystemHealthCard({ lang }: { lang: Language }) {
+export function SystemHealthCard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [checks, setChecks] = useState<MigrationCheckResult[]>([]);
   const [allPass, setAllPass] = useState(false);
@@ -19,6 +19,7 @@ export function SystemHealthCard({ lang }: { lang: Language }) {
   const products = usePosStore((s) => s.products);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const auditLogs = usePosStore((s) => s.auditLogs);
+  const { queue, refreshQueue } = useSystemHealthDiagnostics();
 
   useEffect(() => {
     let cancelled = false;
@@ -37,31 +38,30 @@ export function SystemHealthCard({ lang }: { lang: Language }) {
   }, []);
 
   useEffect(() => {
+    if (lazy && !queue) return;
     let cancelled = false;
-    void readSyncQueue()
-      .then((syncQueue) =>
-        runProductionReadinessSelfTest({
-          customers,
-          sales,
-          debtPayments,
-          products,
-          stockMovements,
-          auditLogs,
-          syncQueue,
-        }),
-      )
-      .then((report) => {
-        if (cancelled) return;
-        setCertificationState(report.certificationState);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setCertificationState("FAIL");
+    void (async () => {
+      const snap = queue ?? (await refreshQueue());
+      const report = await runProductionReadinessSelfTest({
+        customers,
+        sales,
+        debtPayments,
+        products,
+        stockMovements,
+        auditLogs,
+        syncQueue: snap.rawQueue,
       });
+      if (cancelled) return;
+      setCertificationState(report.certificationState);
+    })().catch(() => {
+      if (cancelled) return;
+      setCertificationState("FAIL");
+    });
     return () => {
       cancelled = true;
     };
-  }, [customers, sales, debtPayments, products, stockMovements, auditLogs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lazy: once per queue; non-lazy: store-driven
+  }, lazy ? [queue?.checkedAt] : [customers, sales, debtPayments, products, stockMovements, auditLogs, queue?.checkedAt]);
 
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">

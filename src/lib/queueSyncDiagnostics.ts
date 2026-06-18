@@ -15,6 +15,7 @@ export type QueueSyncDiagnosticSnapshot = {
   localOnlyMode: boolean;
   nextRetryMs: number | null;
   byKind: Record<string, number>;
+  rawQueue: SyncOperation[];
 };
 
 function groupByKind(queue: SyncOperation[]): Record<string, number> {
@@ -47,5 +48,6 @@ export async function buildQueueSyncDiagnosticSnapshot(): Promise<QueueSyncDiagn
     localOnlyMode: !hasSupabaseConfig,
     nextRetryMs: nextQueueRetryMs(queue, now),
     byKind: groupByKind(queue),
+    rawQueue: queue,
   };
 }

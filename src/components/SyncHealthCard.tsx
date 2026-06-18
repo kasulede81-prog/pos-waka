@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Language } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { useOfflineStatus } from "../hooks/useOfflineStatus";
-import { countSalesWithSyncErrors, countUnsyncedSales, listSalesWithSyncErrors } from "../offline/cloudSync";
-import { tTemplate } from "../lib/i18n";
+import { computeSyncSalesStats } from "../offline/cloudSync";
+import { usePosStore } from "../store/usePosStore";
 
 type Props = { lang: Language; variant?: "full" | "simple" };
 
@@ -29,9 +29,11 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
   const h = sync.health;
   const simple = variant === "simple";
 
-  const unsyncedSales = countUnsyncedSales();
-  const syncErrorCount = countSalesWithSyncErrors();
-  const syncErrors = listSalesWithSyncErrors(6);
+  const sales = usePosStore((s) => s.sales);
+  const { unsyncedCount: unsyncedSales, errorCount: syncErrorCount, errors: syncErrors } = useMemo(
+    () => computeSyncSalesStats(sales),
+    [sales],
+  );
   const needsAttention = isOnline && (h.lastIssueCode === "error" || (h.lastIssueCode === "partial" && sync.pendingCount > 5) || syncErrorCount > 0);
 
   const issueLabel =

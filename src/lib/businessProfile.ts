@@ -4,6 +4,7 @@ import { fetchOwnerOnboardingStatus, writeCachedOwnerOnboardingComplete } from "
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { usePosStore } from "../store/usePosStore";
+import { clearPendingRegistrationProfile } from "./registrationProfileCache";
 
 export type SaveOwnerBundleArgs = {
   shopName: string;
@@ -141,6 +142,7 @@ export async function finalizeOwnerOnboardingAfterCloudSave(userId: string): Pro
     }
   }
   writeCachedOwnerOnboardingComplete(userId, true);
+  clearPendingRegistrationProfile();
   const store = usePosStore.getState();
   store.completeBusinessOnboarding(store.preferences.businessType);
   window.dispatchEvent(new CustomEvent("waka:onboarding-updated"));

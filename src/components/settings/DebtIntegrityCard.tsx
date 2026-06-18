@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { verifyCustomerDebtIntegrity } from "../../lib/customerDebtIntegrity";
@@ -6,19 +6,25 @@ import { canSafelyHealCustomerDebt } from "../../lib/debtSyncState";
 import { usePosStore } from "../../store/usePosStore";
 import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
+import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
-export function DebtIntegrityCard({ lang }: { lang: Language }) {
+export function DebtIntegrityCard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const actor = useSessionActor();
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const repair = usePosStore((s) => s.repairCustomerDebtIntegrity);
   const [repairMsg, setRepairMsg] = useState<string | null>(null);
+  const { shared, ensureShared } = useSystemHealthDiagnostics();
 
-  const status = useMemo(
-    () => verifyCustomerDebtIntegrity(customers, sales, debtPayments, { heal: false }),
-    [customers, sales, debtPayments],
-  );
+  useEffect(() => {
+    if (lazy) void ensureShared();
+  }, [lazy, ensureShared]);
+
+  const status = useMemo(() => {
+    if (shared?.debtIntegrity) return shared.debtIntegrity;
+    return verifyCustomerDebtIntegrity(customers, sales, debtPayments, { heal: false });
+  }, [shared, customers, sales, debtPayments]);
 
   const healSafety = canSafelyHealCustomerDebt();
   const canRepair = hasPermission(actor.role, "owner.dashboard") && healSafety.ok;

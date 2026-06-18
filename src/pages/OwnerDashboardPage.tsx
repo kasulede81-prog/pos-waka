@@ -26,6 +26,8 @@ import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { isCompletedSale } from "../lib/saleStatus";
 import { getCompletedFinancialsFromScoped } from "../lib/financialMetrics";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
+import { timedComputation } from "../lib/performanceMetrics";
+import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
 
 function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
   if (pulse === "strong") return t(lang, "ownerPulseStrong");
@@ -70,35 +72,38 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     return close?.countedCashUgx ?? null;
   }, [selectedDay, dayCloses]);
 
-  const dashboard = useMemo(
-    () =>
-      buildOwnerDashboardData({
-        lang,
-        sales,
-        products,
-        auditLogs,
-        returnRecords: reportingReturnRecords,
-        voidRecords: reportingVoidRecords,
-        dayCloses,
-        preferences,
-        drawerToday,
-        hospitalityMode,
-        pharmacyMode,
-      }),
-    [
-      lang,
-      sales,
-      products,
-      auditLogs,
-      reportingReturnRecords,
-      reportingVoidRecords,
-      dayCloses,
-      preferences,
-      drawerToday,
-      hospitalityMode,
-      pharmacyMode,
-    ],
-  );
+  const dashboard = useMemo(() => {
+    const fp = `${buildSalesFingerprint(sales)}:${products.length}:${auditLogs.length}:${reportingReturnRecords.length}:${reportingVoidRecords.length}:${dayCloses.length}:${drawerToday}:${hospitalityMode}:${pharmacyMode}`;
+    return getCachedComputation("buildOwnerDashboardData", fp, () =>
+      timedComputation("buildOwnerDashboardData", () =>
+        buildOwnerDashboardData({
+          lang,
+          sales,
+          products,
+          auditLogs,
+          returnRecords: reportingReturnRecords,
+          voidRecords: reportingVoidRecords,
+          dayCloses,
+          preferences,
+          drawerToday,
+          hospitalityMode,
+          pharmacyMode,
+        }),
+      ),
+    );
+  }, [
+    lang,
+    sales,
+    products,
+    auditLogs,
+    reportingReturnRecords,
+    reportingVoidRecords,
+    dayCloses,
+    preferences,
+    drawerToday,
+    hospitalityMode,
+    pharmacyMode,
+  ]);
 
   const heroFinancials = useMemo(() => {
     const filteredSales = sales.filter((s) => isCompletedSale(s) && saleMatchesFilter(s, bounds));

@@ -13,6 +13,8 @@ import {
   type WeeklySalesSummary,
   type MonthlySalesSummary,
 } from "../lib/localReporting";
+import { timedComputation } from "../lib/performanceMetrics";
+import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
 
 export type ShopReportBundle = {
   /** Financial totals always from canonical local helpers (getCompletedFinancials). */
@@ -44,6 +46,10 @@ function trendBars(days: { day: string; revenueUgx: number }[]) {
   }));
 }
 
+function reportFilterFingerprint(filter: DateFilterValue): string {
+  return JSON.stringify(filter);
+}
+
 export function useShopReportBundle(filter: DateFilterValue, includeArchived: boolean): ShopReportBundle {
   const sales = useDeferredReportingSales(includeArchived);
   const returns = useReportingReturnRecords(includeArchived);
@@ -52,10 +58,14 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
   const suppliers = usePosStore((s) => s.suppliers);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
 
-  const local = useMemo(
-    () => localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses),
-    [sales, products, customers, returns, suppliers, filter, cashExpenses],
-  );
+  const local = useMemo(() => {
+    const fp = `${buildSalesFingerprint(sales)}:${products.length}:${customers.length}:${returns.length}:${suppliers.length}:${cashExpenses.length}:${reportFilterFingerprint(filter)}`;
+    return getCachedComputation("localGetRangeSummary", fp, () =>
+      timedComputation("localGetRangeSummary", () =>
+        localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses),
+      ),
+    );
+  }, [sales, products, customers, returns, suppliers, filter, cashExpenses]);
 
   const summary = local.summary;
   const cash =
@@ -104,10 +114,14 @@ export function useDashboardAnalytics(
     [returns, sales, scope, actorUserId],
   );
 
-  const localToday = useMemo(
-    () => localGetRangeSummary(scopedSales, products, customers, scopedReturns, [], DEFAULT_DATE_FILTER),
-    [scopedSales, products, customers, scopedReturns],
-  );
+  const localToday = useMemo(() => {
+    const fp = `${buildSalesFingerprint(scopedSales)}:${products.length}:${customers.length}:${scopedReturns.length}:today`;
+    return getCachedComputation("localGetRangeSummary:today", fp, () =>
+      timedComputation("localGetRangeSummary:today", () =>
+        localGetRangeSummary(scopedSales, products, customers, scopedReturns, [], DEFAULT_DATE_FILTER),
+      ),
+    );
+  }, [scopedSales, products, customers, scopedReturns]);
   const localWeekly = useMemo(
     () => localGetRollingSevenDaySalesSummary(scopedSales, products, scopedReturns),
     [scopedSales, products, scopedReturns],

@@ -19,9 +19,10 @@ import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
 import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
 import { useAiFeatureGate } from "../hooks/useAiFeatureGate";
+import { usePageLoadMark } from "../hooks/usePageLoadMark";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
-import { StockProductCard } from "../components/stock/StockProductCard";
+import { VirtualizedStockProductList } from "../components/stock/VirtualizedStockProductList";
 import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSectionTabs";
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
@@ -55,6 +56,7 @@ import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } fr
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
 export function StockPage({ lang }: { lang: Language }) {
+  usePageLoadMark("stock");
   const actor = useSessionActor();
   const { snapshot } = useSubscription();
   const canRemove = hasPermission(actor.role, "products.remove");
@@ -564,22 +566,18 @@ export function StockPage({ lang }: { lang: Language }) {
     }
 
     return (
-      <ul className="space-y-3">
-        {items.map((p) => (
-          <StockProductCard
-            key={p.id}
-            lang={lang}
-            product={p}
-            locked={isProductPlanLocked(p.id, lockedIds)}
-            canAdd={canAdd}
-            canRemove={canRemove}
-            canSell={canSell}
-            canRestock={canRestock}
-            isOnlyProduct={onlyProductInStock}
-            onAction={(action) => handleRowAction(p, action)}
-          />
-        ))}
-      </ul>
+      <VirtualizedStockProductList
+        lang={lang}
+        products={items}
+        preferences={preferences}
+        lockedIds={lockedIds}
+        canAdd={canAdd}
+        canRemove={canRemove}
+        canSell={canSell}
+        canRestock={canRestock}
+        isOnlyProduct={onlyProductInStock}
+        onAction={handleRowAction}
+      />
     );
   };
 

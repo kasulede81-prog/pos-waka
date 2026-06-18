@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
@@ -8,7 +8,7 @@ import {
   type ReleaseChecklistItem,
 } from "../../lib/productionReadiness";
 import { usePosStore } from "../../store/usePosStore";
-import { readSyncQueue } from "../../offline/localDb";
+import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
 function statusLabel(lang: Language, status: ReadinessStatus): string {
   if (status === "pass") return t(lang, "readinessPass");
@@ -31,13 +31,14 @@ function CheckRow({ lang, check }: { lang: Language; check: ReadinessCheck }) {
   );
 }
 
-export function ProductionReadinessCard({ lang }: { lang: Language }) {
+export function ProductionReadinessCard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const products = usePosStore((s) => s.products);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const auditLogs = usePosStore((s) => s.auditLogs);
+  const { queue, refreshQueue } = useSystemHealthDiagnostics();
 
   const [loading, setLoading] = useState(true);
   const [overall, setOverall] = useState<ReadinessStatus>("pass");
@@ -45,31 +46,41 @@ export function ProductionReadinessCard({ lang }: { lang: Language }) {
   const [checks, setChecks] = useState<ReadinessCheck[]>([]);
   const [releaseChecklist, setReleaseChecklist] = useState<ReleaseChecklistItem[]>([]);
 
-  const runTest = () => {
+  const runTest = useCallback(() => {
     setLoading(true);
-    void readSyncQueue().then((syncQueue) =>
-      runProductionReadinessSelfTest({
+    void (async () => {
+      const snap = queue ?? (await refreshQueue());
+      const report = await runProductionReadinessSelfTest({
         customers,
         sales,
         debtPayments,
         products,
         stockMovements,
         auditLogs,
-        syncQueue,
-      }).then((report) => {
-        setOverall(report.overall);
-        setCertificationState(report.certificationState);
-        setChecks(report.checks);
-        setReleaseChecklist(report.releaseChecklist);
-        setLoading(false);
-      }),
-    );
-  };
+        syncQueue: snap.rawQueue,
+      });
+      setOverall(report.overall);
+      setCertificationState(report.certificationState);
+      setChecks(report.checks);
+      setReleaseChecklist(report.releaseChecklist);
+      setLoading(false);
+    })();
+  }, [
+    queue,
+    refreshQueue,
+    customers,
+    sales,
+    debtPayments,
+    products,
+    stockMovements,
+    auditLogs,
+  ]);
 
   useEffect(() => {
+    if (lazy && !queue) return;
     runTest();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run when store slices change
-  }, [customers, sales, debtPayments, products, stockMovements, auditLogs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- lazy: run once when queue ready; non-lazy: store-driven
+  }, lazy ? [queue?.checkedAt] : [customers, sales, debtPayments, products, stockMovements, auditLogs, queue?.checkedAt]);
 
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">

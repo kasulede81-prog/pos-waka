@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
@@ -9,6 +9,7 @@ import {
   filterDebtSyncRows,
   type DebtSyncDiagnosticFilter,
 } from "../../lib/debtSyncDiagnostics";
+import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
 const FILTERS: DebtSyncDiagnosticFilter[] = ["all", "mismatched", "missing_payments", "unsynced"];
 
@@ -31,19 +32,24 @@ function statusLabel(lang: Language, status: "healthy" | "warning" | "critical")
   return t(lang, "debtSyncStatusWarning");
 }
 
-export function DebtSyncDiagnosticsCard({ lang }: { lang: Language }) {
+export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const actor = useSessionActor();
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const [filter, setFilter] = useState<DebtSyncDiagnosticFilter>("all");
+  const { shared, ensureShared } = useSystemHealthDiagnostics();
+
+  useEffect(() => {
+    if (lazy) void ensureShared();
+  }, [lazy, ensureShared]);
 
   const canView = hasPermission(actor.role, "owner.dashboard");
 
-  const snapshot = useMemo(
-    () => buildDebtSyncDiagnosticSnapshot({ customers, sales, debtPayments }),
-    [customers, sales, debtPayments],
-  );
+  const snapshot = useMemo(() => {
+    if (shared?.debtSync) return shared.debtSync;
+    return buildDebtSyncDiagnosticSnapshot({ customers, sales, debtPayments });
+  }, [shared, customers, sales, debtPayments]);
 
   const rows = useMemo(
     () => filterDebtSyncRows(snapshot.rows, filter, snapshot.hydration),

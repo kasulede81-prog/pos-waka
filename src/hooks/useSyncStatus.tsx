@@ -202,7 +202,15 @@ function useSyncStatusEngine(opts?: { paused?: boolean }) {
     refreshQueue();
     if (getDeviceOnline()) {
       runWhenIdle(
-        () => void runFlush({ pull: true, showSpinner: false, forcePending: true }),
+        () => {
+          void (async () => {
+            if (isNativeApp()) {
+              const { waitForFirstUserInteraction } = await import("../lib/firstUserInteraction");
+              await waitForFirstUserInteraction().catch(() => undefined);
+            }
+            await runFlush({ pull: true, showSpinner: false, forcePending: true });
+          })();
+        },
         isNativeApp() ? 2500 : 800,
       );
     }

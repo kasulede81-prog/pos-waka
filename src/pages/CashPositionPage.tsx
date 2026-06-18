@@ -24,6 +24,8 @@ import {
 } from "../lib/cashPositionExport";
 import { cashDrawerAdjustmentTypeLabel } from "../lib/cashDrawerLedger";
 import { receiptPrintActionLabel } from "../lib/printActionLabels";
+import { timedComputation } from "../lib/performanceMetrics";
+import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
 
 function paymentLabel(lang: Language, key: CashPositionPaymentKey): string {
   const labels: Record<CashPositionPaymentKey, string> = {
@@ -64,43 +66,46 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
   const generalLabel = t(lang, "uncategorized");
 
-  const report = useMemo(
-    () =>
-      buildCashPositionReport({
-        lang,
-        dayKey: todayKey,
-        shopName,
-        sales,
-        products,
-        returnRecords,
-        debtPayments,
-        cashExpenses,
-        supplierPayments,
-        cashDrawerAdjustments,
-        shifts,
-        dayDrawerOpens,
-        formulaVersion,
-        staffAccounts: preferences.staffAccounts ?? [],
-        generalCategoryLabel: generalLabel,
-      }),
-    [
-      lang,
-      todayKey,
-      shopName,
-      sales,
-      products,
-      returnRecords,
-      debtPayments,
-      cashExpenses,
-      supplierPayments,
-      cashDrawerAdjustments,
-      shifts,
-      dayDrawerOpens,
-      formulaVersion,
-      preferences.staffAccounts,
-      generalLabel,
-    ],
-  );
+  const report = useMemo(() => {
+    const fp = `${todayKey}:${buildSalesFingerprint(sales)}:${returnRecords.length}:${debtPayments.length}:${cashExpenses.length}:${supplierPayments.length}:${cashDrawerAdjustments.length}:${dayDrawerOpens.length}:${formulaVersion}`;
+    return getCachedComputation("buildCashPositionReport", fp, () =>
+      timedComputation("buildCashPositionReport", () =>
+        buildCashPositionReport({
+          lang,
+          dayKey: todayKey,
+          shopName,
+          sales,
+          products,
+          returnRecords,
+          debtPayments,
+          cashExpenses,
+          supplierPayments,
+          cashDrawerAdjustments,
+          shifts,
+          dayDrawerOpens,
+          formulaVersion,
+          staffAccounts: preferences.staffAccounts ?? [],
+          generalCategoryLabel: generalLabel,
+        }),
+      ),
+    );
+  }, [
+    lang,
+    todayKey,
+    shopName,
+    sales,
+    products,
+    returnRecords,
+    debtPayments,
+    cashExpenses,
+    supplierPayments,
+    cashDrawerAdjustments,
+    shifts,
+    dayDrawerOpens,
+    formulaVersion,
+    preferences.staffAccounts,
+    generalLabel,
+  ]);
   const displayReport = useDeferredValue(report);
 
   const actualUgx = Math.max(0, Math.floor(Number(physicalCount.replace(/\D/g, "")) || 0));

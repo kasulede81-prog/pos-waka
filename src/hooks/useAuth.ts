@@ -23,6 +23,7 @@ import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
+import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
@@ -76,6 +77,7 @@ function applySignupProfileToLocalStore(next: Session | null): void {
   const store = usePosStore.getState();
   const existingOwner =
     isWorkspaceBootstrapped(next.user.id) || readCachedOwnerOnboardingComplete(next.user.id) === true;
+  cachePendingRegistrationProfile(profile, next.user.id);
   applyRegistrationProfileToLocalStore(profile);
   if (existingOwner) {
     store.setPreferences({

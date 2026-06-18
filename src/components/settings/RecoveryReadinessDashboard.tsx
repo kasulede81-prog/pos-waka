@@ -17,6 +17,7 @@ import {
   type PostRestoreValidationSnapshot,
 } from "../../lib/postRestoreValidation";
 import { snapshotFromPartial } from "../../offline/backupEngine";
+import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
 function statusLabel(lang: Language, status: "healthy" | "warning" | "critical"): string {
   if (status === "healthy") return t(lang, "recoveryStatusHealthy");
@@ -60,7 +61,7 @@ function Section({
   );
 }
 
-export function RecoveryReadinessDashboard({ lang }: { lang: Language }) {
+export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const actor = useSessionActor();
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
@@ -71,6 +72,7 @@ export function RecoveryReadinessDashboard({ lang }: { lang: Language }) {
   const purchases = usePosStore((s) => s.purchases);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const archivedSales = usePosStore((s) => s.archivedSales);
+  const { shared, queue, ensureShared } = useSystemHealthDiagnostics();
 
   const [queueSnap, setQueueSnap] = useState<QueueSyncDiagnosticSnapshot | null>(null);
   const [archiveTotal, setArchiveTotal] = useState(0);
@@ -78,12 +80,25 @@ export function RecoveryReadinessDashboard({ lang }: { lang: Language }) {
   const canView = hasPermission(actor.role, "owner.dashboard");
 
   useEffect(() => {
+    if (lazy) void ensureShared();
+  }, [lazy, ensureShared]);
+
+  useEffect(() => {
     if (!canView) return;
-    void buildQueueSyncDiagnosticSnapshot().then(setQueueSnap);
+    if (lazy) {
+      setQueueSnap(shared?.queue ?? queue);
+    } else {
+      void buildQueueSyncDiagnosticSnapshot().then(setQueueSnap);
+    }
+  }, [canView, lazy, shared, queue, products.length, sales.length]);
+
+  useEffect(() => {
+    if (!canView) return;
     void readRestoreArchiveStats().then((s) => setArchiveTotal(s.totalArchivedOps));
-  }, [canView, products.length, sales.length]);
+  }, [canView]);
 
   const currentTrimAnalysis = useMemo((): SnapshotTrimAnalysis => {
+    if (shared?.snapshotTrim) return shared.snapshotTrim;
     const prefs = usePosStore.getState().preferences;
     const snap = snapshotFromPartial({
       products,
@@ -110,22 +125,21 @@ export function RecoveryReadinessDashboard({ lang }: { lang: Language }) {
       });
     }
     return analyzeSnapshotTrim(snap);
-  }, [products, customers, sales, debtPayments, suppliers, purchases, supplierPayments, stockMovements, archivedSales]);
+  }, [shared, products, customers, sales, debtPayments, suppliers, purchases, supplierPayments, stockMovements, archivedSales]);
 
-  const liveValidation = useMemo(
-    (): PostRestoreValidationSnapshot =>
-      buildPostRestoreValidationSnapshot({
-        products,
-        customers,
-        sales,
-        debtPayments,
-        stockMovements,
-        suppliers,
-        purchases,
-        supplierPayments,
-      }),
-    [products, customers, sales, debtPayments, stockMovements, suppliers, purchases, supplierPayments],
-  );
+  const liveValidation = useMemo((): PostRestoreValidationSnapshot => {
+    if (shared?.postRestoreValidation) return shared.postRestoreValidation;
+    return buildPostRestoreValidationSnapshot({
+      products,
+      customers,
+      sales,
+      debtPayments,
+      stockMovements,
+      suppliers,
+      purchases,
+      supplierPayments,
+    });
+  }, [shared, products, customers, sales, debtPayments, stockMovements, suppliers, purchases, supplierPayments]);
 
   const lastRestore = getLastRestoreQueueSafety();
   const lastUploadTrim = getLastSnapshotUploadTrimAnalysis();
@@ -232,15 +246,24 @@ export function RestoreDiagnosticsCard({ lang }: { lang: Language }) {
   );
 }
 
-export function QueueStatusCard({ lang }: { lang: Language }) {
+export function QueueStatusCard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const actor = useSessionActor();
+  const { queue, shared, ensureShared } = useSystemHealthDiagnostics();
   const [queueSnap, setQueueSnap] = useState<QueueSyncDiagnosticSnapshot | null>(null);
   const canView = hasPermission(actor.role, "owner.dashboard");
 
   useEffect(() => {
+    if (lazy) void ensureShared();
+  }, [lazy, ensureShared]);
+
+  useEffect(() => {
     if (!canView) return;
+    if (lazy) {
+      setQueueSnap(shared?.queue ?? queue);
+      return;
+    }
     void buildQueueSyncDiagnosticSnapshot().then(setQueueSnap);
-  }, [canView]);
+  }, [canView, lazy, shared, queue]);
 
   if (!canView) return null;
 
@@ -261,16 +284,22 @@ export function QueueStatusCard({ lang }: { lang: Language }) {
   );
 }
 
-export function SnapshotHealthCard({ lang }: { lang: Language }) {
+export function SnapshotHealthCard({ lang, lazy = false }: { lang: Language; lazy?: boolean }) {
   const actor = useSessionActor();
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const sales = usePosStore((s) => s.sales);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const archivedSales = usePosStore((s) => s.archivedSales);
+  const { shared, ensureShared } = useSystemHealthDiagnostics();
   const canView = hasPermission(actor.role, "owner.dashboard");
 
+  useEffect(() => {
+    if (lazy) void ensureShared();
+  }, [lazy, ensureShared]);
+
   const analysis = useMemo(() => {
+    if (shared?.snapshotTrim) return shared.snapshotTrim;
     const prefs = usePosStore.getState().preferences;
     const snap = snapshotFromPartial({
       products,
@@ -291,7 +320,7 @@ export function SnapshotHealthCard({ lang }: { lang: Language }) {
       archivedSales,
     };
     return analyzeSnapshotTrim(payload);
-  }, [products, customers, sales, debtPayments, archivedSales]);
+  }, [shared, products, customers, sales, debtPayments, archivedSales]);
 
   const lastUpload = getLastSnapshotUploadTrimAnalysis();
 

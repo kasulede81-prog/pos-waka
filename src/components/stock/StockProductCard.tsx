@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { AlertTriangle, MoreHorizontal } from "lucide-react";
-import type { Language, Product } from "../../types";
+import type { Language, Product, ShopPreferences } from "../../types";
 import { t } from "../../lib/i18n";
-import { formatProductPriceLabel, usePosStore } from "../../store/usePosStore";
+import { formatProductPriceLabel } from "../../store/usePosStore";
 import { formatStockLabel, isLowStock } from "../../lib/sellingEngine";
 import {
   formatPharmacyLowStockRemaining,
@@ -21,6 +21,8 @@ type RowAction = "edit" | "sell" | "restock" | "duplicate" | "remove";
 type Props = {
   lang: Language;
   product: Product;
+  /** Passed from parent — avoids per-row store subscriptions in virtualized lists. */
+  preferences: ShopPreferences;
   locked: boolean;
   canAdd: boolean;
   canRemove: boolean;
@@ -34,6 +36,7 @@ type Props = {
 export function StockProductCard({
   lang,
   product: p,
+  preferences,
   locked,
   canAdd,
   canRemove,
@@ -43,7 +46,6 @@ export function StockProductCard({
   onAction,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const preferences = usePosStore((s) => s.preferences);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
   const low = isLowStock(p);
@@ -52,7 +54,7 @@ export function StockProductCard({
   const detail = pharmacyMode ? formatMedicineListSecondary(p) : null;
 
   return (
-    <li
+    <div
       className={`rounded-[1.35rem] border border-slate-200/90 bg-white p-4 shadow-sm ${locked ? "opacity-55" : ""}`}
     >
       <div className="min-w-0">
@@ -194,6 +196,6 @@ export function StockProductCard({
           </button>
         </div>
       ) : null}
-    </li>
+    </div>
   );
 }

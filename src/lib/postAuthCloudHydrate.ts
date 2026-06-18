@@ -36,6 +36,14 @@ async function runHydrateAccountFromCloud(opts?: {
   forcePull?: boolean;
   onProgress?: (percent: number) => void;
 }): Promise<void> {
+  const { withGlobalSyncMutex } = await import("./globalSyncMutex");
+  return withGlobalSyncMutex("hydrateAccountFromCloud", () => runHydrateAccountFromCloudInner(opts));
+}
+
+async function runHydrateAccountFromCloudInner(opts?: {
+  forcePull?: boolean;
+  onProgress?: (percent: number) => void;
+}): Promise<void> {
   if (!hasSupabaseConfig) return;
 
   await waitForPosStoreHydrated();
@@ -113,7 +121,13 @@ export async function hydrateAccountFromCloud(opts?: {
   if (!force && Date.now() - lastHydrateFinishedAt < minGap) return;
   if (hydrateInFlight) return hydrateInFlight;
 
-  hydrateInFlight = runHydrateAccountFromCloud(opts)
+  hydrateInFlight = (async () => {
+    if (isNativeApp() && !force) {
+      const { waitForFirstUserInteraction } = await import("./firstUserInteraction");
+      await waitForFirstUserInteraction().catch(() => undefined);
+    }
+    await runHydrateAccountFromCloud(opts);
+  })()
     .catch((err) => {
       captureAppException(err, { scope: "cloud_hydrate" });
       reportSyncIssue("cloud_hydrate_failed");

@@ -8,20 +8,22 @@ import {
   getAuditSyncHealth,
 } from "../../lib/auditHealth";
 import { usePosStore } from "../../store/usePosStore";
-import { readSyncQueue } from "../../offline/localDb";
 import { saveExportedFile } from "../../lib/fileDownload";
+import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
-export function AuditHealthCard({ lang }: { lang: Language }) {
+export function AuditHealthCard({ lang }: { lang: Language; lazy?: boolean }) {
   const auditLogs = usePosStore((s) => s.auditLogs);
   const retention = getAuditRetentionStatus(auditLogs);
+  const { queue, refreshQueue } = useSystemHealthDiagnostics();
   const [pendingAudit, setPendingAudit] = useState(0);
   const [exportMsg, setExportMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    void readSyncQueue().then((q) => {
-      setPendingAudit(getAuditSyncHealth(q).pendingAuditOps);
-    });
-  }, [auditLogs.length]);
+    void (async () => {
+      const snap = queue ?? (await refreshQueue());
+      setPendingAudit(getAuditSyncHealth(snap.rawQueue).pendingAuditOps);
+    })();
+  }, [queue, refreshQueue, auditLogs.length]);
 
   const exportAudit = async () => {
     const body = buildAuditExportText(auditLogs, lang);

@@ -42,7 +42,7 @@ import { getActiveAccountKey } from "./accountScope";
  */
 
 const DB_NAME = "waka-pos-offline";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const LEGACY_SNAPSHOT_KEY = "snapshot";
 const LEGACY_LAST_GOOD_KEY = "last_good_snapshot";
@@ -109,6 +109,11 @@ type WakaDB = DBSchema & {
   records: {
     key: string;
     value: import("./entityStore").EntityRow;
+    indexes: {
+      byAccountKey: string;
+      byBucket: import("./entityStore").EntityBucket;
+      byAccountBucket: [string, import("./entityStore").EntityBucket];
+    };
   };
 };
 
@@ -135,7 +140,7 @@ export function warmupLocalDb(): void {
 export function getLocalDb(): Promise<IDBPDatabase<WakaDB>> {
   if (!dbPromise) {
     dbPromise = openDB<WakaDB>(DB_NAME, DB_VERSION, {
-      upgrade(database, oldVersion) {
+      upgrade(database, oldVersion, _newVersion, transaction) {
         if (!database.objectStoreNames.contains("kv")) {
           database.createObjectStore("kv");
         }
@@ -147,8 +152,18 @@ export function getLocalDb(): Promise<IDBPDatabase<WakaDB>> {
           const b = database.createObjectStore("backups", { keyPath: "id" });
           b.createIndex("byCreated", "createdAt");
         }
-        if (oldVersion < 3 && !database.objectStoreNames.contains("records")) {
+        if (!database.objectStoreNames.contains("records")) {
           database.createObjectStore("records", { keyPath: "key" });
+        }
+        const recordsStore = transaction.objectStore("records");
+        if (!recordsStore.indexNames.contains("byAccountKey")) {
+          recordsStore.createIndex("byAccountKey", "accountKey", { unique: false });
+        }
+        if (!recordsStore.indexNames.contains("byBucket")) {
+          recordsStore.createIndex("byBucket", "bucket", { unique: false });
+        }
+        if (!recordsStore.indexNames.contains("byAccountBucket")) {
+          recordsStore.createIndex("byAccountBucket", ["accountKey", "bucket"], { unique: false });
         }
       },
     });

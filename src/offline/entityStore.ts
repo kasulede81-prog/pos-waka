@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { getActiveAccountKey } from "./accountScope";
 import { getLocalDb, readKv, type PersistedSnapshot, writeKv } from "./localDb";
+import { recordBootstrapIdbRead } from "../lib/performanceMetrics";
 import {
   applyTombstonesToManifest,
   mergeTombstoneBundles,
@@ -161,11 +162,28 @@ export async function deleteEntityRecord(bucket: EntityBucket, entityId: string)
   await db.delete("records", entityKey(acc, bucket, entityId));
 }
 
-export async function getEntitiesByBucket<T>(bucket: EntityBucket): Promise<T[]> {
-  const acc = accountOrNull();
-  if (!acc) return [];
+async function readEntitiesByBucketIndexed<T>(acc: string, bucket: EntityBucket): Promise<T[] | null> {
+  const db = await getLocalDb();
+  if (!db.objectStoreNames.contains("records")) return null;
+  const tx = db.transaction("records", "readonly");
+  const store = tx.objectStore("records");
+  if (!store.indexNames.contains("byAccountBucket")) return null;
+  const index = store.index("byAccountBucket");
+  const rows = await index.getAll(IDBKeyRange.only([acc, bucket]));
+  await tx.done;
+  recordBootstrapIdbRead(rows.length);
+  const out: T[] = [];
+  for (const row of rows) {
+    const r = row as EntityRow;
+    if (r.data != null) out.push(r.data as T);
+  }
+  return out;
+}
+
+async function readEntitiesByBucketLegacyScan<T>(acc: string, bucket: EntityBucket): Promise<T[]> {
   const db = await getLocalDb();
   const all = await db.getAll("records");
+  recordBootstrapIdbRead(all.length, { fullTable: true });
   const out: T[] = [];
   for (const row of all) {
     const r = row as EntityRow;
@@ -176,6 +194,18 @@ export async function getEntitiesByBucket<T>(bucket: EntityBucket): Promise<T[]>
   return out;
 }
 
+export async function getEntitiesByBucket<T>(bucket: EntityBucket): Promise<T[]> {
+  const acc = accountOrNull();
+  if (!acc) return [];
+  try {
+    const indexed = await readEntitiesByBucketIndexed<T>(acc, bucket);
+    if (indexed != null) return indexed;
+  } catch {
+    /* fall through to legacy scan */
+  }
+  return readEntitiesByBucketLegacyScan<T>(acc, bucket);
+}
+
 export async function getEntitiesByIds<T>(bucket: EntityBucket, ids: string[]): Promise<T[]> {
   if (ids.length === 0) return [];
   const acc = accountOrNull();
@@ -184,6 +214,7 @@ export async function getEntitiesByIds<T>(bucket: EntityBucket, ids: string[]): 
   const out: T[] = [];
   for (const id of ids) {
     const row = (await db.get("records", entityKey(acc, bucket, id))) as EntityRow | undefined;
+    recordBootstrapIdbRead(row?.data != null ? 1 : 0);
     if (row?.data != null) out.push(row.data as T);
   }
   return out;

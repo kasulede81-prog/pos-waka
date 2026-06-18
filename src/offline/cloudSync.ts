@@ -2843,7 +2843,7 @@ function shouldPullFromCloud(): boolean {
 }
 
 /** Push pending sales/queue only (fast, for background sync). */
-export async function pushShopPendingToCloud(): Promise<{
+async function pushShopPendingToCloudInner(): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
@@ -2870,8 +2870,16 @@ export async function pushShopPendingToCloud(): Promise<{
   return { push, queueFailed };
 }
 
+export async function pushShopPendingToCloud(): Promise<{
+  push: { ok: number; fail: number };
+  queueFailed: number;
+}> {
+  const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
+  return withGlobalSyncMutex("pushPending", () => pushShopPendingToCloudInner());
+}
+
 /** Pull cloud data, push pending local rows, then drain the offline queue. */
-export async function syncShopWithCloud(opts?: {
+async function syncShopWithCloudInner(opts?: {
   pull?: boolean;
   forceFull?: boolean;
 }): Promise<{
@@ -2903,13 +2911,29 @@ export async function syncShopWithCloud(opts?: {
   if (getDeviceOnline()) {
     await pullHospitalityStateFromCloud(opts?.forceFull === true);
   }
-  const { push, queueFailed } = await pushShopPendingToCloud();
+  const { push, queueFailed } = await pushShopPendingToCloudInner();
   if (getDeviceOnline() && push.fail === 0) {
     const { uploadShopCloudSnapshot } = await import("../lib/cloudSnapshotSync");
     const { runWhenIdle } = await import("../lib/uiYield");
     runWhenIdle(() => void uploadShopCloudSnapshot().catch(() => false), isNativeApp() ? 15_000 : 4000);
   }
   return { pulled, push, queueFailed };
+}
+
+export async function syncShopWithCloud(opts?: {
+  pull?: boolean;
+  forceFull?: boolean;
+}): Promise<{
+  pulled: boolean;
+  push: { ok: number; fail: number };
+  queueFailed: number;
+}> {
+  const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
+  const { recordSyncDuration } = await import("../lib/performanceMetrics");
+  const started = performance.now();
+  const result = await withGlobalSyncMutex("syncShopWithCloud", () => syncShopWithCloudInner(opts));
+  recordSyncDuration("syncShopWithCloud", performance.now() - started);
+  return result;
 }
 
 /** Fire-and-forget cloud sync after local hydrate (does not block UI). */
@@ -2922,22 +2946,44 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   const delay = opts?.delayMs ?? 0;
   backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
-    void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
+    void (async () => {
+      if (isNativeApp()) {
+        const { waitForFirstUserInteraction } = await import("../lib/firstUserInteraction");
+        await waitForFirstUserInteraction().catch(() => undefined);
+      }
+      await syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
+    })();
   }, delay);
 }
 
+export function computeSyncSalesStats(sales: Sale[]): {
+  unsyncedCount: number;
+  errorCount: number;
+  errors: Array<{ id: string; error: string; createdAt: string }>;
+} {
+  let unsyncedCount = 0;
+  let errorCount = 0;
+  const errors: Array<{ id: string; error: string; createdAt: string }> = [];
+  for (const s of sales) {
+    if (s.pendingSync) unsyncedCount += 1;
+    if (s.lastSyncError) {
+      errorCount += 1;
+      if (errors.length < 6) {
+        errors.push({ id: s.id, error: s.lastSyncError, createdAt: s.createdAt });
+      }
+    }
+  }
+  return { unsyncedCount, errorCount, errors };
+}
+
 export function countUnsyncedSales(): number {
-  return usePosStore.getState().sales.filter((s) => s.pendingSync).length;
+  return computeSyncSalesStats(usePosStore.getState().sales).unsyncedCount;
 }
 
 export function countSalesWithSyncErrors(): number {
-  return usePosStore.getState().sales.filter((s) => s.lastSyncError).length;
+  return computeSyncSalesStats(usePosStore.getState().sales).errorCount;
 }
 
 export function listSalesWithSyncErrors(limit = 5): Array<{ id: string; error: string; createdAt: string }> {
-  return usePosStore
-    .getState()
-    .sales.filter((s) => s.lastSyncError)
-    .slice(0, limit)
-    .map((s) => ({ id: s.id, error: s.lastSyncError ?? "unknown", createdAt: s.createdAt }));
+  return computeSyncSalesStats(usePosStore.getState().sales).errors.slice(0, limit);
 }

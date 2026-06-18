@@ -48,6 +48,7 @@ import { authorizeBackupRestore } from "../lib/backupRestoreAuthorization";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
+import { readPendingRegistrationProfileForUser } from "../lib/registrationProfileCache";
 import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
@@ -4989,9 +4990,20 @@ const BOOTSTRAP_DISK_TIMEOUT_MS = 12_000;
 /** Returning Supabase owners should not be sent through new-shop onboarding after a slow/empty disk read. */
 function preferencesForAccountBootstrap(key: string): ShopPreferences {
   const preferences = createDefaultPreferences();
-  if (!key.startsWith("sb:")) return preferences;
-  const userId = key.slice(3);
-  if (isWorkspaceBootstrapped(userId) || readCachedOwnerOnboardingComplete(userId) === true) {
+  const userId = key.startsWith("sb:") ? key.slice(3) : null;
+  const pending = userId ? readPendingRegistrationProfileForUser(userId) : null;
+  const existing = usePosStore.getState().preferences;
+
+  const shopDisplayName =
+    pending?.shopDisplayName?.trim() || existing.shopDisplayName?.trim() || null;
+  if (shopDisplayName) preferences.shopDisplayName = shopDisplayName;
+
+  const shopPhone = pending?.phoneE164 ?? existing.shopPhoneE164 ?? null;
+  if (shopPhone) preferences.shopPhoneE164 = shopPhone;
+
+  if (existing.shopCurrency) preferences.shopCurrency = existing.shopCurrency;
+
+  if (userId && (isWorkspaceBootstrapped(userId) || readCachedOwnerOnboardingComplete(userId) === true)) {
     preferences.onboardingDone = true;
     preferences.onboardingWizardDone = true;
     preferences.schemaVersion = 2;
@@ -5001,9 +5013,12 @@ function preferencesForAccountBootstrap(key: string): ShopPreferences {
 
 /** Load local POS data; never hang the UI longer than BOOTSTRAP_DISK_TIMEOUT_MS. */
 export async function bootstrapPosFromDisk(): Promise<void> {
+  const { markBootstrapStart, markBootstrapEnd } = await import("../lib/performanceMetrics");
+  markBootstrapStart();
   const key = getActiveAccountKey();
   if (!key) {
     usePosStore.getState().resetForSignOut();
+    markBootstrapEnd();
     return;
   }
   if (key.startsWith("demo:")) {
@@ -5018,6 +5033,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       customers: [],
       preferences: prefs,
     });
+    markBootstrapEnd();
     schedulePostBootstrapTasks();
     return;
   }
@@ -5048,28 +5064,81 @@ export async function bootstrapPosFromDisk(): Promise<void> {
           manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]),
         );
       }
+      const [
+        debtPaymentsRaw,
+        dayClosesRaw,
+        auditLogsRaw,
+        suppliersRaw,
+        purchasesRaw,
+        supplierPaymentsRaw,
+        stockMovementsRaw,
+        voidRecordsRaw,
+        returnRecordsRaw,
+        cashExpensesRaw,
+        cashDrawerAdjustmentsRaw,
+        inventoryCountSessionsRaw,
+        archivedAuditLogsRaw,
+        archivedDayClosesRaw,
+        archivedVoidRecordsRaw,
+        archivedReturnRecordsRaw,
+      ] = await Promise.all([
+        getEntitiesByBucket<DebtPayment>("debtPayment"),
+        getEntitiesByBucket<DayCloseSummary>("dayClose"),
+        getEntitiesByBucket<AuditLogEntry>("auditLog"),
+        getEntitiesByBucket<Supplier>("supplier"),
+        getEntitiesByBucket<Purchase>("purchase"),
+        getEntitiesByBucket<SupplierPayment>("supplierPayment"),
+        getEntitiesByBucket<StockMovement>("stockMovement"),
+        getEntitiesByBucket<VoidRecord>("voidRecord"),
+        getEntitiesByBucket<ReturnRecord>("returnRecord"),
+        getEntitiesByBucket<CashExpense>("cashExpense"),
+        getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment"),
+        getEntitiesByBucket<InventoryCountSession>("inventoryCountSession"),
+        getEntitiesByBucket<AuditLogEntry>("archivedAuditLog"),
+        getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
+        getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
+        getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
+      ]);
+      const archivedSalesRaw = (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(
+        normalizeSale,
+      );
+      const remainder = {
+        debtPayments: debtPaymentsRaw,
+        dayCloses: dayClosesRaw,
+        auditLogs: auditLogsRaw,
+        suppliers: suppliersRaw.map(normalizeSupplier),
+        purchases: purchasesRaw.map(normalizePurchase),
+        supplierPayments: supplierPaymentsRaw.map(normalizeSupplierPayment),
+        stockMovements: stockMovementsRaw.map(normalizeStockMovement),
+        voidRecords: voidRecordsRaw,
+        returnRecords: returnRecordsRaw,
+        cashExpenses: cashExpensesRaw.map(normalizeCashExpense),
+        cashDrawerAdjustments: cashDrawerAdjustmentsRaw.map(normalizeCashDrawerAdjustment),
+        inventoryCountSessions: inventoryCountSessionsRaw.map(normalizeInventoryCountSession),
+        archivedSales: archivedSalesRaw,
+        archivedAuditLogs: archivedAuditLogsRaw,
+        archivedDayCloses: archivedDayClosesRaw,
+        archivedVoidRecords: archivedVoidRecordsRaw,
+        archivedReturnRecords: archivedReturnRecordsRaw,
+      };
       usePosStore.getState().hydrateRemainder({
-        debtPayments: await getEntitiesByBucket("debtPayment"),
-        dayCloses: await getEntitiesByBucket("dayClose"),
-        auditLogs: await getEntitiesByBucket("auditLog"),
-        suppliers: (await getEntitiesByBucket<Supplier>("supplier")).map(normalizeSupplier),
-        purchases: (await getEntitiesByBucket<Purchase>("purchase")).map(normalizePurchase),
-        supplierPayments: (await getEntitiesByBucket<SupplierPayment>("supplierPayment")).map(normalizeSupplierPayment),
-        stockMovements: (await getEntitiesByBucket<StockMovement>("stockMovement")).map(normalizeStockMovement),
-        voidRecords: await getEntitiesByBucket("voidRecord"),
-        returnRecords: await getEntitiesByBucket("returnRecord"),
-        cashExpenses: (await getEntitiesByBucket<CashExpense>("cashExpense")).map(normalizeCashExpense),
-        cashDrawerAdjustments: (await getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment")).map(
-          normalizeCashDrawerAdjustment,
-        ),
-        inventoryCountSessions: (await getEntitiesByBucket<InventoryCountSession>("inventoryCountSession")).map(
-          normalizeInventoryCountSession,
-        ),
-        archivedSales: (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale),
-        archivedAuditLogs: await getEntitiesByBucket("archivedAuditLog"),
-        archivedDayCloses: await getEntitiesByBucket("archivedDayClose"),
-        archivedVoidRecords: await getEntitiesByBucket("archivedVoidRecord"),
-        archivedReturnRecords: await getEntitiesByBucket("archivedReturnRecord"),
+        debtPayments: remainder.debtPayments,
+        dayCloses: remainder.dayCloses,
+        auditLogs: remainder.auditLogs,
+        suppliers: remainder.suppliers,
+        purchases: remainder.purchases,
+        supplierPayments: remainder.supplierPayments,
+        stockMovements: remainder.stockMovements,
+        voidRecords: remainder.voidRecords,
+        returnRecords: remainder.returnRecords,
+        cashExpenses: remainder.cashExpenses,
+        cashDrawerAdjustments: remainder.cashDrawerAdjustments,
+        inventoryCountSessions: remainder.inventoryCountSessions,
+        archivedSales: remainder.archivedSales,
+        archivedAuditLogs: remainder.archivedAuditLogs,
+        archivedDayCloses: remainder.archivedDayCloses,
+        archivedVoidRecords: remainder.archivedVoidRecords,
+        archivedReturnRecords: remainder.archivedReturnRecords,
       });
       return;
     }
@@ -5125,6 +5194,7 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     }
     if (import.meta.env.DEV) console.warn("[waka-pos] bootstrap disk", e);
   }
+  markBootstrapEnd();
   schedulePostBootstrapTasks();
 }
 

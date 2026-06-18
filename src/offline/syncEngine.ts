@@ -37,6 +37,15 @@ export async function flushSyncQueue(onProgress?: (done: number, total: number) 
   remaining: number;
   skippedBackoff: number;
 }> {
+  const { withGlobalSyncMutex } = await import("../lib/globalSyncMutex");
+  return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress));
+}
+
+async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void): Promise<{
+  failed: number;
+  remaining: number;
+  skippedBackoff: number;
+}> {
   const queue = (await readSyncQueue()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   let failed = 0;
   let skippedBackoff = 0;
