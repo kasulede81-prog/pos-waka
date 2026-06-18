@@ -18,8 +18,6 @@ function formatWhen(iso: string): string {
   }
 }
 
-import { useProtectedAction } from "../hooks/useProtectedAction";
-
 export function PendingSalesPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
