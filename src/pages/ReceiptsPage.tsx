@@ -11,7 +11,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala } from "../lib/datesUg";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
-import { saleMatchesFilter } from "../lib/dateFilters";
+import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
@@ -145,17 +145,22 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const partitioned = useMemo(() => partitionReceiptsSales(filteredInRange), [filteredInRange]);
 
+  const filteredReturns = useMemo(
+    () => allReturns.filter((r) => returnMatchesFilter(r, bounds)),
+    [allReturns, bounds],
+  );
+
   const rangeFinancials = useMemo(
     () =>
-      getCompletedFinancialsFromScoped(partitioned.completed, allReturns, products, {
+      getCompletedFinancialsFromScoped(partitioned.completed, filteredReturns, products, {
         skipProfit: !showProfit,
       }),
-    [partitioned.completed, allReturns, products, showProfit],
+    [partitioned.completed, filteredReturns, products, showProfit],
   );
 
   const rangeRevenueUgx = useMemo(
-    () => getCompletedRevenue(partitioned.completed, allReturns, products),
-    [partitioned.completed, allReturns, products],
+    () => getCompletedRevenue(partitioned.completed, filteredReturns, products),
+    [partitioned.completed, filteredReturns, products],
   );
 
   const listSales = useMemo(() => {
