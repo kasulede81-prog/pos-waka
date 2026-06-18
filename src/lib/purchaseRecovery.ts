@@ -1,9 +1,11 @@
 /**
- * Purchase & supplier cloud hydration — map DB rows and reconcile supplier ledgers on recovery.
+ * Purchase void cloud sync — push payload, pull parse, and void-aware merge.
  */
 
 import type { Purchase, PurchaseLine, Supplier, SupplierPayment } from "../types";
+import { isPurchaseVoided } from "./purchaseCorrections";
 import { isWalkInSupplierId } from "./walkInSupplier";
+import { parsePurchaseLineFromCloud, serializePurchaseLineForCloud } from "./purchaseLineSync";
 
 export type CloudPurchaseRow = {
   record: Purchase;
@@ -22,22 +24,57 @@ function recencyMs(createdAt: string, updatedAt?: string): number {
   return Number.isNaN(c) ? 0 : c;
 }
 
+function voidRecencyMs(purchase: Purchase): number {
+  if (purchase.voidedAt) return new Date(purchase.voidedAt).getTime();
+  return 0;
+}
+
+function parseVoidFields(row: Record<string, unknown>): { voidedAt?: string; voidReason?: string } {
+  const meta = row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
+  const voidedRaw =
+    row.voided_at ??
+    row.voidedAt ??
+    meta.voided_at ??
+    meta.voidedAt;
+  const voidedAt = voidedRaw != null && String(voidedRaw).trim() ? String(voidedRaw) : undefined;
+  const reasonRaw = row.void_reason ?? row.voidReason ?? meta.void_reason ?? meta.voidReason;
+  const voidReason = reasonRaw != null ? String(reasonRaw).trim() : undefined;
+  return {
+    ...(voidedAt ? { voidedAt } : {}),
+    ...(voidReason ? { voidReason } : {}),
+  };
+}
+
 function parsePurchaseLines(raw: unknown): PurchaseLine[] {
   if (!Array.isArray(raw)) return [];
   const lines: PurchaseLine[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const o = item as Record<string, unknown>;
-    const productId = String(o.productId ?? o.product_id ?? "").trim();
-    if (!productId) continue;
-    lines.push({
-      productId,
-      name: String(o.name ?? ""),
-      qtyBuyingUnits: Math.max(0, Number(o.qtyBuyingUnits ?? o.qty_buying_units ?? 0)),
-      costPerBuyingUnitUgx: Math.max(0, Math.floor(Number(o.costPerBuyingUnitUgx ?? o.cost_per_buying_unit_ugx ?? 0))),
-    });
+    const parsed = parsePurchaseLineFromCloud(item as Record<string, unknown>);
+    if (parsed) lines.push(parsed);
   }
   return lines;
+}
+
+/** Build cloud push payload for shop_push_purchase RPC. */
+export function buildPurchaseCloudPushPayload(purchase: Purchase): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    id: purchase.id,
+    supplier_id: purchase.supplierId,
+    supplier_name: purchase.supplierName,
+    total_cost_ugx: purchase.totalCostUgx,
+    amount_paid_ugx: purchase.amountPaidUgx,
+    balance_delta_ugx: purchase.balanceDeltaUgx,
+    notes: purchase.notes,
+    created_at: purchase.createdAt,
+    lines: purchase.lines.map(serializePurchaseLineForCloud),
+    metadata: { wakaClient: true },
+  };
+  if (purchase.voidedAt) {
+    payload.voided_at = purchase.voidedAt;
+    payload.void_reason = purchase.voidReason ?? "";
+  }
+  return payload;
 }
 
 export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | null {
@@ -50,6 +87,7 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
   const createdAt = String(row.created_at ?? new Date().toISOString());
   const updatedAt = String(row.updated_at ?? createdAt);
   const totalCostUgx = Math.max(0, Math.floor(Number(row.total_cost_ugx ?? 0)));
+  const voidFields = parseVoidFields(row);
 
   const record: Purchase = {
     id,
@@ -62,6 +100,7 @@ export function rowToPurchase(row: Record<string, unknown>): CloudPurchaseRow | 
     notes: String(row.notes ?? ""),
     createdAt,
     pendingSync: false,
+    ...voidFields,
   };
 
   return { record, updatedAt };
@@ -107,6 +146,21 @@ export function rowToSupplierPayment(row: Record<string, unknown>): SupplierPaym
   };
 }
 
+/** Merge two purchase records — never unvoid; voided state wins by voidedAt recency. */
+export function mergePurchaseRecord(local: Purchase, remote: Purchase): Purchase {
+  const localVoid = isPurchaseVoided(local);
+  const remoteVoid = isPurchaseVoided(remote);
+
+  if (localVoid && !remoteVoid) return local;
+  if (remoteVoid && !localVoid) return remote;
+  if (localVoid && remoteVoid) {
+    return voidRecencyMs(remote) >= voidRecencyMs(local) ? remote : local;
+  }
+
+  if (recencyMs(local.createdAt) <= recencyMs(remote.createdAt)) return remote;
+  return local;
+}
+
 export function mergePurchasesForRecovery(local: Purchase[], remote: CloudPurchaseRow[]): Purchase[] {
   const map = new Map<string, { record: Purchase; updatedAt: string }>();
 
@@ -120,9 +174,12 @@ export function mergePurchasesForRecovery(local: Purchase[], remote: CloudPurcha
       map.set(record.id, { record, updatedAt });
       continue;
     }
-    if (recencyMs(existing.record.createdAt, existing.updatedAt) <= recencyMs(record.createdAt, updatedAt)) {
-      map.set(record.id, { record, updatedAt });
-    }
+    const merged = mergePurchaseRecord(existing.record, record);
+    const winnerUpdatedAt =
+      merged === record
+        ? updatedAt
+        : existing.updatedAt;
+    map.set(record.id, { record: merged, updatedAt: winnerUpdatedAt });
   }
 
   return [...map.values()]
@@ -182,7 +239,7 @@ export function reconcileSuppliersFromPurchaseHistory(
   }
 
   for (const p of purchases) {
-    if (isWalkInSupplierId(p.supplierId) || p.voidedAt) continue;
+    if (isWalkInSupplierId(p.supplierId) || isPurchaseVoided(p)) continue;
     let s = byId.get(p.supplierId);
     if (!s) {
       s = {

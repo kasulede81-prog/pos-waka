@@ -7,7 +7,11 @@ import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
-import { hasPermission } from "../lib/permissions";
+import {
+  filterReturnsForHomeScope,
+  filterSalesForHomeScope,
+  resolveVisibleHomeMetrics,
+} from "../lib/homeVisibility";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { localGetDailySalesSummary } from "../lib/localReporting";
@@ -40,12 +44,13 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const hospitality = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const todayKey = dateKeyKampala(new Date());
 
-  const canFloor = hasPermission(actor.role, "hospitality.floor");
+  const homeMetrics = resolveVisibleHomeMetrics(actor.role);
+  const canFloor = hasEffectivePermission(actor.role, "hospitality.floor", snapshot, authMode);
   const kitchenEnabled = isKitchenEnabledForHospitality(
     preferences.businessType,
     preferences.hospitalityKitchenEnabled,
   );
-  const canKitchen = kitchenEnabled && hasPermission(actor.role, "hospitality.kitchen");
+  const canKitchen = kitchenEnabled && hasEffectivePermission(actor.role, "hospitality.kitchen", snapshot, authMode);
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
 
@@ -66,10 +71,16 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
       .sort((a, b) => b.total - a.total);
   }, [floor, sales]);
 
-  const todayRevenue = useMemo(
-    () => localGetDailySalesSummary(sales, products, returnRecords, todayKey).totalRevenueUgx,
-    [sales, products, returnRecords, todayKey],
+  const scopedSales = useMemo(
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
+    [sales, homeMetrics.scope, actor.userId],
   );
+
+  const todayRevenue = useMemo(() => {
+    if (!homeMetrics.showShopWideRevenue && !homeMetrics.showPersonalRevenue) return null;
+    const scopedReturns = filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId);
+    return localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey).totalRevenueUgx;
+  }, [homeMetrics, scopedSales, products, returnRecords, sales, actor.userId, todayKey]);
 
   const hasOpenSessions = (floor?.sessions.some((s) => s.status === "open" || s.status === "payment_pending") ?? false);
 
@@ -170,6 +181,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
             <p className="mt-1 text-2xl font-black text-amber-950">{formatUgx(stats.pendingBillsUgx)}</p>
             <p className="mt-1 text-xs font-semibold text-amber-800">{stats.pendingBillCount} open</p>
           </article>
+          {todayRevenue != null ? (
           <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "hospitalityDashTodayRevenue")}</p>
             <p className="mt-1 text-2xl font-black">UGX {todayRevenue.toLocaleString()}</p>
@@ -180,6 +192,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
               </p>
             ) : null}
           </article>
+          ) : null}
         </section>
       ) : null}
 

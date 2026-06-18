@@ -28,6 +28,10 @@ import { useSyncStatus } from "../hooks/useSyncStatus";
 import { assessRestoreRisk, confirmRestoreWithSafetyChecks } from "../lib/restoreSafety";
 import { appendPilotEvent } from "../lib/pilotEventLog";
 import { captureAppException } from "../lib/crashReporting";
+import { useSessionActor } from "../context/SessionActorContext";
+import { useSubscription } from "../context/SubscriptionContext";
+import { authorizeBackupExport } from "../lib/backupExportAuthorization";
+import { authorizeBackupRestore } from "../lib/backupRestoreAuthorization";
 
 type Props = { lang: Language; compact?: boolean; /** When false, show upgrade hint instead of backup actions. */ actionsEnabled?: boolean };
 
@@ -97,6 +101,8 @@ function RestoreProgressOverlay({
 
 export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Props) {
   const sync = useSyncStatus();
+  const actor = useSessionActor();
+  const { snapshot: subscriptionSnapshot, authMode } = useSubscription();
   const [meta, setMeta] = useState<Array<{ id: string; kind: string; createdAt: string; dateKey?: string }>>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -141,6 +147,13 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
     setRestorePercent(0);
 
     try {
+      const restoreAuth = authorizeBackupRestore({ actor, snapshot: subscriptionSnapshot, authMode });
+      if (!restoreAuth.ok) {
+        setMsg(t(lang, restoreAuth.errorKey === "backupRestoreNotEntitled" ? "backupUpgradeRequired" : "backupRestoreFail"));
+        setBusy(false);
+        setRestorePhase(null);
+        return;
+      }
       setRestorePhase("restoring");
       await yieldUiTick();
       const { snapshot } = await loadSnapshot();
@@ -175,6 +188,11 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
     setBusy(true);
     setMsg(null);
     try {
+      const auth = authorizeBackupExport({ actor, snapshot: subscriptionSnapshot, authMode });
+      if (!auth.ok) {
+        setMsg(t(lang, "backupExportFail"));
+        return;
+      }
       const raw = await readSnapshotWithFallback();
       const snap = snapshotFromPartial(raw ?? {});
       if (!snap) {

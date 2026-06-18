@@ -212,7 +212,7 @@ describe("inventoryIntegrity — offline recovery movements", () => {
     const deltas = [
       ...saleStockDeltasFromLines(SALE_A, [{ productId: PRODUCT_ID, quantity: 4 }], "2026-05-31T10:00:00.000Z"),
       voidStockDelta("void-1", PRODUCT_ID, 1, "2026-05-31T10:30:00.000Z"),
-      returnStockDelta("ret-1", PRODUCT_ID, 2, "2026-05-31T11:00:00.000Z"),
+      returnStockDelta("ret-1", PRODUCT_ID, 2, "wrong_item", "2026-05-31T11:00:00.000Z"),
       {
         productId: PRODUCT_ID,
         delta: 10,

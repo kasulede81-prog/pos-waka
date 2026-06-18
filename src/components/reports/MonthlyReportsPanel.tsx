@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { useSessionActor } from "../../context/SessionActorContext";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { resolveProfitVisibility } from "../../lib/profitVisibility";
 import { usePosStore } from "../../store/usePosStore";
 import { useDeferredReportingSales } from "../../hooks/useDeferredReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
@@ -35,6 +38,10 @@ type Props = { lang: Language };
 
 /** Monthly report downloads — embedded in Reports tab or standalone page. */
 export function MonthlyReportsPanel({ lang }: Props) {
+  const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const exportOpts = { includeProfit: canProfit };
   const [includeArchived, setIncludeArchived] = useState(true);
   const [monthKey, setMonthKey] = useState(currentMonthKey);
   const [busy, setBusy] = useState(false);
@@ -70,7 +77,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
   const downloadCsv = async () => {
     setBusy(true);
     try {
-      const ok = await downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report), "text/csv;charset=utf-8");
+      const ok = await downloadTextFile(`waka-monthly-${monthKey}.csv`, monthlyReportToCsv(report, exportOpts), "text/csv;charset=utf-8");
       showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
     } finally {
       setBusy(false);
@@ -82,7 +89,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
     try {
       const ok = await downloadTextFile(
         `waka-monthly-${monthKey}.xls`,
-        monthlyReportToCsv(report),
+        monthlyReportToCsv(report, exportOpts),
         "application/vnd.ms-excel;charset=utf-8",
       );
       showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
@@ -94,7 +101,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
   const downloadWord = async () => {
     setBusy(true);
     try {
-      const ok = await downloadMonthlyReportWord(lang, report);
+      const ok = await downloadMonthlyReportWord(lang, report, exportOpts);
       showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
     } finally {
       setBusy(false);
@@ -104,7 +111,7 @@ export function MonthlyReportsPanel({ lang }: Props) {
   const downloadPdf = async () => {
     setBusy(true);
     try {
-      const ok = await downloadMonthlyReportPdf(lang, report);
+      const ok = await downloadMonthlyReportPdf(lang, report, exportOpts);
       showToast(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail"));
     } catch {
       showToast(t(lang, "monthlyReportDownloadFail"));
@@ -114,12 +121,12 @@ export function MonthlyReportsPanel({ lang }: Props) {
   };
 
   const printReport = () => {
-    const ok = printMonthlyReport(lang, report);
+    const ok = printMonthlyReport(lang, report, exportOpts);
     showToast(ok ? t(lang, "monthlyReportPrintOk") : t(lang, "monthlyReportPrintFail"));
   };
 
   const shareText = async () => {
-    const body = formatMonthlyReportPlain(lang, report);
+    const body = formatMonthlyReportPlain(lang, report, exportOpts);
     try {
       await navigator.clipboard.writeText(body);
       showToast(t(lang, "monthlyReportCopyOk"));
@@ -151,8 +158,13 @@ export function MonthlyReportsPanel({ lang }: Props) {
         <p className="text-sm font-bold text-stone-600">{t(lang, "monthlyReportPreview")}</p>
         <p className="mt-2 text-2xl font-black text-waka-950">UGX {report.totalSalesUgx.toLocaleString()}</p>
         <p className="text-sm font-semibold text-stone-700">
-          {t(lang, "monthlyReportTransactions")}: {report.transactionCount} · {t(lang, "estimatedProfit")}: UGX{" "}
-          {report.profitUgx.toLocaleString()}
+          {t(lang, "monthlyReportTransactions")}: {report.transactionCount}
+          {canProfit ? (
+            <>
+              {" · "}
+              {t(lang, "estimatedProfit")}: UGX {report.profitUgx.toLocaleString()}
+            </>
+          ) : null}
         </p>
       </section>
 

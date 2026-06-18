@@ -1,12 +1,13 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Store, Sliders, Bell, KeyRound, Printer, Archive, Lock, ReceiptText, LayoutGrid, Pill, LifeBuoy, Activity, UtensilsCrossed, MonitorSmartphone, Stethoscope, UserCog, Home, Briefcase } from "lucide-react";
+import { Activity, Archive, Bell, Briefcase, Calculator, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
@@ -18,6 +19,7 @@ import { canTogglePilotMode, isPilotModeActive } from "../lib/pilotMode";
 import { usePosStore } from "../store/usePosStore";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
+import { canSeeFinanceDiagnostics } from "../lib/financeVisibility";
 
 export function SettingsHubPage({ lang }: { lang: Language }) {
   const [searchParams] = useSearchParams();
@@ -38,7 +40,11 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
     return <Navigate to="/" replace />;
   }
 
-  const canShop = hasPermission(actor.role, "settings.shop");
+  const canShop = hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode);
+  const canOwnerFinanceDiagnostics =
+    canSeeFinanceDiagnostics(actor.role) &&
+    hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode);
+  const canSubscriptionDiagnostics = canSeeFinanceDiagnostics(actor.role);
   const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
   const canReceipt = hasPermission(actor.role, "settings.receipt");
   const canDevices = hasPermission(actor.role, "settings.devices");
@@ -190,6 +196,22 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubSystemHealth")}
             subtitle={t(lang, "settingsHubSystemHealthSub")}
             Icon={Activity}
+          />
+        ) : null}
+        {canSubscriptionDiagnostics ? (
+          <OfficeNavCard
+            to="/settings/subscription-diagnostics"
+            title={t(lang, "subscriptionDiagTitle")}
+            subtitle={t(lang, "subscriptionDiagSub")}
+            Icon={Activity}
+          />
+        ) : null}
+        {canOwnerFinanceDiagnostics ? (
+          <OfficeNavCard
+            to="/settings/finance-diagnostics"
+            title={t(lang, "settingsHubFinanceDiagnostics")}
+            subtitle={t(lang, "settingsHubFinanceDiagnosticsSub")}
+            Icon={Calculator}
           />
         ) : null}
         {canShop && Capacitor.isNativePlatform() ? (

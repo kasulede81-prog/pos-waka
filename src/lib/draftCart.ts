@@ -115,6 +115,7 @@ export function rebuildDraftLineQuantity(
     ...built.line,
     id: prior?.id ?? built.line.id ?? crypto.randomUUID(),
     updatedAt: now,
+    stockVersionAtAdd: product.version ?? 1,
   };
   if (!prior || lineDiscountUgx(prior) <= 0) return line;
 
@@ -140,9 +141,15 @@ export function mergeDraftSaleLine(
   incoming: SaleLine,
   product: Product,
 ): SaleLine {
-  if (!existing) return ensureSaleLineId(incoming);
+  if (!existing) {
+    return { ...ensureSaleLineId(incoming), stockVersionAtAdd: product.version ?? 1 };
+  }
   const totalQty = existing.quantity + incoming.quantity;
-  return rebuildDraftLineQuantity(product, totalQty, existing) ?? ensureSaleLineId(incoming);
+  const merged = rebuildDraftLineQuantity(product, totalQty, existing);
+  if (merged) {
+    return { ...merged, stockVersionAtAdd: existing.stockVersionAtAdd ?? product.version ?? 1 };
+  }
+  return { ...ensureSaleLineId(incoming), stockVersionAtAdd: product.version ?? 1 };
 }
 
 /** +/- on cart lines always moves by one base unit (1 bottle, 1 kg, …). Use presets or qty popup for crates/sacks. */

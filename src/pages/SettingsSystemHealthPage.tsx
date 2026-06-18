@@ -4,6 +4,14 @@ import { PageBackBar } from "../components/layout/PageBackBar";
 import { SystemHealthCard } from "../components/settings/SystemHealthCard";
 import { AuditHealthCard } from "../components/settings/AuditHealthCard";
 import { DebtIntegrityCard } from "../components/settings/DebtIntegrityCard";
+import { DebtSyncDiagnosticsCard } from "../components/settings/DebtSyncDiagnosticsCard";
+import { PurchaseSyncDiagnosticsCard } from "../components/settings/PurchaseSyncDiagnosticsCard";
+import {
+  RecoveryReadinessDashboard,
+  RestoreDiagnosticsCard,
+  QueueStatusCard,
+  SnapshotHealthCard,
+} from "../components/settings/RecoveryReadinessDashboard";
 import { ProductionReadinessCard } from "../components/settings/ProductionReadinessCard";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 
@@ -18,6 +26,12 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
       <ProductionReadinessCard lang={lang} />
       <SystemHealthCard lang={lang} />
       <DebtIntegrityCard lang={lang} />
+      <DebtSyncDiagnosticsCard lang={lang} />
+      <PurchaseSyncDiagnosticsCard lang={lang} />
+      <RecoveryReadinessDashboard lang={lang} />
+      <RestoreDiagnosticsCard lang={lang} />
+      <QueueStatusCard lang={lang} />
+      <SnapshotHealthCard lang={lang} />
       <AuditHealthCard lang={lang} />
       <SyncHealthCard lang={lang} variant="full" />
     </div>

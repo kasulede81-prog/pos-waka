@@ -29,7 +29,7 @@ import { ReturnProductModal } from "../components/pos/ReturnProductModal";
 import type { VoidReason } from "../types";
 import { getCompletedFinancialsFromScoped, getCompletedRevenue } from "../lib/financialMetrics";
 import { partitionReceiptsSales } from "../lib/receiptsGrouping";
-import { canSeeOfficeProfit } from "../lib/homeProfit";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { expenseCountsInDrawer } from "../lib/cashExpenses";
 import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
 import { isCompletedSale } from "../lib/saleStatus";
@@ -37,6 +37,7 @@ import { SalesHistoryHeroCard } from "../components/receipts/SalesHistoryHeroCar
 import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
 import { SalesHistorySummaryStrip } from "../components/receipts/SalesHistorySummaryStrip";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
+import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -56,6 +57,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const preferences = usePosStore((s) => s.preferences);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const debtPayments = usePosStore((s) => s.debtPayments);
   const { authMode, snapshot } = useSubscription();
   const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
@@ -64,7 +66,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const term = hospitalityMode ? ht : pharmacyMode ? pt : null;
   const canVoid = hasPermission(actor.role, "sale_void");
-  const showProfit = canSeeOfficeProfit(actor.role, authMode);
+  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const showProfit = canProfit;
+  const showShopSummaries = canShopWideFinancials;
   const products = usePosStore((s) => s.products);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
@@ -192,6 +196,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const stockValueUgx = useMemo(() => inventoryValueAtCostUgx(products), [products]);
 
+  const debtCollectedUgx = useMemo(
+    () => sumDebtPaymentsInBounds(debtPayments, bounds),
+    [debtPayments, bounds],
+  );
+
   const totalDebtUgx = useMemo(
     () => customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
     [customers],
@@ -271,6 +280,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             salesUgx={rangeRevenueUgx}
             profitUgx={showProfit ? rangeFinancials.profitUgx : null}
             showProfit={showProfit}
+            showShopDebt={showShopSummaries}
+            showReportsLink={showShopSummaries}
             totalDebtUgx={totalDebtUgx}
             showDebtsLink={canViewDebts}
             filter={filter}
@@ -332,10 +343,12 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       {hasAnyInRange ? (
         <SalesHistorySummaryStrip
           lang={lang}
-          cashInHandUgx={rangeFinancials.cashCollectedUgx}
+          cashSalesUgx={rangeFinancials.cashCollectedUgx}
+          debtCollectedUgx={debtCollectedUgx}
           expensesUgx={expensesUgx}
           expensesLabel={expensesLabel}
           stockValueUgx={stockValueUgx}
+          showShopSummaries={showShopSummaries}
         />
       ) : null}
 

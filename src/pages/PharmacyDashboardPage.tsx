@@ -18,7 +18,12 @@ import { ExpiryStatusBadge } from "../components/pharmacy/ExpiryStatusBadge";
 import { useShallow } from "zustand/react/shallow";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
 import { PharmacyExpiredWriteOffPanel } from "../components/pharmacy/PharmacyExpiredWriteOffPanel";
-import { canSeeOfficeProfit } from "../lib/homeProfit";
+import {
+  filterReturnsForHomeScope,
+  filterSalesForHomeScope,
+  resolveVisibleHomeMetrics,
+} from "../lib/homeVisibility";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
 
 export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -38,12 +43,22 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
   const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
-  const canProfit = canSeeOfficeProfit(actor.role, authMode) && hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const homeMetrics = resolveVisibleHomeMetrics(actor.role);
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
   const canWriteOff = hasEffectivePermission(actor.role, "pharmacy.expired_writeoff", snapshot, authMode);
 
+  const scopedSales = useMemo(
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
+    [sales, homeMetrics.scope, actor.userId],
+  );
+  const scopedReturns = useMemo(
+    () => filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId),
+    [returnRecords, sales, homeMetrics.scope, actor.userId],
+  );
+
   const stats = useMemo(
-    () => computePharmacyDashboardStats(products, sales, returnRecords, todayKey),
-    [products, sales, returnRecords, todayKey],
+    () => computePharmacyDashboardStats(products, scopedSales, scopedReturns, todayKey),
+    [products, scopedSales, scopedReturns, todayKey],
   );
 
   if (!pharmacy) return null;
@@ -114,6 +129,7 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
             <p className="text-xs font-semibold text-emerald-800">{t(lang, "estimatedProfitHint")}</p>
           </div>
         ) : null}
+        {homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue ? (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <p className="text-xs font-black uppercase text-amber-800">{t(lang, "pharmacyDashTodayRevenue")}</p>
           <p className="mt-1 text-2xl font-black text-amber-950">
@@ -123,6 +139,7 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
             {stats.todayDispensingCount} {t(lang, "pharmacyDashTodayDispensings").toLowerCase()}
           </p>
         </div>
+        ) : null}
         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
           <p className="text-xs font-black uppercase text-stone-700">{t(lang, "pharmacyDashInventoryValue")}</p>
           <p className="mt-1 text-2xl font-black text-stone-950">UGX {stats.inventoryValueUgx.toLocaleString()}</p>

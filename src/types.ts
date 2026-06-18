@@ -436,6 +436,8 @@ export type PurchaseLine = {
   name: string;
   qtyBuyingUnits: number;
   costPerBuyingUnitUgx: number;
+  /** When base_units, qtyBuyingUnits holds base quantity (pharmacy direct entry). */
+  unitMode?: "buying_units" | "base_units";
 };
 
 /** Stock-in from a supplier (or walk-in) — updates shelf stock and cost. */
@@ -456,6 +458,10 @@ export type Purchase = {
   /** Set when voided — purchase is never hard-deleted. */
   voidedAt?: string | null;
   voidReason?: string;
+  /** Set when purchase row (incl. stock-in) was acknowledged by cloud before void. */
+  preVoidCloudSynced?: boolean;
+  /** Set after void stock reversal is pushed to cloud (prevents double subtraction). */
+  voidStockSyncedAt?: string | null;
   createdAt: string;
   pendingSync: boolean;
 };
@@ -526,6 +532,8 @@ export type SaleLine = {
   /** Set when voided after payment — line stays on receipt for audit */
   voided?: boolean;
   voidedAt?: string | null;
+  /** Product.version when line entered cart — cross-tab sale guard */
+  stockVersionAtAdd?: number;
 };
 
 export type Sale = {

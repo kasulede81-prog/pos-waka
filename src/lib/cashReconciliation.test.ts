@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { DebtPayment, Product, ReturnRecord, Sale, ShiftRecord } from "../types";
 import {
   getDrawerCashForDay,
-  sumDebtPaymentsDuringShift,
   sumDebtPaymentsOnDay,
+  sumDebtPaymentsDuringShift,
+  sumExpectedDrawerCashForBounds,
 } from "./cashReconciliation";
+import { resolveDateFilterBounds } from "./dateFilters";
 import { reduceSaleTotalsByAmount } from "./saleAdjustments";
 import { shiftExpectedCash, shiftExpectedCashLabelParts } from "./saleAdjustments";
 
@@ -171,5 +173,18 @@ describe("debt cash reconciliation", () => {
     const drawer = getDrawerCashForDay([pendingOnly], [], products, [], DAY);
     expect(drawer.expectedDrawerCashUgx).toBe(0);
     expect(drawer.revenueUgx).toBe(0);
+  });
+
+  it("sumExpectedDrawerCashForBounds matches per-day drawer formula", () => {
+    const completed = sale({ status: "completed", totalUgx: 50_000, cashPaidUgx: 50_000 });
+    const debtPayments = [payment(10_000, `${DAY}T14:00:00.000Z`)];
+    const bounds = resolveDateFilterBounds({ kind: "day", dateKey: DAY });
+    const single = getDrawerCashForDay([completed], [], products, debtPayments, DAY).expectedDrawerCashUgx;
+    const summed = sumExpectedDrawerCashForBounds(
+      { sales: [completed], returns: [], products, debtPayments, cashExpenses: [], supplierPayments: [] },
+      bounds,
+    );
+    expect(summed).toBe(single);
+    expect(summed).toBe(60_000);
   });
 });

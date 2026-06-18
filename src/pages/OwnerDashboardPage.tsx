@@ -8,7 +8,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { buildOwnerDashboardData, buildOwnerSummaryLines } from "../lib/ownerDashboardData";
-import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
+import { useDrawerCashForToday, useExpectedDrawerCashForBounds } from "../hooks/useDrawerCashForDay";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { dateKeyKampala } from "../lib/datesUg";
@@ -61,6 +61,14 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const reportingVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
   const reportingReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const drawerToday = useDrawerCashForToday();
+  const heroExpectedCash = useExpectedDrawerCashForBounds(bounds);
+
+  const selectedDay = selectedDayKeyForFilter(filter);
+  const heroCountedCash = useMemo(() => {
+    if (!selectedDay) return null;
+    const close = dayCloses.find((c) => c.dateKey === selectedDay && !c.supersededAt);
+    return close?.countedCashUgx ?? null;
+  }, [selectedDay, dayCloses]);
 
   const dashboard = useMemo(
     () =>
@@ -98,12 +106,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     const filteredReturns = allReturns.filter((r) => returnMatchesFilter(r, bounds));
     return getCompletedFinancialsFromScoped(filteredSales, filteredReturns, products);
   }, [sales, bounds, products, includeArchived, returnRecords, archivedReturnRecords]);
-
-  const selectedDay = selectedDayKeyForFilter(filter);
-  const heroExpectedCash =
-    selectedDay === dashboard.todayKey ? dashboard.stats.expectedCashUgx : heroFinancials.cashCollectedUgx;
-  const heroCountedCash =
-    selectedDay === dashboard.todayKey ? dashboard.stats.countedCashUgx : null;
 
   const { summaryLines, waLine, trendLine } = useMemo(
     () => buildOwnerSummaryLines(lang, dashboard),

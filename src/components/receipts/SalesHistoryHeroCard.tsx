@@ -3,6 +3,7 @@ import { ChevronRight, HandCoins, Wallet } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DateFilterValue } from "../../lib/dateFilters";
+import type { HistoryHeroMetric } from "../shared/HistoryHeroCard";
 import { HistoryHeroCard } from "../shared/HistoryHeroCard";
 
 type Props = {
@@ -12,7 +13,9 @@ type Props = {
   profitUgx: number | null;
   showProfit: boolean;
   totalDebtUgx: number;
+  showShopDebt?: boolean;
   showDebtsLink?: boolean;
+  showReportsLink?: boolean;
   filter: DateFilterValue;
   onFilterChange: (next: DateFilterValue) => void;
   sparklinePoints?: number[];
@@ -61,54 +64,59 @@ export function SalesHistoryHeroCard({
   profitUgx,
   showProfit,
   totalDebtUgx,
+  showShopDebt = true,
   showDebtsLink = true,
+  showReportsLink = true,
   filter,
   onFilterChange,
   sparklinePoints,
 }: Props) {
+  const metrics: HistoryHeroMetric[] = [
+    {
+      label: salesLabel,
+      value: `UGX ${salesUgx.toLocaleString()}`,
+      footer: showReportsLink ? (
+        <Link
+          to="/reports"
+          className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-waka-50/95 hover:text-white sm:mt-2 sm:text-xs"
+        >
+          {t(lang, "salesHistoryViewSummary")}
+          <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
+        </Link>
+      ) : undefined,
+    },
+  ];
+
+  if (showProfit) {
+    metrics.push({
+      label: t(lang, "salesHistoryProfits"),
+      icon: Wallet,
+      value: profitUgx != null ? `UGX ${profitUgx.toLocaleString()}` : "—",
+      belowValue:
+        showProfit && sparklinePoints && sparklinePoints.length > 1 ? (
+          <ProfitSparkline points={sparklinePoints} />
+        ) : undefined,
+    });
+  }
+
+  if (showShopDebt) {
+    metrics.push({
+      label: t(lang, "salesHistoryTotalDebts"),
+      icon: HandCoins,
+      value: `UGX ${totalDebtUgx.toLocaleString()}`,
+      footer: showDebtsLink ? (
+        <Link
+          to="/debts"
+          className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-waka-50/95 hover:text-white sm:mt-2 sm:text-xs"
+        >
+          {t(lang, "salesHistoryViewDebts")}
+          <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
+        </Link>
+      ) : undefined,
+    });
+  }
+
   return (
-    <HistoryHeroCard
-      lang={lang}
-      filter={filter}
-      onFilterChange={onFilterChange}
-      metrics={[
-        {
-          label: salesLabel,
-          value: `UGX ${salesUgx.toLocaleString()}`,
-          footer: (
-            <Link
-              to="/reports"
-              className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-waka-50/95 hover:text-white sm:mt-2 sm:text-xs"
-            >
-              {t(lang, "salesHistoryViewSummary")}
-              <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
-            </Link>
-          ),
-        },
-        {
-          label: t(lang, "salesHistoryProfits"),
-          icon: Wallet,
-          value: showProfit ? `UGX ${(profitUgx ?? 0).toLocaleString()}` : "—",
-          belowValue:
-            showProfit && sparklinePoints && sparklinePoints.length > 1 ? (
-              <ProfitSparkline points={sparklinePoints} />
-            ) : undefined,
-        },
-        {
-          label: t(lang, "salesHistoryTotalDebts"),
-          icon: HandCoins,
-          value: `UGX ${totalDebtUgx.toLocaleString()}`,
-          footer: showDebtsLink ? (
-            <Link
-              to="/debts"
-              className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-waka-50/95 hover:text-white sm:mt-2 sm:text-xs"
-            >
-              {t(lang, "salesHistoryViewDebts")}
-              <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
-            </Link>
-          ) : undefined,
-        },
-      ]}
-    />
+    <HistoryHeroCard lang={lang} filter={filter} onFilterChange={onFilterChange} metrics={metrics} />
   );
 }

@@ -8,6 +8,7 @@ describe("persistOnboardingChoices", () => {
       dispatchEvent: () => undefined,
     };
     usePosStore.setState({
+      sessionActor: { userId: "owner:1", role: "owner", displayName: "Owner" },
       preferences: {
         ...usePosStore.getState().preferences,
         shopDisplayName: "My Shop",

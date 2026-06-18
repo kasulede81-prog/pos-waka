@@ -16,7 +16,7 @@ import { isSingleDayFilter, selectedDayKeyForFilter } from "../lib/dateFilterLab
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
 import { downloadDailyReportPdf } from "../lib/dailyReportPdf";
 import {
@@ -84,7 +84,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const showDailyExport = isSingleDayFilter(filter);
   const canViewReports = hasPermission(actor.role, "reports.view");
 
-  const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
   const canPurchasesView = hasPermission(actor.role, "purchases.view");
   const canSuppliersView = hasPermission(actor.role, "suppliers.view");
 
@@ -518,6 +518,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
                   debtPayments,
                   cashExpenses,
                   topProducts: report.topProducts,
+                  includeProfit: canProfit,
                 }).then((ok) => setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")));
               }}
             >
@@ -528,7 +529,14 @@ export function ReportsPage({ lang }: { lang: Language }) {
               className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
               onClick={() => {
                 const dk = reportDayKey;
-                const text = buildDailyReportText(lang, dk, sales, products, returnRecords, debtPayments, cashExpenses);
+                const text = buildDailyReportText(lang, dk, {
+                  sales,
+                  products,
+                  returnRecords,
+                  debtPayments,
+                  cashExpenses,
+                  includeProfit: canProfit,
+                });
                 void navigator.clipboard.writeText(text).then(
                   () => {
                     setReportHint(t(lang, "reportCopied"));
@@ -545,7 +553,14 @@ export function ReportsPage({ lang }: { lang: Language }) {
               className="rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-800"
               onClick={async () => {
                 const dk = reportDayKey;
-                const text = buildDailyReportText(lang, dk, sales, products, returnRecords, debtPayments, cashExpenses);
+                const text = buildDailyReportText(lang, dk, {
+                  sales,
+                  products,
+                  returnRecords,
+                  debtPayments,
+                  cashExpenses,
+                  includeProfit: canProfit,
+                });
                 const ok = await shareText(text, t(lang, "appName"));
                 setReportHint(ok ? t(lang, "reportShared") : t(lang, "reportCopyInstead"));
                 window.setTimeout(() => setReportHint(null), 3500);

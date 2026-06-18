@@ -1,8 +1,10 @@
 import { useEffect, type ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import type { Language } from "../../types";
-import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+import { hasBackOfficeShellAccess } from "../../lib/backOfficeAccess";
 import { usePosStore } from "../../store/usePosStore";
 import { isBackOfficePath, isStockKeeperPath, stockKeeperPathPermission, debtPathPermission } from "../../lib/backOfficePaths";
 import { isBackOfficePinRequired } from "../../lib/backOfficeUnlock";
@@ -15,6 +17,7 @@ type Props = { children: ReactNode; lang: Language };
 export function BackOfficeRouteGuard({ children, lang }: Props) {
   const location = useLocation();
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
   const preferences = usePosStore((s) => s.preferences);
   const { isUnlocked, lock, touch, unlockedRole, unlockedLabel } = useBackOfficeSession();
 
@@ -47,12 +50,13 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
   }
 
   const stockPerm = isStockKeeperPath(location.pathname) ? stockKeeperPathPermission(location.pathname) : null;
-  const hasStockKeeperAccess = stockPerm != null && hasPermission(actor.role, stockPerm);
+  const hasStockKeeperAccess =
+    stockPerm != null && hasEffectivePermission(actor.role, stockPerm, snapshot, authMode);
   const debtPerm = debtPathPermission(location.pathname);
-  const hasDebtAccess = debtPerm != null && hasPermission(actor.role, debtPerm);
-  const hasFullBackOffice = hasPermission(actor.role, "back_office.access");
+  const hasDebtAccess = debtPerm != null && hasEffectivePermission(actor.role, debtPerm, snapshot, authMode);
+  const hasFullBackOffice = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode);
 
-  if (!hasFullBackOffice && !hasStockKeeperAccess && !hasDebtAccess) {
+  if (!hasBackOfficeShellAccess({ pathname: location.pathname, role: actor.role, snapshot, authMode })) {
     return <Navigate to="/" replace state={{ backOfficeDenied: true }} />;
   }
 

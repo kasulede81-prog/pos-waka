@@ -1,6 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { dateKeyKampala } from "../lib/datesUg";
-import { getDrawerCashForDayInput, type DrawerCashSnapshot } from "../lib/cashReconciliation";
+import {
+  getDrawerCashForDayInput,
+  sumExpectedDrawerCashForBounds,
+  type DrawerCashSnapshot,
+} from "../lib/cashReconciliation";
+import type { DateFilterBounds } from "../lib/dateFilters";
 import { usePosStore, ensureAllActiveSalesLoaded } from "../store/usePosStore";
 import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
@@ -35,6 +40,38 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
       }),
     [sales, returns, products, debtPayments, cashExpenses, supplierPayments, day],
   );
+}
+
+/** Expected drawer cash for a date filter (single day snapshot or summed range). */
+export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number {
+  const sales = useReportingSales(false);
+  const returns = useReportingReturnRecords(false);
+  const products = usePosStore((s) => s.products);
+  const debtPayments = usePosStore((s) => s.debtPayments);
+  const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const supplierPayments = usePosStore((s) => s.supplierPayments);
+
+  useEffect(() => {
+    void ensureAllActiveSalesLoaded();
+  }, []);
+
+  return useMemo(() => {
+    const input = { sales, returns, products, debtPayments, cashExpenses, supplierPayments };
+    if (bounds.isSingleDay) {
+      return getDrawerCashForDayInput({ ...input, day: bounds.fromKey }).expectedDrawerCashUgx;
+    }
+    return sumExpectedDrawerCashForBounds(input, bounds);
+  }, [
+    bounds.fromKey,
+    bounds.toKey,
+    bounds.isSingleDay,
+    sales,
+    returns,
+    products,
+    debtPayments,
+    cashExpenses,
+    supplierPayments,
+  ]);
 }
 
 /** Today in Kampala — shared day key for drawer reconciliation UIs. */

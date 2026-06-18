@@ -2,9 +2,9 @@ import type { Product, ReturnRecord, Sale, UserRole } from "../types";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { costPerBaseUnitUgx, estimatedProfitForLine } from "./sellingEngine";
 
-/** Profit reports in Back Office — owners/managers only (not cashiers). */
+/** @deprecated Use resolveProfitVisibility().canProfit — role-only gate without subscription tier. */
 export function canSeeOfficeProfit(role: UserRole, authMode: "supabase" | "local"): boolean {
-  if (authMode === "local") return true;
+  if (authMode === "local") return role === "owner" || role === "manager" || role === "supervisor";
   return role === "owner" || role === "manager" || role === "supervisor";
 }
 

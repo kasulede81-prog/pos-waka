@@ -10,8 +10,10 @@ export type SyncCheckpoints = {
   lastSalesSyncAt: string | null;
   lastProductsSyncAt: string | null;
   lastCustomersSyncAt: string | null;
-  /** Debt balances sync via customer rows; checkpoint mirrors customer pull. */
+  /** Legacy alias; mirrors lastDebtPaymentsSyncAt when debt payments are pulled. */
   lastDebtsSyncAt: string | null;
+  /** customer_debt_payments pull cursor (created_at). */
+  lastDebtPaymentsSyncAt: string | null;
   /** Shop expenses table (created_at cursor). */
   lastExpensesSyncAt: string | null;
   /** sale_returns table (updated_at cursor). */
@@ -27,6 +29,7 @@ const empty: SyncCheckpoints = {
   lastProductsSyncAt: null,
   lastCustomersSyncAt: null,
   lastDebtsSyncAt: null,
+  lastDebtPaymentsSyncAt: null,
   lastExpensesSyncAt: null,
   lastReturnsSyncAt: null,
   lastPurchasesSyncAt: null,
@@ -53,6 +56,12 @@ export function readSyncCheckpoints(): SyncCheckpoints {
       lastProductsSyncAt: typeof o.lastProductsSyncAt === "string" ? o.lastProductsSyncAt : null,
       lastCustomersSyncAt: typeof o.lastCustomersSyncAt === "string" ? o.lastCustomersSyncAt : null,
       lastDebtsSyncAt: typeof o.lastDebtsSyncAt === "string" ? o.lastDebtsSyncAt : null,
+      lastDebtPaymentsSyncAt:
+        typeof o.lastDebtPaymentsSyncAt === "string"
+          ? o.lastDebtPaymentsSyncAt
+          : typeof o.lastDebtsSyncAt === "string"
+            ? o.lastDebtsSyncAt
+            : null,
       lastExpensesSyncAt: typeof o.lastExpensesSyncAt === "string" ? o.lastExpensesSyncAt : null,
       lastReturnsSyncAt: typeof o.lastReturnsSyncAt === "string" ? o.lastReturnsSyncAt : null,
       lastPurchasesSyncAt: typeof o.lastPurchasesSyncAt === "string" ? o.lastPurchasesSyncAt : null,
@@ -93,6 +102,7 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastProductsSyncAt: at,
     lastCustomersSyncAt: at,
     lastDebtsSyncAt: at,
+    lastDebtPaymentsSyncAt: at,
     lastExpensesSyncAt: at,
     lastReturnsSyncAt: at,
     lastPurchasesSyncAt: at,
@@ -117,6 +127,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   productsAt?: string;
   customersAt?: string;
   debtsAt?: string;
+  debtPaymentsAt?: string;
   expensesAt?: string;
   returnsAt?: string;
   purchasesAt?: string;
@@ -129,9 +140,12 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   if (partial.products) patch.lastProductsSyncAt = partial.productsAt ?? fallback;
   if (partial.customers) {
     patch.lastCustomersSyncAt = partial.customersAt ?? fallback;
-    if (partial.debts !== false) patch.lastDebtsSyncAt = partial.debtsAt ?? partial.customersAt ?? fallback;
   }
-  if (partial.debts) patch.lastDebtsSyncAt = partial.debtsAt ?? fallback;
+  if (partial.debts) {
+    const debtAt = partial.debtPaymentsAt ?? partial.debtsAt ?? fallback;
+    patch.lastDebtsSyncAt = debtAt;
+    patch.lastDebtPaymentsSyncAt = debtAt;
+  }
   if (partial.expenses) patch.lastExpensesSyncAt = partial.expensesAt ?? fallback;
   if (partial.returns) patch.lastReturnsSyncAt = partial.returnsAt ?? fallback;
   if (partial.purchases) patch.lastPurchasesSyncAt = partial.purchasesAt ?? fallback;

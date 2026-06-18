@@ -7,6 +7,7 @@ import { AppModalOverlay } from "./layout/AppModalOverlay";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { normalizeExpiryDate } from "../lib/pharmacyExpiry";
+import { CostValidationPreview } from "./stock/CostValidationPreview";
 
 const SELLING_MODES: SellingMode[] = ["unit", "weighted", "portion"];
 
@@ -124,6 +125,8 @@ export function StockProductEditModal({
 
   const packN = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
   const piecesN = Math.floor(Number(piecesInside.replace(/[^\d.]/g, "")) || 0);
+  const sellN = Math.floor(Number(price.replace(/\D/g, "")) || 0);
+  const manualCostN = Math.floor(Number(costManual.replace(/\D/g, "")) || 0);
   const showPackTrack = boughtAs.trim().length > 0 && packN > 0 && piecesN > 0;
 
   const resolveUnit = () => (unitPreset === "custom" ? unitCustom : unitPreset).trim() || "piece";
@@ -292,6 +295,26 @@ export function StockProductEditModal({
               />
             </label>
           </div>
+
+          {showPackTrack && sellN > 0 ? (
+            <CostValidationPreview
+              lang={lang}
+              packCostUgx={packN}
+              piecesPerPack={piecesN}
+              sellPriceUgx={sellN}
+              packLabel={boughtAs.trim()}
+              unitLabel={resolveUnit()}
+              compact
+            />
+          ) : !showPackTrack && sellN > 0 && costManual.trim().length > 0 ? (
+            <CostValidationPreview
+              lang={lang}
+              unitCostUgx={manualCostN}
+              sellPriceUgx={sellN}
+              unitLabel={resolveUnit()}
+              compact
+            />
+          ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">

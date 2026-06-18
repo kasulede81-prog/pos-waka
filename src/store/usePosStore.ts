@@ -31,8 +31,16 @@ import type {
   CashExpense,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
-import { hasPermission } from "../lib/permissions";
-import { checkStorePermission } from "../lib/storeAuthorization";
+import { checkStorePermissionEffective } from "../lib/storeAuthorization";
+import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
+import {
+  validateCanAddProduct,
+  validateDraftLinesPlanAccess,
+  validateProductPlanAccess,
+  resolveStorePlanTier,
+} from "../lib/productPlanEnforcement";
+import { validateCanAddStaffAccount } from "../lib/staffPlanEnforcement";
+import { authorizeBackupRestore } from "../lib/backupRestoreAuthorization";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
@@ -131,12 +139,21 @@ import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { draftQuantityExceedsStock, mergedDraftQuantity } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
+import { canSafelyHealCustomerDebt } from "../lib/debtSyncState";
 import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
 import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
+import { emitInventoryStockChanges, type InventoryStockSyncMessage, type InventorySyncEventType } from "../lib/inventorySyncChannel";
+import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
+import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
+import {
+  assertStaffAccountMutationAllowed,
+  authorizeStaffAccountMutation,
+  StaffAccountAuthorizationError,
+} from "../lib/staffAccountAuthorization";
 import { isCompletedSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
@@ -174,6 +191,14 @@ function mergeStockMovements(existing: StockMovement[], incoming: StockMovement[
   for (const e of existing) byId.set(e.id, e);
   for (const e of incoming) byId.set(e.id, e);
   return [...byId.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_STOCK_MOVEMENTS);
+}
+
+function broadcastInventoryStock(products: Product[], type: InventorySyncEventType): void {
+  if (products.length === 0) return;
+  emitInventoryStockChanges(
+    products.map((p) => ({ productId: p.id, newStock: p.stockOnHand, version: p.version })),
+    type,
+  );
 }
 
 function stockKindFromAdjustReason(reason: string | undefined): StockMovementKind {
@@ -356,6 +381,9 @@ export type PosState = {
    * signs in.
    */
   resetForSignOut: () => void;
+
+  /** Apply inventory stock from another browser tab (BroadcastChannel / storage). */
+  applyRemoteInventorySync: (msg: InventoryStockSyncMessage) => void;
 
   setSessionActor: (actor: SessionActor | null) => void;
 
@@ -544,7 +572,12 @@ export type PosState = {
     override?: boolean;
     overrideReason?: string;
   }) => Promise<{ ok: boolean; errorKey?: string }>;
-  repairCustomerDebtIntegrity: () => { ok: boolean; healedCount: number; mismatchCount: number };
+  repairCustomerDebtIntegrity: () => {
+    ok: boolean;
+    healedCount: number;
+    mismatchCount: number;
+    errorKey?: string;
+  };
   addCashExpense: (input: { amountUgx: number; category: string; description?: string }) => { ok: boolean; errorKey?: string; expenseId?: string };
   approveCashExpense: (id: string) => { ok: boolean; errorKey?: string };
   rejectCashExpense: (id: string) => { ok: boolean; errorKey?: string };
@@ -877,9 +910,10 @@ export const usePosStore = create<PosState>((set, get) => {
     void queueRemote("audit_log", { entry });
   };
 
-  const denyUnlessPerm = (permission: Permission, actionLabel: string) => {
+  const denyUnlessEffectivePermission = (permission: Permission, actionLabel: string) => {
     const actor = get().sessionActor;
-    const check = checkStorePermission(actor, permission);
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const check = checkStorePermissionEffective(actor, permission, snapshot, authMode);
     if (check.ok) return null;
     pushAudit("auth_forbidden", `Denied ${actionLabel}`, {
       permission,
@@ -1035,9 +1069,42 @@ export const usePosStore = create<PosState>((set, get) => {
     });
   },
 
+  applyRemoteInventorySync: (msg) => {
+    set((s) => {
+      const idx = s.products.findIndex((p) => p.id === msg.productId);
+      if (idx === -1) return s;
+      const merged = mergeRemoteInventoryStock(s.products[idx]!, {
+        newStock: msg.newStock,
+        version: msg.version,
+        timestamp: msg.timestamp,
+      });
+      if (!merged) return s;
+      const products = [...s.products];
+      products[idx] = merged;
+      return { products };
+    });
+  },
+
   setSessionActor: (actor) => set({ sessionActor: actor }),
 
   setPreferences: (p) => {
+    const state = get();
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const denied = authorizePreferencesPatch(state.sessionActor, p, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: state.preferences.staffAccounts ?? [],
+    });
+    if (!denied.ok) {
+      pushAudit("auth_forbidden", "Denied setPreferences", {
+        permission: requiredPermissionsForPreferencesPatch(p).join(","),
+        action: "setPreferences",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: denied.errorKey,
+        keys: Object.keys(p),
+      });
+      return;
+    }
     set((s) => {
       const merged = { ...s.preferences, ...p };
       const role = s.sessionActor?.role ?? "cashier";
@@ -1049,6 +1116,31 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addStaffAccount: (input) => {
+    const staffDenied = authorizeStaffAccountMutation(get().sessionActor);
+    if (!staffDenied.ok) {
+      pushAudit("auth_forbidden", "Denied addStaffAccount", {
+        permission: "settings.shop",
+        action: "addStaffAccount",
+        attemptedRole: get().sessionActor?.role ?? null,
+        errorKey: staffDenied.errorKey,
+      });
+      return { ok: false, errorKey: staffDenied.errorKey };
+    }
+
+    const existing = get().preferences.staffAccounts ?? [];
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const tier = resolveStorePlanTier(snapshot, authMode);
+    const staffCap = validateCanAddStaffAccount(existing.length, tier);
+    if (!staffCap.ok) {
+      pushAudit("auth_forbidden", "Denied addStaffAccount (plan staff limit)", {
+        permission: "settings.shop",
+        action: "addStaffAccount",
+        attemptedRole: get().sessionActor?.role ?? null,
+        errorKey: staffCap.errorKey,
+      });
+      return { ok: false, errorKey: staffCap.errorKey };
+    }
+
     const name = input.name.trim();
     if (!name) return { ok: false, errorKey: "staffNameRequired" };
     const role = normalizeUserRole(input.role);
@@ -1057,7 +1149,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const password = (input.password ?? "").trim() || null;
     if (!password && pin?.length !== 4) return { ok: false, errorKey: "staffPinMust4" };
 
-    const existing = get().preferences.staffAccounts ?? [];
     let username = (input.username ?? "").trim().toLowerCase() || null;
     if (!username) username = generateStaffUsername(name, existing);
     else if (existing.some((a) => (a.username ?? "").toLowerCase() === username)) {
@@ -1090,6 +1181,20 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   updateStaffAccount: (id, patch) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        pushAudit("auth_forbidden", "Denied updateStaffAccount", {
+          permission: "settings.shop",
+          action: "updateStaffAccount",
+          attemptedRole: get().sessionActor?.role ?? null,
+          errorKey: e.errorKey,
+        });
+        return;
+      }
+      throw e;
+    }
     set((s) => ({
       preferences: {
         ...s.preferences,
@@ -1116,6 +1221,20 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   removeStaffAccount: (id) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        pushAudit("auth_forbidden", "Denied removeStaffAccount", {
+          permission: "settings.shop",
+          action: "removeStaffAccount",
+          attemptedRole: get().sessionActor?.role ?? null,
+          errorKey: e.errorKey,
+        });
+        return;
+      }
+      throw e;
+    }
     set((s) => ({
       preferences: {
         ...s.preferences,
@@ -1126,6 +1245,20 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   resetStaffSecret: (id, patch) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        pushAudit("auth_forbidden", "Denied resetStaffSecret", {
+          permission: "settings.shop",
+          action: "resetStaffSecret",
+          attemptedRole: get().sessionActor?.role ?? null,
+          errorKey: e.errorKey,
+        });
+        return;
+      }
+      throw e;
+    }
     set((s) => ({
       preferences: {
         ...s.preferences,
@@ -1320,6 +1453,10 @@ export const usePosStore = create<PosState>((set, get) => {
   addDraftLineFromInput: () => {
     const d = get().draftInput;
     if (!d) return { ok: false, errorKey: "noSelection" };
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const tier = resolveStorePlanTier(snapshot, authMode);
+    const planCheck = validateProductPlanAccess(d.product.id, get().products, tier);
+    if (!planCheck.ok) return { ok: false, errorKey: planCheck.errorKey };
     const built =
       d.pharmacySaleUnit && d.inputMode === "quantity"
         ? buildPharmacySaleLine(d.product, d.pharmacySaleUnit, d.value)
@@ -1356,6 +1493,10 @@ export const usePosStore = create<PosState>((set, get) => {
     const line = state.draftLines.find((l) => l.productId === productId);
     const product = state.products.find((p) => p.id === productId);
     if (!line || !product) return { ok: false, errorKey: "noSelection" };
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const tier = resolveStorePlanTier(snapshot, authMode);
+    const planCheck = validateProductPlanAccess(productId, state.products, tier);
+    if (!planCheck.ok) return { ok: false, errorKey: planCheck.errorKey };
     if (quantity <= 0) {
       set((s) => ({ draftLines: s.draftLines.filter((l) => l.productId !== productId) }));
       scheduleDraftPersist(get);
@@ -1454,6 +1595,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   openTable: ({ tableId, guestCount, customerName, customerPhone }) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "openTable");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const table = floor.tables.find((t) => t.id === tableId);
@@ -1506,6 +1649,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   openNamedTab: ({ tabLabel, guestCount, customerName, customerPhone }) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "openNamedTab");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const label = tabLabel.trim();
     if (!label) return { ok: false, errorKey: "invalid" };
     const state = get();
@@ -1564,6 +1709,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   resumeTableSession: async (sessionId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.order", "resumeTableSession");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
@@ -1589,6 +1736,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   saveTableBill: () => {
+    const denied = denyUnlessEffectivePermission("hospitality.order", "saveTableBill");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const saleId = state.activePendingSaleId;
     if (!saleId) return { ok: false, errorKey: "invalid" };
@@ -1654,6 +1803,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   fireTableKitchenTickets: () => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "fireTableKitchenTickets");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const saleId = state.activePendingSaleId;
     const sessionId = state.preferences.activeTableSessionId;
@@ -1696,6 +1847,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   requestTableBill: (sessionId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.order", "requestTableBill");
+    if (denied) return;
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return;
@@ -1720,6 +1873,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   transferTableSession: (sessionId, toTableId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.transfer", "transferTableSession");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
@@ -1744,6 +1899,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   mergeTableSessions: (sourceSessionId, targetSessionId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.transfer", "mergeTableSessions");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
@@ -1789,6 +1946,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   updateKitchenTicketStatus: (ticketId, status) => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "updateKitchenTicketStatus");
+    if (denied) return;
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return;
@@ -1803,6 +1962,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   cancelKitchenTicket: (ticketId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "cancelKitchenTicket");
+    if (denied) return;
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return;
@@ -1817,6 +1978,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   cleanupKitchenTickets: () => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "cleanupKitchenTickets");
+    if (denied) return;
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return;
@@ -1837,6 +2000,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addDiningArea: (name) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "addDiningArea");
+    if (denied) return;
     const state = get();
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const next = addDiningArea(floor, name);
@@ -1846,6 +2011,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   renameDiningArea: (areaId, name) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "renameDiningArea");
+    if (denied) return;
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return;
@@ -1856,6 +2023,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   removeDiningArea: (areaId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "removeDiningArea");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
@@ -1870,6 +2039,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addDiningTable: (input) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "addDiningTable");
+    if (denied) return;
     const state = get();
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const next = addDiningTable(floor, input);
@@ -1879,6 +2050,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   updateDiningTable: (tableId, patch) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "updateDiningTable");
+    if (denied) return;
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return;
@@ -1889,6 +2062,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   removeDiningTable: (tableId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "removeDiningTable");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = state.preferences.hospitalityFloor;
     if (!floor) return { ok: false, errorKey: "invalid" };
@@ -1901,6 +2076,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   savePendingSale: (referenceLabel) => {
+    const denied = denyUnlessEffectivePermission("pending_sales.manage", "savePendingSale");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
     const saleId = state.activePendingSaleId ?? crypto.randomUUID();
@@ -1927,6 +2104,8 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   resumePendingSale: (saleId) => {
+    const denied = denyUnlessEffectivePermission("pending_sales.manage", "resumePendingSale");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     if (state.draftLines.length && !state.activePendingSaleId) {
       return { ok: false, errorKey: "invalid" };
@@ -1947,10 +2126,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   cancelPendingSale: (saleId) => {
+    const denied = denyUnlessEffectivePermission("pending_sales.manage", "cancelPendingSale");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
-    const actor = state.sessionActor;
-    if (!actor) return { ok: false, errorKey: "noSelection" };
-    if (!hasPermission(actor.role, "sale_void")) return { ok: false, errorKey: "forbidden" };
     const sale = state.sales.find((s) => s.id === saleId && s.status === "pending");
     if (!sale) return { ok: false, errorKey: "invalid" };
     const cancelled: Sale = { ...sale, status: "cancelled", updatedAt: new Date().toISOString(), pendingSync: true };
@@ -1985,11 +2163,16 @@ export const usePosStore = create<PosState>((set, get) => {
     changeGivenUgx,
     splitBreakdown,
   }) => {
-    const denied = denyUnlessPerm("pos.sell", "finalizeDraftSale");
+    const denied = denyUnlessEffectivePermission("pos.sell", "finalizeDraftSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
+
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const tier = resolveStorePlanTier(snapshot, authMode);
+    const lockedCheck = validateDraftLinesPlanAccess(state.draftLines, state.products, tier);
+    if (!lockedCheck.ok) return { ok: false, errorKey: lockedCheck.errorKey };
 
     if (
       isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled) &&
@@ -2022,7 +2205,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const discountTotal = Math.max(0, listSubtotal - total);
     const debt = Math.min(Math.max(0, Math.floor(debtUgx)), total);
     if (debt > 0) {
-      const debtDenied = denyUnlessPerm("customers.debt", "finalizeDraftSale");
+      const debtDenied = denyUnlessEffectivePermission("customers.debt", "finalizeDraftSale");
       if (debtDenied) return { ok: false, errorKey: debtDenied.errorKey };
     }
     const cashPaidUgx = total - debt;
@@ -2041,6 +2224,9 @@ export const usePosStore = create<PosState>((set, get) => {
       customerId = debtor.customerId;
       createdDebtor = debtor.createdCustomer;
     }
+
+    const stockCheck = validateDraftSaleStockBeforeFinalize(state.draftLines, state.products);
+    if (!stockCheck.ok) return { ok: false, errorKey: stockCheck.errorKey };
 
     const products = [...state.products];
     for (const line of state.draftLines) {
@@ -2205,6 +2391,13 @@ export const usePosStore = create<PosState>((set, get) => {
       void queueRemote("audit_log", { entry });
     }
     void clearPersistedDraft();
+    const stockChangedForBroadcast = products.filter((p) => {
+      const old = state.products.find((x) => x.id === p.id);
+      return old != null && old.stockOnHand !== p.stockOnHand;
+    });
+    if (stockChangedForBroadcast.length > 0) {
+      broadcastInventoryStock(stockChangedForBroadcast, "sale_completed");
+    }
     void import("../offline/entityStore").then(({ putEntity, putEntitiesBatch }) => {
       void putEntity("sale", sale.id, sale, sale.createdAt);
       const stockChanged = products.filter((p) => {
@@ -2232,7 +2425,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   voidSaleLine: ({ saleId, lineIndex, reason, note }) => {
-    const denied = denyUnlessPerm("sale_void", "voidSaleLine");
+    const denied = denyUnlessEffectivePermission("sale_void", "voidSaleLine");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -2351,11 +2544,14 @@ export const usePosStore = create<PosState>((set, get) => {
     if (sale.customerId && debtReduce > 0) {
       void queueRemote("customer", { id: sale.customerId });
     }
+    if (pIdx >= 0) {
+      broadcastInventoryStock([products[pIdx]!], "sale_void");
+    }
     return { ok: true };
   },
 
   returnProduct: ({ saleId, productId, quantity, refundAmountUgx, reason, note }) => {
-    const denied = denyUnlessPerm("sale_void", "returnProduct");
+    const denied = denyUnlessEffectivePermission("sale_void", "returnProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -2491,6 +2687,10 @@ export const usePosStore = create<PosState>((set, get) => {
     if (linkedCustomerId && debtReduce > 0) {
       void queueRemote("customer", { id: linkedCustomerId });
     }
+    if (restock) {
+      const updated = get().products.find((p) => p.id === productId);
+      if (updated) broadcastInventoryStock([updated], "sale_return");
+    }
     return { ok: true, returnRecord: returnRec };
   },
 
@@ -2532,7 +2732,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   quickAddProduct: (input) => {
-    const denied = denyUnlessPerm("products.add", "quickAddProduct");
+    const denied = denyUnlessEffectivePermission("products.add", "quickAddProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const trimmed = input.name.trim();
@@ -2626,10 +2826,16 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   duplicateProduct: (productId, nameSuffix) => {
-    const denied = denyUnlessPerm("products.add", "duplicateProduct");
+    const denied = denyUnlessEffectivePermission("products.add", "duplicateProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
-    const p = get().products.find((x) => x.id === productId);
+    const state = get();
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const tier = resolveStorePlanTier(snapshot, authMode);
+    const cap = validateCanAddProduct(state.products.length, tier);
+    if (!cap.ok) return { ok: false, errorKey: cap.errorKey };
+
+    const p = state.products.find((x) => x.id === productId);
     if (!p) return { ok: false, errorKey: "missingProduct" };
     get().addProduct({
       name: `${p.name}${nameSuffix}`,
@@ -2653,7 +2859,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   removeProduct: (productId, reason) => {
-    const denied = denyUnlessPerm("products.remove", "removeProduct");
+    const denied = denyUnlessEffectivePermission("products.remove", "removeProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
 
@@ -2675,8 +2881,22 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addProduct: (p) => {
-    const denied = denyUnlessPerm("products.add", "addProduct");
+    const denied = denyUnlessEffectivePermission("products.add", "addProduct");
     if (denied) return;
+
+    const state = get();
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const tier = resolveStorePlanTier(snapshot, authMode);
+    const cap = validateCanAddProduct(state.products.length, tier);
+    if (!cap.ok) {
+      pushAudit("auth_forbidden", "Denied addProduct (plan product limit)", {
+        permission: "products.add",
+        action: "addProduct",
+        attemptedRole: state.sessionActor?.role ?? null,
+        errorKey: cap.errorKey,
+      });
+      return;
+    }
 
     const now = new Date().toISOString();
     const qp = defaultQuickPresetsForProduct(p);
@@ -2701,7 +2921,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   updateProductQuickPresets: (productId, presets) => {
-    const denied = denyUnlessPerm("products.edit_presets", "updateProductQuickPresets");
+    const denied = denyUnlessEffectivePermission("products.edit_presets", "updateProductQuickPresets");
     if (denied) return;
 
     set((s) => ({
@@ -2723,7 +2943,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   updateProduct: (productId, patch, opts) => {
-    const denied = denyUnlessPerm("stock.adjust", "updateProduct");
+    const denied = denyUnlessEffectivePermission("stock.adjust", "updateProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const prev = get().products.find((p) => p.id === productId);
@@ -2865,11 +3085,14 @@ export const usePosStore = create<PosState>((set, get) => {
     if (changes.some((c) => c.field === "price")) {
       pushAudit("price_change", summary, catalogPayload);
     }
+    if (Math.abs(stockDelta) > 1e-6) {
+      broadcastInventoryStock([normalized], "stock_changed");
+    }
     return { ok: true };
   },
 
   adjustStock: (productId, delta, reason) => {
-    const denied = denyUnlessPerm("stock.adjust", "adjustStock");
+    const denied = denyUnlessEffectivePermission("stock.adjust", "adjustStock");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
 
@@ -2916,11 +3139,13 @@ export const usePosStore = create<PosState>((set, get) => {
       stockBefore: prev?.stockOnHand ?? null,
       stockAfter: prev != null ? Math.max(0, prev.stockOnHand + delta) : null,
     });
+    const updated = get().products.find((p) => p.id === productId);
+    if (updated) broadcastInventoryStock([updated], "stock_adjusted");
     return { ok: true };
   },
 
   writeOffExpiredStock: ({ productId, quantity, note }) => {
-    const denied = denyUnlessPerm("pharmacy.expired_writeoff", "writeOffExpiredStock");
+    const denied = denyUnlessEffectivePermission("pharmacy.expired_writeoff", "writeOffExpiredStock");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -2993,7 +3218,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addCustomer: (c) => {
-    const denied = denyUnlessPerm("customers.view", "addCustomer");
+    const denied = denyUnlessEffectivePermission("customers.view", "addCustomer");
     if (denied) {
       return {
         ...c,
@@ -3018,7 +3243,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   assignOrphanDebtSale: (saleId, customerId) => {
-    const denied = denyUnlessPerm("customers.debt", "assignOrphanDebtSale");
+    const denied = denyUnlessEffectivePermission("customers.debt", "assignOrphanDebtSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -3054,7 +3279,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addDebtPayment: (customerId, amountUgx) => {
-    const denied = denyUnlessPerm("customers.debt", "addDebtPayment");
+    const denied = denyUnlessEffectivePermission("customers.debt", "addDebtPayment");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const amount = Math.floor(Math.max(0, amountUgx));
@@ -3110,7 +3335,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addSupplier: (input) => {
-    const denied = denyUnlessPerm("suppliers.manage", "addSupplier");
+    const denied = denyUnlessEffectivePermission("suppliers.manage", "addSupplier");
     if (denied) return;
 
     const name = input.name.trim();
@@ -3134,7 +3359,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   updateSupplier: (supplierId, patch) => {
-    const denied = denyUnlessPerm("suppliers.manage", "updateSupplier");
+    const denied = denyUnlessEffectivePermission("suppliers.manage", "updateSupplier");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -3168,7 +3393,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addSupplierPayment: (supplierId, amountUgx) => {
-    const denied = denyUnlessPerm("suppliers.manage", "addSupplierPayment");
+    const denied = denyUnlessEffectivePermission("suppliers.manage", "addSupplierPayment");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -3205,7 +3430,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   voidPurchase: (purchaseId, reason) => {
-    const denied = denyUnlessPerm("purchases.void", "voidPurchase");
+    const denied = denyUnlessEffectivePermission("purchases.void", "voidPurchase");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
@@ -3253,6 +3478,7 @@ export const usePosStore = create<PosState>((set, get) => {
       voidedAt: at,
       voidReason: trimmedReason,
       pendingSync: true,
+      preVoidCloudSynced: !purchase.pendingSync,
     };
 
     const purchases = [...state.purchases];
@@ -3292,11 +3518,18 @@ export const usePosStore = create<PosState>((set, get) => {
       amountPaidUgx: purchase.amountPaidUgx,
       reason: trimmedReason,
     });
+    const voidedProducts = products.filter((p) => {
+      const old = state.products.find((x) => x.id === p.id);
+      return old != null && old.stockOnHand !== p.stockOnHand;
+    });
+    if (voidedProducts.length > 0) {
+      broadcastInventoryStock(voidedProducts, "purchase_void");
+    }
     return { ok: true };
   },
 
   recordPurchase: (input) => {
-    const denied = denyUnlessPerm("purchases.record", "recordPurchase");
+    const denied = denyUnlessEffectivePermission("purchases.record", "recordPurchase");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -3334,6 +3567,7 @@ export const usePosStore = create<PosState>((set, get) => {
           name: p.name,
           qtyBuyingUnits: baseInDirect,
           costPerBuyingUnitUgx: Math.round(costBase),
+          unitMode: "base_units",
         });
       } else {
         totalCostUgx += purchaseLineCostTotalUgx({
@@ -3439,11 +3673,18 @@ export const usePosStore = create<PosState>((set, get) => {
       amountPaidUgx,
       lineCount: builtLines.length,
     });
+    const changedProducts = products.filter((p) => {
+      const old = state.products.find((x) => x.id === p.id);
+      return old != null && old.stockOnHand !== p.stockOnHand;
+    });
+    if (changedProducts.length > 0) {
+      broadcastInventoryStock(changedProducts, "purchase_saved");
+    }
     return { ok: true };
   },
 
   runDataArchive: () => {
-    const denied = denyUnlessPerm("settings.shop", "runDataArchive");
+    const denied = denyUnlessEffectivePermission("settings.shop", "runDataArchive");
     if (denied) {
       return {
         moved: { sales: 0, auditLogs: 0, dayCloses: 0, voidRecords: 0, returnRecords: 0, shifts: 0 },
@@ -3503,7 +3744,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   permanentlyDeleteArchived: () => {
-    const denied = denyUnlessPerm("settings.shop", "permanentlyDeleteArchived");
+    const denied = denyUnlessEffectivePermission("settings.shop", "permanentlyDeleteArchived");
     if (denied) return;
 
     const state = get();
@@ -3607,7 +3848,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   approveCashExpense: (id) => {
-    const denied = denyUnlessPerm("expenses.approve", "approveCashExpense");
+    const denied = denyUnlessEffectivePermission("expenses.approve", "approveCashExpense");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -3643,7 +3884,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   rejectCashExpense: (id) => {
-    const denied = denyUnlessPerm("expenses.approve", "rejectCashExpense");
+    const denied = denyUnlessEffectivePermission("expenses.approve", "rejectCashExpense");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
@@ -3679,7 +3920,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   voidCashExpense: (id, reason) => {
-    const denied = denyUnlessPerm("expenses.delete", "voidCashExpense");
+    const denied = denyUnlessEffectivePermission("expenses.delete", "voidCashExpense");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     if (!validateAuditReason(reason)) return { ok: false, errorKey: auditReasonErrorKey() };
 
@@ -3707,7 +3948,7 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   recordDayClose: async ({ dateKey, countedCashUgx, override, overrideReason }) => {
-    const denied = denyUnlessPerm("day.close", "recordDayClose");
+    const denied = denyUnlessEffectivePermission("day.close", "recordDayClose");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     await ensureAllActiveSalesLoaded();
@@ -3817,8 +4058,13 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   repairCustomerDebtIntegrity: () => {
-    const denied = denyUnlessPerm("owner.dashboard", "repairCustomerDebtIntegrity");
-    if (denied) return { ok: false, healedCount: 0, mismatchCount: 0 };
+    const denied = denyUnlessEffectivePermission("owner.dashboard", "repairCustomerDebtIntegrity");
+    if (denied) return { ok: false, healedCount: 0, mismatchCount: 0, errorKey: denied.errorKey };
+
+    const healSafety = canSafelyHealCustomerDebt();
+    if (!healSafety.ok) {
+      return { ok: false, healedCount: 0, mismatchCount: 0, errorKey: healSafety.reasonKey };
+    }
 
     const state = get();
     const before = verifyCustomerDebtIntegrity(state.customers, state.sales, state.debtPayments, { heal: false });
@@ -4112,7 +4358,12 @@ function reportRestoreProgress(
 
 /** Write current in-memory store to IndexedDB after a restore (can run after UI unblocks). */
 export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise<void> {
-  const restoreAuth = checkStorePermission(usePosStore.getState().sessionActor, "settings.shop");
+  const { snapshot, authMode } = getStoreSubscriptionContext();
+  const restoreAuth = authorizeBackupRestore({
+    actor: usePosStore.getState().sessionActor,
+    snapshot,
+    authMode,
+  });
   if (!restoreAuth.ok) {
     usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup persist", {
       permission: "settings.shop",
@@ -4138,7 +4389,12 @@ export async function applyRestoredSnapshotFromBackup(
   snap: PersistedSnapshot,
   opts?: { sessionId?: number; onProgress?: (percent: number) => void },
 ): Promise<void> {
-  const restoreAuth = checkStorePermission(usePosStore.getState().sessionActor, "settings.shop");
+  const { snapshot, authMode } = getStoreSubscriptionContext();
+  const restoreAuth = authorizeBackupRestore({
+    actor: usePosStore.getState().sessionActor,
+    snapshot,
+    authMode,
+  });
   if (!restoreAuth.ok) {
     usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup restore", {
       permission: "settings.shop",
@@ -4207,6 +4463,22 @@ export async function applyRestoredSnapshotFromBackup(
 
     void clearPersistedDraft();
     await yieldUiTick();
+
+    const { clearSyncQueueForRestore } = await import("../lib/restoreSyncSafety");
+    await clearSyncQueueForRestore();
+
+    const restored = usePosStore.getState();
+    const { runPostRestoreValidationSnapshot } = await import("../lib/postRestoreValidation");
+    runPostRestoreValidationSnapshot({
+      products: restored.products,
+      stockMovements: restored.stockMovements,
+      customers: restored.customers,
+      sales: restored.sales,
+      debtPayments: restored.debtPayments,
+      suppliers: restored.suppliers,
+      purchases: restored.purchases,
+      supplierPayments: restored.supplierPayments,
+    });
   } finally {
     release();
   }

@@ -8,18 +8,17 @@ import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { useMemo } from "react";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
+import { hasEffectivePermission, resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
-import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
 
 type Props = { lang: Language };
 
 export function DesktopStatusChips({ lang }: Props) {
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const products = usePosStore((s) => s.products);
-  const { snapshot } = useSubscription();
   const sync = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
   const pending = sync.pendingCount;
@@ -40,8 +39,10 @@ export function DesktopStatusChips({ lang }: Props) {
     [unlockedProducts],
   );
 
-  const showRisks = hasPermission(actor.role, "owner.activity") && riskCount > 0;
-  const showLowStock = hasPermission(actor.role, "stock.view") && lowStockCount > 0;
+  const showRisks =
+    hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode) && riskCount > 0;
+  const showLowStock =
+    hasEffectivePermission(actor.role, "stock.view", snapshot, authMode) && lowStockCount > 0;
 
   const chipClass =
     "inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white";

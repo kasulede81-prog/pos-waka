@@ -15,11 +15,12 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
 }
 
 /**
- * Best-effort remote push. When Supabase is not configured, ops are cleared so
- * the queue stays small. When configured but signed out, ops are retried later.
+ * Best-effort remote push. When Supabase is not configured, ops are retained
+ * (local-only mode) so they can sync once cloud is configured.
+ * When configured but signed out, ops are retried later.
  */
 async function processOne(op: SyncOperation): Promise<boolean> {
-  if (!hasSupabaseConfig || !supabase) return true;
+  if (!hasSupabaseConfig || !supabase) return false;
 
   const { data: session } = await supabase.auth.getSession();
   if (!session.session) return false;

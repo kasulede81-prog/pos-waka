@@ -18,7 +18,12 @@ import { isHospitalityMode } from "../lib/hospitality";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
-import { canSeeOfficeProfit } from "../lib/homeProfit";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
+import {
+  filterReturnsForHomeScope,
+  filterSalesForHomeScope,
+  resolveVisibleHomeMetrics,
+} from "../lib/homeVisibility";
 import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
 import { PharmacyDashboardPage } from "./PharmacyDashboardPage";
 
@@ -61,18 +66,26 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const canDayClose = hasEffectivePermission(actor.role, "day.close", snapshot, authMode);
   const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
   const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
-  const canProfit =
-    canSeeOfficeProfit(actor.role, authMode) &&
-    hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const profitVisibility = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const canProfit = profitVisibility.canProfit;
+  const homeMetrics = resolveVisibleHomeMetrics(actor.role);
 
   const sales = useDeferredReportingSales(includeArchived);
-  const analytics = useDashboardAnalytics(includeArchived);
+  const returnRecords = usePosStore((s) => s.returnRecords);
+  const scopedSales = useMemo(
+    () => filterSalesForHomeScope(sales, homeMetrics.scope, actor.userId),
+    [sales, homeMetrics.scope, actor.userId],
+  );
+  const scopedReturns = useMemo(
+    () => filterReturnsForHomeScope(returnRecords, sales, homeMetrics.scope, actor.userId),
+    [returnRecords, sales, homeMetrics.scope, actor.userId],
+  );
+  const analytics = useDashboardAnalytics(includeArchived, homeMetrics.scope, actor.userId);
   const salesCount = usePosStore((s) => s.sales.length);
   const products = usePosStore((s) => s.products);
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const customers = usePosStore((s) => s.customers);
-  const returnRecords = usePosStore((s) => s.returnRecords);
   const showActivityFeed = hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
@@ -86,17 +99,17 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   /** Local totals — must match the sales list (server lags when offline / pending sync). */
   const localToday = useMemo(
-    () => localGetDailySalesSummary(sales, products, returnRecords, todayKey),
-    [sales, products, returnRecords, todayKey],
+    () => localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey),
+    [scopedSales, products, scopedReturns, todayKey],
   );
   const localWeek = useMemo(
-    () => localGetWeeklySalesSummary(sales, products, returnRecords),
-    [sales, products, returnRecords],
+    () => localGetWeeklySalesSummary(scopedSales, products, scopedReturns),
+    [scopedSales, products, scopedReturns],
   );
 
   const todaySales = useMemo(
-    () => sales.filter((s) => dateKeyKampala(s.createdAt) === todayKey),
-    [sales, todayKey],
+    () => scopedSales.filter((s) => dateKeyKampala(s.createdAt) === todayKey),
+    [scopedSales, todayKey],
   );
 
   const salesTodayTotal = localToday.totalRevenueUgx;
@@ -117,7 +130,12 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const quickTiles = useMemo(() => products.slice(0, 10), [products]);
 
-  const gridCols = canStock && canProfit ? "lg:grid-cols-2" : canStock ? "lg:grid-cols-3" : "lg:grid-cols-2";
+  const gridCols =
+    homeMetrics.showInventoryMetrics && canStock && canProfit
+      ? "lg:grid-cols-2"
+      : homeMetrics.showInventoryMetrics && canStock
+        ? "lg:grid-cols-3"
+        : "lg:grid-cols-2";
 
   const hospitalityHome = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   if (hospitalityHome) {
@@ -279,21 +297,23 @@ export function DashboardPage({ lang }: { lang: Language }) {
       ) : null}
 
       <section className={`grid grid-cols-2 gap-3 ${gridCols}`}>
-        <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
-          <p className="text-xs font-black uppercase tracking-wide text-white/80">
-            {wholesaleHome ? t(lang, "wholesaleDashLargeInvoices") : t(lang, "todaySection")}
-          </p>
-          <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {salesTodayTotal.toLocaleString()}</p>
-          <p className="mt-1 text-xs font-semibold text-white/70">
-            {wholesaleHome ? t(lang, "wholesaleDashNoInvoices") : t(lang, "dashboardTodaySalesHint")}
-          </p>
-          <p className="mt-1 text-xs font-semibold text-white/80">
-            {t(lang, "dashboardSalesMeta")
-              .replace("{{count}}", String(todaySales.length))
-              .replace("{{amount}}", cashToday.toLocaleString())}
-          </p>
-        </article>
-        {canStock ? (
+        {homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue ? (
+          <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
+            <p className="text-xs font-black uppercase tracking-wide text-white/80">
+              {wholesaleHome ? t(lang, "wholesaleDashLargeInvoices") : t(lang, "todaySection")}
+            </p>
+            <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {salesTodayTotal.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-semibold text-white/70">
+              {wholesaleHome ? t(lang, "wholesaleDashNoInvoices") : t(lang, "dashboardTodaySalesHint")}
+            </p>
+            <p className="mt-1 text-xs font-semibold text-white/80">
+              {t(lang, "dashboardSalesMeta")
+                .replace("{{count}}", String(todaySales.length))
+                .replace("{{amount}}", cashToday.toLocaleString())}
+            </p>
+          </article>
+        ) : null}
+        {homeMetrics.showInventoryMetrics && canStock ? (
           <article className="rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-rose-900">
               {wholesaleHome ? t(lang, "wholesaleDashReorderRequired") : t(lang, "cardLowStock")}
@@ -302,14 +322,16 @@ export function DashboardPage({ lang }: { lang: Language }) {
             <p className="mt-1 text-xs font-semibold text-rose-800">{t(lang, "almostFinishedHint")}</p>
           </article>
         ) : null}
-        <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
-          <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">
-            {wholesaleHome ? t(lang, "wholesaleDashReceivables") : t(lang, "cardDebtToday")}
-          </p>
-          <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
-          <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtTodayHint")}</p>
-        </article>
-        {canProfit ? (
+        {homeMetrics.showShopWideDebt ? (
+          <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
+            <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">
+              {wholesaleHome ? t(lang, "wholesaleDashReceivables") : t(lang, "cardDebtToday")}
+            </p>
+            <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtTodayHint")}</p>
+          </article>
+        ) : null}
+        {canProfit && (homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue) ? (
           <article className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-emerald-900">
               {t(lang, "cardProfitToday")}
@@ -324,11 +346,14 @@ export function DashboardPage({ lang }: { lang: Language }) {
         ) : null}
       </section>
 
-      <p className="text-center text-sm font-medium text-stone-500">
-        {t(lang, "weekCashHint")}: <span className="font-bold text-stone-800">UGX {cashWeekDisplay.toLocaleString()}</span>
-        <span className="mt-0.5 block text-xs font-medium text-stone-400">{t(lang, "dashboardCashInSalesHint")}</span>
-      </p>
+      {homeMetrics.showWeekCashSummary ? (
+        <p className="text-center text-sm font-medium text-stone-500">
+          {t(lang, "weekCashHint")}: <span className="font-bold text-stone-800">UGX {cashWeekDisplay.toLocaleString()}</span>
+          <span className="mt-0.5 block text-xs font-medium text-stone-400">{t(lang, "dashboardCashInSalesHint")}</span>
+        </p>
+      ) : null}
 
+      {homeMetrics.showRecentSalesList ? (
       <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xl font-black text-stone-900">{t(lang, "dashboardTodaySalesTitle")}</h2>
@@ -365,7 +390,9 @@ export function DashboardPage({ lang }: { lang: Language }) {
           </ul>
         )}
       </section>
+      ) : null}
 
+      {homeMetrics.showFastMovers ? (
       <section className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">
         <h2 className="text-xl font-black text-stone-900">{t(lang, "fastToday")}</h2>
         {fastMovers.length === 0 ? (
@@ -387,8 +414,9 @@ export function DashboardPage({ lang }: { lang: Language }) {
           </ul>
         )}
       </section>
+      ) : null}
 
-      {canStock ? (
+      {homeMetrics.showInventoryMetrics && canStock ? (
         <section className="rounded-3xl border-4 border-rose-200 bg-rose-50/80 p-5">
           <h2 className="text-xl font-black text-rose-950">{t(lang, "lowStockTitleFriendly")}</h2>
           {lowStockProducts.length === 0 ? (

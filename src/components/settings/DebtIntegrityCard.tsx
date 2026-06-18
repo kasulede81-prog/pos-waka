@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { verifyCustomerDebtIntegrity } from "../../lib/customerDebtIntegrity";
+import { canSafelyHealCustomerDebt } from "../../lib/debtSyncState";
 import { usePosStore } from "../../store/usePosStore";
 import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
@@ -19,10 +20,16 @@ export function DebtIntegrityCard({ lang }: { lang: Language }) {
     [customers, sales, debtPayments],
   );
 
-  const canRepair = hasPermission(actor.role, "owner.dashboard");
+  const healSafety = canSafelyHealCustomerDebt();
+  const canRepair = hasPermission(actor.role, "owner.dashboard") && healSafety.ok;
 
   const runRepair = () => {
     const result = repair();
+    if (!result.ok && result.errorKey) {
+      setRepairMsg(t(lang, result.errorKey));
+      window.setTimeout(() => setRepairMsg(null), 5000);
+      return;
+    }
     setRepairMsg(
       t(lang, "debtIntegrityRepairResult")
         .replace("{healed}", String(result.healedCount))
@@ -52,6 +59,10 @@ export function DebtIntegrityCard({ lang }: { lang: Language }) {
           ? t(lang, "debtIntegrityHealthy")
           : t(lang, "debtIntegrityWarning").replace("{count}", String(status.mismatches.length))}
       </p>
+
+      {!healSafety.ok ? (
+        <p className="mt-2 text-xs font-semibold text-amber-900">{t(lang, healSafety.reasonKey)}</p>
+      ) : null}
 
       {canRepair ? (
         <button

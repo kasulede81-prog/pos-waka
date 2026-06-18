@@ -19,6 +19,8 @@ export type DailyReportPdfInput = {
   debtPayments: DebtPayment[];
   cashExpenses: CashExpense[];
   topProducts: ProductRank[];
+  /** When false, profit line is omitted (Free tier). */
+  includeProfit?: boolean;
 };
 
 function paymentMethodBreakdown(sales: Sale[], day: string): Array<{ label: string; count: number; ugx: number }> {
@@ -45,8 +47,18 @@ function voidLineCount(sales: Sale[], day: string): number {
 }
 
 export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
-  const { lang, dateKey, shopName, sales, products, returnRecords, debtPayments, cashExpenses, topProducts } =
-    input;
+  const {
+    lang,
+    dateKey,
+    shopName,
+    sales,
+    products,
+    returnRecords,
+    debtPayments,
+    cashExpenses,
+    topProducts,
+    includeProfit = true,
+  } = input;
   const dayReturns = returnRecords.filter((r) => dateKeyKampala(r.createdAt) === dateKey);
   const fin = getCompletedFinancials(sales, returnRecords, products, { day: dateKey });
   const drawer = getDrawerCashForDayInput({
@@ -70,7 +82,9 @@ export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
   pdfLine(layout, doc, dateKey);
   pdfGap(layout, 6);
   pdfLine(layout, doc, `${t(lang, "totalSales")}: UGX ${fin.revenueUgx.toLocaleString()}`, { bold: true });
-  pdfLine(layout, doc, `${t(lang, "estimatedProfit")}: UGX ${fin.profitUgx.toLocaleString()}`);
+  if (includeProfit) {
+    pdfLine(layout, doc, `${t(lang, "estimatedProfit")}: UGX ${fin.profitUgx.toLocaleString()}`);
+  }
   pdfLine(layout, doc, `${t(lang, "cashInHand")}: UGX ${fin.cashCollectedUgx.toLocaleString()}`);
   pdfLine(layout, doc, `${t(lang, "ownerCardExpectedCash")}: UGX ${drawer.expectedDrawerCashUgx.toLocaleString()}`);
   pdfLine(layout, doc, `${t(lang, "creditLabel")}: UGX ${fin.debtIssuedUgx.toLocaleString()}`);

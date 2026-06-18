@@ -10,6 +10,8 @@ export type DailyReportExportInput = {
   returnRecords: ReturnRecord[];
   debtPayments?: DebtPayment[];
   cashExpenses?: CashExpense[];
+  /** When false, profit line is omitted (Free tier). */
+  includeProfit?: boolean;
 };
 
 /** Plain-text summary for WhatsApp / SMS / print */
@@ -60,6 +62,7 @@ export function buildDailyReportText(
   const cash = fin.cashCollectedUgx;
   const debt = fin.debtIssuedUgx;
   const profit = fin.profitUgx;
+  const includeProfit = input.includeProfit !== false;
   const lines: string[] = [];
   lines.push(`${t(lang, "appName")} — ${t(lang, "exportReportHeading")} ${dateKey}`);
   lines.push(`${t(lang, "salesCount")}: ${fin.transactionCount}`);
@@ -67,7 +70,9 @@ export function buildDailyReportText(
   lines.push(`${t(lang, "cashInHand")}: UGX ${cash.toLocaleString()}`);
   lines.push(`${t(lang, "ownerCardExpectedCash")}: UGX ${drawer.expectedDrawerCashUgx.toLocaleString()}`);
   lines.push(`${t(lang, "creditLabel")}: UGX ${debt.toLocaleString()}`);
-  lines.push(`${t(lang, "estimatedProfit")}: UGX ${profit.toLocaleString()}`);
+  if (includeProfit) {
+    lines.push(`${t(lang, "estimatedProfit")}: UGX ${profit.toLocaleString()}`);
+  }
   lines.push("");
   lines.push(t(lang, "exportReportFooter"));
   return lines.join("\n");

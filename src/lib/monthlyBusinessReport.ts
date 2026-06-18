@@ -115,7 +115,11 @@ export function buildMonthlyBusinessReport(params: {
   };
 }
 
-export function formatMonthlyReportPlain(lang: Language, report: MonthlyBusinessReport): string {
+export function formatMonthlyReportPlain(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): string {
   const lines: string[] = [];
   lines.push(`${report.shopName} — ${t(lang, "monthlyReportTitle")} ${report.monthKey}`);
   lines.push(`${t(lang, "monthlyReportGenerated")}: ${new Date(report.generatedAt).toLocaleString()}`);
@@ -126,7 +130,9 @@ export function formatMonthlyReportPlain(lang: Language, report: MonthlyBusiness
   lines.push(`${t(lang, "creditLabel")}: UGX ${report.debtUgx.toLocaleString()}`);
   lines.push(`${t(lang, "monthlyReportDiscounts")}: UGX ${report.discountsUgx.toLocaleString()}`);
   lines.push(`${t(lang, "monthlyReportRefunds")}: UGX ${report.refundsUgx.toLocaleString()}`);
-  lines.push(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
+  if (opts.includeProfit) {
+    lines.push(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
+  }
   lines.push("");
   lines.push(t(lang, "monthlyReportTopProducts"));
   for (const p of report.topProducts.slice(0, 10)) {
@@ -145,7 +151,7 @@ export function formatMonthlyReportPlain(lang: Language, report: MonthlyBusiness
   return lines.join("\n");
 }
 
-export function monthlyReportToCsv(report: MonthlyBusinessReport): string {
+export function monthlyReportToCsv(report: MonthlyBusinessReport, opts: { includeProfit: boolean }): string {
   const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
   const rows: string[] = [];
   rows.push(["section", "label", "value"].map(esc).join(","));
@@ -156,7 +162,9 @@ export function monthlyReportToCsv(report: MonthlyBusinessReport): string {
   rows.push(["summary", "debt_ugx", report.debtUgx].map(esc).join(","));
   rows.push(["summary", "discounts_ugx", report.discountsUgx].map(esc).join(","));
   rows.push(["summary", "refunds_ugx", report.refundsUgx].map(esc).join(","));
-  rows.push(["summary", "profit_ugx", report.profitUgx].map(esc).join(","));
+  if (opts.includeProfit) {
+    rows.push(["summary", "profit_ugx", report.profitUgx].map(esc).join(","));
+  }
   rows.push(["summary", "products_count", report.inventorySummary.productCount].map(esc).join(","));
   rows.push(["summary", "stock_value_cost_ugx", report.inventorySummary.stockValueAtCostUgx].map(esc).join(","));
   for (const p of report.topProducts) {
@@ -180,7 +188,11 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function buildMonthlyReportHtml(lang: Language, report: MonthlyBusinessReport): string {
+export function buildMonthlyReportHtml(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): string {
   const rows = [
     [t(lang, "totalSales"), `UGX ${report.totalSalesUgx.toLocaleString()}`],
     [t(lang, "monthlyReportTransactions"), String(report.transactionCount)],
@@ -188,7 +200,9 @@ export function buildMonthlyReportHtml(lang: Language, report: MonthlyBusinessRe
     [t(lang, "creditLabel"), `UGX ${report.debtUgx.toLocaleString()}`],
     [t(lang, "monthlyReportDiscounts"), `UGX ${report.discountsUgx.toLocaleString()}`],
     [t(lang, "monthlyReportRefunds"), `UGX ${report.refundsUgx.toLocaleString()}`],
-    [t(lang, "estimatedProfit"), `UGX ${report.profitUgx.toLocaleString()}`],
+    ...(opts.includeProfit
+      ? [[t(lang, "estimatedProfit"), `UGX ${report.profitUgx.toLocaleString()}`] as [string, string]]
+      : []),
   ];
   const productRows = report.topProducts
     .slice(0, 15)
@@ -222,8 +236,12 @@ ${escapeHtml(t(lang, "monthlyReportLowStock"))}: ${report.inventorySummary.lowSt
 </body></html>`;
 }
 
-export function printMonthlyReport(lang: Language, report: MonthlyBusinessReport): boolean {
-  const html = buildMonthlyReportHtml(lang, report);
+export function printMonthlyReport(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): boolean {
+  const html = buildMonthlyReportHtml(lang, report, opts);
   const frame = document.createElement("iframe");
   frame.style.position = "fixed";
   frame.style.right = "0";
@@ -252,12 +270,20 @@ export function printMonthlyReport(lang: Language, report: MonthlyBusinessReport
   return true;
 }
 
-export async function downloadMonthlyReportWord(lang: Language, report: MonthlyBusinessReport): Promise<boolean> {
-  const html = buildMonthlyReportHtml(lang, report);
+export async function downloadMonthlyReportWord(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): Promise<boolean> {
+  const html = buildMonthlyReportHtml(lang, report, opts);
   return saveExportedFile(`waka-monthly-${report.monthKey}.doc`, html, "application/msword;charset=utf-8");
 }
 
-export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBusinessReport): Promise<boolean> {
+export async function downloadMonthlyReportPdf(
+  lang: Language,
+  report: MonthlyBusinessReport,
+  opts: { includeProfit: boolean },
+): Promise<boolean> {
   try {
   const { jsPDF } = await import("jspdf");
   const doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -286,7 +312,9 @@ export async function downloadMonthlyReportPdf(lang: Language, report: MonthlyBu
   line(`${t(lang, "creditLabel")}: UGX ${report.debtUgx.toLocaleString()}`);
   line(`${t(lang, "monthlyReportDiscounts")}: UGX ${report.discountsUgx.toLocaleString()}`);
   line(`${t(lang, "monthlyReportRefunds")}: UGX ${report.refundsUgx.toLocaleString()}`);
-  line(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
+  if (opts.includeProfit) {
+    line(`${t(lang, "estimatedProfit")}: UGX ${report.profitUgx.toLocaleString()}`);
+  }
   y += 10;
   line(t(lang, "monthlyReportTopProducts"), 12, true);
   for (const p of report.topProducts.slice(0, 12)) {

@@ -323,6 +323,45 @@ export async function clearSyncQueue(): Promise<void> {
   await tx.done;
 }
 
+export type RestoreQueueArchiveEntry = {
+  archivedAt: string;
+  operations: SyncOperation[];
+};
+
+function restoreQueueArchiveKey(accountKey: string): string {
+  return `${accountKey}::restore_queue_archive`;
+}
+
+/** Move pending sync ops to archive and clear queue — used after backup restore. */
+export async function archiveAndClearSyncQueue(): Promise<{ clearedCount: number; archivedCount: number }> {
+  const acc = getActiveAccountKey();
+  if (!acc) return { clearedCount: 0, archivedCount: 0 };
+  const queue = await readSyncQueue();
+  const clearedCount = queue.length;
+  if (clearedCount === 0) return { clearedCount: 0, archivedCount: 0 };
+
+  const db = await getLocalDb();
+  const key = restoreQueueArchiveKey(acc);
+  const existing = (await db.get("kv", key)) as RestoreQueueArchiveEntry[] | undefined;
+  const entry: RestoreQueueArchiveEntry = {
+    archivedAt: new Date().toISOString(),
+    operations: queue,
+  };
+  const nextArchive = [entry, ...(existing ?? [])].slice(0, 10);
+  await db.put("kv", nextArchive, key);
+  await clearSyncQueue();
+  return { clearedCount, archivedCount: clearedCount };
+}
+
+export async function countArchivedRestoreQueueOps(): Promise<number> {
+  const acc = getActiveAccountKey();
+  if (!acc) return 0;
+  const db = await getLocalDb();
+  const archives = (await db.get("kv", restoreQueueArchiveKey(acc))) as RestoreQueueArchiveEntry[] | undefined;
+  if (!archives?.length) return 0;
+  return archives.reduce((sum, entry) => sum + entry.operations.length, 0);
+}
+
 export async function appendBackupRecord(rec: LocalBackupRecord): Promise<void> {
   const acc = getActiveAccountKey();
   if (!acc) return;

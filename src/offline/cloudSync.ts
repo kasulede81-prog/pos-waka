@@ -2,6 +2,7 @@ import type {
   AuditLogEntry,
   CashExpense,
   Customer,
+  DebtPayment,
   Product,
   Purchase,
   ReturnRecord,
@@ -32,6 +33,7 @@ import type { SyncOperation } from "../types";
 import { reportSyncIssue } from "../lib/monitoring";
 import { mergeReturnRecordsForRecovery, rowToReturnRecord, type CloudReturnRow } from "../lib/returnRecovery";
 import {
+  buildPurchaseCloudPushPayload,
   mergePurchaseRecoveryBundle,
   rowToPurchase,
   rowToSupplier,
@@ -40,14 +42,18 @@ import {
   type CloudSupplierRow,
 } from "../lib/purchaseRecovery";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
+import { isPurchaseVoided } from "../lib/purchaseCorrections";
+import { purchaseLineBaseUnitsIn } from "../lib/purchaseLineSync";
 import {
   mergeProductFromCloudPull,
   patchProductsWithServerStock,
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
-import { buyingUnitsToBaseUnits } from "../lib/sellingEngine";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
 import { defaultReceiptDisplayOptions } from "../lib/receiptBranding";
+import { mergeDebtPaymentsFromCloudPull, parseDebtPaymentRows } from "../lib/debtPaymentRecovery";
+import { mergeCustomerFromCloudPull } from "../lib/customerDebtReconciliation";
+import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -1030,23 +1036,7 @@ export async function syncCashExpenseImmediately(expenseId: string): Promise<boo
 
 async function pushPurchaseToCloud(purchase: Purchase, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(purchase.id)) return false;
-  const payload = {
-    id: purchase.id,
-    supplier_id: purchase.supplierId,
-    supplier_name: purchase.supplierName,
-    total_cost_ugx: purchase.totalCostUgx,
-    amount_paid_ugx: purchase.amountPaidUgx,
-    balance_delta_ugx: purchase.balanceDeltaUgx,
-    notes: purchase.notes,
-    created_at: purchase.createdAt,
-    lines: purchase.lines.map((ln) => ({
-      productId: ln.productId,
-      name: ln.name,
-      qtyBuyingUnits: ln.qtyBuyingUnits,
-      costPerBuyingUnitUgx: ln.costPerBuyingUnitUgx,
-    })),
-    metadata: { wakaClient: true },
-  };
+  const payload = buildPurchaseCloudPushPayload(purchase);
   const { data, error } = await supabase.rpc("shop_push_purchase", {
     p_shop_id: ctx.shopId,
     p_payload: payload,
@@ -1057,6 +1047,97 @@ async function pushPurchaseToCloud(purchase: Purchase, ctx: ShopCtx): Promise<bo
   }
   const result = data as { ok?: boolean } | null;
   return result?.ok === true;
+}
+
+function markPurchaseSynced(purchaseId: string, extra?: Partial<Purchase>): void {
+  usePosStore.setState((s) => ({
+    purchases: s.purchases.map((p) =>
+      p.id === purchaseId ? { ...p, pendingSync: false, ...extra } : p,
+    ),
+  }));
+}
+
+async function syncPurchaseVoidStockReversal(purchase: Purchase, ctx: ShopCtx): Promise<boolean> {
+  if (purchase.voidStockSyncedAt) return true;
+  if (!purchase.preVoidCloudSynced) return true;
+
+  for (const ln of purchase.lines) {
+    const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
+    if (!product) continue;
+    const baseOut = purchaseLineBaseUnitsIn(product, ln);
+    if (baseOut <= 0) continue;
+    const catalogOk = await pushProductCatalogToCloud(product, ctx);
+    if (!catalogOk) return false;
+    const stockOk = await pushProductStockToCloud(product.id, ctx, {
+      delta: -baseOut,
+      note: `purchase_void:${purchase.id}`,
+      baseUpdatedAt: product.updatedAt,
+      baseStockOnHand: product.stockOnHand + baseOut,
+    });
+    if (!stockOk) return false;
+  }
+
+  markPurchaseSynced(purchase.id, { voidStockSyncedAt: new Date().toISOString() });
+  return true;
+}
+
+async function syncPurchaseVoidBundle(purchaseId: string, ctx: ShopCtx): Promise<boolean> {
+  const purchase = usePosStore.getState().purchases.find((p) => p.id === purchaseId);
+  if (!purchase) return true;
+  if (!isPurchaseVoided(purchase)) return syncPurchaseBundle(purchaseId, ctx);
+
+  const purchaseOk = await pushPurchaseToCloud(purchase, ctx);
+  if (!purchaseOk) return false;
+
+  const stockOk = await syncPurchaseVoidStockReversal(purchase, ctx);
+  if (!stockOk) return false;
+
+  if (!isWalkInSupplierId(purchase.supplierId)) {
+    const supplier = usePosStore.getState().suppliers.find((s) => s.id === purchase.supplierId);
+    if (supplier) {
+      const supplierOk = await pushSupplierToCloud(supplier, ctx);
+      if (!supplierOk) return false;
+    }
+  }
+
+  markPurchaseSynced(purchaseId);
+  return true;
+}
+
+async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boolean> {
+  const purchase = usePosStore.getState().purchases.find((p) => p.id === purchaseId);
+  if (!purchase) return true;
+  if (isPurchaseVoided(purchase)) return syncPurchaseVoidBundle(purchaseId, ctx);
+
+  const purchaseOk = await pushPurchaseToCloud(purchase, ctx);
+  if (!purchaseOk) return false;
+
+  for (const ln of purchase.lines) {
+    const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
+    if (!product) continue;
+    const baseIn = purchaseLineBaseUnitsIn(product, ln);
+    if (baseIn <= 0) continue;
+    const catalogOk = await pushProductCatalogToCloud(product, ctx);
+    if (!catalogOk) return false;
+    const stockOk = await pushProductStockToCloud(product.id, ctx, {
+      delta: baseIn,
+      note: `purchase:${purchase.id}`,
+      baseUpdatedAt: product.updatedAt,
+      baseStockOnHand: product.stockOnHand - baseIn,
+    });
+    if (!stockOk) return false;
+  }
+
+  if (!isWalkInSupplierId(purchase.supplierId)) {
+    const supplier = usePosStore.getState().suppliers.find((s) => s.id === purchase.supplierId);
+    if (supplier) {
+      const supplierOk = await pushSupplierToCloud(supplier, ctx);
+      if (!supplierOk) return false;
+    }
+  }
+
+  markPurchaseSynced(purchaseId);
+  return true;
 }
 
 async function pushSupplierToCloud(supplier: Supplier, ctx: ShopCtx): Promise<boolean> {
@@ -1106,47 +1187,6 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
   return result?.ok === true;
 }
 
-function markPurchaseSynced(purchaseId: string): void {
-  usePosStore.setState((s) => ({
-    purchases: s.purchases.map((p) => (p.id === purchaseId ? { ...p, pendingSync: false } : p)),
-  }));
-}
-
-async function syncPurchaseBundle(purchaseId: string, ctx: ShopCtx): Promise<boolean> {
-  const purchase = usePosStore.getState().purchases.find((p) => p.id === purchaseId);
-  if (!purchase) return true;
-
-  const purchaseOk = await pushPurchaseToCloud(purchase, ctx);
-  if (!purchaseOk) return false;
-
-  for (const ln of purchase.lines) {
-    const product = usePosStore.getState().products.find((p) => p.id === ln.productId);
-    if (!product) continue;
-    const baseIn = buyingUnitsToBaseUnits(product, ln.qtyBuyingUnits);
-    if (baseIn <= 0) continue;
-    const catalogOk = await pushProductCatalogToCloud(product, ctx);
-    if (!catalogOk) return false;
-    const stockOk = await pushProductStockToCloud(product.id, ctx, {
-      delta: baseIn,
-      note: `purchase:${purchase.id}`,
-      baseUpdatedAt: product.updatedAt,
-      baseStockOnHand: product.stockOnHand - baseIn,
-    });
-    if (!stockOk) return false;
-  }
-
-  if (!isWalkInSupplierId(purchase.supplierId)) {
-    const supplier = usePosStore.getState().suppliers.find((s) => s.id === purchase.supplierId);
-    if (supplier) {
-      const supplierOk = await pushSupplierToCloud(supplier, ctx);
-      if (!supplierOk) return false;
-    }
-  }
-
-  markPurchaseSynced(purchaseId);
-  return true;
-}
-
 /** Push one sale to Supabase as soon as possible (after checkout). */
 export async function syncSaleImmediately(saleId: string): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
@@ -1193,11 +1233,13 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     case "pending_purchases": {
       const purchaseId = String(payload.purchaseId ?? "");
       if (!purchaseId) return true;
+      if (payload.void === true) return syncPurchaseVoidBundle(purchaseId, ctx);
       return syncPurchaseBundle(purchaseId, ctx);
     }
     case "purchase": {
       const purchaseId = String(payload.purchaseId ?? payload.id ?? "");
       if (!purchaseId) return true;
+      if (payload.void === true) return syncPurchaseVoidBundle(purchaseId, ctx);
       return syncPurchaseBundle(purchaseId, ctx);
     }
     case "supplier": {
@@ -1208,6 +1250,11 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     }
     case "pending_stock_updates":
     case "stock_move": {
+      if (payload.kind === "purchase_void") {
+        const purchaseId = String(payload.purchaseId ?? "");
+        if (!purchaseId) return true;
+        return syncPurchaseVoidBundle(purchaseId, ctx);
+      }
       if (payload.kind === "purchase") {
         const purchaseId = String(payload.purchaseId ?? "");
         if (!purchaseId) return true;
@@ -1323,6 +1370,7 @@ export type CloudPullStats = {
   products: number;
   customers: number;
   sales: number;
+  debtPayments: number;
   returns: number;
   purchases: number;
   suppliers: number;
@@ -1338,6 +1386,7 @@ export type CloudPullCheckpoints = {
   salesAt: string;
   productsAt: string;
   customersAt: string;
+  debtPaymentsAt: string;
   expensesAt: string;
   returnsAt: string;
   purchasesAt: string;
@@ -1349,6 +1398,7 @@ export type CloudPullResult = {
   products: Product[];
   customers: Customer[];
   sales: Sale[];
+  debtPayments: DebtPayment[];
   returnRecords: ReturnRecord[];
   /** Cloud rows with updated_at for merge (same ids as returnRecords). */
   returnCloudRows: CloudReturnRow[];
@@ -1373,10 +1423,13 @@ const INCREMENTAL_RETURNS_LIMIT = 500;
 const INCREMENTAL_PURCHASES_LIMIT = 500;
 const INCREMENTAL_SUPPLIERS_LIMIT = 500;
 const INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT = 500;
+const INCREMENTAL_DEBT_PAYMENTS_LIMIT = 500;
 const INCREMENTAL_MAX_PAGES = 40;
 
+const CUSTOMER_DEBT_PAYMENTS_SELECT = "id, shop_id, customer_id, amount_ugx, created_at, metadata";
+
 const SHOP_PURCHASES_SELECT =
-  "id, shop_id, supplier_id, supplier_name, total_cost_ugx, amount_paid_ugx, balance_delta_ugx, notes, lines, created_at, updated_at, metadata";
+  "id, shop_id, supplier_id, supplier_name, total_cost_ugx, amount_paid_ugx, balance_delta_ugx, notes, lines, created_at, updated_at, voided_at, void_reason, metadata";
 
 const SHOP_SUPPLIERS_SELECT =
   "id, shop_id, name, phone, location, notes, balance_owed_ugx, total_purchases_ugx, last_supply_at, created_at, updated_at, metadata";
@@ -1949,6 +2002,96 @@ async function pullSupplierPaymentsIncremental(
   };
 }
 
+function maxDebtPaymentCreatedAt(rows: Record<string, unknown>[], since: string): string {
+  let checkpointAt = since;
+  for (const row of rows) {
+    checkpointAt = maxIsoTimestamp(checkpointAt, row.created_at);
+  }
+  return checkpointAt;
+}
+
+async function pullDebtPaymentsPage(
+  ctx: ShopCtx,
+  since: string,
+): Promise<{ rows: DebtPayment[]; bytes: number; checkpointAt: string }> {
+  const { data, error } = await supabase!
+    .from("customer_debt_payments")
+    .select(CUSTOMER_DEBT_PAYMENTS_SELECT)
+    .eq("shop_id", ctx.shopId)
+    .gt("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(INCREMENTAL_DEBT_PAYMENTS_LIMIT);
+
+  if (error) {
+    if (isMissingTableError(error)) return { rows: [], bytes: 0, checkpointAt: since };
+    throw error;
+  }
+  const raw = (data ?? []) as Record<string, unknown>[];
+  const rows = parseDebtPaymentRows(raw);
+  const checkpointAt = raw.length > 0 ? maxDebtPaymentCreatedAt(raw, since) : since;
+  return { rows, bytes: estimatePayloadBytes(raw), checkpointAt };
+}
+
+async function pullDebtPaymentsFull(ctx: ShopCtx): Promise<{ debtPayments: DebtPayment[]; bytes: number }> {
+  const all: DebtPayment[] = [];
+  let bytes = 0;
+  let cursor = new Date(0).toISOString();
+  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
+    const { rows, bytes: b, checkpointAt } = await pullDebtPaymentsPage(ctx, cursor);
+    bytes += b;
+    if (rows.length === 0) break;
+    all.push(...rows);
+    if (checkpointAt <= cursor) break;
+    cursor = checkpointAt;
+    if (rows.length < INCREMENTAL_DEBT_PAYMENTS_LIMIT) break;
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
+  }
+  return { debtPayments: all, bytes };
+}
+
+async function pullDebtPaymentsIncremental(
+  ctx: ShopCtx,
+  since: string,
+): Promise<{ debtPayments: DebtPayment[]; bytes: number; checkpointAt: string }> {
+  const debtPayments: DebtPayment[] = [];
+  let bytes = 0;
+  let cursor = since;
+  let checkpointAt = since;
+  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
+    const pageResult = await pullDebtPaymentsPage(ctx, cursor);
+    bytes += pageResult.bytes;
+    if (pageResult.rows.length === 0) break;
+    checkpointAt = pageResult.checkpointAt;
+    debtPayments.push(...pageResult.rows);
+    if (pageResult.rows.length < INCREMENTAL_DEBT_PAYMENTS_LIMIT) break;
+    cursor = checkpointAt;
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
+  }
+  return {
+    debtPayments,
+    bytes,
+    checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(),
+  };
+}
+
+/** Pull customer debt payments from cloud (full or incremental by created_at cursor). */
+export async function pullDebtPayments(opts?: {
+  forceFull?: boolean;
+}): Promise<{ debtPayments: DebtPayment[]; checkpointAt: string } | null> {
+  const ctx = await resolveShopCtx();
+  if (!ctx || !supabase) return null;
+  const cp = readSyncCheckpoints();
+  if (opts?.forceFull === true || !cp.bootstrapComplete) {
+    const full = await pullDebtPaymentsFull(ctx);
+    return { debtPayments: full.debtPayments, checkpointAt: new Date().toISOString() };
+  }
+  const since = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
+  const inc = await pullDebtPaymentsIncremental(ctx, since);
+  return { debtPayments: inc.debtPayments, checkpointAt: inc.checkpointAt };
+}
+
 async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashExpense[]; bytes: number }> {
   const all: CashExpense[] = [];
   let bytes = 0;
@@ -1986,11 +2129,13 @@ export async function pullShopDataFromCloud(opts?: {
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
   let supplierPayments: SupplierPayment[] = [];
+  let debtPayments: DebtPayment[] = [];
   let expenseCount = 0;
   let returnCount = 0;
   let purchaseCount = 0;
   let supplierCount = 0;
   let supplierPaymentCount = 0;
+  let debtPaymentCount = 0;
   let payloadBytes = 0;
   let pullCheckpoints: CloudPullCheckpoints | undefined;
 
@@ -2034,12 +2179,18 @@ export async function pullShopDataFromCloud(opts?: {
       supplierPayments = payFull.supplierPayments;
       supplierPaymentCount = payFull.supplierPayments.length;
       payloadBytes += payFull.bytes;
+
+      const dpFull = await pullDebtPaymentsFull(ctx);
+      debtPayments = dpFull.debtPayments;
+      debtPaymentCount = dpFull.debtPayments.length;
+      payloadBytes += dpFull.bytes;
     } else {
       const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
       const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
       const sinceSales = cp.lastSalesSyncAt ?? new Date(0).toISOString();
       const sinceExpenses = cp.lastExpensesSyncAt ?? new Date(0).toISOString();
       const sinceReturns = cp.lastReturnsSyncAt ?? new Date(0).toISOString();
+      const sinceDebtPayments = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
 
       const p = await pullProductsIncremental(ctx, sinceProducts);
       products = p.products;
@@ -2084,10 +2235,16 @@ export async function pullShopDataFromCloud(opts?: {
       supplierPaymentCount = pay.supplierPayments.length;
       payloadBytes += pay.bytes;
 
+      const dp = await pullDebtPaymentsIncremental(ctx, sinceDebtPayments);
+      debtPayments = dp.debtPayments;
+      debtPaymentCount = dp.debtPayments.length;
+      payloadBytes += dp.bytes;
+
       pullCheckpoints = {
         salesAt: s.checkpointAt,
         productsAt: p.checkpointAt,
         customersAt: c.checkpointAt,
+        debtPaymentsAt: dp.checkpointAt,
         expensesAt: ex.checkpointAt,
         returnsAt: ret.checkpointAt,
         purchasesAt: pur.checkpointAt,
@@ -2119,6 +2276,7 @@ export async function pullShopDataFromCloud(opts?: {
     products: products.length,
     customers: customers.length,
     sales: sales.length,
+    debtPayments: debtPaymentCount,
     deletedProducts: deletedProductIds.length,
     voidedSales: voidedSaleIds.length,
     expenses: expenseCount,
@@ -2137,6 +2295,7 @@ export async function pullShopDataFromCloud(opts?: {
     products,
     customers,
     sales,
+    debtPayments,
     returnRecords: returnCloudRows.map((r) => r.record),
     returnCloudRows,
     purchases: purchaseCloudRows.map((r) => r.record),
@@ -2173,6 +2332,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     cloud.purchaseCloudRows.length > 0 ||
     cloud.supplierCloudRows.length > 0 ||
     cloud.supplierPayments.length > 0 ||
+    cloud.debtPayments.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
     cloud.voidedSaleIds.length > 0;
   const localEmpty =
@@ -2194,7 +2354,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         salesAt: cloud.checkpoints?.salesAt,
         productsAt: cloud.checkpoints?.productsAt,
         customersAt: cloud.checkpoints?.customersAt,
-        debtsAt: cloud.checkpoints?.customersAt,
+        debtPaymentsAt: cloud.checkpoints?.debtPaymentsAt,
         expensesAt: cloud.checkpoints?.expensesAt,
         returnsAt: cloud.checkpoints?.returnsAt,
         purchasesAt: cloud.checkpoints?.purchasesAt,
@@ -2221,12 +2381,16 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
   );
 
   if (localEmpty && hasCloud) {
+    const debtPayments = mergeDebtPaymentsFromCloudPull([], cloud.debtPayments);
+    const { reconcileCustomersForBootstrapRecovery } = await import("../lib/bootstrapDebtRecovery");
+    const customers = reconcileCustomersForBootstrapRecovery(cloud.customers, cloud.sales, debtPayments);
+
     await applyRestoredSnapshotFromBackup({
       products: cloud.products,
-      customers: cloud.customers,
+      customers,
       sales: cloud.sales,
       preferences: state.preferences,
-      debtPayments: state.debtPayments,
+      debtPayments,
       dayCloses: state.dayCloses,
       auditLogs: state.auditLogs,
       suppliers: purchaseRecovery.suppliers,
@@ -2245,6 +2409,11 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     });
     await persistRestoredSnapshotToDisk();
     markBootstrapSyncComplete();
+    runPostSyncDebtValidation({
+      customers: usePosStore.getState().customers,
+      sales: usePosStore.getState().sales,
+      debtPayments: usePosStore.getState().debtPayments,
+    });
     await applyShopRecoverySignalsForCurrentShop();
     const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
       "../lib/stabilityDiagnostics",
@@ -2274,11 +2443,22 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     )
   ).filter((p) => !deletedProductSet.has(p.id));
 
-  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) => newer(a, b));
   const mergedSales = await mergeByIdChunked(state.sales, cloud.sales, (local, remote) =>
     mergeSaleFromCloudPull(local, remote),
   );
   const sales = mergedSales.filter((s) => !voidedSaleSet.has(s.id));
+
+  const debtPayments = mergeDebtPaymentsFromCloudPull(state.debtPayments, cloud.debtPayments);
+  const cpBeforeMerge = readSyncCheckpoints();
+  const ledgerAuthoritative =
+    cloud.stats.mode === "full" ||
+    cloud.debtPayments.length > 0 ||
+    cpBeforeMerge.lastDebtPaymentsSyncAt != null ||
+    debtPayments.length > 0;
+
+  const customers = await mergeByIdChunked(state.customers, cloud.customers, (a, b) =>
+    mergeCustomerFromCloudPull(a, b, sales, debtPayments, { ledgerAuthoritative }),
+  );
 
   const mergedCashExpenses =
     cloud.cashExpenses.length > 0
@@ -2300,6 +2480,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     }
     usePosStore.setState({
       sales,
+      debtPayments,
       cashExpenses: mergedCashExpenses,
       returnRecords,
       purchases: purchaseRecovery.purchases,
@@ -2310,6 +2491,11 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     const next = usePosStore.getState();
     const { flushFullSnapshotPersist } = await import("./incrementalPersist");
     await flushFullSnapshotPersist(next, { skipLastGood: true });
+    runPostSyncDebtValidation({
+      customers: next.customers,
+      sales: next.sales,
+      debtPayments: next.debtPayments,
+    });
   } finally {
     release();
   }
@@ -2335,7 +2521,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       salesAt: cloud.checkpoints?.salesAt,
       productsAt: cloud.checkpoints?.productsAt,
       customersAt: cloud.checkpoints?.customersAt,
-      debtsAt: cloud.checkpoints?.customersAt,
+      debtPaymentsAt: cloud.checkpoints?.debtPaymentsAt,
       expensesAt: cloud.checkpoints?.expensesAt,
       returnsAt: cloud.checkpoints?.returnsAt,
       purchasesAt: cloud.checkpoints?.purchasesAt,

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { bootstrapPosFromDisk, flushPendingPersist, usePosStore } from "../store/usePosStore";
 import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
+import { initInventorySyncChannel } from "../lib/inventorySyncChannel";
 import { hideNativeSplashWhenReady } from "../lib/nativeSplash";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
@@ -48,6 +49,14 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [cloudRestore, setCloudRestore] = useState(false);
   const bootGenRef = useRef(0);
+
+  useEffect(() => {
+    if (!accountKey) return;
+    const dispose = initInventorySyncChannel((msg) => {
+      usePosStore.getState().applyRemoteInventorySync(msg);
+    });
+    return dispose;
+  }, [accountKey]);
 
   useEffect(() => {
     const gen = ++bootGenRef.current;

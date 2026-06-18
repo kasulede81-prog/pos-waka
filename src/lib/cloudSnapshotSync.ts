@@ -1,11 +1,14 @@
 import { buildExportEnvelope, validateImportEnvelope, WAKA_BACKUP_FILE_VERSION } from "../offline/backupEngine";
 import type { PersistedSnapshot } from "../offline/localDb";
 import { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk, usePosStore } from "../store/usePosStore";
+import {
+  analyzeSnapshotTrim,
+  MAX_CLOUD_SNAPSHOT_BYTES,
+  recordSnapshotUploadTrimAnalysis,
+} from "./snapshotTrimDiagnostics";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { yieldUiTick } from "./uiYield";
 
-const MAX_CLOUD_SNAPSHOT_BYTES = 8 * 1024 * 1024;
-/** Avoid re-uploading a huge JSON blob on every sync (keeps the app responsive). */
 const MIN_UPLOAD_INTERVAL_MS = 5 * 60_000;
 let lastCloudSnapshotUploadAt = 0;
 let cloudSnapshotUploadInFlight: Promise<boolean> | null = null;
@@ -102,6 +105,9 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
   const snap = snapshotFromStore();
   if (!snap) return false;
   if (snap.products.length === 0 && snap.sales.length === 0) return false;
+
+  const trimAnalysis = analyzeSnapshotTrim(snap);
+  recordSnapshotUploadTrimAnalysis(trimAnalysis);
 
   const payload = await trimSnapshotForUpload(snap);
   const envelope = buildExportEnvelope(payload);

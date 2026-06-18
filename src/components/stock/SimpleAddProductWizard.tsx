@@ -12,15 +12,14 @@ import {
   SELL_UNIT_OPTIONS,
   buildProductFromSimpleWizard,
   packKindLabel,
-  profitPerSellUnitUgx,
   sellUnitLabel,
-  wizardCostPerSellUnitUgx,
   type BuiltWizardProduct,
   type PackKind,
   type SellUnitKind,
 } from "../../lib/simpleProductWizard";
 import { validateAuditReason } from "../../lib/auditReasons";
 import type { WizardPrefillFromAi } from "../../lib/ai/mapAiSuggestionToWizard";
+import { CostValidationPreview } from "./CostValidationPreview";
 
 export type SimpleAddWizardStep =
   | "name"
@@ -141,8 +140,6 @@ export function SimpleAddProductWizard({
   const packPriceN = Math.floor(Number(buyPackPrice.replace(/\D/g, "")) || 0);
   const sellPriceN = Math.floor(Number(sellPrice.replace(/\D/g, "")) || 0);
   const stockN = Math.max(0, Number(stockCount.replace(/[^\d.]/g, "")) || 0);
-  const costPerUnit = wizardCostPerSellUnitUgx(packPriceN, piecesN);
-  const profitPerUnit = profitPerSellUnitUgx(sellPriceN, costPerUnit);
   const totalPieces = hasPack ? stockN * piecesN : stockN;
 
   const needsAuditReason = useMemo(() => {
@@ -581,6 +578,16 @@ export function SimpleAddProductWizard({
                   })}
                 </p>
               ) : null}
+              {hasPack && packPriceN > 0 && piecesN > 0 && sellPriceN > 0 ? (
+                <CostValidationPreview
+                  lang={lang}
+                  packCostUgx={packPriceN}
+                  piecesPerPack={piecesN}
+                  sellPriceUgx={sellPriceN}
+                  packLabel={packLabel}
+                  unitLabel={unitLabel}
+                />
+              ) : null}
               {step === "sellPrice" && !hasPack && needsAuditReason ? (
                 <label className="mt-3 block space-y-1">
                   <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
@@ -610,26 +617,15 @@ export function SimpleAddProductWizard({
                 className="min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
               />
               <p className="text-sm font-semibold text-slate-500">UGX · {t(lang, "simpleAddStep8Optional")}</p>
-              {costPerUnit != null && costPerUnit > 0 ? (
-                <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
-                  {tTemplate(lang, "simpleAddCostPerPiece", {
-                    piece: unitLabel,
-                    amount: costPerUnit.toLocaleString(),
-                  })}
-                </p>
-              ) : null}
-              {profitPerUnit != null && sellPriceN > 0 ? (
-                <p
-                  className={clsx(
-                    "rounded-xl px-3 py-2 text-sm font-bold",
-                    profitPerUnit >= 0 ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900",
-                  )}
-                >
-                  {tTemplate(lang, "simpleAddProfitPerUnit", {
-                    unit: unitLabel,
-                    amount: profitPerUnit.toLocaleString(),
-                  })}
-                </p>
+              {hasPack && packPriceN > 0 && piecesN > 0 && sellPriceN > 0 ? (
+                <CostValidationPreview
+                  lang={lang}
+                  packCostUgx={packPriceN}
+                  piecesPerPack={piecesN}
+                  sellPriceUgx={sellPriceN}
+                  packLabel={packLabel}
+                  unitLabel={unitLabel}
+                />
               ) : null}
               {isLastStep && needsAuditReason ? (
                 <label className="mt-3 block space-y-1">

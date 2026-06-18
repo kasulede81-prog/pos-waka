@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { fetchSubscriptionSnapshotForUser } from "../lib/fetchShopSubscription";
 import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
+import { setStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 
 export type SubscriptionContextValue = {
   authMode: "supabase" | "local";
@@ -71,6 +72,10 @@ export function SubscriptionProvider({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    setStoreSubscriptionContext({ snapshot, authMode });
+  }, [snapshot, authMode]);
 
   useEffect(() => {
     const on = () => {

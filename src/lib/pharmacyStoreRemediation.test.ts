@@ -105,7 +105,6 @@ describe("pharmacy updateProduct cost", () => {
   it("owner updates buy price per unit", () => {
     const r = usePosStore.getState().updateProduct(EXPIRED_ID, {
       costPricePerUnitUgx: 250,
-      sellingPricePerUnitUgx: 600,
     });
     expect(r.ok).toBe(true);
     expect(usePosStore.getState().products[0]!.costPricePerUnitUgx).toBe(250);

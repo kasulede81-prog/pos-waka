@@ -10,8 +10,8 @@ import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { isCompletedSale } from "../lib/saleStatus";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { canSeeOfficeProfit, computeProfitGroupedByCategory } from "../lib/homeProfit";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
+import { computeProfitGroupedByCategory } from "../lib/homeProfit";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
 import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
@@ -37,9 +37,7 @@ export function ProfitPage({ lang, embedded }: Props) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const products = usePosStore((s) => s.products);
 
-  const canViewProfit =
-    canSeeOfficeProfit(actor.role, authMode) &&
-    hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const { canProfit: canViewProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const generalLabel = t(lang, "uncategorized");

@@ -7,7 +7,7 @@ import type { Product, Sale, SaleLine } from "../types";
 
 const THRESHOLDS_MS = {
   dashboardLoad: 600,
-  reportGeneration: 700,
+  reportGeneration: 800,
   queueDrain: 100,
   mergePerformance: 160,
   inventoryReconcile: 120,

@@ -3,6 +3,8 @@
  */
 
 import type { CashExpense, DebtPayment, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
+import type { DateFilterBounds } from "./dateFilters";
+import { enumerateDaysInBounds } from "./dateFilters";
 import { externalReturnRefundsUgx } from "./canonicalRevenue";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
@@ -98,6 +100,17 @@ export type DrawerCashInput = {
  */
 export function getExpectedCashForDay(input: DrawerCashInput): number {
   return getDrawerCashForDayInput(input).expectedDrawerCashUgx;
+}
+
+/** Sum expected drawer cash for each day in bounds using the same per-day formula. */
+export function sumExpectedDrawerCashForBounds(
+  input: Omit<DrawerCashInput, "day">,
+  bounds: DateFilterBounds,
+): number {
+  return enumerateDaysInBounds(bounds).reduce(
+    (sum, day) => sum + getDrawerCashForDayInput({ ...input, day }).expectedDrawerCashUgx,
+    0,
+  );
 }
 
 /**

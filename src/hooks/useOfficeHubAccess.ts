@@ -2,12 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
 import { fetchMarketingAgentMe } from "../lib/referralAgents";
-import { canSeeOfficeProfit } from "../lib/homeProfit";
 import type { Permission } from "../types";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { canUseBackupRestore, hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { canRecordCashExpenses } from "../lib/cashExpenses";
+import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { usePosStore } from "../store/usePosStore";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
@@ -49,8 +49,8 @@ export function useOfficeHubAccess() {
   const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
   const canBackup = canUseBackupRestore(snapshot, authMode);
   const canRecordExpense = canRecordCashExpenses(actor.role, preferences);
-  const canProfit =
-    canSeeOfficeProfit(actor.role, authMode) && can("back_office.access") && can("reports.profit");
+  const profitVisibility = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const canProfit = profitVisibility.canProfit && can("back_office.access");
   const canShopSettings = can("settings.shop");
   const canOwnerDashboard = can("owner.dashboard");
   const canArrangeShelves = can("settings.shop") && can("stock.view");

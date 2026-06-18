@@ -2,7 +2,8 @@
  * Multi-device inventory merge, movement reconciliation, and integrity checks.
  */
 
-import type { Product, Sale, StockMovement } from "../types";
+import type { Product, ReturnReason, Sale, StockMovement } from "../types";
+import { returnRestocksInventory } from "./returnPolicy";
 
 /** Namespace UUID for deterministic sale movement ids (matches server inventory_movement_uuid). */
 export const INVENTORY_MOVEMENT_NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fdcb4fe";
@@ -260,8 +261,18 @@ export function returnStockDelta(
   returnId: string,
   productId: string,
   quantity: number,
+  reason: ReturnReason,
   createdAt: string,
 ): StockDelta {
+  if (!returnRestocksInventory(reason)) {
+    return {
+      productId,
+      delta: 0,
+      at: createdAt,
+      kind: "adjust_other",
+      refId: returnId,
+    };
+  }
   return {
     productId,
     delta: Math.max(0, quantity),

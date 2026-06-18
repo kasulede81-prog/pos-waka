@@ -207,7 +207,15 @@ export function PosPage({ lang }: { lang: Language }) {
   const products = usePosStore(useShallow((s) => s.products));
   const sales = useDeferredSales();
   const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
-  const todaySalesSummary = useMemo(() => summarizeTodaySales(sales), [sales]);
+  const todaySalesSummary = useMemo(
+    () =>
+      summarizeTodaySales(
+        sales,
+        new Date(),
+        actor.role === "cashier" ? { soldByUserId: actor.userId } : undefined,
+      ),
+    [sales, actor.role, actor.userId],
+  );
   const customers = usePosStore(useShallow((s) => s.customers));
   const preferences = usePosStore(
     useShallow((s) => ({

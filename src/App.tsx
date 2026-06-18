@@ -28,6 +28,8 @@ import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
 import { SettingsSystemHealthPage } from "./pages/SettingsSystemHealthPage";
 import { SettingsDiagnosticsPage } from "./pages/SettingsDiagnosticsPage";
+import { SettingsFinanceDiagnosticsPage } from "./pages/SettingsFinanceDiagnosticsPage";
+import { SettingsSubscriptionDiagnosticsPage } from "./pages/SettingsSubscriptionDiagnosticsPage";
 import { ConnectedDevicesPage } from "./pages/ConnectedDevicesPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
@@ -741,6 +743,22 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsDiagnosticsPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/finance-diagnostics"
+              element={
+                <RoleProtectedRoute permission="owner.dashboard">
+                  <SettingsFinanceDiagnosticsPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/subscription-diagnostics"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <SettingsSubscriptionDiagnosticsPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

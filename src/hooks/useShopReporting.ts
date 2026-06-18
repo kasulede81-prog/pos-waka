@@ -3,6 +3,8 @@ import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "./useDeferredReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
 import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
+import type { HomeMetricScope } from "../lib/homeVisibility";
+import { filterReturnsForHomeScope, filterSalesForHomeScope } from "../lib/homeVisibility";
 import {
   localGetRangeSummary,
   localGetRollingSevenDaySalesSummary,
@@ -83,19 +85,32 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
   };
 }
 
-export function useDashboardAnalytics(includeArchived: boolean) {
+export function useDashboardAnalytics(
+  includeArchived: boolean,
+  scope: HomeMetricScope = "shop_wide",
+  actorUserId?: string | null,
+) {
   const sales = useDeferredReportingSales(includeArchived);
   const returns = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
 
+  const scopedSales = useMemo(
+    () => filterSalesForHomeScope(sales, scope, actorUserId),
+    [sales, scope, actorUserId],
+  );
+  const scopedReturns = useMemo(
+    () => filterReturnsForHomeScope(returns, sales, scope, actorUserId),
+    [returns, sales, scope, actorUserId],
+  );
+
   const localToday = useMemo(
-    () => localGetRangeSummary(sales, products, customers, returns, [], DEFAULT_DATE_FILTER),
-    [sales, products, customers, returns],
+    () => localGetRangeSummary(scopedSales, products, customers, scopedReturns, [], DEFAULT_DATE_FILTER),
+    [scopedSales, products, customers, scopedReturns],
   );
   const localWeekly = useMemo(
-    () => localGetRollingSevenDaySalesSummary(sales, products, returns),
-    [sales, products, returns],
+    () => localGetRollingSevenDaySalesSummary(scopedSales, products, scopedReturns),
+    [scopedSales, products, scopedReturns],
   );
 
   const todaySummary = localToday.summary;
