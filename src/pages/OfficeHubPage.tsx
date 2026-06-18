@@ -12,6 +12,12 @@ import { usePosStore } from "../store/usePosStore";
 import { useOfficeHubAccess, fetchOfficeHubAdminFlags } from "../hooks/useOfficeHubAccess";
 import { resolveOfficeHubSections } from "../lib/officeHubSections";
 import { internalAdminPreviewHref, isInternalAdminPreviewEnabled } from "../lib/internalAdminPreview";
+import { useSessionActor } from "../context/SessionActorContext";
+import { useSubscription } from "../context/SubscriptionContext";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { dateKeyKampala } from "../lib/datesUg";
+import { activeDayDrawerOpenForDate, isFormulaV2 } from "../lib/dayDrawerOpen";
+import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
 
 const OfficeHubRiskBadge = lazy(() =>
   import("../components/office/OfficeHubRiskBadge").then((m) => ({ default: m.OfficeHubRiskBadge })),
@@ -46,6 +52,10 @@ function OfficeSyncStatusChip({ lang }: { lang: Language }) {
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
   const { sectionVisible, canOwnerDashboard } = useOfficeHubAccess();
+  const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
+  const preferences = usePosStore((s) => s.preferences);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const savedOrder = usePosStore((s) => s.preferences.officeHubTileOrder) ?? [];
   const layout = usePosStore((s) => s.preferences.officeHubTileLayout) ?? {};
   const [showInternalAdmin, setShowInternalAdmin] = useState(false);
@@ -56,6 +66,11 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
     [savedOrder, layout, sectionVisible],
   );
   const empty = visibleSections.length === 0;
+  const todayKey = dateKeyKampala(new Date());
+  const needsDayOpen =
+    isFormulaV2(preferences) &&
+    !activeDayDrawerOpenForDate(dayDrawerOpens, todayKey) &&
+    hasEffectivePermission(actor.role, "day.open_drawer", snapshot, authMode);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +105,8 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
           </div>
         ) : null}
       </header>
+
+      {needsDayOpen ? <DayDrawerOpenAlert lang={lang} /> : null}
 
       <OfficePremiumSection lang={lang} />
 

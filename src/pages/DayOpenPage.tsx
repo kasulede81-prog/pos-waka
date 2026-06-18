@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -31,7 +31,9 @@ export function DayOpenPage({ lang }: { lang: Language }) {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [voidReason, setVoidReason] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; key: string } | null>(null);
+
+  const translateKey = (key: string) => (t as (l: Language, k: string) => string)(lang, key);
 
   if (!canOpen) {
     return <Navigate to="/office" replace />;
@@ -46,16 +48,16 @@ export function DayOpenPage({ lang }: { lang: Language }) {
     if (r.ok) {
       setAmount("");
       setNote("");
-      setMsg(t(lang, "dayOpenRecordBtn"));
+      setMsg({ kind: "ok", key: "dayOpenSuccess" });
     } else {
-      setMsg(r.errorKey ?? "saleError");
+      setMsg({ kind: "err", key: r.errorKey ?? "saleError" });
     }
   };
 
   const submitVoid = () => {
     if (!active) return;
     const r = voidDayDrawerOpen({ dayOpenId: active.id, reason: voidReason });
-    setMsg(r.ok ? t(lang, "dayOpenVoidBtn") : (r.errorKey ?? "saleError"));
+    setMsg(r.ok ? { kind: "ok", key: "dayOpenVoided" } : { kind: "err", key: r.errorKey ?? "saleError" });
   };
 
   return (
@@ -134,7 +136,27 @@ export function DayOpenPage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      {msg ? <p className="text-sm font-bold text-stone-600">{msg}</p> : null}
+      {msg ? (
+        <div
+          className={
+            msg.kind === "ok"
+              ? "rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3"
+              : "rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3"
+          }
+        >
+          <p className={`text-sm font-bold ${msg.kind === "ok" ? "text-emerald-950" : "text-rose-900"}`}>
+            {translateKey(msg.key)}
+          </p>
+          {msg.kind === "ok" ? (
+            <Link
+              to="/pos"
+              className="mt-3 flex min-h-[48px] items-center justify-center rounded-2xl bg-waka-600 font-black text-white"
+            >
+              {t(lang, "dayOpenSuccessGoSell")}
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

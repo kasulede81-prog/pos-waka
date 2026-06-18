@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasPermission } from "../../lib/permissions";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
@@ -27,15 +28,18 @@ type Props = {
 export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
-  const canOpenDay = hasPermission(actor.role, "day.open_drawer");
+  const { snapshot, authMode } = useSubscription();
+  const canOpenDay = hasEffectivePermission(actor.role, "day.open_drawer", snapshot, authMode);
   const beginShift = usePosStore((s) => s.beginShift);
   const beginShiftV2 = usePosStore((s) => s.beginShiftV2);
+  const recordDayDrawerOpen = usePosStore((s) => s.recordDayDrawerOpen);
   const preferences = usePosStore((s) => s.preferences);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const sales = usePosStore((s) => s.sales);
 
   const [floatInput, setFloatInput] = useState("");
+  const [dayOpenAmount, setDayOpenAmount] = useState("");
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [overrideOpen, setOverrideOpen] = useState(false);
 
@@ -90,23 +94,59 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
     if (r.errorKey === "shiftFloatMismatch") setOverrideOpen(true);
   };
 
+  const submitDayOpen = () => {
+    const openingFloatUgx = Math.floor(Number(dayOpenAmount.replace(/\D/g, "")) || 0);
+    if (openingFloatUgx <= 0) return;
+    const r = recordDayDrawerOpen({ openingFloatUgx });
+    if (r.ok) {
+      setDayOpenAmount("");
+      setErrorKey(null);
+      return;
+    }
+    setErrorKey(r.errorKey ?? "saleError");
+  };
+
   if (v2 && !dayOpen) {
     return (
       <AppModalOverlay className="z-[80] flex items-center justify-center bg-stone-950/80 p-4" role="dialog" aria-modal>
         <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-          <h1 className="text-2xl font-black text-stone-900">{t(lang, "shiftOpenTitle")}</h1>
-          <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-            {t(lang, "dayDrawerNotOpen")}
-          </p>
+          <h1 className="text-2xl font-black text-stone-900">{t(lang, "dayOpenTitle")}</h1>
           {canOpenDay ? (
-            <button
-              type="button"
-              onClick={() => navigate("/office/day-open")}
-              className="mt-4 min-h-[52px] w-full rounded-2xl bg-waka-600 font-black text-white"
-            >
-              {t(lang, "dayOpenGoBtn")}
-            </button>
-          ) : null}
+            <>
+              <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "dayOpenSub")}</p>
+              <label className="mt-5 block text-sm font-bold text-stone-800">
+                {t(lang, "dayOpenAmountLabel")}
+                <input
+                  value={dayOpenAmount}
+                  onChange={(e) => {
+                    setDayOpenAmount(e.target.value.replace(/\D/g, "").slice(0, 12));
+                    setErrorKey(null);
+                  }}
+                  inputMode="numeric"
+                  placeholder="0"
+                  autoFocus
+                  className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
+                />
+              </label>
+              {errorKey ? (
+                <p className="mt-3 text-sm font-bold text-rose-700">
+                  {(t as (l: Language, k: string) => string)(lang, errorKey)}
+                </p>
+              ) : null}
+              <button
+                type="button"
+                onClick={submitDayOpen}
+                disabled={!dayOpenAmount.replace(/\D/g, "")}
+                className="mt-4 min-h-[52px] w-full rounded-2xl bg-waka-600 font-black text-white disabled:opacity-50"
+              >
+                {t(lang, "dayOpenRecordBtn")}
+              </button>
+            </>
+          ) : (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+              {t(lang, "dayDrawerNotOpen")}
+            </p>
+          )}
           <button
             type="button"
             onClick={() => navigate(POS_HOME_ROUTE)}
