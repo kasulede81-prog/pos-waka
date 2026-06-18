@@ -112,7 +112,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       deviceId: row.deviceId,
       note: row.note,
     });
-    void queueRemote("pending_day_drawer_opens", { dayOpenId: row.id });
+    void queueRemote("pending_day_drawer_opens", { action: "create", dayOpenId: row.id });
     return { ok: true as const, dayOpenId: row.id };
   };
 
@@ -178,7 +178,11 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       reason: (input.reason ?? "").trim(),
       actorUserId: actor.userId,
     });
-    void queueRemote("pending_day_drawer_opens", { dayOpenId: row.id });
+    void queueRemote("pending_day_drawer_opens", {
+      action: "supersede",
+      dayOpenId: row.id,
+      previousId: prev.id,
+    });
     return { ok: true as const, dayOpenId: row.id };
   };
 
@@ -206,7 +210,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       voidReason: reason,
       actorUserId: actor.userId,
     });
-    void queueRemote("pending_day_drawer_opens", { dayOpenId: row.id, void: true });
+    void queueRemote("pending_day_drawer_opens", { action: "void", dayOpenId: row.id });
     return { ok: true as const };
   };
 
@@ -334,6 +338,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       verifiedAt: now,
       verifiedByUserId,
       verifiedByLabel,
+      verificationVarianceUgx: verified - baseline,
       dayDrawerOpenId: dayOpenId,
       priorShiftId,
       handoffFloatUgx: null,

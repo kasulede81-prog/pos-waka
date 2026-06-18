@@ -189,6 +189,10 @@ export async function restoreShopFromCloudSnapshot(
 
   await applyRestoredSnapshotFromBackup(envelope.snapshot, { onProgress });
   await yieldUiTick();
+
+  const { pullDayDrawerOpensForRecovery } = await import("./dayDrawerOpenCloudSync");
+  await pullDayDrawerOpensForRecovery(ctx).catch(() => false);
+
   await persistRestoredSnapshotToDisk();
   return true;
 }

@@ -137,6 +137,7 @@ export function normalizeDayDrawerOpen(row: DayDrawerOpen): DayDrawerOpen {
     note: row.note?.trim() ?? "",
     countedByLabel: row.countedByLabel?.trim() || row.countedByUserId,
     pendingSync: row.pendingSync ?? false,
+    cloudSyncedAt: row.cloudSyncedAt ?? null,
     deletedAt: row.deletedAt ?? null,
   };
 }

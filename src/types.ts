@@ -196,6 +196,8 @@ export type ShiftRecord = {
   verifiedAt?: string | null;
   verifiedByUserId?: string | null;
   verifiedByLabel?: string | null;
+  /** Cashier count minus segment baseline at shift start (audit only; does not change opening float). */
+  verificationVarianceUgx?: number | null;
   dayDrawerOpenId?: string | null;
   /** Cash left in drawer for next cashier (recorded at shift close). */
   handoffFloatUgx?: number | null;
@@ -226,6 +228,8 @@ export type DayDrawerOpen = {
   createdAt: string;
   updatedAt: string;
   pendingSync: boolean;
+  /** Set when cloud RPC confirms this row. */
+  cloudSyncedAt?: string | null;
   lastSyncError?: string | null;
   deletedAt?: string | null;
 };

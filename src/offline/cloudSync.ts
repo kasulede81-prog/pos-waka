@@ -3,6 +3,7 @@ import type {
   CashExpense,
   CashDrawerAdjustment,
   Customer,
+  DayDrawerOpen,
   DebtPayment,
   Product,
   Purchase,
@@ -57,6 +58,11 @@ import {
   mergeCashDrawerAdjustmentsFromCloudPull,
   parseCashDrawerAdjustmentRows,
 } from "../lib/cashDrawerAdjustmentRecovery";
+import { mergeDayDrawerOpensFromCloudPull } from "../lib/dayDrawerOpenRecovery";
+import {
+  pullDayDrawerOpensFromRpc,
+  syncDayDrawerOpenOperation,
+} from "../lib/dayDrawerOpenCloudSync";
 import { mergeCustomerFromCloudPull } from "../lib/customerDebtReconciliation";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 
@@ -1372,14 +1378,9 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       }
       return true;
     case "pending_day_drawer_opens": {
-      const dayOpenId = String(payload.dayOpenId ?? "");
-      if (!dayOpenId) return true;
-      usePosStore.setState((s) => ({
-        dayDrawerOpens: s.dayDrawerOpens.map((row) =>
-          row.id === dayOpenId ? { ...row, pendingSync: false, lastSyncError: null } : row,
-        ),
-      }));
-      return true;
+      const ctx = await resolveShopCtx();
+      if (!ctx) return false;
+      return syncDayDrawerOpenOperation(payload as Record<string, unknown>, ctx);
     }
     case "pending_inventory_counts": {
       const sessionId = String(payload.sessionId ?? "");
@@ -1474,6 +1475,7 @@ export type CloudPullCheckpoints = {
   suppliersAt: string;
   supplierPaymentsAt: string;
   cashDrawerAdjustmentsAt: string;
+  dayDrawerOpensAt: string;
 };
 
 export type CloudPullResult = {
@@ -1490,6 +1492,7 @@ export type CloudPullResult = {
   supplierPayments: SupplierPayment[];
   cashExpenses: CashExpense[];
   cashDrawerAdjustments: CashDrawerAdjustment[];
+  dayDrawerOpens: DayDrawerOpen[];
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
@@ -1858,6 +1861,30 @@ async function pullCashDrawerAdjustmentsFull(
 ): Promise<{ cashDrawerAdjustments: CashDrawerAdjustment[]; bytes: number }> {
   const page = await pullCashDrawerAdjustmentsFromRpc(ctx, null);
   return { cashDrawerAdjustments: page.cashDrawerAdjustments, bytes: page.bytes };
+}
+
+async function pullDayDrawerOpensIncremental(
+  ctx: ShopCtx,
+  since: string,
+): Promise<{ dayDrawerOpens: DayDrawerOpen[]; count: number; bytes: number; checkpointAt: string }> {
+  try {
+    const page = await pullDayDrawerOpensFromRpc(ctx, since);
+    return {
+      dayDrawerOpens: page.dayDrawerOpens,
+      count: page.dayDrawerOpens.length,
+      bytes: page.bytes,
+      checkpointAt: page.checkpointAt > since ? page.checkpointAt : new Date().toISOString(),
+    };
+  } catch {
+    return { dayDrawerOpens: [], count: 0, bytes: 0, checkpointAt: since };
+  }
+}
+
+async function pullDayDrawerOpensFull(
+  ctx: ShopCtx,
+): Promise<{ dayDrawerOpens: DayDrawerOpen[]; bytes: number }> {
+  const page = await pullDayDrawerOpensFromRpc(ctx, null);
+  return { dayDrawerOpens: page.dayDrawerOpens, bytes: page.bytes };
 }
 
 function parseReturnRows(rows: Record<string, unknown>[]): CloudReturnRow[] {
@@ -2288,6 +2315,7 @@ export async function pullShopDataFromCloud(opts?: {
   let voidedSaleIds: string[] = [];
   let cashExpenses: CashExpense[] = [];
   let cashDrawerAdjustments: CashDrawerAdjustment[] = [];
+  let dayDrawerOpens: DayDrawerOpen[] = [];
   let returnCloudRows: CloudReturnRow[] = [];
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
@@ -2351,6 +2379,10 @@ export async function pullShopDataFromCloud(opts?: {
       const adjFull = await pullCashDrawerAdjustmentsFull(ctx);
       cashDrawerAdjustments = adjFull.cashDrawerAdjustments;
       payloadBytes += adjFull.bytes;
+
+      const ddoFull = await pullDayDrawerOpensFull(ctx);
+      dayDrawerOpens = ddoFull.dayDrawerOpens;
+      payloadBytes += ddoFull.bytes;
     } else {
       const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
       const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
@@ -2412,6 +2444,11 @@ export async function pullShopDataFromCloud(opts?: {
       cashDrawerAdjustments = adj.cashDrawerAdjustments;
       payloadBytes += adj.bytes;
 
+      const sinceDayDrawerOpens = cp.lastDayDrawerOpensSyncAt ?? new Date(0).toISOString();
+      const ddo = await pullDayDrawerOpensIncremental(ctx, sinceDayDrawerOpens);
+      dayDrawerOpens = ddo.dayDrawerOpens;
+      payloadBytes += ddo.bytes;
+
       pullCheckpoints = {
         salesAt: s.checkpointAt,
         productsAt: p.checkpointAt,
@@ -2423,6 +2460,7 @@ export async function pullShopDataFromCloud(opts?: {
         suppliersAt: sup.checkpointAt,
         supplierPaymentsAt: pay.checkpointAt,
         cashDrawerAdjustmentsAt: adj.checkpointAt,
+        dayDrawerOpensAt: ddo.checkpointAt,
       };
     }
   } catch {
@@ -2477,6 +2515,7 @@ export async function pullShopDataFromCloud(opts?: {
     supplierPayments,
     cashExpenses,
     cashDrawerAdjustments,
+    dayDrawerOpens,
     deletedProductIds,
     voidedSaleIds,
     stats,
@@ -2515,6 +2554,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     cloud.supplierPayments.length > 0 ||
     cloud.debtPayments.length > 0 ||
     cloud.cashDrawerAdjustments.length > 0 ||
+    cloud.dayDrawerOpens.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
     cloud.voidedSaleIds.length > 0;
   const localEmpty =
@@ -2534,6 +2574,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         suppliers: true,
         supplierPayments: true,
         cashDrawerAdjustments: true,
+        dayDrawerOpens: true,
         salesAt: cloud.checkpoints?.salesAt,
         productsAt: cloud.checkpoints?.productsAt,
         customersAt: cloud.checkpoints?.customersAt,
@@ -2544,6 +2585,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         suppliersAt: cloud.checkpoints?.suppliersAt,
         supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
         cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
+        dayDrawerOpensAt: cloud.checkpoints?.dayDrawerOpensAt,
       });
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
@@ -2568,6 +2610,10 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     const debtPayments = mergeDebtPaymentsFromCloudPull([], cloud.debtPayments);
     const { reconcileCustomersForBootstrapRecovery } = await import("../lib/bootstrapDebtRecovery");
     const customers = reconcileCustomersForBootstrapRecovery(cloud.customers, cloud.sales, debtPayments);
+    const mergedDayDrawerOpens =
+      cloud.dayDrawerOpens.length > 0
+        ? await mergeDayDrawerOpensFromCloudPull([], cloud.dayDrawerOpens)
+        : state.dayDrawerOpens;
 
     await applyRestoredSnapshotFromBackup({
       products: cloud.products,
@@ -2586,6 +2632,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       cashExpenses: cloud.cashExpenses.length > 0 ? cloud.cashExpenses : state.cashExpenses,
       cashDrawerAdjustments:
         cloud.cashDrawerAdjustments.length > 0 ? cloud.cashDrawerAdjustments : state.cashDrawerAdjustments,
+      dayDrawerOpens: mergedDayDrawerOpens,
       archivedSales: state.archivedSales,
       archivedAuditLogs: state.archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
@@ -2660,6 +2707,11 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       ? await mergeCashDrawerAdjustmentsFromCloudPull(state.cashDrawerAdjustments, cloud.cashDrawerAdjustments)
       : state.cashDrawerAdjustments;
 
+  const mergedDayDrawerOpens =
+    cloud.dayDrawerOpens.length > 0
+      ? await mergeDayDrawerOpensFromCloudPull(state.dayDrawerOpens, cloud.dayDrawerOpens)
+      : state.dayDrawerOpens;
+
   const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
 
   const { suspendStorePersist } = await import("../store/usePosStore");
@@ -2676,6 +2728,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       debtPayments,
       cashExpenses: mergedCashExpenses,
       cashDrawerAdjustments: mergedCashDrawerAdjustments,
+      dayDrawerOpens: mergedDayDrawerOpens,
       returnRecords,
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,
@@ -2716,6 +2769,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         cloud.stats.supplierPayments > 0 || cloud.checkpoints?.supplierPaymentsAt != null,
       cashDrawerAdjustments:
         cloud.cashDrawerAdjustments.length > 0 || cloud.checkpoints?.cashDrawerAdjustmentsAt != null,
+      dayDrawerOpens: cloud.dayDrawerOpens.length > 0 || cloud.checkpoints?.dayDrawerOpensAt != null,
       salesAt: cloud.checkpoints?.salesAt,
       productsAt: cloud.checkpoints?.productsAt,
       customersAt: cloud.checkpoints?.customersAt,
@@ -2726,6 +2780,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       suppliersAt: cloud.checkpoints?.suppliersAt,
       supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
       cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
+      dayDrawerOpensAt: cloud.checkpoints?.dayDrawerOpensAt,
     });
   }
 
@@ -2763,6 +2818,15 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   for (const adj of usePosStore.getState().cashDrawerAdjustments) {
     if (!adj.pendingSync) continue;
     if (await pushCashDrawerAdjustmentToCloud(adj, ctx)) ok += 1;
+    else fail += 1;
+  }
+
+  for (const row of usePosStore.getState().dayDrawerOpens) {
+    if (!row.pendingSync) continue;
+    const action = row.status === "voided" ? "void" : row.supersedesId ? "supersede" : "create";
+    const payload: Record<string, unknown> = { action, dayOpenId: row.id };
+    if (action === "supersede" && row.supersedesId) payload.previousId = row.supersedesId;
+    if (await syncDayDrawerOpenOperation(payload, ctx)) ok += 1;
     else fail += 1;
   }
 

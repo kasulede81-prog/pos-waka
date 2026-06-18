@@ -3,6 +3,7 @@ import { t } from "../lib/i18n";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { SystemHealthCard } from "../components/settings/SystemHealthCard";
 import { CashDrawerDiagnosticsCard } from "../components/settings/CashDrawerDiagnosticsCard";
+import { DayDrawerOpenCloudDiagnosticsCard } from "../components/settings/DayDrawerOpenCloudDiagnosticsCard";
 import { DeletionSafetyDiagnosticsCard } from "../components/settings/DeletionSafetyDiagnosticsCard";
 import { AuditHealthCard } from "../components/settings/AuditHealthCard";
 import { DebtIntegrityCard } from "../components/settings/DebtIntegrityCard";
@@ -31,6 +32,7 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
       <DebtSyncDiagnosticsCard lang={lang} />
       <PurchaseSyncDiagnosticsCard lang={lang} />
       <CashDrawerDiagnosticsCard lang={lang} />
+      <DayDrawerOpenCloudDiagnosticsCard lang={lang} />
       <DeletionSafetyDiagnosticsCard lang={lang} />
       <RecoveryReadinessDashboard lang={lang} />
       <RestoreDiagnosticsCard lang={lang} />

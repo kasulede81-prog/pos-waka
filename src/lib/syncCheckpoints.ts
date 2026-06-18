@@ -23,6 +23,8 @@ export type SyncCheckpoints = {
   lastSupplierPaymentsSyncAt: string | null;
   /** shop_cash_drawer_adjustments pull cursor (updated_at). */
   lastCashDrawerAdjustmentsSyncAt: string | null;
+  /** shop_day_drawer_opens pull cursor (updated_at). */
+  lastDayDrawerOpensSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -38,6 +40,7 @@ const empty: SyncCheckpoints = {
   lastSuppliersSyncAt: null,
   lastSupplierPaymentsSyncAt: null,
   lastCashDrawerAdjustmentsSyncAt: null,
+  lastDayDrawerOpensSyncAt: null,
 };
 
 function scopedKey(): string | null {
@@ -73,6 +76,8 @@ export function readSyncCheckpoints(): SyncCheckpoints {
         typeof o.lastSupplierPaymentsSyncAt === "string" ? o.lastSupplierPaymentsSyncAt : null,
       lastCashDrawerAdjustmentsSyncAt:
         typeof o.lastCashDrawerAdjustmentsSyncAt === "string" ? o.lastCashDrawerAdjustmentsSyncAt : null,
+      lastDayDrawerOpensSyncAt:
+        typeof o.lastDayDrawerOpensSyncAt === "string" ? o.lastDayDrawerOpensSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -114,6 +119,7 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastSuppliersSyncAt: at,
     lastSupplierPaymentsSyncAt: at,
     lastCashDrawerAdjustmentsSyncAt: at,
+    lastDayDrawerOpensSyncAt: at,
   });
 }
 
@@ -128,6 +134,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   suppliers?: boolean;
   supplierPayments?: boolean;
   cashDrawerAdjustments?: boolean;
+  dayDrawerOpens?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -141,6 +148,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   suppliersAt?: string;
   supplierPaymentsAt?: string;
   cashDrawerAdjustmentsAt?: string;
+  dayDrawerOpensAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -161,6 +169,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   if (partial.supplierPayments) patch.lastSupplierPaymentsSyncAt = partial.supplierPaymentsAt ?? fallback;
   if (partial.cashDrawerAdjustments) {
     patch.lastCashDrawerAdjustmentsSyncAt = partial.cashDrawerAdjustmentsAt ?? fallback;
+  }
+  if (partial.dayDrawerOpens) {
+    patch.lastDayDrawerOpensSyncAt = partial.dayDrawerOpensAt ?? fallback;
   }
   return writeSyncCheckpoints(patch);
 }

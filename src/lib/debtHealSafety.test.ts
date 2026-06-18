@@ -19,6 +19,7 @@ const emptyCheckpoints: syncCheckpoints.SyncCheckpoints = {
   lastSuppliersSyncAt: null,
   lastSupplierPaymentsSyncAt: null,
   lastCashDrawerAdjustmentsSyncAt: null,
+  lastDayDrawerOpensSyncAt: null,
 };
 
 describe("debtHealSafety", () => {
