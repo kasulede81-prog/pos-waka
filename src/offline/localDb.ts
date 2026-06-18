@@ -9,6 +9,8 @@ import type {
   ReturnRecord,
   CashExpense,
   CashDrawerAdjustment,
+  DayDrawerOpen,
+  InventoryCountSession,
   Sale,
   ShopPreferences,
   StockMovement,
@@ -63,6 +65,8 @@ export type PersistedSnapshot = {
   returnRecords?: ReturnRecord[];
   cashExpenses?: CashExpense[];
   cashDrawerAdjustments?: CashDrawerAdjustment[];
+  dayDrawerOpens?: DayDrawerOpen[];
+  inventoryCountSessions?: InventoryCountSession[];
   archivedSales?: Sale[];
   archivedAuditLogs?: AuditLogEntry[];
   archivedDayCloses?: DayCloseSummary[];

@@ -46,7 +46,9 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const formulaVersion = usePosStore((s) => s.preferences.cashDrawerFormulaVersion ?? "v1");
   const addCashDrawerAdjustment = usePosStore((s) => s.addCashDrawerAdjustment);
   const preferences = usePosStore((s) => s.preferences);
 
@@ -76,6 +78,8 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         supplierPayments,
         cashDrawerAdjustments,
         shifts,
+        dayDrawerOpens,
+        formulaVersion,
         staffAccounts: preferences.staffAccounts ?? [],
         generalCategoryLabel: generalLabel,
       }),
@@ -91,6 +95,8 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
+      dayDrawerOpens,
+      formulaVersion,
       preferences.staffAccounts,
       generalLabel,
     ],

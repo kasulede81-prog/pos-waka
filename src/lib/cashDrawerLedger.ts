@@ -2,10 +2,11 @@
  * Cash drawer ledger — adjustments, opening float, and V2 expected-cash inputs.
  */
 
-import type { CashDrawerAdjustment, CashDrawerAdjustmentType, ShiftRecord } from "../types";
+import type { CashDrawerAdjustment, CashDrawerAdjustmentType, CashDrawerFormulaVersion, DayDrawerOpen, ShiftRecord } from "../types";
 import type { Language } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
+import { resolveOpeningFloatUgx as resolveOpeningFloatCore } from "./dayDrawerOpen";
 
 export const CASH_DRAWER_INFLOW_TYPES: readonly CashDrawerAdjustmentType[] = [
   "opening_float",
@@ -72,19 +73,17 @@ export function sumAdjustmentOutflows(adjustments: CashDrawerAdjustment[], day: 
     .reduce((sum, a) => sum + Math.max(0, Math.floor(a.amountUgx)), 0);
 }
 
-/** Opening float from adjustments + shift rows that started on this day. */
+/** Opening float — v1: adjustments + shifts; v2: DayDrawerOpen only (see dayDrawerOpen.ts). */
 export function resolveOpeningFloatUgx(
   day: string,
   adjustments: CashDrawerAdjustment[],
   shifts: ShiftRecord[],
+  opts?: {
+    dayDrawerOpens?: DayDrawerOpen[];
+    formulaVersion?: CashDrawerFormulaVersion;
+  },
 ): number {
-  let total = sumAdjustmentsByType(adjustments, day, ["opening_float"]);
-  for (const sh of shifts) {
-    if (dateKeyKampala(sh.startAt) !== day) continue;
-    const f = sh.openingFloatUgx ?? 0;
-    if (f > 0) total += f;
-  }
-  return total;
+  return resolveOpeningFloatCore(day, adjustments, shifts, opts);
 }
 
 export type AdjustmentBreakdownByType = Partial<Record<CashDrawerAdjustmentType, number>>;

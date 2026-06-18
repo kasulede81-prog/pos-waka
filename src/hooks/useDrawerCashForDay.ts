@@ -22,7 +22,9 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const formulaVersion = usePosStore((s) => s.preferences.cashDrawerFormulaVersion ?? "v1");
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
@@ -39,9 +41,11 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
         supplierPayments,
         cashDrawerAdjustments,
         shifts,
+        dayDrawerOpens,
+        formulaVersion,
         day,
       }),
-    [sales, returns, products, debtPayments, cashExpenses, supplierPayments, cashDrawerAdjustments, shifts, day],
+    [sales, returns, products, debtPayments, cashExpenses, supplierPayments, cashDrawerAdjustments, shifts, dayDrawerOpens, formulaVersion, day],
   );
 }
 
@@ -54,7 +58,9 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const formulaVersion = usePosStore((s) => s.preferences.cashDrawerFormulaVersion ?? "v1");
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
@@ -70,6 +76,8 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
       supplierPayments,
       cashDrawerAdjustments,
       shifts,
+      dayDrawerOpens,
+      formulaVersion,
     };
     if (bounds.isSingleDay) {
       return getDrawerCashForDayInput({ ...input, day: bounds.fromKey }).expectedDrawerCashUgx;
@@ -87,6 +95,8 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
     supplierPayments,
     cashDrawerAdjustments,
     shifts,
+    dayDrawerOpens,
+    formulaVersion,
   ]);
 }
 

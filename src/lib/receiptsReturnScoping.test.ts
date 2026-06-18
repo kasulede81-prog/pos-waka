@@ -67,7 +67,7 @@ function returnOnDay(
     productId: "prod-1",
     productName: "Widget",
     quantity: 1,
-    reason: "restocked",
+    reason: "wrong_item",
     actorUserId: "owner",
     actorName: "Owner",
     shiftId: null,

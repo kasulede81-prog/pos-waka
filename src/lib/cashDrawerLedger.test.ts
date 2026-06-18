@@ -228,7 +228,7 @@ describe("adjustment type signed amounts", () => {
 });
 
 describe("opening float resolution", () => {
-  it("sums opening_float adjustments and shift floats", () => {
+  it("v1 sums opening_float adjustments and shift floats", () => {
     const adjustments = [adjustment("opening_float", 30_000)];
     const shifts: ShiftRecord[] = [
       {
@@ -243,8 +243,44 @@ describe("opening float resolution", () => {
         openingFloatUgx: 20_000,
       },
     ];
-    expect(resolveOpeningFloatUgx(DAY, adjustments, shifts)).toBe(50_000);
+    expect(resolveOpeningFloatUgx(DAY, adjustments, shifts, { formulaVersion: "v1" })).toBe(50_000);
     expect(sumAdjustmentInflowsExcludingOpening(adjustments, DAY)).toBe(0);
     expect(sumAdjustmentOutflows([adjustment("bank_deposit", 300_000)], DAY)).toBe(300_000);
+  });
+
+  it("v2 uses DayDrawerOpen only", () => {
+    const adjustments = [adjustment("opening_float", 30_000)];
+    const shifts: ShiftRecord[] = [
+      {
+        id: "sh1",
+        actorUserId: "u1",
+        role: "cashier",
+        startAt: `${DAY}T08:00:00.000Z`,
+        salesTotalUgx: 0,
+        debtTotalUgx: 0,
+        refundsUgx: 0,
+        estimatedCashUgx: 0,
+        openingFloatUgx: 20_000,
+      },
+    ];
+    const dayDrawerOpens = [
+      {
+        id: "do1",
+        dateKey: DAY,
+        openingFloatUgx: 100_000,
+        countedAt: `${DAY}T07:00:00.000Z`,
+        countedByUserId: "owner",
+        countedByLabel: "Owner",
+        note: "",
+        deviceId: "d",
+        status: "open" as const,
+        createdAt: `${DAY}T07:00:00.000Z`,
+        updatedAt: `${DAY}T07:00:00.000Z`,
+        pendingSync: false,
+      },
+    ];
+    expect(
+      resolveOpeningFloatUgx(DAY, adjustments, shifts, { dayDrawerOpens, formulaVersion: "v2" }),
+    ).toBe(100_000);
   });
 });

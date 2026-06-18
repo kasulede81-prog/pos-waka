@@ -1371,6 +1371,26 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
         return pushSupplierPaymentToCloud(payment, ctx);
       }
       return true;
+    case "pending_day_drawer_opens": {
+      const dayOpenId = String(payload.dayOpenId ?? "");
+      if (!dayOpenId) return true;
+      usePosStore.setState((s) => ({
+        dayDrawerOpens: s.dayDrawerOpens.map((row) =>
+          row.id === dayOpenId ? { ...row, pendingSync: false, lastSyncError: null } : row,
+        ),
+      }));
+      return true;
+    }
+    case "pending_inventory_counts": {
+      const sessionId = String(payload.sessionId ?? "");
+      if (!sessionId) return true;
+      usePosStore.setState((s) => ({
+        inventoryCountSessions: s.inventoryCountSessions.map((row) =>
+          row.id === sessionId ? { ...row, pendingSync: false } : row,
+        ),
+      }));
+      return true;
+    }
     case "pending_cash_expenses": {
       const expenseId = String(payload.expenseId ?? "");
       const row = usePosStore.getState().cashExpenses.find((e) => e.id === expenseId);

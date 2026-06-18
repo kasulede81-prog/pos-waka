@@ -65,6 +65,7 @@ function seedStore(withShift = false) {
     auditLogs: [],
     preferences: {
       ...usePosStore.getState().preferences,
+      cashDrawerFormulaVersion: "v1",
       shifts: withShift ? [openShift()] : [],
     },
   });

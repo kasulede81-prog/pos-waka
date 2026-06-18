@@ -719,8 +719,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             setStaffSwitchCloseOpen(false);
             setPendingStaffUnlock(null);
           }}
-          onConfirm={(counted) => {
-            const r = closeShiftWithCashCount(counted);
+          onConfirm={(counted, handoff) => {
+            const r = closeShiftWithCashCount(counted, handoff);
             if (!r.ok) {
               setLockError(t(lang, r.errorKey ?? "saleError"));
               return { ok: false };

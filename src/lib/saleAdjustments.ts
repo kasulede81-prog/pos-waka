@@ -1,4 +1,4 @@
-import type { Customer, Sale, SaleLine, ShiftRecord } from "../types";
+import type { CashDrawerFormulaVersion, Customer, Sale, SaleLine, ShiftRecord } from "../types";
 
 export type DiscountMode = "percent" | "amount" | "final";
 
@@ -95,14 +95,27 @@ export function reduceSaleTotalsByAmount(
   };
 }
 
+export type ShiftCashContext = {
+  formulaVersion?: CashDrawerFormulaVersion;
+};
+
+function shiftBaselineUgx(sh: ShiftRecord, formulaVersion: CashDrawerFormulaVersion): number {
+  if (formulaVersion === "v2") {
+    if (sh.segmentBaselineUgx != null) return Math.max(0, Math.floor(sh.segmentBaselineUgx));
+    return 0;
+  }
+  return Math.max(0, Math.floor(sh.openingFloatUgx ?? 0));
+}
+
 /** Shift running cash already reflects void/return payouts in estimatedCashUgx (Option A). */
-export function shiftExpectedCash(sh: ShiftRecord): number {
+export function shiftExpectedCash(sh: ShiftRecord, ctx?: ShiftCashContext): number {
+  const formulaVersion = ctx?.formulaVersion ?? "v1";
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
-  const opening = sh.openingFloatUgx ?? 0;
+  const opening = shiftBaselineUgx(sh, formulaVersion);
   return Math.max(0, opening + sh.estimatedCashUgx + debtPayments);
 }
 
-export function shiftExpectedCashLabelParts(sh: ShiftRecord): {
+export function shiftExpectedCashLabelParts(sh: ShiftRecord, ctx?: ShiftCashContext): {
   openingFloat: number;
   sales: number;
   discounts: number;
@@ -111,12 +124,13 @@ export function shiftExpectedCashLabelParts(sh: ShiftRecord): {
   debtPayments: number;
   expected: number;
 } {
-  const openingFloat = sh.openingFloatUgx ?? 0;
+  const formulaVersion = ctx?.formulaVersion ?? "v1";
+  const openingFloat = shiftBaselineUgx(sh, formulaVersion);
   const discounts = sh.discountsTotalUgx ?? 0;
   const voids = sh.voidsTotalUgx ?? 0;
   const returns = sh.returnsTotalUgx ?? 0;
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
-  const expected = shiftExpectedCash(sh);
+  const expected = shiftExpectedCash(sh, ctx);
   return {
     openingFloat,
     sales: expected + voids + returns - debtPayments - openingFloat,

@@ -40,6 +40,7 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "customers", path: "/customers", titleKey: "customers", subtitleKey: "officeCardCustomersSub", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["customer", "patient", "account", "debtor"] },
   { id: "debts", path: "/debts", titleKey: "debts", subtitleKey: "debtsHelp", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["debt", "credit", "owe", "loan"] },
   { id: "cash-expenses", path: "/cash-expenses", titleKey: "officeCardCashExpenses", subtitleKey: "officeCardCashExpensesSub", sectionKey: "officeSectionDaily", keywords: ["expense", "petty cash", "drawer"] },
+  { id: "day-open", path: "/office/day-open", titleKey: "dayOpenTitle", subtitleKey: "dayOpenSub", sectionKey: "officeSectionDaily", perm: "day.open_drawer", keywords: ["open", "float", "drawer", "day"] },
   { id: "cash-position", path: "/office/cash-position", titleKey: "officeCardCashPosition", subtitleKey: "officeCardCashPositionSub", sectionKey: "officeSectionDaily", perm: "day.close", keywords: ["cash", "drawer", "till"] },
   { id: "close-day", path: "/close-day", titleKey: "officeCardCloseDay", subtitleKey: "officeCardCloseDaySub", sectionKey: "officeSectionDaily", perm: "day.close", keywords: ["close", "end day", "z-report"] },
   { id: "kitchen", path: "/kitchen", titleKey: "navKitchen", subtitleKey: "officeCardKitchenSub", sectionKey: "officeSectionDaily", perm: "hospitality.kitchen", modes: ["hospitality"], keywords: ["kitchen", "kds", "orders"] },

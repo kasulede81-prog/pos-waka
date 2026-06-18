@@ -2063,8 +2063,8 @@ export function PosPage({ lang }: { lang: Language }) {
         open={shiftCloseOpen}
         shift={activeShift}
         onClose={() => setShiftCloseOpen(false)}
-        onConfirm={(counted) => {
-          const r = closeShiftWithCashCount(counted);
+        onConfirm={(counted, handoff) => {
+          const r = closeShiftWithCashCount(counted, handoff);
           if (!r.ok) {
             setToast(t(lang, r.errorKey ?? "saleError"));
             window.setTimeout(() => setToast(null), 2200);

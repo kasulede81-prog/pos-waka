@@ -235,6 +235,8 @@ export function buildCashPositionReport(params: {
   supplierPayments?: SupplierPayment[];
   cashDrawerAdjustments?: CashDrawerAdjustment[];
   shifts?: ShiftRecord[];
+  dayDrawerOpens?: import("../types").DayDrawerOpen[];
+  formulaVersion?: import("../types").CashDrawerFormulaVersion;
   staffAccounts: StaffAccount[];
   generalCategoryLabel: string;
 }): CashPositionReport {
@@ -249,6 +251,8 @@ export function buildCashPositionReport(params: {
     supplierPayments = [],
     cashDrawerAdjustments = [],
     shifts = [],
+    dayDrawerOpens = [],
+    formulaVersion = "v1",
     staffAccounts,
     generalCategoryLabel,
   } = params;
@@ -287,6 +291,8 @@ export function buildCashPositionReport(params: {
     supplierPayments,
     cashDrawerAdjustments,
     shifts,
+    dayDrawerOpens,
+    formulaVersion,
     day: dayKey,
   });
   const debtCollectedUgx = drawer.debtCollectedUgx;

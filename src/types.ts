@@ -12,12 +12,21 @@ export type Permission =
   | "sale_void"
   | "stock.view"
   | "stock.adjust"
+  | "stock.count"
   | "products.add"
   | "products.remove"
   | "products.edit_presets"
   | "customers.view"
   | "customers.debt"
   | "day.close"
+  /** Record official shop drawer open for the day (owner/manager/supervisor). */
+  | "day.open_drawer"
+  /** Manager override when cashier float verification mismatches. */
+  | "day.verify_opening_float"
+  /** Open a cashier shift after day drawer is open. */
+  | "shift.start"
+  /** Close shift with cash count and handoff. */
+  | "shift.close"
   | "reports.view"
   | "reports.profit"
   | "settings.view"
@@ -118,7 +127,21 @@ export type AuditAction =
   | "customer_merge"
   | "product_restore"
   | "staff_login"
-  | "staff_logout";
+  | "staff_logout"
+  | "inventory_count_started"
+  | "inventory_count_submitted"
+  | "inventory_count_approved"
+  | "inventory_count_applied"
+  | "inventory_count_cancelled"
+  | "day_drawer_open"
+  | "day_drawer_open_supersede"
+  | "day_drawer_open_void"
+  | "shift_float_verified"
+  | "shift_float_mismatch"
+  | "shift_float_override"
+  | "shift_handoff_ready"
+  | "shift_handoff_verified"
+  | "shift_handoff_override";
 
 export type AuditLogEntry = {
   id: string;
@@ -157,8 +180,54 @@ export type ShiftRecord = {
   countedCashUgx?: number | null;
   /** counted − expected (positive = over, negative = short) */
   cashDifferenceUgx?: number | null;
-  /** Optional starting float when shift began (UGX). */
+  /** @deprecated v1 only — optional self-reported float. Ignored for day ledger in formula v2. */
   openingFloatUgx?: number | null;
+  /** Cashier physical count at shift start (v2 verification). */
+  verifiedFloatUgx?: number | null;
+  /** v2 segment baseline frozen at shift start (day open or prior handoff). */
+  segmentBaselineUgx?: number | null;
+  verificationStatus?:
+    | "matched"
+    | "mismatch_overridden"
+    | "handoff_matched"
+    | "handoff_overridden"
+    | "legacy_unverified"
+    | null;
+  verifiedAt?: string | null;
+  verifiedByUserId?: string | null;
+  verifiedByLabel?: string | null;
+  dayDrawerOpenId?: string | null;
+  /** Cash left in drawer for next cashier (recorded at shift close). */
+  handoffFloatUgx?: number | null;
+  /** Prior closed shift on same day (handoff chain). */
+  priorShiftId?: string | null;
+};
+
+export type CashDrawerFormulaVersion = "v1" | "v2";
+
+export type DayDrawerOpenStatus = "open" | "superseded" | "voided";
+
+/** Authoritative day-level opening float — one active row per Kampala dateKey. */
+export type DayDrawerOpen = {
+  id: string;
+  dateKey: string;
+  openingFloatUgx: number;
+  countedAt: string;
+  countedByUserId: string;
+  countedByLabel: string;
+  firstVerifiedByUserId?: string | null;
+  firstVerifiedByLabel?: string | null;
+  note: string;
+  witnessUserId?: string | null;
+  deviceId: string;
+  status: DayDrawerOpenStatus;
+  supersedesId?: string | null;
+  voidReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  pendingSync: boolean;
+  lastSyncError?: string | null;
+  deletedAt?: string | null;
 };
 
 export type VoidReason = "wrong_item" | "customer_changed_mind" | "returned_item" | "wrong_quantity" | "other";
@@ -490,7 +559,8 @@ export type StockMovementKind =
   | "adjust_use"
   | "adjust_other"
   | "adjust_count"
-  | "adjust_expired_writeoff";
+  | "adjust_expired_writeoff"
+  | "inventory_count_variance";
 
 export type StockMovement = {
   id: string;
@@ -503,6 +573,51 @@ export type StockMovement = {
   summary: string;
   refId?: string;
   supplierId?: string | null;
+};
+
+export type InventoryCountSessionStatus =
+  | "draft"
+  | "counting"
+  | "submitted"
+  | "approved"
+  | "applied"
+  | "cancelled";
+
+export type InventoryCountLine = {
+  id: string;
+  sessionId: string;
+  productId: string;
+  productName?: string;
+  expectedQtySnapshot: number;
+  countedQty: number | null;
+  varianceQty: number;
+  varianceCostUgx: number;
+  varianceRetailUgx: number;
+  reason: string;
+  updatedAt: string;
+};
+
+export type InventoryCountSession = {
+  id: string;
+  sessionNumber: number;
+  status: InventoryCountSessionStatus;
+  startedAt: string | null;
+  startedBy: string | null;
+  startedByName?: string | null;
+  submittedAt: string | null;
+  submittedBy: string | null;
+  submittedByName?: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  approvedByName?: string | null;
+  appliedAt: string | null;
+  appliedBy: string | null;
+  appliedByName?: string | null;
+  snapshotCreatedAt: string | null;
+  notes: string;
+  lines: InventoryCountLine[];
+  pendingSync: boolean;
+  updatedAt: string;
 };
 
 export type SaleLine = {
@@ -970,6 +1085,8 @@ export type ShopPreferences = {
   discountControlMode?: "unrestricted" | "manager_approval" | "max_percent";
   /** Percent threshold for manager_approval / max_percent modes. */
   discountMaxPercentThreshold?: number;
+  /** Cash drawer reconciliation formula — undefined = v1 (legacy dual float). New shops default v2. */
+  cashDrawerFormulaVersion?: CashDrawerFormulaVersion;
 };
 
 export type SyncOperationKind =
@@ -980,6 +1097,8 @@ export type SyncOperationKind =
   | "pending_expenses"
   | "pending_cash_expenses"
   | "pending_cash_drawer_adjustments"
+  | "pending_inventory_counts"
+  | "pending_day_drawer_opens"
   | "pending_purchases"
   | "pending_hospitality"
   /** Legacy queue kinds kept for backward compatibility */

@@ -597,6 +597,15 @@ export function StockPage({ lang }: { lang: Language }) {
         backLabel={t(lang, "officeBackToHub")}
       />
 
+      {hasPermission(actor.role, "stock.count") ? (
+        <Link
+          to="/stock/count"
+          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-black text-indigo-950"
+        >
+          {t(lang, "stockCountNav")}
+        </Link>
+      ) : null}
+
       {freeProductLimitReached ? (
         <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
           <p className="text-lg font-black text-orange-950">{pt("freeLimitProductsTitle")}</p>

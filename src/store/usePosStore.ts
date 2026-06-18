@@ -31,6 +31,8 @@ import type {
   CashExpense,
   CashDrawerAdjustment,
   CashDrawerAdjustmentType,
+  DayDrawerOpen,
+  InventoryCountSession,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
 import { checkStorePermissionEffective } from "../lib/storeAuthorization";
@@ -49,6 +51,10 @@ import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentAccount } from "../offline/localDb";
+import { normalizeInventoryCountSession } from "../lib/inventoryCount";
+import { createInventoryCountStoreActions } from "./inventoryCountMutations";
+import { createDayDrawerOpenStoreActions } from "./dayDrawerOpenMutations";
+import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { isNativeApp } from "../lib/nativeApp";
 import { persistDebounceMs, runWhenIdle, yieldUiTick } from "../lib/uiYield";
@@ -313,6 +319,8 @@ export type PosState = {
   returnRecords: ReturnRecord[];
   cashExpenses: CashExpense[];
   cashDrawerAdjustments: CashDrawerAdjustment[];
+  dayDrawerOpens: DayDrawerOpen[];
+  inventoryCountSessions: InventoryCountSession[];
   archivedSales: Sale[];
   archivedAuditLogs: AuditLogEntry[];
   archivedDayCloses: DayCloseSummary[];
@@ -346,6 +354,8 @@ export type PosState = {
       returnRecords?: ReturnRecord[];
       cashExpenses?: CashExpense[];
       cashDrawerAdjustments?: CashDrawerAdjustment[];
+      dayDrawerOpens?: DayDrawerOpen[];
+      inventoryCountSessions?: InventoryCountSession[];
       archivedSales?: Sale[];
       archivedAuditLogs?: AuditLogEntry[];
       archivedDayCloses?: DayCloseSummary[];
@@ -376,6 +386,8 @@ export type PosState = {
     returnRecords?: ReturnRecord[];
     cashExpenses?: CashExpense[];
     cashDrawerAdjustments?: CashDrawerAdjustment[];
+    dayDrawerOpens?: DayDrawerOpen[];
+    inventoryCountSessions?: InventoryCountSession[];
     archivedSales?: Sale[];
     archivedAuditLogs?: AuditLogEntry[];
     archivedDayCloses?: DayCloseSummary[];
@@ -416,7 +428,21 @@ export type PosState = {
   switchStaffAccount: (id: string | null, opts?: { force?: boolean }) => { ok: boolean; errorKey?: string };
   setPosLocked: (locked: boolean) => void;
   setPilotModeEnabled: (enabled: boolean) => void;
-  beginShift: (openingFloatUgx?: number) => void;
+  beginShift: (openingFloatUgx?: number) => { ok: boolean; errorKey?: string };
+  beginShiftV2: (input: import("./dayDrawerOpenMutations").BeginShiftV2Input) => { ok: boolean; errorKey?: string; shiftId?: string };
+  recordDayDrawerOpen: (input: {
+    openingFloatUgx: number;
+    note?: string;
+    witnessUserId?: string | null;
+    dateKey?: string;
+  }) => { ok: boolean; errorKey?: string; dayOpenId?: string };
+  supersedeDayDrawerOpen: (input: {
+    previousId: string;
+    openingFloatUgx: number;
+    note?: string;
+    reason?: string;
+  }) => { ok: boolean; errorKey?: string; dayOpenId?: string };
+  voidDayDrawerOpen: (input: { dayOpenId: string; reason: string }) => { ok: boolean; errorKey?: string };
   endActiveShift: (actorUserId?: string) => void;
   logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
@@ -487,7 +513,10 @@ export type PosState = {
     reason: ReturnReason;
     note?: string;
   }) => { ok: boolean; errorKey?: string; returnRecord?: ReturnRecord };
-  closeShiftWithCashCount: (countedCashUgx: number) => { ok: boolean; errorKey?: string; differenceUgx?: number };
+  closeShiftWithCashCount: (
+    countedCashUgx: number,
+    handoffFloatUgx?: number,
+  ) => { ok: boolean; errorKey?: string; differenceUgx?: number };
   finalizeDraftSale: (opts: {
     debtUgx: number;
     customerId?: string | null;
@@ -631,6 +660,19 @@ export type PosState = {
   };
   /** Owner-only permanent removal of archived buckets on this device. */
   permanentlyDeleteArchived: () => void;
+
+  createInventoryCountSession: (notes?: string) => { ok: boolean; errorKey?: string; sessionId?: string };
+  startInventoryCountSession: (sessionId: string) => { ok: boolean; errorKey?: string };
+  setInventoryCountLine: (
+    sessionId: string,
+    productId: string,
+    countedQty: number,
+    reason?: string,
+  ) => { ok: boolean; errorKey?: string };
+  submitInventoryCountSession: (sessionId: string) => { ok: boolean; errorKey?: string };
+  approveInventoryCountSession: (sessionId: string) => { ok: boolean; errorKey?: string };
+  applyInventoryCountSession: (sessionId: string) => { ok: boolean; errorKey?: string; movementCount?: number };
+  cancelInventoryCountSession: (sessionId: string) => { ok: boolean; errorKey?: string };
 };
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -960,6 +1002,8 @@ export const usePosStore = create<PosState>((set, get) => {
   returnRecords: [],
   cashExpenses: [],
   cashDrawerAdjustments: [],
+  dayDrawerOpens: [],
+  inventoryCountSessions: [],
   archivedSales: [],
   archivedAuditLogs: [],
   archivedDayCloses: [],
@@ -991,6 +1035,8 @@ export const usePosStore = create<PosState>((set, get) => {
       returnRecords: data.returnRecords ?? [],
       cashExpenses: (data.cashExpenses ?? []).map(normalizeCashExpense),
       cashDrawerAdjustments: (data.cashDrawerAdjustments ?? []).map(normalizeCashDrawerAdjustment),
+      dayDrawerOpens: (data.dayDrawerOpens ?? []).map(normalizeDayDrawerOpen),
+      inventoryCountSessions: (data.inventoryCountSessions ?? []).map(normalizeInventoryCountSession),
       archivedSales: (data.archivedSales ?? []).map(normalizeSale),
       archivedAuditLogs: data.archivedAuditLogs ?? [],
       archivedDayCloses: data.archivedDayCloses ?? [],
@@ -1019,6 +1065,7 @@ export const usePosStore = create<PosState>((set, get) => {
       returnRecords: [],
       cashExpenses: [],
       cashDrawerAdjustments: [],
+      inventoryCountSessions: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
@@ -1046,6 +1093,12 @@ export const usePosStore = create<PosState>((set, get) => {
       cashDrawerAdjustments: data.cashDrawerAdjustments
         ? data.cashDrawerAdjustments.map(normalizeCashDrawerAdjustment)
         : s.cashDrawerAdjustments,
+      dayDrawerOpens: data.dayDrawerOpens
+        ? data.dayDrawerOpens.map(normalizeDayDrawerOpen)
+        : s.dayDrawerOpens,
+      inventoryCountSessions: data.inventoryCountSessions
+        ? data.inventoryCountSessions.map(normalizeInventoryCountSession)
+        : s.inventoryCountSessions,
       archivedSales: data.archivedSales ? data.archivedSales.map(normalizeSale) : s.archivedSales,
       archivedAuditLogs: data.archivedAuditLogs ?? s.archivedAuditLogs,
       archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
@@ -1082,6 +1135,8 @@ export const usePosStore = create<PosState>((set, get) => {
       voidRecords: [],
       returnRecords: [],
       cashExpenses: [],
+      cashDrawerAdjustments: [],
+      inventoryCountSessions: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
@@ -1343,11 +1398,17 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   beginShift: (openingFloatUgx?: number) => {
+    if (isFormulaV2(get().preferences)) {
+      return { ok: false, errorKey: "dayDrawerUseVerification" };
+    }
+    const denied = denyUnlessEffectivePermission("shift.start", "beginShift");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const s = get();
     const actor = s.sessionActor;
-    if (!actor) return;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
     const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
-    if (open) return;
+    if (open) return { ok: false, errorKey: "invalid" };
     const floatAmt = openingFloatUgx != null ? Math.max(0, Math.floor(openingFloatUgx)) : 0;
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
@@ -1367,6 +1428,7 @@ export const usePosStore = create<PosState>((set, get) => {
       countedCashUgx: null,
       cashDifferenceUgx: null,
       openingFloatUgx: floatAmt > 0 ? floatAmt : null,
+      verificationStatus: "legacy_unverified",
     };
     set((st) => ({
       preferences: {
@@ -1375,6 +1437,7 @@ export const usePosStore = create<PosState>((set, get) => {
       },
     }));
     pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: actor.userId });
+    return { ok: true };
   },
 
   endActiveShift: (actorUserId) => {
@@ -1413,6 +1476,7 @@ export const usePosStore = create<PosState>((set, get) => {
         onboardingDone: true,
         onboardingWizardDone: true,
         schemaVersion: 2,
+        cashDrawerFormulaVersion: "v2",
         hospitalityModeEnabled: hospitality ? true : s.preferences.hospitalityModeEnabled,
         pharmacyModeEnabled: pharmacy ? true : s.preferences.pharmacyModeEnabled,
         hospitalityFloor: hospitality
@@ -1441,6 +1505,7 @@ export const usePosStore = create<PosState>((set, get) => {
         onboardingDone: true,
         onboardingWizardDone: true,
         schemaVersion: 2,
+        cashDrawerFormulaVersion: "v2",
         hospitalityModeEnabled: hospitality ? true : s.preferences.hospitalityModeEnabled,
         pharmacyModeEnabled: pharmacy ? true : s.preferences.pharmacyModeEnabled,
         hospitalityFloor: hospitality
@@ -1465,6 +1530,7 @@ export const usePosStore = create<PosState>((set, get) => {
         businessType,
         kioskQuickSell: prof.kioskQuickSellDefault,
         schemaVersion: 2,
+        cashDrawerFormulaVersion: "v2",
         hospitalityModeEnabled: hospitality ? true : s.preferences.hospitalityModeEnabled,
         pharmacyModeEnabled: pharmacy ? true : s.preferences.pharmacyModeEnabled,
         hospitalityFloor: hospitality
@@ -2738,15 +2804,33 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, returnRecord: returnRec };
   },
 
-  closeShiftWithCashCount: (countedCashUgx) => {
+  closeShiftWithCashCount: (countedCashUgx, handoffFloatUgx) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const closeGuard = assertCanCloseShift(state);
     if (!closeGuard.ok) return { ok: false, errorKey: closeGuard.errorKey };
+
+    if (isFormulaV2(state.preferences)) {
+      const { closeShiftWithHandoff } = createDayDrawerOpenStoreActions({
+        get,
+        set,
+        pushAudit,
+        queueRemote,
+        denyUnlessEffectivePermission,
+      });
+      return closeShiftWithHandoff({
+        countedCashUgx,
+        handoffFloatUgx: handoffFloatUgx ?? countedCashUgx,
+      });
+    }
+
+    const denied = denyUnlessEffectivePermission("shift.close", "closeShiftWithCashCount");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
     const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     if (!open) return { ok: false, errorKey: "invalid" };
-    const expected = shiftExpectedCash(open);
+    const expected = shiftExpectedCash(open, { formulaVersion: "v1" });
     const counted = Math.max(0, Math.floor(countedCashUgx));
     const differenceUgx = counted - expected;
     const endAt = new Date().toISOString();
@@ -3902,6 +3986,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
+    if (input.type === "opening_float" && isFormulaV2(state.preferences)) {
+      return { ok: false, errorKey: "dayDrawerUseDayOpen" };
+    }
     const amountUgx = Math.floor(input.amountUgx);
     if (amountUgx <= 0) return { ok: false, errorKey: "invalidMoney" };
     const now = new Date().toISOString();
@@ -4062,6 +4149,8 @@ export const usePosStore = create<PosState>((set, get) => {
       supplierPayments: state.supplierPayments,
       cashDrawerAdjustments: state.cashDrawerAdjustments,
       shifts: state.preferences.shifts ?? [],
+      dayDrawerOpens: state.dayDrawerOpens,
+      formulaVersion: resolveCashDrawerFormulaVersion(state.preferences),
       day: dateKey,
     });
     const fin = getCompletedFinancials(state.sales, state.returnRecords, state.products, { day: dateKey });
@@ -4186,6 +4275,26 @@ export const usePosStore = create<PosState>((set, get) => {
       mismatchCount: result.mismatches.length,
     };
   },
+
+  ...createInventoryCountStoreActions({
+    get,
+    set,
+    pushAudit,
+    queueRemote,
+    mergeStockMovements,
+  }),
+
+  ...(() => {
+    const { closeShiftWithHandoff: _omit, ...dayDrawerActions } = createDayDrawerOpenStoreActions({
+      get,
+      set,
+      pushAudit,
+      queueRemote,
+      denyUnlessEffectivePermission,
+    });
+    void _omit;
+    return dayDrawerActions;
+  })(),
 };
 });
 
@@ -4205,6 +4314,9 @@ function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
     a.voidRecords === b.voidRecords &&
     a.returnRecords === b.returnRecords &&
     a.cashExpenses === b.cashExpenses &&
+    a.cashDrawerAdjustments === b.cashDrawerAdjustments &&
+    a.dayDrawerOpens === b.dayDrawerOpens &&
+    a.inventoryCountSessions === b.inventoryCountSessions &&
     a.archivedSales === b.archivedSales &&
     a.archivedAuditLogs === b.archivedAuditLogs &&
     a.archivedDayCloses === b.archivedDayCloses &&
@@ -4370,6 +4482,8 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       typeof p.discountMaxPercentThreshold === "number" && p.discountMaxPercentThreshold >= 0 && p.discountMaxPercentThreshold <= 100
         ? p.discountMaxPercentThreshold
         : (base.discountMaxPercentThreshold ?? 10),
+    cashDrawerFormulaVersion:
+      p.cashDrawerFormulaVersion === "v2" ? "v2" : p.cashDrawerFormulaVersion === "v1" ? "v1" : (base.cashDrawerFormulaVersion ?? undefined),
   };
 }
 
@@ -4568,6 +4682,8 @@ export async function applyRestoredSnapshotFromBackup(
       returnRecords: restoredSnap.returnRecords ?? [],
       cashExpenses: (restoredSnap.cashExpenses ?? []).map(normalizeCashExpense),
       cashDrawerAdjustments: (restoredSnap.cashDrawerAdjustments ?? []).map(normalizeCashDrawerAdjustment),
+      dayDrawerOpens: (restoredSnap.dayDrawerOpens ?? []).map(normalizeDayDrawerOpen),
+      inventoryCountSessions: (restoredSnap.inventoryCountSessions ?? []).map(normalizeInventoryCountSession),
       archivedSales: [],
       archivedAuditLogs: restoredSnap.archivedAuditLogs ?? [],
       archivedDayCloses: restoredSnap.archivedDayCloses ?? [],
@@ -4637,6 +4753,9 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         cashExpenses: ((snap as { cashExpenses?: CashExpense[] }).cashExpenses ?? []).map(normalizeCashExpense),
         cashDrawerAdjustments: ((snap as { cashDrawerAdjustments?: CashDrawerAdjustment[] }).cashDrawerAdjustments ?? []).map(
           normalizeCashDrawerAdjustment,
+        ),
+        inventoryCountSessions: ((snap as { inventoryCountSessions?: InventoryCountSession[] }).inventoryCountSessions ?? []).map(
+          normalizeInventoryCountSession,
         ),
         archivedSales: (snap.archivedSales ?? []).map(normalizeSale),
         archivedAuditLogs: snap.archivedAuditLogs ?? [],
@@ -4942,6 +5061,9 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         cashExpenses: (await getEntitiesByBucket<CashExpense>("cashExpense")).map(normalizeCashExpense),
         cashDrawerAdjustments: (await getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment")).map(
           normalizeCashDrawerAdjustment,
+        ),
+        inventoryCountSessions: (await getEntitiesByBucket<InventoryCountSession>("inventoryCountSession")).map(
+          normalizeInventoryCountSession,
         ),
         archivedSales: (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale),
         archivedAuditLogs: await getEntitiesByBucket("archivedAuditLog"),

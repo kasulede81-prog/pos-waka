@@ -52,7 +52,9 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 17;
+const PERM_MATRIX_VERSION = 19;
+
+const DRAWER_OPEN_PERMS: Permission[] = ["day.open_drawer", "day.verify_opening_float", "shift.start", "shift.close"];
 
 const HOSPITALITY_OWNER: Permission[] = [
   "hospitality.floor",
@@ -71,6 +73,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "receipts.view",
     "stock.view",
     "stock.adjust",
+    "stock.count",
     "products.add",
     "products.remove",
     "products.edit_presets",
@@ -78,6 +81,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "customers.view",
     "customers.debt",
     "day.close",
+    ...DRAWER_OPEN_PERMS,
     "reports.view",
     "reports.profit",
     "settings.view",
@@ -108,12 +112,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "receipts.view",
     "stock.view",
     "stock.adjust",
+    "stock.count",
     "products.add",
     "products.edit_presets",
     "shelves.customize",
     "customers.view",
     "customers.debt",
     "day.close",
+    ...DRAWER_OPEN_PERMS,
     "reports.view",
     "reports.profit",
     "settings.view",
@@ -137,9 +143,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "pos.sell",
     "sale_void",
     "receipts.view",
+    "stock.view",
+    "stock.count",
     "customers.view",
     "customers.debt",
     "expenses.record",
+    "shift.start",
+    "shift.close",
     "hospitality.floor",
     "hospitality.order",
     "hospitality.settle",
@@ -150,6 +160,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "receipts.view",
     "stock.view",
     "stock.adjust",
+    "stock.count",
     "products.add",
     "products.edit_presets",
     "shelves.customize",
@@ -166,12 +177,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "receipts.view",
     "stock.view",
     "stock.adjust",
+    "stock.count",
     "products.add",
     "products.edit_presets",
     "shelves.customize",
     "customers.view",
     "customers.debt",
     "day.close",
+    ...DRAWER_OPEN_PERMS,
     "reports.view",
     "reports.profit",
     "settings.view",

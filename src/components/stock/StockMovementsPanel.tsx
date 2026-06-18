@@ -21,6 +21,9 @@ function friendlyMovement(lang: Language, mv: StockMovement, pharmacyMode?: bool
   if (mv.kind === "purchase_in" || summary.includes("purchase")) {
     return t(lang, "stockMoveRestock").replace("{detail}", `${sign}${qty} ${mv.productName}`);
   }
+  if (mv.kind === "inventory_count_variance" || summary.toLowerCase().includes("count #")) {
+    return `${t(lang, "inventoryCountVariance")}: ${sign}${qty} ${mv.productName}`;
+  }
   return `${sign}${qty} ${mv.productName}`;
 }
 

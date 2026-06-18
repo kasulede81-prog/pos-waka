@@ -53,11 +53,14 @@ import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
 import { ProfitPage } from "./pages/ProfitPage";
 import { PharmacyMarginReportPage } from "./pages/PharmacyMarginReportPage";
 import { StockPage } from "./pages/StockPage";
+import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
+import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { SuppliersPage } from "./pages/SuppliersPage";
 import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
 import { CashPositionPage } from "./pages/CashPositionPage";
+import { DayOpenPage } from "./pages/DayOpenPage";
 import { PurchasesPage } from "./pages/PurchasesPage";
 import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
 import { SupplierDetailPage } from "./pages/SupplierDetailPage";
@@ -370,6 +373,14 @@ function AppRoutes() {
               }
             />
             <Route
+              path="office/day-open"
+              element={
+                <RoleProtectedRoute permission="day.open_drawer">
+                  <DayOpenPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="office/cash-position"
               element={
                 <RoleProtectedRoute permission="day.close">
@@ -465,6 +476,22 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="stock.view">
                   <StockPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="stock/count"
+              element={
+                <RoleProtectedRoute permission="stock.count">
+                  <InventoryCountSessionsPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="stock/count/:sessionId"
+              element={
+                <RoleProtectedRoute permission="stock.count">
+                  <InventoryCountSessionPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

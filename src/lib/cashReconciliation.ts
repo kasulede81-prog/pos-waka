@@ -4,7 +4,9 @@
 
 import type {
   CashDrawerAdjustment,
+  CashDrawerFormulaVersion,
   CashExpense,
+  DayDrawerOpen,
   DebtPayment,
   Product,
   ReturnRecord,
@@ -124,6 +126,8 @@ export type DrawerCashInput = {
   supplierPayments?: SupplierPayment[];
   cashDrawerAdjustments?: CashDrawerAdjustment[];
   shifts?: ShiftRecord[];
+  dayDrawerOpens?: DayDrawerOpen[];
+  formulaVersion?: CashDrawerFormulaVersion;
   day: string;
 };
 
@@ -155,6 +159,8 @@ export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnap
     cashDrawerAdjustments = [],
     supplierPayments = [],
     shifts = [],
+    dayDrawerOpens = [],
+    formulaVersion = "v1",
     day,
   } = input;
   const expenseUgx = sumCashExpensesOnDay(cashExpenses, day);
@@ -169,6 +175,8 @@ export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnap
     supplierPaymentsUgx,
     cashDrawerAdjustments,
     shifts,
+    dayDrawerOpens,
+    formulaVersion,
   );
 }
 
@@ -183,6 +191,8 @@ export function getDrawerCashForDay(
   supplierPaymentsUgx = 0,
   cashDrawerAdjustments: CashDrawerAdjustment[] = [],
   shifts: ShiftRecord[] = [],
+  dayDrawerOpens: DayDrawerOpen[] = [],
+  formulaVersion: CashDrawerFormulaVersion = "v1",
 ): DrawerCashSnapshot {
   const fin = getCompletedFinancials(sales, returns, products, { day });
   const daySales = revenueSalesOnDay(sales, day);
@@ -191,7 +201,10 @@ export function getDrawerCashForDay(
   const refundsUgx = sumRefundsOnDay(returns, day);
   const cashRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
   const drawerSales = getCashDrawerSalesInput(sales, day);
-  const openingFloatUgx = resolveOpeningFloatUgx(day, cashDrawerAdjustments, shifts);
+  const openingFloatUgx = resolveOpeningFloatUgx(day, cashDrawerAdjustments, shifts, {
+    dayDrawerOpens,
+    formulaVersion,
+  });
   const adjustmentInflowsUgx = sumAdjustmentInflowsExcludingOpening(cashDrawerAdjustments, day);
   const adjustmentOutflowsUgx = sumAdjustmentOutflows(cashDrawerAdjustments, day);
   const expectedDrawerCashUgx = computeExpectedDrawerCashV2({

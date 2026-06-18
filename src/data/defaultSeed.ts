@@ -13,6 +13,7 @@ export function createDefaultPreferences(): ShopPreferences {
     devRoleOverride: null,
     cashVarianceThresholdPct: 5,
     cashVarianceThresholdUgxFixed: 10_000,
+    cashDrawerFormulaVersion: "v2",
     lastAutoBackupDateKey: undefined,
     activeBranchId: null,
     branchDisplayName: null,
