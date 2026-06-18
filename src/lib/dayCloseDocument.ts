@@ -14,12 +14,18 @@ export function buildDayCloseSnapshot(params: {
     debtCollectedUgx: number;
     refundsUgx: number;
     expenseUgx: number;
+    openingFloatUgx?: number;
+    cashSalesUgx?: number;
+    supplierPaymentsUgx?: number;
+    adjustmentInflowsUgx?: number;
+    adjustmentOutflowsUgx?: number;
+    cashRefundsUgx?: number;
   };
   transactionCount: number;
 }): DayCloseDocumentSnapshot {
   const { row, drawer, closedByUserId, closedByLabel, transactionCount } = params;
   return {
-    documentVersion: 1,
+    documentVersion: 2,
     generatedAt: row.createdAt,
     closedByUserId,
     closedByLabel,
@@ -34,6 +40,12 @@ export function buildDayCloseSnapshot(params: {
     refundsUgx: drawer.refundsUgx,
     expenseUgx: drawer.expenseUgx,
     transactionCount,
+    openingFloatUgx: drawer.openingFloatUgx ?? row.openingFloatUgx ?? 0,
+    cashSalesUgx: drawer.cashSalesUgx ?? drawer.cashFromSalesUgx,
+    supplierPaymentsUgx: drawer.supplierPaymentsUgx ?? 0,
+    adjustmentInflowsUgx: drawer.adjustmentInflowsUgx ?? 0,
+    adjustmentOutflowsUgx: drawer.adjustmentOutflowsUgx ?? 0,
+    cashRefundsUgx: drawer.cashRefundsUgx ?? drawer.refundsUgx,
   };
 }
 
@@ -56,10 +68,24 @@ export function buildDayClosePdfBlob(lang: Language, close: DayCloseSummary, sho
   pdfLine(layout, doc, `${t(lang, "estimatedProfit")}: UGX ${close.profitEstimateUgx.toLocaleString()}`);
   pdfLine(layout, doc, `${t(lang, "creditLabel")}: UGX ${close.totalDebtUgx.toLocaleString()}`);
   if (snap) {
-    pdfLine(layout, doc, `${t(lang, "closeSimpleCashSalesToday")}: UGX ${snap.cashFromSalesUgx.toLocaleString()}`);
+    if ((snap.openingFloatUgx ?? 0) > 0) {
+      pdfLine(layout, doc, `${t(lang, "cashDrawerOpeningFloat")}: UGX ${snap.openingFloatUgx!.toLocaleString()}`);
+    }
+    pdfLine(layout, doc, `${t(lang, "closeSimpleCashSalesToday")}: UGX ${(snap.cashSalesUgx ?? snap.cashFromSalesUgx).toLocaleString()}`);
     pdfLine(layout, doc, `${t(lang, "closeDebtCollectedToday")}: UGX ${snap.debtCollectedUgx.toLocaleString()}`);
+    if ((snap.adjustmentInflowsUgx ?? 0) > 0) {
+      pdfLine(layout, doc, `${t(lang, "cashDrawerAdjustmentIn")}: UGX ${snap.adjustmentInflowsUgx!.toLocaleString()}`);
+    }
+    if ((snap.adjustmentOutflowsUgx ?? 0) > 0) {
+      pdfLine(layout, doc, `${t(lang, "cashDrawerAdjustmentOut")}: UGX ${snap.adjustmentOutflowsUgx!.toLocaleString()}`);
+    }
     if (snap.expenseUgx > 0) pdfLine(layout, doc, `${t(lang, "closeDayExpensesToday")}: UGX ${snap.expenseUgx.toLocaleString()}`);
-    if (snap.refundsUgx > 0) pdfLine(layout, doc, `${t(lang, "dayCloseRefunds")}: UGX ${snap.refundsUgx.toLocaleString()}`);
+    if ((snap.supplierPaymentsUgx ?? 0) > 0) {
+      pdfLine(layout, doc, `${t(lang, "closeDaySupplierPaymentsToday")}: UGX ${snap.supplierPaymentsUgx!.toLocaleString()}`);
+    }
+    if ((snap.cashRefundsUgx ?? snap.refundsUgx) > 0) {
+      pdfLine(layout, doc, `${t(lang, "dayCloseRefunds")}: UGX ${(snap.cashRefundsUgx ?? snap.refundsUgx).toLocaleString()}`);
+    }
     pdfLine(layout, doc, `${t(lang, "salesCount")}: ${snap.transactionCount}`);
   }
   return doc.output("blob");

@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import type { Language } from "../types";
+import type { CashDrawerAdjustmentType, Language } from "../types";
+import { CASH_DRAWER_ADJUSTMENT_TYPES } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useReportingSales } from "../hooks/useReportingSales";
@@ -21,6 +22,7 @@ import {
   downloadCashPositionPdf,
   printCashPositionReport,
 } from "../lib/cashPositionExport";
+import { cashDrawerAdjustmentTypeLabel } from "../lib/cashDrawerLedger";
 import { receiptPrintActionLabel } from "../lib/printActionLabels";
 
 function paymentLabel(lang: Language, key: CashPositionPaymentKey): string {
@@ -43,11 +45,18 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   const debtPayments = usePosStore((s) => s.debtPayments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
+  const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const addCashDrawerAdjustment = usePosStore((s) => s.addCashDrawerAdjustment);
   const preferences = usePosStore((s) => s.preferences);
 
   const [physicalCount, setPhysicalCount] = useState("");
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [movementType, setMovementType] = useState<CashDrawerAdjustmentType>("owner_injection");
+  const [movementAmount, setMovementAmount] = useState("");
+  const [movementNote, setMovementNote] = useState("");
+  const [movementMsg, setMovementMsg] = useState<string | null>(null);
 
   const todayKey = dateKeyKampala(new Date());
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
@@ -65,6 +74,8 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         debtPayments,
         cashExpenses,
         supplierPayments,
+        cashDrawerAdjustments,
+        shifts,
         staffAccounts: preferences.staffAccounts ?? [],
         generalCategoryLabel: generalLabel,
       }),
@@ -78,6 +89,8 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       debtPayments,
       cashExpenses,
       supplierPayments,
+      cashDrawerAdjustments,
+      shifts,
       preferences.staffAccounts,
       generalLabel,
     ],
@@ -125,6 +138,22 @@ export function CashPositionPage({ lang }: { lang: Language }) {
       showExportHint(ok);
     } finally {
       setExportBusy(false);
+    }
+  };
+
+  const submitMovement = () => {
+    const amountUgx = Math.floor(Number(movementAmount.replace(/\D/g, "")) || 0);
+    if (amountUgx <= 0) return;
+    const result = addCashDrawerAdjustment({
+      type: movementType,
+      amountUgx,
+      note: movementNote.trim(),
+    });
+    if (result.ok) {
+      setMovementAmount("");
+      setMovementNote("");
+      setMovementMsg(t(lang, "cashPositionMovementSaved"));
+      window.setTimeout(() => setMovementMsg(null), 3000);
     }
   };
 
@@ -225,6 +254,14 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         <h2 className="text-lg font-black text-waka-950">{t(lang, "cashPositionSectionCash")}</h2>
         <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "cashPositionCashHint")}</p>
         <dl className="mt-4 space-y-3">
+          {displayReport.cashPosition.openingFloatUgx > 0 ? (
+            <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
+              <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionOpeningFloat")}</dt>
+              <dd className="text-lg font-black text-stone-900">
+                UGX {displayReport.cashPosition.openingFloatUgx.toLocaleString()}
+              </dd>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
             <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionCashSales")}</dt>
             <dd className="text-lg font-black text-stone-900">
@@ -237,10 +274,26 @@ export function CashPositionPage({ lang }: { lang: Language }) {
               + UGX {displayReport.cashPosition.debtCollectedUgx.toLocaleString()}
             </dd>
           </div>
+          {displayReport.cashPosition.adjustmentInflowsUgx > 0 ? (
+            <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
+              <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionCashAdded")}</dt>
+              <dd className="text-lg font-black text-teal-800">
+                + UGX {displayReport.cashPosition.adjustmentInflowsUgx.toLocaleString()}
+              </dd>
+            </div>
+          ) : null}
+          {displayReport.cashPosition.adjustmentOutflowsUgx > 0 ? (
+            <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
+              <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionCashRemoved")}</dt>
+              <dd className="text-lg font-black text-rose-800">
+                − UGX {displayReport.cashPosition.adjustmentOutflowsUgx.toLocaleString()}
+              </dd>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
-            <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionRefunds")}</dt>
+            <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionSupplierPayments")}</dt>
             <dd className="text-lg font-black text-rose-800">
-              − UGX {displayReport.cashPosition.refundsUgx.toLocaleString()}
+              − UGX {displayReport.cashPosition.supplierPaymentsUgx.toLocaleString()}
             </dd>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
@@ -250,16 +303,84 @@ export function CashPositionPage({ lang }: { lang: Language }) {
             </dd>
           </div>
           <div className="flex items-center justify-between rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
-            <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionSupplierPayments")}</dt>
+            <dt className="text-sm font-bold text-stone-700">{t(lang, "cashPositionRefunds")}</dt>
             <dd className="text-lg font-black text-rose-800">
-              − UGX {displayReport.cashPosition.supplierPaymentsUgx.toLocaleString()}
+              − UGX {displayReport.cashPosition.refundsUgx.toLocaleString()}
             </dd>
           </div>
         </dl>
+        {Object.keys(displayReport.adjustmentBreakdown).length > 0 ? (
+          <div className="mt-4 rounded-2xl bg-white px-4 py-3 ring-1 ring-waka-100">
+            <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+              {t(lang, "cashPositionAdjustmentBreakdown")}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {Object.entries(displayReport.adjustmentBreakdown).map(([type, amount]) =>
+                amount && amount > 0 ? (
+                  <li key={type} className="flex justify-between text-sm font-semibold text-stone-700">
+                    <span>{cashDrawerAdjustmentTypeLabel(lang, type as import("../types").CashDrawerAdjustmentType)}</span>
+                    <span>UGX {amount.toLocaleString()}</span>
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          </div>
+        ) : null}
         <div className="mt-4 rounded-2xl bg-waka-600 px-4 py-4 text-white">
           <p className="text-xs font-black uppercase tracking-wide text-white/80">{t(lang, "cashPositionExpectedCash")}</p>
           <p className="mt-1 text-3xl font-black">UGX {displayReport.cashPosition.expectedCashUgx.toLocaleString()}</p>
         </div>
+      </section>
+
+      {/* Record cash drawer movement */}
+      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <h2 className="text-lg font-black text-stone-900">{t(lang, "cashPositionRecordMovement")}</h2>
+        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "cashPositionRecordMovementHint")}</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm font-bold text-stone-800">
+            {t(lang, "cashPositionMovementType")}
+            <select
+              value={movementType}
+              onChange={(e) => setMovementType(e.target.value as CashDrawerAdjustmentType)}
+              className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold"
+            >
+              {CASH_DRAWER_ADJUSTMENT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {cashDrawerAdjustmentTypeLabel(lang, type)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm font-bold text-stone-800">
+            {t(lang, "cashPositionMovementAmount")}
+            <input
+              value={movementAmount}
+              onChange={(e) => setMovementAmount(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              inputMode="numeric"
+              placeholder="0"
+              className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-xl font-black"
+            />
+          </label>
+          <label className="block text-sm font-bold text-stone-800 sm:col-span-2">
+            {t(lang, "cashPositionMovementNote")}
+            <input
+              value={movementNote}
+              onChange={(e) => setMovementNote(e.target.value.slice(0, 120))}
+              className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          onClick={submitMovement}
+          disabled={!movementAmount.replace(/\D/g, "")}
+          className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white disabled:opacity-50 sm:w-auto"
+        >
+          {t(lang, "save")}
+        </button>
+        {movementMsg ? (
+          <p className="mt-3 text-sm font-bold text-waka-800">{movementMsg}</p>
+        ) : null}
       </section>
 
       {/* Section 4: Category sales */}

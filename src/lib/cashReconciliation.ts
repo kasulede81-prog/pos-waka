@@ -2,17 +2,37 @@
  * Cash drawer reconciliation — canonical expected cash for owner-facing screens.
  */
 
-import type { CashExpense, DebtPayment, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
+import type {
+  CashDrawerAdjustment,
+  CashExpense,
+  DebtPayment,
+  Product,
+  ReturnRecord,
+  Sale,
+  ShiftRecord,
+  SupplierPayment,
+} from "../types";
 import type { DateFilterBounds } from "./dateFilters";
 import { enumerateDaysInBounds } from "./dateFilters";
 import { externalReturnRefundsUgx } from "./canonicalRevenue";
+import {
+  adjustmentBreakdownByType,
+  computeExpectedDrawerCashV2,
+  resolveOpeningFloatUgx,
+  sumAdjustmentInflowsExcludingOpening,
+  sumAdjustmentOutflows,
+  type AdjustmentBreakdownByType,
+  type ExpectedDrawerCashV2Input,
+} from "./cashDrawerLedger";
+import { getCashDrawerSalesInput } from "./cashDrawerSales";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesOnDay } from "./financialMetrics";
 
+export type { ExpectedDrawerCashV2Input };
+export { computeExpectedDrawerCashV2 };
+
 /**
- * Expected physical cash in drawer (Option A — single source of truth).
- * Completed sale headers already reflect linked same-day returns in cashPaidUgx.
- * Only external refunds (cross-day, unlinked, or sale outside day scope) reduce expected cash again.
+ * @deprecated Use computeExpectedDrawerCashV2 — kept for transitional imports.
  */
 export function computeExpectedDrawerCashUgx(input: {
   cashFromSalesUgx: number;
@@ -21,14 +41,16 @@ export function computeExpectedDrawerCashUgx(input: {
   supplierPaymentsUgx: number;
   externalReturnRefundsUgx: number;
 }): number {
-  return Math.max(
-    0,
-    input.cashFromSalesUgx +
-      input.debtCollectedUgx -
-      input.expenseUgx -
-      input.supplierPaymentsUgx -
-      input.externalReturnRefundsUgx,
-  );
+  return computeExpectedDrawerCashV2({
+    openingFloatUgx: 0,
+    cashSalesUgx: input.cashFromSalesUgx,
+    cashDebtCollectionsUgx: input.debtCollectedUgx,
+    adjustmentInflowsUgx: 0,
+    adjustmentOutflowsUgx: 0,
+    cashExpensesUgx: input.expenseUgx,
+    cashSupplierPaymentsUgx: input.supplierPaymentsUgx,
+    cashRefundsUgx: input.externalReturnRefundsUgx,
+  });
 }
 
 export function sumDebtPaymentsOnDay(debtPayments: DebtPayment[], day: string): number {
@@ -74,9 +96,18 @@ export function sumDebtPaymentsDuringShift(debtPayments: DebtPayment[], shift: S
 }
 
 export type DrawerCashSnapshot = {
+  /** Physical cash from sales (payment-method aware). */
   cashFromSalesUgx: number;
+  cashSalesUgx: number;
+  mobileMoneySalesUgx: number;
+  cardSalesUgx: number;
+  openingFloatUgx: number;
   debtCollectedUgx: number;
+  adjustmentInflowsUgx: number;
+  adjustmentOutflowsUgx: number;
+  adjustmentByType: AdjustmentBreakdownByType;
   refundsUgx: number;
+  cashRefundsUgx: number;
   supplierPaymentsUgx: number;
   expectedDrawerCashUgx: number;
   revenueUgx: number;
@@ -91,12 +122,13 @@ export type DrawerCashInput = {
   debtPayments: DebtPayment[];
   cashExpenses: CashExpense[];
   supplierPayments?: SupplierPayment[];
+  cashDrawerAdjustments?: CashDrawerAdjustment[];
+  shifts?: ShiftRecord[];
   day: string;
 };
 
 /**
  * Single canonical expected-cash figure (UGX) for a Kampala day.
- * Formula: cash from completed sales + debt payments − expenses − supplier payments − external return refunds.
  */
 export function getExpectedCashForDay(input: DrawerCashInput): number {
   return getDrawerCashForDayInput(input).expectedDrawerCashUgx;
@@ -113,18 +145,34 @@ export function sumExpectedDrawerCashForBounds(
   );
 }
 
-/**
- * Expected physical cash in drawer for a Kampala day:
- * cash from completed sales + debt payments − expenses − supplier payments − external return refunds.
- */
 export function getDrawerCashForDayInput(input: DrawerCashInput): DrawerCashSnapshot {
-  const { sales, returns, products, debtPayments, cashExpenses, supplierPayments = [], day } = input;
+  const {
+    sales,
+    returns,
+    products,
+    debtPayments,
+    cashExpenses,
+    cashDrawerAdjustments = [],
+    supplierPayments = [],
+    shifts = [],
+    day,
+  } = input;
   const expenseUgx = sumCashExpensesOnDay(cashExpenses, day);
   const supplierPaymentsUgx = sumSupplierPaymentsOnDay(supplierPayments, day);
-  return getDrawerCashForDay(sales, returns, products, debtPayments, day, expenseUgx, supplierPaymentsUgx);
+  return getDrawerCashForDay(
+    sales,
+    returns,
+    products,
+    debtPayments,
+    day,
+    expenseUgx,
+    supplierPaymentsUgx,
+    cashDrawerAdjustments,
+    shifts,
+  );
 }
 
-/** Expected physical cash in drawer for a Kampala day (Option A — linked returns already in sale.cashPaidUgx). */
+/** Expected physical cash in drawer for a Kampala day (V2 ledger). */
 export function getDrawerCashForDay(
   sales: Sale[],
   returns: ReturnRecord[],
@@ -133,25 +181,41 @@ export function getDrawerCashForDay(
   day: string,
   expenseUgx = 0,
   supplierPaymentsUgx = 0,
+  cashDrawerAdjustments: CashDrawerAdjustment[] = [],
+  shifts: ShiftRecord[] = [],
 ): DrawerCashSnapshot {
   const fin = getCompletedFinancials(sales, returns, products, { day });
   const daySales = revenueSalesOnDay(sales, day);
   const dayReturns = returns.filter((r) => dateKeyKampala(r.createdAt) === day);
   const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, day);
   const refundsUgx = sumRefundsOnDay(returns, day);
-  const externalRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
-  const cashFromSalesUgx = fin.cashCollectedUgx;
-  const expectedDrawerCashUgx = computeExpectedDrawerCashUgx({
-    cashFromSalesUgx,
-    debtCollectedUgx,
-    expenseUgx,
-    supplierPaymentsUgx,
-    externalReturnRefundsUgx: externalRefundsUgx,
+  const cashRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
+  const drawerSales = getCashDrawerSalesInput(sales, day);
+  const openingFloatUgx = resolveOpeningFloatUgx(day, cashDrawerAdjustments, shifts);
+  const adjustmentInflowsUgx = sumAdjustmentInflowsExcludingOpening(cashDrawerAdjustments, day);
+  const adjustmentOutflowsUgx = sumAdjustmentOutflows(cashDrawerAdjustments, day);
+  const expectedDrawerCashUgx = computeExpectedDrawerCashV2({
+    openingFloatUgx,
+    cashSalesUgx: drawerSales.cashSalesUgx,
+    cashDebtCollectionsUgx: debtCollectedUgx,
+    adjustmentInflowsUgx,
+    adjustmentOutflowsUgx,
+    cashExpensesUgx: expenseUgx,
+    cashSupplierPaymentsUgx: supplierPaymentsUgx,
+    cashRefundsUgx,
   });
   return {
-    cashFromSalesUgx,
+    cashFromSalesUgx: drawerSales.cashSalesUgx,
+    cashSalesUgx: drawerSales.cashSalesUgx,
+    mobileMoneySalesUgx: drawerSales.mobileMoneySalesUgx,
+    cardSalesUgx: drawerSales.cardSalesUgx,
+    openingFloatUgx,
     debtCollectedUgx,
+    adjustmentInflowsUgx,
+    adjustmentOutflowsUgx,
+    adjustmentByType: adjustmentBreakdownByType(cashDrawerAdjustments, day),
     refundsUgx,
+    cashRefundsUgx,
     supplierPaymentsUgx,
     expectedDrawerCashUgx,
     revenueUgx: fin.revenueUgx,

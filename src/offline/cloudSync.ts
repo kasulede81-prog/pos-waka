@@ -1,6 +1,7 @@
 import type {
   AuditLogEntry,
   CashExpense,
+  CashDrawerAdjustment,
   Customer,
   DebtPayment,
   Product,
@@ -52,6 +53,10 @@ import {
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
 import { defaultReceiptDisplayOptions } from "../lib/receiptBranding";
 import { mergeDebtPaymentsFromCloudPull, parseDebtPaymentRows } from "../lib/debtPaymentRecovery";
+import {
+  mergeCashDrawerAdjustmentsFromCloudPull,
+  parseCashDrawerAdjustmentRows,
+} from "../lib/cashDrawerAdjustmentRecovery";
 import { mergeCustomerFromCloudPull } from "../lib/customerDebtReconciliation";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 
@@ -1034,6 +1039,50 @@ export async function syncCashExpenseImmediately(expenseId: string): Promise<boo
   return ok;
 }
 
+async function pushCashDrawerAdjustmentToCloud(adj: CashDrawerAdjustment, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase) return false;
+  const payload = {
+    id: adj.id,
+    type: adj.type,
+    amount_ugx: adj.amountUgx,
+    note: adj.note,
+    actor_user_id: adj.actorUserId,
+    actor_label: adj.actorName ?? null,
+    occurred_at: adj.occurredAt,
+    created_at: adj.createdAt,
+    deleted_at: adj.deletedAt,
+    metadata: { wakaClient: true },
+  };
+  const { data, error } = await supabase.rpc("shop_push_cash_drawer_adjustment", {
+    p_shop_id: ctx.shopId,
+    p_payload: payload,
+  });
+  if (error) {
+    if (isMissingTableError(error)) return true;
+    return false;
+  }
+  const result = data as { ok?: boolean } | null;
+  return result?.ok === true;
+}
+
+export async function syncCashDrawerAdjustmentImmediately(adjustmentId: string): Promise<boolean> {
+  if (!hasSupabaseConfig) return false;
+  if (!getDeviceOnline()) return false;
+  const row = usePosStore.getState().cashDrawerAdjustments.find((a) => a.id === adjustmentId);
+  if (!row) return false;
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
+  const ok = await pushCashDrawerAdjustmentToCloud(row, ctx);
+  if (ok) {
+    usePosStore.setState((s) => ({
+      cashDrawerAdjustments: s.cashDrawerAdjustments.map((a) =>
+        a.id === adjustmentId ? { ...a, pendingSync: false, lastSyncError: null, syncedAt: new Date().toISOString() } : a,
+      ),
+    }));
+  }
+  return ok;
+}
+
 async function pushPurchaseToCloud(purchase: Purchase, ctx: ShopCtx): Promise<boolean> {
   if (!supabase || !isUuid(purchase.id)) return false;
   const payload = buildPurchaseCloudPushPayload(purchase);
@@ -1330,6 +1379,11 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       }
       return ok;
     }
+    case "pending_cash_drawer_adjustments": {
+      const adjustmentId = String(payload.adjustmentId ?? "");
+      if (!adjustmentId) return true;
+      return syncCashDrawerAdjustmentImmediately(adjustmentId);
+    }
     case "customer": {
       if (payload.kind === "debt_payment") {
         const paymentId = String(payload.paymentId ?? "");
@@ -1392,6 +1446,7 @@ export type CloudPullCheckpoints = {
   purchasesAt: string;
   suppliersAt: string;
   supplierPaymentsAt: string;
+  cashDrawerAdjustmentsAt: string;
 };
 
 export type CloudPullResult = {
@@ -1407,6 +1462,7 @@ export type CloudPullResult = {
   supplierCloudRows: CloudSupplierRow[];
   supplierPayments: SupplierPayment[];
   cashExpenses: CashExpense[];
+  cashDrawerAdjustments: CashDrawerAdjustment[];
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
@@ -1696,6 +1752,60 @@ async function pullExpensesIncremental(
   } catch {
     return { cashExpenses: [], count: 0, bytes: 0, checkpointAt: since };
   }
+}
+
+async function pullCashDrawerAdjustmentsFromRpc(
+  ctx: ShopCtx,
+  since: string | null,
+): Promise<{ cashDrawerAdjustments: CashDrawerAdjustment[]; bytes: number; checkpointAt: string }> {
+  if (!supabase) {
+    return { cashDrawerAdjustments: [], bytes: 0, checkpointAt: since ?? new Date(0).toISOString() };
+  }
+  const { data, error } = await supabase.rpc("shop_pull_cash_drawer_adjustments", {
+    p_shop_id: ctx.shopId,
+    p_since: since,
+  });
+  if (error) {
+    if (isMissingTableError(error)) {
+      return { cashDrawerAdjustments: [], bytes: 0, checkpointAt: since ?? new Date(0).toISOString() };
+    }
+    throw error;
+  }
+  const result = data as { ok?: boolean; rows?: unknown[] } | null;
+  if (!result?.ok) {
+    return { cashDrawerAdjustments: [], bytes: 0, checkpointAt: since ?? new Date(0).toISOString() };
+  }
+  const raw = result.rows ?? [];
+  const cashDrawerAdjustments = parseCashDrawerAdjustmentRows(raw);
+  let checkpointAt = since ?? new Date(0).toISOString();
+  for (const row of cashDrawerAdjustments) {
+    checkpointAt = maxIsoTimestamp(checkpointAt, row.updatedAt);
+  }
+  return { cashDrawerAdjustments, bytes: estimatePayloadBytes(raw), checkpointAt };
+}
+
+async function pullCashDrawerAdjustmentsIncremental(
+  ctx: ShopCtx,
+  since: string,
+): Promise<{ cashDrawerAdjustments: CashDrawerAdjustment[]; count: number; bytes: number; checkpointAt: string }> {
+  try {
+    const page = await pullCashDrawerAdjustmentsFromRpc(ctx, since);
+    return {
+      cashDrawerAdjustments: page.cashDrawerAdjustments,
+      count: page.cashDrawerAdjustments.length,
+      bytes: page.bytes,
+      checkpointAt: page.checkpointAt > since ? page.checkpointAt : new Date().toISOString(),
+    };
+  } catch {
+    return { cashDrawerAdjustments: [], count: 0, bytes: 0, checkpointAt: since };
+  }
+}
+
+async function pullCashDrawerAdjustmentsFull(
+  ctx: ShopCtx,
+): Promise<{ cashDrawerAdjustments: CashDrawerAdjustment[]; bytes: number }> {
+  const page = await pullCashDrawerAdjustmentsFromRpc(ctx, null);
+  return { cashDrawerAdjustments: page.cashDrawerAdjustments, bytes: page.bytes };
 }
 
 function parseReturnRows(rows: Record<string, unknown>[]): CloudReturnRow[] {
@@ -2125,6 +2235,7 @@ export async function pullShopDataFromCloud(opts?: {
   let deletedProductIds: string[] = [];
   let voidedSaleIds: string[] = [];
   let cashExpenses: CashExpense[] = [];
+  let cashDrawerAdjustments: CashDrawerAdjustment[] = [];
   let returnCloudRows: CloudReturnRow[] = [];
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
@@ -2184,6 +2295,10 @@ export async function pullShopDataFromCloud(opts?: {
       debtPayments = dpFull.debtPayments;
       debtPaymentCount = dpFull.debtPayments.length;
       payloadBytes += dpFull.bytes;
+
+      const adjFull = await pullCashDrawerAdjustmentsFull(ctx);
+      cashDrawerAdjustments = adjFull.cashDrawerAdjustments;
+      payloadBytes += adjFull.bytes;
     } else {
       const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
       const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
@@ -2240,6 +2355,11 @@ export async function pullShopDataFromCloud(opts?: {
       debtPaymentCount = dp.debtPayments.length;
       payloadBytes += dp.bytes;
 
+      const sinceCashDrawerAdjustments = cp.lastCashDrawerAdjustmentsSyncAt ?? new Date(0).toISOString();
+      const adj = await pullCashDrawerAdjustmentsIncremental(ctx, sinceCashDrawerAdjustments);
+      cashDrawerAdjustments = adj.cashDrawerAdjustments;
+      payloadBytes += adj.bytes;
+
       pullCheckpoints = {
         salesAt: s.checkpointAt,
         productsAt: p.checkpointAt,
@@ -2250,6 +2370,7 @@ export async function pullShopDataFromCloud(opts?: {
         purchasesAt: pur.checkpointAt,
         suppliersAt: sup.checkpointAt,
         supplierPaymentsAt: pay.checkpointAt,
+        cashDrawerAdjustmentsAt: adj.checkpointAt,
       };
     }
   } catch {
@@ -2303,6 +2424,7 @@ export async function pullShopDataFromCloud(opts?: {
     supplierCloudRows,
     supplierPayments,
     cashExpenses,
+    cashDrawerAdjustments,
     deletedProductIds,
     voidedSaleIds,
     stats,
@@ -2333,6 +2455,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     cloud.supplierCloudRows.length > 0 ||
     cloud.supplierPayments.length > 0 ||
     cloud.debtPayments.length > 0 ||
+    cloud.cashDrawerAdjustments.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
     cloud.voidedSaleIds.length > 0;
   const localEmpty =
@@ -2351,6 +2474,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         purchases: true,
         suppliers: true,
         supplierPayments: true,
+        cashDrawerAdjustments: true,
         salesAt: cloud.checkpoints?.salesAt,
         productsAt: cloud.checkpoints?.productsAt,
         customersAt: cloud.checkpoints?.customersAt,
@@ -2360,6 +2484,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         purchasesAt: cloud.checkpoints?.purchasesAt,
         suppliersAt: cloud.checkpoints?.suppliersAt,
         supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
+        cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
       });
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
@@ -2400,6 +2525,8 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       voidRecords: state.voidRecords,
       returnRecords: mergeReturnRecordsForRecovery([], cloud.returnCloudRows),
       cashExpenses: cloud.cashExpenses.length > 0 ? cloud.cashExpenses : state.cashExpenses,
+      cashDrawerAdjustments:
+        cloud.cashDrawerAdjustments.length > 0 ? cloud.cashDrawerAdjustments : state.cashDrawerAdjustments,
       archivedSales: state.archivedSales,
       archivedAuditLogs: state.archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
@@ -2467,6 +2594,11 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         )
       : state.cashExpenses;
 
+  const mergedCashDrawerAdjustments =
+    cloud.cashDrawerAdjustments.length > 0
+      ? await mergeCashDrawerAdjustmentsFromCloudPull(state.cashDrawerAdjustments, cloud.cashDrawerAdjustments)
+      : state.cashDrawerAdjustments;
+
   const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
 
   const { suspendStorePersist } = await import("../store/usePosStore");
@@ -2482,6 +2614,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       sales,
       debtPayments,
       cashExpenses: mergedCashExpenses,
+      cashDrawerAdjustments: mergedCashDrawerAdjustments,
       returnRecords,
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,
@@ -2518,6 +2651,8 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       suppliers: cloud.stats.suppliers > 0 || cloud.checkpoints?.suppliersAt != null,
       supplierPayments:
         cloud.stats.supplierPayments > 0 || cloud.checkpoints?.supplierPaymentsAt != null,
+      cashDrawerAdjustments:
+        cloud.cashDrawerAdjustments.length > 0 || cloud.checkpoints?.cashDrawerAdjustmentsAt != null,
       salesAt: cloud.checkpoints?.salesAt,
       productsAt: cloud.checkpoints?.productsAt,
       customersAt: cloud.checkpoints?.customersAt,
@@ -2527,6 +2662,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       purchasesAt: cloud.checkpoints?.purchasesAt,
       suppliersAt: cloud.checkpoints?.suppliersAt,
       supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
+      cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
     });
   }
 
@@ -2558,6 +2694,12 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   for (const s of sales) {
     if (!s.pendingSync) continue;
     if (await pushSaleRowToCloud(s, ctx)) ok += 1;
+    else fail += 1;
+  }
+
+  for (const adj of usePosStore.getState().cashDrawerAdjustments) {
+    if (!adj.pendingSync) continue;
+    if (await pushCashDrawerAdjustmentToCloud(adj, ctx)) ok += 1;
     else fail += 1;
   }
 

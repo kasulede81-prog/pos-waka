@@ -26,7 +26,7 @@ describe("dayClosePdf", () => {
       },
       transactionCount: 12,
     });
-    expect(snap.documentVersion).toBe(1);
+    expect(snap.documentVersion).toBe(2);
     expect(snap.transactionCount).toBe(12);
     expect(snap.varianceUgx).toBe(-1000);
   });

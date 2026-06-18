@@ -11,9 +11,8 @@ import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
 
 /**
- * Canonical expected-cash inputs for owner-facing screens (Close Day, Cash Expenses,
- * Owner Dashboard, exports). Uses active sales/returns only — not archived buckets —
- * and loads the full active sales list from disk so RAM pagination cannot skew totals.
+ * Canonical expected-cash inputs for owner-facing screens (Close Day, Cash Position,
+ * Owner Dashboard, exports). Uses V2 drawer ledger formula.
  */
 export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
   const sales = useReportingSales(false);
@@ -22,6 +21,8 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
   const debtPayments = usePosStore((s) => s.debtPayments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
+  const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
@@ -36,9 +37,11 @@ export function useDrawerCashForDay(day: string): DrawerCashSnapshot {
         debtPayments,
         cashExpenses,
         supplierPayments,
+        cashDrawerAdjustments,
+        shifts,
         day,
       }),
-    [sales, returns, products, debtPayments, cashExpenses, supplierPayments, day],
+    [sales, returns, products, debtPayments, cashExpenses, supplierPayments, cashDrawerAdjustments, shifts, day],
   );
 }
 
@@ -50,13 +53,24 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
   const debtPayments = usePosStore((s) => s.debtPayments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const supplierPayments = usePosStore((s) => s.supplierPayments);
+  const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   useEffect(() => {
     void ensureAllActiveSalesLoaded();
   }, []);
 
   return useMemo(() => {
-    const input = { sales, returns, products, debtPayments, cashExpenses, supplierPayments };
+    const input = {
+      sales,
+      returns,
+      products,
+      debtPayments,
+      cashExpenses,
+      supplierPayments,
+      cashDrawerAdjustments,
+      shifts,
+    };
     if (bounds.isSingleDay) {
       return getDrawerCashForDayInput({ ...input, day: bounds.fromKey }).expectedDrawerCashUgx;
     }
@@ -71,6 +85,8 @@ export function useExpectedDrawerCashForBounds(bounds: DateFilterBounds): number
     debtPayments,
     cashExpenses,
     supplierPayments,
+    cashDrawerAdjustments,
+    shifts,
   ]);
 }
 

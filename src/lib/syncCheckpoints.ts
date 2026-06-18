@@ -21,6 +21,8 @@ export type SyncCheckpoints = {
   lastPurchasesSyncAt: string | null;
   lastSuppliersSyncAt: string | null;
   lastSupplierPaymentsSyncAt: string | null;
+  /** shop_cash_drawer_adjustments pull cursor (updated_at). */
+  lastCashDrawerAdjustmentsSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -35,6 +37,7 @@ const empty: SyncCheckpoints = {
   lastPurchasesSyncAt: null,
   lastSuppliersSyncAt: null,
   lastSupplierPaymentsSyncAt: null,
+  lastCashDrawerAdjustmentsSyncAt: null,
 };
 
 function scopedKey(): string | null {
@@ -68,6 +71,8 @@ export function readSyncCheckpoints(): SyncCheckpoints {
       lastSuppliersSyncAt: typeof o.lastSuppliersSyncAt === "string" ? o.lastSuppliersSyncAt : null,
       lastSupplierPaymentsSyncAt:
         typeof o.lastSupplierPaymentsSyncAt === "string" ? o.lastSupplierPaymentsSyncAt : null,
+      lastCashDrawerAdjustmentsSyncAt:
+        typeof o.lastCashDrawerAdjustmentsSyncAt === "string" ? o.lastCashDrawerAdjustmentsSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -108,6 +113,7 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastPurchasesSyncAt: at,
     lastSuppliersSyncAt: at,
     lastSupplierPaymentsSyncAt: at,
+    lastCashDrawerAdjustmentsSyncAt: at,
   });
 }
 
@@ -121,6 +127,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   purchases?: boolean;
   suppliers?: boolean;
   supplierPayments?: boolean;
+  cashDrawerAdjustments?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -133,6 +140,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   purchasesAt?: string;
   suppliersAt?: string;
   supplierPaymentsAt?: string;
+  cashDrawerAdjustmentsAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -151,6 +159,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   if (partial.purchases) patch.lastPurchasesSyncAt = partial.purchasesAt ?? fallback;
   if (partial.suppliers) patch.lastSuppliersSyncAt = partial.suppliersAt ?? fallback;
   if (partial.supplierPayments) patch.lastSupplierPaymentsSyncAt = partial.supplierPaymentsAt ?? fallback;
+  if (partial.cashDrawerAdjustments) {
+    patch.lastCashDrawerAdjustmentsSyncAt = partial.cashDrawerAdjustmentsAt ?? fallback;
+  }
   return writeSyncCheckpoints(patch);
 }
 

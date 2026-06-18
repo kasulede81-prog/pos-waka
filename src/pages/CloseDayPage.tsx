@@ -58,6 +58,9 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       refundsUgx: drawer.refundsUgx,
       expenseUgx: drawer.expenseUgx,
       supplierPaymentsUgx: drawer.supplierPaymentsUgx,
+      openingFloatUgx: drawer.openingFloatUgx,
+      adjustmentInflowsUgx: drawer.adjustmentInflowsUgx,
+      adjustmentOutflowsUgx: drawer.adjustmentOutflowsUgx,
     }),
     [drawer, sales, returnRecords, products, todayKey],
   );
@@ -162,6 +165,24 @@ export function CloseDayPage({ lang }: { lang: Language }) {
               <p className="mt-1 text-xl font-black text-rose-950">UGX {summary.supplierPaymentsUgx.toLocaleString()}</p>
             </div>
           ) : null}
+          {summary.openingFloatUgx > 0 ? (
+            <div className="rounded-2xl bg-sky-50 px-3 py-3 col-span-2">
+              <p className="text-[11px] font-black uppercase text-sky-800">{t(lang, "cashDrawerOpeningFloat")}</p>
+              <p className="mt-1 text-xl font-black text-sky-950">UGX {summary.openingFloatUgx.toLocaleString()}</p>
+            </div>
+          ) : null}
+          {summary.adjustmentInflowsUgx > 0 ? (
+            <div className="rounded-2xl bg-teal-50 px-3 py-3 col-span-2">
+              <p className="text-[11px] font-black uppercase text-teal-800">{t(lang, "cashDrawerAdjustmentIn")}</p>
+              <p className="mt-1 text-xl font-black text-teal-950">UGX {summary.adjustmentInflowsUgx.toLocaleString()}</p>
+            </div>
+          ) : null}
+          {summary.adjustmentOutflowsUgx > 0 ? (
+            <div className="rounded-2xl bg-rose-50 px-3 py-3 col-span-2">
+              <p className="text-[11px] font-black uppercase text-rose-800">{t(lang, "cashDrawerAdjustmentOut")}</p>
+              <p className="mt-1 text-xl font-black text-rose-950">UGX {summary.adjustmentOutflowsUgx.toLocaleString()}</p>
+            </div>
+          ) : null}
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 col-span-2">
             <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "closeDayExpectedTitle")}</p>
             <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.expectedCash.toLocaleString()}</p>
@@ -170,12 +191,27 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         <div className="mt-4 rounded-2xl border border-waka-100 bg-waka-50/80 px-3 py-3 text-sm text-stone-800">
           <p className="font-black text-stone-900">{t(lang, "closeDayExpectedFormulaIntro")}</p>
           <ul className="mt-2 space-y-1 font-semibold">
+            {summary.openingFloatUgx > 0 ? (
+              <li>
+                {t(lang, "closeDayFormulaOpeningFloat")}: UGX {summary.openingFloatUgx.toLocaleString()}
+              </li>
+            ) : null}
             <li>
               {t(lang, "closeDayFormulaCashSales")}: UGX {summary.cash.toLocaleString()}
             </li>
             <li>
               {t(lang, "closeDayFormulaDebtCollected")}: UGX {summary.debtCollected.toLocaleString()}
             </li>
+            {summary.adjustmentInflowsUgx > 0 ? (
+              <li>
+                {t(lang, "closeDayFormulaAdjustmentIn")}: UGX {summary.adjustmentInflowsUgx.toLocaleString()}
+              </li>
+            ) : null}
+            {summary.adjustmentOutflowsUgx > 0 ? (
+              <li>
+                {t(lang, "closeDayFormulaAdjustmentOut")}: UGX {summary.adjustmentOutflowsUgx.toLocaleString()}
+              </li>
+            ) : null}
             {summary.expenseUgx > 0 ? (
               <li>
                 {t(lang, "closeDayFormulaExpenses")}: UGX {summary.expenseUgx.toLocaleString()}

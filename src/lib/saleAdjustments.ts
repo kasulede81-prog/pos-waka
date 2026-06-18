@@ -98,10 +98,12 @@ export function reduceSaleTotalsByAmount(
 /** Shift running cash already reflects void/return payouts in estimatedCashUgx (Option A). */
 export function shiftExpectedCash(sh: ShiftRecord): number {
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
-  return Math.max(0, sh.estimatedCashUgx + debtPayments);
+  const opening = sh.openingFloatUgx ?? 0;
+  return Math.max(0, opening + sh.estimatedCashUgx + debtPayments);
 }
 
 export function shiftExpectedCashLabelParts(sh: ShiftRecord): {
+  openingFloat: number;
   sales: number;
   discounts: number;
   voids: number;
@@ -109,13 +111,15 @@ export function shiftExpectedCashLabelParts(sh: ShiftRecord): {
   debtPayments: number;
   expected: number;
 } {
+  const openingFloat = sh.openingFloatUgx ?? 0;
   const discounts = sh.discountsTotalUgx ?? 0;
   const voids = sh.voidsTotalUgx ?? 0;
   const returns = sh.returnsTotalUgx ?? 0;
   const debtPayments = sh.debtPaymentsTotalUgx ?? 0;
   const expected = shiftExpectedCash(sh);
   return {
-    sales: expected + voids + returns - debtPayments,
+    openingFloat,
+    sales: expected + voids + returns - debtPayments - openingFloat,
     discounts,
     voids,
     returns,

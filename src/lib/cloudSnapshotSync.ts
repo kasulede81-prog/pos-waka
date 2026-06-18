@@ -44,6 +44,7 @@ function snapshotFromStore(): PersistedSnapshot | null {
     voidRecords: s.voidRecords,
     returnRecords: s.returnRecords,
     cashExpenses: s.cashExpenses,
+    cashDrawerAdjustments: s.cashDrawerAdjustments,
     archivedSales: s.archivedSales,
     archivedAuditLogs: s.archivedAuditLogs,
     archivedDayCloses: s.archivedDayCloses,

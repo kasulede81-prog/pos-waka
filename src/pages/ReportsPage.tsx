@@ -66,6 +66,10 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const purchases = usePosStore((s) => s.purchases);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const cashExpenses = usePosStore((s) => s.cashExpenses);
+  const supplierPayments = usePosStore((s) => s.supplierPayments);
+  const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const preferences = usePosStore((s) => s.preferences);
   const {
     filter,
     setFilter,
@@ -93,7 +97,6 @@ export function ReportsPage({ lang }: { lang: Language }) {
     return purchases.filter((p) => dateKeyKampala(p.createdAt) === dk).reduce((a, p) => a + p.totalCostUgx, 0);
   }, [purchases, reportDayKey]);
 
-  const preferences = usePosStore((s) => s.preferences);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const wholesaleMode = isWholesaleMode(preferences.businessType);
@@ -517,6 +520,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
                   returnRecords,
                   debtPayments,
                   cashExpenses,
+                  supplierPayments,
+                  cashDrawerAdjustments,
+                  shifts,
                   topProducts: report.topProducts,
                   includeProfit: canProfit,
                 }).then((ok) => setReportHint(ok ? t(lang, "monthlyReportDownloadOk") : t(lang, "monthlyReportDownloadFail")));
@@ -535,6 +541,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
                   returnRecords,
                   debtPayments,
                   cashExpenses,
+                  supplierPayments,
+                  cashDrawerAdjustments,
+                  shifts,
                   includeProfit: canProfit,
                 });
                 void navigator.clipboard.writeText(text).then(
@@ -559,6 +568,9 @@ export function ReportsPage({ lang }: { lang: Language }) {
                   returnRecords,
                   debtPayments,
                   cashExpenses,
+                  supplierPayments,
+                  cashDrawerAdjustments,
+                  shifts,
                   includeProfit: canProfit,
                 });
                 const ok = await shareText(text, t(lang, "appName"));

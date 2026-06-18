@@ -48,15 +48,24 @@ function appendCashPositionSections(
   lines.push(`  ${t(lang, "cashPositionGrandTotal")}: UGX ${report.summary.totalSalesUgx.toLocaleString()}`);
   lines.push("");
   lines.push(t(lang, "cashPositionSectionCash"));
+  if (report.cashPosition.openingFloatUgx > 0) {
+    lines.push(`  ${t(lang, "cashPositionOpeningFloat")}: UGX ${report.cashPosition.openingFloatUgx.toLocaleString()}`);
+  }
   lines.push(`  ${t(lang, "cashPositionCashSales")}: UGX ${report.cashPosition.cashSalesUgx.toLocaleString()}`);
   lines.push(
     `  ${t(lang, "cashPositionDebtCollected")}: UGX ${report.cashPosition.debtCollectedUgx.toLocaleString()}`,
   );
-  lines.push(`  ${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.refundsUgx.toLocaleString()}`);
+  if (report.cashPosition.adjustmentInflowsUgx > 0) {
+    lines.push(`  ${t(lang, "cashPositionCashAdded")}: UGX ${report.cashPosition.adjustmentInflowsUgx.toLocaleString()}`);
+  }
+  if (report.cashPosition.adjustmentOutflowsUgx > 0) {
+    lines.push(
+      `  ${t(lang, "cashPositionCashRemoved")}: UGX ${report.cashPosition.adjustmentOutflowsUgx.toLocaleString()}`,
+    );
+  }
+  lines.push(`  ${t(lang, "cashPositionSupplierPayments")}: UGX ${report.cashPosition.supplierPaymentsUgx.toLocaleString()}`);
   lines.push(`  ${t(lang, "cashPositionExpenses")}: UGX ${report.cashPosition.expensesUgx.toLocaleString()}`);
-  lines.push(
-    `  ${t(lang, "cashPositionSupplierPayments")}: UGX ${report.cashPosition.supplierPaymentsUgx.toLocaleString()}`,
-  );
+  lines.push(`  ${t(lang, "cashPositionRefunds")}: UGX ${report.cashPosition.refundsUgx.toLocaleString()}`);
   lines.push(
     `  ${t(lang, "cashPositionExpectedCash")}: UGX ${report.cashPosition.expectedCashUgx.toLocaleString()}`,
   );
@@ -111,7 +120,10 @@ export function cashPositionToCsv(
   rows.push(["summary", "transactions", report.summary.transactionCount].map(esc).join(","));
   rows.push(["summary", "items_sold", report.summary.itemsSold].map(esc).join(","));
   rows.push(["cash", "cash_sales_ugx", report.cashPosition.cashSalesUgx].map(esc).join(","));
+  rows.push(["cash", "opening_float_ugx", report.cashPosition.openingFloatUgx].map(esc).join(","));
   rows.push(["cash", "debt_collected_ugx", report.cashPosition.debtCollectedUgx].map(esc).join(","));
+  rows.push(["cash", "adjustment_inflows_ugx", report.cashPosition.adjustmentInflowsUgx].map(esc).join(","));
+  rows.push(["cash", "adjustment_outflows_ugx", report.cashPosition.adjustmentOutflowsUgx].map(esc).join(","));
   rows.push(["cash", "refunds_ugx", report.cashPosition.refundsUgx].map(esc).join(","));
   rows.push(["cash", "expenses_ugx", report.cashPosition.expensesUgx].map(esc).join(","));
   rows.push(["cash", "supplier_payments_ugx", report.cashPosition.supplierPaymentsUgx].map(esc).join(","));

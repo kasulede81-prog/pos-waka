@@ -33,6 +33,12 @@ export function ShiftCloseModal({ lang, open, shift, onClose, onConfirm }: Props
         <p className="mt-1 text-sm text-slate-600">{t(lang, "shiftCloseHint")}</p>
 
         <ul className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">
+          {parts.openingFloat > 0 ? (
+            <li className="flex justify-between text-sky-800">
+              <span>{t(lang, "shiftCloseOpeningFloat")}</span>
+              <span>UGX {parts.openingFloat.toLocaleString()}</span>
+            </li>
+          ) : null}
           <li className="flex justify-between">
             <span>{t(lang, "shiftCloseSales")}</span>
             <span>UGX {parts.sales.toLocaleString()}</span>

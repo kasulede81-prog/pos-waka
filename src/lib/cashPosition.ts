@@ -3,15 +3,13 @@
  * Uses canonical financial + drawer helpers; does not alter sales logic.
  */
 
-import type { CashExpense, DebtPayment, Language, Product, ReturnRecord, Sale, StaffAccount, SupplierPayment } from "../types";
-import { computeCanonicalRevenueUgx, externalReturnRefundsUgx } from "./canonicalRevenue";
+import type { CashExpense, CashDrawerAdjustment, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, StaffAccount, SupplierPayment } from "../types";
+import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import {
-  computeExpectedDrawerCashUgx,
-  sumCashExpensesOnDay,
-  sumDebtPaymentsOnDay,
+  getDrawerCashForDayInput,
   sumRefundsOnDay,
-  sumSupplierPaymentsOnDay,
 } from "./cashReconciliation";
+import type { AdjustmentBreakdownByType } from "./cashDrawerLedger";
 import { dateKeyKampala } from "./datesUg";
 import { t } from "./i18n";
 import { isCompletedSale } from "./saleStatus";
@@ -55,13 +53,18 @@ export type CashPositionReport = {
   /** Revenue minus sum of payment rows (negative when cross-day returns reduce revenue). */
   paymentAdjustmentUgx: number;
   cashPosition: {
+    openingFloatUgx: number;
     cashSalesUgx: number;
     debtCollectedUgx: number;
+    adjustmentInflowsUgx: number;
+    adjustmentOutflowsUgx: number;
     refundsUgx: number;
+    cashRefundsUgx: number;
     expensesUgx: number;
     supplierPaymentsUgx: number;
     expectedCashUgx: number;
   };
+  adjustmentBreakdown: AdjustmentBreakdownByType;
   categories: CashPositionCategoryRow[];
   cashiers: CashPositionCashierRow[];
 };
@@ -230,6 +233,8 @@ export function buildCashPositionReport(params: {
   debtPayments: DebtPayment[];
   cashExpenses: CashExpense[];
   supplierPayments?: SupplierPayment[];
+  cashDrawerAdjustments?: CashDrawerAdjustment[];
+  shifts?: ShiftRecord[];
   staffAccounts: StaffAccount[];
   generalCategoryLabel: string;
 }): CashPositionReport {
@@ -242,6 +247,8 @@ export function buildCashPositionReport(params: {
     debtPayments,
     cashExpenses,
     supplierPayments = [],
+    cashDrawerAdjustments = [],
+    shifts = [],
     staffAccounts,
     generalCategoryLabel,
   } = params;
@@ -271,20 +278,23 @@ export function buildCashPositionReport(params: {
   } else {
     totalSalesUgx = computeCanonicalRevenueUgx(daySales, dayReturns);
   }
-  let cashFromSalesUgx = 0;
-  for (const s of daySales) cashFromSalesUgx += s.cashPaidUgx;
-  const debtCollectedUgx = sumDebtPaymentsOnDay(debtPayments, dayKey);
-  const refundsUgx = sumRefundsOnDay(dayReturns, dayKey);
-  const externalRefundsUgx = externalReturnRefundsUgx(daySales, dayReturns);
-  const expensesUgx = sumCashExpensesOnDay(cashExpenses, dayKey);
-  const supplierPaymentsUgx = sumSupplierPaymentsOnDay(supplierPayments, dayKey);
-  const expectedCashUgx = computeExpectedDrawerCashUgx({
-    cashFromSalesUgx,
-    debtCollectedUgx,
-    expenseUgx: expensesUgx,
-    supplierPaymentsUgx,
-    externalReturnRefundsUgx: externalRefundsUgx,
+  const drawer = getDrawerCashForDayInput({
+    sales,
+    returns: returnRecords,
+    products,
+    debtPayments,
+    cashExpenses,
+    supplierPayments,
+    cashDrawerAdjustments,
+    shifts,
+    day: dayKey,
   });
+  const debtCollectedUgx = drawer.debtCollectedUgx;
+  const refundsUgx = sumRefundsOnDay(dayReturns, dayKey);
+  const expensesUgx = drawer.expenseUgx;
+  const supplierPaymentsUgx = drawer.supplierPaymentsUgx;
+  const expectedCashUgx = drawer.expectedDrawerCashUgx;
+  const cashSalesUgx = drawer.cashSalesUgx;
 
   const paymentAgg = new Map<CashPositionPaymentKey, { amountUgx: number; transactionCount: number }>();
   for (const key of PAYMENT_KEYS) {
@@ -425,13 +435,18 @@ export function buildCashPositionReport(params: {
     paymentMethods,
     paymentAdjustmentUgx,
     cashPosition: {
-      cashSalesUgx: cashFromSalesUgx,
+      openingFloatUgx: drawer.openingFloatUgx,
+      cashSalesUgx,
       debtCollectedUgx,
+      adjustmentInflowsUgx: drawer.adjustmentInflowsUgx,
+      adjustmentOutflowsUgx: drawer.adjustmentOutflowsUgx,
       refundsUgx,
+      cashRefundsUgx: drawer.cashRefundsUgx,
       expensesUgx,
       supplierPaymentsUgx,
       expectedCashUgx,
     },
+    adjustmentBreakdown: drawer.adjustmentByType,
     categories,
     cashiers,
   };

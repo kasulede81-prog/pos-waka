@@ -1,4 +1,4 @@
-import type { CashExpense, DebtPayment, Language, Product, ReturnRecord, Sale } from "../types";
+import type { CashExpense, CashDrawerAdjustment, DebtPayment, Language, Product, ReturnRecord, Sale, ShiftRecord, SupplierPayment } from "../types";
 import { t } from "./i18n";
 import { dateKeyKampala } from "./datesUg";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
@@ -10,6 +10,9 @@ export type DailyReportExportInput = {
   returnRecords: ReturnRecord[];
   debtPayments?: DebtPayment[];
   cashExpenses?: CashExpense[];
+  supplierPayments?: SupplierPayment[];
+  cashDrawerAdjustments?: CashDrawerAdjustment[];
+  shifts?: ShiftRecord[];
   /** When false, profit line is omitted (Free tier). */
   includeProfit?: boolean;
 };
@@ -56,6 +59,9 @@ export function buildDailyReportText(
     products: input.products,
     debtPayments: input.debtPayments ?? [],
     cashExpenses: input.cashExpenses ?? [],
+    supplierPayments: input.supplierPayments ?? [],
+    cashDrawerAdjustments: input.cashDrawerAdjustments ?? [],
+    shifts: input.shifts ?? [],
     day: dateKey,
   });
   const total = fin.revenueUgx;

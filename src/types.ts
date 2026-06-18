@@ -97,6 +97,7 @@ export type AuditAction =
   | "cash_expense_voided"
   | "cash_expense_approved"
   | "cash_expense_rejected"
+  | "cash_drawer_adjustment"
   | "auth_forbidden"
   | "archive_purge"
   | "day_close_override"
@@ -156,6 +157,8 @@ export type ShiftRecord = {
   countedCashUgx?: number | null;
   /** counted − expected (positive = over, negative = short) */
   cashDifferenceUgx?: number | null;
+  /** Optional starting float when shift began (UGX). */
+  openingFloatUgx?: number | null;
 };
 
 export type VoidReason = "wrong_item" | "customer_changed_mind" | "returned_item" | "wrong_quantity" | "other";
@@ -597,7 +600,7 @@ export type DebtPayment = {
 /** End-of-day note — counted cash vs expected */
 /** Immutable audit metadata for day-close PDF exports (no accounting effect). */
 export type DayCloseDocumentSnapshot = {
-  documentVersion: 1;
+  documentVersion: 1 | 2;
   generatedAt: string;
   closedByUserId: string | null;
   closedByLabel: string;
@@ -612,6 +615,13 @@ export type DayCloseDocumentSnapshot = {
   refundsUgx: number;
   expenseUgx: number;
   transactionCount: number;
+  /** V2 drawer ledger fields (optional on legacy snapshots). */
+  openingFloatUgx?: number;
+  cashSalesUgx?: number;
+  supplierPaymentsUgx?: number;
+  adjustmentInflowsUgx?: number;
+  adjustmentOutflowsUgx?: number;
+  cashRefundsUgx?: number;
 };
 
 export type DayCloseSummary = {
@@ -630,6 +640,39 @@ export type DayCloseSummary = {
   replacesCloseId?: string | null;
   /** PDF/print snapshot for accountant archive */
   documentSnapshot?: DayCloseDocumentSnapshot | null;
+  /** Opening float recorded at day close (UGX). */
+  openingFloatUgx?: number | null;
+};
+
+export const CASH_DRAWER_ADJUSTMENT_TYPES = [
+  "opening_float",
+  "owner_injection",
+  "owner_withdrawal",
+  "bank_deposit",
+  "safe_transfer_in",
+  "safe_transfer_out",
+  "cash_added",
+  "cash_removed",
+  "float_replenishment",
+] as const;
+
+export type CashDrawerAdjustmentType = (typeof CASH_DRAWER_ADJUSTMENT_TYPES)[number];
+
+/** Cash added to or removed from the physical drawer (not sales, debt, or expenses). */
+export type CashDrawerAdjustment = {
+  id: string;
+  type: CashDrawerAdjustmentType;
+  amountUgx: number;
+  note: string;
+  actorUserId: string;
+  actorName?: string;
+  occurredAt: string;
+  createdAt: string;
+  updatedAt: string;
+  syncedAt?: string | null;
+  pendingSync: boolean;
+  lastSyncError?: string | null;
+  deletedAt?: string | null;
 };
 
 export const EXPENSE_CATEGORIES = [
@@ -936,6 +979,7 @@ export type SyncOperationKind =
   | "pending_returns"
   | "pending_expenses"
   | "pending_cash_expenses"
+  | "pending_cash_drawer_adjustments"
   | "pending_purchases"
   | "pending_hospitality"
   /** Legacy queue kinds kept for backward compatibility */

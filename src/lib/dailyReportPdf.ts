@@ -1,5 +1,15 @@
 import { jsPDF } from "jspdf";
-import type { CashExpense, DebtPayment, Language, Product, ReturnRecord, Sale } from "../types";
+import type {
+  CashExpense,
+  CashDrawerAdjustment,
+  DebtPayment,
+  Language,
+  Product,
+  ReturnRecord,
+  Sale,
+  ShiftRecord,
+  SupplierPayment,
+} from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials } from "./financialMetrics";
 import { getDrawerCashForDayInput } from "./cashReconciliation";
@@ -18,6 +28,9 @@ export type DailyReportPdfInput = {
   returnRecords: ReturnRecord[];
   debtPayments: DebtPayment[];
   cashExpenses: CashExpense[];
+  supplierPayments?: SupplierPayment[];
+  cashDrawerAdjustments?: CashDrawerAdjustment[];
+  shifts?: ShiftRecord[];
   topProducts: ProductRank[];
   /** When false, profit line is omitted (Free tier). */
   includeProfit?: boolean;
@@ -56,10 +69,12 @@ export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
     returnRecords,
     debtPayments,
     cashExpenses,
+    supplierPayments = [],
+    cashDrawerAdjustments = [],
+    shifts = [],
     topProducts,
     includeProfit = true,
   } = input;
-  const dayReturns = returnRecords.filter((r) => dateKeyKampala(r.createdAt) === dateKey);
   const fin = getCompletedFinancials(sales, returnRecords, products, { day: dateKey });
   const drawer = getDrawerCashForDayInput({
     sales,
@@ -67,9 +82,12 @@ export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
     products,
     debtPayments,
     cashExpenses,
+    supplierPayments,
+    cashDrawerAdjustments,
+    shifts,
     day: dateKey,
   });
-  const refundsUgx = dayReturns.reduce((a, r) => a + r.refundAmountUgx, 0);
+  const refundsUgx = drawer.cashRefundsUgx;
   const expensesUgx = drawer.expenseUgx;
   const payments = paymentMethodBreakdown(sales, dateKey);
   const voids = voidLineCount(sales, dateKey);
@@ -87,6 +105,18 @@ export function buildDailyReportPdfBlob(input: DailyReportPdfInput): Blob {
   }
   pdfLine(layout, doc, `${t(lang, "cashInHand")}: UGX ${fin.cashCollectedUgx.toLocaleString()}`);
   pdfLine(layout, doc, `${t(lang, "ownerCardExpectedCash")}: UGX ${drawer.expectedDrawerCashUgx.toLocaleString()}`);
+  if (drawer.openingFloatUgx > 0) {
+    pdfLine(layout, doc, `${t(lang, "cashDrawerOpeningFloat")}: UGX ${drawer.openingFloatUgx.toLocaleString()}`);
+  }
+  if (drawer.adjustmentInflowsUgx > 0) {
+    pdfLine(layout, doc, `${t(lang, "cashDrawerAdjustmentIn")}: UGX ${drawer.adjustmentInflowsUgx.toLocaleString()}`);
+  }
+  if (drawer.adjustmentOutflowsUgx > 0) {
+    pdfLine(layout, doc, `${t(lang, "cashDrawerAdjustmentOut")}: UGX ${drawer.adjustmentOutflowsUgx.toLocaleString()}`);
+  }
+  if (drawer.supplierPaymentsUgx > 0) {
+    pdfLine(layout, doc, `${t(lang, "closeDaySupplierPaymentsToday")}: UGX ${drawer.supplierPaymentsUgx.toLocaleString()}`);
+  }
   pdfLine(layout, doc, `${t(lang, "creditLabel")}: UGX ${fin.debtIssuedUgx.toLocaleString()}`);
   pdfLine(layout, doc, `${t(lang, "dayCloseRefunds")}: UGX ${refundsUgx.toLocaleString()}`);
   pdfLine(layout, doc, `${t(lang, "closeDayExpensesToday")}: UGX ${expensesUgx.toLocaleString()}`);

@@ -2,6 +2,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { SystemHealthCard } from "../components/settings/SystemHealthCard";
+import { CashDrawerDiagnosticsCard } from "../components/settings/CashDrawerDiagnosticsCard";
 import { AuditHealthCard } from "../components/settings/AuditHealthCard";
 import { DebtIntegrityCard } from "../components/settings/DebtIntegrityCard";
 import { DebtSyncDiagnosticsCard } from "../components/settings/DebtSyncDiagnosticsCard";
@@ -28,6 +29,7 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
       <DebtIntegrityCard lang={lang} />
       <DebtSyncDiagnosticsCard lang={lang} />
       <PurchaseSyncDiagnosticsCard lang={lang} />
+      <CashDrawerDiagnosticsCard lang={lang} />
       <RecoveryReadinessDashboard lang={lang} />
       <RestoreDiagnosticsCard lang={lang} />
       <QueueStatusCard lang={lang} />

@@ -29,6 +29,8 @@ import type {
   VoidReason,
   VoidRecord,
   CashExpense,
+  CashDrawerAdjustment,
+  CashDrawerAdjustmentType,
 } from "../types";
 import type { SessionActor } from "../lib/sessionActor";
 import { checkStorePermissionEffective } from "../lib/storeAuthorization";
@@ -136,6 +138,8 @@ import { getBusinessProfile } from "../config/businessTypes";
 import { dateKeyKampala } from "../lib/datesUg";
 import { getCompletedFinancials } from "../lib/financialMetrics";
 import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
+import { normalizeCashDrawerAdjustment } from "../lib/cashDrawerLedger";
+import { cashReduceFromRefund } from "../lib/cashDrawerSales";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
 import { draftQuantityExceedsStock, mergedDraftQuantity } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
@@ -265,6 +269,7 @@ function normalizeShifts(raw: unknown): ShiftRecord[] {
         debtPaymentsTotalUgx: Number(o.debtPaymentsTotalUgx ?? 0) || 0,
         countedCashUgx: o.countedCashUgx != null ? Number(o.countedCashUgx) : null,
         cashDifferenceUgx: o.cashDifferenceUgx != null ? Number(o.cashDifferenceUgx) : null,
+        openingFloatUgx: o.openingFloatUgx != null ? Number(o.openingFloatUgx) : null,
       };
     })
     .filter(Boolean) as ShiftRecord[];
@@ -302,6 +307,7 @@ export type PosState = {
   voidRecords: VoidRecord[];
   returnRecords: ReturnRecord[];
   cashExpenses: CashExpense[];
+  cashDrawerAdjustments: CashDrawerAdjustment[];
   archivedSales: Sale[];
   archivedAuditLogs: AuditLogEntry[];
   archivedDayCloses: DayCloseSummary[];
@@ -334,6 +340,7 @@ export type PosState = {
       voidRecords?: VoidRecord[];
       returnRecords?: ReturnRecord[];
       cashExpenses?: CashExpense[];
+      cashDrawerAdjustments?: CashDrawerAdjustment[];
       archivedSales?: Sale[];
       archivedAuditLogs?: AuditLogEntry[];
       archivedDayCloses?: DayCloseSummary[];
@@ -363,6 +370,7 @@ export type PosState = {
     voidRecords?: VoidRecord[];
     returnRecords?: ReturnRecord[];
     cashExpenses?: CashExpense[];
+    cashDrawerAdjustments?: CashDrawerAdjustment[];
     archivedSales?: Sale[];
     archivedAuditLogs?: AuditLogEntry[];
     archivedDayCloses?: DayCloseSummary[];
@@ -403,7 +411,7 @@ export type PosState = {
   switchStaffAccount: (id: string | null) => void;
   setPosLocked: (locked: boolean) => void;
   setPilotModeEnabled: (enabled: boolean) => void;
-  beginShift: () => void;
+  beginShift: (openingFloatUgx?: number) => void;
   endActiveShift: (actorUserId?: string) => void;
   logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
@@ -582,6 +590,12 @@ export type PosState = {
   approveCashExpense: (id: string) => { ok: boolean; errorKey?: string };
   rejectCashExpense: (id: string) => { ok: boolean; errorKey?: string };
   voidCashExpense: (id: string, reason: string) => { ok: boolean; errorKey?: string };
+  addCashDrawerAdjustment: (input: {
+    type: CashDrawerAdjustmentType;
+    amountUgx: number;
+    note?: string;
+    occurredAt?: string;
+  }) => { ok: boolean; errorKey?: string; adjustmentId?: string };
 
   addSupplier: (input: { name: string; phone?: string; location?: string; notes?: string }) => void;
   updateSupplier: (
@@ -940,6 +954,7 @@ export const usePosStore = create<PosState>((set, get) => {
   voidRecords: [],
   returnRecords: [],
   cashExpenses: [],
+  cashDrawerAdjustments: [],
   archivedSales: [],
   archivedAuditLogs: [],
   archivedDayCloses: [],
@@ -970,6 +985,7 @@ export const usePosStore = create<PosState>((set, get) => {
       voidRecords: data.voidRecords ?? [],
       returnRecords: data.returnRecords ?? [],
       cashExpenses: (data.cashExpenses ?? []).map(normalizeCashExpense),
+      cashDrawerAdjustments: (data.cashDrawerAdjustments ?? []).map(normalizeCashDrawerAdjustment),
       archivedSales: (data.archivedSales ?? []).map(normalizeSale),
       archivedAuditLogs: data.archivedAuditLogs ?? [],
       archivedDayCloses: data.archivedDayCloses ?? [],
@@ -997,6 +1013,7 @@ export const usePosStore = create<PosState>((set, get) => {
       voidRecords: [],
       returnRecords: [],
       cashExpenses: [],
+      cashDrawerAdjustments: [],
       archivedSales: [],
       archivedAuditLogs: [],
       archivedDayCloses: [],
@@ -1021,6 +1038,9 @@ export const usePosStore = create<PosState>((set, get) => {
       voidRecords: data.voidRecords ?? s.voidRecords,
       returnRecords: data.returnRecords ?? s.returnRecords,
       cashExpenses: data.cashExpenses ? data.cashExpenses.map(normalizeCashExpense) : s.cashExpenses,
+      cashDrawerAdjustments: data.cashDrawerAdjustments
+        ? data.cashDrawerAdjustments.map(normalizeCashDrawerAdjustment)
+        : s.cashDrawerAdjustments,
       archivedSales: data.archivedSales ? data.archivedSales.map(normalizeSale) : s.archivedSales,
       archivedAuditLogs: data.archivedAuditLogs ?? s.archivedAuditLogs,
       archivedDayCloses: data.archivedDayCloses ?? s.archivedDayCloses,
@@ -1310,12 +1330,13 @@ export const usePosStore = create<PosState>((set, get) => {
     pushAudit(action, summary, payload ?? {});
   },
 
-  beginShift: () => {
+  beginShift: (openingFloatUgx?: number) => {
     const s = get();
     const actor = s.sessionActor;
     if (!actor) return;
     const open = s.preferences.shifts?.find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     if (open) return;
+    const floatAmt = openingFloatUgx != null ? Math.max(0, Math.floor(openingFloatUgx)) : 0;
     const row: ShiftRecord = {
       id: crypto.randomUUID(),
       actorUserId: actor.userId,
@@ -1333,6 +1354,7 @@ export const usePosStore = create<PosState>((set, get) => {
       debtPaymentsTotalUgx: 0,
       countedCashUgx: null,
       cashDifferenceUgx: null,
+      openingFloatUgx: floatAmt > 0 ? floatAmt : null,
     };
     set((st) => ({
       preferences: {
@@ -2617,10 +2639,12 @@ export const usePosStore = create<PosState>((set, get) => {
     let customers = state.customers;
     let debtReduce = 0;
     let linkedCustomerId: string | null = null;
+    let cashReduce = refund;
     if (saleId) {
       const saleIdx = sales.findIndex((s) => s.id === saleId);
       if (saleIdx >= 0) {
         const sale = sales[saleIdx]!;
+        cashReduce = cashReduceFromRefund(sale, refund);
         const limit = validateReturnAgainstSale({
           sale,
           productId,
@@ -2657,7 +2681,7 @@ export const usePosStore = create<PosState>((set, get) => {
             sh.id === openShift.id
               ? {
                   ...sh,
-                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - refund),
+                  estimatedCashUgx: Math.max(0, sh.estimatedCashUgx - cashReduce),
                   returnsTotalUgx: (sh.returnsTotalUgx ?? 0) + refund,
                   refundsUgx: sh.refundsUgx + refund,
                 }
@@ -3847,6 +3871,46 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, expenseId: row.id };
   },
 
+  addCashDrawerAdjustment: (input) => {
+    const denied = denyUnlessEffectivePermission("day.close", "addCashDrawerAdjustment");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const amountUgx = Math.floor(input.amountUgx);
+    if (amountUgx <= 0) return { ok: false, errorKey: "invalidMoney" };
+    const now = new Date().toISOString();
+    const occurredAt = input.occurredAt?.trim() || now;
+    const row: CashDrawerAdjustment = normalizeCashDrawerAdjustment({
+      id: crypto.randomUUID(),
+      type: input.type,
+      amountUgx,
+      note: (input.note ?? "").trim(),
+      actorUserId: actor.userId,
+      actorName: actor.displayName,
+      occurredAt,
+      createdAt: now,
+      updatedAt: now,
+      pendingSync: true,
+      lastSyncError: null,
+      deletedAt: null,
+    });
+    set((s) => ({ cashDrawerAdjustments: [row, ...s.cashDrawerAdjustments] }));
+    pushAudit("cash_drawer_adjustment", `${input.type} UGX ${amountUgx.toLocaleString()}`, {
+      adjustmentId: row.id,
+      type: input.type,
+      amountUgx,
+      note: row.note,
+      actorUserId: actor.userId,
+    });
+    void queueRemote("pending_cash_drawer_adjustments", { adjustmentId: row.id });
+    if (hasSupabaseConfig) {
+      void import("../offline/cloudSync").then((m) => m.syncCashDrawerAdjustmentImmediately(row.id));
+    }
+    return { ok: true, adjustmentId: row.id };
+  },
+
   approveCashExpense: (id) => {
     const denied = denyUnlessEffectivePermission("expenses.approve", "approveCashExpense");
     if (denied) return { ok: false, errorKey: denied.errorKey };
@@ -3972,6 +4036,8 @@ export const usePosStore = create<PosState>((set, get) => {
       debtPayments: state.debtPayments,
       cashExpenses: state.cashExpenses,
       supplierPayments: state.supplierPayments,
+      cashDrawerAdjustments: state.cashDrawerAdjustments,
+      shifts: state.preferences.shifts ?? [],
       day: dateKey,
     });
     const fin = getCompletedFinancials(state.sales, state.returnRecords, state.products, { day: dateKey });
@@ -4006,6 +4072,12 @@ export const usePosStore = create<PosState>((set, get) => {
         debtCollectedUgx: drawer.debtCollectedUgx,
         refundsUgx: drawer.refundsUgx,
         expenseUgx: drawer.expenseUgx,
+        openingFloatUgx: drawer.openingFloatUgx,
+        cashSalesUgx: drawer.cashSalesUgx,
+        supplierPaymentsUgx: drawer.supplierPaymentsUgx,
+        adjustmentInflowsUgx: drawer.adjustmentInflowsUgx,
+        adjustmentOutflowsUgx: drawer.adjustmentOutflowsUgx,
+        cashRefundsUgx: drawer.cashRefundsUgx,
       },
       transactionCount: fin.transactionCount,
     });
@@ -4021,6 +4093,7 @@ export const usePosStore = create<PosState>((set, get) => {
       createdAt: now,
       replacesCloseId: existing?.id ?? null,
       overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
+      openingFloatUgx: drawer.openingFloatUgx,
       documentSnapshot,
     };
     set((s) => ({
@@ -4439,6 +4512,7 @@ export async function applyRestoredSnapshotFromBackup(
       voidRecords: snap.voidRecords ?? [],
       returnRecords: snap.returnRecords ?? [],
       cashExpenses: (snap.cashExpenses ?? []).map(normalizeCashExpense),
+      cashDrawerAdjustments: (snap.cashDrawerAdjustments ?? []).map(normalizeCashDrawerAdjustment),
       archivedSales: [],
       archivedAuditLogs: snap.archivedAuditLogs ?? [],
       archivedDayCloses: snap.archivedDayCloses ?? [],
@@ -4503,6 +4577,9 @@ function scheduleHydrateRemainderFromSnap(snap: Partial<PersistedSnapshot>): voi
         voidRecords: (snap as { voidRecords?: VoidRecord[] }).voidRecords ?? [],
         returnRecords: (snap as { returnRecords?: ReturnRecord[] }).returnRecords ?? [],
         cashExpenses: ((snap as { cashExpenses?: CashExpense[] }).cashExpenses ?? []).map(normalizeCashExpense),
+        cashDrawerAdjustments: ((snap as { cashDrawerAdjustments?: CashDrawerAdjustment[] }).cashDrawerAdjustments ?? []).map(
+          normalizeCashDrawerAdjustment,
+        ),
         archivedSales: (snap.archivedSales ?? []).map(normalizeSale),
         archivedAuditLogs: snap.archivedAuditLogs ?? [],
         archivedDayCloses: snap.archivedDayCloses ?? [],
@@ -4800,6 +4877,9 @@ export async function bootstrapPosFromDisk(): Promise<void> {
         voidRecords: await getEntitiesByBucket("voidRecord"),
         returnRecords: await getEntitiesByBucket("returnRecord"),
         cashExpenses: (await getEntitiesByBucket<CashExpense>("cashExpense")).map(normalizeCashExpense),
+        cashDrawerAdjustments: (await getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment")).map(
+          normalizeCashDrawerAdjustment,
+        ),
         archivedSales: (await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder)).map(normalizeSale),
         archivedAuditLogs: await getEntitiesByBucket("archivedAuditLog"),
         archivedDayCloses: await getEntitiesByBucket("archivedDayClose"),

@@ -42,6 +42,7 @@ export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSna
     archivedVoidRecords: p.archivedVoidRecords ?? [],
     archivedReturnRecords: p.archivedReturnRecords ?? [],
     cashExpenses: p.cashExpenses ?? [],
+    cashDrawerAdjustments: p.cashDrawerAdjustments ?? [],
     updatedAt: p.updatedAt ?? new Date().toISOString(),
   };
 }
