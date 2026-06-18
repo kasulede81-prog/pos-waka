@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Bell, Briefcase, Calculator, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -133,6 +133,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubDevices")}
             subtitle={t(lang, "settingsHubDevicesSub")}
             Icon={MonitorSmartphone}
+          />
+        ) : null}
+        {canShop && actor.role === "owner" ? (
+          <OfficeNavCard
+            to="/settings/biometric"
+            title={t(lang, "settingsHubBiometric")}
+            subtitle={t(lang, "settingsHubBiometricSub")}
+            Icon={Fingerprint}
           />
         ) : null}
         {canShop ? (

@@ -4416,6 +4416,8 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           ? null
           : String(p.activeStaffId),
     posLocked: typeof p.posLocked === "boolean" ? p.posLocked : base.posLocked ?? false,
+    biometricAuthEnabled:
+      typeof p.biometricAuthEnabled === "boolean" ? p.biometricAuthEnabled : base.biometricAuthEnabled ?? false,
     shifts: normalizeShifts(p.shifts),
     favoriteProductIds: Array.isArray(p.favoriteProductIds)
       ? (p.favoriteProductIds as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 40)

@@ -50,6 +50,10 @@ import { PosDataProvider } from "./providers/PosDataProvider";
 import { NativeSplashGate } from "./components/NativeSplashGate";
 import { SyncStatusProvider } from "./hooks/useSyncStatus";
 import { BackOfficeSessionProvider } from "./context/BackOfficeSessionContext";
+import { SensitiveActionAuthProvider } from "./context/SensitiveActionAuthContext";
+import { SensitiveActionGate } from "./components/security/SensitiveActionGate";
+import { SettingsChangeGate } from "./components/security/SettingsChangeGate";
+import { SettingsBiometricPage } from "./pages/SettingsBiometricPage";
 import { ProfitPage } from "./pages/ProfitPage";
 import { PharmacyMarginReportPage } from "./pages/PharmacyMarginReportPage";
 import { StockPage } from "./pages/StockPage";
@@ -323,7 +327,8 @@ function AppRoutes() {
                   element={
                     <SyncStatusProvider>
                       <BackOfficeSessionProvider>
-                        <AppShell
+                        <SensitiveActionAuthProvider lang={lang}>
+                          <AppShell
                             lang={lang}
                             setLang={setLang}
                             onSignOut={auth.signOut}
@@ -332,6 +337,7 @@ function AppRoutes() {
                             authMode={auth.mode}
                             staffSession={auth.staffSession}
                           />
+                        </SensitiveActionAuthProvider>
                       </BackOfficeSessionProvider>
                     </SyncStatusProvider>
                   }
@@ -368,7 +374,9 @@ function AppRoutes() {
               path="office/profit"
               element={
                 <RoleProtectedRoute permission="reports.profit">
-                  <ProfitPage lang={lang} />
+                  <SensitiveActionGate lang={lang} kind="access_reports">
+                    <ProfitPage lang={lang} />
+                  </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
             />
@@ -384,7 +392,9 @@ function AppRoutes() {
               path="office/cash-position"
               element={
                 <RoleProtectedRoute permission="day.close">
-                  <CashPositionPage lang={lang} />
+                  <SensitiveActionGate lang={lang} kind="access_reports">
+                    <CashPositionPage lang={lang} />
+                  </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
             />
@@ -572,7 +582,9 @@ function AppRoutes() {
               path="reports"
               element={
                 <RoleProtectedRoute permission="reports.view">
-                  <ReportsPage lang={lang} />
+                  <SensitiveActionGate lang={lang} kind="access_reports">
+                    <ReportsPage lang={lang} />
+                  </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
             />
@@ -596,7 +608,9 @@ function AppRoutes() {
               path="staff-access"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <StaffAccessPage lang={lang} />
+                  <SensitiveActionGate lang={lang} kind="manage_users" deniedTo="/settings">
+                    <StaffAccessPage lang={lang} />
+                  </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
             />
@@ -624,9 +638,11 @@ function AppRoutes() {
               path="office/audit-center"
               element={
                 <RoleProtectedRoute permission="owner.activity">
-                  <Suspense fallback={<LazyWait />}>
-                    <AuditCenterPage lang={lang} />
-                  </Suspense>
+                  <SensitiveActionGate lang={lang} kind="access_reports">
+                    <Suspense fallback={<LazyWait />}>
+                      <AuditCenterPage lang={lang} />
+                    </Suspense>
+                  </SensitiveActionGate>
                 </RoleProtectedRoute>
               }
             />
@@ -660,13 +676,15 @@ function AppRoutes() {
               path="settings/shop"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsShopPage
-                    lang={lang}
-                    email={auth.email}
-                    shopName={auth.shopName}
-                    user={auth.user}
-                    authMode={auth.mode}
-                  />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsShopPage
+                      lang={lang}
+                      email={auth.email}
+                      shopName={auth.shopName}
+                      user={auth.user}
+                      authMode={auth.mode}
+                    />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -674,7 +692,9 @@ function AppRoutes() {
               path="settings/receipt"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsReceiptPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsReceiptPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -682,7 +702,9 @@ function AppRoutes() {
               path="settings/selling"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsSellingPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsSellingPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -690,7 +712,9 @@ function AppRoutes() {
               path="settings/home-menu"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsHomeMenuPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsHomeMenuPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -698,7 +722,9 @@ function AppRoutes() {
               path="settings/office-menu"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsOfficeMenuPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsOfficeMenuPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -706,7 +732,9 @@ function AppRoutes() {
               path="settings/shelves"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsShelvesPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsShelvesPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -714,9 +742,11 @@ function AppRoutes() {
               path="settings/floor"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <Suspense fallback={<LazyWait />}>
-                    <SettingsFloorPage lang={lang} />
-                  </Suspense>
+                  <SettingsChangeGate lang={lang}>
+                    <Suspense fallback={<LazyWait />}>
+                      <SettingsFloorPage lang={lang} />
+                    </Suspense>
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -724,7 +754,9 @@ function AppRoutes() {
               path="settings/pharmacy"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsPharmacyPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsPharmacyPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -732,7 +764,9 @@ function AppRoutes() {
               path="settings/hospitality"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsHospitalityPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsHospitalityPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -740,7 +774,17 @@ function AppRoutes() {
               path="settings/pin"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsPinPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsPinPage lang={lang} />
+                  </SettingsChangeGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/biometric"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsBiometricPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />
@@ -748,11 +792,13 @@ function AppRoutes() {
               path="settings/password"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsPasswordPage
-                    lang={lang}
-                    authMode={auth.mode}
-                    updatePassword={auth.updatePassword}
-                  />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsPasswordPage
+                      lang={lang}
+                      authMode={auth.mode}
+                      updatePassword={auth.updatePassword}
+                    />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -760,7 +806,9 @@ function AppRoutes() {
               path="settings/notifications"
               element={
                 <RoleProtectedRoute permission="settings.view">
-                  <SettingsNotificationsPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsNotificationsPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -768,7 +816,9 @@ function AppRoutes() {
               path="settings/devices"
               element={
                 <RoleProtectedRoute permission="settings.devices">
-                  <ConnectedDevicesPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <ConnectedDevicesPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -776,7 +826,9 @@ function AppRoutes() {
               path="settings/health"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsSystemHealthPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsSystemHealthPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -784,7 +836,9 @@ function AppRoutes() {
               path="settings/diagnostics"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsDiagnosticsPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsDiagnosticsPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -792,7 +846,9 @@ function AppRoutes() {
               path="settings/finance-diagnostics"
               element={
                 <RoleProtectedRoute permission="owner.dashboard">
-                  <SettingsFinanceDiagnosticsPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsFinanceDiagnosticsPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -800,7 +856,9 @@ function AppRoutes() {
               path="settings/subscription-diagnostics"
               element={
                 <RoleProtectedRoute permission="settings.view">
-                  <SettingsSubscriptionDiagnosticsPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsSubscriptionDiagnosticsPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -808,7 +866,9 @@ function AppRoutes() {
               path="settings/retention"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <SettingsDataRetentionPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsDataRetentionPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />
@@ -816,7 +876,9 @@ function AppRoutes() {
               path="settings/archive"
               element={
                 <RoleProtectedRoute permission="settings.shop">
-                  <ArchiveDataPage lang={lang} />
+                  <SettingsChangeGate lang={lang}>
+                    <ArchiveDataPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />

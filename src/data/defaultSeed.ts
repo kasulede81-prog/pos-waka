@@ -27,6 +27,7 @@ export function createDefaultPreferences(): ShopPreferences {
     staffAccounts: [],
     activeStaffId: null,
     posLocked: false,
+    biometricAuthEnabled: false,
     shifts: [],
     receiptPaperSize: "80mm",
     dataRetentionPolicy: "3m",

@@ -8,6 +8,7 @@ import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { hasPermission } from "../lib/permissions";
 import { useSessionActor } from "../context/SessionActorContext";
+import { useProtectedAction } from "../hooks/useProtectedAction";
 
 function formatWhen(iso: string): string {
   try {
@@ -17,9 +18,12 @@ function formatWhen(iso: string): string {
   }
 }
 
+import { useProtectedAction } from "../hooks/useProtectedAction";
+
 export function PendingSalesPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
+  const { runProtected } = useProtectedAction();
   const sales = usePosStore((s) => s.sales);
   const resumePendingSale = usePosStore((s) => s.resumePendingSale);
   const cancelPendingSale = usePosStore((s) => s.cancelPendingSale);
@@ -80,7 +84,11 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
                     {canCancel ? (
                       <button
                         type="button"
-                        onClick={() => cancelPendingSale(sale.id)}
+                        onClick={() =>
+                          void runProtected("delete_transaction", () => {
+                            cancelPendingSale(sale.id);
+                          })
+                        }
                         className="min-h-10 rounded-xl border border-rose-200 px-4 text-xs font-black text-rose-800"
                       >
                         {t(lang, "pendingSalesCancel")}

@@ -49,6 +49,7 @@ const RECEIPT_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
 /** Shop profile, shelves, retention, PIN, staff prefs, etc. (not receipt branding). */
 const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "backOfficePin",
+  "biometricAuthEnabled",
   "shopDisplayName",
   "shopPhoneE164",
   "shopAddressLine",
@@ -94,6 +95,8 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "branchDisplayName",
   "pilotModeEnabled",
 ]);
+
+const OWNER_ONLY_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["biometricAuthEnabled"]);
 
 const OWNER_ACTIVITY_KEYS = new Set<keyof ShopPreferences>(["ownerRisksReviewedAt"]);
 
@@ -153,6 +156,9 @@ export function authorizePreferencesPatch(
   for (const key of Object.keys(patch) as (keyof ShopPreferences)[]) {
     const perm = permissionForPreferenceKey(key);
     if (!perm) continue;
+    if (OWNER_ONLY_PREFERENCE_KEYS.has(key) && (!actor || actor.role !== "owner")) {
+      return { ok: false, errorKey: "forbidden" };
+    }
     const effectiveCheck =
       perm === "settings.shop" && FREE_TIER_SHOP_PROFILE_KEYS.has(key)
         ? checkStorePermission(actor, perm)

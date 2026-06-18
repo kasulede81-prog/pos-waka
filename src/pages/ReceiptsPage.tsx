@@ -38,9 +38,11 @@ import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
 import { SalesHistorySummaryStrip } from "../components/receipts/SalesHistorySummaryStrip";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
+import { useProtectedAction } from "../hooks/useProtectedAction";
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
+  const { runProtected } = useProtectedAction();
   const {
     filter,
     setFilter,
@@ -245,9 +247,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       canVoid={canVoid && isCompletedSale(sale)}
       toneIndex={index}
       onPrint={printSale}
-      onReceiptPdf={receiptPdfSale}
-      onReturn={setReturnSale}
-      onVoidLine={(s, lineIndex, line) => setVoidTarget({ sale: s, lineIndex, line })}
+      onReceiptPdf={(sale) => void runProtected("export_data", () => receiptPdfSale(sale))}
+      onReturn={(sale) => void runProtected("refund_sale", () => setReturnSale(sale))}
+      onVoidLine={(s, lineIndex, line) =>
+        void runProtected("void_sale", () => setVoidTarget({ sale: s, lineIndex, line }))
+      }
     />
   );
 
@@ -261,7 +265,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         {partitioned.completed.length > 0 ? (
           <button
             type="button"
-            onClick={() => void onDownloadAll()}
+            onClick={() => void runProtected("export_data", onDownloadAll)}
             className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-waka-200 bg-white px-3 text-xs font-black text-waka-800 shadow-sm transition-waka active:bg-waka-50"
             title={t(lang, "receiptsDownloadPdf")}
           >

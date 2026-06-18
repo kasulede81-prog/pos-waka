@@ -29,6 +29,14 @@ describe("settingsAuthorization — permission map", () => {
     expect(authorizePreferencesPatch(actor("cashier"), { backOfficePin: "1234" }).ok).toBe(false);
   });
 
+  it("biometric setting is owner-only", () => {
+    expect(authorizePreferencesPatch(actor("owner"), { biometricAuthEnabled: true }).ok).toBe(true);
+    expect(authorizePreferencesPatch(actor("manager"), { biometricAuthEnabled: true })).toEqual({
+      ok: false,
+      errorKey: "forbidden",
+    });
+  });
+
   it("receipt settings require settings.receipt", () => {
     expect(requiredPermissionsForPreferencesPatch({ receiptCustomHeaderText: "Hello" })).toEqual([
       "settings.receipt",

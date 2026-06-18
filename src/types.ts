@@ -141,7 +141,9 @@ export type AuditAction =
   | "shift_float_override"
   | "shift_handoff_ready"
   | "shift_handoff_verified"
-  | "shift_handoff_override";
+  | "shift_handoff_override"
+  | "sensitive_action_auth_granted"
+  | "sensitive_action_auth_denied";
 
 export type AuditLogEntry = {
   id: string;
@@ -1009,6 +1011,8 @@ export type ShopPreferences = {
   activeStaffId?: string | null;
   /** Lock screen state for quick shift switches. */
   posLocked?: boolean;
+  /** When true, sensitive actions require native biometric or Owner PIN (Owner-only setting). */
+  biometricAuthEnabled?: boolean;
   shifts?: ShiftRecord[];
   /** Product ids starred on Sell screen (fast access) */
   favoriteProductIds?: string[];
