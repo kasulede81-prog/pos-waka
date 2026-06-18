@@ -92,6 +92,7 @@ export async function listCachedShopsForStaffLogin(): Promise<CachedShop[]> {
   const db = await getLocalDb();
   const allKeys = await db.getAllKeys("kv");
   const shops = new Map<string, CachedShop>();
+  const { isOrganizationBlocked, hasWipeMarker } = await import("./organizationDeletionState");
 
   for (const key of allKeys) {
     if (typeof key !== "string") continue;
@@ -99,6 +100,7 @@ export async function listCachedShopsForStaffLogin(): Promise<CachedShop[]> {
 
     const accountKey = key.slice(0, key.length - "::snapshot".length);
     if (!accountKey) continue;
+    if (isOrganizationBlocked(accountKey) || hasWipeMarker(accountKey)) continue;
     const snapshot = (await db.get("kv", key)) as SnapshotLike | undefined;
     if (!snapshot?.preferences) continue;
     const businessName = readSnapshotBusinessName(snapshot);
@@ -108,6 +110,23 @@ export async function listCachedShopsForStaffLogin(): Promise<CachedShop[]> {
   }
 
   return [...shops.values()].sort((a, b) => a.businessName.localeCompare(b.businessName));
+}
+
+async function findStaffShopByBusinessName(businessName: string): Promise<CachedShop | null> {
+  const db = await getLocalDb();
+  const allKeys = await db.getAllKeys("kv");
+  for (const key of allKeys) {
+    if (typeof key !== "string" || !key.endsWith("::snapshot")) continue;
+    const accountKey = key.slice(0, key.length - "::snapshot".length);
+    if (!accountKey) continue;
+    const snapshot = (await db.get("kv", key)) as SnapshotLike | undefined;
+    if (!snapshot?.preferences) continue;
+    const name = readSnapshotBusinessName(snapshot);
+    if (!name || !keysEqual(name, businessName)) continue;
+    if ((snapshot.preferences.staffAccounts?.length ?? 0) === 0) continue;
+    return { accountKey, businessName: name };
+  }
+  return null;
 }
 
 export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<StaffAuthResult> {
@@ -122,10 +141,16 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
     throw new Error("PIN must be exactly 4 digits.");
   }
 
-  const shops = await listCachedShopsForStaffLogin();
-  const shop = shops.find((s) => keysEqual(s.businessName, businessName));
+  const shop = await findStaffShopByBusinessName(businessName);
   if (!shop) {
     throw new Error("Business not found on this device. Owner must sign in once on this device first.");
+  }
+
+  const { isOrganizationBlocked, ORGANIZATION_DELETED_MESSAGE, hasWipeMarker } = await import(
+    "./organizationDeletionState",
+  );
+  if (isOrganizationBlocked(shop.accountKey) || hasWipeMarker(shop.accountKey)) {
+    throw new Error(ORGANIZATION_DELETED_MESSAGE);
   }
 
   const db = await getLocalDb();

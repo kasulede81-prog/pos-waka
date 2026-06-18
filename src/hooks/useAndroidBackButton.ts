@@ -4,8 +4,8 @@ import { Capacitor } from "@capacitor/core";
 import { App } from "@capacitor/app";
 import { dispatchAndroidBack } from "../lib/androidBackStack";
 import { getBackFallbackPath, historyCanGoBack } from "../lib/navigationBack";
-import { confirmLeaveActiveSaleIfNeeded } from "../lib/posLeaveGuard";
-import { isPosSellPath, lockPosAfterSellExit } from "../lib/posSellExit";
+import { confirmLeavePosIfNeeded } from "../lib/posExitGuard";
+import { isPosSellPath } from "../lib/posSellExit";
 
 const MINIMIZE_AT_ROOT_PATHS = new Set(["/", "/pos"]);
 
@@ -29,8 +29,11 @@ export function useAndroidBackButton() {
 
       void (async () => {
         const leavingPos = isPosSellPath(location.pathname);
-        if (leavingPos && !(await confirmLeaveActiveSaleIfNeeded())) return;
-        if (leavingPos) lockPosAfterSellExit();
+        if (leavingPos) {
+          const fallback = getBackFallbackPath(location.pathname);
+          const target = historyCanGoBack() ? location.pathname : fallback;
+          if (!(await confirmLeavePosIfNeeded(location.pathname, target))) return;
+        }
 
         if (historyCanGoBack()) {
           navigate(-1);

@@ -27,3 +27,14 @@ export function markWorkspaceBootstrapped(userId: string): void {
     /* ignore */
   }
 }
+
+export function unmarkWorkspaceBootstrapped(userId: string): void {
+  try {
+    const next = { ...readSet() };
+    if (!(userId in next)) return;
+    delete next[userId];
+    localStorage.setItem(KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}

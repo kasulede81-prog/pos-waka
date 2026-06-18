@@ -6,9 +6,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { hasPermission } from "../../lib/permissions";
-import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
-import { lockPosAfterSellExit } from "../../lib/posSellExit";
-import { usePosStore } from "../../store/usePosStore";
+import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { POS_HOME_ROUTE, POS_SELL_ROUTE } from "../../lib/posNavigation";
 
 type Props = {
@@ -21,26 +19,21 @@ export function PosOperationalNav({ lang, sellLabelKey }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const actor = useSessionActor();
-  const draftLineCount = usePosStore((s) => s.draftLines.length);
   const canSell = hasPermission(actor.role, "pos.sell");
   const onSell = location.pathname === POS_SELL_ROUTE || location.pathname.startsWith(`${POS_SELL_ROUTE}/`);
 
   const guardedNavigate = useCallback(
     (to: string) => {
-      const leavingPos =
-        onSell && draftLineCount > 0 && to !== location.pathname && !to.startsWith(POS_SELL_ROUTE);
+      const leavingPos = onSell && to !== location.pathname && !to.startsWith(POS_SELL_ROUTE);
       if (leavingPos) {
-        void confirmLeaveActiveSaleIfNeeded().then((ok) => {
-          if (ok) {
-            lockPosAfterSellExit();
-            navigate(to, { preventScrollReset: true });
-          }
+        void confirmLeavePosIfNeeded(location.pathname, to).then((ok) => {
+          if (ok) navigate(to, { preventScrollReset: true });
         });
         return;
       }
       navigate(to, { preventScrollReset: true });
     },
-    [draftLineCount, location.pathname, navigate, onSell],
+    [location.pathname, navigate, onSell],
   );
 
   if (!canSell) return null;

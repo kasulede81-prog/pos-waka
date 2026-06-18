@@ -67,12 +67,14 @@ describe("usePosStore — cashier mutation regression", () => {
   });
 
   it("cashier addDebtPayment succeeds", () => {
+    usePosStore.getState().beginShift();
     const r = usePosStore.getState().addDebtPayment(CUSTOMER_ID, 1_000);
     expect(r.ok).toBe(true);
     expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(4_000);
   });
 
   it("cashier finalizeDraftSale with credit succeeds", () => {
+    usePosStore.getState().beginShift();
     usePosStore.setState({
       draftLines: [
         {

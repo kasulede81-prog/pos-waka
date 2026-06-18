@@ -29,6 +29,10 @@ import {
 } from "../lib/posCheckoutMount";
 import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
+import { ShiftSellGateway } from "../components/pos/ShiftSellGateway";
+import { ActiveShiftBanner } from "../components/pos/ActiveShiftBanner";
+import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
+import { registerPosExitHandler } from "../lib/posExitGuard";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
 import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
 import { PosScreenPortal } from "../components/layout/PosScreenPortal";
@@ -345,6 +349,8 @@ export function PosPage({ lang }: { lang: Language }) {
   );
   const [discountLine, setDiscountLine] = useState<SaleLine | null>(null);
   const [shiftCloseOpen, setShiftCloseOpen] = useState(false);
+  const [posExitOpen, setPosExitOpen] = useState(false);
+  const posExitResolverRef = useRef<((choice: "lock" | "continue" | "cancel") => void) | null>(null);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
 
@@ -1126,6 +1132,16 @@ export function PosPage({ lang }: { lang: Language }) {
     });
   }, [draftLines.length, lang]);
 
+  useEffect(() => {
+    return registerPosExitHandler({
+      confirmPosExit: () =>
+        new Promise((resolve) => {
+          posExitResolverRef.current = resolve;
+          setPosExitOpen(true);
+        }),
+    });
+  }, []);
+
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
   const sellPresets = selected ? getPosSellPresets(selected) : [];
@@ -1312,8 +1328,17 @@ export function PosPage({ lang }: { lang: Language }) {
   }
 
   return (
+    <ShiftSellGateway lang={lang}>
     <div className="space-y-2">
       <PosOfflineBanner lang={lang} />
+      {activeShift ? (
+        <ActiveShiftBanner
+          lang={lang}
+          shift={activeShift}
+          cashierName={actor.displayName ?? actor.userId}
+          onCloseShift={() => setShiftCloseOpen(true)}
+        />
+      ) : null}
       <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} />
       <PosSellHeroCard
         lang={lang}
@@ -2041,13 +2066,33 @@ export function PosPage({ lang }: { lang: Language }) {
         onConfirm={(counted) => {
           const r = closeShiftWithCashCount(counted);
           if (!r.ok) {
-            setToast(t(lang, "saleError"));
+            setToast(t(lang, r.errorKey ?? "saleError"));
             window.setTimeout(() => setToast(null), 2200);
             return { ok: false };
           }
           setToast(t(lang, "shiftCloseConfirm"));
           window.setTimeout(() => setToast(null), 2200);
           return { ok: true };
+        }}
+      />
+
+      <PosExitConfirmModal
+        lang={lang}
+        open={posExitOpen}
+        onLock={() => {
+          setPosExitOpen(false);
+          posExitResolverRef.current?.("lock");
+          posExitResolverRef.current = null;
+        }}
+        onContinue={() => {
+          setPosExitOpen(false);
+          posExitResolverRef.current?.("continue");
+          posExitResolverRef.current = null;
+        }}
+        onCancel={() => {
+          setPosExitOpen(false);
+          posExitResolverRef.current?.("cancel");
+          posExitResolverRef.current = null;
         }}
       />
 
@@ -2183,5 +2228,6 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
     </div>
+    </ShiftSellGateway>
   );
 }

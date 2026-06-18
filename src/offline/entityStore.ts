@@ -17,6 +17,13 @@ import type {
 } from "../types";
 import { getActiveAccountKey } from "./accountScope";
 import { getLocalDb, readKv, type PersistedSnapshot, writeKv } from "./localDb";
+import {
+  applyTombstonesToManifest,
+  mergeTombstoneBundles,
+  snapshotFieldsFromTombstones,
+  tombstonesFromManifest,
+  tombstonesFromSnapshot,
+} from "../lib/tombstoneDurability";
 
 export const ENTITY_STORE_VERSION = 3;
 
@@ -56,6 +63,7 @@ export type EntityManifest = {
   salesOrder: string[];
   archivedSalesOrder: string[];
   tombstones: Record<string, string>;
+  voidedSaleIds: Record<string, string>;
   updatedAt: string;
 };
 
@@ -78,6 +86,7 @@ function emptyManifest(preferences: ShopPreferences): EntityManifest {
     salesOrder: [],
     archivedSalesOrder: [],
     tombstones: {},
+    voidedSaleIds: {},
     updatedAt: new Date().toISOString(),
   };
 }
@@ -85,7 +94,11 @@ function emptyManifest(preferences: ShopPreferences): EntityManifest {
 export async function readEntityManifest(): Promise<EntityManifest | null> {
   const row = await readKv<EntityManifest>(MANIFEST_KV_KEY);
   if (!row || row.version !== ENTITY_STORE_VERSION) return null;
-  return row;
+  return {
+    ...row,
+    voidedSaleIds: row.voidedSaleIds ?? {},
+    tombstones: row.tombstones ?? {},
+  };
 }
 
 export async function writeEntityManifest(manifest: EntityManifest): Promise<void> {
@@ -191,18 +204,47 @@ export async function clearProductTombstone(productId: string): Promise<void> {
   await writeEntityManifest(manifest);
 }
 
+export async function addVoidedSaleTombstone(saleId: string): Promise<void> {
+  const state = await import("../store/usePosStore").then((m) => m.usePosStore.getState());
+  const manifest = (await readEntityManifest()) ?? emptyManifest(state.preferences);
+  manifest.voidedSaleIds = manifest.voidedSaleIds ?? {};
+  manifest.voidedSaleIds[saleId] = new Date().toISOString();
+  await writeEntityManifest(manifest);
+}
+
+export async function addVoidedSaleTombstones(saleIds: string[]): Promise<void> {
+  if (saleIds.length === 0) return;
+  const state = await import("../store/usePosStore").then((m) => m.usePosStore.getState());
+  const manifest = (await readEntityManifest()) ?? emptyManifest(state.preferences);
+  manifest.voidedSaleIds = manifest.voidedSaleIds ?? {};
+  const now = new Date().toISOString();
+  for (const id of saleIds) {
+    if (id) manifest.voidedSaleIds[id] = manifest.voidedSaleIds[id] ?? now;
+  }
+  await writeEntityManifest(manifest);
+}
+
 export async function migrateSnapshotToEntities(snap: PersistedSnapshot): Promise<void> {
   const acc = accountOrNull();
   if (!acc) return;
 
-  const manifest = emptyManifest(snap.preferences);
-  manifest.salesOrder = snap.sales.map((s) => s.id);
-  manifest.archivedSalesOrder = (snap.archivedSales ?? []).map((s) => s.id);
+  const existing = await readEntityManifest();
+  const snapTombstones = tombstonesFromSnapshot(snap);
+  const mergedTombstones = mergeTombstoneBundles(tombstonesFromManifest(existing), snapTombstones);
+
+  const manifest = applyTombstonesToManifest(emptyManifest(snap.preferences), mergedTombstones);
+  manifest.salesOrder = snap.sales.map((s) => s.id).filter((id) => !mergedTombstones.voidedSaleIds[id]);
+  manifest.archivedSalesOrder = (snap.archivedSales ?? [])
+    .map((s) => s.id)
+    .filter((id) => !mergedTombstones.voidedSaleIds[id]);
   await writeEntityManifest(manifest);
 
+  const deletedProducts = mergedTombstones.deletedProductIds;
   await putEntitiesBatch(
     "product",
-    snap.products.map((p) => ({ id: p.id, data: p, sortKey: p.updatedAt })),
+    snap.products
+      .filter((p) => !deletedProducts[p.id])
+      .map((p) => ({ id: p.id, data: p, sortKey: p.updatedAt })),
   );
   await putEntitiesBatch(
     "customer",
@@ -210,11 +252,15 @@ export async function migrateSnapshotToEntities(snap: PersistedSnapshot): Promis
   );
   await putEntitiesBatch(
     "sale",
-    snap.sales.map((s) => ({ id: s.id, data: s, sortKey: s.createdAt })),
+    snap.sales
+      .filter((s) => !mergedTombstones.voidedSaleIds[s.id])
+      .map((s) => ({ id: s.id, data: s, sortKey: s.createdAt })),
   );
   await putEntitiesBatch(
     "archivedSale",
-    (snap.archivedSales ?? []).map((s) => ({ id: s.id, data: s, sortKey: s.createdAt })),
+    (snap.archivedSales ?? [])
+      .filter((s) => !mergedTombstones.voidedSaleIds[s.id])
+      .map((s) => ({ id: s.id, data: s, sortKey: s.createdAt })),
   );
   await putEntitiesBatch("debtPayment", (snap.debtPayments ?? []).map((d) => ({ id: d.id, data: d, sortKey: d.createdAt })));
   await putEntitiesBatch("dayClose", (snap.dayCloses ?? []).map((d) => ({ id: d.id, data: d, sortKey: d.createdAt })));
@@ -258,15 +304,22 @@ export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot 
   const manifest = await readEntityManifest();
   if (!manifest) return null;
 
+  const tombstoneBundle = tombstonesFromManifest(manifest);
+  const tombstoneFields = snapshotFieldsFromTombstones(tombstoneBundle);
+  const deletedProducts = tombstoneBundle.deletedProductIds;
+  const voidedSales = tombstoneBundle.voidedSaleIds;
+
   const sales = await getEntitiesByIds<Sale>("sale", manifest.salesOrder);
   const archivedSales = await getEntitiesByIds<Sale>("archivedSale", manifest.archivedSalesOrder);
   const salesById = new Map(sales.map((s) => [s.id, s]));
   const archivedById = new Map(archivedSales.map((s) => [s.id, s]));
 
+  const products = (await getEntitiesByBucket<Product>("product")).filter((p) => !deletedProducts[p.id]);
+
   return {
-    products: await getEntitiesByBucket<Product>("product"),
+    products,
     customers: await getEntitiesByBucket<Customer>("customer"),
-    sales: manifest.salesOrder.map((id) => salesById.get(id)).filter((s): s is Sale => s != null),
+    sales: manifest.salesOrder.map((id) => salesById.get(id)).filter((s): s is Sale => s != null && !voidedSales[s.id]),
     preferences: manifest.preferences,
     debtPayments: await getEntitiesByBucket<DebtPayment>("debtPayment"),
     dayCloses: await getEntitiesByBucket<DayCloseSummary>("dayClose"),
@@ -279,11 +332,14 @@ export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot 
     returnRecords: await getEntitiesByBucket<ReturnRecord>("returnRecord"),
     cashExpenses: await getEntitiesByBucket<CashExpense>("cashExpense"),
     cashDrawerAdjustments: await getEntitiesByBucket<CashDrawerAdjustment>("cashDrawerAdjustment"),
-    archivedSales: manifest.archivedSalesOrder.map((id) => archivedById.get(id)).filter((s): s is Sale => s != null),
+    archivedSales: manifest.archivedSalesOrder
+      .map((id) => archivedById.get(id))
+      .filter((s): s is Sale => s != null && !voidedSales[s.id]),
     archivedAuditLogs: await getEntitiesByBucket<AuditLogEntry>("archivedAuditLog"),
     archivedDayCloses: await getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
     archivedVoidRecords: await getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
     archivedReturnRecords: await getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
+    ...tombstoneFields,
     updatedAt: manifest.updatedAt,
   };
 }

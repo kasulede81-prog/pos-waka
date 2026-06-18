@@ -1248,6 +1248,13 @@ export async function syncSaleImmediately(saleId: string): Promise<boolean> {
 }
 
 export async function processCloudSyncOperation(op: SyncOperation): Promise<boolean> {
+  const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    return false;
+  }
+
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
 
@@ -1560,6 +1567,19 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{ sales: Sale[]; voidedIds: 
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
+
+  const { data: voidedRows, error: vErr } = await supabase!
+    .from("sales")
+    .select("id")
+    .eq("shop_id", ctx.shopId)
+    .eq("status", "voided")
+    .limit(5000);
+  if (vErr) throw vErr;
+  for (const row of voidedRows ?? []) {
+    const id = String((row as { id?: string }).id ?? "");
+    if (isUuid(id) && !voidedIds.includes(id)) voidedIds.push(id);
+  }
+
   return { sales, voidedIds, bytes };
 }
 
@@ -1607,7 +1627,19 @@ async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; de
   if (pErr) throw pErr;
   const rows = productRows ?? [];
   const products = rows.map((r) => rowToProduct(r as Record<string, unknown>)).filter((p): p is Product => p != null);
-  return { products, deletedIds: [], bytes: estimatePayloadBytes(rows) };
+
+  const { data: deletedRows, error: dErr } = await supabase!
+    .from("products")
+    .select("id")
+    .eq("shop_id", ctx.shopId)
+    .eq("is_active", false)
+    .limit(5000);
+  if (dErr) throw dErr;
+  const deletedIds = (deletedRows ?? [])
+    .map((r) => String((r as { id?: string }).id ?? ""))
+    .filter((id) => isUuid(id));
+
+  return { products, deletedIds, bytes: estimatePayloadBytes(rows) + estimatePayloadBytes(deletedRows ?? []) };
 }
 
 async function pullProductsIncremental(
@@ -2434,6 +2466,13 @@ export async function pullShopDataFromCloud(opts?: {
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean }): Promise<boolean> {
+  const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    return false;
+  }
+
   const mergeStarted = Date.now();
   const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   const { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk } = await import(
@@ -2532,6 +2571,8 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       archivedDayCloses: state.archivedDayCloses,
       archivedVoidRecords: state.archivedVoidRecords,
       archivedReturnRecords: state.archivedReturnRecords,
+      deletedProductIds: cloud.deletedProductIds,
+      voidedSaleIds: cloud.voidedSaleIds,
       updatedAt: new Date().toISOString(),
     });
     await persistRestoredSnapshotToDisk();
@@ -2636,6 +2677,8 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
   for (const id of cloud.deletedProductIds) {
     await markProductDeleted(id);
   }
+  const { addVoidedSaleTombstones } = await import("./entityStore");
+  await addVoidedSaleTombstones(cloud.voidedSaleIds);
 
   if (cloud.stats.mode === "full") {
     markBootstrapSyncComplete();
@@ -2720,6 +2763,13 @@ export async function pushShopPendingToCloud(): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
+  const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    return { push: { ok: 0, fail: 0 }, queueFailed: 0 };
+  }
+
   let push = { ok: 0, fail: 0 };
   let queueFailed = 0;
   if (getDeviceOnline()) {
@@ -2745,6 +2795,13 @@ export async function syncShopWithCloud(opts?: {
   push: { ok: number; fail: number };
   queueFailed: number;
 }> {
+  const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
+  }
+
   if (shouldPausePosBackgroundWork()) {
     return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
   }

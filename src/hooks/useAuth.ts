@@ -18,12 +18,13 @@ import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegis
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
+import { assertAccountSwitchAllowed, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
+import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
-import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
   authenticateOfflineStaff,
@@ -63,6 +64,7 @@ const AUTH_MODE: "supabase" | "local" = hasSupabaseConfig ? "supabase" : "local"
  */
 function applyAccountSwitchSync(nextKey: string | null): void {
   if (getActiveAccountKey() === nextKey) return;
+  if (nextKey) assertAccountSwitchAllowed(nextKey);
   flushPendingPersist();
   usePosStore.getState().resetForSignOut();
   setActiveAccountKey(nextKey);
@@ -161,6 +163,18 @@ export function useAuth() {
           isWorkspaceBootstrapped(uid);
 
         if (alreadyEnsured) {
+          const accountKey = computeAccountKey({
+            mode: "supabase",
+            userId: uid,
+            email: next.user.email,
+          });
+          if (accountKey) {
+            const deleted = await refreshOrganizationDeletionState(uid, accountKey);
+            if (deleted) {
+              markWorkspaceEnsured(uid);
+              return;
+            }
+          }
           markWorkspaceEnsured(uid);
           if (verified) {
             await repairOwnerWorkspaceIfNeeded(next.user);
@@ -203,6 +217,19 @@ export function useAuth() {
               });
             }
             return;
+          }
+
+          const accountKey = computeAccountKey({
+            mode: "supabase",
+            userId: uid,
+            email: next.user.email,
+          });
+          if (isWorkspaceBootstrapped(uid) && accountKey) {
+            const deleted = await refreshOrganizationDeletionState(uid, accountKey);
+            if (deleted) {
+              markWorkspaceEnsured(uid);
+              return;
+            }
           }
 
           const meta = next.user.user_metadata as Record<string, unknown> | undefined;
@@ -679,7 +706,7 @@ export function useAuth() {
       flushPendingPersist();
       const store = usePosStore.getState();
       if (store.preferences.activeStaffId) {
-        store.switchStaffAccount(null);
+        store.switchStaffAccount(null, { force: true });
         await flushPendingPersist();
       }
       clearStaffAuth();

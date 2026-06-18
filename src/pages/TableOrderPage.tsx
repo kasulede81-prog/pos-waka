@@ -27,6 +27,7 @@ import { hapticTap } from "../lib/nativeFeedback";
 import { TableSettleSheet } from "../components/hospitality/TableSettleSheet";
 import { SplitBillSheet } from "../components/hospitality/SplitBillSheet";
 import { TableActionSheet } from "../components/hospitality/TableActionSheet";
+import { ShiftSellGateway } from "../components/pos/ShiftSellGateway";
 
 export function TableOrderPage({ lang }: { lang: Language }) {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -173,6 +174,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
   };
 
   return (
+    <ShiftSellGateway lang={lang}>
     <div className="space-y-4 pb-36">
       <div className="flex items-center gap-3">
         <Link to="/floor" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-200 bg-white">
@@ -446,5 +448,6 @@ export function TableOrderPage({ lang }: { lang: Language }) {
         }}
       />
     </div>
+    </ShiftSellGateway>
   );
 }

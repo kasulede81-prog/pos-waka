@@ -54,6 +54,18 @@ function snapshotFromStore(): PersistedSnapshot | null {
   };
 }
 
+async function snapshotFromStoreWithTombstones(): Promise<PersistedSnapshot | null> {
+  const base = snapshotFromStore();
+  if (!base) return null;
+  const { readEntityManifest } = await import("../offline/entityStore");
+  const { snapshotFieldsFromTombstones, tombstonesFromManifest } = await import("./tombstoneDurability");
+  const manifest = await readEntityManifest();
+  const fields = manifest
+    ? snapshotFieldsFromTombstones(tombstonesFromManifest(manifest))
+    : { deletedProductIds: [], voidedSaleIds: [] };
+  return { ...base, ...fields };
+}
+
 /** Trim snapshot JSON size for cloud upload by dropping oldest archived sales if needed. */
 async function trimSnapshotForUpload(snap: PersistedSnapshot): Promise<PersistedSnapshot> {
   let env = buildExportEnvelope(snap);
@@ -100,10 +112,17 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
   if (cloudSnapshotUploadInFlight) return cloudSnapshotUploadInFlight;
 
   const run = async (): Promise<boolean> => {
+  const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    return false;
+  }
+
   const ctx = await resolveShopCtx();
   if (!ctx || !supabase) return false;
 
-  const snap = snapshotFromStore();
+  const snap = await snapshotFromStoreWithTombstones();
   if (!snap) return false;
   if (snap.products.length === 0 && snap.sales.length === 0) return false;
 
@@ -140,6 +159,9 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
 export async function restoreShopFromCloudSnapshot(
   onProgress?: (percent: number) => void,
 ): Promise<boolean> {
+  const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
+  await assertOrganizationOperationsAllowed();
+
   const ctx = await resolveShopCtx();
   if (!ctx || !supabase) return false;
 

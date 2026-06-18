@@ -68,6 +68,10 @@ export type PersistedSnapshot = {
   archivedDayCloses?: DayCloseSummary[];
   archivedVoidRecords?: VoidRecord[];
   archivedReturnRecords?: ReturnRecord[];
+  /** Product IDs tombstoned (deletion durability for backup/restore/sync). */
+  deletedProductIds?: string[];
+  /** Sale IDs voided/tombstoned (deletion durability for backup/restore/sync). */
+  voidedSaleIds?: string[];
   updatedAt: string;
 };
 
@@ -396,4 +400,148 @@ export async function deleteBackupRecord(id: string): Promise<void> {
   const db = await getLocalDb();
   if (!db.objectStoreNames.contains("backups")) return;
   await db.delete("backups", id);
+}
+
+export type AccountIdbWipeSummary = {
+  kvKeysRemoved: number;
+  recordsRemoved: number;
+  syncQueueRemoved: number;
+  backupsRemoved: number;
+};
+
+const ACCOUNT_KV_SUFFIXES = [
+  LEGACY_SNAPSHOT_KEY,
+  LEGACY_LAST_GOOD_KEY,
+  "draft_sale",
+  "entity-manifest",
+  "restore_queue_archive",
+] as const;
+
+/** List distinct account keys found in IndexedDB (kv + records + queue + backups). */
+export async function listAccountKeysInIndexedDb(): Promise<string[]> {
+  const keys = new Set<string>();
+  try {
+    const db = await getLocalDb();
+    const kvKeys = await db.getAllKeys("kv");
+    for (const key of kvKeys) {
+      const k = String(key);
+      const sep = k.indexOf("::");
+      if (sep > 0) keys.add(k.slice(0, sep));
+    }
+    const records = await db.getAll("records");
+    for (const row of records) {
+      const r = row as { accountKey?: string };
+      if (r.accountKey) keys.add(r.accountKey);
+    }
+    const queue = await db.getAll("syncQueue");
+    for (const op of queue) {
+      const r = op as SyncOperation & { accountKey?: string };
+      if (r.accountKey) keys.add(r.accountKey);
+    }
+    if (db.objectStoreNames.contains("backups")) {
+      const backups = await db.getAll("backups");
+      for (const b of backups) {
+        if (b.accountKey) keys.add(b.accountKey);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...keys].sort();
+}
+
+export async function countBackupsForAccount(accountKey: string): Promise<number> {
+  try {
+    const db = await getLocalDb();
+    if (!db.objectStoreNames.contains("backups")) return 0;
+    const all = await db.getAll("backups");
+    return all.filter((r) => r.accountKey === accountKey).length;
+  } catch {
+    return 0;
+  }
+}
+
+export async function hasIndexedDbDataForAccount(accountKey: string): Promise<boolean> {
+  try {
+    const db = await getLocalDb();
+    for (const suffix of ACCOUNT_KV_SUFFIXES) {
+      const row = await db.get("kv", `${accountKey}::${suffix}`);
+      if (row != null) return true;
+    }
+    const records = await db.getAll("records");
+    if (records.some((r) => (r as { accountKey?: string }).accountKey === accountKey)) return true;
+    const queue = await db.getAll("syncQueue");
+    if (queue.some((op) => (op as SyncOperation & { accountKey?: string }).accountKey === accountKey)) return true;
+    if (db.objectStoreNames.contains("backups")) {
+      const backups = await db.getAll("backups");
+      if (backups.some((b) => b.accountKey === accountKey)) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+/** Remove all IndexedDB rows for a single account namespace (idempotent). */
+export async function wipeIndexedDbNamespace(accountKey: string): Promise<AccountIdbWipeSummary> {
+  const summary: AccountIdbWipeSummary = {
+    kvKeysRemoved: 0,
+    recordsRemoved: 0,
+    syncQueueRemoved: 0,
+    backupsRemoved: 0,
+  };
+  if (!accountKey) return summary;
+
+  try {
+    const db = await getLocalDb();
+    const kvKeys = await db.getAllKeys("kv");
+    const prefix = `${accountKey}::`;
+    const txKv = db.transaction("kv", "readwrite");
+    for (const key of kvKeys) {
+      const k = String(key);
+      if (k === accountKey || k.startsWith(prefix)) {
+        await txKv.store.delete(k);
+        summary.kvKeysRemoved += 1;
+      }
+    }
+    await txKv.done;
+
+    const records = await db.getAll("records");
+    const txRec = db.transaction("records", "readwrite");
+    for (const row of records) {
+      const r = row as { key: string; accountKey?: string };
+      if (r.accountKey === accountKey) {
+        await txRec.store.delete(r.key);
+        summary.recordsRemoved += 1;
+      }
+    }
+    await txRec.done;
+
+    const queue = await db.getAll("syncQueue");
+    const txQ = db.transaction("syncQueue", "readwrite");
+    for (const op of queue) {
+      const r = op as SyncOperation & { accountKey?: string };
+      if (r.accountKey === accountKey) {
+        await txQ.store.delete(op.id);
+        summary.syncQueueRemoved += 1;
+      }
+    }
+    await txQ.done;
+
+    if (db.objectStoreNames.contains("backups")) {
+      const backups = await db.getAll("backups");
+      const txB = db.transaction("backups", "readwrite");
+      for (const b of backups) {
+        if (b.accountKey === accountKey) {
+          await txB.store.delete(b.id);
+          summary.backupsRemoved += 1;
+        }
+      }
+      await txB.done;
+    }
+  } catch {
+    /* idempotent — partial wipe is acceptable on error */
+  }
+
+  return summary;
 }

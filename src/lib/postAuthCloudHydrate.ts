@@ -2,7 +2,7 @@ import { getDeviceOnline } from "./deviceOnline";
 import { shouldPausePosBackgroundWork } from "./backgroundWorkPolicy";
 import { isNativeApp } from "./nativeApp";
 import { runWhenIdle } from "./uiYield";
-import { hasSupabaseConfig } from "./supabase";
+import { hasSupabaseConfig, supabase } from "./supabase";
 import { usePosStore } from "../store/usePosStore";
 import { isLocalShopDataEmpty, restoreShopFromCloudSnapshot, uploadShopCloudSnapshot } from "./cloudSnapshotSync";
 import { captureAppException } from "./crashReporting";
@@ -39,6 +39,29 @@ async function runHydrateAccountFromCloud(opts?: {
   if (!hasSupabaseConfig) return;
 
   await waitForPosStoreHydrated();
+
+  const { data } = await supabase!.auth.getSession();
+  const userId = data.session?.user?.id ?? null;
+  const { getActiveAccountKey } = await import("../offline/accountScope");
+  const accountKey = getActiveAccountKey();
+  const {
+    assertOrganizationOperationsAllowed,
+    refreshOrganizationDeletionState,
+    isOrganizationBlocked,
+  } = await import("./organizationDeletionState");
+
+  if (userId && accountKey) {
+    await refreshOrganizationDeletionState(userId, accountKey);
+  }
+  if (isOrganizationBlocked(accountKey)) {
+    return;
+  }
+
+  try {
+    await assertOrganizationOperationsAllowed({ userId, accountKey });
+  } catch {
+    return;
+  }
 
   const { hydrateLocalShopProfileFromCloud } = await import("./businessProfile");
   await hydrateLocalShopProfileFromCloud().catch(() => undefined);

@@ -38,8 +38,8 @@ import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
-import { confirmLeaveActiveSaleIfNeeded } from "../../lib/posLeaveGuard";
-import { lockPosAfterSellExit } from "../../lib/posSellExit";
+import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
+import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
@@ -105,9 +105,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const { snapshot } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
   const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
-  const beginShift = usePosStore((s) => s.beginShift);
-  const endActiveShift = usePosStore((s) => s.endActiveShift);
-  const draftLineCount = usePosStore((s) => s.draftLines.length);
+  const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
+  const shifts = usePosStore((s) => s.preferences.shifts);
   const [pwaUpdate, setPwaUpdate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
@@ -115,28 +114,30 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const [lockSecret, setLockSecret] = useState("");
   const [lockError, setLockError] = useState<string | null>(null);
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
+  const [staffSwitchShiftOpen, setStaffSwitchShiftOpen] = useState(false);
+  const [staffSwitchCloseOpen, setStaffSwitchCloseOpen] = useState(false);
+  const [pendingStaffUnlock, setPendingStaffUnlock] = useState<{
+    staffId: string | null;
+    secret: string;
+  } | null>(null);
   const [isInternalAdmin, setIsInternalAdmin] = useState(false);
   const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(null);
   const [roleReady, setRoleReady] = useState(() => authMode !== "supabase" || !user?.id);
-  const prevActorRef = useRef<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const guardedNavigate = useCallback(
     (to: string, options?: NavigateOptions) => {
       const onPos = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
-      const leavingPos = onPos && draftLineCount > 0 && to !== location.pathname && !to.startsWith("/pos");
+      const leavingPos = onPos && to !== location.pathname && !to.startsWith("/pos");
       if (leavingPos) {
-        void confirmLeaveActiveSaleIfNeeded().then((ok) => {
-          if (ok) {
-            lockPosAfterSellExit();
-            navigate(to, options);
-          }
+        void confirmLeavePosIfNeeded(location.pathname, to).then((ok) => {
+          if (ok) navigate(to, options);
         });
         return;
       }
       navigate(to, options);
     },
-    [draftLineCount, location.pathname, navigate],
+    [location.pathname, navigate],
   );
 
   useEffect(() => {
@@ -196,14 +197,25 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     usePosStore.getState().setSessionActor(actor);
   }, [actor]);
 
-  useEffect(() => {
-    const prev = prevActorRef.current;
-    if (prev && prev !== actor.userId) {
-      endActiveShift(prev);
-    }
-    prevActorRef.current = actor.userId;
-    if (!preferences.posLocked) beginShift();
-  }, [actor.userId, preferences.posLocked, beginShift, endActiveShift]);
+  const activeShiftForActor = useMemo(
+    () => (shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
+    [shifts, actor.userId],
+  );
+
+  const completeStaffUnlock = useCallback(
+    (staffId: string | null) => {
+      const r = switchStaffAccount(staffId);
+      if (!r.ok) {
+        setLockError(t(lang, r.errorKey ?? "saleError"));
+        return;
+      }
+      setPosLocked(false);
+      setLockSecret("");
+      setLockError(null);
+      setPendingStaffUnlock(null);
+    },
+    [lang, setPosLocked, switchStaffAccount],
+  );
 
   useEffect(() => {
     setMenuOpen(false);
@@ -639,10 +651,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     setLockError(t(lang, "unlockWrongPin"));
                     return;
                   }
-                  switchStaffAccount(staff?.id ?? null);
-                  setPosLocked(false);
-                  setLockSecret("");
-                  setLockError(null);
+                  const targetStaffId = staff?.id ?? null;
+                  const switchingStaff = (preferences.activeStaffId ?? null) !== targetStaffId;
+                  if (switchingStaff && activeShiftForActor) {
+                    setPendingStaffUnlock({ staffId: targetStaffId, secret });
+                    setStaffSwitchShiftOpen(true);
+                    return;
+                  }
+                  completeStaffUnlock(targetStaffId);
                 }}
               >
                 {t(lang, "unlockSubmit")}
@@ -653,7 +669,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   className="mt-2 min-h-[42px] w-full rounded-2xl border border-amber-300 bg-amber-50 py-2 text-sm font-black text-amber-900"
                   onClick={() => {
                     usePosStore.getState().setPreferences({ backOfficePin: null });
-                    switchStaffAccount(null);
+                    switchStaffAccount(null, { force: true });
                     setPosLocked(false);
                     setLockSecret("");
                     setLockError(null);
@@ -665,6 +681,55 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </AppModalOverlay>
         ) : null}
+        {staffSwitchShiftOpen ? (
+          <AppModalOverlay className="z-[125] flex items-center justify-center bg-stone-950/85 p-4">
+            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+              <p className="text-xl font-black text-stone-900">{t(lang, "staffSwitchShiftTitle")}</p>
+              <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "staffSwitchShiftBody")}</p>
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStaffSwitchShiftOpen(false);
+                    setPendingStaffUnlock(null);
+                  }}
+                  className="min-h-[48px] rounded-2xl border-2 font-bold"
+                >
+                  {t(lang, "cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStaffSwitchShiftOpen(false);
+                    setStaffSwitchCloseOpen(true);
+                  }}
+                  className="min-h-[48px] rounded-2xl bg-waka-600 font-black text-white"
+                >
+                  {t(lang, "shiftCloseBtn")}
+                </button>
+              </div>
+            </div>
+          </AppModalOverlay>
+        ) : null}
+        <ShiftCloseModal
+          lang={lang}
+          open={staffSwitchCloseOpen}
+          shift={activeShiftForActor}
+          onClose={() => {
+            setStaffSwitchCloseOpen(false);
+            setPendingStaffUnlock(null);
+          }}
+          onConfirm={(counted) => {
+            const r = closeShiftWithCashCount(counted);
+            if (!r.ok) {
+              setLockError(t(lang, r.errorKey ?? "saleError"));
+              return { ok: false };
+            }
+            setStaffSwitchCloseOpen(false);
+            if (pendingStaffUnlock) completeStaffUnlock(pendingStaffUnlock.staffId);
+            return { ok: true };
+          }}
+        />
         {lockSetupHint ? (
           <AppModalOverlay className="z-[115] flex items-center justify-center bg-stone-950/70 p-4">
             <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">

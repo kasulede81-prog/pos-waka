@@ -141,6 +141,11 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
 /** Full snapshot for backups, disaster recovery, export, and legacy compatibility. */
 export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLastGood?: boolean }): Promise<IncrementalPersistResult> {
   const started = performance.now();
+  const { readEntityManifest } = await import("./entityStore");
+  const { snapshotFieldsFromTombstones, tombstonesFromManifest } = await import("../lib/tombstoneDurability");
+  const manifest = await readEntityManifest();
+  const tombstoneFields = manifest ? snapshotFieldsFromTombstones(tombstonesFromManifest(manifest)) : { deletedProductIds: [], voidedSaleIds: [] };
+
   const payload: Omit<PersistedSnapshot, "updatedAt"> = {
     products: state.products,
     customers: state.customers,
@@ -162,6 +167,8 @@ export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLas
     archivedDayCloses: state.archivedDayCloses,
     archivedVoidRecords: state.archivedVoidRecords,
     archivedReturnRecords: state.archivedReturnRecords,
+    deletedProductIds: tombstoneFields.deletedProductIds,
+    voidedSaleIds: tombstoneFields.voidedSaleIds,
   };
   await migrateSnapshotToEntities({ ...payload, updatedAt: new Date().toISOString() });
   await writeSnapshot(payload, { skipLastGood: opts?.skipLastGood });

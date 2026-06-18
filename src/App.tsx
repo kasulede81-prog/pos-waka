@@ -113,6 +113,7 @@ const TableOrderPage = lazy(() => import("./pages/TableOrderPage").then((m) => (
 const SettingsFloorPage = lazy(() => import("./pages/SettingsFloorPage").then((m) => ({ default: m.SettingsFloorPage })));
 const KitchenDisplayPage = lazy(() => import("./pages/KitchenDisplayPage").then((m) => ({ default: m.KitchenDisplayPage })));
 const PendingSalesPage = lazy(() => import("./pages/PendingSalesPage").then((m) => ({ default: m.PendingSalesPage })));
+const OpenShiftsPage = lazy(() => import("./pages/OpenShiftsPage").then((m) => ({ default: m.OpenShiftsPage })));
 
 function LazyWait() {
   return (
@@ -377,6 +378,20 @@ function AppRoutes() {
               }
             />
             <Route path="office/cash" element={<Navigate to="/office/cash-position" replace />} />
+            <Route
+              path="office/open-shifts"
+              element={
+                <RoleProtectedRoute permission="back_office.access">
+                  <Suspense fallback={<LazyWait />}>
+                    <OpenShiftsPage lang={lang} />
+                  </Suspense>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/shift-reports"
+              element={<Navigate to="/office/open-shifts" replace />}
+            />
             <Route
               path="office/purchases"
               element={

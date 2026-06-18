@@ -123,6 +123,11 @@ import {
   shiftExpectedCash,
   type DiscountMode,
 } from "../lib/saleAdjustments";
+import {
+  assertCanCloseShift,
+  getActiveShiftForActor,
+  requireActiveShift,
+} from "../lib/shiftEnforcement";
 import { cartDiscountFromPendingSale, estimatedProfitAfterCartDiscount, mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
 import { deletedLineIdsFromDraft, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { getDeviceOnline } from "../lib/deviceOnline";
@@ -408,7 +413,7 @@ export type PosState = {
   updateStaffAccount: (id: string, patch: { name?: string; username?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
   removeStaffAccount: (id: string) => void;
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
-  switchStaffAccount: (id: string | null) => void;
+  switchStaffAccount: (id: string | null, opts?: { force?: boolean }) => { ok: boolean; errorKey?: string };
   setPosLocked: (locked: boolean) => void;
   setPilotModeEnabled: (enabled: boolean) => void;
   beginShift: (openingFloatUgx?: number) => void;
@@ -1304,20 +1309,27 @@ export const usePosStore = create<PosState>((set, get) => {
     }));
   },
 
-  switchStaffAccount: (id) => {
-    const prev = get().preferences.activeStaffId ?? null;
-    const staff = get().preferences.staffAccounts ?? [];
+  switchStaffAccount: (id, opts) => {
+    const state = get();
+    const prev = state.preferences.activeStaffId ?? null;
+    const staff = state.preferences.staffAccounts ?? [];
+    if (!opts?.force && prev !== id) {
+      const actor = state.sessionActor;
+      if (actor) {
+        const open = getActiveShiftForActor(state.preferences.shifts, actor.userId);
+        if (open) return { ok: false, errorKey: "staffSwitchShiftOpen" };
+      }
+    }
     if (prev && prev !== id) {
       const prevStaff = staff.find((s) => s.id === prev);
       pushAudit("staff_logout", prevStaff?.name ?? prev, { staffId: prev, staffName: prevStaff?.name });
-      get().endActiveShift();
     }
     set((s) => ({ preferences: { ...s.preferences, activeStaffId: id } }));
     if (id && prev !== id) {
       const nextStaff = staff.find((s) => s.id === id);
       pushAudit("staff_login", nextStaff?.name ?? id, { staffId: id, staffName: nextStaff?.name, role: nextStaff?.role });
-      get().beginShift();
     }
+    return { ok: true };
   },
 
   setPosLocked: (locked) => {
@@ -2101,6 +2113,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("pending_sales.manage", "savePendingSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
+    const shiftGuard = requireActiveShift(state);
+    if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
     const saleId = state.activePendingSaleId ?? crypto.randomUUID();
     const existing = state.sales.find((s) => s.id === saleId);
@@ -2189,6 +2203,8 @@ export const usePosStore = create<PosState>((set, get) => {
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
+    const shiftGuard = requireActiveShift(state);
+    if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     if (!state.draftLines.length) return { ok: false, errorKey: "emptySale" };
 
     const { snapshot, authMode } = getStoreSubscriptionContext();
@@ -2451,6 +2467,8 @@ export const usePosStore = create<PosState>((set, get) => {
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
+    const shiftGuard = requireActiveShift(state);
+    if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const saleIdx = state.sales.findIndex((s) => s.id === saleId);
@@ -2577,6 +2595,8 @@ export const usePosStore = create<PosState>((set, get) => {
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
+    const shiftGuard = requireActiveShift(state);
+    if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
     const qty = Math.max(0, Number(quantity) || 0);
@@ -2722,6 +2742,8 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
+    const closeGuard = assertCanCloseShift(state);
+    if (!closeGuard.ok) return { ok: false, errorKey: closeGuard.errorKey };
     const open = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     if (!open) return { ok: false, errorKey: "invalid" };
     const expected = shiftExpectedCash(open);
@@ -3306,9 +3328,11 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("customers.debt", "addDebtPayment");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
+    const state = get();
+    const shiftGuard = requireActiveShift(state);
+    if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     const amount = Math.floor(Math.max(0, amountUgx));
     if (amount <= 0) return { ok: false, errorKey: "invalidMoney" };
-    const state = get();
     const c = state.customers.find((x) => x.id === customerId);
     if (!c) return { ok: false, errorKey: "missingProduct" };
     const pay = Math.min(amount, c.debtBalanceUgx);
@@ -4431,6 +4455,20 @@ function reportRestoreProgress(
 
 /** Write current in-memory store to IndexedDB after a restore (can run after UI unblocks). */
 export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise<void> {
+  const { assertOrganizationOperationsAllowed, ORGANIZATION_DELETED_ERROR } = await import(
+    "../lib/organizationDeletionState",
+  );
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup persist — organization deleted", {
+      permission: "settings.shop",
+      action: "backup_persist",
+      errorKey: ORGANIZATION_DELETED_ERROR,
+    });
+    throw new Error(ORGANIZATION_DELETED_ERROR);
+  }
+
   const { snapshot, authMode } = getStoreSubscriptionContext();
   const restoreAuth = authorizeBackupRestore({
     actor: usePosStore.getState().sessionActor,
@@ -4462,6 +4500,23 @@ export async function applyRestoredSnapshotFromBackup(
   snap: PersistedSnapshot,
   opts?: { sessionId?: number; onProgress?: (percent: number) => void },
 ): Promise<void> {
+  const { assertOrganizationOperationsAllowed, ORGANIZATION_DELETED_ERROR } = await import(
+    "../lib/organizationDeletionState",
+  );
+  try {
+    await assertOrganizationOperationsAllowed();
+  } catch {
+    usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup restore — organization deleted", {
+      permission: "settings.shop",
+      action: "backup_restore",
+      errorKey: ORGANIZATION_DELETED_ERROR,
+    });
+    throw new Error(ORGANIZATION_DELETED_ERROR);
+  }
+
+  const { attachTombstonesToSnapshot, tombstonesFromSnapshot } = await import("../lib/tombstoneDurability");
+  const restoredSnap = attachTombstonesToSnapshot(snap, tombstonesFromSnapshot(snap));
+
   const { snapshot, authMode } = getStoreSubscriptionContext();
   const restoreAuth = authorizeBackupRestore({
     actor: usePosStore.getState().sessionActor,
@@ -4490,11 +4545,11 @@ export async function applyRestoredSnapshotFromBackup(
 
   try {
     assertBackupRestoreNotAborted(sessionId);
-    const preferences = mergePreferencesFromPartial({ preferences: snap.preferences });
+    const preferences = mergePreferencesFromPartial({ preferences: restoredSnap.preferences });
 
     usePosStore.getState().hydrateEssentials({
-      products: snap.products.map(normalizeProduct),
-      customers: (snap.customers ?? []).map(normalizeCustomer),
+      products: restoredSnap.products.map(normalizeProduct),
+      customers: (restoredSnap.customers ?? []).map(normalizeCustomer),
       preferences,
     });
     reportRestoreProgress(opts?.onProgress, 0, 8, 100);
@@ -4502,34 +4557,34 @@ export async function applyRestoredSnapshotFromBackup(
 
     assertBackupRestoreNotAborted(sessionId);
     usePosStore.getState().hydrateRemainder({
-      debtPayments: snap.debtPayments ?? [],
-      dayCloses: snap.dayCloses ?? [],
-      auditLogs: snap.auditLogs ?? [],
-      suppliers: (snap.suppliers ?? []).map(normalizeSupplier),
-      purchases: (snap.purchases ?? []).map(normalizePurchase),
-      supplierPayments: (snap.supplierPayments ?? []).map(normalizeSupplierPayment),
-      stockMovements: (snap.stockMovements ?? []).map(normalizeStockMovement),
-      voidRecords: snap.voidRecords ?? [],
-      returnRecords: snap.returnRecords ?? [],
-      cashExpenses: (snap.cashExpenses ?? []).map(normalizeCashExpense),
-      cashDrawerAdjustments: (snap.cashDrawerAdjustments ?? []).map(normalizeCashDrawerAdjustment),
+      debtPayments: restoredSnap.debtPayments ?? [],
+      dayCloses: restoredSnap.dayCloses ?? [],
+      auditLogs: restoredSnap.auditLogs ?? [],
+      suppliers: (restoredSnap.suppliers ?? []).map(normalizeSupplier),
+      purchases: (restoredSnap.purchases ?? []).map(normalizePurchase),
+      supplierPayments: (restoredSnap.supplierPayments ?? []).map(normalizeSupplierPayment),
+      stockMovements: (restoredSnap.stockMovements ?? []).map(normalizeStockMovement),
+      voidRecords: restoredSnap.voidRecords ?? [],
+      returnRecords: restoredSnap.returnRecords ?? [],
+      cashExpenses: (restoredSnap.cashExpenses ?? []).map(normalizeCashExpense),
+      cashDrawerAdjustments: (restoredSnap.cashDrawerAdjustments ?? []).map(normalizeCashDrawerAdjustment),
       archivedSales: [],
-      archivedAuditLogs: snap.archivedAuditLogs ?? [],
-      archivedDayCloses: snap.archivedDayCloses ?? [],
-      archivedVoidRecords: snap.archivedVoidRecords ?? [],
-      archivedReturnRecords: snap.archivedReturnRecords ?? [],
+      archivedAuditLogs: restoredSnap.archivedAuditLogs ?? [],
+      archivedDayCloses: restoredSnap.archivedDayCloses ?? [],
+      archivedVoidRecords: restoredSnap.archivedVoidRecords ?? [],
+      archivedReturnRecords: restoredSnap.archivedReturnRecords ?? [],
     });
     reportRestoreProgress(opts?.onProgress, 8, 12, 100);
     await yieldUiTick();
 
-    await hydrateSalesBatched(snap.sales, {
+    await hydrateSalesBatched(restoredSnap.sales, {
       sessionId,
       batchSize: SALES_RESTORE_BATCH,
       onProgress: (p) => reportRestoreProgress(opts?.onProgress, 12, 82, p),
     });
 
     assertBackupRestoreNotAborted(sessionId);
-    await hydrateArchivedSalesBatched(snap.archivedSales ?? [], {
+    await hydrateArchivedSalesBatched(restoredSnap.archivedSales ?? [], {
       sessionId,
       batchSize: ARCHIVED_RESTORE_BATCH,
       onProgress: (p) => reportRestoreProgress(opts?.onProgress, 82, 100, p),
@@ -4540,6 +4595,9 @@ export async function applyRestoredSnapshotFromBackup(
 
     const { clearSyncQueueForRestore } = await import("../lib/restoreSyncSafety");
     await clearSyncQueueForRestore();
+
+    const { migrateSnapshotToEntities } = await import("../offline/entityStore");
+    await migrateSnapshotToEntities(restoredSnap);
 
     const restored = usePosStore.getState();
     const { runPostRestoreValidationSnapshot } = await import("../lib/postRestoreValidation");
@@ -4746,7 +4804,7 @@ async function runPostBootstrapTasks(): Promise<void> {
   runWhenIdle(() => usePosStore.getState().runDataArchive(), 4000);
 
   if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
-    usePosStore.getState().switchStaffAccount(null);
+    usePosStore.getState().switchStaffAccount(null, { force: true });
   }
 
   const key = getActiveAccountKey();
@@ -4854,17 +4912,22 @@ export async function bootstrapPosFromDisk(): Promise<void> {
       const products = (await getEntitiesByBucket<Product>("product")).map(normalizeProduct);
       const customers = (await getEntitiesByBucket<Customer>("customer")).map(normalizeCustomer);
       const tombstones = manifest.tombstones ?? {};
+      const voidedSales = manifest.voidedSaleIds ?? {};
       const filteredProducts = products.filter((p) => !tombstones[p.id]);
       usePosStore.getState().hydrateEssentials({
         products: filteredProducts,
         customers,
         preferences: manifest.preferences,
       });
-      const headIds = manifest.salesOrder.slice(0, INITIAL_SALES_LOAD_COUNT);
+      const headIds = manifest.salesOrder
+        .slice(0, INITIAL_SALES_LOAD_COUNT)
+        .filter((id) => !voidedSales[id]);
       const headSales = (await getEntitiesByIds<Sale>("sale", headIds)).map(normalizeSale);
       await hydrateSalesBatched(headSales);
       if (manifest.salesOrder.length > INITIAL_SALES_LOAD_COUNT) {
-        scheduleBackgroundSalesHydrateByIds(manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT));
+        scheduleBackgroundSalesHydrateByIds(
+          manifest.salesOrder.slice(INITIAL_SALES_LOAD_COUNT).filter((id) => !voidedSales[id]),
+        );
       }
       usePosStore.getState().hydrateRemainder({
         debtPayments: await getEntitiesByBucket("debtPayment"),

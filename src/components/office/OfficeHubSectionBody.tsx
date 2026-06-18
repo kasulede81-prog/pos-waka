@@ -21,6 +21,7 @@ import {
   Settings,
   UserCog,
   Receipt,
+  Clock,
 } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -30,6 +31,7 @@ import { useWholesaleTerms } from "../../lib/wholesaleTerms";
 import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { useOfficeHubAccess } from "../../hooks/useOfficeHubAccess";
+import { useSessionActor } from "../../context/SessionActorContext";
 import type { OfficeHubSectionId } from "../../lib/officeHubSections";
 import { OfficeNavCard } from "./OfficeNavCard";
 import { OfficeCloseDayCard } from "./OfficeCloseDayCard";
@@ -47,6 +49,8 @@ type Props = {
 
 export function OfficeHubSectionBody({ lang, section }: Props) {
   const access = useOfficeHubAccess();
+  const actor = useSessionActor();
+  const canViewOpenShifts = actor.role === "owner" || actor.role === "manager";
   const sync = useSyncStatus();
   const syncAttention = sync.pendingCount > 0 || countSalesWithSyncErrors() > 0;
   const pt = usePharmacyTerms(lang, access.preferences.businessType, access.preferences.pharmacyModeEnabled);
@@ -198,6 +202,14 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             />
             <OfficeCloseDayCard lang={lang} highlight={highlightCloseDay} />
           </>
+        ) : null}
+        {canViewOpenShifts ? (
+          <OfficeNavCard
+            to="/office/open-shifts"
+            title={t(lang, "officeCardOpenShifts")}
+            subtitle={t(lang, "officeCardOpenShiftsSub")}
+            Icon={Clock}
+          />
         ) : null}
         {access.showDeferredHub ? (
           <Suspense fallback={null}>
