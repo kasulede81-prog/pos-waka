@@ -3,7 +3,7 @@
   "private": true,
   "description": "WAKA POS desktop and mobile point-of-sale application.",
   "author": "WAKA Technologies",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "type": "module",
   "scripts": {
     "dev": "vite --mode development",
