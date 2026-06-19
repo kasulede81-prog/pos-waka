@@ -5,6 +5,8 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
+import { authorizePreferencesPatch } from "../lib/settingsAuthorization";
+import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 
@@ -24,20 +26,34 @@ export function SettingsCashDrawerPage({ lang }: Props) {
     preferences.ownerDayOpenCorrectionAfterSales === true,
   );
   const [saved, setSaved] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!hasPermission(actor.role, "day.open_drawer")) {
     return <Navigate to="/settings" replace />;
   }
 
   const save = () => {
     const pctN = Math.max(0, Math.min(100, Number(pct) || 0));
     const fixedN = Math.max(0, Math.floor(Number(fixed.replace(/\D/g, "")) || 0));
-    setPreferences({
+    const patch = {
       cashVarianceThresholdPct: pctN,
       cashVarianceThresholdUgxFixed: fixedN,
       cashDrawerFormulaVersion: formula,
       ownerDayOpenCorrectionAfterSales: ownerCorrection,
+    };
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const denied = authorizePreferencesPatch(actor, patch, {
+      snapshot,
+      authMode,
+      currentStaffAccounts: preferences.staffAccounts ?? [],
     });
+    if (!denied.ok) {
+      setErrorKey(denied.errorKey ?? "forbidden");
+      setSaved(false);
+      return;
+    }
+    setPreferences(patch);
+    setErrorKey(null);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2500);
   };
@@ -109,6 +125,11 @@ export function SettingsCashDrawerPage({ lang }: Props) {
         </button>
         {saved ? (
           <p className="mt-2 text-center text-sm font-bold text-emerald-700">{t(lang, "cashDrawerSettingsSaved")}</p>
+        ) : null}
+        {errorKey ? (
+          <p className="mt-2 text-center text-sm font-bold text-rose-700">
+            {(t as (l: Language, k: string) => string)(lang, errorKey)}
+          </p>
         ) : null}
       </section>
     </div>

@@ -121,13 +121,7 @@ export async function hydrateAccountFromCloud(opts?: {
   if (!force && Date.now() - lastHydrateFinishedAt < minGap) return;
   if (hydrateInFlight) return hydrateInFlight;
 
-  hydrateInFlight = (async () => {
-    if (isNativeApp() && !force) {
-      const { waitForFirstUserInteraction } = await import("./firstUserInteraction");
-      await waitForFirstUserInteraction().catch(() => undefined);
-    }
-    await runHydrateAccountFromCloud(opts);
-  })()
+  hydrateInFlight = runHydrateAccountFromCloud(opts)
     .catch((err) => {
       captureAppException(err, { scope: "cloud_hydrate" });
       reportSyncIssue("cloud_hydrate_failed");

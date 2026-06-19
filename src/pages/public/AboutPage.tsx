@@ -1,15 +1,16 @@
-import { Link } from "react-router-dom";
+import type { ReactNode } from "react";
 import type { Language } from "../../types";
 import { MarketingLayout } from "../../components/marketing/MarketingLayout";
 import { SeoHead } from "../../components/marketing/SeoHead";
-import { FounderSection } from "../../components/marketing/FounderSection";
-import { FounderJourney } from "../../components/marketing/FounderJourney";
 import {
   FOUNDER_NAME,
-  FOUNDER_VISION,
-  WAKA_BRAND_NAME,
+  WAKA_LEGAL_COMPANY_NAME,
   WAKA_MAIN_PRODUCT,
-  WAKA_PRODUCT_DESCRIPTION,
+  WAKA_OFFICE_CITY,
+  WAKA_OFFICE_COUNTRY,
+  WAKA_OFFICE_STREET,
+  WAKA_POS_URL,
+  WAKA_SUPPORT_EMAILS,
 } from "../../config/company";
 
 type Props = {
@@ -18,91 +19,245 @@ type Props = {
   isAuthenticated: boolean;
 };
 
+type FeatureBlock = {
+  title: string;
+  intro?: string[];
+  bulletsLabel?: string;
+  bullets?: string[];
+  outro?: string[];
+};
+
+const DIFFERENTIATORS: FeatureBlock[] = [
+  {
+    title: "Built For Real Businesses",
+    intro: [
+      "Every feature in Waka comes from real operational challenges faced by shop owners, pharmacists, restaurant operators, wholesalers, and service businesses.",
+    ],
+  },
+  {
+    title: "Works Online And Offline",
+    intro: [
+      "Business should not stop because internet is unavailable.",
+      "Waka continues recording sales, stock movements, debts, expenses, and operations while offline, then syncs automatically when connectivity returns.",
+    ],
+  },
+  {
+    title: "Complete Cash Control",
+    bulletsLabel: "Monitor:",
+    bullets: [
+      "Shift openings",
+      "Float verification",
+      "Cash shortages",
+      "Cash overages",
+      "Drawer reconciliation",
+      "Cash adjustments",
+      "Daily cash accountability",
+    ],
+    outro: ["Owners always know where money moved."],
+  },
+  {
+    title: "Owner Command Center",
+    bulletsLabel: "Waka provides a centralized command center where owners can monitor:",
+    bullets: [
+      "Revenue",
+      "Profit",
+      "Staff performance",
+      "Inventory risks",
+      "Cash control",
+      "Debt collection",
+      "Supplier balances",
+      "System integrity",
+      "Business alerts",
+    ],
+    outro: ["All from one dashboard."],
+  },
+  {
+    title: "Inventory Intelligence",
+    bulletsLabel: "Track:",
+    bullets: [
+      "Stock levels",
+      "Low stock alerts",
+      "Out-of-stock products",
+      "Inventory counts",
+      "Product movements",
+      "Expiry monitoring",
+      "Shrinkage risks",
+    ],
+  },
+  {
+    title: "Staff Accountability",
+    bulletsLabel: "Know:",
+    bullets: [
+      "Who opened a shift",
+      "Who verified cash",
+      "Who edited products",
+      "Who issued refunds",
+      "Who applied discounts",
+      "Who performed stock adjustments",
+    ],
+    outro: ["Every important action is recorded."],
+  },
+  {
+    title: "Built For Growth",
+    intro: ["Start with a small shop and grow without changing systems."],
+    bulletsLabel: "Waka supports:",
+    bullets: [
+      "Multiple staff accounts",
+      "Multiple devices",
+      "Cloud backup",
+      "Branch expansion",
+      "Advanced reporting",
+      "Business analytics",
+    ],
+  },
+];
+
 export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
-        title="About Waka POS and Waka Technologies"
-        description={`${WAKA_BRAND_NAME} builds ${WAKA_MAIN_PRODUCT} in Uganda for retail shops, pharmacies, supermarkets, and restaurants. Founded by ${FOUNDER_NAME} — simple POS software with local support and offline selling.`}
+        title="About Waka POS — Built in Uganda for African Business"
+        description="Waka POS is an all-in-one business management platform for shops, supermarkets, pharmacies, restaurants, and growing businesses across Africa. Founded by Kasule Denis in Uganda."
         path="/about"
         structuredData="home"
       />
 
-      <article className="space-y-10">
+      <article className="space-y-8">
         <header className="space-y-4">
           <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">About us</p>
           <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">
-            Built in Uganda for everyday businesses
+            Built in Uganda. Built for African Business.
           </h1>
-          <p className="max-w-2xl text-lg font-medium leading-relaxed text-stone-600">{WAKA_PRODUCT_DESCRIPTION}</p>
+          <div className="max-w-3xl space-y-3 text-base font-medium leading-relaxed text-stone-600">
+            <p>
+              {WAKA_MAIN_PRODUCT} is an all-in-one business management platform designed for shops, supermarkets,
+              pharmacies, restaurants, salons, wholesalers, and growing businesses across Africa.
+            </p>
+            <p>
+              We help business owners sell faster, manage stock, control cash, monitor staff performance, track debts,
+              manage suppliers, and make better decisions from a single platform.
+            </p>
+            <p>
+              Whether you operate one shop or multiple branches, Waka gives you the tools to run your business with
+              confidence.
+            </p>
+          </div>
         </header>
 
+        <ContentSection title="Our Story">
+          <p>
+            Waka was founded by {FOUNDER_NAME} after years of operating and managing real businesses in Uganda.
+          </p>
+          <p>
+            Like many business owners, he experienced the daily challenges of tracking stock, managing cash, monitoring
+            staff, collecting debts, and understanding business performance using notebooks, spreadsheets, and
+            disconnected systems.
+          </p>
+          <p>Waka was created to solve those problems with simple technology that works for everyday businesses.</p>
+          <p>
+            Today Waka serves businesses across multiple industries while remaining focused on one goal: helping African
+            businesses operate more efficiently and grow sustainably.
+          </p>
+        </ContentSection>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-black text-stone-950">What Makes Waka Different</h2>
+          <div className="space-y-4">
+            {DIFFERENTIATORS.map((block) => (
+              <FeatureCard key={block.title} block={block} />
+            ))}
+          </div>
+        </section>
+
+        <ContentSection title="Our Vision">
+          <p>To build Africa&apos;s most trusted business operating platform.</p>
+          <p>
+            We believe business owners deserve affordable technology that provides visibility, accountability, and
+            control without requiring expensive infrastructure or technical knowledge.
+          </p>
+          <p>
+            Our mission is to help millions of African businesses move from manual operations to modern business
+            management.
+          </p>
+        </ContentSection>
+
         <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
-          <h2 className="text-xl font-black text-stone-950">Our story</h2>
-          <p className="mt-4 text-sm font-medium leading-relaxed text-stone-700">
-            {WAKA_BRAND_NAME} and {WAKA_MAIN_PRODUCT} were started by {FOUNDER_NAME} to give Ugandan shops affordable,
-            easy tools for everyday work. Many businesses still rely on notebooks and memory for stock and sales. Waka
-            POS brings checkout, receipts, stock, debts, reports, and staff into one simple app on the phones you already
-            use.
-          </p>
+          <h2 className="text-xl font-black text-stone-950">{WAKA_LEGAL_COMPANY_NAME}</h2>
           <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">
-            We focus on local support, plain language, and software that keeps working when the network is slow, with
-            offline selling and backup when you are online.
+            Waka POS is operated by {WAKA_LEGAL_COMPANY_NAME}, a Ugandan technology company building business software
+            for Africa.
           </p>
-        </section>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          {[
-            {
-              title: "Simple by design",
-              body: "Clear screens, fast checkout, and everyday language you can explain to your staff.",
-            },
-            {
-              title: "Offline-friendly",
-              body: "Keep selling and recording when internet is weak. Sync and backup when connection returns.",
-            },
-            {
-              title: "Affordable for SMEs",
-              body: "Start in Free Mode. Upgrade when your shop needs more products, staff, or backup.",
-            },
-          ].map((card) => (
-            <div key={card.title} className="rounded-2xl border border-orange-100 bg-orange-50/50 p-5">
-              <h3 className="font-black text-stone-950">{card.title}</h3>
-              <p className="mt-2 text-sm font-medium text-stone-700">{card.body}</p>
+          <div className="mt-6 grid gap-6 sm:grid-cols-2">
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Email</h3>
+              <ul className="mt-2 space-y-1 text-sm font-semibold text-orange-800">
+                {WAKA_SUPPORT_EMAILS.map((email) => (
+                  <li key={email}>
+                    <a href={`mailto:${email}`} className="hover:underline">
+                      {email}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
-          ))}
-        </section>
+            <div>
+              <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Website</h3>
+              <p className="mt-2 text-sm font-semibold text-orange-800">
+                <a href={WAKA_POS_URL} className="hover:underline">
+                  pos.waka.ug
+                </a>
+              </p>
+            </div>
+          </div>
 
-        <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm">
-          <h2 className="text-xl font-black text-stone-950">Vision</h2>
-          <p className="mt-3 text-sm font-medium leading-relaxed text-stone-700">{FOUNDER_VISION}</p>
-        </section>
-
-        <section className="rounded-3xl border border-orange-50 bg-gradient-to-br from-white to-orange-50/60 p-6 shadow-waka-sm sm:p-8">
-          <FounderJourney condensed />
-        </section>
-
-        <FounderSection />
-
-        <section className="rounded-3xl border border-stone-100 bg-white p-6 text-center shadow-waka-sm">
-          <h2 className="text-lg font-black text-stone-950">Ready to try Waka POS?</h2>
-          <p className="mt-2 text-sm font-medium text-stone-600">Create a free account or speak with our support team.</p>
-          <div className="mt-5 flex flex-wrap justify-center gap-3">
-            <Link
-              to="/register"
-              className="inline-flex min-h-[48px] items-center rounded-2xl bg-orange-600 px-6 py-3 text-sm font-black text-white"
-            >
-              Create account
-            </Link>
-            <Link
-              to="/contact"
-              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-200 px-6 py-3 text-sm font-black text-stone-900"
-            >
-              Contact us
-            </Link>
+          <div className="mt-6">
+            <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Location</h3>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-stone-700">
+              {WAKA_OFFICE_STREET},
+              <br />
+              {WAKA_OFFICE_CITY}, {WAKA_OFFICE_COUNTRY}
+            </p>
           </div>
         </section>
       </article>
     </MarketingLayout>
+  );
+}
+
+function ContentSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
+      <h2 className="text-xl font-black text-stone-950">{title}</h2>
+      <div className="mt-4 space-y-3 text-sm font-medium leading-relaxed text-stone-700">{children}</div>
+    </section>
+  );
+}
+
+function FeatureCard({ block }: { block: FeatureBlock }) {
+  return (
+    <article className="rounded-2xl border border-orange-100 bg-orange-50/40 p-5 sm:p-6">
+      <h3 className="text-lg font-black text-stone-950">{block.title}</h3>
+      {block.intro?.map((paragraph) => (
+        <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-stone-700">
+          {paragraph}
+        </p>
+      ))}
+      {block.bulletsLabel ? (
+        <p className="mt-2 text-sm font-medium text-stone-700">{block.bulletsLabel}</p>
+      ) : null}
+      {block.bullets && block.bullets.length > 0 ? (
+        <ul className="mt-2 list-inside list-disc space-y-1 text-sm font-medium text-stone-700">
+          {block.bullets.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+      {block.outro?.map((paragraph) => (
+        <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-stone-700">
+          {paragraph}
+        </p>
+      ))}
+    </article>
   );
 }

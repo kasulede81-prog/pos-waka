@@ -41,6 +41,7 @@ import { AccountPage } from "./pages/AccountPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MarketingHomePage } from "./pages/MarketingHomePage";
 import { AboutPage } from "./pages/public/AboutPage";
+import { PricingPage } from "./pages/public/PricingPage";
 import { ContactPage } from "./pages/public/ContactPage";
 import { FounderPage } from "./pages/public/FounderPage";
 import { CompanyPage } from "./pages/public/CompanyPage";
@@ -237,10 +238,6 @@ function AppRoutes() {
         <Route path="/terms" element={<LegalPolicyPage kind="terms" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
         <Route path="/privacy" element={<LegalPolicyPage kind="privacy" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
         <Route
-          path="/refund-policy"
-          element={<LegalPolicyPage kind="refund" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
-        />
-        <Route
           path="/acceptable-use"
           element={<LegalPolicyPage kind="acceptable-use" lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />}
         />
@@ -249,6 +246,7 @@ function AppRoutes() {
         <Route element={<NativeMarketingGuard isAuthenticated={auth.isAuthenticated} />}>
           <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/about" element={<AboutPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/pricing" element={<PricingPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/contact" element={<ContactPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/founder" element={<FounderPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/about/founder" element={<Navigate to="/founder" replace />} />
@@ -685,7 +683,7 @@ function AppRoutes() {
             <Route
               path="settings/cash-drawer"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <RoleProtectedRoute permission="day.open_drawer">
                   <SettingsChangeGate lang={lang}>
                     <SettingsCashDrawerPage lang={lang} />
                   </SettingsChangeGate>

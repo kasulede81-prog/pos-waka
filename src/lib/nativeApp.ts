@@ -36,12 +36,11 @@ export const NATIVE_PUBLIC_PATHS = new Set([
   "/reset-password",
   "/terms",
   "/privacy",
-  "/refund-policy",
   "/acceptable-use",
   "/support",
 ]);
 
-const NATIVE_MARKETING_PREFIXES = ["/home", "/about", "/contact", "/founder", "/company", "/demo", "/solutions"] as const;
+const NATIVE_MARKETING_PREFIXES = ["/home", "/about", "/pricing", "/contact", "/founder", "/company", "/demo", "/solutions"] as const;
 
 export function isNativeMarketingPath(pathname: string): boolean {
   const p = pathname.split("?")[0] || "/";

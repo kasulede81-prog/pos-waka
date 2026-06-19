@@ -2,13 +2,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://waka.ug/home</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
   <url><loc>https://waka.ug/about</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://waka.ug/pricing</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
   <url><loc>https://waka.ug/founder</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://waka.ug/contact</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://waka.ug/support</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://waka.ug/company</loc><changefreq>yearly</changefreq><priority>0.5</priority></url>
   <url><loc>https://waka.ug/terms</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://waka.ug/privacy</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
-  <url><loc>https://waka.ug/refund-policy</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://waka.ug/acceptable-use</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
   <url><loc>https://waka.ug/solutions/pharmacy-pos-uganda</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
   <url><loc>https://waka.ug/solutions/supermarket-pos-uganda</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>

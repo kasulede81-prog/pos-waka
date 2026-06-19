@@ -15,6 +15,7 @@ type Props = {
 };
 
 const FOOTER_LINKS = [
+  { to: "/pricing", label: "Pricing" },
   { to: "/privacy", label: "Privacy" },
   { to: "/terms", label: "Terms" },
   { to: "/contact", label: "Contact" },

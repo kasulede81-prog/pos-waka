@@ -142,6 +142,13 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               >
                 {t(lang, "dayOpenRecordBtn")}
               </button>
+              <button
+                type="button"
+                onClick={() => navigate("/office/day-open")}
+                className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 text-sm font-bold text-stone-800"
+              >
+                {t(lang, "dayOpenGoBtn")} — {t(lang, "cashManageDrawerSettings")}
+              </button>
             </>
           ) : (
             <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">

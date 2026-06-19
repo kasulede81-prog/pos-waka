@@ -37,7 +37,6 @@ export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Pr
           <nav className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-orange-800">
             <Link to="/terms">Terms</Link>
             <Link to="/privacy">Privacy</Link>
-            <Link to="/refund-policy">Refund Policy</Link>
             <Link to="/acceptable-use">Acceptable use</Link>
             <Link to="/support">Support</Link>
           </nav>

@@ -41,6 +41,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   }
 
   const canShop = hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode);
+  const canDrawerSettings = hasPermission(actor.role, "day.open_drawer");
   const canOwnerFinanceDiagnostics =
     canSeeFinanceDiagnostics(actor.role) &&
     hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode);
@@ -79,7 +80,7 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={UserCog}
           />
         ) : null}
-        {canShop ? (
+        {canDrawerSettings ? (
           <OfficeNavCard
             to="/settings/cash-drawer"
             title={t(lang, "cashManageDrawerSettings")}

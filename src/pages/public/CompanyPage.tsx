@@ -66,7 +66,6 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
         <nav className="flex flex-wrap gap-3 rounded-3xl border border-stone-100 bg-white p-5 text-sm font-black text-orange-800">
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
-          <Link to="/refund-policy">Refund policy</Link>
           <Link to="/acceptable-use">Acceptable use</Link>
         </nav>
       </article>

@@ -136,7 +136,7 @@ describe("P0-3 Business trial account gates", () => {
   });
 
   it("allows staff creation quota", () => {
-    expect(maxStaffAccountsForTier(resolveEffectivePlanTier(snap))).toBe(3);
+    expect(maxStaffAccountsForTier(resolveEffectivePlanTier(snap))).toBe(4);
   });
 
   it("unlocks owner dashboard, profit, shop settings", () => {

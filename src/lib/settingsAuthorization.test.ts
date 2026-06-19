@@ -59,6 +59,29 @@ describe("settingsAuthorization — permission map", () => {
     expect(authorizePreferencesPatch(actor("manager"), { posPinnedShelfKeys: ["cat:General"] }).ok).toBe(false);
   });
 
+  it("cash drawer settings require day.open_drawer (not Business shop tier)", () => {
+    expect(requiredPermissionsForPreferencesPatch({ cashDrawerFormulaVersion: "v2" })).toEqual([
+      "day.open_drawer",
+    ]);
+    expect(
+      authorizePreferencesPatch(actor("owner"), { ownerDayOpenCorrectionAfterSales: true }).ok,
+    ).toBe(true);
+    expect(authorizePreferencesPatch(actor("cashier"), { cashDrawerFormulaVersion: "v2" }).ok).toBe(false);
+  });
+
+  it("owner on free plan can save cash drawer settings", () => {
+    setStoreSubscriptionContext({
+      snapshot: { kind: "remote", row: { plan_code: "free", status: "active" } as never },
+      authMode: "supabase",
+    });
+    expect(
+      authorizePreferencesPatch(actor("owner"), {
+        cashDrawerFormulaVersion: "v2",
+        ownerDayOpenCorrectionAfterSales: true,
+      }).ok,
+    ).toBe(true);
+  });
+
   it("denies when actor is null", () => {
     expect(authorizePreferencesPatch(null, { shopDisplayName: "X" })).toEqual({
       ok: false,

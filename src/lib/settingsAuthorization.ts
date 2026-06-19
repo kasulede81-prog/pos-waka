@@ -46,6 +46,14 @@ const RECEIPT_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "receiptShowPoweredByWaka",
 ]);
 
+/** Cash drawer configuration — owner/manager day drawer permission (not Business shop-settings tier). */
+const CASH_DRAWER_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
+  "cashVarianceThresholdPct",
+  "cashVarianceThresholdUgxFixed",
+  "cashDrawerFormulaVersion",
+  "ownerDayOpenCorrectionAfterSales",
+]);
+
 /** Shop profile, shelves, retention, PIN, staff prefs, etc. (not receipt branding). */
 const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "backOfficePin",
@@ -82,10 +90,6 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "pendingSalesTtl",
   "staffCanManagePendingSales",
   "devRoleOverride",
-  "cashVarianceThresholdPct",
-  "cashVarianceThresholdUgxFixed",
-  "cashDrawerFormulaVersion",
-  "ownerDayOpenCorrectionAfterSales",
   "wakaShopId",
   "businessType",
   "onboardingDone",
@@ -131,6 +135,7 @@ function permissionForPreferenceKey(key: keyof ShopPreferences): Permission | nu
   if (UI_MODE_KEYS.has(key)) return "ui.toggle_mode";
   if (OWNER_ACTIVITY_KEYS.has(key)) return "owner.activity";
   if (NOTIFICATIONS_KEYS.has(key)) return "settings.view";
+  if (CASH_DRAWER_PREFERENCE_KEYS.has(key)) return "day.open_drawer";
   if (RECEIPT_PREFERENCE_KEYS.has(key)) return "settings.receipt";
   if (SHOP_PREFERENCE_KEYS.has(key)) return "settings.shop";
   return "settings.shop";

@@ -185,14 +185,15 @@ export function getPaidPlanRenewalCountdown(
 }
 
 export function maxStaffAccountsForTier(tier: SubscriptionPlanCode): number {
-  if (tier === "free" || tier === "starter") return 0;
-  if (tier === "business") return 3;
+  if (tier === "free") return 0;
+  if (tier === "starter") return 2;
+  if (tier === "business") return 4;
   return 10;
 }
 
 export function maxDevicesHintForTier(tier: SubscriptionPlanCode): number {
   if (tier === "free" || tier === "starter") return 1;
-  if (tier === "business") return 3;
+  if (tier === "business") return 4;
   return 10;
 }
 

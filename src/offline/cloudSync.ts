@@ -2946,13 +2946,7 @@ export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: n
   const delay = opts?.delayMs ?? 0;
   backgroundSyncTimer = globalThis.setTimeout(() => {
     backgroundSyncTimer = null;
-    void (async () => {
-      if (isNativeApp()) {
-        const { waitForFirstUserInteraction } = await import("../lib/firstUserInteraction");
-        await waitForFirstUserInteraction().catch(() => undefined);
-      }
-      await syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
-    })();
+    void syncShopWithCloud({ pull: opts?.pull }).catch(() => undefined);
   }, delay);
 }
 

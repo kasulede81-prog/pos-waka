@@ -5,19 +5,15 @@ import { AuthLayout } from "../components/AuthLayout";
 import { MarketingLayout } from "../components/marketing/MarketingLayout";
 import { SeoHead } from "../components/marketing/SeoHead";
 import { WakaSupportCard } from "../components/support/WakaSupportCard";
-import { FOUNDER_NAME } from "../config/company";
 import {
   WAKA_COMPANY_COUNTRY,
-  WAKA_COMPANY_LOCATION,
   WAKA_COMPANY_POSTAL_ADDRESS,
   WAKA_COMPANY_TAGLINE,
-  WAKA_COMPANY_TYPE,
   WAKA_LEGAL_COMPANY_NAME,
-  WAKA_MAIN_PRODUCT,
   WAKA_SUPPORT_EMAILS,
 } from "../config/wakaSupport";
 
-type LegalKind = "terms" | "privacy" | "refund" | "acceptable-use";
+type LegalKind = "terms" | "privacy" | "acceptable-use";
 
 type Props = {
   kind: LegalKind;
@@ -34,114 +30,261 @@ type Section = {
 const policyContent: Record<LegalKind, { title: string; intro: string; sections: Section[] }> = {
   terms: {
     title: "Terms & Conditions",
-    intro: `${WAKA_MAIN_PRODUCT} is operated by ${WAKA_LEGAL_COMPANY_NAME}, a Ugandan registered company founded by ${FOUNDER_NAME}. These terms explain the fair rules for using Waka POS and related Waka business services.`,
+    intro:
+      "Last Updated: June 2026. Welcome to Waka POS. These Terms & Conditions (\"Terms\") govern your access to and use of Waka POS, including our mobile applications, web applications, cloud services, backups, synchronization services, and related business tools (collectively, the \"Services\"). By creating an account, accessing, or using Waka POS, you agree to be bound by these Terms.",
     sections: [
       {
-        title: "Company identity",
+        title: "1. About Waka POS",
         body: [
-          `${WAKA_LEGAL_COMPANY_NAME} is a ${WAKA_COMPANY_TYPE} registered in ${WAKA_COMPANY_COUNTRY}.`,
-          `Registered office: ${WAKA_COMPANY_LOCATION}. Postal address: ${WAKA_COMPANY_POSTAL_ADDRESS}.`,
+          `Waka POS is operated by ${WAKA_LEGAL_COMPANY_NAME}, a company registered in ${WAKA_COMPANY_COUNTRY}.`,
+          "Waka POS provides business management tools including but not limited to: Point of Sale (POS), Inventory Management, Customer Debt Tracking, Supplier Management, Staff & Shift Management, Cash Drawer Management, Reporting & Analytics, Inventory Count Sessions, Cloud Backup & Synchronization, Audit Logs & Business Intelligence, and Multi-Device Operations.",
+          "Waka POS is designed to help businesses manage daily operations, record transactions, monitor performance, and protect business records.",
         ],
       },
       {
-        title: "Using Waka POS",
+        title: "2. Eligibility",
         body: [
-          "Waka POS helps shops record sales, stock, debts, staff activity, receipts, reports, and daily business work.",
-          "You are responsible for entering correct business information, keeping your login or PIN private, and using the app for lawful business activity.",
+          "To use Waka POS, you must be at least 18 years old; or be authorized to act on behalf of a registered business or organization.",
+          "You are responsible for ensuring that all registration information provided to Waka POS is accurate, complete, and kept up to date.",
         ],
       },
       {
-        title: "Free Mode and paid plans",
+        title: "3. Account Registration & Security",
         body: [
-          "New users may start in Free Mode with basic features and limits. You can upgrade to a paid plan when your business needs more products, backup, staff, devices, or advanced features.",
-          "Paid subscriptions, renewals, expiries, and special activations may be handled by Waka support or authorised admins.",
+          "You are responsible for maintaining the confidentiality of account credentials, PINs, staff access codes, biometric access enabled on your devices, and authorized devices connected to your account.",
+          "You agree to notify Waka POS immediately if you believe your account, device, or credentials have been compromised.",
+          "Waka POS is not responsible for losses resulting from shared passwords or PINs, unsecured devices, unauthorized staff access, device theft, malware or phishing attacks, or failure to follow reasonable security practices.",
+          "You remain responsible for activities performed under your account unless otherwise required by law.",
         ],
       },
       {
-        title: "Offline use and cloud backup",
+        title: "4. Subscription Plans & Access",
         body: [
-          "Waka POS is designed to keep working offline where possible. Some features, such as cloud backup, syncing, account changes, and multi-device features, need internet access.",
-          "When sync is available, your device may send saved changes to Waka systems so your business records can be backed up or shared with authorised devices.",
+          "Waka POS may offer free plans, trial plans, paid subscriptions, enterprise agreements, and promotional activations.",
+          "Available features, limits, storage, backups, staff accounts, devices, and integrations may vary depending on the selected plan.",
+          "Failure to maintain an active subscription may result in reduced functionality, account restrictions, or suspension of premium services.",
+          "Subscription fees are generally non-refundable unless required by applicable law or expressly approved by Waka POS.",
         ],
       },
       {
-        title: "Support handling",
+        title: "5. Offline Operation & Synchronization",
         body: [
-          `For help, contact ${WAKA_SUPPORT_EMAILS.join(" or ")}. We try to respond fairly and practically, especially for payment, activation, backup, and account issues.`,
-          "We may need your shop name, phone number, email, device details, or screenshots to understand and resolve a support request.",
+          "Waka POS is designed to operate both online and offline. While offline, business records may be stored locally on your device until synchronization becomes available.",
+          "When internet connectivity is restored, Waka POS may upload transactions, synchronize inventory, update cloud backups, restore business records, and synchronize authorized devices.",
+          "You acknowledge that temporary differences may occur between devices until synchronization is completed.",
+          "Users are responsible for ensuring devices are periodically connected to the internet to maintain accurate synchronization and backup protection.",
+        ],
+      },
+      {
+        title: "6. Cash Management, Staff Accountability & Business Records",
+        body: [
+          "Waka POS may record operational events including day drawer opens, shift starts and closures, cash variances, float verification, inventory adjustments, void transactions, returns and refunds, discounts, debt collections, and audit events.",
+          "These records are intended to assist business owners in managing operations and accountability.",
+          "Waka POS provides reporting and monitoring tools but does not independently determine employee misconduct, theft, fraud, negligence, or legal liability.",
+          "Business owners remain responsible for reviewing records and making management decisions.",
+        ],
+      },
+      {
+        title: "7. Data Ownership & Privacy",
+        body: [
+          "You retain ownership of the business data you enter into Waka POS. This may include products, customers, sales, suppliers, inventory records, staff records, reports, audit logs, and operational history.",
+          "Waka POS processes and stores data according to its Privacy Policy. We do not sell customer business data.",
+          "Data may be disclosed only when required by law, required by a court order, necessary to protect our systems or users, or necessary to provide requested services.",
+        ],
+      },
+      {
+        title: "8. Cloud Backups & Data Recovery",
+        body: [
+          "Where enabled, Waka POS may create cloud backups and synchronization snapshots.",
+          "While we take reasonable measures to protect business data, no backup or synchronization system can guarantee prevention of all data loss.",
+          "Users are strongly encouraged to keep devices secure, maintain internet connectivity when possible, export important records periodically, and review synchronization status regularly.",
+          "Waka POS is not responsible for losses caused by deleted exports, damaged devices, third-party platform failures, or user actions that permanently remove business records.",
+        ],
+      },
+      {
+        title: "9. Data Deletion & Account Closure",
+        body: [
+          "Business owners may request account closure or permanent deletion of an organization.",
+          "Deletion may result in the removal of business records, cloud backups, synchronization data, associated accounts, and access permissions.",
+          "Certain records may be retained where required by law, fraud prevention requirements, security obligations, dispute resolution, or legitimate business interests.",
+          "Once deletion has been completed, some data may no longer be recoverable.",
+        ],
+      },
+      {
+        title: "10. Acceptable Use",
+        body: [
+          "You agree not to use Waka POS for unlawful activities, upload malicious software, attempt unauthorized access to systems, reverse engineer or copy proprietary software, interfere with platform security, use Waka POS to harm other users, misrepresent business information, or circumvent subscription or licensing controls.",
+          "Violations may result in suspension or termination of access.",
+        ],
+      },
+      {
+        title: "11. Suspension & Termination",
+        body: [
+          "Waka POS may suspend or terminate accounts when these Terms are violated, fraudulent activity is suspected, payment obligations are not met, security risks are identified, or required information is intentionally falsified.",
+          "Users may also close their accounts at any time.",
+          "Termination of access does not automatically remove obligations that arose before termination.",
+        ],
+      },
+      {
+        title: "12. Limitation of Liability",
+        body: [
+          "Waka POS is provided on an \"as available\" and \"as is\" basis.",
+          `To the maximum extent permitted by law, ${WAKA_LEGAL_COMPANY_NAME} shall not be liable for lost profits, lost revenue, business interruption, data loss, device failure, synchronization delays, staff misconduct, inventory discrepancies, or indirect or consequential damages.`,
+          "Users remain responsible for verifying business records and maintaining appropriate operational controls.",
+        ],
+      },
+      {
+        title: "13. Changes to These Terms",
+        body: [
+          "We may update these Terms periodically to reflect new features, legal requirements, security improvements, or business changes.",
+          "Material updates may be communicated through in-app notifications, email, or official Waka POS announcements.",
+          "Continued use of the Services after updates become effective constitutes acceptance of the revised Terms.",
+        ],
+      },
+      {
+        title: "14. Governing Law",
+        body: [
+          `These Terms shall be governed by and interpreted in accordance with the laws of the Republic of ${WAKA_COMPANY_COUNTRY}.`,
+          `Any disputes arising from the use of Waka POS shall be resolved through the appropriate courts and legal processes of ${WAKA_COMPANY_COUNTRY} unless otherwise required by applicable law.`,
+        ],
+      },
+      {
+        title: "15. Contact Information",
+        body: [
+          WAKA_LEGAL_COMPANY_NAME,
+          "Registered Office: Opposite Freedom City, Namasuba – Kikajjo Road, Masajja Ward, Wakiso District, Kampala, Uganda.",
+          `Postal Address: ${WAKA_COMPANY_POSTAL_ADDRESS}.`,
+          `Email: ${WAKA_SUPPORT_EMAILS.join(", ")}.`,
+          "Website: www.waka.ug",
         ],
       },
     ],
   },
   privacy: {
     title: "Privacy Policy",
-    intro: `${WAKA_LEGAL_COMPANY_NAME} respects the privacy of Waka POS users. This policy explains what information we collect and why we use it.`,
+    intro: `Effective Date: June 2026. ${WAKA_LEGAL_COMPANY_NAME} ("Waka POS", "we", "our", or "us") is committed to protecting your privacy and handling your information responsibly. This Privacy Policy explains how we collect, use, store, process, and protect information when you use Waka POS, including our website, mobile applications, cloud services, synchronization services, and related business tools (collectively, the "Services"). By accessing or using Waka POS, you agree to the practices described in this Privacy Policy.`,
     sections: [
       {
-        title: "Information we collect",
+        title: "Definitions",
         body: [
-          "We may collect account information, shop details, staff names or roles, product records, sales records, customer debt records, support messages, device information, and sync activity.",
-          "We collect this information to provide Waka POS, support your account, improve reliability, manage subscriptions, and help with backup or recovery.",
+          "Personal Data: Information that identifies or can reasonably identify an individual, including names, phone numbers, email addresses, staff information, customer records, and business account details.",
+          "Business Data: Information entered into Waka POS by business owners or authorized staff, including products, inventory records, sales, expenses, suppliers, customers, debts, reports, inventory counts, cash drawer records, and operational history.",
+          "Usage Data: Technical information automatically collected when using Waka POS, including device information, browser information, application version, error logs, performance statistics, and synchronization activity.",
+          "Cookies: Small files stored on your device that help remember preferences, maintain sessions, and improve user experience.",
         ],
       },
       {
-        title: "Backups, sync, and offline mode",
+        title: "1. Information We Collect",
         body: [
-          "When you use Waka POS offline, records may stay on your device until internet connection is available.",
-          "If your plan or settings include cloud backup or sync, your records may be uploaded to Waka systems so they can be restored, protected, or shared with authorised users in your business.",
+          "Information you provide: We may collect full name, email address, phone number, business name, business registration information (where provided), subscription information, billing information, support communications, and business preferences and settings.",
+          "Business records: Waka POS may store products and inventory, sales transactions, customer records, customer debt records, supplier records, purchase records, expenses, cash drawer records, shift records, inventory count sessions, reports and analytics, and audit logs.",
+          "Staff information: Where enabled by a business owner, Waka POS may store staff names, staff roles, permissions, shift activity, operational actions, and accountability records.",
+          "Device and technical information: We may automatically collect device identifiers, device type and operating system, browser information, application version, crash reports, error logs, performance metrics, synchronization activity, backup activity, and security events.",
         ],
       },
       {
-        title: "How we protect information",
+        title: "2. How We Use Information",
         body: [
-          "We use reasonable measures to help protect your information.",
-          "No system is perfect, so business owners should also protect their devices, passwords, staff PINs, and account access.",
-        ],
-      },
-      {
-        title: "No selling of data",
-        body: [
+          "We use collected information to provide Waka POS services, authenticate users, manage subscriptions and activations, synchronize business records, create backups and recovery snapshots, improve reliability and performance, detect fraud, abuse, and security threats, provide customer support, comply with legal obligations, and develop and improve features.",
           "We do not sell your business data.",
-          "We may use trusted service providers, such as hosting, database, email, or support tools, only where needed to run Waka POS and related services.",
         ],
       },
       {
-        title: "Contact",
+        title: "3. Offline Use, Synchronization & Cloud Services",
         body: [
-          `Questions about privacy can be sent to ${WAKA_SUPPORT_EMAILS.join(" or ")}.`,
-          `Registered office: ${WAKA_COMPANY_LOCATION}.`,
+          "Waka POS is designed to operate both online and offline. When operating offline, business records may remain stored locally on your device and data may not immediately appear on other authorized devices.",
+          "When synchronization is enabled, business records may be transmitted to Waka POS cloud infrastructure, authorized devices may receive synchronized information, cloud backups and recovery snapshots may be generated, and business data may be restored following device replacement, recovery, or reinstallation.",
+          "Synchronization may include sales, inventory updates, customer records, supplier records, shift records, cash drawer records, inventory count sessions, audit logs, and operational history.",
         ],
       },
-    ],
-  },
-  refund: {
-    title: "Refund Policy",
-    intro: "This refund policy explains how Waka POS handles subscription payments, renewals, accidental payments, and support reviews.",
-    sections: [
       {
-        title: "Subscription activation",
+        title: "4. Audit Logs & Operational Monitoring",
         body: [
-          "When a paid plan is activated, Waka POS may unlock paid features such as more products, staff accounts, backup, or multi-device access.",
-          "Completed billing periods are generally non-refundable once the plan has been activated and made available for use.",
+          "To improve accountability, security, and support, Waka POS may record operational events including sign-ins and authentication activity, device activity, staff actions, inventory adjustments, cash drawer events, shift activity, synchronization events, and security-related activity.",
+          "These records help us diagnose technical issues, investigate support requests, improve reliability, protect business accounts, and detect unauthorized access.",
+          "Audit logs are not used for advertising purposes.",
         ],
       },
       {
-        title: "Renewals and expiry",
+        title: "5. Cookies & Similar Technologies",
         body: [
-          "Renewals extend access to paid features for the selected period. If a paid plan expires, the account may return to Free Mode and paid features may become unavailable.",
-          "If there is a payment or activation problem, contact support quickly so we can review it.",
+          "Waka POS may use cookies and similar technologies to maintain sessions, remember preferences, improve user experience, measure platform performance, and improve reliability.",
+          "Users may disable cookies through browser settings; however, some features may not function correctly if cookies are disabled.",
         ],
       },
       {
-        title: "Accidental payment review",
+        title: "6. Sharing of Information",
         body: [
-          "If you made an accidental payment, duplicate payment, or paid the wrong amount, contact support with payment proof, phone number, shop name, and date of payment.",
-          "We will review the case fairly. Depending on the situation, we may correct the subscription, extend days, or advise the next step.",
+          "We do not sell customer or business data.",
+          "Service providers: Trusted providers may assist us with cloud hosting, databases, email delivery, customer support, analytics, and infrastructure monitoring. These providers may access information only as necessary to provide services on our behalf.",
+          "Legal requirements: We may disclose information when required by law, by court order, by regulatory authorities, to protect our legal rights, or to prevent fraud or abuse.",
         ],
       },
       {
-        title: "How to request help",
-        body: [`Refund or billing questions should be sent to ${WAKA_SUPPORT_EMAILS.join(" or ")}.`],
+        title: "7. Data Retention",
+        body: [
+          "We retain information for as long as necessary to operate Waka POS, provide support, maintain backups, resolve disputes, prevent fraud, and meet legal obligations.",
+          "Retention periods may vary depending on the type of information involved.",
+          "Business owners may request deletion of eligible information, subject to legal and operational requirements.",
+        ],
+      },
+      {
+        title: "8. Data Security",
+        body: [
+          "We use reasonable technical and organizational measures to protect information, including authentication controls, access controls, secure infrastructure, monitoring and logging, backup systems, and security reviews.",
+          "However, no security system can guarantee absolute protection.",
+          "Business owners are responsible for protecting passwords and PINs, managing staff permissions, securing devices, and monitoring authorized access.",
+        ],
+      },
+      {
+        title: "9. Data Access, Export & Deletion",
+        body: [
+          "Business owners may access their information, export supported records, request account closure, and request deletion of eligible information.",
+          "Certain information may be retained where necessary for legal compliance, fraud prevention, security investigations, or dispute resolution.",
+          "Once deletion is completed, some information may become permanently unrecoverable.",
+        ],
+      },
+      {
+        title: "10. International Data Processing",
+        body: [
+          "Information may be processed or stored using cloud infrastructure and service providers located in different countries.",
+          "By using Waka POS, you acknowledge that information may be transferred and processed where necessary to provide the Services.",
+          "Appropriate safeguards are applied where required.",
+        ],
+      },
+      {
+        title: "11. Children's Privacy",
+        body: [
+          "Waka POS is intended for business users and individuals aged 18 years or older.",
+          "We do not knowingly collect personal information from children.",
+          "If we become aware that information from a child has been collected without proper authorization, we will take reasonable steps to remove it.",
+        ],
+      },
+      {
+        title: "12. Your Privacy Rights",
+        body: [
+          "Subject to applicable law, users may have rights to access information we hold, correct inaccurate information, request deletion of eligible information, request export of supported information, object to certain processing activities, and withdraw consent where applicable.",
+          "Requests may be submitted using the contact details below.",
+        ],
+      },
+      {
+        title: "13. Changes to this Privacy Policy",
+        body: [
+          "We may update this Privacy Policy from time to time.",
+          "Material changes may be communicated through in-app notifications, email notifications, or official Waka POS communication channels.",
+          "Continued use of Waka POS after changes become effective constitutes acceptance of the updated Privacy Policy.",
+        ],
+      },
+      {
+        title: "14. Contact Information",
+        body: [
+          WAKA_LEGAL_COMPANY_NAME,
+          "Registered Office: Opposite Freedom City, Namasuba – Kikajjo Road, Masajja Ward, Wakiso District, Kampala, Uganda.",
+          `Postal Address: ${WAKA_COMPANY_POSTAL_ADDRESS}.`,
+          `Email: ${WAKA_SUPPORT_EMAILS.join(", ")}.`,
+          "Website: www.waka.ug",
+          "For privacy-related questions, requests, or concerns, please contact us using the details above.",
+        ],
       },
     ],
   },
@@ -184,7 +327,6 @@ const policyContent: Record<LegalKind, { title: string; intro: string; sections:
 const SEO_PATH: Record<LegalKind, string> = {
   terms: "/terms",
   privacy: "/privacy",
-  refund: "/refund-policy",
   "acceptable-use": "/acceptable-use",
 };
 
@@ -221,7 +363,6 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
         <div className="flex flex-wrap justify-center gap-3 rounded-3xl border border-stone-100 bg-white p-4 text-sm font-black text-orange-800">
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
-          <Link to="/refund-policy">Refund Policy</Link>
           <Link to="/acceptable-use">Acceptable Use</Link>
           <Link to="/about">About</Link>
           <Link to="/company">Company</Link>

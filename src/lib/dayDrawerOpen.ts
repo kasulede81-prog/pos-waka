@@ -18,7 +18,7 @@ import { resolveFloatVerifyOverride } from "./managerFloatVerify";
 export function resolveCashDrawerFormulaVersion(
   preferences: Pick<ShopPreferences, "cashDrawerFormulaVersion">,
 ): CashDrawerFormulaVersion {
-  return preferences.cashDrawerFormulaVersion ?? "v1";
+  return preferences.cashDrawerFormulaVersion ?? "v2";
 }
 
 export function isFormulaV2(preferences: Pick<ShopPreferences, "cashDrawerFormulaVersion">): boolean {

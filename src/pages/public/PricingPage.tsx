@@ -1,0 +1,249 @@
+import { Link } from "react-router-dom";
+import type { Language } from "../../types";
+import { MarketingLayout } from "../../components/marketing/MarketingLayout";
+import { SeoHead } from "../../components/marketing/SeoHead";
+
+type Props = {
+  lang: Language;
+  setLang: (l: Language) => void;
+  isAuthenticated: boolean;
+};
+
+type PricingPlan = {
+  name: string;
+  monthlyUgx: number;
+  annualUgx: number;
+  blurb: string;
+  features: string[];
+  limits: string[];
+  goodFor: string;
+  popular?: boolean;
+};
+
+const PLANS: PricingPlan[] = [
+  {
+    name: "Free",
+    monthlyUgx: 0,
+    annualUgx: 0,
+    blurb: "Perfect for trying Waka POS and running a very small shop.",
+    features: [
+      "Sales & Checkout",
+      "Inventory Management",
+      "Customer Management",
+      "Debt Tracking",
+      "Receipts",
+      "Offline Mode",
+      "Basic Reports",
+    ],
+    limits: ["1 Device", "1 User", "Up to 7 Products"],
+    goodFor: "Testing, kiosks, startups, very small shops",
+  },
+  {
+    name: "Starter",
+    monthlyUgx: 18_000,
+    annualUgx: 172_800,
+    blurb: "For owners who run the shop themselves.",
+    features: [
+      "Unlimited Products",
+      "Supplier Management",
+      "Purchase Tracking",
+      "Expense Tracking",
+      "Profit Reports",
+      "Advanced Reports",
+      "Customer Debt Management",
+      "Supplier Payments",
+      "Inventory Counts",
+      "Backup & Restore",
+      "Cloud Sync",
+      "Stock Movement Tracking",
+      "Daily Business Reports",
+    ],
+    limits: ["1 Device", "2 Users", "2 Staff Accounts"],
+    goodFor: "Boutiques, salons, groceries, pharmacies, mini markets",
+  },
+  {
+    name: "Business",
+    monthlyUgx: 36_000,
+    annualUgx: 345_600,
+    blurb: "For growing businesses with employees.",
+    popular: true,
+    features: [
+      "Everything in Starter",
+      "Staff Accounts",
+      "Staff Switching",
+      "Owner Dashboard",
+      "Cash Drawer Management",
+      "Day Open & Day Close",
+      "Shift Management",
+      "Opening Float Verification",
+      "Cash Reconciliation",
+      "Returns & Refunds",
+      "Activity Logs",
+      "Audit Center",
+      "Role Permissions",
+      "Multi-Device Sync",
+      "Inventory Count Approval Workflow",
+      "Staff Accountability Tracking",
+      "Cash History",
+      "Business Analytics",
+    ],
+    limits: ["Up to 4 Devices", "Up to 4 Staff Accounts"],
+    goodFor: "Supermarkets, hardware stores, pharmacies, businesses with employees",
+  },
+  {
+    name: "Waka Plus",
+    monthlyUgx: 82_000,
+    annualUgx: 787_200,
+    blurb: "For wholesalers and larger businesses.",
+    features: [
+      "Everything in Business",
+      "Up to 10 Devices",
+      "Up to 10 Staff Accounts",
+      "Multi-Shop Support",
+      "Advanced Backups",
+      "Cloud Recovery",
+      "Priority Support",
+      "Advanced Audit Center",
+      "Operational Analytics",
+      "Cash Control Dashboard",
+      "Inventory Intelligence",
+      "Business Performance Insights",
+      "Early Access Features",
+      "AI Assistant (Coming Soon)",
+    ],
+    limits: ["Up to 10 Devices", "Up to 10 Staff Accounts"],
+    goodFor: "Wholesalers, distributors, chain stores, multi-branch businesses",
+  },
+];
+
+const WHY_CHOOSE = [
+  "Offline First",
+  "Cloud Sync",
+  "Inventory Management",
+  "Cash Drawer Control",
+  "Shift Management",
+  "Staff Accountability",
+  "Debt Tracking",
+  "Supplier Management",
+  "Audit Logs",
+  "Inventory Counts",
+  "Business Reports",
+  "Backup & Recovery",
+  "Multi-Device Support",
+  "Multi-Shop Support",
+  "Built for African Businesses",
+];
+
+function formatUgx(amount: number): string {
+  return `UGX ${amount.toLocaleString("en-UG")}`;
+}
+
+export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
+  return (
+    <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
+      <SeoHead
+        title="Waka POS Pricing — Complete Business Control for Every Shop"
+        description="Waka POS pricing for shops in Uganda. Free plan to start. Starter, Business, and Waka Plus plans with sales, inventory, cash control, staff accountability, and cloud sync."
+        path="/pricing"
+        structuredData="home"
+      />
+
+      <article className="space-y-10">
+        <header className="space-y-4">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">Pricing</p>
+          <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">Waka POS Pricing</h1>
+          <p className="text-2xl font-black text-orange-800">Complete Business Control for Every Shop</p>
+          <p className="max-w-3xl text-base font-medium leading-relaxed text-stone-600">
+            Sales · Inventory · Staff · Cash Control · Suppliers · Debt Tracking · Reports · Cloud Sync · Business
+            Intelligence
+          </p>
+        </header>
+
+        <div className="space-y-6">
+          {PLANS.map((plan) => (
+            <section
+              key={plan.name}
+              className={`rounded-3xl border p-6 shadow-waka-sm sm:p-8 ${
+                plan.popular ? "border-orange-400 bg-gradient-to-br from-orange-50 to-white" : "border-stone-100 bg-white"
+              }`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-black text-stone-950">
+                    {plan.name}
+                    {plan.popular ? <span className="ml-2 text-base text-orange-600">★ Most Popular</span> : null}
+                  </h2>
+                  <p className="mt-2 text-3xl font-black text-orange-700">{formatUgx(plan.monthlyUgx)}</p>
+                  {plan.monthlyUgx > 0 ? (
+                    <p className="mt-1 text-sm font-bold text-stone-600">
+                      {formatUgx(plan.annualUgx)}/year <span className="text-emerald-700">(Save 20%)</span>
+                    </p>
+                  ) : null}
+                  <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-stone-700">{plan.blurb}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 grid gap-6 lg:grid-cols-2">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Standout Features</h3>
+                  <ul className="mt-3 space-y-2">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex gap-2 text-sm font-semibold text-stone-700">
+                        <span className="text-orange-600">✓</span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Limits</h3>
+                  <ul className="mt-3 list-inside list-disc space-y-1 text-sm font-semibold text-stone-700">
+                    {plan.limits.map((limit) => (
+                      <li key={limit}>{limit}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-4 text-sm font-medium text-stone-600">
+                    <span className="font-black text-stone-800">Good for:</span> {plan.goodFor}
+                  </p>
+                </div>
+              </div>
+            </section>
+          ))}
+        </div>
+
+        <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">
+          <h2 className="text-xl font-black text-stone-950">Why Businesses Choose Waka POS</h2>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {WHY_CHOOSE.map((item) => (
+              <li key={item} className="flex gap-2 text-sm font-semibold text-stone-700">
+                <span className="text-orange-600">✓</span>
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-600 to-orange-500 p-8 text-white shadow-waka-sm">
+          <h2 className="text-3xl font-black leading-tight">Run your entire business from one app.</h2>
+          <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-orange-50">
+            Manage sales, inventory, cash, staff, suppliers, debts, reports, audits, and cloud backups with Waka POS.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              to="/register"
+              className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-orange-700"
+            >
+              Create free account
+            </Link>
+            <Link
+              to="/support"
+              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-white/80 px-6 py-3 text-sm font-black text-white"
+            >
+              Contact support
+            </Link>
+          </div>
+        </section>
+      </article>
+    </MarketingLayout>
+  );
+}

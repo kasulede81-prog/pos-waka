@@ -42,8 +42,9 @@ function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | 
 }
 
 function usersHintForPlan(plan: SubscriptionPlanCode): number {
-  if (plan === "free" || plan === "starter") return 1;
-  if (plan === "business") return 3;
+  if (plan === "free") return 1;
+  if (plan === "starter") return 2;
+  if (plan === "business") return 4;
   return 10;
 }
 

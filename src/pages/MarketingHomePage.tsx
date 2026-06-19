@@ -79,8 +79,8 @@ export function MarketingHomePage({ lang, setLang, isAuthenticated }: Props) {
                 <p className="text-4xl font-black text-orange-700">Free to start</p>
                 <p className="mt-2 text-sm font-semibold text-stone-600">Upgrade when your business needs more.</p>
               </div>
-              <Link to="/support" className="text-center text-sm font-black text-orange-700 underline-offset-4 hover:underline">
-                {t(lang, "activationContactSupport")}
+              <Link to="/pricing" className="text-center text-sm font-black text-orange-700 underline-offset-4 hover:underline">
+                View pricing →
               </Link>
             </div>
           </div>

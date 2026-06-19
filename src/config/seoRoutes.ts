@@ -4,13 +4,13 @@ import { SOLUTION_PAGE_SLUGS } from "./solutionPages";
 export const MARKETING_INDEXABLE_PATHS = new Set([
   "/home",
   "/about",
+  "/pricing",
   "/contact",
   "/founder",
   "/company",
   "/support",
   "/terms",
   "/privacy",
-  "/refund-policy",
   "/acceptable-use",
   ...SOLUTION_PAGE_SLUGS.map((slug) => `/solutions/${slug}`),
 ]);
