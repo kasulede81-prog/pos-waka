@@ -63,7 +63,7 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
 
         <SystemHealthSummaryStrip lang={lang} />
 
-        <LazyCard lang={lang} title={t(lang, "syncDiagnosticsTitle")} defaultOpen>
+        <LazyCard lang={lang} title={t(lang, "syncDiagnosticsTitle")}>
           <SyncHealthCard lang={lang} variant="full" />
         </LazyCard>
 

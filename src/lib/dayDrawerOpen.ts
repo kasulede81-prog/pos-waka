@@ -81,6 +81,19 @@ export function floatVerificationWithinTolerance(
   return Math.abs(actual - expected) <= threshold;
 }
 
+/** Day-close variance exceeds shop tolerance (used by Close Day + Cash Management). */
+export function dayCloseVarianceIsFlagged(
+  expectedCashUgx: number,
+  differenceUgx: number,
+  preferences: Pick<ShopPreferences, "cashVarianceThresholdPct" | "cashVarianceThresholdUgxFixed">,
+): boolean {
+  const exp = Math.max(1, expectedCashUgx);
+  const absDiff = Math.abs(differenceUgx);
+  const pct = preferences.cashVarianceThresholdPct ?? 5;
+  const fixed = preferences.cashVarianceThresholdUgxFixed ?? 10_000;
+  return absDiff > Math.max((pct / 100) * exp, fixed);
+}
+
 /** Most recent closed shift on the same Kampala day (for handoff). */
 export function latestClosedShiftForDay(shifts: ShiftRecord[], day: string): ShiftRecord | null {
   let best: ShiftRecord | null = null;

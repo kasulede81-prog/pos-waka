@@ -11,6 +11,7 @@ import { getCompletedFinancials } from "../lib/financialMetrics";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { PageHeader } from "../components/layout/PageHeader";
+import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
 import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 import { HistoryListCard } from "../components/shared/HistoryListCard";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -122,7 +123,10 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         title={t(lang, "closeDay")}
         subtitle={t(lang, "closeDaySimpleHelp")}
         backLabel={t(lang, "officeBackToHub")}
+        backFallback="/office/cash-drawer"
       />
+
+      <ManageDrawerSettingsLink lang={lang} />
 
       <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-950">
         {t(lang, "closeDayTrustNote")}

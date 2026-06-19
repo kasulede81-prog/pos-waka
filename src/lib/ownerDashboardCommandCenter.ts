@@ -4,6 +4,7 @@
 
 import { partitionAttentionByAck } from "./ownerAlertAcknowledgement";
 import { getCachedComputation } from "./computationResultCache";
+import { buildRevenueSalesIndex } from "./financialMetrics";
 import {
   buildAttentionCenter,
   buildCashControlSnapshot,
@@ -59,6 +60,7 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
 
 export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): OwnerCommandCenterBundle {
   const historicalStats = buildHistoricalShiftStats(input.shifts);
+  const salesIndex = buildRevenueSalesIndex(input.sales, input.returnRecords);
 
   const integrity = buildOwnerDashboardIntegritySnapshot({
     bounds: input.bounds,
@@ -112,6 +114,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       debtPayments: input.debtPayments,
       cashExpenses: input.cashExpenses,
       bounds: input.bounds,
+      salesIndex,
     }),
   };
 }

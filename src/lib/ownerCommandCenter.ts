@@ -24,6 +24,7 @@ import {
   dateMatchesFilter,
   type DateFilterBounds,
   revenueSalesInBounds,
+  revenueSalesInBoundsFromIndex,
   returnsInBounds,
 } from "./dateFilters";
 import { activeDayDrawerOpenForDate } from "./dayDrawerOpen";
@@ -813,8 +814,11 @@ export function buildFinancialSnapshot(input: {
   debtPayments: DebtPayment[];
   cashExpenses: CashExpense[];
   bounds: DateFilterBounds;
+  salesIndex?: import("./financialMetrics").RevenueSalesIndex;
 }): OwnerFinancialSnapshot {
-  const scopedSales = revenueSalesInBounds(input.sales, input.bounds);
+  const scopedSales = input.salesIndex
+    ? revenueSalesInBoundsFromIndex(input.salesIndex, input.bounds)
+    : revenueSalesInBounds(input.sales, input.bounds);
   const mix = {
     cashUgx: 0,
     mobileMoneyUgx: 0,

@@ -76,7 +76,7 @@ export const LAUNCHER_TILE_CATALOG: LauncherTileDef[] = [
   {
     id: "cash",
     labelKey: "desktopHomeTileCash",
-    to: "/office/cash-position",
+    to: "/office/cash-drawer",
     Icon: Banknote,
     perm: "day.close",
     group: "operational",

@@ -6,6 +6,7 @@ import type { CashExpense, ReturnRecord, Sale } from "../types";
 import { ACTIVE_SALES_MEMORY_DAYS } from "./activeSalesWindow";
 import { dateKeyKampala, monthKeyKampala, saleReportingDayKey, weekStartKeyKampala } from "./datesUg";
 import { isRevenueSale } from "./financialMetrics";
+import type { RevenueSalesIndex } from "./financialMetrics";
 
 export type DateFilterPreset = "today" | "this_week" | "this_month";
 
@@ -72,6 +73,16 @@ export function expenseMatchesFilter(expense: Pick<CashExpense, "paidOn">, bound
 
 export function revenueSalesInBounds(sales: Sale[], bounds: DateFilterBounds): Sale[] {
   return sales.filter((s) => isRevenueSale(s) && saleMatchesFilter(s, bounds));
+}
+
+/** O(days) bucket lookup — avoids rescanning all sales when a day index exists. */
+export function revenueSalesInBoundsFromIndex(index: RevenueSalesIndex, bounds: DateFilterBounds): Sale[] {
+  if (bounds.isSingleDay) return index.salesByDay.get(bounds.fromKey) ?? [];
+  const out: Sale[] = [];
+  for (const [dk, list] of index.salesByDay) {
+    if (dk >= bounds.fromKey && dk <= bounds.toKey) out.push(...list);
+  }
+  return out;
 }
 
 export function returnsInBounds(returns: ReturnRecord[], bounds: DateFilterBounds): ReturnRecord[] {

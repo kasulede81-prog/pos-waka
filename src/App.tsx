@@ -16,6 +16,7 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { SettingsHubPage } from "./pages/SettingsHubPage";
+import { SettingsCashDrawerPage } from "./pages/SettingsCashDrawerPage";
 import { SettingsShopPage } from "./pages/SettingsShopPage";
 import { SettingsReceiptPage } from "./pages/SettingsReceiptPage";
 import { SettingsSellingPage } from "./pages/SettingsSellingPage";
@@ -35,6 +36,7 @@ import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
 import { BackupSyncPage } from "./pages/BackupSyncPage";
+import { CashManagementPage } from "./pages/CashManagementPage";
 import { AccountPage } from "./pages/AccountPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MarketingHomePage } from "./pages/MarketingHomePage";
@@ -381,6 +383,15 @@ function AppRoutes() {
               }
             />
             <Route
+              path="office/cash-drawer"
+              element={
+                <RoleProtectedRoute permission="day.close">
+                  <CashManagementPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route path="office/cash" element={<Navigate to="/office/cash-drawer" replace />} />
+            <Route
               path="office/day-open"
               element={
                 <RoleProtectedRoute permission="day.open_drawer">
@@ -398,7 +409,6 @@ function AppRoutes() {
                 </RoleProtectedRoute>
               }
             />
-            <Route path="office/cash" element={<Navigate to="/office/cash-position" replace />} />
             <Route
               path="office/open-shifts"
               element={
@@ -669,6 +679,16 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.view">
                   <PilotSupportCenterPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/cash-drawer"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsCashDrawerPage lang={lang} />
+                  </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
             />

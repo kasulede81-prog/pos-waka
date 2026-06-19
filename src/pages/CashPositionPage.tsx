@@ -7,6 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { PageHeader } from "../components/layout/PageHeader";
+import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { dateKeyKampala } from "../lib/datesUg";
@@ -189,9 +190,11 @@ export function CashPositionPage({ lang }: { lang: Language }) {
         lang={lang}
         title={t(lang, "cashPositionTitle")}
         subtitle={t(lang, "cashPositionSub")}
-        backFallback="/office"
+        backFallback="/office/cash-drawer"
         backLabel={t(lang, "officeBackToHub")}
       />
+
+      <ManageDrawerSettingsLink lang={lang} />
 
       <p className="text-sm font-semibold text-stone-600">
         {t(lang, "cashPositionToday")}: <span className="font-black text-stone-900">{todayKey}</span>

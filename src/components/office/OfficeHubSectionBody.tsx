@@ -21,8 +21,6 @@ import {
   Settings,
   UserCog,
   Receipt,
-  Clock,
-  Sun,
 } from "lucide-react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -40,7 +38,6 @@ import { dateKeyKampala } from "../../lib/datesUg";
 import { activeDayDrawerOpenForDate, isFormulaV2 } from "../../lib/dayDrawerOpen";
 import type { OfficeHubSectionId } from "../../lib/officeHubSections";
 import { OfficeNavCard } from "./OfficeNavCard";
-import { OfficeCloseDayCard } from "./OfficeCloseDayCard";
 import { DayDrawerOpenAlert } from "./DayDrawerOpenAlert";
 
 const OfficeHubDeferredCards = lazy(() =>
@@ -60,7 +57,6 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
   const { snapshot, authMode } = useSubscription();
   const preferences = usePosStore((s) => s.preferences);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
-  const canViewOpenShifts = actor.role === "owner" || actor.role === "manager";
   const sync = useSyncStatus();
   const syncAttention = sync.pendingCount > 0 || countSalesWithSyncErrors() > 0;
   const pt = usePharmacyTerms(lang, access.preferences.businessType, access.preferences.pharmacyModeEnabled);
@@ -211,33 +207,13 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             Icon={Banknote}
           />
         ) : null}
-        {access.can("day.open_drawer") ? (
+        {access.can("day.close") || access.can("day.open_drawer") ? (
           <OfficeNavCard
-            to="/office/day-open"
-            title={t(lang, "officeCardDayOpen")}
-            subtitle={t(lang, "officeCardDayOpenSub")}
-            Icon={Sun}
-            highlight
-          />
-        ) : null}
-        {access.can("day.close") ? (
-          <>
-            <OfficeNavCard
-              to="/office/cash-position"
-              title={t(lang, "officeCardCashPosition")}
-              subtitle={t(lang, "officeCardCashPositionSub")}
-              Icon={Banknote}
-              highlight
-            />
-            <OfficeCloseDayCard lang={lang} highlight={highlightCloseDay} />
-          </>
-        ) : null}
-        {canViewOpenShifts ? (
-          <OfficeNavCard
-            to="/office/open-shifts"
-            title={t(lang, "officeCardOpenShifts")}
-            subtitle={t(lang, "officeCardOpenShiftsSub")}
-            Icon={Clock}
+            to="/office/cash-drawer"
+            title={t(lang, "cashManagementTitle")}
+            subtitle={t(lang, "cashManagementSub")}
+            Icon={Banknote}
+            highlight={highlightCloseDay}
           />
         ) : null}
         {access.showDeferredHub ? (

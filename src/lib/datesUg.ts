@@ -1,14 +1,36 @@
 import type { Sale } from "../types";
 
+const KAMPALA_DATE_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Africa/Kampala",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Hot-path cache — sales often share identical ISO timestamps. */
+const ISO_DATE_KEY_CACHE = new Map<string, string>();
+const ISO_DATE_KEY_CACHE_MAX = 60_000;
+
+function formatKampalaDateKey(d: Date): string {
+  return KAMPALA_DATE_FMT.format(d);
+}
+
 /** YYYY-MM-DD in Kampala for grouping “today” sales offline */
 export function dateKeyKampala(isoOrDate: string | Date): string {
-  const d = typeof isoOrDate === "string" ? new Date(isoOrDate) : isoOrDate;
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Africa/Kampala",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(d);
+  if (typeof isoOrDate === "string") {
+    const cached = ISO_DATE_KEY_CACHE.get(isoOrDate);
+    if (cached !== undefined) return cached;
+    const key = formatKampalaDateKey(new Date(isoOrDate));
+    if (ISO_DATE_KEY_CACHE.size >= ISO_DATE_KEY_CACHE_MAX) ISO_DATE_KEY_CACHE.clear();
+    ISO_DATE_KEY_CACHE.set(isoOrDate, key);
+    return key;
+  }
+  return formatKampalaDateKey(isoOrDate);
+}
+
+/** Test-only — reset memoization between benchmark runs. */
+export function clearDateKeyKampalaCacheForTests(): void {
+  ISO_DATE_KEY_CACHE.clear();
 }
 
 /** Calendar-day key at least `days` days before today (device local + Kampala formatting). */

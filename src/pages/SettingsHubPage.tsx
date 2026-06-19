@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -77,6 +77,14 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "officeCardStaffAccess")}
             subtitle={t(lang, "officeCardStaffAccessSub")}
             Icon={UserCog}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/cash-drawer"
+            title={t(lang, "cashManageDrawerSettings")}
+            subtitle={t(lang, "cashManageDrawerSettingsSub")}
+            Icon={Banknote}
           />
         ) : null}
         {canShop ? (

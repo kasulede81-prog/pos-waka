@@ -7,6 +7,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { dateKeyKampala } from "../lib/datesUg";
+import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
 import {
   activeDayDrawerOpenForDate,
   isDayDrawerOpenMutable,
@@ -62,7 +63,9 @@ export function DayOpenPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-16">
-      <PageHeader lang={lang} title={t(lang, "dayOpenTitle")} subtitle={t(lang, "dayOpenSub")} backFallback="/office" />
+      <PageHeader lang={lang} title={t(lang, "dayOpenTitle")} subtitle={t(lang, "dayOpenSub")} backFallback="/office/cash-drawer" />
+
+      <ManageDrawerSettingsLink lang={lang} />
 
       {!v2 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">

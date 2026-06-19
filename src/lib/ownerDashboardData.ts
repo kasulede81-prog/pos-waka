@@ -31,7 +31,7 @@ import { getCompletedFinancialsFromScoped } from "./financialMetrics";
 import { computeBackOfficeAccessStats } from "./backOfficeAccessStats";
 import { buildOwnerRiskCards, type OwnerRiskCard } from "./ownerRiskDashboard";
 import {
-  revenueSalesInBounds,
+  revenueSalesInBoundsFromIndex,
   returnsInBounds,
   type DateFilterBounds,
 } from "./dateFilters";
@@ -129,10 +129,6 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
   const todayKey = dateKeyKampala(new Date());
   const yesterdayKey = dateKeyDaysAgoKampala(1);
   const periodKey = bounds.toKey;
-  const periodSales = revenueSalesInBounds(sales, bounds);
-  const periodReturns = returnsInBounds(returnRecords, bounds);
-  const periodVoids = filterVoidsInBounds(voidRecords, bounds);
-  const periodAuditLogs = filterAuditLogsInBounds(auditLogs, bounds);
 
   const { revenueIndex, dayIndex: salesIndex } = buildCombinedReportingIndex(
     sales,
@@ -140,6 +136,13 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     undefined,
     todayKey,
   );
+  const periodSales = bounds.isSingleDay
+    ? (revenueIndex.salesByDay.get(bounds.fromKey) ?? [])
+    : revenueSalesInBoundsFromIndex(revenueIndex, bounds);
+  const periodReturns = returnsInBounds(returnRecords, bounds);
+  const periodVoids = filterVoidsInBounds(voidRecords, bounds);
+  const periodAuditLogs = filterAuditLogsInBounds(auditLogs, bounds);
+
   const today = revenueIndex.salesByDay.get(todayKey) ?? [];
 
   const todayVoids: VoidRecord[] = [];
