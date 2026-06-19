@@ -85,6 +85,18 @@ export function sumCashExpensesInMonth(cashExpenses: CashExpense[], monthKey: st
     .reduce((sum, e) => sum + Math.max(0, e.amountUgx), 0);
 }
 
+export function sumCashExpensesInBounds(cashExpenses: CashExpense[], bounds: DateFilterBounds): number {
+  return cashExpenses
+    .filter(
+      (e) =>
+        !e.deletedAt &&
+        (e.approvalStatus ?? "approved") === "approved" &&
+        e.paidOn >= bounds.fromKey &&
+        e.paidOn <= bounds.toKey,
+    )
+    .reduce((sum, e) => sum + Math.max(0, e.amountUgx), 0);
+}
+
 export function sumDebtPaymentsDuringShift(debtPayments: DebtPayment[], shift: ShiftRecord): number {
   const startMs = new Date(shift.startAt).getTime();
   const endMs = shift.endAt ? new Date(shift.endAt).getTime() : Date.now();

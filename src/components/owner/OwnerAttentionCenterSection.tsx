@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
@@ -9,7 +10,10 @@ type Props = {
   critical: AttentionItem[];
   warnings: AttentionItem[];
   information: AttentionItem[];
+  reviewedCritical: AttentionItem[];
+  reviewedWarnings: AttentionItem[];
   periodLabel: string;
+  onAcknowledge: (alertId: string) => void;
 };
 
 function severityClass(severity: AttentionItem["severity"]): string {
@@ -36,10 +40,12 @@ function AlertGroup({
   lang,
   title,
   items,
+  onAcknowledge,
 }: {
   lang: Language;
   title: string;
   items: AttentionItem[];
+  onAcknowledge?: (alertId: string) => void;
 }) {
   if (items.length === 0) return null;
   return (
@@ -72,12 +78,23 @@ function AlertGroup({
                   <p className="shrink-0 text-sm font-black tabular-nums">UGX {item.amountUgx.toLocaleString()}</p>
                 ) : null}
               </div>
-              <Link
-                to={item.actionTo}
-                className="mt-3 inline-flex min-h-[40px] w-full items-center justify-center rounded-xl bg-white/80 px-3 text-xs font-black text-stone-900 shadow-sm"
-              >
-                {t(lang, item.actionLabelKey)} →
-              </Link>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Link
+                  to={item.actionTo}
+                  className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl bg-white/80 px-3 text-xs font-black text-stone-900 shadow-sm"
+                >
+                  {t(lang, item.actionLabelKey)} →
+                </Link>
+                {onAcknowledge && item.acknowledgeable !== false && item.severity !== "information" ? (
+                  <button
+                    type="button"
+                    onClick={() => onAcknowledge(item.id)}
+                    className="inline-flex min-h-[40px] flex-1 items-center justify-center rounded-xl border border-white/60 bg-white/40 px-3 text-xs font-black text-stone-900"
+                  >
+                    {t(lang, "ownerAttentionAcknowledge")}
+                  </button>
+                ) : null}
+              </div>
             </div>
           </li>
         ))}
@@ -86,12 +103,23 @@ function AlertGroup({
   );
 }
 
-export function OwnerAttentionCenterSection({ lang, critical, warnings, information, periodLabel }: Props) {
-  const total = critical.length + warnings.length + information.length;
+export function OwnerAttentionCenterSection({
+  lang,
+  critical,
+  warnings,
+  information,
+  reviewedCritical,
+  reviewedWarnings,
+  periodLabel,
+  onAcknowledge,
+}: Props) {
+  const [showReviewed, setShowReviewed] = useState(false);
+  const activeTotal = critical.length + warnings.length + information.length;
+  const reviewedTotal = reviewedCritical.length + reviewedWarnings.length;
 
   return (
     <HistoryListCard
-      isEmpty={total === 0}
+      isEmpty={activeTotal === 0 && reviewedTotal === 0}
       empty={<p className="text-sm font-semibold text-emerald-900">{t(lang, "ownerAttentionAllClear")}</p>}
     >
       <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
@@ -101,13 +129,31 @@ export function OwnerAttentionCenterSection({ lang, critical, warnings, informat
             {tTemplate(lang, "ownerAttentionPeriod", { label: periodLabel })}
           </p>
         </div>
-        {total > 0 ? (
-          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-black text-rose-950">{total}</span>
+        {activeTotal > 0 ? (
+          <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-black text-rose-950">{activeTotal}</span>
         ) : null}
       </div>
-      <AlertGroup lang={lang} title={t(lang, "ownerAttentionCritical")} items={critical} />
-      <AlertGroup lang={lang} title={t(lang, "ownerAttentionWarnings")} items={warnings} />
+      <AlertGroup lang={lang} title={t(lang, "ownerAttentionCritical")} items={critical} onAcknowledge={onAcknowledge} />
+      <AlertGroup lang={lang} title={t(lang, "ownerAttentionWarnings")} items={warnings} onAcknowledge={onAcknowledge} />
       <AlertGroup lang={lang} title={t(lang, "ownerAttentionInfo")} items={information} />
+      {reviewedTotal > 0 ? (
+        <div className="border-t border-stone-100">
+          <button
+            type="button"
+            onClick={() => setShowReviewed((v) => !v)}
+            className="flex w-full items-center justify-between px-4 py-3 text-left text-xs font-black text-stone-600"
+          >
+            <span>{tTemplate(lang, "ownerAttentionReviewed", { count: reviewedTotal })}</span>
+            <span>{showReviewed ? "−" : "+"}</span>
+          </button>
+          {showReviewed ? (
+            <>
+              <AlertGroup lang={lang} title={t(lang, "ownerAttentionCritical")} items={reviewedCritical} />
+              <AlertGroup lang={lang} title={t(lang, "ownerAttentionWarnings")} items={reviewedWarnings} />
+            </>
+          ) : null}
+        </div>
+      ) : null}
     </HistoryListCard>
   );
 }

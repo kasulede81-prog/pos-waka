@@ -5,6 +5,7 @@
 import type {
   AuditLogEntry,
   CashDrawerAdjustment,
+  CashExpense,
   Customer,
   DayCloseSummary,
   DayDrawerOpen,
@@ -26,26 +27,19 @@ import {
   returnsInBounds,
 } from "./dateFilters";
 import { activeDayDrawerOpenForDate } from "./dayDrawerOpen";
-import { collectDayDrawerOpenDiagnostics } from "./dayDrawerOpenDiagnostics";
 import { sumDebtPaymentsInBounds } from "./customerDebtActivity";
+import { sumCashExpensesInBounds } from "./cashReconciliation";
 import { isLowStock } from "./sellingEngine";
 import { buildInventoryCountVarianceReport } from "./inventoryCount";
 import type { OwnerAlert } from "./ownerAlerts";
+import type { OwnerAlertAcknowledgement } from "./ownerAlertAcknowledgement";
 import {
   auditCenterLinkFromFilter,
   ownerRiskCardTitle,
   type OwnerRiskCard,
 } from "./ownerRiskDashboard";
-import {
-  evaluateDebtIntegrityStatus,
-  evaluateInventoryIntegrityStatus,
-  type ReadinessStatus,
-} from "./productionReadiness";
-import { computeSyncSalesStats } from "../offline/cloudSync";
-import { verifyCustomerDebtIntegrity } from "./customerDebtIntegrity";
-import { verifyInventoryIntegrity } from "./inventoryIntegrity";
-import type { StockMovement } from "../types";
-import type { DebtPayment } from "../types";
+import type { OwnerDashboardIntegritySnapshot } from "./ownerDashboardIntegrityCache";
+import type { DebtPayment, StockMovement } from "../types";
 
 export type AttentionSeverity = "critical" | "warning" | "information";
 
@@ -61,6 +55,7 @@ export type AttentionItem = {
   timestamp?: string | null;
   actionTo: string;
   actionLabelKey: string;
+  acknowledgeable?: boolean;
 };
 
 export type IntegritySignalStatus = "green" | "warning" | "critical";
@@ -85,17 +80,45 @@ export type ShiftAccountabilityRow = {
   overageCount: number;
   cumulativeShortageUgx: number;
   cumulativeOverageUgx: number;
+  lifetimeShortageCount: number;
+  lifetimeShortageUgx: number;
+  shortageCount30d: number;
   isRepeatOffender: boolean;
+};
+
+export type CashAdjustmentFeedRow = {
+  id: string;
+  actorLabel: string;
+  occurredAt: string;
+  amountUgx: number;
+  type: string;
+  note: string;
+  direction: "in" | "out";
+};
+
+export type FloatVerificationFeedRow = {
+  shiftId: string;
+  cashierLabel: string;
+  verifierLabel: string | null;
+  expectedUgx: number | null;
+  countedUgx: number | null;
+  varianceUgx: number;
+  at: string;
 };
 
 export type OwnerCashControlSnapshot = {
   primaryDayKey: string;
+  isPeriodRange: boolean;
   drawerOpen: DayDrawerOpen | null;
   openingFloatUgx: number | null;
   openedByLabel: string | null;
-  expectedCashUgx: number;
-  countedCashUgx: number | null;
-  dayVarianceUgx: number | null;
+  periodExpectedCashUgx: number;
+  latestCountedCashUgx: number | null;
+  latestDayVarianceUgx: number | null;
+  latestCountDayKey: string;
+  shortageShiftCount: number;
+  overageShiftCount: number;
+  floatMismatchCount: number;
   shiftVariances: Array<{
     shiftId: string;
     label: string;
@@ -103,13 +126,8 @@ export type OwnerCashControlSnapshot = {
     at: string;
     kind: "shortage" | "overage";
   }>;
-  floatMismatches: Array<{
-    shiftId: string;
-    label: string;
-    varianceUgx: number;
-    verifiedByLabel: string | null;
-    at: string;
-  }>;
+  adjustmentFeed: CashAdjustmentFeedRow[];
+  floatVerificationFeed: FloatVerificationFeedRow[];
   adjustmentsInPeriod: { inflowUgx: number; outflowUgx: number; count: number };
   hasUnresolvedVariance: boolean;
 };
@@ -127,6 +145,10 @@ export type OwnerFinancialSnapshot = {
   debtCollectedUgx: number;
   receivablesUgx: number;
   payablesUgx: number;
+  expensesTodayUgx: number;
+  expensesPeriodUgx: number;
+  expensesPriorPeriodUgx: number;
+  topSuppliers: Array<{ id: string; name: string; balanceOwedUgx: number }>;
   paymentMix: {
     cashUgx: number;
     mobileMoneyUgx: number;
@@ -148,6 +170,7 @@ export type OwnerCommandCenterInput = {
   dayCloses: DayCloseSummary[];
   dayDrawerOpens: DayDrawerOpen[];
   cashDrawerAdjustments: CashDrawerAdjustment[];
+  cashExpenses: CashExpense[];
   debtPayments: DebtPayment[];
   stockMovements: StockMovement[];
   inventoryCountSessions: InventoryCountSession[];
@@ -156,11 +179,14 @@ export type OwnerCommandCenterInput = {
   returnRecords: ReturnRecord[];
   ownerAlertsResolved: OwnerAlert[];
   riskCards: OwnerRiskCard[];
+  acknowledgements: OwnerAlertAcknowledgement[];
   expectedCashUgx: number;
   pharmacyMode: boolean;
   syncPendingCount: number;
   syncErrorCount: number;
 };
+
+type ReadinessStatus = "pass" | "warning" | "fail";
 
 function alertToneToSeverity(tone: OwnerAlert["tone"]): AttentionSeverity {
   if (tone === "danger") return "critical";
@@ -191,8 +217,32 @@ function parseAmountFromVars(vars?: Record<string, string | number>): number | n
   return Number.isFinite(n) ? n : null;
 }
 
+function resolveOwnerAlertAction(alert: OwnerAlert): { actionTo: string; actionLabelKey: string } {
+  if (alert.id === "low-stock" || alert.id.startsWith("fast-burn")) {
+    return { actionTo: "/stock", actionLabelKey: "ownerAttentionActionStock" };
+  }
+  if (alert.id.startsWith("variance-") || alert.id === "cash-short-today") {
+    return { actionTo: "/close-day", actionLabelKey: "ownerAttentionActionClose" };
+  }
+  if (alert.id === "debt-high") {
+    return { actionTo: "/customers", actionLabelKey: "ownerAttentionActionDebts" };
+  }
+  if (
+    alert.id === "stock-movements" ||
+    alert.id === "products-removed-review" ||
+    alert.id.startsWith("manual-stock")
+  ) {
+    return { actionTo: "/stock", actionLabelKey: "ownerAttentionActionStock" };
+  }
+  if (alert.id === "refunds-many") {
+    return { actionTo: "/office/audit-center", actionLabelKey: "ownerAttentionActionInvestigate" };
+  }
+  return { actionTo: "/office/audit-center", actionLabelKey: "ownerAttentionActionReview" };
+}
+
 export function ownerAlertToAttentionItem(alert: OwnerAlert): AttentionItem {
   const amountUgx = parseAmountFromVars(alert.detailVars);
+  const route = resolveOwnerAlertAction(alert);
   return {
     id: `alert-${alert.id}`,
     severity: alertToneToSeverity(alert.tone),
@@ -201,8 +251,9 @@ export function ownerAlertToAttentionItem(alert: OwnerAlert): AttentionItem {
     detailKey: alert.detail,
     detailVars: alert.detailVars,
     amountUgx,
-    actionTo: "/office/audit-center",
-    actionLabelKey: "ownerAttentionActionReview",
+    actionTo: route.actionTo,
+    actionLabelKey: route.actionLabelKey,
+    acknowledgeable: alert.tone !== "info",
   };
 }
 
@@ -344,57 +395,93 @@ export function buildSyncAttentionItems(syncErrorCount: number, unsyncedCount: n
   return items;
 }
 
-export function buildIntegrityAttentionItems(input: {
-  customers: Customer[];
-  sales: Sale[];
-  debtPayments: DebtPayment[];
-  products: Product[];
-  stockMovements: StockMovement[];
-}): AttentionItem[] {
-  const items: AttentionItem[] = [];
-  const debt = verifyCustomerDebtIntegrity(input.customers, input.sales, input.debtPayments, { heal: false });
-  if (!debt.ok) {
-    items.push({
-      id: "debt-integrity",
+export function buildDrawerConflictAttentionItems(
+  integrity: OwnerDashboardIntegritySnapshot,
+): AttentionItem[] {
+  const conflicts =
+    integrity.periodDrawerDuplicateOpens > 0 ||
+    integrity.periodDrawerDeviceConflicts > 0 ||
+    integrity.periodDrawerUnsynced > 0;
+  if (!conflicts) return [];
+  return [
+    {
+      id: "drawer-cloud-conflict",
       severity: "critical",
-      titleKey: "ownerAttentionDebtIntegrity",
-      titleVars: { count: debt.mismatches.length },
-      actionTo: "/settings/health",
-      actionLabelKey: "ownerAttentionActionIntegrity",
-    });
-  }
-  const inv = verifyInventoryIntegrity({ products: input.products, movements: input.stockMovements });
-  if (!inv.ok) {
-    items.push({
-      id: "inventory-integrity",
-      severity: "critical",
-      titleKey: "ownerAttentionInventoryIntegrity",
-      titleVars: { count: inv.mismatches.length },
-      actionTo: "/settings/health",
-      actionLabelKey: "ownerAttentionActionIntegrity",
-    });
-  }
-  return items;
+      titleKey: "ownerAttentionDrawerConflict",
+      titleVars: {
+        conflicts: integrity.periodDrawerDuplicateOpens + integrity.periodDrawerDeviceConflicts,
+      },
+      actionTo: "/office/day-open",
+      actionLabelKey: "ownerAttentionActionDrawer",
+      acknowledgeable: true,
+    },
+  ];
 }
 
-export function buildAttentionCenter(input: OwnerCommandCenterInput): {
+export function buildSupplierOwedAttentionItems(suppliers: Supplier[]): AttentionItem[] {
+  const owed = suppliers
+    .filter((s) => (s.balanceOwedUgx ?? 0) > 0)
+    .sort((a, b) => (b.balanceOwedUgx ?? 0) - (a.balanceOwedUgx ?? 0));
+  if (owed.length === 0) return [];
+  const top = owed[0]!;
+  if ((top.balanceOwedUgx ?? 0) < 10_000 && owed.length === 1) return [];
+  return [
+    {
+      id: "supplier-payables",
+      severity: owed.some((s) => (s.balanceOwedUgx ?? 0) >= 100_000) ? "critical" : "warning",
+      titleKey: "ownerAttentionSupplierOwed",
+      titleVars: { count: owed.length, name: top.name },
+      amountUgx: top.balanceOwedUgx ?? 0,
+      actionTo: "/suppliers",
+      actionLabelKey: "ownerAttentionActionSuppliers",
+      acknowledgeable: true,
+    },
+  ];
+}
+
+export function buildAttentionCenter(
+  input: OwnerCommandCenterInput,
+  integrity: OwnerDashboardIntegritySnapshot,
+): {
   critical: AttentionItem[];
   warnings: AttentionItem[];
   information: AttentionItem[];
 } {
-  const { unsyncedCount, errorCount } = computeSyncSalesStats(input.sales);
-  const syncErrors = input.syncErrorCount > 0 ? input.syncErrorCount : errorCount;
-  const unsynced = input.syncPendingCount > 0 ? input.syncPendingCount : unsyncedCount;
+  const syncErrors = input.syncErrorCount > 0 ? input.syncErrorCount : integrity.syncStats.errorCount;
+  const unsynced = input.syncPendingCount > 0 ? input.syncPendingCount : integrity.syncStats.unsyncedCount;
+
+  const integrityItems: AttentionItem[] = [];
+  if (!integrity.debtIntegrity.ok) {
+    integrityItems.push({
+      id: "debt-integrity",
+      severity: "critical",
+      titleKey: "ownerAttentionDebtIntegrity",
+      titleVars: { count: integrity.debtIntegrity.mismatches.length },
+      actionTo: "/settings/health",
+      actionLabelKey: "ownerAttentionActionIntegrity",
+      acknowledgeable: true,
+    });
+  }
+  if (!integrity.inventoryIntegrity.ok) {
+    integrityItems.push({
+      id: "inventory-integrity",
+      severity: "critical",
+      titleKey: "ownerAttentionInventoryIntegrity",
+      titleVars: { count: integrity.inventoryIntegrity.mismatches.length },
+      actionTo: "/settings/health",
+      actionLabelKey: "ownerAttentionActionIntegrity",
+      acknowledgeable: true,
+    });
+  }
 
   const all: AttentionItem[] = [
     ...input.ownerAlertsResolved.map(ownerAlertToAttentionItem),
     ...input.riskCards.map((c) => riskCardToAttentionItem(input.lang, c, input.bounds)),
-    ...buildShiftShortageAttentionItems(input.shifts, input.bounds, input.lang),
-    ...buildFloatMismatchAttentionItems(input.shifts, input.bounds, input.lang),
-    ...buildNegativeStockAttentionItems(input.products),
     ...buildCountVarianceAttentionItems(input.inventoryCountSessions),
     ...buildSyncAttentionItems(syncErrors, unsynced),
-    ...buildIntegrityAttentionItems(input),
+    ...integrityItems,
+    ...buildDrawerConflictAttentionItems(integrity),
+    ...buildSupplierOwedAttentionItems(input.suppliers),
   ];
 
   const seen = new Set<string>();
@@ -411,89 +498,85 @@ export function buildAttentionCenter(input: OwnerCommandCenterInput): {
   };
 }
 
-export function buildIntegritySignals(input: {
-  customers: Customer[];
-  sales: Sale[];
-  debtPayments: DebtPayment[];
-  products: Product[];
-  stockMovements: StockMovement[];
-  dayDrawerOpens: DayDrawerOpen[];
-  shifts: ShiftRecord[];
-  todayKey: string;
-  syncPendingCount: number;
-  syncErrorCount: number;
-}): IntegritySignal[] {
-  const debtCheck = evaluateDebtIntegrityStatus(input.customers, input.sales, input.debtPayments);
-  const invCheck = evaluateInventoryIntegrityStatus({
-    products: input.products,
-    stockMovements: input.stockMovements,
-  });
-  const { unsyncedCount, errorCount } = computeSyncSalesStats(input.sales);
-  const syncErr = input.syncErrorCount || errorCount;
-  const pending = input.syncPendingCount || unsyncedCount;
+export function buildIntegritySignals(
+  integrity: OwnerDashboardIntegritySnapshot,
+  bounds: DateFilterBounds,
+): IntegritySignal[] {
+  const syncErr = integrity.syncErrorCount || integrity.syncStats.errorCount;
+  const pending = integrity.syncPendingCount || integrity.syncStats.unsyncedCount;
+  const queueDegraded =
+    integrity.syncHealth.queueHealth === "degraded" || integrity.syncHealth.queueHealth === "backing_off";
 
-  const drawerDiag = collectDayDrawerOpenDiagnostics(input.dayDrawerOpens, input.shifts, input.todayKey);
   const drawerConflict =
-    drawerDiag.duplicateOpenCount > 0 ||
-    drawerDiag.conflictingDeviceCount > 1 ||
-    drawerDiag.unsyncedCount > 0;
+    integrity.periodDrawerDuplicateOpens > 0 ||
+    integrity.periodDrawerDeviceConflicts > 0 ||
+    integrity.periodDrawerUnsynced > 0 ||
+    integrity.periodVerificationMismatches > 0;
 
   const signals: IntegritySignal[] = [
     {
       id: "debt",
       labelKey: "ownerIntegrityDebt",
-      status: readinessToIntegrity(debtCheck.status),
-      detailKey: debtCheck.status === "pass" ? "ownerIntegrityOk" : "ownerIntegrityDebtDetail",
-      detailVars: { count: debtCheck.status === "pass" ? 0 : Number.parseInt(debtCheck.detail, 10) || 1 },
+      status: readinessToIntegrity(integrity.debtCheck.status),
+      detailKey: integrity.debtCheck.status === "pass" ? "ownerIntegrityOk" : "ownerIntegrityDebtDetail",
+      detailVars: {
+        count:
+          integrity.debtCheck.status === "pass"
+            ? 0
+            : Number.parseInt(integrity.debtCheck.detail, 10) || integrity.debtIntegrity.mismatches.length,
+      },
       actionTo: "/settings/health",
     },
     {
       id: "inventory",
       labelKey: "ownerIntegrityInventory",
-      status: readinessToIntegrity(invCheck.status),
-      detailKey: invCheck.status === "pass" ? "ownerIntegrityOk" : "ownerIntegrityInventoryDetail",
-      detailVars: { count: invCheck.status === "pass" ? 0 : Number.parseInt(invCheck.detail, 10) || 1 },
+      status: readinessToIntegrity(integrity.inventoryCheck.status),
+      detailKey: integrity.inventoryCheck.status === "pass" ? "ownerIntegrityOk" : "ownerIntegrityInventoryDetail",
+      detailVars: {
+        count:
+          integrity.inventoryCheck.status === "pass"
+            ? 0
+            : Number.parseInt(integrity.inventoryCheck.detail, 10) || integrity.inventoryIntegrity.mismatches.length,
+      },
       actionTo: "/settings/health",
     },
     {
       id: "sync",
       labelKey: "ownerIntegritySync",
-      status: syncErr > 0 ? "critical" : pending > 10 ? "warning" : "green",
+      status: syncErr > 0 ? "critical" : pending > 10 || queueDegraded ? "warning" : "green",
       detailKey:
         syncErr > 0
           ? "ownerIntegritySyncErrors"
-          : pending > 0
-            ? "ownerIntegritySyncPending"
-            : "ownerIntegrityOk",
+          : queueDegraded
+            ? "ownerIntegrityQueueDegraded"
+            : pending > 0
+              ? "ownerIntegritySyncPending"
+              : "ownerIntegrityOk",
       detailVars: { count: syncErr || pending },
-      actionTo: "/office/backup",
+      actionTo: "/settings/health",
     },
     {
       id: "queue",
       labelKey: "ownerIntegrityQueue",
-      status: pending > 50 ? "warning" : pending > 0 ? "warning" : "green",
-      detailKey: pending > 0 ? "ownerIntegrityQueuePending" : "ownerIntegrityOk",
+      status: queueDegraded ? "critical" : pending > 50 ? "warning" : pending > 0 ? "warning" : "green",
+      detailKey: queueDegraded ? "ownerIntegrityQueueDegraded" : pending > 0 ? "ownerIntegrityQueuePending" : "ownerIntegrityOk",
       detailVars: { count: pending },
       actionTo: "/settings/health",
     },
     {
       id: "drawer",
       labelKey: "ownerIntegrityDrawer",
-      status: drawerConflict || drawerDiag.verificationMismatchCount > 0 ? "critical" : "green",
-      detailKey:
-        drawerDiag.verificationMismatchCount > 0
-          ? "ownerIntegrityDrawerMismatch"
-          : drawerConflict
-            ? "ownerIntegrityDrawerConflict"
-            : "ownerIntegrityOk",
+      status: drawerConflict ? "critical" : "green",
+      detailKey: drawerConflict ? "ownerIntegrityDrawerConflict" : "ownerIntegrityOk",
       detailVars: {
-        mismatches: drawerDiag.verificationMismatchCount,
-        conflicts: drawerDiag.duplicateOpenCount + drawerDiag.conflictingDeviceCount,
+        mismatches: integrity.periodVerificationMismatches,
+        conflicts: integrity.periodDrawerDuplicateOpens + integrity.periodDrawerDeviceConflicts,
       },
       actionTo: "/office/day-open",
     },
   ];
 
+  void bounds;
   return signals;
 }
 
@@ -501,6 +584,18 @@ export function buildShiftAccountabilityRows(
   shifts: ShiftRecord[],
   bounds: DateFilterBounds,
   lang: Language,
+  historicalStats: Map<
+    string,
+    {
+      lifetimeShortageCount: number;
+      lifetimeShortageUgx: number;
+      shortageCount30d: number;
+      shortageUgx30d: number;
+      overageCount: number;
+      cumulativeOverageUgx: number;
+      floatMismatchCount: number;
+    }
+  >,
 ): ShiftAccountabilityRow[] {
   const inPeriod = shifts.filter((s) => shiftInBounds(s, bounds));
   const byUser = new Map<string, ShiftRecord[]>();
@@ -522,6 +617,15 @@ export function buildShiftAccountabilityRows(
     let latestClosing: number | null = null;
     let verifiedBy: string | null = null;
     const hasActiveShift = userShifts.some((s) => !s.endAt);
+    const hist = historicalStats.get(userId) ?? {
+      lifetimeShortageCount: 0,
+      lifetimeShortageUgx: 0,
+      shortageCount30d: 0,
+      shortageUgx30d: 0,
+      overageCount: 0,
+      cumulativeOverageUgx: 0,
+      floatMismatchCount: 0,
+    };
 
     for (const sh of userShifts) {
       const diff = sh.cashDifferenceUgx;
@@ -541,7 +645,10 @@ export function buildShiftAccountabilityRows(
       }
     }
 
-    const isRepeatOffender = shortageCount >= 2 || cumulativeShortageUgx >= 10_000;
+    const isRepeatOffender =
+      hist.lifetimeShortageCount >= 2 ||
+      hist.lifetimeShortageUgx >= 10_000 ||
+      hist.shortageCount30d >= 2;
     rows.push({
       userId,
       label: userShifts[0]?.actorName ?? actorDisplayLabel(userId, lang),
@@ -553,6 +660,9 @@ export function buildShiftAccountabilityRows(
       overageCount,
       cumulativeShortageUgx,
       cumulativeOverageUgx,
+      lifetimeShortageCount: hist.lifetimeShortageCount,
+      lifetimeShortageUgx: hist.lifetimeShortageUgx,
+      shortageCount30d: hist.shortageCount30d,
       isRepeatOffender,
     });
   }
@@ -586,60 +696,86 @@ export function buildCashControlSnapshot(input: {
   const close = input.dayCloses.find((c) => c.dateKey === input.primaryDayKey && !c.supersededAt);
 
   const shiftVariances: OwnerCashControlSnapshot["shiftVariances"] = [];
-  const floatMismatches: OwnerCashControlSnapshot["floatMismatches"] = [];
+  const floatVerificationFeed: FloatVerificationFeedRow[] = [];
+  let shortageShiftCount = 0;
+  let overageShiftCount = 0;
+  let floatMismatchCount = 0;
 
   for (const sh of input.shifts) {
     if (!shiftInBounds(sh, input.bounds)) continue;
     const label = sh.actorName ?? actorDisplayLabel(sh.actorUserId, input.lang);
     if (sh.cashDifferenceUgx != null && sh.cashDifferenceUgx !== 0) {
+      const kind = sh.cashDifferenceUgx < 0 ? "shortage" : "overage";
+      if (kind === "shortage") shortageShiftCount += 1;
+      else overageShiftCount += 1;
       shiftVariances.push({
         shiftId: sh.id,
         label,
         diffUgx: sh.cashDifferenceUgx,
         at: sh.endAt ?? sh.startAt,
-        kind: sh.cashDifferenceUgx < 0 ? "shortage" : "overage",
+        kind,
       });
     }
     if (sh.verificationVarianceUgx != null && sh.verificationVarianceUgx !== 0) {
-      floatMismatches.push({
+      floatMismatchCount += 1;
+      floatVerificationFeed.push({
         shiftId: sh.id,
-        label,
+        cashierLabel: label,
+        verifierLabel: sh.verifiedByLabel ?? null,
+        expectedUgx: sh.segmentBaselineUgx ?? null,
+        countedUgx: sh.verifiedFloatUgx ?? null,
         varianceUgx: sh.verificationVarianceUgx,
-        verifiedByLabel: sh.verifiedByLabel ?? null,
         at: sh.verifiedAt ?? sh.startAt,
       });
     }
   }
 
   shiftVariances.sort((a, b) => Math.abs(b.diffUgx) - Math.abs(a.diffUgx));
-  floatMismatches.sort((a, b) => Math.abs(b.varianceUgx) - Math.abs(a.varianceUgx));
 
+  const adjustmentFeed: CashAdjustmentFeedRow[] = [];
   let inflowUgx = 0;
   let outflowUgx = 0;
   let adjCount = 0;
   for (const adj of input.cashDrawerAdjustments) {
     if (!adjustmentInBounds(adj, input.bounds)) continue;
     adjCount += 1;
-    if (INFLOW_ADJUSTMENT.has(adj.type)) inflowUgx += adj.amountUgx;
+    const isIn = INFLOW_ADJUSTMENT.has(adj.type);
+    if (isIn) inflowUgx += adj.amountUgx;
     else outflowUgx += adj.amountUgx;
+    adjustmentFeed.push({
+      id: adj.id,
+      actorLabel: adj.actorName ?? actorDisplayLabel(adj.actorUserId, input.lang),
+      occurredAt: adj.occurredAt,
+      amountUgx: adj.amountUgx,
+      type: adj.type,
+      note: adj.note,
+      direction: isIn ? "in" : "out",
+    });
   }
+  adjustmentFeed.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
 
-  const dayVarianceUgx = close?.differenceUgx ?? null;
+  const latestDayVarianceUgx = close?.differenceUgx ?? null;
   const hasUnresolvedVariance =
-    (dayVarianceUgx != null && dayVarianceUgx !== 0) ||
-    shiftVariances.some((s) => s.kind === "shortage") ||
-    floatMismatches.length > 0;
+    (latestDayVarianceUgx != null && latestDayVarianceUgx !== 0) ||
+    shortageShiftCount > 0 ||
+    floatMismatchCount > 0;
 
   return {
     primaryDayKey: input.primaryDayKey,
+    isPeriodRange: !input.bounds.isSingleDay,
     drawerOpen,
     openingFloatUgx: drawerOpen?.openingFloatUgx ?? null,
     openedByLabel: drawerOpen?.countedByLabel ?? null,
-    expectedCashUgx: input.expectedCashUgx,
-    countedCashUgx: close?.countedCashUgx ?? null,
-    dayVarianceUgx,
+    periodExpectedCashUgx: input.expectedCashUgx,
+    latestCountedCashUgx: close?.countedCashUgx ?? null,
+    latestDayVarianceUgx,
+    latestCountDayKey: input.primaryDayKey,
+    shortageShiftCount,
+    overageShiftCount,
+    floatMismatchCount,
     shiftVariances: shiftVariances.slice(0, 8),
-    floatMismatches: floatMismatches.slice(0, 6),
+    adjustmentFeed: adjustmentFeed.slice(0, 8),
+    floatVerificationFeed: floatVerificationFeed.slice(0, 8),
     adjustmentsInPeriod: { inflowUgx, outflowUgx, count: adjCount },
     hasUnresolvedVariance,
   };
@@ -675,6 +811,7 @@ export function buildFinancialSnapshot(input: {
   customers: Customer[];
   suppliers: Supplier[];
   debtPayments: DebtPayment[];
+  cashExpenses: CashExpense[];
   bounds: DateFilterBounds;
 }): OwnerFinancialSnapshot {
   const scopedSales = revenueSalesInBounds(input.sales, input.bounds);
@@ -698,10 +835,46 @@ export function buildFinancialSnapshot(input: {
     else mix.otherUgx += amt;
   }
 
+  const expensesPeriodUgx = sumCashExpensesInBounds(input.cashExpenses, input.bounds);
+  const todayKey = dateKeyKampala(new Date());
+  const expensesTodayUgx = sumCashExpensesInBounds(input.cashExpenses, {
+    fromKey: todayKey,
+    toKey: todayKey,
+    isSingleDay: true,
+  });
+  const daySpan =
+    Math.max(
+      1,
+      Math.round(
+        (Date.parse(`${input.bounds.toKey}T12:00:00.000Z`) -
+          Date.parse(`${input.bounds.fromKey}T12:00:00.000Z`)) /
+          86400000,
+      ) + 1,
+    );
+  const priorToKey = dateKeyKampala(new Date(Date.parse(`${input.bounds.fromKey}T12:00:00.000Z`) - 86400000));
+  const priorFromKey = dateKeyKampala(
+    new Date(Date.parse(`${input.bounds.fromKey}T12:00:00.000Z`) - daySpan * 86400000),
+  );
+  const expensesPriorPeriodUgx = sumCashExpensesInBounds(input.cashExpenses, {
+    fromKey: priorFromKey,
+    toKey: priorToKey,
+    isSingleDay: priorFromKey === priorToKey,
+  });
+
+  const topSuppliers = [...input.suppliers]
+    .filter((s) => (s.balanceOwedUgx ?? 0) > 0)
+    .sort((a, b) => (b.balanceOwedUgx ?? 0) - (a.balanceOwedUgx ?? 0))
+    .slice(0, 5)
+    .map((s) => ({ id: s.id, name: s.name, balanceOwedUgx: s.balanceOwedUgx ?? 0 }));
+
   return {
     debtCollectedUgx: sumDebtPaymentsInBounds(input.debtPayments, input.bounds),
     receivablesUgx: input.customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0),
     payablesUgx: input.suppliers.reduce((sum, s) => sum + Math.max(0, s.balanceOwedUgx ?? 0), 0),
+    expensesTodayUgx,
+    expensesPeriodUgx,
+    expensesPriorPeriodUgx,
+    topSuppliers,
     paymentMix: mix,
   };
 }

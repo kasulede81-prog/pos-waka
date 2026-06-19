@@ -166,6 +166,7 @@ import { returnRestocksInventory, validateReturnAuthorization } from "../lib/ret
 import { emitInventoryStockChanges, type InventoryStockSyncMessage, type InventorySyncEventType } from "../lib/inventorySyncChannel";
 import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
+import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
   authorizeStaffAccountMutation,
@@ -430,6 +431,7 @@ export type PosState = {
   switchStaffAccount: (id: string | null, opts?: { force?: boolean }) => { ok: boolean; errorKey?: string };
   setPosLocked: (locked: boolean) => void;
   setPilotModeEnabled: (enabled: boolean) => void;
+  acknowledgeOwnerAlert: (alertId: string) => void;
   beginShift: (openingFloatUgx?: number) => { ok: boolean; errorKey?: string };
   beginShiftV2: (input: import("./dayDrawerOpenMutations").BeginShiftV2Input) => { ok: boolean; errorKey?: string; shiftId?: string };
   recordDayDrawerOpen: (input: {
@@ -1406,6 +1408,15 @@ export const usePosStore = create<PosState>((set, get) => {
   },
   setPilotModeEnabled: (enabled) => {
     set((s) => ({ preferences: { ...s.preferences, pilotModeEnabled: enabled } }));
+  },
+  acknowledgeOwnerAlert: (alertId) => {
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor || actor.role !== "owner") return;
+    const trimmed = String(alertId).trim();
+    if (!trimmed) return;
+    const next = appendAcknowledgement(state.preferences.ownerAlertAcknowledgements, trimmed, actor.userId);
+    set((s) => ({ preferences: { ...s.preferences, ownerAlertAcknowledgements: next } }));
   },
   logAuditAction: (action, summary, payload) => {
     pushAudit(action, summary, payload ?? {});
@@ -4384,6 +4395,19 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : p.ownerRisksReviewedAt === null
           ? null
           : String(p.ownerRisksReviewedAt),
+    ownerAlertAcknowledgements: Array.isArray(p.ownerAlertAcknowledgements)
+      ? p.ownerAlertAcknowledgements
+          .map((row) => {
+            if (!row || typeof row !== "object") return null;
+            const alertId = String((row as { alertId?: unknown }).alertId ?? "").trim();
+            const acknowledgedAt = String((row as { acknowledgedAt?: unknown }).acknowledgedAt ?? "").trim();
+            const acknowledgedBy = String((row as { acknowledgedBy?: unknown }).acknowledgedBy ?? "").trim();
+            if (!alertId || !acknowledgedAt || !acknowledgedBy) return null;
+            return { alertId, acknowledgedAt, acknowledgedBy };
+          })
+          .filter((row): row is { alertId: string; acknowledgedAt: string; acknowledgedBy: string } => row != null)
+          .slice(-200)
+      : (base.ownerAlertAcknowledgements ?? []),
     activeBranchId:
       p.activeBranchId === undefined
         ? (base.activeBranchId ?? null)

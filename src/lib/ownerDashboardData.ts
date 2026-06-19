@@ -296,7 +296,11 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     alertWarnCount: warnCount,
   });
 
-  const trustRows = computeCashierTrustRows(lang, periodSales, auditLogs, alertTodayKey, periodAuditLogs);
+  const trustRows = computeCashierTrustRows(lang, periodSales, auditLogs, alertTodayKey, periodAuditLogs, {
+    shifts: preferences.shifts ?? [],
+    voidRecords: periodVoids,
+    returnRecords: periodReturns,
+  });
   const backOfficeAccess = computeBackOfficeAccessStats(auditLogs, alertTodayKey);
   const riskCards = buildOwnerRiskCards({
     lang,

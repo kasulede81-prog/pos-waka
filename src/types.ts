@@ -985,6 +985,12 @@ export type ShopPreferences = {
   lastAutoBackupDateKey?: string;
   /** When the owner last opened Investigation / risks (ISO). Hides launcher badges until new events. */
   ownerRisksReviewedAt?: string | null;
+  /** Owner-reviewed attention-center alerts (critical/warning). */
+  ownerAlertAcknowledgements?: Array<{
+    alertId: string;
+    acknowledgedAt: string;
+    acknowledgedBy: string;
+  }>;
   /**
    * Multi-branch (future): when set, rows may be tagged with this id for sync and dashboards.
    * Single-shop installs leave these unset.

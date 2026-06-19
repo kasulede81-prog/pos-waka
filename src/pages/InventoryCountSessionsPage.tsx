@@ -1,8 +1,8 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ClipboardList, Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
-import { usePosStore } from "../store/usePosStore";
+import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canInventoryCount } from "../lib/inventoryCount";
@@ -15,9 +15,11 @@ function statusLabel(lang: Language, status: string): string {
 }
 
 export function InventoryCountSessionsPage({ lang }: Props) {
+  const navigate = useNavigate();
   const actor = useSessionActor();
   const sessions = usePosStore((s) => s.inventoryCountSessions);
   const createSession = usePosStore((s) => s.createInventoryCountSession);
+  const startSession = usePosStore((s) => s.startInventoryCountSession);
 
   const canCreate = canInventoryCount(actor.role, "create");
 
@@ -29,9 +31,17 @@ export function InventoryCountSessionsPage({ lang }: Props) {
       window.alert(t(lang, r.errorKey ?? "invalid"));
       return;
     }
-    if (r.sessionId) {
-      window.location.assign(`/stock/count/${r.sessionId}`);
+    if (!r.sessionId) return;
+
+    const started = startSession(r.sessionId);
+    if (!started.ok) {
+      window.alert(t(lang, started.errorKey ?? "invalid"));
+      navigate(`/stock/count/${r.sessionId}`);
+      return;
     }
+
+    flushPendingPersist();
+    navigate(`/stock/count/${r.sessionId}`);
   };
 
   return (

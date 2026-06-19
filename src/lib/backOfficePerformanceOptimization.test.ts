@@ -8,6 +8,7 @@ import type { AuditLogEntry, Product, ReturnRecord, Sale, SaleLine } from "../ty
 import { localGetRangeSummary } from "./localReporting";
 import { buildAuditLogSearchIndex, filterAuditLogsIndexed } from "./auditSearch";
 import { buildOwnerDashboardData } from "./ownerDashboardData";
+import { buildOwnerCommandCenterBundle } from "./ownerDashboardCommandCenter";
 import { getCompletedFinancials } from "./financialMetrics";
 import { buildCashPositionReport } from "./cashPosition";
 
@@ -20,6 +21,9 @@ const TARGETS_MS = {
   investigation10k: 500,
   /** Sprint 1 baseline ~5s; period-scoped aggregation ~2–2.5s warm path. */
   ownerDashboard10k: 2_500,
+  /** Command center bundle at medium shop scale. */
+  ownerCommandCenter5k: 1_000,
+  ownerCommandCenter10k: 2_500,
 } as const;
 
 function mkLine(productId: string, idx: number): SaleLine {
@@ -139,6 +143,88 @@ describe("back office performance optimization", () => {
       expect(ms).toBeLessThan(TARGETS_MS.investigation10k);
     },
     30_000,
+  );
+
+  it(
+    "owner command center: 1k products / 5k sales under 1s",
+    () => {
+      const sales = Array.from({ length: 5_000 }, (_, i) => mkSale(i, `p-${i % 200}`));
+      const products = mkProducts(1_000);
+      const auditLogs = mkAuditLogs(200);
+      const ms = benchBest(() =>
+        buildOwnerCommandCenterBundle({
+          lang: "en",
+          bounds: TODAY_BOUNDS,
+          sales,
+          products,
+          customers: [],
+          suppliers: [],
+          shifts: [],
+          dayCloses: [],
+          dayDrawerOpens: [],
+          cashDrawerAdjustments: [],
+          cashExpenses: [],
+          debtPayments: [],
+          stockMovements: [],
+          inventoryCountSessions: [],
+          auditLogs,
+          voidRecords: [],
+          returnRecords: [],
+          ownerAlertsResolved: [],
+          riskCards: [],
+          acknowledgements: [],
+          expectedCashUgx: 25_000_000,
+          pharmacyMode: false,
+          syncPendingCount: 0,
+          syncErrorCount: 0,
+        }),
+      );
+      // eslint-disable-next-line no-console
+      console.log(`owner command center 5k/1k: ${ms.toFixed(1)}ms`);
+      expect(ms).toBeLessThan(TARGETS_MS.ownerCommandCenter5k);
+    },
+    60_000,
+  );
+
+  it(
+    "owner command center: 10k sales under 2.5s",
+    () => {
+      const sales = Array.from({ length: 10_000 }, (_, i) => mkSale(i, `p-${i % 50}`));
+      const products = mkProducts(50);
+      const auditLogs = mkAuditLogs(500);
+      const ms = benchBest(() =>
+        buildOwnerCommandCenterBundle({
+          lang: "en",
+          bounds: TODAY_BOUNDS,
+          sales,
+          products,
+          customers: [],
+          suppliers: [],
+          shifts: [],
+          dayCloses: [],
+          dayDrawerOpens: [],
+          cashDrawerAdjustments: [],
+          cashExpenses: [],
+          debtPayments: [],
+          stockMovements: [],
+          inventoryCountSessions: [],
+          auditLogs,
+          voidRecords: [],
+          returnRecords: [],
+          ownerAlertsResolved: [],
+          riskCards: [],
+          acknowledgements: [],
+          expectedCashUgx: 50_000_000,
+          pharmacyMode: false,
+          syncPendingCount: 0,
+          syncErrorCount: 0,
+        }),
+      );
+      // eslint-disable-next-line no-console
+      console.log(`owner command center 10k: ${ms.toFixed(1)}ms`);
+      expect(ms).toBeLessThan(TARGETS_MS.ownerCommandCenter10k);
+    },
+    60_000,
   );
 
   it(

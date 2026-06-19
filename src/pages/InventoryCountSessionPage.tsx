@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AlertTriangle, Check, Download } from "lucide-react";
 import type { Language } from "../types";
@@ -41,6 +41,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
   const [query, setQuery] = useState("");
   const [qtyDraft, setQtyDraft] = useState<Record<string, string>>({});
   const [reasonDraft, setReasonDraft] = useState<Record<string, string>>({});
+  const autoStartedRef = useRef(false);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
@@ -54,6 +55,15 @@ export function InventoryCountSessionPage({ lang }: Props) {
     if (!q) return session.lines;
     return session.lines.filter((l) => (l.productName ?? "").toLowerCase().includes(q));
   }, [session, query]);
+
+  useEffect(() => {
+    if (!sessionId || !session || autoStartedRef.current) return;
+    if (session.status !== "draft") return;
+    if (!canInventoryCount(actor.role, "count")) return;
+    autoStartedRef.current = true;
+    const r = startSession(sessionId);
+    if (!r.ok) autoStartedRef.current = false;
+  }, [sessionId, session, actor.role, startSession]);
 
   if (!sessionId || !session) {
     return (
@@ -201,7 +211,11 @@ export function InventoryCountSessionPage({ lang }: Props) {
           <button
             type="button"
             onClick={() => {
-              runAction(() => applySession(sessionId));
+              const r = applySession(sessionId);
+              if (!r.ok) {
+                window.alert(t(lang, r.errorKey ?? "invalid"));
+                return;
+              }
               navigate("/stock/count");
             }}
             className="rounded-2xl bg-stone-950 px-4 py-3 text-sm font-black text-white"
@@ -213,7 +227,11 @@ export function InventoryCountSessionPage({ lang }: Props) {
           <button
             type="button"
             onClick={() => {
-              runAction(() => cancelSession(sessionId));
+              const r = cancelSession(sessionId);
+              if (!r.ok) {
+                window.alert(t(lang, r.errorKey ?? "invalid"));
+                return;
+              }
               navigate("/stock/count");
             }}
             className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-900"
@@ -222,6 +240,12 @@ export function InventoryCountSessionPage({ lang }: Props) {
           </button>
         ) : null}
       </div>
+
+      {session.status === "draft" ? (
+        <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-semibold text-slate-600">
+          {t(lang, "inventoryCountStarting")}
+        </p>
+      ) : null}
 
       {canCount ? (
         <input

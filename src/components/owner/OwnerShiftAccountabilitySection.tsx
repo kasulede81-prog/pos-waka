@@ -80,6 +80,16 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
                   {row.overageCount} · UGX {row.cumulativeOverageUgx.toLocaleString()}
                 </dd>
               </div>
+              <div>
+                <dt className="font-semibold text-stone-500">{t(lang, "ownerShiftLifetimeShortages")}</dt>
+                <dd className="font-black text-stone-900">
+                  {row.lifetimeShortageCount} · UGX {row.lifetimeShortageUgx.toLocaleString()}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-stone-500">{t(lang, "ownerShiftShortages30d")}</dt>
+                <dd className="font-black text-stone-900">{row.shortageCount30d}</dd>
+              </div>
             </dl>
           </li>
         ))}

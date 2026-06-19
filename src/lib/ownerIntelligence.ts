@@ -1,4 +1,4 @@
-import type { AuditLogEntry, DayCloseSummary, Language, Product, Sale, ShopPreferences } from "../types";
+import type { AuditLogEntry, DayCloseSummary, Language, Product, ReturnRecord, Sale, ShiftRecord, ShopPreferences, VoidRecord } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { catalogEventsForDay, isSensitiveCatalogEvent } from "./catalogAudit";
 import { computeOwnerAlerts, type OwnerAlert } from "./ownerAlerts";
@@ -51,15 +51,43 @@ export function computeCashierTrustRows(
   auditLogs: AuditLogEntry[],
   todayKey: string,
   todayAuditLogs?: AuditLogEntry[],
+  opts?: {
+    shifts?: ShiftRecord[];
+    voidRecords?: VoidRecord[];
+    returnRecords?: ReturnRecord[];
+  },
 ): CashierTrustRow[] {
   const byUser = new Map<
     string,
-    { sales: number; debt: number; refunds: number; stock: number; catalog: number }
+    {
+      sales: number;
+      debt: number;
+      refunds: number;
+      stock: number;
+      catalog: number;
+      cashShortUgx: number;
+      floatVarianceUgx: number;
+      voids: number;
+      returns: number;
+    }
   >();
 
   const touch = (uid: string) => {
     const id = uid || "unknown";
-    byUser.set(id, byUser.get(id) ?? { sales: 0, debt: 0, refunds: 0, stock: 0, catalog: 0 });
+    byUser.set(
+      id,
+      byUser.get(id) ?? {
+        sales: 0,
+        debt: 0,
+        refunds: 0,
+        stock: 0,
+        catalog: 0,
+        cashShortUgx: 0,
+        floatVarianceUgx: 0,
+        voids: 0,
+        returns: 0,
+      },
+    );
     return byUser.get(id)!;
   };
 
@@ -69,6 +97,28 @@ export function computeCashierTrustRows(
     row.sales += 1;
     row.debt += s.debtUgx;
     if (s.totalUgx < 0) row.refunds += 1;
+  }
+
+  for (const sh of opts?.shifts ?? []) {
+    if (dateKeyKampala(sh.startAt) !== todayKey) continue;
+    const uid = sh.actorUserId || "unknown";
+    const row = touch(uid);
+    if (sh.cashDifferenceUgx != null && sh.cashDifferenceUgx < 0) {
+      row.cashShortUgx += Math.abs(sh.cashDifferenceUgx);
+    }
+    if (sh.verificationVarianceUgx != null && sh.verificationVarianceUgx !== 0) {
+      row.floatVarianceUgx += Math.abs(sh.verificationVarianceUgx);
+    }
+  }
+
+  for (const v of opts?.voidRecords ?? []) {
+    if (dateKeyKampala(v.createdAt) !== todayKey) continue;
+    touch(v.actorUserId || "unknown").voids += 1;
+  }
+
+  for (const r of opts?.returnRecords ?? []) {
+    if (dateKeyKampala(r.createdAt) !== todayKey) continue;
+    touch(r.actorUserId || "unknown").returns += 1;
   }
 
   for (const e of todayAuditLogs ?? auditLogs) {
@@ -94,6 +144,10 @@ export function computeCashierTrustRows(
     score -= Math.min(18, v.catalog * 3);
     score -= Math.min(22, Math.floor(v.debt / 75_000));
     score -= v.refunds * 18;
+    score -= Math.min(20, Math.floor(v.cashShortUgx / 5_000));
+    score -= Math.min(12, Math.floor(v.floatVarianceUgx / 5_000));
+    score -= Math.min(16, v.voids * 4);
+    score -= Math.min(12, v.returns * 3);
     if (v.sales === 0 && (v.stock > 6 || v.catalog > 4)) score -= 12;
     score = Math.max(0, Math.min(100, Math.round(score)));
 

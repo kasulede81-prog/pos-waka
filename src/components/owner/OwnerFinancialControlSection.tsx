@@ -13,6 +13,13 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
   const mix = financial.paymentMix;
   const mixTotal =
     mix.cashUgx + mix.mobileMoneyUgx + mix.atmUgx + mix.creditUgx + mix.mixedUgx + mix.otherUgx;
+  const expenseTrend =
+    financial.expensesPriorPeriodUgx > 0
+      ? Math.round(
+          ((financial.expensesPeriodUgx - financial.expensesPriorPeriodUgx) / financial.expensesPriorPeriodUgx) *
+            100,
+        )
+      : null;
 
   return (
     <section className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
@@ -32,7 +39,39 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
           <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerFinancialPayables")}</dt>
           <dd className="mt-0.5 text-sm font-black tabular-nums">UGX {financial.payablesUgx.toLocaleString()}</dd>
         </div>
+        <div className="rounded-xl bg-stone-50 px-3 py-2">
+          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerFinancialExpensesToday")}</dt>
+          <dd className="mt-0.5 text-sm font-black tabular-nums">UGX {financial.expensesTodayUgx.toLocaleString()}</dd>
+        </div>
+        <div className="rounded-xl bg-stone-50 px-3 py-2">
+          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerFinancialExpensesPeriod")}</dt>
+          <dd className="mt-0.5 text-sm font-black tabular-nums">UGX {financial.expensesPeriodUgx.toLocaleString()}</dd>
+          {expenseTrend != null ? (
+            <dd
+              className={`text-xs font-bold ${expenseTrend > 0 ? "text-rose-700" : expenseTrend < 0 ? "text-emerald-700" : "text-stone-600"}`}
+            >
+              {expenseTrend > 0 ? "+" : ""}
+              {expenseTrend}% {t(lang, "ownerFinancialExpensesTrend")}
+            </dd>
+          ) : null}
+        </div>
       </dl>
+
+      {financial.topSuppliers.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+            {t(lang, "ownerFinancialTopSuppliers")}
+          </p>
+          <ul className="mt-2 space-y-1">
+            {financial.topSuppliers.map((s) => (
+              <li key={s.id} className="flex justify-between rounded-lg border border-stone-100 px-3 py-2 text-xs">
+                <span className="font-semibold text-stone-800">{s.name}</span>
+                <span className="font-black tabular-nums text-rose-700">UGX {s.balanceOwedUgx.toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {mixTotal > 0 ? (
         <div className="mt-4">
@@ -72,7 +111,7 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
         </div>
       ) : null}
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      <div className="mt-4 grid gap-2 sm:grid-cols-3">
         <Link
           to="/customers"
           className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-900"
@@ -84,6 +123,18 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
           className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-900"
         >
           {t(lang, "ownerFinancialViewSuppliers")}
+        </Link>
+        <Link
+          to="/purchases"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-900"
+        >
+          {t(lang, "ownerFinancialViewPurchases")}
+        </Link>
+        <Link
+          to="/cash-expenses"
+          className="inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 px-4 text-sm font-black text-stone-900 sm:col-span-3"
+        >
+          {t(lang, "ownerFinancialViewExpenses")}
         </Link>
       </div>
     </section>

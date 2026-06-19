@@ -98,7 +98,7 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
 
 const OWNER_ONLY_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["biometricAuthEnabled"]);
 
-const OWNER_ACTIVITY_KEYS = new Set<keyof ShopPreferences>(["ownerRisksReviewedAt"]);
+const OWNER_ACTIVITY_KEYS = new Set<keyof ShopPreferences>(["ownerRisksReviewedAt", "ownerAlertAcknowledgements"]);
 
 const NOTIFICATIONS_KEYS = new Set<keyof ShopPreferences>(["hapticsOn", "saleSoundOn"]);
 

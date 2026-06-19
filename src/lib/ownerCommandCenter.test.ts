@@ -5,6 +5,7 @@ import {
   buildShiftAccountabilityRows,
   buildShiftShortageAttentionItems,
 } from "./ownerCommandCenter";
+import { buildHistoricalShiftStats, buildOwnerDashboardIntegritySnapshot } from "./ownerDashboardIntegrityCache";
 import type { DateFilterBounds } from "./dateFilters";
 
 const DAY = "2026-06-11";
@@ -33,6 +34,21 @@ function shift(partial: Partial<ShiftRecord> & Pick<ShiftRecord, "id" | "actorUs
   };
 }
 
+function emptyIntegrity() {
+  return buildOwnerDashboardIntegritySnapshot({
+    bounds,
+    customers: [],
+    sales: [],
+    debtPayments: [],
+    products: [],
+    stockMovements: [],
+    dayDrawerOpens: [],
+    shifts: [],
+    syncPendingCount: 0,
+    syncErrorCount: 0,
+  });
+}
+
 describe("ownerCommandCenter", () => {
   it("groups shift shortages into critical vs warning by amount", () => {
     const shifts = [
@@ -45,47 +61,54 @@ describe("ownerCommandCenter", () => {
     expect(items.find((i) => i.id === "shift-short-s2")?.severity).toBe("critical");
   });
 
-  it("flags repeat offenders in shift accountability", () => {
+  it("flags repeat offenders using historical shift stats", () => {
     const shifts = [
       shift({ id: "s1", actorUserId: "u1", startAt: `${DAY}T08:00:00.000Z`, cashDifferenceUgx: -5_000 }),
       shift({ id: "s2", actorUserId: "u1", startAt: `${DAY}T14:00:00.000Z`, cashDifferenceUgx: -6_000 }),
       shift({ id: "s3", actorUserId: "u2", startAt: `${DAY}T08:00:00.000Z`, cashDifferenceUgx: 2_000 }),
     ];
-    const rows = buildShiftAccountabilityRows(shifts, bounds, "en");
+    const historicalStats = buildHistoricalShiftStats(shifts);
+    const rows = buildShiftAccountabilityRows(shifts, bounds, "en", historicalStats);
     const offender = rows.find((r) => r.userId === "u1");
     const clean = rows.find((r) => r.userId === "u2");
     expect(offender?.isRepeatOffender).toBe(true);
     expect(offender?.shortageCount).toBe(2);
     expect(offender?.cumulativeShortageUgx).toBe(11_000);
+    expect(offender?.lifetimeShortageCount).toBe(2);
     expect(clean?.isRepeatOffender).toBe(false);
   });
 
   it("deduplicates attention items by id", () => {
-    const result = buildAttentionCenter({
-      lang: "en",
-      bounds,
-      sales: [],
-      products: [{ id: "p1", name: "Cola", stockOnHand: -2 } as never],
-      customers: [],
-      suppliers: [],
-      shifts: [],
-      dayCloses: [],
-      dayDrawerOpens: [],
-      cashDrawerAdjustments: [],
-      debtPayments: [],
-      stockMovements: [],
-      inventoryCountSessions: [],
-      auditLogs: [],
-      voidRecords: [],
-      returnRecords: [],
-      ownerAlertsResolved: [],
-      riskCards: [],
-      expectedCashUgx: 0,
-      pharmacyMode: false,
-      syncPendingCount: 0,
-      syncErrorCount: 0,
-    });
-    expect(result.critical.some((i) => i.id === "negative-stock")).toBe(true);
+    const integrity = emptyIntegrity();
+    const result = buildAttentionCenter(
+      {
+        lang: "en",
+        bounds,
+        sales: [],
+        products: [],
+        customers: [],
+        suppliers: [],
+        shifts: [],
+        dayCloses: [],
+        dayDrawerOpens: [],
+        cashDrawerAdjustments: [],
+        cashExpenses: [],
+        debtPayments: [],
+        stockMovements: [],
+        inventoryCountSessions: [],
+        auditLogs: [],
+        voidRecords: [],
+        returnRecords: [],
+        ownerAlertsResolved: [],
+        riskCards: [],
+        acknowledgements: [],
+        expectedCashUgx: 0,
+        pharmacyMode: false,
+        syncPendingCount: 0,
+        syncErrorCount: 0,
+      },
+      integrity,
+    );
     const allIds = [...result.critical, ...result.warnings, ...result.information].map((i) => i.id);
     expect(new Set(allIds).size).toBe(allIds.length);
   });

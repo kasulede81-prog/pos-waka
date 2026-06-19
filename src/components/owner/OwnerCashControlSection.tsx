@@ -8,6 +8,19 @@ type Props = {
   cash: OwnerCashControlSnapshot;
 };
 
+function formatTs(iso: string, lang: Language): string {
+  try {
+    return new Date(iso).toLocaleString(lang === "lg" ? "lg-UG" : "en-UG", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+}
+
 export function OwnerCashControlSection({ lang, cash }: Props) {
   return (
     <section className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
@@ -27,9 +40,7 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
         <div className="rounded-xl bg-stone-50 px-3 py-2">
           <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashDrawerOpen")}</dt>
           <dd className="mt-0.5 text-sm font-black text-stone-900">
-            {cash.drawerOpen
-              ? t(lang, "ownerCashDrawerOpenYes")
-              : t(lang, "ownerCashDrawerOpenNo")}
+            {cash.drawerOpen ? t(lang, "ownerCashDrawerOpenYes") : t(lang, "ownerCashDrawerOpenNo")}
           </dd>
           {cash.openedByLabel ? (
             <dd className="text-xs font-semibold text-stone-600">
@@ -38,28 +49,41 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
           ) : null}
         </div>
         <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashExpected")}</dt>
+          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashPeriodExpected")}</dt>
           <dd className="mt-0.5 text-sm font-black tabular-nums text-stone-900">
-            UGX {cash.expectedCashUgx.toLocaleString()}
+            UGX {cash.periodExpectedCashUgx.toLocaleString()}
+          </dd>
+          <dd className="text-[11px] font-medium text-stone-500">{t(lang, "ownerCashPeriodExpectedHint")}</dd>
+        </div>
+        <div className="rounded-xl bg-stone-50 px-3 py-2">
+          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashLatestCounted")}</dt>
+          <dd className="mt-0.5 text-sm font-black tabular-nums text-stone-900">
+            {cash.latestCountedCashUgx != null ? `UGX ${cash.latestCountedCashUgx.toLocaleString()}` : "—"}
+          </dd>
+          <dd className="text-[11px] font-medium text-stone-500">
+            {t(lang, "ownerCashLatestCountedHint")} ({cash.latestCountDayKey})
           </dd>
         </div>
         <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashCounted")}</dt>
-          <dd className="mt-0.5 text-sm font-black tabular-nums text-stone-900">
-            {cash.countedCashUgx != null ? `UGX ${cash.countedCashUgx.toLocaleString()}` : "—"}
-          </dd>
-        </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashDayVariance")}</dt>
+          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashLatestDayVariance")}</dt>
           <dd
             className={`mt-0.5 text-sm font-black tabular-nums ${
-              cash.dayVarianceUgx != null && cash.dayVarianceUgx < 0 ? "text-rose-700" : "text-stone-900"
+              cash.latestDayVarianceUgx != null && cash.latestDayVarianceUgx < 0 ? "text-rose-700" : "text-stone-900"
             }`}
           >
-            {cash.dayVarianceUgx != null ? `UGX ${cash.dayVarianceUgx.toLocaleString()}` : "—"}
+            {cash.latestDayVarianceUgx != null ? `UGX ${cash.latestDayVarianceUgx.toLocaleString()}` : "—"}
           </dd>
+          <dd className="text-[11px] font-medium text-stone-500">{t(lang, "ownerCashLatestDayVarianceHint")}</dd>
         </div>
       </dl>
+
+      {cash.shortageShiftCount > 0 || cash.overageShiftCount > 0 || cash.floatMismatchCount > 0 ? (
+        <p className="mt-3 text-xs font-semibold text-stone-600">
+          {t(lang, "ownerCashSummary")}: {cash.shortageShiftCount} {t(lang, "ownerCashShortages")} ·{" "}
+          {cash.overageShiftCount} {t(lang, "ownerCashOverages")} · {cash.floatMismatchCount}{" "}
+          {t(lang, "ownerCashFloatChecks")}
+        </p>
+      ) : null}
 
       {cash.shiftVariances.length > 0 ? (
         <div className="mt-4">
@@ -82,14 +106,51 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
         </div>
       ) : null}
 
-      {cash.floatMismatches.length > 0 ? (
+      {cash.adjustmentFeed.length > 0 ? (
         <div className="mt-4">
-          <p className="text-xs font-black uppercase tracking-wide text-rose-600">{t(lang, "ownerCashFloatMismatches")}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "ownerCashAdjustmentFeed")}</p>
           <ul className="mt-2 space-y-1">
-            {cash.floatMismatches.map((fm) => (
-              <li key={fm.shiftId} className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs">
-                <span className="font-bold text-rose-950">{fm.label}</span>
-                <span className="ml-2 font-black tabular-nums">UGX {fm.varianceUgx.toLocaleString()}</span>
+            {cash.adjustmentFeed.map((row) => (
+              <li key={row.id} className="rounded-lg border border-stone-100 px-3 py-2 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-stone-900">{row.actorLabel}</span>
+                  <span
+                    className={`font-black tabular-nums ${row.direction === "out" ? "text-rose-700" : "text-emerald-700"}`}
+                  >
+                    {row.direction === "out" ? "−" : "+"}UGX {row.amountUgx.toLocaleString()}
+                  </span>
+                </div>
+                <p className="mt-0.5 font-semibold text-stone-600">
+                  {row.type} · {formatTs(row.occurredAt, lang)}
+                </p>
+                {row.note ? <p className="mt-0.5 text-stone-500">{row.note}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {cash.floatVerificationFeed.length > 0 ? (
+        <div className="mt-4">
+          <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "ownerCashFloatFeed")}</p>
+          <ul className="mt-2 space-y-1">
+            {cash.floatVerificationFeed.map((row) => (
+              <li key={row.shiftId} className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="font-bold text-rose-950">{row.cashierLabel}</span>
+                  <span className="font-black tabular-nums text-rose-800">
+                    UGX {row.varianceUgx.toLocaleString()}
+                  </span>
+                </div>
+                <p className="mt-0.5 font-semibold text-rose-900">
+                  {t(lang, "ownerCashFloatVerifier")}: {row.verifierLabel ?? "—"}
+                </p>
+                <p className="text-rose-800">
+                  {t(lang, "ownerCashFloatExpected")}:{" "}
+                  {row.expectedUgx != null ? `UGX ${row.expectedUgx.toLocaleString()}` : "—"} ·{" "}
+                  {t(lang, "ownerCashFloatCounted")}:{" "}
+                  {row.countedUgx != null ? `UGX ${row.countedUgx.toLocaleString()}` : "—"}
+                </p>
               </li>
             ))}
           </ul>
