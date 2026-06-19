@@ -1,6 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl } from "../lib/authConfig";
+import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl, stashAuthRedirectError } from "../lib/authConfig";
 import { Capacitor } from "@capacitor/core";
 import { isGoogleAuthUiEnabled } from "../lib/authFeatureFlags";
 import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
@@ -18,7 +18,7 @@ import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegis
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
-import { assertAccountSwitchAllowed, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
+import { assertAccountSwitchAllowed, ORGANIZATION_DELETED_MESSAGE, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
@@ -170,16 +170,22 @@ export function useAuth() {
             userId: uid,
             email: next.user.email,
           });
+          if (verified) {
+            await repairOwnerWorkspaceIfNeeded(next.user);
+          }
           if (accountKey) {
             const deleted = await refreshOrganizationDeletionState(uid, accountKey);
             if (deleted) {
               markWorkspaceEnsured(uid);
+              stashAuthRedirectError(ORGANIZATION_DELETED_MESSAGE);
+              await supabase.auth.signOut();
+              applyAccountSwitchSync(null);
+              setSession(null);
               return;
             }
           }
           markWorkspaceEnsured(uid);
           if (verified) {
-            await repairOwnerWorkspaceIfNeeded(next.user);
             await tryApplyPendingReferral(next);
             if (!backgroundSyncScheduledRef.current[uid]) {
               backgroundSyncScheduledRef.current[uid] = true;
@@ -230,6 +236,10 @@ export function useAuth() {
             const deleted = await refreshOrganizationDeletionState(uid, accountKey);
             if (deleted) {
               markWorkspaceEnsured(uid);
+              stashAuthRedirectError(ORGANIZATION_DELETED_MESSAGE);
+              await supabase.auth.signOut();
+              applyAccountSwitchSync(null);
+              setSession(null);
               return;
             }
           }

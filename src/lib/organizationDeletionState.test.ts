@@ -68,11 +68,17 @@ describe("organizationDeletionState", () => {
     expect(isDeletedOrganization(accountKey)).toBe(false);
   });
 
-  it("blocks account switch into deleted namespace", async () => {
-    const { markOrganizationDeleted, assertAccountSwitchAllowed, OrganizationDeletedError } = await import(
+  it("does not block account switch on deletion marker alone (cloud refresh reconciles)", async () => {
+    const { markOrganizationDeleted, assertAccountSwitchAllowed } = await import("./organizationDeletionState");
+    markOrganizationDeleted({ accountKey, userId });
+    expect(() => assertAccountSwitchAllowed(accountKey)).not.toThrow();
+  });
+
+  it("blocks account switch into wiped namespace", async () => {
+    const { writeWipeMarker, assertAccountSwitchAllowed, OrganizationDeletedError } = await import(
       "./organizationDeletionState"
     );
-    markOrganizationDeleted({ accountKey, userId });
+    writeWipeMarker(accountKey);
     expect(() => assertAccountSwitchAllowed(accountKey)).toThrow(OrganizationDeletedError);
   });
 

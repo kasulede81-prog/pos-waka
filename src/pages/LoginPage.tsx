@@ -5,7 +5,7 @@ import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
 import { t } from "../lib/i18n";
-import { formatAuthError } from "../lib/authConfig";
+import { formatAuthError, consumeAuthRedirectError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
@@ -38,7 +38,7 @@ export function LoginPage({
 }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => consumeAuthRedirectError());
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
 

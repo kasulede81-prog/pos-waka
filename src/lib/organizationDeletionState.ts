@@ -211,8 +211,13 @@ export async function refreshOrganizationDeletionState(
   return isOrganizationBlocked(accountKey);
 }
 
+/**
+ * Blocks switching into a namespace that was locally wiped. Deletion markers are
+ * reconciled asynchronously via `refreshOrganizationDeletionState` so a stale
+ * marker cannot block sign-in when the cloud org still exists.
+ */
 export function assertAccountSwitchAllowed(nextAccountKey: string): void {
-  if (isOrganizationBlocked(nextAccountKey)) {
+  if (hasWipeMarker(nextAccountKey)) {
     throw new OrganizationDeletedError();
   }
 }

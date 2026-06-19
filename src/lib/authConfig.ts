@@ -129,6 +129,28 @@ export function getSupabaseAuthRedirectUrls(): string[] {
   ];
 }
 
+const AUTH_REDIRECT_ERROR_KEY = "waka.auth.redirectError.v1";
+
+export function stashAuthRedirectError(message: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(AUTH_REDIRECT_ERROR_KEY, message);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function consumeAuthRedirectError(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const msg = sessionStorage.getItem(AUTH_REDIRECT_ERROR_KEY);
+    if (msg) sessionStorage.removeItem(AUTH_REDIRECT_ERROR_KEY);
+    return msg;
+  } catch {
+    return null;
+  }
+}
+
 export function authDevLog(level: "log" | "warn" | "error", message: string, detail?: unknown): void {
   if (!import.meta.env.DEV) return;
   const prefix = "[waka-auth]";
