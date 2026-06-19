@@ -49,12 +49,13 @@ function num(pl: Record<string, unknown>, key: string): number {
 
 export function buildOwnerRiskCards(input: {
   lang: Language;
-  todayKey: string;
+  periodFromKey: string;
+  periodToKey: string;
   todayAuditLogs: AuditLogEntry[];
   todayReturns: ReturnRecord[];
   todayVoids: VoidRecord[];
 }): OwnerRiskCard[] {
-  const { lang, todayKey, todayAuditLogs, todayReturns, todayVoids } = input;
+  const { lang, periodFromKey, periodToKey, todayAuditLogs, todayReturns, todayVoids } = input;
 
   const deletions = todayAuditLogs.filter((e) => e.action === "product_remove");
   const priceChanges = todayAuditLogs.filter((e) => e.action === "price_change");
@@ -84,56 +85,56 @@ export function buildOwnerRiskCards(input: {
       count: deletions.length,
       impactUgx: 0,
       staffLabels: uniqueStaff(deletions, lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "product_remove" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "product_remove" },
     },
     {
       kind: "price_changes",
       count: priceChanges.length,
       impactUgx: 0,
       staffLabels: uniqueStaff(priceChanges, lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "price_change" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "price_change" },
     },
     {
       kind: "large_discounts",
       count: largeDiscounts.length,
       impactUgx: discountImpact,
       staffLabels: uniqueStaff(largeDiscounts, lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "discount_given" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "discount_given" },
     },
     {
       kind: "returns",
       count: todayReturns.length,
       impactUgx: returnsImpact,
       staffLabels: returnStaff.length ? returnStaff : uniqueStaff(todayAuditLogs.filter((e) => e.action === "sale_return"), lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "sale_return" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "sale_return" },
     },
     {
       kind: "voids",
       count: todayVoids.length,
       impactUgx: voidsImpact,
       staffLabels: uniqueStaff(todayAuditLogs.filter((e) => e.action === "sale_void"), lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "sale_void" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "sale_void" },
     },
     {
       kind: "expenses",
       count: expenses.length,
       impactUgx: expenseImpact,
       staffLabels: uniqueStaff(expenses, lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "cash_expense_created" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "cash_expense_created" },
     },
     {
       kind: "back_office_failed",
       count: unlockFailed.length,
       impactUgx: 0,
       staffLabels: uniqueStaff(unlockFailed, lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "back_office_unlock_failed" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "back_office_unlock_failed" },
     },
     {
       kind: "stock_adjustments",
       count: stockAdjusts.length,
       impactUgx: 0,
       staffLabels: uniqueStaff(stockAdjusts, lang),
-      auditFilter: { dateFrom: todayKey, dateTo: todayKey, action: "stock_adjust" },
+      auditFilter: { dateFrom: periodFromKey, dateTo: periodToKey, action: "stock_adjust" },
     },
   ];
 

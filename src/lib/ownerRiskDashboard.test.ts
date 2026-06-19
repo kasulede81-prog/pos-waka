@@ -25,7 +25,8 @@ describe("owner risk dashboard", () => {
     ];
     const cards = buildOwnerRiskCards({
       lang: "en",
-      todayKey: TODAY,
+      periodFromKey: TODAY,
+      periodToKey: TODAY,
       todayAuditLogs,
       todayReturns: [],
       todayVoids: [],
@@ -43,7 +44,8 @@ describe("owner risk dashboard", () => {
     ];
     const cards = buildOwnerRiskCards({
       lang: "en",
-      todayKey: TODAY,
+      periodFromKey: TODAY,
+      periodToKey: TODAY,
       todayAuditLogs,
       todayReturns: [],
       todayVoids: [],
@@ -84,7 +86,8 @@ describe("owner risk dashboard", () => {
     ];
     const cards = buildOwnerRiskCards({
       lang: "en",
-      todayKey: TODAY,
+      periodFromKey: TODAY,
+      periodToKey: TODAY,
       todayAuditLogs: [],
       todayReturns,
       todayVoids,

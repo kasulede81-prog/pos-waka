@@ -99,6 +99,7 @@ import {
   updateDiningTable,
 } from "../lib/hospitalityFloorEditor";
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
+import { canEnableBiometricAuth } from "../lib/sensitiveActionAuth";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
 import { normalizePosShelfLayout, clampShelfScale } from "../lib/posShelfLayout";
@@ -1185,6 +1186,18 @@ export const usePosStore = create<PosState>((set, get) => {
         keys: Object.keys(p),
       });
       return;
+    }
+    if (p.biometricAuthEnabled === true) {
+      const pin = p.backOfficePin ?? state.preferences.backOfficePin;
+      if (!canEnableBiometricAuth({ backOfficePin: pin })) {
+        pushAudit("auth_forbidden", "Denied biometric enable without Owner PIN", {
+          action: "setPreferences",
+          attemptedRole: state.sessionActor?.role ?? null,
+          errorKey: "biometricRequiresOwnerPin",
+          keys: Object.keys(p),
+        });
+        return;
+      }
     }
     set((s) => {
       const merged = { ...s.preferences, ...p };

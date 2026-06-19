@@ -8,7 +8,8 @@ import { HistoryListCard } from "../shared/HistoryListCard";
 type Props = {
   lang: Language;
   rows: OwnerStaffPerformanceRow[];
-  todayKey: string;
+  periodFromKey: string;
+  periodToKey: string;
 };
 
 function trustBadgeClass(level: OwnerStaffPerformanceRow["trustLevel"]): string {
@@ -23,7 +24,7 @@ function trustLabel(lang: Language, level: OwnerStaffPerformanceRow["trustLevel"
   return t(lang, "trustRisky");
 }
 
-export function OwnerStaffPerformanceSection({ lang, rows, todayKey }: Props) {
+export function OwnerStaffPerformanceSection({ lang, rows, periodFromKey, periodToKey }: Props) {
   return (
     <HistoryListCard
       isEmpty={rows.length === 0}
@@ -41,8 +42,8 @@ export function OwnerStaffPerformanceSection({ lang, rows, todayKey }: Props) {
           <li key={row.userId}>
             <Link
               to={auditCenterLinkFromFilter({
-                dateFrom: todayKey,
-                dateTo: todayKey,
+                dateFrom: periodFromKey,
+                dateTo: periodToKey,
                 actorUserId: row.userId,
               })}
               className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 transition-colors hover:bg-stone-50"

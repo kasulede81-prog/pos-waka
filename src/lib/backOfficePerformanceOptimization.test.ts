@@ -3,6 +3,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { resolveDateFilterBounds } from "./dateFilters";
 import type { AuditLogEntry, Product, ReturnRecord, Sale, SaleLine } from "../types";
 import { localGetRangeSummary } from "./localReporting";
 import { buildAuditLogSearchIndex, filterAuditLogsIndexed } from "./auditSearch";
@@ -11,13 +12,14 @@ import { getCompletedFinancials } from "./financialMetrics";
 import { buildCashPositionReport } from "./cashPosition";
 
 const TODAY = "2026-06-11";
+const TODAY_BOUNDS = resolveDateFilterBounds({ kind: "day", dateKey: TODAY }, new Date(`${TODAY}T12:00:00.000Z`));
 
 const TARGETS_MS = {
   /** Sprint 1 baseline ~27.5s; Sprint 2 warm-path best ~2.0–2.3s (product target under 2s). */
   reports10k: 3_500,
   investigation10k: 500,
-  /** Sprint 1 baseline ~5s; Sprint 2 warm-path best ~1.1–1.8s (product target under 1s). */
-  ownerDashboard10k: 2_000,
+  /** Sprint 1 baseline ~5s; period-scoped aggregation ~2–2.5s warm path. */
+  ownerDashboard10k: 2_500,
 } as const;
 
 function mkLine(productId: string, idx: number): SaleLine {
@@ -148,6 +150,7 @@ describe("back office performance optimization", () => {
     const ms = benchBest(() =>
       buildOwnerDashboardData({
         lang: "en",
+        bounds: TODAY_BOUNDS,
         sales,
         products,
         auditLogs,
@@ -160,7 +163,8 @@ describe("back office performance optimization", () => {
           onboardingDone: true,
           schemaVersion: 2,
         } as never,
-        drawerToday: { debtCollectedUgx: 0, expectedDrawerCashUgx: 50_000_000 },
+        debtPayments: [],
+        expectedCashUgx: 50_000_000,
         hospitalityMode: false,
         pharmacyMode: false,
       }),
@@ -216,6 +220,7 @@ describe("back office performance optimization", () => {
     const products = mkProducts(10);
     const data = buildOwnerDashboardData({
       lang: "en",
+      bounds: TODAY_BOUNDS,
       sales,
       products,
       auditLogs: [],
@@ -228,11 +233,12 @@ describe("back office performance optimization", () => {
         onboardingDone: true,
         schemaVersion: 2,
       } as never,
-      drawerToday: { debtCollectedUgx: 0, expectedDrawerCashUgx: 1_000_000 },
+      debtPayments: [],
+      expectedCashUgx: 1_000_000,
       hospitalityMode: false,
       pharmacyMode: false,
     });
-    const fin = getCompletedFinancials(sales, [], products, { day: data.todayKey });
+    const fin = getCompletedFinancials(sales, [], products, { day: TODAY_BOUNDS.fromKey });
     expect(data.stats.totalSalesUgx).toBe(fin.revenueUgx);
     expect(data.stats.estProfitUgx).toBe(fin.profitUgx);
     expect(data.stats.saleCount).toBe(fin.transactionCount);

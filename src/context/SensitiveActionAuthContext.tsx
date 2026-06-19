@@ -10,17 +10,19 @@ import {
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { promptNativeBiometric } from "../lib/biometricAuth";
+import { promptNativeBiometric, checkBiometricCapability } from "../lib/biometricAuth";
 import {
   grantSensitiveActionSession,
   isBiometricAuthFeatureEnabled,
   isSensitiveActionSessionActive,
   MAX_BIOMETRIC_FAILURES_BEFORE_PIN,
+  sensitiveAuthSatisfiedByBackOfficeUnlock,
   shouldPromptForSensitiveAction,
   verifyOwnerPin,
   type SensitiveActionKind,
 } from "../lib/sensitiveActionAuth";
 import { BiometricAuthModal } from "../components/security/BiometricAuthModal";
+import { useBackOfficeSession } from "./BackOfficeSessionContext";
 
 type PendingRequest = {
   kind: SensitiveActionKind;
@@ -41,6 +43,7 @@ function actionPromptReason(lang: Language, kind: SensitiveActionKind): string {
 
 export function SensitiveActionAuthProvider({ lang, children }: { lang: Language; children: ReactNode }) {
   const preferences = usePosStore((s) => s.preferences);
+  const { isUnlocked: backOfficeUnlocked } = useBackOfficeSession();
   const [pending, setPending] = useState<PendingRequest | null>(null);
   const [, setBiometricFailures] = useState(0);
   const [forcePin, setForcePin] = useState(false);
@@ -69,6 +72,10 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
       if (isSensitiveActionSessionActive()) {
         return Promise.resolve(true);
       }
+      if (sensitiveAuthSatisfiedByBackOfficeUnlock(preferences, backOfficeUnlocked)) {
+        grantSensitiveActionSession();
+        return Promise.resolve(true);
+      }
       return new Promise<boolean>((resolve) => {
         pendingRef.current = { kind, resolve };
         setPending({ kind, resolve });
@@ -76,9 +83,14 @@ export function SensitiveActionAuthProvider({ lang, children }: { lang: Language
         setForcePin(false);
         setStatusMessage(null);
         setStatusKind(null);
+        void checkBiometricCapability().then((cap) => {
+          if (!cap.isAvailable && !cap.deviceIsSecure) {
+            setForcePin(true);
+          }
+        });
       });
     },
-    [preferences],
+    [preferences, backOfficeUnlocked],
   );
 
   const runBiometric = useCallback(async () => {

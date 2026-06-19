@@ -1,8 +1,12 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { Capacitor } from "@capacitor/core";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
+import { usePosStore } from "../../store/usePosStore";
+import { checkBiometricCapability, promptNativeBiometric } from "../../lib/biometricAuth";
+import { isBiometricAuthFeatureEnabled } from "../../lib/sensitiveActionAuth";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { PinInput } from "../ui/PinInput";
 
@@ -10,10 +14,26 @@ type Props = { lang: Language };
 
 export function BackOfficeUnlockModal({ lang }: Props) {
   const navigate = useNavigate();
-  const { unlockWithPin, unlockedRole, unlockedLabel } = useBackOfficeSession();
+  const preferences = usePosStore((s) => s.preferences);
+  const { unlockWithPin, unlockWithBiometric, unlockedRole, unlockedLabel } = useBackOfficeSession();
   const [pin, setPin] = useState("");
   const [err, setErr] = useState(false);
   const [justUnlocked, setJustUnlocked] = useState(false);
+  const [biometricBusy, setBiometricBusy] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const biometricEnabled = isBiometricAuthFeatureEnabled(preferences);
+
+  useEffect(() => {
+    if (!biometricEnabled) return;
+    let cancelled = false;
+    void checkBiometricCapability().then((cap) => {
+      if (cancelled) return;
+      setBiometricAvailable(Capacitor.isNativePlatform() && (cap.isAvailable || cap.deviceIsSecure));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [biometricEnabled]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -25,6 +45,23 @@ export function BackOfficeUnlockModal({ lang }: Props) {
       return;
     }
     setPin("");
+    setJustUnlocked(true);
+  };
+
+  const runBiometric = async () => {
+    if (biometricBusy) return;
+    setBiometricBusy(true);
+    setErr(false);
+    const result = await promptNativeBiometric(t(lang, "biometricReason_access_reports"));
+    setBiometricBusy(false);
+    if (!result.ok) {
+      if (!result.cancelled) setErr(true);
+      return;
+    }
+    if (!unlockWithBiometric()) {
+      setErr(true);
+      return;
+    }
     setJustUnlocked(true);
   };
 
@@ -53,6 +90,16 @@ export function BackOfficeUnlockModal({ lang }: Props) {
       >
         <p className="text-xl font-black text-stone-900">{t(lang, "unlockModalTitle")}</p>
         <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "unlockModalHint")}</p>
+        {biometricEnabled && biometricAvailable ? (
+          <button
+            type="button"
+            disabled={biometricBusy}
+            onClick={() => void runBiometric()}
+            className="mt-4 min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
+          >
+            {biometricBusy ? t(lang, "biometricAuthenticating") : t(lang, "unlockBiometricButton")}
+          </button>
+        ) : null}
         <form onSubmit={submit} className="mt-5 space-y-3">
           <PinInput
             maxLength={6}

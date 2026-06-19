@@ -95,6 +95,15 @@ describe("usePosStore — setPreferences authorization", () => {
     expect(usePosStore.getState().preferences.shopDisplayName).toBe("Owner Shop");
   });
 
+  it("owner cannot enable biometric without back office PIN", () => {
+    usePosStore.setState({
+      sessionActor: actor("owner"),
+      preferences: { ...usePosStore.getState().preferences, backOfficePin: "", biometricAuthEnabled: false },
+    });
+    usePosStore.getState().setPreferences({ biometricAuthEnabled: true });
+    expect(usePosStore.getState().preferences.biometricAuthEnabled).not.toBe(true);
+  });
+
   it("manager can mutate receipt settings", () => {
     usePosStore.setState({ sessionActor: actor("manager") });
     usePosStore.getState().setPreferences({ receiptCustomHeaderText: "Manager header" });

@@ -3,6 +3,7 @@ import { usePosStore } from "../store/usePosStore";
 import { resolveBackOfficeUnlock } from "../lib/backOfficeUnlock";
 import type { UserRole } from "../types";
 import { getOrCreateDeviceId } from "../lib/deviceId";
+import { grantSensitiveActionSession, clearSensitiveActionSession } from "../lib/sensitiveActionAuth";
 
 const AUTO_LOCK_MS = 3 * 60 * 1000;
 /** Extending session on every tap re-rendered the whole app tree; throttle bumps while unlocked. */
@@ -15,6 +16,8 @@ type Ctx = {
   unlockedLabel: string | null;
   /** Returns false if secret wrong */
   unlockWithPin: (pin: string) => boolean;
+  /** OS biometric verified — owner/manager session actors only. */
+  unlockWithBiometric: () => boolean;
   lock: () => void;
   touch: () => void;
 };
@@ -31,6 +34,7 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
     setUnlockedUntil(null);
     setUnlockedRole(null);
     setUnlockedLabel(null);
+    clearSensitiveActionSession();
   }, []);
 
   const touch = useCallback(() => {
@@ -66,6 +70,7 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
     setUnlockedUntil(Date.now() + AUTO_LOCK_MS);
     setUnlockedRole(result.role);
     setUnlockedLabel(result.actorLabel);
+    grantSensitiveActionSession();
 
     usePosStore.getState().logAuditAction("back_office_unlock_success", `Back Office unlocked as ${result.role}`, {
       via: result.via,
@@ -73,6 +78,28 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
       unlockLabel: result.actorLabel,
       unlockUserId: result.actorUserId,
       staffId: result.staffId ?? null,
+      deviceId,
+    });
+    return true;
+  }, []);
+
+  const unlockWithBiometric = useCallback(() => {
+    const state = usePosStore.getState();
+    const actor = state.sessionActor;
+    const role = actor?.role ?? "owner";
+    if (role !== "owner" && role !== "manager") {
+      return false;
+    }
+    const deviceId = getOrCreateDeviceId();
+    setUnlockedUntil(Date.now() + AUTO_LOCK_MS);
+    setUnlockedRole(role);
+    setUnlockedLabel(actor?.displayName ?? role);
+    grantSensitiveActionSession();
+    usePosStore.getState().logAuditAction("back_office_unlock_success", `Back Office unlocked as ${role}`, {
+      via: "biometric",
+      unlockRole: role,
+      unlockLabel: actor?.displayName ?? role,
+      unlockUserId: actor?.userId ?? "unknown",
       deviceId,
     });
     return true;
@@ -99,10 +126,11 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
       unlockedRole,
       unlockedLabel,
       unlockWithPin,
+      unlockWithBiometric,
       lock,
       touch,
     }),
-    [isUnlocked, unlockedRole, unlockedLabel, unlockWithPin, lock, touch],
+    [isUnlocked, unlockedRole, unlockedLabel, unlockWithPin, unlockWithBiometric, lock, touch],
   );
 
   return <BackOfficeSessionContext.Provider value={value}>{children}</BackOfficeSessionContext.Provider>;

@@ -27,7 +27,14 @@ export function useOwnerRiskCards(lang: Language, includeArchived = false): {
     const todayAuditLogs = auditLogs.filter((e) => dateKeyKampala(e.at) === todayKey);
     const todayReturns = reportingReturnRecords.filter((r) => dateKeyKampala(r.createdAt) === todayKey);
     const todayVoids = reportingVoidRecords.filter((v) => dateKeyKampala(v.createdAt) === todayKey);
-    return buildOwnerRiskCards({ lang, todayKey, todayAuditLogs, todayReturns, todayVoids });
+    return buildOwnerRiskCards({
+      lang,
+      periodFromKey: todayKey,
+      periodToKey: todayKey,
+      todayAuditLogs,
+      todayReturns,
+      todayVoids,
+    });
   }, [auditLogs, reportingReturnRecords, reportingVoidRecords, lang, todayKey]);
 
   const totalCount = useMemo(() => sumOwnerRiskCardCounts(cards), [cards]);

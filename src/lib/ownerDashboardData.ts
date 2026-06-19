@@ -30,6 +30,16 @@ import type { OwnerAlert } from "./ownerAlerts";
 import { getCompletedFinancialsFromScoped } from "./financialMetrics";
 import { computeBackOfficeAccessStats } from "./backOfficeAccessStats";
 import { buildOwnerRiskCards, type OwnerRiskCard } from "./ownerRiskDashboard";
+import {
+  revenueSalesInBounds,
+  returnsInBounds,
+  type DateFilterBounds,
+} from "./dateFilters";
+import { sumDebtPaymentsInBounds } from "./customerDebtActivity";
+import {
+  filterAuditLogsInBounds,
+  filterVoidsInBounds,
+} from "./ownerCommandCenter";
 
 export type OwnerDashboardStats = {
   totalSalesUgx: number;
@@ -47,11 +57,16 @@ export type OwnerDashboardStats = {
 };
 
 export type OwnerDashboardData = {
+  periodKey: string;
+  bounds: DateFilterBounds;
   todayKey: string;
   yesterdayKey: string;
   today: Sale[];
+  periodSales: Sale[];
   todayVoids: VoidRecord[];
+  periodVoids: VoidRecord[];
   todayReturns: ReturnRecord[];
+  periodReturns: ReturnRecord[];
   todayDiscountTotal: number;
   todayDiscountEvents: AuditLogEntry[];
   todayCatalogEvents: AuditLogEntry[];
@@ -76,6 +91,7 @@ export type OwnerDashboardData = {
 
 type BuildParams = {
   lang: Language;
+  bounds: DateFilterBounds;
   sales: Sale[];
   products: Product[];
   auditLogs: AuditLogEntry[];
@@ -83,7 +99,8 @@ type BuildParams = {
   voidRecords: VoidRecord[];
   dayCloses: DayCloseSummary[];
   preferences: ShopPreferences;
-  drawerToday: { debtCollectedUgx: number; expectedDrawerCashUgx: number };
+  debtPayments: import("../types").DebtPayment[];
+  expectedCashUgx: number;
   hospitalityMode: boolean;
   pharmacyMode: boolean;
 };
@@ -95,6 +112,7 @@ function cashierLabel(userId: string): string {
 export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData {
   const {
     lang,
+    bounds,
     sales,
     products,
     auditLogs,
@@ -102,14 +120,21 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     voidRecords,
     dayCloses,
     preferences,
-    drawerToday,
+    debtPayments,
+    expectedCashUgx,
     hospitalityMode,
     pharmacyMode,
   } = params;
 
   const todayKey = dateKeyKampala(new Date());
   const yesterdayKey = dateKeyDaysAgoKampala(1);
-  const { revenueIndex, dayIndex: salesIndex, todayAggregates } = buildCombinedReportingIndex(
+  const periodKey = bounds.toKey;
+  const periodSales = revenueSalesInBounds(sales, bounds);
+  const periodReturns = returnsInBounds(returnRecords, bounds);
+  const periodVoids = filterVoidsInBounds(voidRecords, bounds);
+  const periodAuditLogs = filterAuditLogsInBounds(auditLogs, bounds);
+
+  const { revenueIndex, dayIndex: salesIndex } = buildCombinedReportingIndex(
     sales,
     returnRecords,
     undefined,
@@ -126,11 +151,7 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     if (dateKeyKampala(r.createdAt) === todayKey) todayReturns.push(r);
   }
 
-  const finToday = getCompletedFinancialsFromScoped(
-    today,
-    revenueIndex.returnsByDay.get(todayKey) ?? [],
-    products,
-  );
+  const finPeriod = getCompletedFinancialsFromScoped(periodSales, periodReturns, products);
   const finYesterday = getCompletedFinancialsFromScoped(
     revenueIndex.salesByDay.get(yesterdayKey) ?? [],
     revenueIndex.returnsByDay.get(yesterdayKey) ?? [],
@@ -138,49 +159,67 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
   );
 
   let voidsTotalUgx = 0;
-  for (const v of todayVoids) voidsTotalUgx += Math.max(0, v.amountUgx);
+  for (const v of periodVoids) voidsTotalUgx += Math.max(0, v.amountUgx);
 
   let returnsTotalUgx = 0;
-  for (const r of todayReturns) returnsTotalUgx += Math.max(0, r.refundAmountUgx);
+  for (const r of periodReturns) returnsTotalUgx += Math.max(0, r.refundAmountUgx);
 
-  const closeToday = dayCloses.find((d) => d.dateKey === todayKey && !d.supersededAt);
-  const countedCashUgx = closeToday?.countedCashUgx ?? null;
-  const todayCloseDiff = closeToday?.differenceUgx ?? null;
-  const shortageUgx = closeToday && closeToday.differenceUgx < 0 ? -closeToday.differenceUgx : null;
+  const closePrimary = dayCloses.find((d) => d.dateKey === periodKey && !d.supersededAt);
+  const countedCashUgx = bounds.isSingleDay ? (closePrimary?.countedCashUgx ?? null) : null;
+  const todayCloseDiff = bounds.isSingleDay ? (closePrimary?.differenceUgx ?? null) : null;
+  const shortageUgx =
+    closePrimary && closePrimary.differenceUgx < 0 ? -closePrimary.differenceUgx : null;
 
   const stats: OwnerDashboardStats = {
-    totalSalesUgx: finToday.revenueUgx,
-    grossSalesUgx: finToday.revenueUgx + voidsTotalUgx + returnsTotalUgx,
+    totalSalesUgx: finPeriod.revenueUgx,
+    grossSalesUgx: finPeriod.revenueUgx + voidsTotalUgx + returnsTotalUgx,
     voidsTotalUgx,
-    expectedCashUgx: drawerToday.expectedDrawerCashUgx,
-    debtTodayUgx: finToday.debtIssuedUgx,
-    debtCollectedUgx: drawerToday.debtCollectedUgx,
-    estProfitUgx: finToday.profitUgx,
+    expectedCashUgx,
+    debtTodayUgx: finPeriod.debtIssuedUgx,
+    debtCollectedUgx: sumDebtPaymentsInBounds(debtPayments, bounds),
+    estProfitUgx: finPeriod.profitUgx,
     returnsTotalUgx,
     countedCashUgx,
     todayCloseDiff,
     shortageUgx,
-    saleCount: finToday.transactionCount,
+    saleCount: finPeriod.transactionCount,
   };
 
   const yesterdaySalesUgx = finYesterday.revenueUgx;
   const lowStock = products.filter((p) => isLowStock(p));
 
-  const productMap = todayAggregates.productMap;
-  const cashierMap = todayAggregates.cashierMap;
-  const todayDiscountTotal = todayAggregates.discountTotal;
-  const debtSaleCount = todayAggregates.debtSaleCount;
+  const periodProductMap = new Map<string, { name: string; qty: number; revenue: number }>();
+  const periodCashierMap = new Map<string, { count: number; revenue: number }>();
+  let periodDiscountTotal = 0;
+  let periodDebtSaleCount = 0;
+  let periodRefundSaleCount = 0;
 
-  const fastMovers = [...productMap.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
-  const cashierPerf = [...cashierMap.entries()]
+  for (const s of periodSales) {
+    const uid = s.soldByUserId ?? "unknown";
+    const crow = periodCashierMap.get(uid) ?? { count: 0, revenue: 0 };
+    crow.count += 1;
+    crow.revenue += s.totalUgx;
+    periodCashierMap.set(uid, crow);
+    if (s.debtUgx > 0) periodDebtSaleCount += 1;
+    if (s.totalUgx < 0) periodRefundSaleCount += 1;
+    for (const line of s.lines) {
+      const pid = line.productId;
+      const row = periodProductMap.get(pid) ?? { name: line.name, qty: 0, revenue: 0 };
+      row.qty += line.quantity;
+      row.revenue += line.lineTotalUgx;
+      periodProductMap.set(pid, row);
+      periodDiscountTotal += line.discountUgx ?? 0;
+    }
+  }
+
+  const fastMovers = [...periodProductMap.values()].sort((a, b) => b.revenue - a.revenue).slice(0, 8);
+  const cashierPerf = [...periodCashierMap.entries()]
     .map(([userId, v]) => ({ userId, label: cashierLabel(userId), ...v }))
     .sort((a, b) => b.revenue - a.revenue);
 
   const todayDiscountEvents: AuditLogEntry[] = [];
   const todayCatalogRaw: AuditLogEntry[] = [];
   const todayAuditLogs: AuditLogEntry[] = [];
-  let staffCatalogTodayCount = 0;
-  let staffCatalogTodaySensitive = false;
 
   let productRemoves14d = 0;
   let manualStockHits7d = 0;
@@ -195,10 +234,6 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
       if (e.action === "discount_given") todayDiscountEvents.push(e);
       if (isCatalogTamperAction(e.action)) {
         todayCatalogRaw.push(e);
-        if (e.action !== "price_change" && e.role !== "owner") {
-          staffCatalogTodayCount += 1;
-          if (isSensitiveCatalogEvent(e)) staffCatalogTodaySensitive = true;
-        }
       }
     }
     if (e.action === "stock_adjust" && stockAdjustRecent.length < 40) {
@@ -215,24 +250,36 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     }
   }
 
+  let staffCatalogPeriodCount = 0;
+  let staffCatalogPeriodSensitive = false;
+  for (const e of periodAuditLogs) {
+    if (isCatalogTamperAction(e.action) && e.action !== "price_change" && e.role !== "owner") {
+      staffCatalogPeriodCount += 1;
+      if (isSensitiveCatalogEvent(e)) staffCatalogPeriodSensitive = true;
+    }
+  }
+
   const todayCatalogEvents = todayCatalogRaw.slice(0, 8);
   const todayPriceChangeEvents = todayCatalogRaw.filter((e) => e.action === "price_change");
   const todayStaffCatalogEvents = todayCatalogRaw.filter((e) => e.role !== "owner");
 
+  const alertDebtUgx = finPeriod.debtIssuedUgx;
+  const alertTodayKey = bounds.isSingleDay ? bounds.fromKey : todayKey;
+
   const ownerAlertsResolved = computeExtendedOwnerAlerts({
     products,
     dayCloses,
-    auditLogs,
+    auditLogs: periodAuditLogs,
     preferences,
-    todayDebtUgx: stats.debtTodayUgx,
+    todayDebtUgx: alertDebtUgx,
     sales,
-    todayKey,
+    todayKey: alertTodayKey,
     salesIndex,
-    staffCatalogTodayCount,
-    staffCatalogTodaySensitive,
+    staffCatalogTodayCount: staffCatalogPeriodCount,
+    staffCatalogTodaySensitive: staffCatalogPeriodSensitive,
     auditWeekMetrics: { productRemoves14d, manualStockHits7d },
     recentStockAdjustments: stockAdjustRecent,
-    refundsTodayCount: todayAggregates.refundSaleCount,
+    refundsTodayCount: periodRefundSaleCount,
   });
 
   let dangerCount = 0;
@@ -249,14 +296,15 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     alertWarnCount: warnCount,
   });
 
-  const trustRows = computeCashierTrustRows(lang, today, auditLogs, todayKey, todayAuditLogs);
-  const backOfficeAccess = computeBackOfficeAccessStats(auditLogs, todayKey);
+  const trustRows = computeCashierTrustRows(lang, periodSales, auditLogs, alertTodayKey, periodAuditLogs);
+  const backOfficeAccess = computeBackOfficeAccessStats(auditLogs, alertTodayKey);
   const riskCards = buildOwnerRiskCards({
     lang,
-    todayKey,
-    todayAuditLogs,
-    todayReturns,
-    todayVoids,
+    periodFromKey: bounds.fromKey,
+    periodToKey: bounds.toKey,
+    todayAuditLogs: periodAuditLogs,
+    todayReturns: periodReturns,
+    todayVoids: periodVoids,
   });
 
   const openBillsCount = hospitalityMode ? pendingSales(sales).length : 0;
@@ -265,12 +313,17 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     : 0;
 
   return {
+    periodKey,
+    bounds,
     todayKey,
     yesterdayKey,
     today,
+    periodSales,
     todayVoids,
+    periodVoids,
     todayReturns,
-    todayDiscountTotal,
+    periodReturns,
+    todayDiscountTotal: periodDiscountTotal,
     todayDiscountEvents,
     todayCatalogEvents,
     todayPriceChangeEvents,
@@ -280,7 +333,7 @@ export function buildOwnerDashboardData(params: BuildParams): OwnerDashboardData
     lowStock,
     fastMovers,
     cashierPerf,
-    debtSaleCount,
+    debtSaleCount: periodDebtSaleCount,
     ownerAlertsResolved,
     dangerCount,
     warnCount,

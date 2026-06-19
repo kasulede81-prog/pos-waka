@@ -1,5 +1,6 @@
 import type { ShopPreferences } from "../types";
 import { isBackOfficePinConfigured } from "./lockPos";
+import { isBackOfficePinRequired } from "./backOfficeUnlock";
 
 /** Actions that may require biometric or Owner PIN when enabled in settings. */
 export type SensitiveActionKind =
@@ -53,4 +54,17 @@ export function shouldPromptForSensitiveAction(
 ): boolean {
   if (!isBiometricAuthFeatureEnabled(preferences)) return false;
   return !isSensitiveActionSessionActive();
+}
+
+/** Back Office PIN unlock covers sensitive routes for the same session — avoids double prompts. */
+export function sensitiveAuthSatisfiedByBackOfficeUnlock(
+  preferences: {
+    backOfficePin?: string | null;
+    staffAccounts?: ShopPreferences["staffAccounts"];
+    biometricAuthEnabled?: boolean;
+  },
+  backOfficeUnlocked: boolean,
+): boolean {
+  if (!backOfficeUnlocked) return false;
+  return isBackOfficePinRequired(preferences) || isBiometricAuthFeatureEnabled(preferences);
 }

@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { Capacitor } from "@capacitor/core";
+import { checkBiometricCapability } from "../../lib/biometricAuth";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { PinInput } from "../ui/PinInput";
 
@@ -29,19 +31,24 @@ export function BiometricAuthModal({
 }: Props) {
   const [pin, setPin] = useState("");
   const [pinMode, setPinMode] = useState(showPinOnly);
-  const autoPromptStartedRef = useRef(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   useEffect(() => {
     setPinMode(showPinOnly);
-    autoPromptStartedRef.current = false;
   }, [showPinOnly]);
 
   useEffect(() => {
-    if (!pinMode && !busy && !autoPromptStartedRef.current) {
-      autoPromptStartedRef.current = true;
-      onAuthenticateBiometric();
-    }
-  }, [pinMode, busy, onAuthenticateBiometric]);
+    let cancelled = false;
+    void checkBiometricCapability().then((cap) => {
+      if (cancelled) return;
+      const ready = Capacitor.isNativePlatform() && (cap.isAvailable || cap.deviceIsSecure);
+      setBiometricAvailable(ready);
+      if (!ready) setPinMode(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const submitPin = (e: FormEvent) => {
     e.preventDefault();
@@ -94,14 +101,16 @@ export function BiometricAuthModal({
           </form>
         ) : (
           <div className="mt-5 space-y-3">
-            <button
-              type="button"
-              disabled={busy}
-              onClick={onAuthenticateBiometric}
-              className="min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
-            >
-              {busy ? t(lang, "biometricAuthenticating") : t(lang, "biometricAuthenticateButton")}
-            </button>
+            {biometricAvailable ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onAuthenticateBiometric}
+                className="min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
+              >
+                {busy ? t(lang, "biometricAuthenticating") : t(lang, "biometricAuthenticateButton")}
+              </button>
+            ) : null}
             <button
               type="button"
               disabled={busy}
@@ -109,7 +118,11 @@ export function BiometricAuthModal({
                 setPinMode(true);
                 onUseOwnerPin();
               }}
-              className="w-full rounded-2xl border border-stone-200 py-3 text-sm font-bold text-stone-700"
+              className={
+                biometricAvailable
+                  ? "w-full rounded-2xl border border-stone-200 py-3 text-sm font-bold text-stone-700"
+                  : "min-h-[52px] w-full rounded-2xl bg-waka-600 py-3.5 text-lg font-black text-white shadow-waka-sm"
+              }
             >
               {t(lang, "biometricUseOwnerPin")}
             </button>

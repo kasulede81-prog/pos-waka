@@ -6,6 +6,7 @@ import {
   isSensitiveActionSessionActive,
   MAX_BIOMETRIC_FAILURES_BEFORE_PIN,
   sensitiveActionSessionMsRemaining,
+  sensitiveAuthSatisfiedByBackOfficeUnlock,
   shouldPromptForSensitiveAction,
   SENSITIVE_ACTION_SESSION_MS,
   verifyOwnerPin,
@@ -55,5 +56,26 @@ describe("sensitiveActionAuth", () => {
 
   it("requires three biometric failures before PIN fallback constant", () => {
     expect(MAX_BIOMETRIC_FAILURES_BEFORE_PIN).toBe(3);
+  });
+
+  it("back office unlock satisfies sensitive auth when pin or biometric is configured", () => {
+    expect(
+      sensitiveAuthSatisfiedByBackOfficeUnlock(
+        { backOfficePin: "1234", biometricAuthEnabled: false },
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      sensitiveAuthSatisfiedByBackOfficeUnlock(
+        { backOfficePin: "1234", biometricAuthEnabled: false },
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      sensitiveAuthSatisfiedByBackOfficeUnlock(
+        { backOfficePin: "", biometricAuthEnabled: true },
+        true,
+      ),
+    ).toBe(true);
   });
 });

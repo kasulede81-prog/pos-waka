@@ -8,26 +8,42 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { buildOwnerDashboardData, buildOwnerSummaryLines } from "../lib/ownerDashboardData";
-import { useDrawerCashForToday, useExpectedDrawerCashForBounds } from "../hooks/useDrawerCashForDay";
+import { useExpectedDrawerCashForBounds } from "../hooks/useDrawerCashForDay";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
-import { dateKeyKampala } from "../lib/datesUg";
 import { buildOwnerStaffPerformanceRows } from "../lib/ownerStaffMetrics";
 import { canRecordCashExpenses } from "../lib/cashExpenses";
 import { useSessionActor } from "../context/SessionActorContext";
-import { OwnerNeedsAttentionSection } from "../components/owner/OwnerNeedsAttentionSection";
 import { OwnerBusinessTodaySection } from "../components/owner/OwnerBusinessTodaySection";
 import { OwnerStaffPerformanceSection } from "../components/owner/OwnerStaffPerformanceSection";
 import { OwnerInventoryHealthSection } from "../components/owner/OwnerInventoryHealthSection";
 import { OwnerQuickActionsRow } from "../components/owner/OwnerQuickActionsRow";
 import { OwnerDashboardHeroCard } from "../components/owner/OwnerDashboardHeroCard";
+import { OwnerAttentionCenterSection } from "../components/owner/OwnerAttentionCenterSection";
+import { OwnerIntegrityStrip } from "../components/owner/OwnerIntegrityStrip";
+import { OwnerShiftAccountabilitySection } from "../components/owner/OwnerShiftAccountabilitySection";
+import { OwnerCashControlSection } from "../components/owner/OwnerCashControlSection";
+import { OwnerInventoryRiskSection } from "../components/owner/OwnerInventoryRiskSection";
+import { OwnerFinancialControlSection } from "../components/owner/OwnerFinancialControlSection";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { isCompletedSale } from "../lib/saleStatus";
 import { getCompletedFinancialsFromScoped } from "../lib/financialMetrics";
-import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
+import { selectedDayKeyForFilter, formatDateFilterChipDay } from "../lib/dateFilterLabels";
 import { timedComputation } from "../lib/performanceMetrics";
 import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
+import {
+  buildAttentionCenter,
+  buildCashControlSnapshot,
+  buildFinancialSnapshot,
+  buildIntegritySignals,
+  buildInventoryRiskSnapshot,
+  buildShiftAccountabilityRows,
+  filterAuditLogsInBounds,
+  primaryDayKeyForBounds,
+} from "../lib/ownerCommandCenter";
+import { useSyncStatus } from "../hooks/useSyncStatus";
+import { computeSyncSalesStats } from "../offline/cloudSync";
 
 function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
   if (pulse === "strong") return t(lang, "ownerPulseStrong");
@@ -38,6 +54,7 @@ function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboard
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
   useMarkOwnerRisksReviewed();
   const actor = useSessionActor();
+  const sync = useSyncStatus();
   const {
     filter,
     setFilter,
@@ -51,7 +68,14 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const sales = useDeferredReportingSales(includeArchived);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
+  const suppliers = usePosStore((s) => s.suppliers);
+  const debtPayments = usePosStore((s) => s.debtPayments);
+  const stockMovements = usePosStore((s) => s.stockMovements);
   const dayCloses = usePosStore((s) => s.dayCloses);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
+  const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
+  const inventoryCountSessions = usePosStore((s) => s.inventoryCountSessions);
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const preferences = usePosStore((s) => s.preferences);
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -62,22 +86,23 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const reportingVoidRecords = includeArchived ? [...voidRecords, ...archivedVoidRecords] : voidRecords;
   const reportingReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
-  const drawerToday = useDrawerCashForToday();
   const heroExpectedCash = useExpectedDrawerCashForBounds(bounds);
 
-  const selectedDay = selectedDayKeyForFilter(filter);
-  const heroCountedCash = useMemo(() => {
-    if (!selectedDay) return null;
-    const close = dayCloses.find((c) => c.dateKey === selectedDay && !c.supersededAt);
-    return close?.countedCashUgx ?? null;
-  }, [selectedDay, dayCloses]);
+  const periodLabel = useMemo(() => {
+    const day = selectedDayKeyForFilter(filter);
+    if (day) return formatDateFilterChipDay(day, lang);
+    if (filter.kind === "preset" && filter.preset === "this_week") return t(lang, "dateFilterThisWeek");
+    if (filter.kind === "preset" && filter.preset === "this_month") return t(lang, "dateFilterThisMonth");
+    return t(lang, "dateFilterToday");
+  }, [filter, lang]);
 
   const dashboard = useMemo(() => {
-    const fp = `${buildSalesFingerprint(sales)}:${products.length}:${auditLogs.length}:${reportingReturnRecords.length}:${reportingVoidRecords.length}:${dayCloses.length}:${drawerToday}:${hospitalityMode}:${pharmacyMode}`;
+    const fp = `${buildSalesFingerprint(sales)}:${bounds.fromKey}:${bounds.toKey}:${products.length}:${auditLogs.length}:${reportingReturnRecords.length}:${reportingVoidRecords.length}:${dayCloses.length}:${heroExpectedCash}:${hospitalityMode}:${pharmacyMode}`;
     return getCachedComputation("buildOwnerDashboardData", fp, () =>
       timedComputation("buildOwnerDashboardData", () =>
         buildOwnerDashboardData({
           lang,
+          bounds,
           sales,
           products,
           auditLogs,
@@ -85,7 +110,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
           voidRecords: reportingVoidRecords,
           dayCloses,
           preferences,
-          drawerToday,
+          debtPayments,
+          expectedCashUgx: heroExpectedCash,
           hospitalityMode,
           pharmacyMode,
         }),
@@ -93,6 +119,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     );
   }, [
     lang,
+    bounds,
     sales,
     products,
     auditLogs,
@@ -100,7 +127,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     reportingVoidRecords,
     dayCloses,
     preferences,
-    drawerToday,
+    debtPayments,
+    heroExpectedCash,
     hospitalityMode,
     pharmacyMode,
   ]);
@@ -117,16 +145,16 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [lang, dashboard],
   );
 
-  const { stats, fastMovers, cashierPerf, lowStock, pulse, riskCards, todayKey } = dashboard;
+  const { stats, fastMovers, cashierPerf, lowStock, pulse, riskCards } = dashboard;
 
-  const todayAuditLogs = useMemo(
-    () => auditLogs.filter((e) => dateKeyKampala(e.at) === todayKey),
-    [auditLogs, todayKey],
+  const periodAuditLogs = useMemo(
+    () => filterAuditLogsInBounds(auditLogs, bounds),
+    [auditLogs, bounds],
   );
 
   const staffRows = useMemo(
-    () => buildOwnerStaffPerformanceRows(lang, dashboard.trustRows, cashierPerf, todayAuditLogs),
-    [lang, dashboard.trustRows, cashierPerf, todayAuditLogs],
+    () => buildOwnerStaffPerformanceRows(lang, dashboard.trustRows, cashierPerf, periodAuditLogs),
+    [lang, dashboard.trustRows, cashierPerf, periodAuditLogs],
   );
 
   const totalDebtUgx = useMemo(
@@ -134,13 +162,133 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [customers],
   );
 
+  const syncStats = useMemo(() => computeSyncSalesStats(sales), [sales]);
+
+  const attention = useMemo(
+    () =>
+      buildAttentionCenter({
+        lang,
+        bounds,
+        sales,
+        products,
+        customers,
+        suppliers,
+        shifts,
+        dayCloses,
+        dayDrawerOpens,
+        cashDrawerAdjustments,
+        debtPayments,
+        stockMovements,
+        inventoryCountSessions,
+        auditLogs,
+        voidRecords: reportingVoidRecords,
+        returnRecords: reportingReturnRecords,
+        ownerAlertsResolved: dashboard.ownerAlertsResolved,
+        riskCards,
+        expectedCashUgx: heroExpectedCash,
+        pharmacyMode,
+        syncPendingCount: sync.pendingCount,
+        syncErrorCount: syncStats.errorCount,
+      }),
+    [
+      lang,
+      bounds,
+      sales,
+      products,
+      customers,
+      suppliers,
+      shifts,
+      dayCloses,
+      dayDrawerOpens,
+      cashDrawerAdjustments,
+      debtPayments,
+      stockMovements,
+      inventoryCountSessions,
+      auditLogs,
+      reportingVoidRecords,
+      reportingReturnRecords,
+      dashboard.ownerAlertsResolved,
+      riskCards,
+      heroExpectedCash,
+      pharmacyMode,
+      sync.pendingCount,
+      syncStats.errorCount,
+    ],
+  );
+
+  const integritySignals = useMemo(
+    () =>
+      buildIntegritySignals({
+        customers,
+        sales,
+        debtPayments,
+        products,
+        stockMovements,
+        dayDrawerOpens,
+        shifts,
+        todayKey: dashboard.todayKey,
+        syncPendingCount: sync.pendingCount,
+        syncErrorCount: syncStats.errorCount,
+      }),
+    [
+      customers,
+      sales,
+      debtPayments,
+      products,
+      stockMovements,
+      dayDrawerOpens,
+      shifts,
+      dashboard.todayKey,
+      sync.pendingCount,
+      syncStats.errorCount,
+    ],
+  );
+
+  const shiftRows = useMemo(
+    () => buildShiftAccountabilityRows(shifts, bounds, lang),
+    [shifts, bounds, lang],
+  );
+
+  const cashControl = useMemo(
+    () =>
+      buildCashControlSnapshot({
+        bounds,
+        primaryDayKey: primaryDayKeyForBounds(bounds),
+        dayDrawerOpens,
+        dayCloses,
+        shifts,
+        cashDrawerAdjustments,
+        expectedCashUgx: heroExpectedCash,
+        lang,
+      }),
+    [bounds, dayDrawerOpens, dayCloses, shifts, cashDrawerAdjustments, heroExpectedCash, lang],
+  );
+
+  const inventoryRisk = useMemo(
+    () => buildInventoryRiskSnapshot(products, inventoryCountSessions, pharmacyMode),
+    [products, inventoryCountSessions, pharmacyMode],
+  );
+
+  const financial = useMemo(
+    () => buildFinancialSnapshot({ sales, customers, suppliers, debtPayments, bounds }),
+    [sales, customers, suppliers, debtPayments, bounds],
+  );
+
+  const selectedDay = selectedDayKeyForFilter(filter);
+  const heroCountedCash = useMemo(() => {
+    if (!bounds.isSingleDay) return null;
+    const key = selectedDay ?? bounds.toKey;
+    const close = dayCloses.find((c) => c.dateKey === key && !c.supersededAt);
+    return close?.countedCashUgx ?? null;
+  }, [bounds.isSingleDay, selectedDay, bounds.toKey, dayCloses]);
+
   const showRecordExpense = canRecordCashExpenses(actor.role, preferences);
 
   return (
     <div className="space-y-4 pb-8">
       <div>
         <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{t(lang, "ownerDashboardTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "ownerDashboardSub")}</p>
+        <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "ownerDashboardCommandSub")}</p>
       </div>
 
       <OwnerDashboardHeroCard
@@ -167,7 +315,23 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <OwnerNeedsAttentionSection lang={lang} cards={riskCards} todayKey={todayKey} />
+      <OwnerIntegrityStrip lang={lang} signals={integritySignals} />
+
+      <OwnerAttentionCenterSection
+        lang={lang}
+        critical={attention.critical}
+        warnings={attention.warnings}
+        information={attention.information}
+        periodLabel={periodLabel}
+      />
+
+      <OwnerCashControlSection lang={lang} cash={cashControl} />
+
+      <OwnerShiftAccountabilitySection lang={lang} rows={shiftRows} periodLabel={periodLabel} />
+
+      <OwnerFinancialControlSection lang={lang} financial={financial} periodLabel={periodLabel} />
+
+      <OwnerInventoryRiskSection lang={lang} inventory={inventoryRisk} />
 
       <OwnerBusinessTodaySection
         lang={lang}
@@ -181,7 +345,12 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         waLine={waLine}
       />
 
-      <OwnerStaffPerformanceSection lang={lang} rows={staffRows} todayKey={todayKey} />
+      <OwnerStaffPerformanceSection
+        lang={lang}
+        rows={staffRows}
+        periodFromKey={bounds.fromKey}
+        periodToKey={bounds.toKey}
+      />
 
       <OwnerInventoryHealthSection lang={lang} lowStock={lowStock} fastMovers={fastMovers} />
 
