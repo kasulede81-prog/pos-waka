@@ -4,7 +4,6 @@
 
 import { partitionAttentionByAck } from "./ownerAlertAcknowledgement";
 import { getCachedComputation } from "./computationResultCache";
-import { buildRevenueSalesIndex } from "./financialMetrics";
 import {
   buildAttentionCenter,
   buildCashControlSnapshot,
@@ -12,6 +11,7 @@ import {
   buildIntegritySignals,
   buildInventoryRiskSnapshot,
   buildShiftAccountabilityRows,
+  type OwnerCommandCenterAttentionInput,
   type OwnerCommandCenterInput,
 } from "./ownerCommandCenter";
 import {
@@ -19,8 +19,13 @@ import {
   buildOwnerDashboardIntegritySnapshot,
   type OwnerDashboardIntegritySnapshot,
 } from "./ownerDashboardIntegrityCache";
+import {
+  buildOwnerCommandCenterContext,
+  type OwnerCommandCenterOverview,
+} from "./ownerCommandCenterContext";
 
 export type OwnerCommandCenterBundle = {
+  overview: OwnerCommandCenterOverview;
   integrity: OwnerDashboardIntegritySnapshot;
   attention: ReturnType<typeof buildAttentionCenter>;
   attentionReviewed: ReturnType<typeof buildAttentionCenter>;
@@ -48,8 +53,7 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     input.inventoryCountSessions.length,
     input.cashDrawerAdjustments.length,
     input.cashExpenses.length,
-    input.ownerAlertsResolved.length,
-    input.riskCards.length,
+    input.auditLogs.length,
     input.acknowledgements.length,
     input.syncPendingCount,
     input.syncErrorCount,
@@ -60,7 +64,23 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
 
 export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): OwnerCommandCenterBundle {
   const historicalStats = buildHistoricalShiftStats(input.shifts);
-  const salesIndex = buildRevenueSalesIndex(input.sales, input.returnRecords);
+  const { overview, ownerAlertsResolved, riskCards, revenueIndex } = buildOwnerCommandCenterContext({
+    lang: input.lang,
+    bounds: input.bounds,
+    sales: input.sales,
+    products: input.products,
+    auditLogs: input.auditLogs,
+    returnRecords: input.returnRecords,
+    voidRecords: input.voidRecords,
+    dayCloses: input.dayCloses,
+    preferences: input.preferences,
+  });
+
+  const attentionInput: OwnerCommandCenterAttentionInput = {
+    ...input,
+    ownerAlertsResolved,
+    riskCards,
+  };
 
   const integrity = buildOwnerDashboardIntegritySnapshot({
     bounds: input.bounds,
@@ -75,7 +95,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
     syncErrorCount: input.syncErrorCount,
   });
 
-  const attentionRaw = buildAttentionCenter(input, integrity);
+  const attentionRaw = buildAttentionCenter(attentionInput, integrity);
   const criticalPart = partitionAttentionByAck(attentionRaw.critical, input.acknowledgements);
   const warningsPart = partitionAttentionByAck(attentionRaw.warnings, input.acknowledgements);
 
@@ -91,6 +111,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
   };
 
   return {
+    overview,
     integrity,
     attention,
     attentionReviewed,
@@ -114,7 +135,7 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       debtPayments: input.debtPayments,
       cashExpenses: input.cashExpenses,
       bounds: input.bounds,
-      salesIndex,
+      salesIndex: revenueIndex,
     }),
   };
 }

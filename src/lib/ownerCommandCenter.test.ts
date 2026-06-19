@@ -99,6 +99,12 @@ describe("ownerCommandCenter", () => {
         auditLogs: [],
         voidRecords: [],
         returnRecords: [],
+        preferences: {
+          businessType: "kiosk_duka",
+          kioskQuickSell: true,
+          onboardingDone: true,
+          schemaVersion: 2,
+        } as never,
         ownerAlertsResolved: [],
         riskCards: [],
         acknowledgements: [],

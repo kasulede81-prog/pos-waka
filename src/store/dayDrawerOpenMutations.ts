@@ -10,9 +10,11 @@ import {
   floatVerificationWithinTolerance,
   isDayDrawerOpenMutable,
   isFormulaV2,
+  isOwnerDayOpenCorrectionAfterSalesEnabled,
   latestClosedShiftForDay,
   normalizeDayDrawerOpen,
   shiftVerificationBaselineUgx,
+  verifyOwnerDayOpenCorrection,
 } from "../lib/dayDrawerOpen";
 import { hasPermission } from "../lib/permissions";
 import { resolveFloatVerifyOverride } from "../lib/managerFloatVerify";
@@ -54,6 +56,36 @@ function patchDayDrawerOpen(set: StoreSet, id: string, patch: Partial<DayDrawerO
         : row,
     ),
   }));
+}
+
+type DayOpenEditGateInput = {
+  dateKey: string;
+  reason: string;
+  ownerOverridePin?: string;
+};
+
+function assertDayDrawerOpenEditable(
+  state: PosState,
+  input: DayOpenEditGateInput,
+): { ok: true; afterSalesCorrection: boolean; correctionAuth?: import("../lib/dayDrawerOpen").OwnerDayOpenCorrectionAuth } | { ok: false; errorKey: string } {
+  if (isDayDrawerOpenMutable(state.sales, input.dateKey)) {
+    return { ok: true, afterSalesCorrection: false };
+  }
+  if (!isOwnerDayOpenCorrectionAfterSalesEnabled(state.preferences)) {
+    return { ok: false, errorKey: "dayDrawerLockedAfterSales" };
+  }
+  const actor = state.sessionActor;
+  if (!actor) return { ok: false, errorKey: "noSelection" };
+  const verified = verifyOwnerDayOpenCorrection({
+    pin: input.ownerOverridePin ?? "",
+    reason: input.reason,
+    preferences: state.preferences,
+    sessionRole: actor.role,
+    sessionUserId: actor.userId,
+    sessionLabel: actor.displayName ?? actor.userId,
+  });
+  if (!verified.ok) return verified;
+  return { ok: true, afterSalesCorrection: true, correctionAuth: verified.auth };
 }
 
 export function createDayDrawerOpenStoreActions(deps: Deps) {
@@ -121,6 +153,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     openingFloatUgx: number;
     note?: string;
     reason?: string;
+    ownerOverridePin?: string;
   }) => {
     const denied = denyUnlessEffectivePermission("day.open_drawer", "supersedeDayDrawerOpen");
     if (denied) return { ok: false as const, errorKey: denied.errorKey };
@@ -131,9 +164,12 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
 
     const prev = state.dayDrawerOpens.find((r) => r.id === input.previousId && r.status === "open");
     if (!prev) return { ok: false as const, errorKey: "invalid" };
-    if (!isDayDrawerOpenMutable(state.sales, prev.dateKey)) {
-      return { ok: false as const, errorKey: "dayDrawerLockedAfterSales" };
-    }
+    const editGate = assertDayDrawerOpenEditable(state, {
+      dateKey: prev.dateKey,
+      reason: (input.reason ?? input.note ?? "").trim(),
+      ownerOverridePin: input.ownerOverridePin,
+    });
+    if (!editGate.ok) return { ok: false as const, errorKey: editGate.errorKey };
 
     const amount = Math.floor(input.openingFloatUgx);
     if (amount <= 0) return { ok: false as const, errorKey: "invalidMoney" };
@@ -177,6 +213,14 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       newAmount: amount,
       reason: (input.reason ?? "").trim(),
       actorUserId: actor.userId,
+      afterSalesCorrection: editGate.afterSalesCorrection,
+      ...(editGate.correctionAuth
+        ? {
+            ownerOverrideByUserId: editGate.correctionAuth.managerUserId,
+            ownerOverrideByLabel: editGate.correctionAuth.managerLabel,
+            ownerOverrideReason: editGate.correctionAuth.reason,
+          }
+        : {}),
     });
     void queueRemote("pending_day_drawer_opens", {
       action: "supersede",
@@ -186,7 +230,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     return { ok: true as const, dayOpenId: row.id };
   };
 
-  const voidDayDrawerOpen = (input: { dayOpenId: string; reason: string }) => {
+  const voidDayDrawerOpen = (input: { dayOpenId: string; reason: string; ownerOverridePin?: string }) => {
     const denied = denyUnlessEffectivePermission("day.open_drawer", "voidDayDrawerOpen");
     if (denied) return { ok: false as const, errorKey: denied.errorKey };
 
@@ -196,9 +240,12 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
 
     const row = state.dayDrawerOpens.find((r) => r.id === input.dayOpenId && r.status === "open");
     if (!row) return { ok: false as const, errorKey: "invalid" };
-    if (!isDayDrawerOpenMutable(state.sales, row.dateKey)) {
-      return { ok: false as const, errorKey: "dayDrawerLockedAfterSales" };
-    }
+    const editGate = assertDayDrawerOpenEditable(state, {
+      dateKey: row.dateKey,
+      reason: input.reason,
+      ownerOverridePin: input.ownerOverridePin,
+    });
+    if (!editGate.ok) return { ok: false as const, errorKey: editGate.errorKey };
 
     const reason = input.reason.trim();
     if (reason.length < 3) return { ok: false as const, errorKey: "invalid" };
@@ -209,6 +256,14 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       dateKey: row.dateKey,
       voidReason: reason,
       actorUserId: actor.userId,
+      afterSalesCorrection: editGate.afterSalesCorrection,
+      ...(editGate.correctionAuth
+        ? {
+            ownerOverrideByUserId: editGate.correctionAuth.managerUserId,
+            ownerOverrideByLabel: editGate.correctionAuth.managerLabel,
+            ownerOverrideReason: editGate.correctionAuth.reason,
+          }
+        : {}),
     });
     void queueRemote("pending_day_drawer_opens", { action: "void", dayOpenId: row.id });
     return { ok: true as const };
@@ -273,13 +328,24 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       verificationStatus = priorShift ? "handoff_overridden" : "mismatch_overridden";
 
       if (input.overrideAction === "correct_day_open") {
-        if (!isDayDrawerOpenMutable(state.sales, todayKey)) {
-          return { ok: false as const, errorKey: "dayDrawerLockedAfterSales" };
+        const locked = !isDayDrawerOpenMutable(state.sales, todayKey);
+        if (locked) {
+          if (!isOwnerDayOpenCorrectionAfterSalesEnabled(state.preferences)) {
+            return { ok: false as const, errorKey: "dayDrawerLockedAfterSales" };
+          }
+          if (override.role !== "owner") {
+            return { ok: false as const, errorKey: "dayOpenOverrideOwnerOnly" };
+          }
+          const reason = (input.overrideReason ?? "").trim();
+          if (reason.length < 3) {
+            return { ok: false as const, errorKey: "dayOpenOverrideReasonRequired" };
+          }
         }
         const sup = supersedeDayDrawerOpen({
           previousId: dayOpen.id,
           openingFloatUgx: verified,
           reason: input.overrideReason,
+          ownerOverridePin: locked ? input.managerPin : undefined,
         });
         if (!sup.ok) return sup;
         dayOpenId = sup.dayOpenId;

@@ -7,7 +7,6 @@ import { resolveDateFilterBounds } from "./dateFilters";
 import type { AuditLogEntry, Product, ReturnRecord, Sale, SaleLine } from "../types";
 import { localGetRangeSummary } from "./localReporting";
 import { buildAuditLogSearchIndex, filterAuditLogsIndexed } from "./auditSearch";
-import { buildOwnerDashboardData } from "./ownerDashboardData";
 import { buildOwnerCommandCenterBundle } from "./ownerDashboardCommandCenter";
 import { getCompletedFinancials } from "./financialMetrics";
 import { buildCashPositionReport } from "./cashPosition";
@@ -19,8 +18,8 @@ const TARGETS_MS = {
   /** Sprint 1 baseline ~27.5s; Sprint 2 warm-path best ~2.0–2.3s (product target under 2s). */
   reports10k: 3_500,
   investigation10k: 500,
-  /** Sprint 1 baseline ~5s; period-scoped aggregation ~2–2.5s warm path. */
-  ownerDashboard10k: 2_500,
+  /** Command center bundle at 10k sales — single dashboard data path. */
+  ownerDashboard10k: 1_000,
   /** Command center bundle at medium shop scale. */
   ownerCommandCenter5k: 1_000,
   ownerCommandCenter10k: 2_500,
@@ -170,8 +169,12 @@ describe("back office performance optimization", () => {
           auditLogs,
           voidRecords: [],
           returnRecords: [],
-          ownerAlertsResolved: [],
-          riskCards: [],
+          preferences: {
+            businessType: "kiosk_duka",
+            kioskQuickSell: true,
+            onboardingDone: true,
+            schemaVersion: 2,
+          } as never,
           acknowledgements: [],
           expectedCashUgx: 25_000_000,
           pharmacyMode: false,
@@ -211,8 +214,12 @@ describe("back office performance optimization", () => {
           auditLogs,
           voidRecords: [],
           returnRecords: [],
-          ownerAlertsResolved: [],
-          riskCards: [],
+          preferences: {
+            businessType: "kiosk_duka",
+            kioskQuickSell: true,
+            onboardingDone: true,
+            schemaVersion: 2,
+          } as never,
           acknowledgements: [],
           expectedCashUgx: 50_000_000,
           pharmacyMode: false,
@@ -228,31 +235,41 @@ describe("back office performance optimization", () => {
   );
 
   it(
-    "owner dashboard: 10k sales aggregates under 1s",
+    "owner dashboard: 10k sales command center under 1s",
     () => {
     const sales = Array.from({ length: 10_000 }, (_, i) => mkSale(i, `p-${i % 50}`));
     const products = mkProducts(50);
     const auditLogs = mkAuditLogs(500);
     const ms = benchBest(() =>
-      buildOwnerDashboardData({
+      buildOwnerCommandCenterBundle({
         lang: "en",
         bounds: TODAY_BOUNDS,
         sales,
         products,
         auditLogs,
-        returnRecords: [],
-        voidRecords: [],
+        customers: [],
+        suppliers: [],
+        shifts: [],
         dayCloses: [],
+        dayDrawerOpens: [],
+        cashDrawerAdjustments: [],
+        cashExpenses: [],
+        debtPayments: [],
+        stockMovements: [],
+        inventoryCountSessions: [],
+        voidRecords: [],
+        returnRecords: [],
         preferences: {
           businessType: "kiosk_duka",
           kioskQuickSell: true,
           onboardingDone: true,
           schemaVersion: 2,
         } as never,
-        debtPayments: [],
+        acknowledgements: [],
         expectedCashUgx: 50_000_000,
-        hospitalityMode: false,
         pharmacyMode: false,
+        syncPendingCount: 0,
+        syncErrorCount: 0,
       }),
     );
     // eslint-disable-next-line no-console
@@ -301,32 +318,42 @@ describe("back office performance optimization", () => {
     expect(cashReport.summary.totalSalesUgx).toBeGreaterThan(0);
   });
 
-  it("owner dashboard stats match canonical financials", () => {
+  it("owner command center overview matches canonical financials", () => {
     const sales = Array.from({ length: 200 }, (_, i) => mkSale(i, `p-${i % 10}`));
     const products = mkProducts(10);
-    const data = buildOwnerDashboardData({
+    const bundle = buildOwnerCommandCenterBundle({
       lang: "en",
       bounds: TODAY_BOUNDS,
       sales,
       products,
       auditLogs: [],
-      returnRecords: [],
-      voidRecords: [],
+      customers: [],
+      suppliers: [],
+      shifts: [],
       dayCloses: [],
+      dayDrawerOpens: [],
+      cashDrawerAdjustments: [],
+      cashExpenses: [],
+      debtPayments: [],
+      stockMovements: [],
+      inventoryCountSessions: [],
+      voidRecords: [],
+      returnRecords: [],
       preferences: {
         businessType: "kiosk_duka",
         kioskQuickSell: true,
         onboardingDone: true,
         schemaVersion: 2,
       } as never,
-      debtPayments: [],
+      acknowledgements: [],
       expectedCashUgx: 1_000_000,
-      hospitalityMode: false,
       pharmacyMode: false,
+      syncPendingCount: 0,
+      syncErrorCount: 0,
     });
     const fin = getCompletedFinancials(sales, [], products, { day: TODAY_BOUNDS.fromKey });
-    expect(data.stats.totalSalesUgx).toBe(fin.revenueUgx);
-    expect(data.stats.estProfitUgx).toBe(fin.profitUgx);
-    expect(data.stats.saleCount).toBe(fin.transactionCount);
+    expect(bundle.overview.revenueUgx).toBe(fin.revenueUgx);
+    expect(bundle.overview.profitUgx).toBe(fin.profitUgx);
+    expect(bundle.overview.transactionCount).toBe(fin.transactionCount);
   });
 });

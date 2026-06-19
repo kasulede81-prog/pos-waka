@@ -10,8 +10,10 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
 import {
   activeDayDrawerOpenForDate,
+  canRequestOwnerDayOpenCorrection,
   isDayDrawerOpenMutable,
   isFormulaV2,
+  isOwnerDayOpenCorrectionAfterSalesEnabled,
 } from "../lib/dayDrawerOpen";
 
 export function DayOpenPage({ lang }: { lang: Language }) {
@@ -27,11 +29,15 @@ export function DayOpenPage({ lang }: { lang: Language }) {
   const todayKey = dateKeyKampala(new Date());
   const active = useMemo(() => activeDayDrawerOpenForDate(dayDrawerOpens, todayKey), [dayDrawerOpens, todayKey]);
   const mutable = isDayDrawerOpenMutable(sales, todayKey);
+  const correctionEnabled = isOwnerDayOpenCorrectionAfterSalesEnabled(preferences);
+  const canOwnerCorrect = canRequestOwnerDayOpenCorrection(sales, todayKey, preferences);
   const v2 = isFormulaV2(preferences);
 
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [voidReason, setVoidReason] = useState("");
+  const [ownerPin, setOwnerPin] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; key: string } | null>(null);
 
   const translateKey = (key: string) => (t as (l: Language, k: string) => string)(lang, key);
@@ -55,9 +61,35 @@ export function DayOpenPage({ lang }: { lang: Language }) {
     }
   };
 
-  const submitVoid = () => {
+  const submitOwnerCorrection = () => {
     if (!active) return;
-    const r = voidDayDrawerOpen({ dayOpenId: active.id, reason: voidReason });
+    const openingFloatUgx = Math.floor(Number(amount.replace(/\D/g, "")) || 0);
+    if (openingFloatUgx <= 0) return;
+    const r = supersedeDayDrawerOpen({
+      previousId: active.id,
+      openingFloatUgx,
+      note,
+      reason: correctionReason,
+      ownerOverridePin: ownerPin,
+    });
+    if (r.ok) {
+      setAmount("");
+      setNote("");
+      setOwnerPin("");
+      setCorrectionReason("");
+      setMsg({ kind: "ok", key: "dayOpenCorrectionSuccess" });
+    } else {
+      setMsg({ kind: "err", key: r.errorKey ?? "saleError" });
+    }
+  };
+
+  const submitVoid = (useOwnerOverride: boolean) => {
+    if (!active) return;
+    const r = voidDayDrawerOpen({
+      dayOpenId: active.id,
+      reason: useOwnerOverride ? correctionReason : voidReason,
+      ownerOverridePin: useOwnerOverride ? ownerPin : undefined,
+    });
     setMsg(r.ok ? { kind: "ok", key: "dayOpenVoided" } : { kind: "err", key: r.errorKey ?? "saleError" });
   };
 
@@ -69,7 +101,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
 
       {!v2 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-          Formula v1 — legacy opening float. Enable formula v2 in shop settings when ready.
+          Formula v1 — legacy opening float. Enable formula v2 in drawer settings when ready.
         </p>
       ) : null}
 
@@ -87,7 +119,9 @@ export function DayOpenPage({ lang }: { lang: Language }) {
           ) : null}
           {!mutable ? (
             <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-950">
-              {t(lang, "dayOpenLockedHint")}
+              {canOwnerCorrect
+                ? t(lang, "dayOpenLockedHintWithCorrection")
+                : t(lang, "dayOpenLockedHint")}
             </p>
           ) : null}
         </section>
@@ -129,7 +163,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
               />
               <button
                 type="button"
-                onClick={submitVoid}
+                onClick={() => submitVoid(false)}
                 className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-rose-200 font-bold text-rose-800"
               >
                 {t(lang, "dayOpenVoidBtn")}
@@ -137,6 +171,71 @@ export function DayOpenPage({ lang }: { lang: Language }) {
             </>
           ) : null}
         </section>
+      ) : null}
+
+      {canOwnerCorrect && active ? (
+        <section className="rounded-3xl border-2 border-amber-300 bg-white p-5 shadow-waka-sm">
+          <h2 className="text-base font-black text-stone-950">{t(lang, "dayOpenCorrectionSectionTitle")}</h2>
+          <p className="mt-1 text-xs font-semibold text-stone-600">{t(lang, "dayOpenCorrectionSectionSub")}</p>
+          <label className="mt-4 block text-sm font-bold text-stone-800">
+            {t(lang, "dayOpenAmountLabel")}
+            <input
+              value={amount}
+              onChange={(e) => setAmount(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              inputMode="numeric"
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
+            />
+          </label>
+          <label className="mt-4 block text-sm font-bold text-stone-800">
+            {t(lang, "dayOpenNoteLabel")}
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value.slice(0, 200))}
+              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 px-4 text-sm font-semibold"
+            />
+          </label>
+          <label className="mt-4 block text-sm font-bold text-stone-800">
+            {t(lang, "shiftFloatOverrideReason")}
+            <input
+              value={correctionReason}
+              onChange={(e) => setCorrectionReason(e.target.value.slice(0, 200))}
+              className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 px-4 text-sm font-semibold"
+            />
+          </label>
+          <label className="mt-4 block text-sm font-bold text-stone-800">
+            {t(lang, "dayOpenCorrectionPinLabel")}
+            <input
+              type="password"
+              inputMode="numeric"
+              value={ownerPin}
+              onChange={(e) => setOwnerPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 text-xl font-black tracking-widest"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={submitOwnerCorrection}
+            className="mt-4 min-h-[52px] w-full rounded-2xl bg-amber-600 font-black text-white"
+          >
+            {t(lang, "dayOpenCorrectionSaveBtn")}
+          </button>
+          <button
+            type="button"
+            onClick={() => submitVoid(true)}
+            className="mt-2 min-h-[44px] w-full rounded-2xl border-2 border-rose-200 font-bold text-rose-800"
+          >
+            {t(lang, "dayOpenVoidBtn")}
+          </button>
+        </section>
+      ) : null}
+
+      {!correctionEnabled && !mutable && active ? (
+        <p className="text-center text-xs font-semibold text-stone-500">
+          {t(lang, "dayOpenEnableCorrectionInSettings")}{" "}
+          <Link to="/settings/cash-drawer" className="font-black text-waka-700 underline">
+            {t(lang, "cashManageDrawerSettings")}
+          </Link>
+        </p>
       ) : null}
 
       {msg ? (

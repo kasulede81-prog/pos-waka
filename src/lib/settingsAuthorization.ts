@@ -84,6 +84,8 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "devRoleOverride",
   "cashVarianceThresholdPct",
   "cashVarianceThresholdUgxFixed",
+  "cashDrawerFormulaVersion",
+  "ownerDayOpenCorrectionAfterSales",
   "wakaShopId",
   "businessType",
   "onboardingDone",
@@ -96,7 +98,10 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "pilotModeEnabled",
 ]);
 
-const OWNER_ONLY_PREFERENCE_KEYS = new Set<keyof ShopPreferences>(["biometricAuthEnabled"]);
+const OWNER_ONLY_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
+  "biometricAuthEnabled",
+  "ownerDayOpenCorrectionAfterSales",
+]);
 
 const OWNER_ACTIVITY_KEYS = new Set<keyof ShopPreferences>(["ownerRisksReviewedAt", "ownerAlertAcknowledgements"]);
 

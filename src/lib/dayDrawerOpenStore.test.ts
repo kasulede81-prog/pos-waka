@@ -71,6 +71,53 @@ describe("day drawer store", () => {
     expect(voidR.errorKey).toBe("dayDrawerLockedAfterSales");
   });
 
+  it("owner can correct day open after sales when setting enabled", () => {
+    usePosStore.setState({
+      preferences: {
+        ...usePosStore.getState().preferences,
+        ownerDayOpenCorrectionAfterSales: true,
+      },
+    });
+    usePosStore.getState().recordDayDrawerOpen({ openingFloatUgx: 100_000 });
+    const dayOpenId = usePosStore.getState().dayDrawerOpens[0]!.id;
+    usePosStore.setState({
+      sales: [
+        {
+          id: "s1",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          subtotalUgx: 1_000,
+          totalUgx: 1_000,
+          cashPaidUgx: 1_000,
+          debtUgx: 0,
+          paymentMethod: "cash",
+          estimatedProfitUgx: 100,
+          lines: [],
+          pendingSync: false,
+          lastSyncError: null,
+          status: "completed",
+        },
+      ],
+    });
+    const badPin = usePosStore.getState().supersedeDayDrawerOpen({
+      previousId: dayOpenId,
+      openingFloatUgx: 120_000,
+      reason: "Counted wrong at open",
+      ownerOverridePin: "9999",
+    });
+    expect(badPin.ok).toBe(false);
+    expect(badPin.errorKey).toBe("dayOpenOverridePinInvalid");
+
+    const ok = usePosStore.getState().supersedeDayDrawerOpen({
+      previousId: dayOpenId,
+      openingFloatUgx: 120_000,
+      reason: "Counted wrong at open",
+      ownerOverridePin: "1234",
+    });
+    expect(ok.ok).toBe(true);
+    expect(usePosStore.getState().dayDrawerOpens.find((r) => r.status === "open")?.openingFloatUgx).toBe(120_000);
+  });
+
   it("cashier shift start requires verification and rejects mismatch without override", () => {
     usePosStore.getState().recordDayDrawerOpen({ openingFloatUgx: 100_000 });
     usePosStore.setState({ sessionActor: ACTOR_CASHIER });

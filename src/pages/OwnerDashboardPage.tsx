@@ -6,17 +6,8 @@ import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveN
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { buildOwnerDashboardData, buildOwnerSummaryLines } from "../lib/ownerDashboardData";
 import { useExpectedDrawerCashForBounds } from "../hooks/useDrawerCashForDay";
-import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
-import { buildOwnerStaffPerformanceRows } from "../lib/ownerStaffMetrics";
-import { canRecordCashExpenses } from "../lib/cashExpenses";
-import { useSessionActor } from "../context/SessionActorContext";
-import { OwnerBusinessTodaySection } from "../components/owner/OwnerBusinessTodaySection";
-import { OwnerStaffPerformanceSection } from "../components/owner/OwnerStaffPerformanceSection";
-import { OwnerInventoryHealthSection } from "../components/owner/OwnerInventoryHealthSection";
-import { OwnerQuickActionsRow } from "../components/owner/OwnerQuickActionsRow";
 import { OwnerDashboardHeroCard } from "../components/owner/OwnerDashboardHeroCard";
 import { OwnerAttentionCenterSection } from "../components/owner/OwnerAttentionCenterSection";
 import { OwnerIntegrityStrip } from "../components/owner/OwnerIntegrityStrip";
@@ -25,25 +16,12 @@ import { OwnerCashControlSection } from "../components/owner/OwnerCashControlSec
 import { OwnerInventoryRiskSection } from "../components/owner/OwnerInventoryRiskSection";
 import { OwnerFinancialControlSection } from "../components/owner/OwnerFinancialControlSection";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
-import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
-import { isCompletedSale } from "../lib/saleStatus";
-import { getCompletedFinancialsFromScoped } from "../lib/financialMetrics";
 import { selectedDayKeyForFilter, formatDateFilterChipDay } from "../lib/dateFilterLabels";
-import { timedComputation } from "../lib/performanceMetrics";
-import { buildSalesFingerprint, getCachedComputation } from "../lib/computationResultCache";
-import { filterAuditLogsInBounds } from "../lib/ownerCommandCenter";
 import { getCachedOwnerCommandCenterBundle } from "../lib/ownerDashboardCommandCenter";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { computeSyncSalesStats } from "../offline/cloudSync";
 
-function pulseLabel(lang: Language, pulse: ReturnType<typeof buildOwnerDashboardData>["pulse"]): string {
-  if (pulse === "strong") return t(lang, "ownerPulseStrong");
-  if (pulse === "steady") return t(lang, "ownerPulseSteady");
-  return t(lang, "ownerPulseWatch");
-}
-
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
-  const actor = useSessionActor();
   const sync = useSyncStatus();
   const acknowledgeOwnerAlert = usePosStore((s) => s.acknowledgeOwnerAlert);
   const {
@@ -70,7 +48,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const preferences = usePosStore((s) => s.preferences);
   const acknowledgements = preferences.ownerAlertAcknowledgements ?? [];
-  const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const voidRecords = usePosStore((s) => s.voidRecords);
@@ -88,43 +65,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     if (filter.kind === "preset" && filter.preset === "this_month") return t(lang, "dateFilterThisMonth");
     return t(lang, "dateFilterToday");
   }, [filter, lang]);
-
-  const dashboard = useMemo(() => {
-    const fp = `${buildSalesFingerprint(sales)}:${bounds.fromKey}:${bounds.toKey}:${products.length}:${auditLogs.length}:${reportingReturnRecords.length}:${reportingVoidRecords.length}:${dayCloses.length}:${heroExpectedCash}:${hospitalityMode}:${pharmacyMode}`;
-    return getCachedComputation("buildOwnerDashboardData", fp, () =>
-      timedComputation("buildOwnerDashboardData", () =>
-        buildOwnerDashboardData({
-          lang,
-          bounds,
-          sales,
-          products,
-          auditLogs,
-          returnRecords: reportingReturnRecords,
-          voidRecords: reportingVoidRecords,
-          dayCloses,
-          preferences,
-          debtPayments,
-          expectedCashUgx: heroExpectedCash,
-          hospitalityMode,
-          pharmacyMode,
-        }),
-      ),
-    );
-  }, [
-    lang,
-    bounds,
-    sales,
-    products,
-    auditLogs,
-    reportingReturnRecords,
-    reportingVoidRecords,
-    dayCloses,
-    preferences,
-    debtPayments,
-    heroExpectedCash,
-    hospitalityMode,
-    pharmacyMode,
-  ]);
 
   const syncStats = useMemo(() => computeSyncSalesStats(sales), [sales]);
 
@@ -148,8 +88,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         auditLogs,
         voidRecords: reportingVoidRecords,
         returnRecords: reportingReturnRecords,
-        ownerAlertsResolved: dashboard.ownerAlertsResolved,
-        riskCards: dashboard.riskCards,
+        preferences,
         acknowledgements,
         expectedCashUgx: heroExpectedCash,
         pharmacyMode,
@@ -174,8 +113,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       auditLogs,
       reportingVoidRecords,
       reportingReturnRecords,
-      dashboard.ownerAlertsResolved,
-      dashboard.riskCards,
+      preferences,
       acknowledgements,
       heroExpectedCash,
       pharmacyMode,
@@ -184,50 +122,14 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     ],
   );
 
-  const heroFinancials = useMemo(() => {
-    const filteredSales = sales.filter((s) => isCompletedSale(s) && saleMatchesFilter(s, bounds));
-    const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
-    const filteredReturns = allReturns.filter((r) => returnMatchesFilter(r, bounds));
-    return getCompletedFinancialsFromScoped(filteredSales, filteredReturns, products);
-  }, [sales, bounds, products, includeArchived, returnRecords, archivedReturnRecords]);
-
-  const { summaryLines, waLine, trendLine } = useMemo(
-    () => buildOwnerSummaryLines(lang, dashboard),
-    [lang, dashboard],
-  );
-
-  const { stats, fastMovers, cashierPerf, lowStock, pulse } = dashboard;
-
-  const periodAuditLogs = useMemo(
-    () => filterAuditLogsInBounds(auditLogs, bounds),
-    [auditLogs, bounds],
-  );
-
-  const staffRows = useMemo(
-    () => buildOwnerStaffPerformanceRows(lang, dashboard.trustRows, cashierPerf, periodAuditLogs),
-    [lang, dashboard.trustRows, cashierPerf, periodAuditLogs],
-  );
-
-  const totalDebtUgx = useMemo(
-    () => customers.reduce((a, c) => a + c.debtBalanceUgx, 0),
-    [customers],
-  );
-
-  const selectedDay = selectedDayKeyForFilter(filter);
-  const heroCountedCash = useMemo(() => {
-    if (!bounds.isSingleDay) return null;
-    const key = selectedDay ?? bounds.toKey;
-    const close = dayCloses.find((c) => c.dateKey === key && !c.supersededAt);
-    return close?.countedCashUgx ?? null;
-  }, [bounds.isSingleDay, selectedDay, bounds.toKey, dayCloses]);
-
-  const showRecordExpense = canRecordCashExpenses(actor.role, preferences);
   const onAcknowledge = useCallback(
     (alertId: string) => {
       acknowledgeOwnerAlert(alertId);
     },
     [acknowledgeOwnerAlert],
   );
+
+  const { overview } = commandCenter;
 
   return (
     <div className="space-y-4 pb-8">
@@ -238,11 +140,11 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <OwnerDashboardHeroCard
         lang={lang}
-        salesUgx={heroFinancials.revenueUgx}
-        profitUgx={heroFinancials.profitUgx}
+        salesUgx={overview.revenueUgx}
+        profitUgx={overview.profitUgx}
         expectedCashUgx={heroExpectedCash}
-        saleCount={heroFinancials.transactionCount}
-        countedCashUgx={heroCountedCash}
+        saleCount={overview.transactionCount}
+        countedCashUgx={overview.countedCashUgx}
         filter={filter}
         onFilterChange={setFilter}
       />
@@ -259,8 +161,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
-
-      <OwnerIntegrityStrip lang={lang} signals={commandCenter.integritySignals} />
 
       <OwnerAttentionCenterSection
         lang={lang}
@@ -281,36 +181,15 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         periodLabel={periodLabel}
       />
 
+      <OwnerInventoryRiskSection lang={lang} inventory={commandCenter.inventory} />
+
       <OwnerFinancialControlSection
         lang={lang}
         financial={commandCenter.financial}
         periodLabel={periodLabel}
       />
 
-      <OwnerInventoryRiskSection lang={lang} inventory={commandCenter.inventory} />
-
-      <OwnerBusinessTodaySection
-        lang={lang}
-        stats={stats}
-        trendLine={trendLine}
-        pulseLabel={pulseLabel(lang, pulse)}
-        customersCount={customers.length}
-        totalDebtUgx={totalDebtUgx}
-        fastMovers={fastMovers}
-        summaryLines={summaryLines}
-        waLine={waLine}
-      />
-
-      <OwnerStaffPerformanceSection
-        lang={lang}
-        rows={staffRows}
-        periodFromKey={bounds.fromKey}
-        periodToKey={bounds.toKey}
-      />
-
-      <OwnerInventoryHealthSection lang={lang} lowStock={lowStock} fastMovers={fastMovers} />
-
-      <OwnerQuickActionsRow lang={lang} showRecordExpense={showRecordExpense} />
+      <OwnerIntegrityStrip lang={lang} signals={commandCenter.integritySignals} />
     </div>
   );
 }

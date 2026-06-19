@@ -1101,6 +1101,8 @@ export type ShopPreferences = {
   discountMaxPercentThreshold?: number;
   /** Cash drawer reconciliation formula — undefined = v1 (legacy dual float). New shops default v2. */
   cashDrawerFormulaVersion?: CashDrawerFormulaVersion;
+  /** Owner may supersede/void day open after first sale with PIN + reason (formula v2). */
+  ownerDayOpenCorrectionAfterSales?: boolean;
 };
 
 export type SyncOperationKind =

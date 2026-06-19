@@ -14,6 +14,7 @@ export function createDefaultPreferences(): ShopPreferences {
     cashVarianceThresholdPct: 5,
     cashVarianceThresholdUgxFixed: 10_000,
     cashDrawerFormulaVersion: "v2",
+    ownerDayOpenCorrectionAfterSales: false,
     lastAutoBackupDateKey: undefined,
     activeBranchId: null,
     branchDisplayName: null,

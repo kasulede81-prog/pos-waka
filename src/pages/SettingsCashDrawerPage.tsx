@@ -20,6 +20,9 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const [formula, setFormula] = useState<CashDrawerFormulaVersion>(
     resolveCashDrawerFormulaVersion(preferences),
   );
+  const [ownerCorrection, setOwnerCorrection] = useState(
+    preferences.ownerDayOpenCorrectionAfterSales === true,
+  );
   const [saved, setSaved] = useState(false);
 
   if (!hasPermission(actor.role, "settings.shop")) {
@@ -33,6 +36,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
       cashVarianceThresholdPct: pctN,
       cashVarianceThresholdUgxFixed: fixedN,
       cashDrawerFormulaVersion: formula,
+      ownerDayOpenCorrectionAfterSales: ownerCorrection,
     });
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2500);
@@ -82,6 +86,20 @@ export function SettingsCashDrawerPage({ lang }: Props) {
             ))}
           </div>
         </fieldset>
+        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <input
+            type="checkbox"
+            checked={ownerCorrection}
+            onChange={(e) => setOwnerCorrection(e.target.checked)}
+            className="mt-1 h-5 w-5 shrink-0 rounded border-stone-300"
+          />
+          <span>
+            <span className="block text-sm font-black text-stone-900">{t(lang, "cashSettingsOwnerDayOpenCorrection")}</span>
+            <span className="mt-1 block text-xs font-semibold text-stone-600">
+              {t(lang, "cashSettingsOwnerDayOpenCorrectionHint")}
+            </span>
+          </span>
+        </label>
         <button
           type="button"
           onClick={save}

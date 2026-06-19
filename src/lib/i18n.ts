@@ -2121,6 +2121,21 @@ const en: Dict = {
   dayOpenHubAlertTitle: "Open today's cash drawer",
   dayOpenHubAlertSub: "Count the physical drawer and record the opening float before selling.",
   dayOpenLockedHint: "Day open is locked after the first sale. Use cash movements to adjust the drawer.",
+  dayOpenLockedHintWithCorrection:
+    "Day open is locked after the first sale. Owner can correct below with PIN and reason, or use cash movements.",
+  dayOpenCorrectionSectionTitle: "Owner correction",
+  dayOpenCorrectionSectionSub: "Requires owner PIN and a written reason. Logged in audit history.",
+  dayOpenCorrectionPinLabel: "Owner PIN",
+  dayOpenCorrectionSaveBtn: "Save corrected opening float",
+  dayOpenCorrectionSuccess: "Opening float corrected and logged.",
+  dayOpenEnableCorrectionInSettings: "Enable owner day-open correction in",
+  dayOpenOverridePinRequired: "Enter owner PIN to correct day open.",
+  dayOpenOverrideReasonRequired: "Enter a reason (at least 3 characters).",
+  dayOpenOverridePinInvalid: "Owner PIN incorrect or not authorized.",
+  dayOpenOverrideOwnerOnly: "Only the owner PIN can correct day open after sales.",
+  cashSettingsOwnerDayOpenCorrection: "Allow owner to correct day open after sales",
+  cashSettingsOwnerDayOpenCorrectionHint:
+    "When on, the owner can change today’s opening float after the first sale using PIN + reason. Off by default — use cash movements instead.",
   dayOpenVoidBtn: "Void day open",
   dayOpenSupersedeBtn: "Correct amount",
   dayOpenActiveLabel: "Today's day open",
@@ -3752,7 +3767,7 @@ const en: Dict = {
   ownerAttentionActionSuppliers: "Suppliers",
   ownerAttentionActionDebts: "Customer debts",
 
-  ownerIntegrityTitle: "System health",
+  ownerIntegrityTitle: "Operations & integrity",
   ownerIntegritySub: "Integrity signals — no need to open Settings to spot problems.",
   ownerIntegrityDebt: "Debt ledger",
   ownerIntegrityInventory: "Inventory ledger",
@@ -3772,7 +3787,7 @@ const en: Dict = {
   ownerIntegrityStatusWarning: "Warning",
   ownerIntegrityStatusCritical: "Critical",
 
-  ownerShiftTitle: "Shift accountability",
+  ownerShiftTitle: "Staff control",
   ownerShiftEmpty: "No shifts in this period.",
   ownerShiftActive: "On shift",
   ownerShiftRepeat: "Repeat shortage",
@@ -3815,7 +3830,7 @@ const en: Dict = {
   ownerCashViewPosition: "Cash position",
   ownerCashViewClose: "Close day",
 
-  ownerInventoryRiskTitle: "Inventory risk",
+  ownerInventoryRiskTitle: "Inventory control",
   ownerInventoryNegative: "Negative stock",
   ownerInventoryOos: "Out of stock",
   ownerInventoryLow: "Low stock",

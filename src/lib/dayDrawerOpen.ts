@@ -13,6 +13,7 @@ import type {
 import { dateKeyKampala } from "./datesUg";
 import { revenueSalesOnDay } from "./financialMetrics";
 import { sumAdjustmentsByType } from "./cashDrawerLedger";
+import { resolveFloatVerifyOverride } from "./managerFloatVerify";
 
 export function resolveCashDrawerFormulaVersion(
   preferences: Pick<ShopPreferences, "cashDrawerFormulaVersion">,
@@ -41,6 +42,59 @@ export function completedSalesCountOnDay(sales: Sale[], day: string): number {
 
 export function isDayDrawerOpenMutable(sales: Sale[], dateKey: string): boolean {
   return completedSalesCountOnDay(sales, dateKey) === 0;
+}
+
+export function isOwnerDayOpenCorrectionAfterSalesEnabled(
+  preferences: Pick<ShopPreferences, "ownerDayOpenCorrectionAfterSales">,
+): boolean {
+  return preferences.ownerDayOpenCorrectionAfterSales === true;
+}
+
+/** Locked day open may be corrected when shop setting is on and owner PIN verifies. */
+export function canRequestOwnerDayOpenCorrection(
+  sales: Sale[],
+  dateKey: string,
+  preferences: Pick<ShopPreferences, "ownerDayOpenCorrectionAfterSales">,
+): boolean {
+  return !isDayDrawerOpenMutable(sales, dateKey) && isOwnerDayOpenCorrectionAfterSalesEnabled(preferences);
+}
+
+export type OwnerDayOpenCorrectionAuth = {
+  managerUserId: string;
+  managerLabel: string;
+  reason: string;
+};
+
+export function verifyOwnerDayOpenCorrection(input: {
+  pin: string;
+  reason: string;
+  preferences: ShopPreferences;
+  sessionRole: import("../types").UserRole;
+  sessionUserId: string;
+  sessionLabel: string;
+}): { ok: true; auth: OwnerDayOpenCorrectionAuth } | { ok: false; errorKey: string } {
+  const reason = input.reason.trim();
+  if (reason.length < 3) return { ok: false, errorKey: "dayOpenOverrideReasonRequired" };
+  const pin = input.pin.trim();
+  if (!pin) return { ok: false, errorKey: "dayOpenOverridePinRequired" };
+  const override = resolveFloatVerifyOverride(
+    pin,
+    input.preferences,
+    input.sessionRole,
+    input.sessionUserId,
+    input.sessionLabel,
+  );
+  if (!override.ok || override.role !== "owner") {
+    return { ok: false, errorKey: "dayOpenOverridePinInvalid" };
+  }
+  return {
+    ok: true,
+    auth: {
+      managerUserId: override.actorUserId,
+      managerLabel: override.actorLabel,
+      reason,
+    },
+  };
 }
 
 /** Legacy v1: adjustments + shift floats. v2: active DayDrawerOpen only. */

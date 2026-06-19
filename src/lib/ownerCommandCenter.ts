@@ -15,6 +15,7 @@ import type {
   ReturnRecord,
   Sale,
   ShiftRecord,
+  ShopPreferences,
   Supplier,
   VoidRecord,
 } from "../types";
@@ -178,13 +179,18 @@ export type OwnerCommandCenterInput = {
   auditLogs: AuditLogEntry[];
   voidRecords: VoidRecord[];
   returnRecords: ReturnRecord[];
-  ownerAlertsResolved: OwnerAlert[];
-  riskCards: OwnerRiskCard[];
+  preferences: ShopPreferences;
   acknowledgements: OwnerAlertAcknowledgement[];
   expectedCashUgx: number;
   pharmacyMode: boolean;
   syncPendingCount: number;
   syncErrorCount: number;
+};
+
+/** Internal — alerts and risk cards are built inside the command center bundle. */
+export type OwnerCommandCenterAttentionInput = OwnerCommandCenterInput & {
+  ownerAlertsResolved: OwnerAlert[];
+  riskCards: OwnerRiskCard[];
 };
 
 type ReadinessStatus = "pass" | "warning" | "fail";
@@ -441,7 +447,7 @@ export function buildSupplierOwedAttentionItems(suppliers: Supplier[]): Attentio
 }
 
 export function buildAttentionCenter(
-  input: OwnerCommandCenterInput,
+  input: OwnerCommandCenterAttentionInput,
   integrity: OwnerDashboardIntegritySnapshot,
 ): {
   critical: AttentionItem[];

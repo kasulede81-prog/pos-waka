@@ -445,8 +445,13 @@ export type PosState = {
     openingFloatUgx: number;
     note?: string;
     reason?: string;
+    ownerOverridePin?: string;
   }) => { ok: boolean; errorKey?: string; dayOpenId?: string };
-  voidDayDrawerOpen: (input: { dayOpenId: string; reason: string }) => { ok: boolean; errorKey?: string };
+  voidDayDrawerOpen: (input: {
+    dayOpenId: string;
+    reason: string;
+    ownerOverridePin?: string;
+  }) => { ok: boolean; errorKey?: string };
   endActiveShift: (actorUserId?: string) => void;
   logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
@@ -4524,6 +4529,12 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : (base.discountMaxPercentThreshold ?? 10),
     cashDrawerFormulaVersion:
       p.cashDrawerFormulaVersion === "v2" ? "v2" : p.cashDrawerFormulaVersion === "v1" ? "v1" : (base.cashDrawerFormulaVersion ?? undefined),
+    ownerDayOpenCorrectionAfterSales:
+      p.ownerDayOpenCorrectionAfterSales === true
+        ? true
+        : p.ownerDayOpenCorrectionAfterSales === false
+          ? false
+          : (base.ownerDayOpenCorrectionAfterSales ?? false),
   };
 }
 

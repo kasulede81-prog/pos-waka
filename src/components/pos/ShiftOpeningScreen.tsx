@@ -14,6 +14,7 @@ import {
   floatVerificationWithinTolerance,
   isDayDrawerOpenMutable,
   isFormulaV2,
+  isOwnerDayOpenCorrectionAfterSalesEnabled,
   latestClosedShiftForDay,
   shiftVerificationBaselineUgx,
 } from "../../lib/dayDrawerOpen";
@@ -248,7 +249,10 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
         open={overrideOpen}
         expectedUgx={baseline}
         verifiedUgx={verifiedN}
-        canCorrectDayOpen={isDayDrawerOpenMutable(sales, todayKey)}
+        canCorrectDayOpen={
+          isDayDrawerOpenMutable(sales, todayKey) ||
+          isOwnerDayOpenCorrectionAfterSalesEnabled(preferences)
+        }
         onClose={() => setOverrideOpen(false)}
         onConfirm={(input) => {
           if (input.action === "reject") {
