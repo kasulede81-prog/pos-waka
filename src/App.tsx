@@ -100,9 +100,7 @@ import { useUiLanguage } from "./hooks/useUiLanguage";
 const OwnerDashboardPage = lazy(() =>
   import("./pages/OwnerDashboardPage").then((m) => ({ default: m.OwnerDashboardPage })),
 );
-const StaffActivityPage = lazy(() =>
-  import("./pages/StaffActivityPage").then((m) => ({ default: m.StaffActivityPage })),
-);
+// Staff activity retained at /office/audit-center (Investigation)
 const AuditCenterPage = lazy(() =>
   import("./pages/AuditCenterPage").then((m) => ({ default: m.AuditCenterPage })),
 );
@@ -635,13 +633,7 @@ function AppRoutes() {
             />
             <Route
               path="owner/activity"
-              element={
-                <RoleProtectedRoute permission="owner.activity">
-                  <Suspense fallback={<LazyWait />}>
-                    <StaffActivityPage lang={lang} />
-                  </Suspense>
-                </RoleProtectedRoute>
-              }
+              element={<Navigate to="/office/audit-center" replace />}
             />
             <Route
               path="office/audit-center"

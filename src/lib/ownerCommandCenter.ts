@@ -41,7 +41,16 @@ import {
   type OwnerRiskCard,
 } from "./ownerRiskDashboard";
 import type { OwnerDashboardIntegritySnapshot } from "./ownerDashboardIntegrityCache";
-import type { DebtPayment, StockMovement } from "../types";
+import {
+  buildDayCloseVarianceAttentionItems,
+  buildHighRefundAttentionItems,
+  buildLargeWithdrawalAttentionItems,
+  buildQueueHealthAttentionItems,
+  buildRepeatOffenderAttentionItems,
+  buildStaleDeviceAttentionItems,
+  buildSyncConflictAttentionItems,
+} from "./ownerCommandCenterBuilders";
+import type { DebtPayment, Purchase, StockMovement, SupplierPayment } from "../types";
 
 export type AttentionSeverity = "critical" | "warning" | "information";
 
@@ -179,12 +188,17 @@ export type OwnerCommandCenterInput = {
   auditLogs: AuditLogEntry[];
   voidRecords: VoidRecord[];
   returnRecords: ReturnRecord[];
+  purchases: Purchase[];
+  supplierPayments: SupplierPayment[];
   preferences: ShopPreferences;
   acknowledgements: OwnerAlertAcknowledgement[];
   expectedCashUgx: number;
   pharmacyMode: boolean;
   syncPendingCount: number;
   syncErrorCount: number;
+  syncHealth?: import("./syncMeta").SyncHealthMeta;
+  devicesOnline?: number;
+  devicesStale?: number;
 };
 
 /** Internal — alerts and risk cards are built inside the command center bundle. */
@@ -449,6 +463,7 @@ export function buildSupplierOwedAttentionItems(suppliers: Supplier[]): Attentio
 export function buildAttentionCenter(
   input: OwnerCommandCenterAttentionInput,
   integrity: OwnerDashboardIntegritySnapshot,
+  shiftRowsForRepeat?: ShiftAccountabilityRow[],
 ): {
   critical: AttentionItem[];
   warnings: AttentionItem[];
@@ -456,6 +471,7 @@ export function buildAttentionCenter(
 } {
   const syncErrors = input.syncErrorCount > 0 ? input.syncErrorCount : integrity.syncStats.errorCount;
   const unsynced = input.syncPendingCount > 0 ? input.syncPendingCount : integrity.syncStats.unsyncedCount;
+  const syncHealth = input.syncHealth ?? integrity.syncHealth;
 
   const integrityItems: AttentionItem[] = [];
   if (!integrity.debtIntegrity.ok) {
@@ -481,14 +497,26 @@ export function buildAttentionCenter(
     });
   }
 
+  const repeatRows = shiftRowsForRepeat ?? [];
+
   const all: AttentionItem[] = [
     ...input.ownerAlertsResolved.map(ownerAlertToAttentionItem),
     ...input.riskCards.map((c) => riskCardToAttentionItem(input.lang, c, input.bounds)),
     ...buildCountVarianceAttentionItems(input.inventoryCountSessions),
     ...buildSyncAttentionItems(syncErrors, unsynced),
+    ...buildSyncConflictAttentionItems(),
+    ...buildQueueHealthAttentionItems(syncHealth, input.syncPendingCount),
+    ...buildStaleDeviceAttentionItems(input.devicesStale ?? 0),
     ...integrityItems,
     ...buildDrawerConflictAttentionItems(integrity),
     ...buildSupplierOwedAttentionItems(input.suppliers),
+    ...buildShiftShortageAttentionItems(input.shifts, input.bounds, input.lang),
+    ...buildFloatMismatchAttentionItems(input.shifts, input.bounds, input.lang),
+    ...buildNegativeStockAttentionItems(input.products),
+    ...buildDayCloseVarianceAttentionItems(input.dayCloses, input.bounds),
+    ...buildRepeatOffenderAttentionItems(repeatRows),
+    ...buildLargeWithdrawalAttentionItems(input.cashDrawerAdjustments, input.bounds, input.lang),
+    ...buildHighRefundAttentionItems(input.returnRecords, input.bounds),
   ];
 
   const seen = new Set<string>();

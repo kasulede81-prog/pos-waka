@@ -6,7 +6,7 @@ import type { DateFilterPreset, DateFilterValue } from "../../lib/dateFilters";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { formatDateFilterViewingLabel } from "../../lib/dateFilterLabels";
 
-const PRESETS: DateFilterPreset[] = ["today", "this_week", "this_month"];
+const PRESETS: DateFilterPreset[] = ["today", "yesterday", "this_week", "this_month"];
 
 export function formatHistoryPickerDate(dateKey: string, lang: Language): string {
   const parts = dateKey.split("-").map(Number);
@@ -44,9 +44,14 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
 
   const presetLabel = (p: DateFilterPreset) => {
     if (p === "today") return t(lang, "dateFilterPresetToday");
+    if (p === "yesterday") return t(lang, "dateFilterPresetYesterday");
     if (p === "this_week") return t(lang, "dateFilterPresetThisWeek");
     return t(lang, "dateFilterPresetThisMonth");
   };
+
+  const rangeFrom =
+    filter.kind === "range" ? filter.fromKey : filter.kind === "day" ? filter.dateKey : customDayKey;
+  const rangeTo = filter.kind === "range" ? filter.toKey : rangeFrom;
 
   return (
     <div className="relative border-t border-white/10 bg-waka-800/35 px-3 py-2">
@@ -107,6 +112,44 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
                 }}
               />
             </label>
+            <div className="mt-3 space-y-2 rounded-xl border border-stone-200 bg-stone-50 p-3">
+              <p className="text-xs font-black uppercase tracking-wide text-stone-500">
+                {t(lang, "dateFilterCustomRange")}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  className="min-h-[36px] flex-1 rounded-lg border border-stone-200 bg-white px-2 text-xs font-semibold"
+                  value={rangeFrom}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    onFilterChange({ kind: "range", fromKey: v, toKey: rangeTo >= v ? rangeTo : v });
+                  }}
+                />
+                <span className="text-xs font-bold text-stone-500">→</span>
+                <input
+                  type="date"
+                  className="min-h-[36px] flex-1 rounded-lg border border-stone-200 bg-white px-2 text-xs font-semibold"
+                  value={rangeTo}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    onFilterChange({ kind: "range", fromKey: rangeFrom <= v ? rangeFrom : v, toKey: v });
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    onFilterChange({ kind: "range", fromKey: rangeFrom, toKey: rangeTo });
+                    setPickerOpen(false);
+                  }}
+                  className="min-h-[36px] rounded-full border border-waka-500 bg-waka-600 px-3 text-xs font-black text-white"
+                >
+                  {t(lang, "dateFilterApplyRange")}
+                </button>
+              </div>
+            </div>
             {footer ? <div className="mt-3 border-t border-stone-100 pt-3">{footer}</div> : null}
           </div>
         </>

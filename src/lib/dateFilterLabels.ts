@@ -24,7 +24,12 @@ export function formatDateFilterViewingLabel(lang: Language, value: DateFilterVa
   if (value.kind === "day") {
     return formatKampalaDayHeading(value.dateKey, lang);
   }
+  if (value.kind === "range") {
+    if (value.fromKey === value.toKey) return formatKampalaDayHeading(value.fromKey, lang);
+    return `${formatKampalaDayHeading(value.fromKey, lang)} – ${formatKampalaDayHeading(value.toKey, lang)}`;
+  }
   if (value.preset === "today") return t(lang, "dateFilterPresetToday");
+  if (value.preset === "yesterday") return t(lang, "dateFilterPresetYesterday");
   if (value.preset === "this_week") return t(lang, "dateFilterPresetThisWeek");
   return t(lang, "dateFilterPresetThisMonth");
 }

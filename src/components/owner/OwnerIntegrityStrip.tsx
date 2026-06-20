@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import type { IntegritySignal } from "../../lib/ownerCommandCenter";
+import type { IntegritySignal } from "../../lib/ownerCommandCenterBuilders";
 
 type Props = {
   lang: Language;

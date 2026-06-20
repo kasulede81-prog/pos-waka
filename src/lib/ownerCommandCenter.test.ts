@@ -95,6 +95,8 @@ describe("ownerCommandCenter", () => {
         cashExpenses: [],
         debtPayments: [],
         stockMovements: [],
+        purchases: [],
+        supplierPayments: [],
         inventoryCountSessions: [],
         auditLogs: [],
         voidRecords: [],

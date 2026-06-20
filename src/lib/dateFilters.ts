@@ -8,11 +8,12 @@ import { dateKeyKampala, monthKeyKampala, saleReportingDayKey, weekStartKeyKampa
 import { isRevenueSale } from "./financialMetrics";
 import type { RevenueSalesIndex } from "./financialMetrics";
 
-export type DateFilterPreset = "today" | "this_week" | "this_month";
+export type DateFilterPreset = "today" | "yesterday" | "this_week" | "this_month";
 
 export type DateFilterValue =
   | { kind: "preset"; preset: DateFilterPreset }
-  | { kind: "day"; dateKey: string };
+  | { kind: "day"; dateKey: string }
+  | { kind: "range"; fromKey: string; toKey: string };
 
 export type DateFilterBounds = {
   fromKey: string;
@@ -45,9 +46,16 @@ export function resolveDateFilterBounds(value: DateFilterValue, now: Date = new 
   if (value.kind === "day") {
     return { fromKey: value.dateKey, toKey: value.dateKey, isSingleDay: true };
   }
+  if (value.kind === "range") {
+    const fromKey = value.fromKey <= value.toKey ? value.fromKey : value.toKey;
+    const toKey = value.fromKey <= value.toKey ? value.toKey : value.fromKey;
+    return { fromKey, toKey, isSingleDay: fromKey === toKey };
+  }
   switch (value.preset) {
     case "today":
       return { fromKey: today, toKey: today, isSingleDay: true };
+    case "yesterday":
+      return { fromKey: addDaysToDateKey(today, -1), toKey: addDaysToDateKey(today, -1), isSingleDay: true };
     case "this_week":
       return { fromKey: weekStartKeyKampala(now), toKey: today, isSingleDay: false };
     case "this_month":

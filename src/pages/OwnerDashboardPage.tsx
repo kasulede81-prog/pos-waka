@@ -15,14 +15,17 @@ import { OwnerShiftAccountabilitySection } from "../components/owner/OwnerShiftA
 import { OwnerCashControlSection } from "../components/owner/OwnerCashControlSection";
 import { OwnerInventoryRiskSection } from "../components/owner/OwnerInventoryRiskSection";
 import { OwnerFinancialControlSection } from "../components/owner/OwnerFinancialControlSection";
+import { OwnerLiveOperationsSection } from "../components/owner/OwnerLiveOperationsSection";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
-import { selectedDayKeyForFilter, formatDateFilterChipDay } from "../lib/dateFilterLabels";
+import { formatDateFilterViewingLabel } from "../lib/dateFilterLabels";
 import { getCachedOwnerCommandCenterBundle } from "../lib/ownerDashboardCommandCenter";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { computeSyncSalesStats } from "../offline/cloudSync";
+import { useOwnerDeviceHealth } from "../hooks/useOwnerDeviceHealth";
 
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const sync = useSyncStatus();
+  const deviceHealth = useOwnerDeviceHealth();
   const acknowledgeOwnerAlert = usePosStore((s) => s.acknowledgeOwnerAlert);
   const {
     filter,
@@ -38,6 +41,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
   const suppliers = usePosStore((s) => s.suppliers);
+  const purchases = usePosStore((s) => s.purchases);
+  const supplierPayments = usePosStore((s) => s.supplierPayments);
   const debtPayments = usePosStore((s) => s.debtPayments);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const dayCloses = usePosStore((s) => s.dayCloses);
@@ -58,13 +63,7 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const reportingReturnRecords = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
   const heroExpectedCash = useExpectedDrawerCashForBounds(bounds);
 
-  const periodLabel = useMemo(() => {
-    const day = selectedDayKeyForFilter(filter);
-    if (day) return formatDateFilterChipDay(day, lang);
-    if (filter.kind === "preset" && filter.preset === "this_week") return t(lang, "dateFilterThisWeek");
-    if (filter.kind === "preset" && filter.preset === "this_month") return t(lang, "dateFilterThisMonth");
-    return t(lang, "dateFilterToday");
-  }, [filter, lang]);
+  const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [filter, lang]);
 
   const syncStats = useMemo(() => computeSyncSalesStats(sales), [sales]);
 
@@ -88,12 +87,17 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         auditLogs,
         voidRecords: reportingVoidRecords,
         returnRecords: reportingReturnRecords,
+        purchases,
+        supplierPayments,
         preferences,
         acknowledgements,
         expectedCashUgx: heroExpectedCash,
         pharmacyMode,
         syncPendingCount: sync.pendingCount,
         syncErrorCount: syncStats.errorCount,
+        syncHealth: sync.health,
+        devicesOnline: deviceHealth.devicesOnline,
+        devicesStale: deviceHealth.devicesStale,
       }),
     [
       lang,
@@ -113,12 +117,17 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       auditLogs,
       reportingVoidRecords,
       reportingReturnRecords,
+      purchases,
+      supplierPayments,
       preferences,
       acknowledgements,
       heroExpectedCash,
       pharmacyMode,
       sync.pendingCount,
       syncStats.errorCount,
+      sync.health,
+      deviceHealth.devicesOnline,
+      deviceHealth.devicesStale,
     ],
   );
 
@@ -132,10 +141,10 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const { overview } = commandCenter;
 
   return (
-    <div className="space-y-4 pb-8">
+    <div className="space-y-3 pb-8 sm:space-y-4">
       <div>
-        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{t(lang, "ownerDashboardTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "ownerDashboardCommandSub")}</p>
+        <h1 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">{t(lang, "ownerDashboardTitle")}</h1>
+        <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">{t(lang, "ownerDashboardCommandSub")}</p>
       </div>
 
       <OwnerDashboardHeroCard
@@ -172,6 +181,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
         periodLabel={periodLabel}
         onAcknowledge={onAcknowledge}
       />
+
+      <OwnerLiveOperationsSection lang={lang} live={commandCenter.liveOps} />
 
       <OwnerCashControlSection lang={lang} cash={commandCenter.cash} />
 

@@ -5,7 +5,6 @@ import {
   Users,
   BarChart3,
   LayoutDashboard,
-  ScrollText,
   Cloud,
   Share2,
   TrendingUp,
@@ -292,10 +291,10 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
               Icon={Shield}
             />
             <OfficeNavCard
-              to="/owner/activity"
-              title={t(lang, "officeCardActivity")}
-              subtitle={t(lang, "officeCardActivitySub")}
-              Icon={ScrollText}
+              to="/settings/devices"
+              title={t(lang, "officeCardDevicesSync")}
+              subtitle={t(lang, "officeCardDevicesSyncSub")}
+              Icon={Cloud}
             />
           </>
         ) : null}

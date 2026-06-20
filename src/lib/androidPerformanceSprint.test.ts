@@ -163,6 +163,8 @@ describe("android performance sprint", () => {
           cashDrawerAdjustments: [],
           cashExpenses: [],
           debtPayments: [],
+          purchases: [],
+          supplierPayments: [],
           stockMovements: [],
           inventoryCountSessions: [],
           auditLogs: [],

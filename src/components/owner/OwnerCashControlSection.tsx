@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import type { OwnerCashControlSnapshot } from "../../lib/ownerCommandCenter";
+import type { OwnerCashExtended } from "../../lib/ownerCommandCenterBuilders";
 
 type Props = {
   lang: Language;
-  cash: OwnerCashControlSnapshot;
+  cash: OwnerCashExtended;
 };
 
 function formatTs(iso: string, lang: Language): string {
@@ -36,36 +36,19 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
         ) : null}
       </div>
 
-      <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashDrawerOpen")}</dt>
-          <dd className="mt-0.5 text-sm font-black text-stone-900">
-            {cash.drawerOpen ? t(lang, "ownerCashDrawerOpenYes") : t(lang, "ownerCashDrawerOpenNo")}
-          </dd>
-          {cash.openedByLabel ? (
-            <dd className="text-xs font-semibold text-stone-600">
-              {cash.openedByLabel} · UGX {(cash.openingFloatUgx ?? 0).toLocaleString()}
-            </dd>
-          ) : null}
+      <dl className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerCashExpected")}</dt>
+          <dd className="mt-0.5 text-sm font-black tabular-nums">UGX {cash.periodExpectedCashUgx.toLocaleString()}</dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashPeriodExpected")}</dt>
-          <dd className="mt-0.5 text-sm font-black tabular-nums text-stone-900">
-            UGX {cash.periodExpectedCashUgx.toLocaleString()}
-          </dd>
-          <dd className="text-[11px] font-medium text-stone-500">{t(lang, "ownerCashPeriodExpectedHint")}</dd>
-        </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashLatestCounted")}</dt>
-          <dd className="mt-0.5 text-sm font-black tabular-nums text-stone-900">
+        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerCashCounted")}</dt>
+          <dd className="mt-0.5 text-sm font-black tabular-nums">
             {cash.latestCountedCashUgx != null ? `UGX ${cash.latestCountedCashUgx.toLocaleString()}` : "—"}
           </dd>
-          <dd className="text-[11px] font-medium text-stone-500">
-            {t(lang, "ownerCashLatestCountedHint")} ({cash.latestCountDayKey})
-          </dd>
         </div>
-        <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashLatestDayVariance")}</dt>
+        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerCashDayVariance")}</dt>
           <dd
             className={`mt-0.5 text-sm font-black tabular-nums ${
               cash.latestDayVarianceUgx != null && cash.latestDayVarianceUgx < 0 ? "text-rose-700" : "text-stone-900"
@@ -73,9 +56,47 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
           >
             {cash.latestDayVarianceUgx != null ? `UGX ${cash.latestDayVarianceUgx.toLocaleString()}` : "—"}
           </dd>
-          <dd className="text-[11px] font-medium text-stone-500">{t(lang, "ownerCashLatestDayVarianceHint")}</dd>
         </div>
       </dl>
+
+      <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-lg bg-stone-50 px-2 py-1.5 text-[11px]">
+          <dt className="font-semibold text-stone-500">{t(lang, "ownerCashOwnerInjection")}</dt>
+          <dd className="font-black tabular-nums">UGX {cash.ownerInjectionsUgx.toLocaleString()}</dd>
+        </div>
+        <div className="rounded-lg bg-stone-50 px-2 py-1.5 text-[11px]">
+          <dt className="font-semibold text-stone-500">{t(lang, "ownerCashOwnerWithdrawal")}</dt>
+          <dd className="font-black tabular-nums text-rose-700">UGX {cash.ownerWithdrawalsUgx.toLocaleString()}</dd>
+        </div>
+        <div className="rounded-lg bg-stone-50 px-2 py-1.5 text-[11px]">
+          <dt className="font-semibold text-stone-500">{t(lang, "ownerCashBankDeposit")}</dt>
+          <dd className="font-black tabular-nums">UGX {cash.bankDepositsUgx.toLocaleString()}</dd>
+        </div>
+        <div className="rounded-lg bg-stone-50 px-2 py-1.5 text-[11px]">
+          <dt className="font-semibold text-stone-500">{t(lang, "ownerCashSafeTransfer")}</dt>
+          <dd className="font-black tabular-nums">
+            +{cash.safeTransfersInUgx.toLocaleString()} / −{cash.safeTransfersOutUgx.toLocaleString()}
+          </dd>
+        </div>
+        <div className="rounded-lg bg-stone-50 px-2 py-1.5 text-[11px]">
+          <dt className="font-semibold text-stone-500">{t(lang, "ownerCashExpenses")}</dt>
+          <dd className="font-black tabular-nums">UGX {cash.cashExpensesUgx.toLocaleString()}</dd>
+        </div>
+      </dl>
+
+      {cash.topCashierShortages.length > 0 ? (
+        <div className="mt-3">
+          <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "ownerCashTopShortages")}</p>
+          <ul className="mt-1 space-y-1">
+            {cash.topCashierShortages.map((row) => (
+              <li key={row.userId} className="flex justify-between text-xs font-bold text-rose-900">
+                <span>{row.label}</span>
+                <span className="tabular-nums">UGX {row.shortageUgx.toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {cash.shortageShiftCount > 0 || cash.overageShiftCount > 0 || cash.floatMismatchCount > 0 ? (
         <p className="mt-3 text-xs font-semibold text-stone-600">
