@@ -1,6 +1,7 @@
 import type { Product, ReturnRecord, Sale, UserRole } from "../types";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
 import { costPerBaseUnitUgx, estimatedProfitForLine } from "./sellingEngine";
+import { lineCostForProductQuantity, lineCostFromSaleLine, lineProfitUgx } from "./costPrecision";
 
 /** @deprecated Use resolveProfitVisibility().canProfit — role-only gate without subscription tier. */
 export function canSeeOfficeProfit(role: UserRole, authMode: "supabase" | "local"): boolean {
@@ -65,7 +66,7 @@ export function computeTodayProfitBreakdown(
             ? costPerBaseUnitUgx(product)
             : 0;
       if (unitCost <= 0) linesMissingCost += 1;
-      const lineCost = Math.round(line.quantity * unitCost);
+      const lineCost = lineCostFromSaleLine(line);
       costUgx += lineCost;
       profitUgx += product
         ? estimatedProfitForLine(product, line)
@@ -80,10 +81,12 @@ export function computeTodayProfitBreakdown(
     const product = productById.get(rec.productId);
     const returnUnitCost = product ? costPerBaseUnitUgx(product) : 0;
     if (returnUnitCost <= 0) linesMissingCost += 1;
-    const returnCost = Math.round(qty * returnUnitCost);
+    const returnCost = product
+      ? lineCostForProductQuantity(product, qty, returnUnitCost)
+      : Math.round(qty * returnUnitCost);
     salesUgx -= refundUgx;
     costUgx -= returnCost;
-    profitUgx -= Math.round(refundUgx - returnCost);
+    profitUgx -= lineProfitUgx(refundUgx, returnCost);
   }
 
   salesUgx = computeCanonicalRevenueUgx(todaySales, returnRecords);
@@ -114,13 +117,7 @@ export function computeProfitGroupedByCategory(
     for (const line of sale.lines) {
       if (line.voided) continue;
       const product = productById.get(line.productId);
-      const unitCost =
-        Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
-          ? line.unitCostUgx
-          : product
-            ? costPerBaseUnitUgx(product)
-            : 0;
-      const lineCost = Math.round(line.quantity * unitCost);
+      const lineCost = lineCostFromSaleLine(line);
       const lineProfit = product
         ? estimatedProfitForLine(product, line)
         : Math.round(line.lineTotalUgx - lineCost);
@@ -158,8 +155,10 @@ export function computeProfitGroupedByCategory(
     const refundUgx = Math.max(0, Math.floor(rec.refundAmountUgx));
     if (qty <= 0 || refundUgx <= 0) continue;
     const returnUnitCost = product ? costPerBaseUnitUgx(product) : 0;
-    const returnCost = Math.round(qty * returnUnitCost);
-    const returnProfitImpact = Math.round(refundUgx - returnCost);
+    const returnCost = product
+      ? lineCostForProductQuantity(product, qty, returnUnitCost)
+      : Math.round(qty * returnUnitCost);
+    const returnProfitImpact = lineProfitUgx(refundUgx, returnCost);
     const catRaw = product?.category?.trim() ?? "";
     const categoryKey = catRaw.length > 0 ? catRaw : uncategorizedLabel();
     let catMap = byCategory.get(categoryKey);

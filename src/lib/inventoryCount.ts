@@ -10,6 +10,7 @@ import type {
   StockMovement,
   UserRole,
 } from "../types";
+import { lineCostUgx, normalizeUnitCostUgx } from "./costPrecision";
 import { stableInventoryMovementId } from "./inventoryIntegrity";
 
 export type InventoryCountPermission =
@@ -56,11 +57,12 @@ export function computeInventoryCountLineVariance(input: {
   sellingPricePerUnitUgx: number;
 }): Pick<InventoryCountLine, "varianceQty" | "varianceCostUgx" | "varianceRetailUgx"> {
   const varianceQty = Math.round((input.countedQty - input.expectedQtySnapshot) * 10000) / 10000;
-  const cost = Math.max(0, Math.floor(input.costPricePerUnitUgx));
+  const cost = normalizeUnitCostUgx(input.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(input.sellingPricePerUnitUgx));
   return {
     varianceQty,
-    varianceCostUgx: Math.round(varianceQty * cost),
+    varianceCostUgx:
+      varianceQty >= 0 ? lineCostUgx(cost, varianceQty) : -lineCostUgx(cost, -varianceQty),
     varianceRetailUgx: Math.round(varianceQty * sell),
   };
 }

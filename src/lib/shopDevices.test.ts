@@ -89,7 +89,7 @@ describe("parsePlanDeviceLimit", () => {
     ).toBe(5);
   });
 
-  it("returns null when features.devices missing (unlimited)", () => {
+  it("falls back to tier default when features.devices missing", () => {
     expect(
       parsePlanDeviceLimit(
         {
@@ -110,6 +110,10 @@ describe("parsePlanDeviceLimit", () => {
         },
         "supabase",
       ),
-    ).toBeNull();
+    ).toBe(4);
+  });
+
+  it("uses effective tier for shops without subscription row", () => {
+    expect(parsePlanDeviceLimit({ kind: "none" }, "supabase")).toBe(1);
   });
 });

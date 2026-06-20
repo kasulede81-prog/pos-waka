@@ -3,14 +3,17 @@ import type {
   CashExpense,
   CashDrawerAdjustment,
   Customer,
+  DayCloseSummary,
   DayDrawerOpen,
   DebtPayment,
+  InventoryCountSession,
   Product,
   Purchase,
   ReturnRecord,
   Sale,
   SaleLine,
   SellingMode,
+  ShiftRecord,
   Supplier,
   SupplierPayment,
 } from "../types";
@@ -54,6 +57,7 @@ import {
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
 import { defaultReceiptDisplayOptions } from "../lib/receiptBranding";
 import { mergeDebtPaymentsFromCloudPull, parseDebtPaymentRows } from "../lib/debtPaymentRecovery";
+import { mergeCustomerFromCloudPull } from "../lib/customerDebtReconciliation";
 import {
   mergeCashDrawerAdjustmentsFromCloudPull,
   parseCashDrawerAdjustmentRows,
@@ -63,7 +67,16 @@ import {
   pullDayDrawerOpensFromRpc,
   syncDayDrawerOpenOperation,
 } from "../lib/dayDrawerOpenCloudSync";
-import { mergeCustomerFromCloudPull } from "../lib/customerDebtReconciliation";
+import { mergeInventoryCountSessionsFromCloudPull } from "../lib/inventoryCountRecovery";
+import {
+  pullInventoryCountSessionsFromRpc,
+  pushInventoryCountSessionToCloud,
+} from "../lib/inventoryCountCloudSync";
+import { mergeShiftsFromCloudPull } from "../lib/shiftRecovery";
+import { pullShiftsFromRpc, pushShiftToCloud } from "../lib/shiftCloudSync";
+import { mergeDayClosesFromCloudPull } from "../lib/dayCloseRecovery";
+import { pullDayClosesFromRpc, pushDayCloseToCloud } from "../lib/dayCloseCloudSync";
+import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
 
 type ShopCtx = { shopId: string; userId: string };
@@ -106,9 +119,9 @@ function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolea
     buying_unit: p.buyingUnit ?? null,
     conversion_rate: p.conversionRate ?? null,
     selling_price_per_unit_ugx: Math.max(0, Math.floor(p.sellingPricePerUnitUgx)),
-    cost_price_per_unit_ugx: Math.max(0, Math.floor(p.costPricePerUnitUgx)),
+    cost_price_per_unit_ugx: Math.max(0, Math.round(p.costPricePerUnitUgx)),
     price_ugx: Math.max(0, Math.floor(p.sellingPricePerUnitUgx)),
-    cost_ugx: Math.max(0, Math.floor(p.costPricePerUnitUgx)),
+    cost_ugx: Math.max(0, Math.round(p.costPricePerUnitUgx)),
     reorder_level: Number(p.minimumStockAlert) || 0,
     minimum_stock_alert: Number(p.minimumStockAlert) || 0,
     sku: productSku(p),
@@ -122,6 +135,9 @@ function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolea
       medicineStrength: p.medicineStrength ?? null,
       medicineForm: p.medicineForm ?? null,
       pharmacyPackaging: p.pharmacyPackaging ?? null,
+      exactCostPricePerUnitUgx: p.costPricePerUnitUgx,
+      buyingPackCostUgx: p.buyingPackCostUgx ?? null,
+      packCostUnitsDepleted: p.packCostUnitsDepleted ?? null,
       wakaClient: true,
     },
     updated_at: p.updatedAt || new Date().toISOString(),
@@ -136,6 +152,8 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
   const id = String(row.id ?? "");
   if (!isUuid(id)) return null;
   const meta = (row.metadata ?? {}) as Record<string, unknown>;
+  const exactMeta = meta.exactCostPricePerUnitUgx;
+  const costFromRow = Number(row.cost_price_per_unit_ugx ?? row.cost_ugx ?? 0);
   const sellingMode = (row.selling_mode as SellingMode) || "unit";
   const expiryRaw = meta.expiryDate ?? meta.expiry_date;
   const strengthRaw = meta.medicineStrength ?? meta.medicine_strength;
@@ -148,7 +166,17 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
     buyingUnit: (row.buying_unit as string | null) ?? null,
     conversionRate: row.conversion_rate != null ? Number(row.conversion_rate) : null,
     sellingPricePerUnitUgx: Math.max(0, Math.floor(Number(row.selling_price_per_unit_ugx ?? row.price_ugx ?? 0))),
-    costPricePerUnitUgx: Math.max(0, Math.floor(Number(row.cost_price_per_unit_ugx ?? row.cost_ugx ?? 0))),
+    costPricePerUnitUgx: normalizeUnitCostUgx(
+      exactMeta != null && Number.isFinite(Number(exactMeta)) ? Number(exactMeta) : costFromRow,
+    ),
+    buyingPackCostUgx:
+      meta.buyingPackCostUgx != null && Number(meta.buyingPackCostUgx) > 0
+        ? normalizePackCostUgx(Number(meta.buyingPackCostUgx))
+        : null,
+    packCostUnitsDepleted:
+      meta.packCostUnitsDepleted != null && Number.isFinite(Number(meta.packCostUnitsDepleted))
+        ? Math.max(0, Math.floor(Number(meta.packCostUnitsDepleted)))
+        : undefined,
     stockOnHand: Number(row.stock_on_hand ?? 0),
     minimumStockAlert: Number(row.minimum_stock_alert ?? row.reorder_level ?? 0),
     category: String(meta.category ?? ""),
@@ -198,7 +226,7 @@ function rowToSaleLine(row: Record<string, unknown>): SaleLine {
     inputMode,
     quantity,
     unitPriceUgx,
-    unitCostUgx: Math.max(0, Math.floor(Number(meta.unitCostUgx ?? 0))),
+    unitCostUgx: normalizeUnitCostUgx(Number(meta.unitCostUgx ?? 0)),
     lineTotalUgx,
     estimatedProfitUgx: Math.max(0, Math.floor(Number(meta.estimatedProfitUgx ?? lineTotalUgx))),
     moneyAmountUgx: row.money_amount_ugx != null ? Math.floor(Number(row.money_amount_ugx)) : null,
@@ -1385,12 +1413,50 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
     case "pending_inventory_counts": {
       const sessionId = String(payload.sessionId ?? "");
       if (!sessionId) return true;
-      usePosStore.setState((s) => ({
-        inventoryCountSessions: s.inventoryCountSessions.map((row) =>
-          row.id === sessionId ? { ...row, pendingSync: false } : row,
-        ),
-      }));
-      return true;
+      const session = usePosStore.getState().inventoryCountSessions.find((r) => r.id === sessionId);
+      if (!session) return true;
+      const ok = await pushInventoryCountSessionToCloud(session, ctx);
+      if (ok) {
+        usePosStore.setState((s) => ({
+          inventoryCountSessions: s.inventoryCountSessions.map((row) =>
+            row.id === sessionId ? { ...row, pendingSync: false } : row,
+          ),
+        }));
+      }
+      return ok;
+    }
+    case "pending_shifts": {
+      const shiftId = String(payload.shiftId ?? "");
+      if (!shiftId) return true;
+      const shift = (usePosStore.getState().preferences.shifts ?? []).find((r) => r.id === shiftId);
+      if (!shift) return true;
+      const ok = await pushShiftToCloud(shift, ctx);
+      if (ok) {
+        usePosStore.setState((s) => ({
+          preferences: {
+            ...s.preferences,
+            shifts: (s.preferences.shifts ?? []).map((row) =>
+              row.id === shiftId ? { ...row, pendingSync: false } : row,
+            ),
+          },
+        }));
+      }
+      return ok;
+    }
+    case "pending_day_closes": {
+      const closeId = String(payload.closeId ?? "");
+      if (!closeId) return true;
+      const close = usePosStore.getState().dayCloses.find((r) => r.id === closeId);
+      if (!close) return true;
+      const ok = await pushDayCloseToCloud(close, ctx);
+      if (ok) {
+        usePosStore.setState((s) => ({
+          dayCloses: s.dayCloses.map((row) =>
+            row.id === closeId ? { ...row, pendingSync: false } : row,
+          ),
+        }));
+      }
+      return ok;
     }
     case "pending_cash_expenses": {
       const expenseId = String(payload.expenseId ?? "");
@@ -1476,6 +1542,9 @@ export type CloudPullCheckpoints = {
   supplierPaymentsAt: string;
   cashDrawerAdjustmentsAt: string;
   dayDrawerOpensAt: string;
+  inventoryCountSessionsAt: string;
+  shiftsAt: string;
+  dayClosesAt: string;
 };
 
 export type CloudPullResult = {
@@ -1493,6 +1562,9 @@ export type CloudPullResult = {
   cashExpenses: CashExpense[];
   cashDrawerAdjustments: CashDrawerAdjustment[];
   dayDrawerOpens: DayDrawerOpen[];
+  inventoryCountSessions: InventoryCountSession[];
+  shifts: ShiftRecord[];
+  dayCloses: DayCloseSummary[];
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
@@ -2316,6 +2388,9 @@ export async function pullShopDataFromCloud(opts?: {
   let cashExpenses: CashExpense[] = [];
   let cashDrawerAdjustments: CashDrawerAdjustment[] = [];
   let dayDrawerOpens: DayDrawerOpen[] = [];
+  let inventoryCountSessions: InventoryCountSession[] = [];
+  let shifts: ShiftRecord[] = [];
+  let dayCloses: DayCloseSummary[] = [];
   let returnCloudRows: CloudReturnRow[] = [];
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
@@ -2383,6 +2458,18 @@ export async function pullShopDataFromCloud(opts?: {
       const ddoFull = await pullDayDrawerOpensFull(ctx);
       dayDrawerOpens = ddoFull.dayDrawerOpens;
       payloadBytes += ddoFull.bytes;
+
+      const icsFull = await pullInventoryCountSessionsFromRpc(ctx, null);
+      inventoryCountSessions = icsFull.sessions;
+      payloadBytes += icsFull.bytes;
+
+      const shiftsFull = await pullShiftsFromRpc(ctx, null);
+      shifts = shiftsFull.shifts;
+      payloadBytes += shiftsFull.bytes;
+
+      const dcFull = await pullDayClosesFromRpc(ctx, null);
+      dayCloses = dcFull.dayCloses;
+      payloadBytes += dcFull.bytes;
     } else {
       const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
       const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
@@ -2449,6 +2536,21 @@ export async function pullShopDataFromCloud(opts?: {
       dayDrawerOpens = ddo.dayDrawerOpens;
       payloadBytes += ddo.bytes;
 
+      const sinceIcs = cp.lastInventoryCountSessionsSyncAt ?? new Date(0).toISOString();
+      const ics = await pullInventoryCountSessionsFromRpc(ctx, sinceIcs);
+      inventoryCountSessions = ics.sessions;
+      payloadBytes += ics.bytes;
+
+      const sinceShifts = cp.lastShiftsSyncAt ?? new Date(0).toISOString();
+      const sh = await pullShiftsFromRpc(ctx, sinceShifts);
+      shifts = sh.shifts;
+      payloadBytes += sh.bytes;
+
+      const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
+      const dc = await pullDayClosesFromRpc(ctx, sinceDayCloses);
+      dayCloses = dc.dayCloses;
+      payloadBytes += dc.bytes;
+
       pullCheckpoints = {
         salesAt: s.checkpointAt,
         productsAt: p.checkpointAt,
@@ -2461,6 +2563,9 @@ export async function pullShopDataFromCloud(opts?: {
         supplierPaymentsAt: pay.checkpointAt,
         cashDrawerAdjustmentsAt: adj.checkpointAt,
         dayDrawerOpensAt: ddo.checkpointAt,
+        inventoryCountSessionsAt: ics.checkpointAt,
+        shiftsAt: sh.checkpointAt,
+        dayClosesAt: dc.checkpointAt,
       };
     }
   } catch {
@@ -2516,6 +2621,9 @@ export async function pullShopDataFromCloud(opts?: {
     cashExpenses,
     cashDrawerAdjustments,
     dayDrawerOpens,
+    inventoryCountSessions,
+    shifts,
+    dayCloses,
     deletedProductIds,
     voidedSaleIds,
     stats,
@@ -2555,6 +2663,9 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     cloud.debtPayments.length > 0 ||
     cloud.cashDrawerAdjustments.length > 0 ||
     cloud.dayDrawerOpens.length > 0 ||
+    cloud.inventoryCountSessions.length > 0 ||
+    cloud.shifts.length > 0 ||
+    cloud.dayCloses.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
     cloud.voidedSaleIds.length > 0;
   const localEmpty =
@@ -2575,6 +2686,9 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         supplierPayments: true,
         cashDrawerAdjustments: true,
         dayDrawerOpens: true,
+        inventoryCountSessions: true,
+        shifts: true,
+        dayCloses: true,
         salesAt: cloud.checkpoints?.salesAt,
         productsAt: cloud.checkpoints?.productsAt,
         customersAt: cloud.checkpoints?.customersAt,
@@ -2586,6 +2700,9 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
         cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
         dayDrawerOpensAt: cloud.checkpoints?.dayDrawerOpensAt,
+        inventoryCountSessionsAt: cloud.checkpoints?.inventoryCountSessionsAt,
+        shiftsAt: cloud.checkpoints?.shiftsAt,
+        dayClosesAt: cloud.checkpoints?.dayClosesAt,
       });
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
@@ -2614,14 +2731,24 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       cloud.dayDrawerOpens.length > 0
         ? await mergeDayDrawerOpensFromCloudPull([], cloud.dayDrawerOpens)
         : state.dayDrawerOpens;
+    const mergedInventoryCounts =
+      cloud.inventoryCountSessions.length > 0
+        ? mergeInventoryCountSessionsFromCloudPull([], cloud.inventoryCountSessions)
+        : state.inventoryCountSessions;
+    const mergedShifts =
+      cloud.shifts.length > 0
+        ? mergeShiftsFromCloudPull([], cloud.shifts)
+        : state.preferences.shifts ?? [];
+    const mergedDayCloses =
+      cloud.dayCloses.length > 0 ? mergeDayClosesFromCloudPull([], cloud.dayCloses) : state.dayCloses;
 
     await applyRestoredSnapshotFromBackup({
       products: cloud.products,
       customers,
       sales: cloud.sales,
-      preferences: state.preferences,
+      preferences: { ...state.preferences, shifts: mergedShifts },
       debtPayments,
-      dayCloses: state.dayCloses,
+      dayCloses: mergedDayCloses,
       auditLogs: state.auditLogs,
       suppliers: purchaseRecovery.suppliers,
       purchases: purchaseRecovery.purchases,
@@ -2633,6 +2760,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       cashDrawerAdjustments:
         cloud.cashDrawerAdjustments.length > 0 ? cloud.cashDrawerAdjustments : state.cashDrawerAdjustments,
       dayDrawerOpens: mergedDayDrawerOpens,
+      inventoryCountSessions: mergedInventoryCounts,
       archivedSales: state.archivedSales,
       archivedAuditLogs: state.archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
@@ -2712,6 +2840,21 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       ? await mergeDayDrawerOpensFromCloudPull(state.dayDrawerOpens, cloud.dayDrawerOpens)
       : state.dayDrawerOpens;
 
+  const mergedInventoryCounts =
+    cloud.inventoryCountSessions.length > 0
+      ? mergeInventoryCountSessionsFromCloudPull(state.inventoryCountSessions, cloud.inventoryCountSessions)
+      : state.inventoryCountSessions;
+
+  const mergedShifts =
+    cloud.shifts.length > 0
+      ? mergeShiftsFromCloudPull(state.preferences.shifts ?? [], cloud.shifts)
+      : state.preferences.shifts ?? [];
+
+  const mergedDayCloses =
+    cloud.dayCloses.length > 0
+      ? mergeDayClosesFromCloudPull(state.dayCloses, cloud.dayCloses)
+      : state.dayCloses;
+
   const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
 
   const { suspendStorePersist } = await import("../store/usePosStore");
@@ -2729,6 +2872,9 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       cashExpenses: mergedCashExpenses,
       cashDrawerAdjustments: mergedCashDrawerAdjustments,
       dayDrawerOpens: mergedDayDrawerOpens,
+      inventoryCountSessions: mergedInventoryCounts,
+      dayCloses: mergedDayCloses,
+      preferences: { ...state.preferences, shifts: mergedShifts },
       returnRecords,
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,
@@ -2770,6 +2916,10 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       cashDrawerAdjustments:
         cloud.cashDrawerAdjustments.length > 0 || cloud.checkpoints?.cashDrawerAdjustmentsAt != null,
       dayDrawerOpens: cloud.dayDrawerOpens.length > 0 || cloud.checkpoints?.dayDrawerOpensAt != null,
+      inventoryCountSessions:
+        cloud.inventoryCountSessions.length > 0 || cloud.checkpoints?.inventoryCountSessionsAt != null,
+      shifts: cloud.shifts.length > 0 || cloud.checkpoints?.shiftsAt != null,
+      dayCloses: cloud.dayCloses.length > 0 || cloud.checkpoints?.dayClosesAt != null,
       salesAt: cloud.checkpoints?.salesAt,
       productsAt: cloud.checkpoints?.productsAt,
       customersAt: cloud.checkpoints?.customersAt,
@@ -2781,6 +2931,9 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       supplierPaymentsAt: cloud.checkpoints?.supplierPaymentsAt,
       cashDrawerAdjustmentsAt: cloud.checkpoints?.cashDrawerAdjustmentsAt,
       dayDrawerOpensAt: cloud.checkpoints?.dayDrawerOpensAt,
+      inventoryCountSessionsAt: cloud.checkpoints?.inventoryCountSessionsAt,
+      shiftsAt: cloud.checkpoints?.shiftsAt,
+      dayClosesAt: cloud.checkpoints?.dayClosesAt,
     });
   }
 
@@ -2827,6 +2980,24 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
     const payload: Record<string, unknown> = { action, dayOpenId: row.id };
     if (action === "supersede" && row.supersedesId) payload.previousId = row.supersedesId;
     if (await syncDayDrawerOpenOperation(payload, ctx)) ok += 1;
+    else fail += 1;
+  }
+
+  for (const session of usePosStore.getState().inventoryCountSessions) {
+    if (!session.pendingSync) continue;
+    if (await pushInventoryCountSessionToCloud(session, ctx)) ok += 1;
+    else fail += 1;
+  }
+
+  for (const shift of usePosStore.getState().preferences.shifts ?? []) {
+    if (!shift.pendingSync) continue;
+    if (await pushShiftToCloud(shift, ctx)) ok += 1;
+    else fail += 1;
+  }
+
+  for (const close of usePosStore.getState().dayCloses) {
+    if (!close.pendingSync) continue;
+    if (await pushDayCloseToCloud(close, ctx)) ok += 1;
     else fail += 1;
   }
 

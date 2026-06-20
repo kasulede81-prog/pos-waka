@@ -121,6 +121,7 @@ import {
   purchaseLineCostTotalUgx,
   weightedCostAfterStockIn,
 } from "../lib/sellingEngine";
+import { lineCostForProductQuantity, lineCostUgx, lineProfitUgx, normalizeUnitCostUgx, advancePackCostUnitsDepleted, retractPackCostUnitsDepleted, resolvePackCostUnitsDepleted, applyPackSlotCostsToSaleLine, hasPackCostAllocation } from "../lib/costPrecision";
 import {
   applyDiscountToLine,
   lineDiscountUgx,
@@ -165,6 +166,8 @@ import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
 import { emitInventoryStockChanges, type InventoryStockSyncMessage, type InventorySyncEventType } from "../lib/inventorySyncChannel";
 import { mergeRemoteInventoryStock, validateDraftSaleStockBeforeFinalize } from "../lib/inventoryVersionProtection";
+import { assertCanFinalizeStockSale } from "../lib/primaryRegisterMode";
+import { isLocalStockFresh } from "../lib/stockFreshness";
 import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } from "../lib/settingsAuthorization";
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
@@ -550,6 +553,7 @@ export type PosState = {
     conversionRate?: number | null;
     /** When set (e.g. from pack cost ÷ pieces), used instead of a guessed cost */
     costPricePerUnitUgx?: number | null;
+    buyingPackCostUgx?: number | null;
     quickPresetsMoneyUgx?: number[];
     quickPresetsQty?: number[];
     medicineStrength?: string | null;
@@ -590,6 +594,7 @@ export type PosState = {
         | "conversionRate"
         | "sellingPricePerUnitUgx"
         | "costPricePerUnitUgx"
+        | "buyingPackCostUgx"
         | "stockOnHand"
         | "minimumStockAlert"
         | "category"
@@ -855,10 +860,12 @@ function normalizeProduct(p: Product): Product {
   const d = defaultQuickPresetsForProduct(p);
   const hasMoney = (p.quickPresetsMoneyUgx?.length ?? 0) > 0;
   const hasQty = (p.quickPresetsQty?.length ?? 0) > 0;
+  const packAlloc = hasPackCostAllocation(p);
   return {
     ...p,
     quickPresetsMoneyUgx: hasMoney ? p.quickPresetsMoneyUgx : d.quickPresetsMoneyUgx,
     quickPresetsQty: hasQty ? p.quickPresetsQty : d.quickPresetsQty,
+    packCostUnitsDepleted: packAlloc ? resolvePackCostUnitsDepleted(p) : p.packCostUnitsDepleted,
   };
 }
 
@@ -868,12 +875,12 @@ function normalizeCustomer(c: Customer): Customer {
 
 function normalizeSaleLine(line: SaleLine): SaleLine {
   const unitPriceUgx = Math.max(0, Math.floor(Number(line.unitPriceUgx) || 0));
-  const unitCostUgx = Math.max(0, Math.floor(Number(line.unitCostUgx) || 0));
+  const unitCostUgx = normalizeUnitCostUgx(line.unitCostUgx);
   const lineTotalUgx = Math.max(0, Math.floor(Number(line.lineTotalUgx) || 0));
   const quantity = Math.max(0, Number(line.quantity) || 0);
   const estimatedProfitUgx = Number.isFinite(line.estimatedProfitUgx)
     ? Math.round(line.estimatedProfitUgx)
-    : Math.round(lineTotalUgx - quantity * unitCostUgx);
+    : lineProfitUgx(lineTotalUgx, lineCostUgx(unitCostUgx, quantity));
   return {
     ...line,
     quantity,
@@ -1459,6 +1466,8 @@ export const usePosStore = create<PosState>((set, get) => {
       cashDifferenceUgx: null,
       openingFloatUgx: floatAmt > 0 ? floatAmt : null,
       verificationStatus: "legacy_unverified",
+      pendingSync: true,
+      updatedAt: new Date().toISOString(),
     };
     set((st) => ({
       preferences: {
@@ -1467,6 +1476,7 @@ export const usePosStore = create<PosState>((set, get) => {
       },
     }));
     pushAudit("shift_start", `Shift start ${actor.displayName ?? actor.userId}`, { shiftId: row.id, actorUserId: actor.userId });
+    void queueRemote("pending_shifts", { shiftId: row.id });
     return { ok: true };
   },
 
@@ -1486,12 +1496,15 @@ export const usePosStore = create<PosState>((set, get) => {
             ? {
                 ...sh,
                 endAt,
+                pendingSync: true,
+                updatedAt: endAt,
               }
             : sh,
         ),
       },
     }));
     pushAudit("shift_end", `Shift end ${actor?.displayName ?? uid}`, { shiftId: open.id, actorUserId: uid });
+    void queueRemote("pending_shifts", { shiftId: open.id });
   },
 
   completeBusinessOnboarding: (businessType) => {
@@ -1590,7 +1603,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const built =
       d.pharmacySaleUnit && d.inputMode === "quantity"
         ? buildPharmacySaleLine(d.product, d.pharmacySaleUnit, d.value)
-        : buildSaleLine(d.product, d.inputMode, d.value);
+        : buildSaleLine(d.product, d.inputMode, d.value, {
+            packSlotStart: resolvePackCostUnitsDepleted(d.product),
+          });
     if (!built.line || built.error) {
       return { ok: false, errorKey: built.error ?? "invalid" };
     }
@@ -1635,7 +1650,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (draftQuantityExceedsStock(product, quantity)) {
       return { ok: false, errorKey: "noStock" };
     }
-    const next = rebuildDraftLineQuantity(product, quantity, line);
+    const next = rebuildDraftLineQuantity(product, quantity, line, resolvePackCostUnitsDepleted(product));
     if (!next) return { ok: false, errorKey: "invalidQty" };
     set((s) => ({
       draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
@@ -2320,12 +2335,12 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const isFirstSale = state.sales.length === 0;
 
-    const saleLines = state.draftLines.map((line) => normalizeSaleLine(line));
-    const listSubtotal = saleLines.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
-    const lineSubtotal = saleLines.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const saleLinesPreview = state.draftLines.map((line) => normalizeSaleLine(line));
+    const listSubtotal = saleLinesPreview.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
+    const lineSubtotal = saleLinesPreview.reduce((a, l) => a + l.lineTotalUgx, 0);
     const cartDiscount = Math.min(Math.max(0, Math.floor(state.draftCartDiscountUgx)), lineSubtotal);
     const actorRole = state.sessionActor?.role ?? "cashier";
-    const lineDiscountTotal = saleLines.reduce((a, l) => a + lineDiscountUgx(l), 0);
+    const lineDiscountTotal = saleLinesPreview.reduce((a, l) => a + lineDiscountUgx(l), 0);
     const discountPolicy = validateCombinedDraftDiscount({
       prefs: state.preferences,
       role: actorRole,
@@ -2334,6 +2349,13 @@ export const usePosStore = create<PosState>((set, get) => {
       cartDiscountUgx: cartDiscount,
     });
     if (!discountPolicy.ok) return { ok: false, errorKey: discountPolicy.errorKey };
+
+    const regGate = assertCanFinalizeStockSale({
+      preferences: state.preferences,
+      isOnline: getDeviceOnline(),
+      stockFresh: isLocalStockFresh(),
+    });
+    if (!regGate.ok) return { ok: false, errorKey: regGate.errorKey };
 
     const total = Math.max(0, lineSubtotal - cartDiscount);
     const discountTotal = Math.max(0, listSubtotal - total);
@@ -2363,16 +2385,28 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!stockCheck.ok) return { ok: false, errorKey: stockCheck.errorKey };
 
     const products = [...state.products];
+    const saleLines: SaleLine[] = [];
+    const finalizeAt = new Date().toISOString();
     for (const line of state.draftLines) {
       const idx = products.findIndex((p) => p.id === line.productId);
       if (idx === -1) return { ok: false, errorKey: "missingProduct" };
       const p = products[idx];
       const next = p.stockOnHand - line.quantity;
       if (next < -0.0001) return { ok: false, errorKey: "noStock" };
+      const slotStart = resolvePackCostUnitsDepleted(p);
+      const slotCosts = applyPackSlotCostsToSaleLine(p, line, slotStart);
+      saleLines.push(
+        normalizeSaleLine({
+          ...line,
+          unitCostUgx: slotCosts.unitCostUgx,
+          estimatedProfitUgx: slotCosts.estimatedProfitUgx,
+        }),
+      );
       products[idx] = {
         ...p,
         stockOnHand: Math.max(0, next),
-        updatedAt: new Date().toISOString(),
+        packCostUnitsDepleted: advancePackCostUnitsDepleted(p.packCostUnitsDepleted, line.quantity),
+        updatedAt: finalizeAt,
         version: p.version + 1,
       };
     }
@@ -2613,6 +2647,9 @@ export const usePosStore = create<PosState>((set, get) => {
       products[pIdx] = {
         ...p,
         stockOnHand: p.stockOnHand + line.quantity,
+        packCostUnitsDepleted: hasPackCostAllocation(p)
+          ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, line.quantity)
+          : p.packCostUnitsDepleted,
         updatedAt: at,
         version: p.version + 1,
       };
@@ -2733,7 +2770,15 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const products = state.products.map((p) =>
       p.id === productId && restock
-        ? { ...p, stockOnHand: p.stockOnHand + qty, updatedAt: at, version: p.version + 1 }
+        ? {
+            ...p,
+            stockOnHand: p.stockOnHand + qty,
+            packCostUnitsDepleted: hasPackCostAllocation(p)
+              ? retractPackCostUnitsDepleted(p.packCostUnitsDepleted, qty)
+              : p.packCostUnitsDepleted,
+            updatedAt: at,
+            version: p.version + 1,
+          }
         : p,
     );
 
@@ -2875,6 +2920,8 @@ export const usePosStore = create<PosState>((set, get) => {
                 endAt,
                 countedCashUgx: counted,
                 cashDifferenceUgx: differenceUgx,
+                pendingSync: true,
+                updatedAt: endAt,
               }
             : sh,
         ),
@@ -2888,6 +2935,7 @@ export const usePosStore = create<PosState>((set, get) => {
       differenceUgx,
       actorUserId: actor.userId,
     });
+    void queueRemote("pending_shifts", { shiftId: open.id });
     return { ok: true, differenceUgx };
   },
 
@@ -2911,7 +2959,7 @@ export const usePosStore = create<PosState>((set, get) => {
     if (pharmacyRequiresBuy && stock <= 0) return { ok: false, errorKey: "pharmacyOpeningStockRequired" };
     const costExplicit =
       input.costPricePerUnitUgx !== undefined && input.costPricePerUnitUgx !== null
-        ? Math.max(0, Math.floor(Number(input.costPricePerUnitUgx)))
+        ? normalizeUnitCostUgx(input.costPricePerUnitUgx)
         : null;
     if (pharmacyRequiresBuy) {
       if (costExplicit === null || costExplicit <= 0) return { ok: false, errorKey: "pharmacyBuyPriceRequired" };
@@ -2941,6 +2989,10 @@ export const usePosStore = create<PosState>((set, get) => {
       conversionRate,
       sellingPricePerUnitUgx: price,
       costPricePerUnitUgx: cost,
+      buyingPackCostUgx:
+        input.buyingPackCostUgx != null && input.buyingPackCostUgx > 0
+          ? Math.floor(input.buyingPackCostUgx)
+          : null,
       stockOnHand: stock,
       minimumStockAlert: minAlert,
       category: input.category,
@@ -3149,7 +3201,13 @@ export const usePosStore = create<PosState>((set, get) => {
       merged.sellingPricePerUnitUgx = v;
     }
     if (patch.costPricePerUnitUgx !== undefined) {
-      merged.costPricePerUnitUgx = Math.max(0, Math.floor(Number(patch.costPricePerUnitUgx)));
+      merged.costPricePerUnitUgx = normalizeUnitCostUgx(patch.costPricePerUnitUgx);
+    }
+    if (patch.buyingPackCostUgx !== undefined) {
+      merged.buyingPackCostUgx =
+        patch.buyingPackCostUgx != null && patch.buyingPackCostUgx > 0
+          ? Math.floor(patch.buyingPackCostUgx)
+          : null;
     }
     if (patch.stockOnHand !== undefined) {
       merged.stockOnHand = Math.max(0, Number(patch.stockOnHand) || 0);
@@ -3277,6 +3335,10 @@ export const usePosStore = create<PosState>((set, get) => {
           ? {
               ...p,
               stockOnHand: Math.max(0, p.stockOnHand + delta),
+              packCostUnitsDepleted:
+                delta < 0 && hasPackCostAllocation(p)
+                  ? advancePackCostUnitsDepleted(p.packCostUnitsDepleted, -delta)
+                  : p.packCostUnitsDepleted,
               updatedAt: new Date().toISOString(),
               version: p.version + 1,
             }
@@ -3323,8 +3385,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const qty = quantity != null ? Math.min(onHand, Math.max(0, Number(quantity) || 0)) : onHand;
     if (qty <= 0) return { ok: false, errorKey: "invalidQty" };
 
-    const costPerUnit = Math.max(0, Math.floor(p.costPricePerUnitUgx));
-    const lossValueUgx = Math.round(qty * costPerUnit);
+    const lossValueUgx = lineCostForProductQuantity(p, qty);
     const at = new Date().toISOString();
     const writeOffId = crypto.randomUUID();
     const delta = -qty;
@@ -3347,6 +3408,9 @@ export const usePosStore = create<PosState>((set, get) => {
           ? {
               ...row,
               stockOnHand: Math.max(0, row.stockOnHand + delta),
+              packCostUnitsDepleted: hasPackCostAllocation(row)
+                ? advancePackCostUnitsDepleted(row.packCostUnitsDepleted, qty)
+                : row.packCostUnitsDepleted,
               updatedAt: at,
               version: row.version + 1,
             }
@@ -3369,7 +3433,7 @@ export const usePosStore = create<PosState>((set, get) => {
       productName: p.name,
       quantity: qty,
       lossValueUgx,
-      costPerUnitUgx: costPerUnit,
+      costPerUnitUgx: normalizeUnitCostUgx(p.costPricePerUnitUgx),
       expiryDate: p.expiryDate ?? null,
       note: note?.trim() || null,
     });
@@ -3766,7 +3830,7 @@ export const usePosStore = create<PosState>((set, get) => {
       const lineInput = input.lines.find((x) => x.productId === ln.productId);
       const incomingCostPerBase =
         lineInput?.costPerBaseUnitUgx != null && lineInput.costPerBaseUnitUgx >= 0
-          ? Math.round(lineInput.costPerBaseUnitUgx)
+          ? normalizeUnitCostUgx(lineInput.costPerBaseUnitUgx)
           : costPerBaseFromBuyingUnitCost(p, ln.costPerBuyingUnitUgx);
       const newCost = weightedCostAfterStockIn(p.stockOnHand, p.costPricePerUnitUgx, baseIn, incomingCostPerBase);
       const newStock = p.stockOnHand + baseIn;
@@ -4238,17 +4302,20 @@ export const usePosStore = create<PosState>((set, get) => {
       overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
       openingFloatUgx: drawer.openingFloatUgx,
       documentSnapshot,
+      pendingSync: true,
+      updatedAt: now,
     };
     set((s) => ({
       dayCloses: [
         row,
         ...s.dayCloses.map((d) =>
-          existing && d.id === existing.id ? { ...d, supersededAt: now } : d,
+          existing && d.id === existing.id ? { ...d, supersededAt: now, pendingSync: true, updatedAt: now } : d,
         ),
       ],
     }));
-    void queueRemote("pending_sales", { kind: "day_close", id: row.id });
+    void queueRemote("pending_day_closes", { closeId: row.id });
     if (existing && override) {
+      void queueRemote("pending_day_closes", { closeId: existing.id });
       pushAudit("day_close_override", `Re-close ${dateKey}`, {
         previousCloseId: existing.id,
         newCloseId: row.id,

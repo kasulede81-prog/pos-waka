@@ -4,7 +4,7 @@ import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isLowStock } from "../lib/sellingEngine";
-import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
+import { inventoryValueAtCostUgx } from "../lib/costPrecision";
 import { starterPackForBusinessType, starterExpiryDateIso, type StarterLine } from "../data/starterPacks";
 import { PharmacyAddMedicineWizard } from "../components/stock/PharmacyAddMedicineWizard";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -19,6 +19,7 @@ import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
 import { mapBulkRowsToQuickAdd } from "../lib/ai/bulkInventoryAi";
 import { useAiFeatureGate } from "../hooks/useAiFeatureGate";
+import { inferProductGuess, uiPlaceholder } from "../lib/pharmacyUx";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
 import { QuickAddProductFields } from "../components/stock/QuickAddProductFields";
 import { StockListToolbar } from "../components/stock/StockListToolbar";
@@ -207,10 +208,7 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
   const outOfStockCount = useMemo(() => unlockedProducts.filter((p) => p.stockOnHand <= 0).length, [unlockedProducts]);
-  const inventoryValueUgx = useMemo(
-    () => unlockedProducts.reduce((a, p) => a + Math.max(0, p.stockOnHand) * Math.max(0, p.costPricePerUnitUgx), 0),
-    [unlockedProducts],
-  );
+  const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
   const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
 
   const shelfFolders = useMemo(() => {
@@ -401,6 +399,7 @@ export function StockPage({ lang }: { lang: Language }) {
           conversionRate: built.conversionRate ?? null,
           sellingPricePerUnitUgx: built.priceUgx,
           costPricePerUnitUgx: built.costPricePerUnitUgx ?? undefined,
+          buyingPackCostUgx: built.buyingPackCostUgx ?? null,
           stockOnHand: built.stockQty,
           sellingMode: built.sellingMode,
           quickPresetsMoneyUgx: built.quickPresetsMoneyUgx,
@@ -424,6 +423,7 @@ export function StockPage({ lang }: { lang: Language }) {
       buyingUnit: built.buyingUnit ?? null,
       conversionRate: built.conversionRate ?? null,
       costPricePerUnitUgx: built.costPricePerUnitUgx ?? null,
+      buyingPackCostUgx: built.buyingPackCostUgx ?? null,
       quickPresetsMoneyUgx: built.quickPresetsMoneyUgx,
       quickPresetsQty: built.quickPresetsQty,
       inferName: built.inferName,

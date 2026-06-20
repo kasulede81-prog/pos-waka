@@ -205,6 +205,9 @@ export type ShiftRecord = {
   handoffFloatUgx?: number | null;
   /** Prior closed shift on same day (handoff chain). */
   priorShiftId?: string | null;
+  /** Cloud sync pending (multi-device). */
+  pendingSync?: boolean;
+  updatedAt?: string;
 };
 
 export type CashDrawerFormulaVersion = "v1" | "v2";
@@ -455,8 +458,12 @@ export type Product = {
   conversionRate?: number | null;
   /** UGX per base unit (used for sell-by-money) */
   sellingPricePerUnitUgx: number;
-  /** UGX cost per base unit — profit hints */
+  /** UGX cost per base unit — profit hints (may be fractional for pack breakdowns) */
   costPricePerUnitUgx: number;
+  /** Invoice total for one buying pack/crate when cost was derived from pack ÷ units */
+  buyingPackCostUgx?: number | null;
+  /** FIFO slot index for pack-cost allocation (units sold from pack-priced inventory). */
+  packCostUnitsDepleted?: number | null;
   stockOnHand: number;
   minimumStockAlert: number;
   category: string;
@@ -763,6 +770,8 @@ export type DayCloseSummary = {
   documentSnapshot?: DayCloseDocumentSnapshot | null;
   /** Opening float recorded at day close (UGX). */
   openingFloatUgx?: number | null;
+  pendingSync?: boolean;
+  updatedAt?: string;
 };
 
 export const CASH_DRAWER_ADJUSTMENT_TYPES = [
@@ -1019,6 +1028,10 @@ export type ShopPreferences = {
   posLocked?: boolean;
   /** When true, sensitive actions require native biometric or Owner PIN (Owner-only setting). */
   biometricAuthEnabled?: boolean;
+  /** single = only primary device may sell offline; multi = all devices (default). */
+  registerMode?: "single" | "multi";
+  /** Device fingerprint designated as primary register (single mode). */
+  primaryDeviceFingerprint?: string | null;
   shifts?: ShiftRecord[];
   /** Product ids starred on Sell screen (fast access) */
   favoriteProductIds?: string[];
@@ -1115,6 +1128,8 @@ export type SyncOperationKind =
   | "pending_cash_drawer_adjustments"
   | "pending_inventory_counts"
   | "pending_day_drawer_opens"
+  | "pending_shifts"
+  | "pending_day_closes"
   | "pending_purchases"
   | "pending_hospitality"
   /** Legacy queue kinds kept for backward compatibility */

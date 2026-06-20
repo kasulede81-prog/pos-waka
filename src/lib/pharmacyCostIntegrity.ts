@@ -1,4 +1,10 @@
 import type { Product } from "../types";
+import {
+  formatUgxDisplay,
+  inventoryLineValueAtCostUgx,
+  inventoryValueAtCostUgx as inventoryValueAtCostPrecise,
+  normalizeUnitCostUgx,
+} from "./costPrecision";
 import { isPharmacyMode } from "./pharmacy";
 import type { BusinessType } from "../types";
 import { isPharmacyPackagingActive, packagingMarginStock } from "./pharmacyPackaging";
@@ -19,7 +25,7 @@ const EXTREME_MARGIN_RATIO = 5;
 
 /** Non-blocking cost/price sanity checks for pharmacy products. */
 export function pharmacyCostWarnings(product: Product): PharmacyCostWarning[] {
-  const cost = Math.max(0, Math.floor(product.costPricePerUnitUgx));
+  const cost = normalizeUnitCostUgx(product.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
   const out: PharmacyCostWarning[] = [];
 
@@ -35,13 +41,13 @@ export function pharmacyCostWarnings(product: Product): PharmacyCostWarning[] {
 }
 
 export function pharmacyMarginUgx(product: Product): number {
-  const cost = Math.max(0, Math.floor(product.costPricePerUnitUgx));
+  const cost = normalizeUnitCostUgx(product.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
   return sell - cost;
 }
 
 export function pharmacyMarginPercent(product: Product): number | null {
-  const cost = Math.max(0, Math.floor(product.costPricePerUnitUgx));
+  const cost = normalizeUnitCostUgx(product.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
   if (cost <= 0) return null;
   return Math.round(((sell - cost) / cost) * 100);
@@ -69,7 +75,7 @@ export function computeMedicineMarginRows(products: Product[]): MedicineMarginRo
   return products
     .filter((p) => p.stockOnHand > 0 || p.sellingPricePerUnitUgx > 0 || p.costPricePerUnitUgx > 0)
     .map((p) => {
-      const cost = Math.max(0, Math.floor(p.costPricePerUnitUgx));
+      const cost = normalizeUnitCostUgx(p.costPricePerUnitUgx);
       const sell = Math.max(0, Math.floor(p.sellingPricePerUnitUgx));
       const stock = Math.max(0, Number(p.stockOnHand) || 0);
       const packStock = packagingMarginStock(p);
@@ -77,12 +83,12 @@ export function computeMedicineMarginRows(products: Product[]): MedicineMarginRo
         productId: p.id,
         name: p.name,
         category: (p.category ?? "").trim() || "—",
-        costPerUnitUgx: cost,
+        costPerUnitUgx: formatUgxDisplay(cost),
         sellingPricePerUnitUgx: sell,
         marginUgx: pharmacyMarginUgx(p),
         marginPercent: pharmacyMarginPercent(p),
         stockOnHand: stock,
-        inventoryValueUgx: Math.round(stock * cost),
+        inventoryValueUgx: inventoryLineValueAtCostUgx(p),
         stockTablets: packStock?.stockTablets ?? stock,
         stockStrips: packStock?.stockStrips ?? null,
         stockBoxes: packStock?.stockBoxes ?? null,
@@ -104,10 +110,7 @@ export function sortMedicineMarginRows(rows: MedicineMarginRow[], sort: Medicine
 }
 
 export function pharmacyInventoryValueAtCostUgx(products: Product[]): number {
-  return products.reduce(
-    (sum, p) => sum + Math.max(0, p.stockOnHand) * Math.max(0, Math.floor(p.costPricePerUnitUgx)),
-    0,
-  );
+  return inventoryValueAtCostPrecise(products);
 }
 
 export function pharmacyQuickAddRequiresBuyPrice(

@@ -147,8 +147,8 @@ describe("staff plan enforcement", () => {
   });
 
   it("allows business staff up to cap", () => {
-    expect(validateCanAddStaffAccount(2, "business").ok).toBe(true);
-    expect(validateCanAddStaffAccount(3, "business")).toEqual({ ok: false, errorKey: "planStaffLimit" });
+    expect(validateCanAddStaffAccount(3, "business").ok).toBe(true);
+    expect(validateCanAddStaffAccount(4, "business")).toEqual({ ok: false, errorKey: "planStaffLimit" });
   });
 });
 

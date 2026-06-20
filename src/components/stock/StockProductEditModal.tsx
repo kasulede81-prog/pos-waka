@@ -14,6 +14,7 @@ import {
   type SellUnitKind,
 } from "../../lib/simpleProductWizard";
 import { formatStockLabel, stockBreakdown } from "../../lib/sellingEngine";
+import { unitCostFromPackTotal } from "../../lib/costPrecision";
 import { validateAuditReason } from "../../lib/auditReasons";
 import { usePosStore } from "../../store/usePosStore";
 import { isPharmacyMode } from "../../lib/pharmacy";
@@ -53,6 +54,7 @@ type Props = {
         | "conversionRate"
         | "sellingPricePerUnitUgx"
         | "costPricePerUnitUgx"
+        | "buyingPackCostUgx"
         | "stockOnHand"
         | "minimumStockAlert"
         | "category"
@@ -208,8 +210,9 @@ export function StockProductEditModal({
     const costPricePerUnitUgx = pharmacyMode
       ? buyPerUnit
       : hasTrack && packPrice > 0
-        ? Math.floor(packPrice / piecesN)
+        ? unitCostFromPackTotal(packPrice, piecesN)
         : product.costPricePerUnitUgx;
+    const buyingPackCostUgx = hasTrack && packPrice > 0 ? packPrice : null;
 
     let pharmacyPackaging = product.pharmacyPackaging ?? null;
     let baseUnit = resolveSellBaseUnit(sellUnit, sellUnitCustom);
@@ -243,6 +246,7 @@ export function StockProductEditModal({
       conversionRate: patchConversion,
       sellingPricePerUnitUgx: priceUgx,
       costPricePerUnitUgx,
+      buyingPackCostUgx,
       stockOnHand: nextStock,
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),

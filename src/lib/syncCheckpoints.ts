@@ -25,6 +25,9 @@ export type SyncCheckpoints = {
   lastCashDrawerAdjustmentsSyncAt: string | null;
   /** shop_day_drawer_opens pull cursor (updated_at). */
   lastDayDrawerOpensSyncAt: string | null;
+  lastInventoryCountSessionsSyncAt: string | null;
+  lastShiftsSyncAt: string | null;
+  lastDayClosesSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -41,6 +44,9 @@ const empty: SyncCheckpoints = {
   lastSupplierPaymentsSyncAt: null,
   lastCashDrawerAdjustmentsSyncAt: null,
   lastDayDrawerOpensSyncAt: null,
+  lastInventoryCountSessionsSyncAt: null,
+  lastShiftsSyncAt: null,
+  lastDayClosesSyncAt: null,
 };
 
 function scopedKey(): string | null {
@@ -78,6 +84,10 @@ export function readSyncCheckpoints(): SyncCheckpoints {
         typeof o.lastCashDrawerAdjustmentsSyncAt === "string" ? o.lastCashDrawerAdjustmentsSyncAt : null,
       lastDayDrawerOpensSyncAt:
         typeof o.lastDayDrawerOpensSyncAt === "string" ? o.lastDayDrawerOpensSyncAt : null,
+      lastInventoryCountSessionsSyncAt:
+        typeof o.lastInventoryCountSessionsSyncAt === "string" ? o.lastInventoryCountSessionsSyncAt : null,
+      lastShiftsSyncAt: typeof o.lastShiftsSyncAt === "string" ? o.lastShiftsSyncAt : null,
+      lastDayClosesSyncAt: typeof o.lastDayClosesSyncAt === "string" ? o.lastDayClosesSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -120,6 +130,9 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastSupplierPaymentsSyncAt: at,
     lastCashDrawerAdjustmentsSyncAt: at,
     lastDayDrawerOpensSyncAt: at,
+    lastInventoryCountSessionsSyncAt: at,
+    lastShiftsSyncAt: at,
+    lastDayClosesSyncAt: at,
   });
 }
 
@@ -135,6 +148,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   supplierPayments?: boolean;
   cashDrawerAdjustments?: boolean;
   dayDrawerOpens?: boolean;
+  inventoryCountSessions?: boolean;
+  shifts?: boolean;
+  dayCloses?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -149,6 +165,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   supplierPaymentsAt?: string;
   cashDrawerAdjustmentsAt?: string;
   dayDrawerOpensAt?: string;
+  inventoryCountSessionsAt?: string;
+  shiftsAt?: string;
+  dayClosesAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -172,6 +191,15 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   }
   if (partial.dayDrawerOpens) {
     patch.lastDayDrawerOpensSyncAt = partial.dayDrawerOpensAt ?? fallback;
+  }
+  if (partial.inventoryCountSessions) {
+    patch.lastInventoryCountSessionsSyncAt = partial.inventoryCountSessionsAt ?? fallback;
+  }
+  if (partial.shifts) {
+    patch.lastShiftsSyncAt = partial.shiftsAt ?? fallback;
+  }
+  if (partial.dayCloses) {
+    patch.lastDayClosesSyncAt = partial.dayClosesAt ?? fallback;
   }
   return writeSyncCheckpoints(patch);
 }

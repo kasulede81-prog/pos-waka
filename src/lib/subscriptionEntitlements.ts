@@ -197,6 +197,11 @@ export function maxDevicesHintForTier(tier: SubscriptionPlanCode): number {
   return 10;
 }
 
+/** Authoritative device cap for a tier when DB features JSON is missing or stale. */
+export function planDeviceLimitForTier(tier: SubscriptionPlanCode): number {
+  return maxDevicesHintForTier(tier);
+}
+
 export function maxProductsForTier(tier: SubscriptionPlanCode): number | null {
   return tier === "free" ? FREE_PLAN_PRODUCT_LIMIT : null;
 }

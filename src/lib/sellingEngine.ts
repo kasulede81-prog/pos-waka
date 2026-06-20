@@ -6,6 +6,16 @@ import {
 } from "./pharmacyPackaging";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatFriendlyQuantity } from "./saleQuantityLabel";
+import {
+  applyPackSlotCostsToSaleLine,
+  costPerBaseFromBuyingUnitCostPrecise,
+  costPerBaseUnitUgxFromProduct,
+  lineCostForProductQuantity,
+  lineProfitUgx,
+  normalizeUnitCostUgx,
+  resolvePackCostUnitsDepleted,
+  weightedCostAfterStockInPrecise,
+} from "./costPrecision";
 
 const MONEY_ROUND = 4;
 
@@ -170,8 +180,7 @@ export function pricePerBaseUnitUgx(product: Product): number {
 }
 
 export function costPerBaseUnitUgx(product: Product): number {
-  const c = product.costPricePerUnitUgx;
-  return c >= 0 ? c : 0;
+  return costPerBaseUnitUgxFromProduct(product);
 }
 
 /**
@@ -209,9 +218,10 @@ export function buildSaleLine(
   product: Product,
   inputMode: LineInputMode,
   rawValue: number,
+  opts?: { packSlotStart?: number },
 ): { line: SaleLine | null; error?: string } {
   const price = pricePerBaseUnitUgx(product);
-  const cost = costPerBaseUnitUgx(product);
+  const packSlotStart = opts?.packSlotStart ?? resolvePackCostUnitsDepleted(product);
   if (price <= 0) {
     return { line: null, error: "noPrice" };
   }
@@ -221,7 +231,7 @@ export function buildSaleLine(
     if (money <= 0) return { line: null, error: "invalidMoney" };
     const qty = quantityFromMoneyUgx(product, money);
     if (qty <= 0) return { line: null, error: "qtyZero" };
-    const estimatedProfitUgx = Math.round(money - qty * cost);
+    const slotCosts = applyPackSlotCostsToSaleLine(product, { quantity: qty, lineTotalUgx: money }, packSlotStart);
     const now = new Date().toISOString();
     return {
       line: {
@@ -232,9 +242,9 @@ export function buildSaleLine(
         inputMode: "money",
         quantity: qty,
         unitPriceUgx: price,
-        unitCostUgx: cost,
+        unitCostUgx: slotCosts.unitCostUgx,
         lineTotalUgx: money,
-        estimatedProfitUgx,
+        estimatedProfitUgx: slotCosts.estimatedProfitUgx,
         moneyAmountUgx: money,
       },
     };
@@ -243,6 +253,7 @@ export function buildSaleLine(
   const qty = Math.round(rawValue * 10 ** MONEY_ROUND) / 10 ** MONEY_ROUND;
   if (qty <= 0) return { line: null, error: "invalidQty" };
   const lineTotalUgx = lineTotalFromQuantity(product, qty);
+  const slotCosts = applyPackSlotCostsToSaleLine(product, { quantity: qty, lineTotalUgx }, packSlotStart);
   const now = new Date().toISOString();
   return {
     line: {
@@ -253,19 +264,23 @@ export function buildSaleLine(
       inputMode: "quantity",
       quantity: qty,
       unitPriceUgx: price,
-      unitCostUgx: cost,
+      unitCostUgx: slotCosts.unitCostUgx,
       lineTotalUgx,
-      estimatedProfitUgx: Math.round(lineTotalUgx - qty * cost),
+      estimatedProfitUgx: slotCosts.estimatedProfitUgx,
       moneyAmountUgx: null,
     },
   };
 }
 
-/** Simple line profit: sale amount minus the buying-cost snapshot for the quantity sold. */
+/** Simple line profit: sale amount minus pack-aware COGS for the quantity sold. */
 export function estimatedProfitForLine(product: Product, line: SaleLine): number {
   if (Number.isFinite(line.estimatedProfitUgx)) return Math.round(line.estimatedProfitUgx);
-  const cost = Number.isFinite(line.unitCostUgx) ? line.unitCostUgx : costPerBaseUnitUgx(product);
-  return Math.round(line.lineTotalUgx - line.quantity * cost);
+  const unitCost =
+    Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
+      ? normalizeUnitCostUgx(line.unitCostUgx)
+      : costPerBaseUnitUgx(product);
+  const cost = lineCostForProductQuantity(product, line.quantity, unitCost);
+  return lineProfitUgx(line.lineTotalUgx, cost);
 }
 
 export function lowStockThreshold(product: Product): number {
@@ -295,8 +310,7 @@ export function buyingUnitsToBaseUnits(product: Product, qtyBuyingUnits: number)
 
 /** UGX cost per base unit from cost per buying unit (e.g. cost per sack → cost per kg). */
 export function costPerBaseFromBuyingUnitCost(product: Product, costPerBuyingUnitUgx: number): number {
-  const per = baseUnitsPerBuyingUnit(product);
-  return Math.round(costPerBuyingUnitUgx / per);
+  return costPerBaseFromBuyingUnitCostPrecise(baseUnitsPerBuyingUnit(product), costPerBuyingUnitUgx);
 }
 
 export function purchaseLineCostTotalUgx(line: { qtyBuyingUnits: number; costPerBuyingUnitUgx: number }): number {
@@ -310,7 +324,5 @@ export function weightedCostAfterStockIn(
   incomingBaseUnits: number,
   incomingCostPerBaseUgx: number,
 ): number {
-  const next = prevStock + incomingBaseUnits;
-  if (next <= 0) return Math.max(0, incomingCostPerBaseUgx);
-  return Math.round((prevStock * prevCostPerBaseUgx + incomingBaseUnits * incomingCostPerBaseUgx) / next);
+  return weightedCostAfterStockInPrecise(prevStock, prevCostPerBaseUgx, incomingBaseUnits, incomingCostPerBaseUgx);
 }

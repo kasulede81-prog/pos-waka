@@ -102,6 +102,7 @@ export type ShiftCashContext = {
 function shiftBaselineUgx(sh: ShiftRecord, formulaVersion: CashDrawerFormulaVersion): number {
   if (formulaVersion === "v2") {
     if (sh.segmentBaselineUgx != null) return Math.max(0, Math.floor(sh.segmentBaselineUgx));
+    if (sh.verifiedFloatUgx != null) return Math.max(0, Math.floor(sh.verifiedFloatUgx));
     return 0;
   }
   return Math.max(0, Math.floor(sh.openingFloatUgx ?? 0));

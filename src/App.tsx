@@ -32,6 +32,7 @@ import { SettingsDiagnosticsPage } from "./pages/SettingsDiagnosticsPage";
 import { SettingsFinanceDiagnosticsPage } from "./pages/SettingsFinanceDiagnosticsPage";
 import { SettingsSubscriptionDiagnosticsPage } from "./pages/SettingsSubscriptionDiagnosticsPage";
 import { ConnectedDevicesPage } from "./pages/ConnectedDevicesPage";
+import { SyncConflictCenterPage } from "./pages/SyncConflictCenterPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
 import { ArchiveDataPage } from "./pages/ArchiveDataPage";
@@ -836,6 +837,16 @@ function AppRoutes() {
                 <RoleProtectedRoute permission="settings.devices">
                   <SettingsChangeGate lang={lang}>
                     <ConnectedDevicesPage lang={lang} />
+                  </SettingsChangeGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/sync-conflicts"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsChangeGate lang={lang}>
+                    <SyncConflictCenterPage lang={lang} />
                   </SettingsChangeGate>
                 </RoleProtectedRoute>
               }

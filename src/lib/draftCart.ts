@@ -7,6 +7,7 @@ import {
   packLabelFromProduct,
   pricePerBaseUnitUgx,
 } from "./sellingEngine";
+import { resolvePackCostUnitsDepleted } from "./costPrecision";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
 import { formatFriendlyQuantity } from "./saleQuantityLabel";
 
@@ -107,8 +108,10 @@ export function rebuildDraftLineQuantity(
   product: Product,
   quantity: number,
   prior?: SaleLine,
+  packSlotStart?: number,
 ): SaleLine | null {
-  const built = buildSaleLine(product, "quantity", quantity);
+  const slotStart = packSlotStart ?? resolvePackCostUnitsDepleted(product);
+  const built = buildSaleLine(product, "quantity", quantity, { packSlotStart: slotStart });
   if (!built.line) return null;
   const now = new Date().toISOString();
   const line = {
@@ -145,7 +148,7 @@ export function mergeDraftSaleLine(
     return { ...ensureSaleLineId(incoming), stockVersionAtAdd: product.version ?? 1 };
   }
   const totalQty = existing.quantity + incoming.quantity;
-  const merged = rebuildDraftLineQuantity(product, totalQty, existing);
+  const merged = rebuildDraftLineQuantity(product, totalQty, existing, resolvePackCostUnitsDepleted(product));
   if (merged) {
     return { ...merged, stockVersionAtAdd: existing.stockVersionAtAdd ?? product.version ?? 1 };
   }

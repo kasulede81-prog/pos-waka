@@ -2,6 +2,7 @@ import type { CashExpense, Language, Product, ReturnRecord, Sale, StaffAccount }
 import { sumCashExpensesInMonth } from "./cashReconciliation";
 import { dateKeyKampala } from "./datesUg";
 import { getCompletedFinancials, revenueSalesInMonth } from "./financialMetrics";
+import { inventoryValueAtCostUgx } from "./costPrecision";
 import { Capacitor } from "@capacitor/core";
 import { saveExportedFile } from "./fileDownload";
 import { t } from "./i18n";
@@ -87,10 +88,7 @@ export function buildMonthlyBusinessReport(params: {
   }
 
   const lowStockCount = products.filter((p) => p.stockOnHand <= (p.minimumStockAlert ?? 5)).length;
-  const stockValueAtCostUgx = products.reduce(
-    (a, p) => a + Math.max(0, p.stockOnHand) * Math.max(0, p.costPricePerUnitUgx),
-    0,
-  );
+  const stockValueAtCostUgx = inventoryValueAtCostUgx(products);
 
   return {
     monthKey,

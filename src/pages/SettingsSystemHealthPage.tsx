@@ -22,6 +22,7 @@ import {
 } from "../components/settings/RecoveryReadinessDashboard";
 import { AuditHealthCard } from "../components/settings/AuditHealthCard";
 import { PerformanceDiagnosticsCard } from "../components/settings/PerformanceDiagnosticsCard";
+import { MultiDeviceHealthCard } from "../components/settings/MultiDeviceHealthCard";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canSeeFinanceDiagnostics } from "../lib/financeVisibility";
@@ -62,6 +63,10 @@ export function SettingsSystemHealthPage({ lang }: { lang: Language }) {
         </div>
 
         <SystemHealthSummaryStrip lang={lang} />
+
+        <LazyCard lang={lang} title={t(lang, "multiDeviceHealthTitle")} defaultOpen>
+          <MultiDeviceHealthCard lang={lang} />
+        </LazyCard>
 
         <LazyCard lang={lang} title={t(lang, "syncDiagnosticsTitle")}>
           <SyncHealthCard lang={lang} variant="full" />

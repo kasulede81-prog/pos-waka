@@ -1,5 +1,14 @@
 /** Live cost preview + sanity warnings for product pack/cost entry (read-only guards). */
 
+import {
+  formatUgxDisplay,
+  inventoryLineValueAtCostUgx,
+  normalizeUnitCostUgx,
+  unitCostFromPackTotal,
+} from "./costPrecision";
+
+export { unitCostFromPackTotal as unitCostFromPack } from "./costPrecision";
+
 export type CostValidationPreview = {
   packCostUgx: number | null;
   piecesPerPack: number | null;
@@ -14,11 +23,6 @@ export type CostValidationWarning = "low_unit_cost" | "high_margin";
 const LOW_COST_RATIO = 0.1;
 const HIGH_MARGIN_RATIO = 0.8;
 
-export function unitCostFromPack(packCostUgx: number, piecesPerPack: number): number | null {
-  if (packCostUgx <= 0 || piecesPerPack <= 0) return null;
-  return Math.floor(packCostUgx / piecesPerPack);
-}
-
 export function computeCostValidationPreview(input: {
   packCostUgx?: number;
   piecesPerPack?: number;
@@ -31,9 +35,9 @@ export function computeCostValidationPreview(input: {
 
   let unitCost: number | null = null;
   if (packCost != null && pieces != null) {
-    unitCost = unitCostFromPack(packCost, pieces);
+    unitCost = unitCostFromPackTotal(packCost, pieces);
   } else if (input.unitCostUgx != null && input.unitCostUgx >= 0) {
-    unitCost = Math.floor(input.unitCostUgx);
+    unitCost = normalizeUnitCostUgx(input.unitCostUgx);
   }
 
   const profit =
@@ -161,20 +165,22 @@ export function buildFinanceDiagnosticRows(
     stockOnHand: number;
     costPricePerUnitUgx: number;
     sellingPricePerUnitUgx: number;
+    buyingPackCostUgx?: number | null;
+    conversionRate?: number | null;
   }[],
 ): FinanceDiagnosticRow[] {
   return products.map((p) => {
     const stock = Math.max(0, Number(p.stockOnHand) || 0);
-    const cost = Math.max(0, Math.floor(p.costPricePerUnitUgx));
+    const cost = normalizeUnitCostUgx(p.costPricePerUnitUgx);
     const sell = Math.max(0, Math.floor(p.sellingPricePerUnitUgx));
     const marginPct = sell > 0 ? Math.round(((sell - cost) / sell) * 1000) / 10 : null;
     const base = {
       productId: p.id,
       name: p.name,
       stockOnHand: stock,
-      unitCostUgx: cost,
+      unitCostUgx: formatUgxDisplay(cost),
       sellPriceUgx: sell,
-      stockValueUgx: Math.round(stock * cost),
+      stockValueUgx: inventoryLineValueAtCostUgx(p),
       marginPct,
     };
     const { severity, flags } = classifyFinanceDiagnosticRow(base);

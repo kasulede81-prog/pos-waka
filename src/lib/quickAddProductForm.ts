@@ -1,4 +1,5 @@
 import type { SellingMode } from "../types";
+import { unitCostFromPackTotal } from "./costPrecision";
 
 /** Fixed sell-unit choices for the simple “add product” form (easy for shop owners). */
 export const QUICK_ADD_SELL_UNITS = ["piece", "pack", "pair", "kg", "other"] as const;
@@ -17,7 +18,7 @@ export function sellUnitPresetFromBaseUnit(baseUnit: string): QuickAddSellUnit |
 
 /** Cost per selling unit from total pack price and current stock count. */
 export function costPerUnitFromPackAndStock(packTotalUgx: number, stockQty: number): number | undefined {
-  if (packTotalUgx > 0 && stockQty > 0) return Math.floor(packTotalUgx / stockQty);
+  if (packTotalUgx > 0 && stockQty > 0) return unitCostFromPackTotal(packTotalUgx, stockQty);
   return undefined;
 }
 

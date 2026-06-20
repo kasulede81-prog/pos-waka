@@ -11,6 +11,7 @@ import type {
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import type { PosSellPreset } from "./sellingEngine";
 import { costPerBaseUnitUgx, pricePerBaseUnitUgx } from "./sellingEngine";
+import { lineCostForProductQuantity, lineProfitUgx } from "./costPrecision";
 
 export type { PharmacyBatchRecord, PharmacyPackaging, PharmacyPackagingLevel1, PharmacyPackagingLevel2 };
 
@@ -74,7 +75,7 @@ export function calcCostPerBaseUnitUgx(totalInvoiceUgx: number, totalBaseUnits: 
   const total = Math.max(0, Math.floor(totalInvoiceUgx));
   const units = Math.max(0, Math.floor(totalBaseUnits));
   if (units <= 0) return 0;
-  return Math.round(total / units);
+  return total / units;
 }
 
 export function baseUnitsPerStrip(pkg: PharmacyPackaging): number {
@@ -121,8 +122,9 @@ export function boxPriceForProduct(product: Product): number | null {
 
 /** Profit for a sale line always uses base-unit cost (quantity is in base units). */
 export function pharmacyLineProfitUgx(lineTotalUgx: number, quantityBase: number, product: Product): number {
-  const cost = costPerBaseUnitUgx(product);
-  return Math.round(Math.max(0, Math.floor(lineTotalUgx)) - quantityBase * cost);
+  const revenue = Math.max(0, Math.floor(lineTotalUgx));
+  const cost = lineCostForProductQuantity(product, quantityBase);
+  return lineProfitUgx(revenue, cost);
 }
 
 export type PackagingStockPreviewLine = { count: number; label: string };

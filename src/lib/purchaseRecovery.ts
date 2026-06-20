@@ -6,6 +6,7 @@ import type { Purchase, PurchaseLine, Supplier, SupplierPayment } from "../types
 import { isPurchaseVoided } from "./purchaseCorrections";
 import { isWalkInSupplierId } from "./walkInSupplier";
 import { parsePurchaseLineFromCloud, serializePurchaseLineForCloud } from "./purchaseLineSync";
+import { inventoryValueAtCostUgx as inventoryValueAtCostPrecise } from "./costPrecision";
 
 export type CloudPurchaseRow = {
   record: Purchase;
@@ -297,9 +298,11 @@ export function mergePurchaseRecoveryBundle(
   return { purchases, suppliers, supplierPayments };
 }
 
-export function inventoryValueAtCostUgx(products: { stockOnHand: number; costPricePerUnitUgx: number }[]): number {
-  return products.reduce(
-    (sum, p) => sum + Math.max(0, p.stockOnHand) * Math.max(0, p.costPricePerUnitUgx),
-    0,
-  );
+export function inventoryValueAtCostUgx(products: {
+  stockOnHand: number;
+  costPricePerUnitUgx: number;
+  buyingPackCostUgx?: number | null;
+  conversionRate?: number | null;
+}[]): number {
+  return inventoryValueAtCostPrecise(products);
 }

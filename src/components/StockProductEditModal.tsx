@@ -3,6 +3,7 @@ import type { Language, Product, SellingMode, StockMovement } from "../types";
 import { t } from "../lib/i18n";
 import { formatProductPriceLabel } from "../store/usePosStore";
 import { formatStockLabel } from "../lib/sellingEngine";
+import { unitCostFromPackTotal } from "../lib/costPrecision";
 import { AppModalOverlay } from "./layout/AppModalOverlay";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
@@ -37,6 +38,7 @@ type Props = {
         | "conversionRate"
         | "sellingPricePerUnitUgx"
         | "costPricePerUnitUgx"
+        | "buyingPackCostUgx"
         | "stockOnHand"
         | "minimumStockAlert"
         | "category"
@@ -149,7 +151,7 @@ export function StockProductEditModal({
     if (hasTrack) {
       buyingUnit = supplierName.trim() ? `${bought} · ${supplierName.trim()}` : bought;
       conversionRate = pieces;
-      costPricePerUnitUgx = Math.floor(pack / pieces);
+      costPricePerUnitUgx = unitCostFromPackTotal(pack, pieces);
     } else {
       buyingUnit = null;
       conversionRate = null;
@@ -173,6 +175,7 @@ export function StockProductEditModal({
       conversionRate,
       sellingPricePerUnitUgx: priceUgx,
       costPricePerUnitUgx,
+      buyingPackCostUgx: hasTrack ? pack : null,
       stockOnHand: Math.max(0, Number(stock.replace(/[^\d.-]/g, "")) || 0),
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),

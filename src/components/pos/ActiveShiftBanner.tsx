@@ -3,6 +3,9 @@ import type { Language, ShiftRecord } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatShiftDuration } from "../../lib/shiftEnforcement";
 import { shiftExpectedCash, shiftExpectedCashLabelParts } from "../../lib/saleAdjustments";
+import { activeDayDrawerOpenForDate } from "../../lib/dayDrawerOpen";
+import { dateKeyKampala } from "../../lib/datesUg";
+import { usePosStore } from "../../store/usePosStore";
 
 type Props = {
   lang: Language;
@@ -13,8 +16,25 @@ type Props = {
 
 export function ActiveShiftBanner({ lang, shift, cashierName, onCloseShift }: Props) {
   const [now, setNow] = useState(() => Date.now());
-  const parts = useMemo(() => shiftExpectedCashLabelParts(shift), [shift]);
-  const expected = shiftExpectedCash(shift);
+  const preferences = usePosStore((s) => s.preferences);
+  const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
+  const formulaVersion = preferences.cashDrawerFormulaVersion ?? "v1";
+  const cashCtx = useMemo(() => ({ formulaVersion }), [formulaVersion]);
+  const parts = useMemo(() => shiftExpectedCashLabelParts(shift, cashCtx), [shift, cashCtx]);
+  const expected = shiftExpectedCash(shift, cashCtx);
+  const dayOpen = useMemo(
+    () =>
+      formulaVersion === "v2"
+        ? activeDayDrawerOpenForDate(dayDrawerOpens, dateKeyKampala(new Date()))
+        : null,
+    [formulaVersion, dayDrawerOpens],
+  );
+  const openingFloatDisplay =
+    parts.openingFloat > 0
+      ? parts.openingFloat
+      : formulaVersion === "v2"
+        ? Math.max(0, shift.verifiedFloatUgx ?? dayOpen?.openingFloatUgx ?? 0)
+        : parts.openingFloat;
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 30_000);
@@ -45,7 +65,7 @@ export function ActiveShiftBanner({ lang, shift, cashierName, onCloseShift }: Pr
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-semibold text-teal-900 sm:grid-cols-4">
         <div>
           <dt className="text-[10px] uppercase tracking-wide text-teal-700">{t(lang, "shiftCloseOpeningFloat")}</dt>
-          <dd>UGX {(shift.openingFloatUgx ?? 0).toLocaleString()}</dd>
+          <dd>UGX {openingFloatDisplay.toLocaleString()}</dd>
         </div>
         <div>
           <dt className="text-[10px] uppercase tracking-wide text-teal-700">{t(lang, "shiftCloseSales")}</dt>

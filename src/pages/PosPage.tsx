@@ -45,6 +45,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
+import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
 import { scanTodaySalesHead } from "../lib/salesDayIndex";
 import { pendingSales } from "../lib/saleStatus";
 import { useDeferredSales } from "../hooks/useDeferredSales";
@@ -970,6 +971,7 @@ export function PosPage({ lang }: { lang: Language }) {
   }, []);
 
   const finishSale = useCallback(() => {
+    void (async () => {
     if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftPayable) {
       setToast(t(lang, "paymentCashTooLow"));
       window.setTimeout(() => setToast(null), 2200);
@@ -982,6 +984,16 @@ export function PosPage({ lang }: { lang: Language }) {
       setToast(t(lang, "debtRequiresCustomerName"));
       window.setTimeout(() => setToast(null), 3200);
       return;
+    }
+    const stockGate = await gateDraftSaleStockBeforeFinalize(shopPreferences, draftLines);
+    if (!stockGate.ok) {
+      setToast(t(lang, stockGate.errorKey));
+      window.setTimeout(() => setToast(null), 3200);
+      return;
+    }
+    if (stockGate.stockWasStale) {
+      setToast(t(lang, "staleStockSyncRecommended"));
+      window.setTimeout(() => setToast(null), 2800);
     }
     const r = finalizeDraftSale({
       debtUgx: debt,
@@ -1030,6 +1042,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setToast(hospitalityMode ? ht("saleSaved") : t(lang, "saleSaved"));
       window.setTimeout(() => setToast(null), 1600);
     }
+    })();
   }, [
     paymentMethod,
     cashInput,
@@ -1042,6 +1055,8 @@ export function PosPage({ lang }: { lang: Language }) {
     changeDue,
     finalizeDraftSale,
     lang,
+    shopPreferences,
+    draftLines,
     hapticsOn,
     soundOn,
     preferences.celebratedFirstSale,

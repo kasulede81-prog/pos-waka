@@ -10,22 +10,22 @@ import {
 } from "./costValidation";
 
 describe("unitCostFromPack", () => {
-  it("divides pack cost by pieces", () => {
-    expect(unitCostFromPack(19992, 24)).toBe(833);
-    expect(unitCostFromPack(1992, 24)).toBe(83);
+  it("keeps decimal precision from pack ÷ pieces", () => {
+    expect(unitCostFromPack(20_000, 24)).toBeCloseTo(833.3333333333, 8);
+    expect(unitCostFromPack(37_500, 48)).toBeCloseTo(781.25, 4);
   });
 });
 
 describe("computeCostValidationPreview", () => {
-  it("builds preview from pack inputs", () => {
+  it("builds preview from pack inputs with exact unit cost", () => {
     const p = computeCostValidationPreview({
-      packCostUgx: 19992,
+      packCostUgx: 20_000,
       piecesPerPack: 24,
       sellPriceUgx: 1000,
     });
-    expect(p.unitCostUgx).toBe(833);
-    expect(p.profitPerUnitUgx).toBe(167);
-    expect(p.marginPct).toBe(16.7);
+    expect(p.unitCostUgx).toBeCloseTo(833.3333333333, 8);
+    expect(p.profitPerUnitUgx).toBeCloseTo(166.6666666667, 4);
+    expect(p.marginPct).toBeCloseTo(16.7, 1);
   });
 
   it("builds preview from direct unit cost", () => {
@@ -46,9 +46,9 @@ describe("getCostValidationWarnings", () => {
     expect(getCostValidationWarnings(preview)).toContain("high_margin");
   });
 
-  it("does not warn for healthy margin", () => {
+  it("does not warn for healthy margin on crate breakdown", () => {
     const preview = computeCostValidationPreview({
-      packCostUgx: 19992,
+      packCostUgx: 20_000,
       piecesPerPack: 24,
       sellPriceUgx: 1000,
     });
@@ -92,6 +92,21 @@ describe("finance diagnostic rows", () => {
     expect(rows[0]?.severity).toBe("critical");
     expect(rows[0]?.flags).toContain("unit_cost_under_10pct");
     expect(rows[0]?.flags).toContain("margin_over_80");
+  });
+
+  it("values pack stock at full pack cost when metadata present", () => {
+    const rows = buildFinanceDiagnosticRows([
+      {
+        id: "crate",
+        name: "Soda crate",
+        stockOnHand: 24,
+        costPricePerUnitUgx: 20_000 / 24,
+        sellingPricePerUnitUgx: 1000,
+        buyingPackCostUgx: 20_000,
+        conversionRate: 24,
+      },
+    ]);
+    expect(rows[0]?.stockValueUgx).toBe(20_000);
   });
 
   it("filters and summarizes health counts", () => {

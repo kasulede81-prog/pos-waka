@@ -4,6 +4,7 @@ import { t } from "./i18n";
 import { inferFromProductName } from "./smartProductGuess";
 import { stockBreakdown } from "./sellingEngine";
 import type { WizardPrefillFromAi } from "./ai/mapAiSuggestionToWizard";
+import { unitCostFromPackTotal } from "./costPrecision";
 
 /** How customers buy one item at the till. */
 export type SellUnitKind = "piece" | "bottle" | "packet" | "kg" | "litre" | "custom";
@@ -120,7 +121,7 @@ export function sellingModeFromSellKind(kind: SellUnitKind, custom = ""): Sellin
 /** Cost per sell unit from what you paid for one full pack. */
 export function wizardCostPerSellUnitUgx(packPriceUgx: number, piecesInside: number): number | null {
   if (packPriceUgx <= 0 || piecesInside <= 0) return null;
-  return Math.floor(packPriceUgx / piecesInside);
+  return unitCostFromPackTotal(packPriceUgx, piecesInside);
 }
 
 export function profitPerSellUnitUgx(sellPriceUgx: number, costPerUnitUgx: number | null | undefined): number | null {
@@ -138,6 +139,7 @@ export type BuiltWizardProduct = {
   buyingUnit?: string;
   conversionRate?: number;
   costPricePerUnitUgx?: number;
+  buyingPackCostUgx?: number;
   quickPresetsMoneyUgx: number[];
   quickPresetsQty: number[];
   inferName: string;
@@ -180,7 +182,7 @@ export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Lan
   const buyPackPrice = Math.floor(Number(input.buyPackPriceUgx.replace(/\D/g, "")) || 0);
   const costPerUnit =
     input.hasPack && buyPackPrice > 0 && piecesPerPack > 0
-      ? Math.floor(buyPackPrice / piecesPerPack)
+      ? unitCostFromPackTotal(buyPackPrice, piecesPerPack)
       : undefined;
 
   const buyingUnit = input.hasPack && piecesPerPack > 1 ? packLabel : undefined;
@@ -205,6 +207,7 @@ export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Lan
     buyingUnit,
     conversionRate,
     costPricePerUnitUgx: costPerUnit,
+    buyingPackCostUgx: input.hasPack && buyPackPrice > 0 ? buyPackPrice : undefined,
     quickPresetsMoneyUgx,
     quickPresetsQty,
     inferName: name,

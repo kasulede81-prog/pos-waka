@@ -5,6 +5,8 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { getOrCreateDeviceId } from "../lib/deviceId";
+import { isPrimaryRegisterDevice, resolveRegisterMode, type RegisterMode } from "../lib/primaryRegisterMode";
 import type { DiscountControlMode } from "../lib/discountGovernance";
 
 const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
@@ -34,6 +36,9 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
   }
 
   const discountMode = preferences.discountControlMode ?? "unrestricted";
+  const registerMode = resolveRegisterMode(preferences);
+  const isPrimary = isPrimaryRegisterDevice(preferences);
+  const thisDeviceFp = getOrCreateDeviceId();
 
   return (
     <div className="space-y-5 pb-8">
@@ -100,6 +105,37 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
           />
           {t(lang, "kioskQuickSellLabel")}
         </label>
+      </article>
+
+      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+        <p className="text-base font-black text-stone-950">{t(lang, "registerModeTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "registerModeSub")}</p>
+        <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "registerModeTitle")}</label>
+        <select
+          value={registerMode}
+          onChange={(e) => setPreferences({ registerMode: e.target.value as RegisterMode })}
+          className="mt-2 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-semibold"
+        >
+          <option value="single">{t(lang, "registerModeSingle")}</option>
+          <option value="multi">{t(lang, "registerModeMulti")}</option>
+        </select>
+        {registerMode === "single" ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-bold text-stone-800">{t(lang, "registerModePrimaryDevice")}</p>
+            <p className="text-xs font-medium text-stone-500">
+              {isPrimary ? t(lang, "registerModeThisDevice") : preferences.primaryDeviceFingerprint ?? "—"}
+            </p>
+            {!isPrimary ? (
+              <button
+                type="button"
+                onClick={() => setPreferences({ primaryDeviceFingerprint: thisDeviceFp })}
+                className="min-h-[44px] rounded-2xl bg-waka-600 px-4 text-sm font-black text-white"
+              >
+                {t(lang, "registerModeSetPrimary")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </article>
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">

@@ -1,6 +1,7 @@
 import { fetchProfilePrimaryShopId } from "./primaryShop";
 import { supabase } from "./supabase";
 import type { PromotionalGrantRow, RemoteSubscriptionRow, SubscriptionSnapshot } from "./subscriptionEntitlements";
+import { maxDevicesHintForTier, normalizePlanCode } from "./subscriptionEntitlements";
 
 export async function resolvePrimaryOrganizationForUser(userId: string): Promise<{
   organizationId: string;
@@ -121,10 +122,12 @@ export async function fetchRemoteSubscriptionForUser(
 
   const features = plan.features as Record<string, unknown> | null;
   const devicesRaw = features?.devices;
-  const maxDevices =
+  const tier = normalizePlanCode(plan.code);
+  const maxDevicesFromFeatures =
     typeof devicesRaw === "number" && Number.isFinite(devicesRaw) && devicesRaw > 0
       ? Math.floor(devicesRaw)
       : null;
+  const maxDevices = maxDevicesFromFeatures ?? maxDevicesHintForTier(tier);
 
   const row: RemoteSubscriptionRow = {
     id: sub.id,

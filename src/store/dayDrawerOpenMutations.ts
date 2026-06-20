@@ -408,6 +408,8 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       dayDrawerOpenId: dayOpenId,
       priorShiftId,
       handoffFloatUgx: null,
+      pendingSync: true,
+      updatedAt: now,
     };
 
     if (!dayOpen.firstVerifiedByUserId) {
@@ -430,6 +432,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       segmentBaselineUgx: segmentBaseline,
       dayOpenId,
     });
+    void queueRemote("pending_shifts", { shiftId: row.id });
     return { ok: true as const, shiftId: row.id };
   };
 
@@ -463,6 +466,8 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
                 countedCashUgx: counted,
                 cashDifferenceUgx: differenceUgx,
                 handoffFloatUgx: formulaVersion === "v2" ? handoff : sh.handoffFloatUgx,
+                pendingSync: true,
+                updatedAt: endAt,
               }
             : sh,
         ),
@@ -483,6 +488,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
         actorUserId: actor.userId,
       });
     }
+    void queueRemote("pending_shifts", { shiftId: open.id });
     return { ok: true as const, differenceUgx };
   };
 
