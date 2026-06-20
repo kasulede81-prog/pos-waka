@@ -5,6 +5,16 @@ import { t } from "../../lib/i18n";
 import type { DateFilterValue } from "../../lib/dateFilters";
 import type { HistoryHeroMetric } from "../shared/HistoryHeroCard";
 import { HistoryHeroCard } from "../shared/HistoryHeroCard";
+import { SalesHistorySummaryStrip } from "./SalesHistorySummaryStrip";
+
+type SummaryProps = {
+  cashSalesUgx: number;
+  debtCollectedUgx: number;
+  expensesUgx: number;
+  expensesLabel: string;
+  stockValueUgx: number;
+  showShopSummaries: boolean;
+};
 
 type Props = {
   lang: Language;
@@ -19,6 +29,7 @@ type Props = {
   filter: DateFilterValue;
   onFilterChange: (next: DateFilterValue) => void;
   sparklinePoints?: number[];
+  summary?: SummaryProps;
 };
 
 function ProfitSparkline({ points }: { points: number[] }) {
@@ -70,6 +81,7 @@ export function SalesHistoryHeroCard({
   filter,
   onFilterChange,
   sparklinePoints,
+  summary,
 }: Props) {
   const metrics: HistoryHeroMetric[] = [
     {
@@ -117,6 +129,25 @@ export function SalesHistoryHeroCard({
   }
 
   return (
-    <HistoryHeroCard lang={lang} filter={filter} onFilterChange={onFilterChange} metrics={metrics} />
+    <HistoryHeroCard
+      lang={lang}
+      filter={filter}
+      onFilterChange={onFilterChange}
+      metrics={metrics}
+      bottomSection={
+        summary ? (
+          <SalesHistorySummaryStrip
+            lang={lang}
+            cashSalesUgx={summary.cashSalesUgx}
+            debtCollectedUgx={summary.debtCollectedUgx}
+            expensesUgx={summary.expensesUgx}
+            expensesLabel={summary.expensesLabel}
+            stockValueUgx={summary.stockValueUgx}
+            showShopSummaries={summary.showShopSummaries}
+            embedded
+          />
+        ) : undefined
+      }
+    />
   );
 }

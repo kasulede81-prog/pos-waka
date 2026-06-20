@@ -25,7 +25,7 @@
     "cap:run:android": "npm run cap:build && npx cap run android",
     "cap:apk:release": "npm run cap:build && cd android && gradlew.bat assembleRelease",
     "cap:bundle:release": "npm run cap:build && cd android && gradlew.bat bundleRelease",
-    "supabase:deploy:admin": "supabase functions deploy admin-set-owner-password --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy admin-permanently-delete-shop-account --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy admin-delete-marketing-agent --project-ref ljaedextsenbkxzzgxcg",
+    "supabase:deploy:admin": "supabase functions deploy admin-set-owner-password --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy admin-permanently-delete-shop-account --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy owner-permanently-delete-account --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy admin-delete-marketing-agent --project-ref ljaedextsenbkxzzgxcg",
     "supabase:deploy:ai": "supabase functions deploy ai-suggest-product --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy ai-business-setup --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy ai-bulk-inventory --project-ref ljaedextsenbkxzzgxcg && supabase functions deploy ai-health --project-ref ljaedextsenbkxzzgxcg",
     "stress:stability": "node scripts/stability-stress.mjs",
     "stress:reporting": "node scripts/reporting-stress.mjs",

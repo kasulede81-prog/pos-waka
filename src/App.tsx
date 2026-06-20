@@ -39,6 +39,7 @@ import { ArchiveDataPage } from "./pages/ArchiveDataPage";
 import { BackupSyncPage } from "./pages/BackupSyncPage";
 import { CashManagementPage } from "./pages/CashManagementPage";
 import { AccountPage } from "./pages/AccountPage";
+import { AccountDeletionPage } from "./pages/AccountDeletionPage";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MarketingHomePage } from "./pages/MarketingHomePage";
 import { AboutPage } from "./pages/public/AboutPage";
@@ -470,6 +471,18 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.view">
                   <BackupSyncPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/account/delete"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <AccountDeletionPage
+                    lang={lang}
+                    userId={auth.user?.id ?? null}
+                    onSignOut={auth.signOut}
+                  />
                 </RoleProtectedRoute>
               }
             />

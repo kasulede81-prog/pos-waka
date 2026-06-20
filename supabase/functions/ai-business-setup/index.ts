@@ -10,6 +10,29 @@ import { callDeepSeekBusinessSetup } from "../_shared/deepseekClient.ts";
 
 const FEATURE = "business_setup_assistant";
 
+function parseTemplateMeta(desc: string | null | undefined): { businessType?: string; userDesc?: string } {
+  if (!desc) return {};
+  try {
+    const j = JSON.parse(desc) as { business_type?: string; user_description?: string | null };
+    if (j && typeof j === "object" && typeof j.business_type === "string") {
+      return {
+        businessType: j.business_type,
+        userDesc: j.user_description != null ? String(j.user_description) : undefined,
+      };
+    }
+  } catch {
+    /* legacy plain-text description */
+  }
+  return { userDesc: desc };
+}
+
+function encodeTemplateMeta(businessType: string, userDesc?: string | null): string {
+  return JSON.stringify({
+    business_type: businessType,
+    user_description: userDesc ?? null,
+  });
+}
+
 function templateFromRow(row: Record<string, unknown>): AiBusinessSetupResult {
   const shelves = Array.isArray(row.shelves) ? row.shelves.map(String) : [];
   const starterRaw = row.starter_products;
@@ -98,6 +121,16 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (!forceRegenerate && existingTemplate) {
+    const meta = parseTemplateMeta(
+      existingTemplate.business_description != null ? String(existingTemplate.business_description) : null,
+    );
+    const cacheStillValid =
+      Boolean(shopRow.ai_setup_completed_at) ||
+      !businessType ||
+      !meta.businessType ||
+      meta.businessType === businessType;
+
+    if (cacheStillValid) {
     const setup = templateFromRow(existingTemplate as Record<string, unknown>);
     const guard = await assertAiFeatureAllowed(admin, FEATURE, { userId, shopId }, true);
     if (!guard.allowed) {
@@ -118,6 +151,7 @@ Deno.serve(async (req) => {
     });
 
     return aiSuccess({ from_cache: true, shop_id: shopId, setup });
+    }
   }
 
   if (forceRegenerate) {
@@ -167,7 +201,7 @@ Deno.serve(async (req) => {
     shop_id: shopId,
     organization_id: shopRow.organization_id,
     detected_nature: result.setup.detectedNature,
-    business_description: businessDescription || null,
+    business_description: encodeTemplateMeta(businessType, businessDescription || null),
     shelves: result.setup.shelves,
     starter_products: result.setup.starterProducts,
     model: deepseekModelFromSettings(guard.settings),

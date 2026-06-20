@@ -21,6 +21,8 @@ import { formatDateFilterViewingLabel } from "../lib/dateFilterLabels";
 import { getCachedOwnerCommandCenterBundle } from "../lib/ownerDashboardCommandCenter";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { computeSyncSalesStats } from "../offline/cloudSync";
+import { OwnerCloudProtectionCard } from "../components/owner/OwnerCloudProtectionCard";
+import { buildCloudRecoverySnapshotFromStore } from "../lib/cloudAuthorityAudit";
 import { useOwnerDeviceHealth } from "../hooks/useOwnerDeviceHealth";
 
 export function OwnerDashboardPage({ lang }: { lang: Language }) {
@@ -131,6 +133,12 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     ],
   );
 
+  const cloudProtection = useMemo(() => buildCloudRecoverySnapshotFromStore(), [
+    commandCenter,
+    sync.pendingCount,
+    sync.health.lastSuccessAt,
+  ]);
+
   const onAcknowledge = useCallback(
     (alertId: string) => {
       acknowledgeOwnerAlert(alertId);
@@ -170,6 +178,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
       ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+
+      <OwnerCloudProtectionCard lang={lang} cloud={cloudProtection} />
 
       <OwnerAttentionCenterSection
         lang={lang}

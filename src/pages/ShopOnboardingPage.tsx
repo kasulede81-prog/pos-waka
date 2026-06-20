@@ -20,6 +20,7 @@ import {
 import { starterPackForBusinessType, type StarterLine } from "../data/starterPacks";
 import { AiBusinessSetupCard } from "../components/onboarding/AiBusinessSetupCard";
 import type { AiStarterProductRow } from "../lib/ai/aiBusinessSchemas";
+import { useSilentAiBusinessSetupPrefetch } from "../hooks/useSilentAiBusinessSetupPrefetch";
 import { usePosStore } from "../store/usePosStore";
 import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { captureAppException } from "../lib/crashReporting";
@@ -65,6 +66,13 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     isSuperAdmin: bizTypeSuperAdmin,
     loading: bizTypeSettingsLoading,
   } = useBusinessTypeVisibility({ forRegistration: true });
+  const { prefetch: prefetchAiSetup } = useSilentAiBusinessSetupPrefetch({
+    enabled: authMode !== "local",
+  });
+
+  const triggerAiSetupPrefetch = (bt: BusinessType) => {
+    prefetchAiSetup({ shopName, businessType: bt });
+  };
 
   const visibleBusinessCards = useMemo(
     () => filterOnboardingBusinessCards(ONBOARDING_BUSINESS_CARDS, bizTypeSettings, bizTypeSuperAdmin),
@@ -386,10 +394,13 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                       setSelectedBusinessCardId(card.id);
                       if (card.hospitalityGroup) {
                         setPickedHospitalityGroup(true);
-                        setBusinessType(businessTypeForHospitalityStyle(hospitalityStyleId));
+                        const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
+                        setBusinessType(bt);
+                        triggerAiSetupPrefetch(bt);
                       } else if (card.businessType) {
                         setPickedHospitalityGroup(false);
                         setBusinessType(card.businessType);
+                        triggerAiSetupPrefetch(card.businessType);
                       }
                     }}
                     className={`${cardBtn} ${selected ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"}`}
@@ -406,9 +417,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               className={primaryBtn}
               onClick={() => {
                 if (pickedHospitalityGroup || isHospitalityOnboardingGroupCard(selectedBusinessCardId)) {
-                  setBusinessType(businessTypeForHospitalityStyle(hospitalityStyleId));
+                  const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
+                  setBusinessType(bt);
+                  triggerAiSetupPrefetch(bt);
                   setStep("hospitality_style");
                 } else {
+                  triggerAiSetupPrefetch(businessType);
                   setStep("selling");
                 }
               }}
@@ -434,6 +448,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                   onClick={() => {
                     setHospitalityStyleId(style.id);
                     setBusinessType(style.businessType);
+                    triggerAiSetupPrefetch(style.businessType);
                   }}
                   className={`${cardBtn} ${
                     hospitalityStyleId === style.id ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"
@@ -448,7 +463,9 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               type="button"
               className={primaryBtn}
               onClick={() => {
-                setBusinessType(businessTypeForHospitalityStyle(hospitalityStyleId));
+                const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
+                setBusinessType(bt);
+                triggerAiSetupPrefetch(bt);
                 setStep("selling");
               }}
             >

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Language } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { hasPermission } from "../../lib/permissions";
 import { useSessionActor } from "../../context/SessionActorContext";
@@ -11,11 +11,20 @@ import {
   getLastSnapshotUploadTrimAnalysis,
   type SnapshotTrimAnalysis,
 } from "../../lib/snapshotTrimDiagnostics";
-import {
-  buildPostRestoreValidationSnapshot,
+import { buildPostRestoreValidationSnapshot,
   getLastPostRestoreValidation,
   type PostRestoreValidationSnapshot,
 } from "../../lib/postRestoreValidation";
+import { buildCloudRecoverySnapshotFromStore } from "../../lib/cloudAuthorityAudit";
+import { readLastCloudRecoveryDiagnostics } from "../../lib/cloudRecoverySession";
+import { buildRecoveryCompletenessReport } from "../../lib/cloudRecoveryCompleteness";
+import { wasLastSalesPullTruncated } from "../../offline/cloudSync";
+import {
+  buildCloudRecoverySimulationReport,
+  getLastCloudRecoveryValidation,
+  recordCloudRecoveryValidation,
+  type CloudRecoveryValidationResult,
+} from "../../lib/cloudRecoveryValidator";
 import { snapshotFromPartial } from "../../offline/backupEngine";
 import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
@@ -76,6 +85,9 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
 
   const [queueSnap, setQueueSnap] = useState<QueueSyncDiagnosticSnapshot | null>(null);
   const [archiveTotal, setArchiveTotal] = useState(0);
+  const [simResult, setSimResult] = useState<CloudRecoveryValidationResult | null>(() =>
+    getLastCloudRecoveryValidation(),
+  );
 
   const canView = hasPermission(actor.role, "owner.dashboard");
 
@@ -141,6 +153,15 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
     });
   }, [shared, products, customers, sales, debtPayments, stockMovements, suppliers, purchases, supplierPayments]);
 
+  const cloudRecovery = useMemo(() => buildCloudRecoverySnapshotFromStore(), [
+    products.length,
+    sales.length,
+    customers.length,
+    purchases.length,
+    suppliers.length,
+    debtPayments.length,
+  ]);
+
   const lastRestore = getLastRestoreQueueSafety();
   const lastUploadTrim = getLastSnapshotUploadTrimAnalysis();
   const lastPostRestore = getLastPostRestoreValidation();
@@ -148,6 +169,26 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
   if (!canView) return null;
 
   const overallStatus = liveValidation.overallStatus;
+
+  const lastRecovery = readLastCloudRecoveryDiagnostics();
+
+  const completeness = useMemo(() => {
+    const s = usePosStore.getState();
+    return buildRecoveryCompletenessReport({
+      validation: buildCloudRecoverySimulationReport(),
+      probe: { hasSnapshot: true, snapshotUpdatedAt: null, hasCloudProducts: products.length > 0 },
+      stockMovements: s.stockMovements.length,
+      inventoryCountSessions: s.inventoryCountSessions.length,
+      archivedSales: archivedSales.length,
+      salesPullTruncated: wasLastSalesPullTruncated(),
+    });
+  }, [products.length, sales.length, archivedSales.length]);
+
+  const runRecoverySimulation = () => {
+    const result = buildCloudRecoverySimulationReport();
+    recordCloudRecoveryValidation(result);
+    setSimResult(result);
+  };
 
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
@@ -157,6 +198,118 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
       <p className={`mt-3 rounded-xl px-3 py-2 text-sm font-bold ${statusClass(overallStatus)}`}>
         {statusLabel(lang, overallStatus)}
       </p>
+
+      <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "cloudRecoveryStatusTitle")}</p>
+        <p className="mt-1 text-2xl font-black tabular-nums text-stone-950">
+          {tTemplate(lang, "cloudRecoveryScoreLabel", { pct: cloudRecovery.scorePct })}
+        </p>
+        <p className="mt-1 text-xs font-semibold text-stone-600">
+          {t(lang, cloudRecovery.badgeKey)} · {cloudRecovery.authoritativeCount} {t(lang, "cloudProtectionAuthoritative")} ·{" "}
+          {cloudRecovery.partialCount} {t(lang, "cloudProtectionPartial")} · {cloudRecovery.localOnlyCount}{" "}
+          {t(lang, "cloudProtectionLocalOnly")}
+        </p>
+        {!cloudRecovery.recoveryReady ? (
+          <p className="mt-2 text-xs font-semibold text-amber-900">{t(lang, "cloudRecoveryNotReadyHint")}</p>
+        ) : null}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "recoveryCompletenessTitle")}</p>
+        <p className="mt-1 text-2xl font-black tabular-nums text-stone-950">{completeness.scorePct}%</p>
+        <ul className="mt-2 space-y-1 text-xs text-stone-700">
+          {completeness.categories.map((cat) => (
+            <li key={cat.id} className="flex justify-between gap-2">
+              <span>{t(lang, cat.labelKey)}</span>
+              <span className={cat.restored ? "font-bold text-emerald-800" : "font-bold text-amber-800"}>
+                {cat.restored ? "✓" : "…"} {cat.localCount}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <Section title={t(lang, "cloudEntityMatrixTitle")}>
+        <ul className="space-y-1">
+          {cloudRecovery.entities.map((entity) => (
+            <li key={entity.id} className="flex flex-wrap items-center justify-between gap-1 text-xs">
+              <span className="font-semibold text-stone-800">{t(lang, entity.labelKey)}</span>
+              <span className="font-bold text-stone-600">
+                {t(lang, entity.protectionLabelKey)}
+                {entity.localCount > 0 ? ` · ${entity.localCount}` : ""}
+                {entity.unsyncedCount > 0 ? ` · ${entity.unsyncedCount} unsynced` : ""}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section title={t(lang, "recoveryDiagnosticsTitle")}>
+        {lastRecovery?.finishedAt ? (
+          <>
+            <p>
+              {lastRecovery.status === "complete"
+                ? t(lang, "recoveryDiagnosticsSuccess")
+                : t(lang, "recoveryDiagnosticsFailure")}
+              {" · "}
+              {new Date(lastRecovery.finishedAt).toLocaleString()}
+            </p>
+            {lastRecovery.durationMs != null ? (
+              <p>
+                {t(lang, "recoveryDiagnosticsDuration")}: {Math.round(lastRecovery.durationMs / 1000)}s
+              </p>
+            ) : null}
+            <p>
+              {t(lang, "recoveryDiagnosticsCounts")}: {lastRecovery.entityCounts.products} products ·{" "}
+              {lastRecovery.entityCounts.sales} sales · {lastRecovery.entityCounts.customers} customers ·{" "}
+              {lastRecovery.entityCounts.shifts} shifts · {lastRecovery.entityCounts.dayCloses} day closes
+            </p>
+            {lastRecovery.completeness ? (
+              <p className="text-xs font-semibold text-stone-700">
+                {t(lang, "recoveryCompletenessTitle")}: {lastRecovery.completeness.scorePct}%
+              </p>
+            ) : null}
+            {lastRecovery.errorMessage ? (
+              <p className="text-xs font-semibold text-rose-900">{lastRecovery.errorMessage}</p>
+            ) : null}
+          </>
+        ) : (
+          <p className="text-stone-500">{t(lang, "recoveryDiagnosticsNone")}</p>
+        )}
+      </Section>
+
+      <div className="mt-4 rounded-xl border border-stone-200 bg-stone-50/80 p-3">
+        <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "cloudRecoverySimulationTitle")}</p>
+        <p className="mt-1 text-sm text-stone-600">{t(lang, "cloudRecoverySimulationSub")}</p>
+        <button
+          type="button"
+          onClick={runRecoverySimulation}
+          className="mt-3 inline-flex min-h-[40px] items-center rounded-xl bg-stone-900 px-4 text-sm font-black text-white"
+        >
+          {t(lang, "cloudRecoverySimulationRun")}
+        </button>
+        {simResult ? (
+          <div className="mt-3 space-y-1 text-sm text-stone-800">
+            <p className={`font-bold ${simResult.ok ? "text-emerald-800" : "text-amber-900"}`}>
+              {simResult.ok ? t(lang, "cloudRecoverySimulationOk") : t(lang, "cloudRecoverySimulationFail")}
+            </p>
+            <p>{t(lang, "cloudRecoverySimulationCounts")}: {simResult.counts.products} products · {simResult.counts.sales} sales · {simResult.counts.customers} customers</p>
+            <p>{t(lang, "cloudRecoverySimulationFinancial")}: UGX {simResult.financial.revenueUgx.toLocaleString()} revenue · UGX {simResult.financial.profitUgx.toLocaleString()} profit</p>
+            <p>{t(lang, "cloudRecoverySimulationInventory")}: UGX {simResult.inventoryValueUgx.toLocaleString()}</p>
+            <p>{t(lang, "cloudRecoverySimulationDebt")}: {simResult.debtMismatches}</p>
+            {simResult.failures.length > 0 ? (
+              <ul className="mt-2 space-y-1 text-xs text-amber-950">
+                {simResult.failures.map((f) => (
+                  <li key={f.code}>
+                    <strong>{f.severity}</strong>: {f.message}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <p className="text-xs text-stone-500">{new Date(simResult.checkedAt).toLocaleString()}</p>
+          </div>
+        ) : null}
+      </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Section title={t(lang, "recoverySectionSyncQueue")}>

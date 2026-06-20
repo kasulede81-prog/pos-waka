@@ -5059,6 +5059,10 @@ async function runPostBootstrapTasks(): Promise<void> {
   const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
   void hydrateLocalShopProfileFromCloud().catch(() => undefined);
   void applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
+  const { isCloudRecoveryLockActive } = await import("../lib/cloudRecoverySession");
+  if (isCloudRecoveryLockActive()) return;
+  const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");
+  if (await shouldRequireRecoveryLock().catch(() => true)) return;
   const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
   const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
   const localEmpty = isLocalShopDataEmpty();
@@ -5280,21 +5284,24 @@ export async function bootstrapPosFromDisk(): Promise<void> {
     } else {
       const preferences = preferencesForAccountBootstrap(key);
       usePosStore.getState().hydrateEssentials({ products: [], customers: [], preferences });
-      void writeSnapshot({
-        products: [],
-        customers: [],
-        sales: [],
-        preferences,
-        debtPayments: [],
-        dayCloses: [],
-        auditLogs: [],
-        suppliers: [],
-        purchases: [],
-        supplierPayments: [],
-        stockMovements: [],
-        voidRecords: [],
-        returnRecords: [],
-      });
+      // Supabase accounts: skip empty disk write until cloud recovery completes (P0 snapshot safety).
+      if (!key.startsWith("sb:")) {
+        void writeSnapshot({
+          products: [],
+          customers: [],
+          sales: [],
+          preferences,
+          debtPayments: [],
+          dayCloses: [],
+          auditLogs: [],
+          suppliers: [],
+          purchases: [],
+          supplierPayments: [],
+          stockMovements: [],
+          voidRecords: [],
+          returnRecords: [],
+        });
+      }
     }
     scheduleLegacySnapshotMigration(snap);
   };

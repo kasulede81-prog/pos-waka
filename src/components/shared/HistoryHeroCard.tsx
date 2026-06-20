@@ -22,6 +22,8 @@ type Props = {
   datePickerFooter?: ReactNode;
   /** Compact strip below metrics (e.g. POS action chips). */
   footer?: ReactNode;
+  /** White section below date picker (e.g. sales history summary grid). */
+  bottomSection?: ReactNode;
 };
 
 export function HistoryHeroCard({
@@ -32,6 +34,7 @@ export function HistoryHeroCard({
   dateLabelOverride,
   datePickerFooter,
   footer,
+  bottomSection,
 }: Props) {
   const count = Math.min(3, Math.max(1, metrics.length));
   const gridClass = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3";
@@ -70,6 +73,9 @@ export function HistoryHeroCard({
           labelOverride={dateLabelOverride}
           footer={datePickerFooter}
         />
+      ) : null}
+      {bottomSection ? (
+        <div className="border-t border-white/20 bg-white text-stone-900">{bottomSection}</div>
       ) : null}
     </div>
   );

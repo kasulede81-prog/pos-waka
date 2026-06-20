@@ -28,6 +28,7 @@ export type SyncCheckpoints = {
   lastInventoryCountSessionsSyncAt: string | null;
   lastShiftsSyncAt: string | null;
   lastDayClosesSyncAt: string | null;
+  lastStockMovementsSyncAt: string | null;
 };
 
 const empty: SyncCheckpoints = {
@@ -47,6 +48,7 @@ const empty: SyncCheckpoints = {
   lastInventoryCountSessionsSyncAt: null,
   lastShiftsSyncAt: null,
   lastDayClosesSyncAt: null,
+  lastStockMovementsSyncAt: null,
 };
 
 function scopedKey(): string | null {
@@ -88,6 +90,8 @@ export function readSyncCheckpoints(): SyncCheckpoints {
         typeof o.lastInventoryCountSessionsSyncAt === "string" ? o.lastInventoryCountSessionsSyncAt : null,
       lastShiftsSyncAt: typeof o.lastShiftsSyncAt === "string" ? o.lastShiftsSyncAt : null,
       lastDayClosesSyncAt: typeof o.lastDayClosesSyncAt === "string" ? o.lastDayClosesSyncAt : null,
+      lastStockMovementsSyncAt:
+        typeof o.lastStockMovementsSyncAt === "string" ? o.lastStockMovementsSyncAt : null,
     };
   } catch {
     return { ...empty };
@@ -133,6 +137,7 @@ export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCh
     lastInventoryCountSessionsSyncAt: at,
     lastShiftsSyncAt: at,
     lastDayClosesSyncAt: at,
+    lastStockMovementsSyncAt: at,
   });
 }
 
@@ -151,6 +156,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   inventoryCountSessions?: boolean;
   shifts?: boolean;
   dayCloses?: boolean;
+  stockMovements?: boolean;
   /** Fallback cursor when per-entity cursors are omitted. */
   at?: string;
   salesAt?: string;
@@ -168,6 +174,7 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   inventoryCountSessionsAt?: string;
   shiftsAt?: string;
   dayClosesAt?: string;
+  stockMovementsAt?: string;
 }): SyncCheckpoints {
   const fallback = partial.at ?? new Date().toISOString();
   const patch: Partial<SyncCheckpoints> = {};
@@ -200,6 +207,9 @@ export function updateCheckpointsAfterIncrementalPull(partial: {
   }
   if (partial.dayCloses) {
     patch.lastDayClosesSyncAt = partial.dayClosesAt ?? fallback;
+  }
+  if (partial.stockMovements) {
+    patch.lastStockMovementsSyncAt = partial.stockMovementsAt ?? fallback;
   }
   return writeSyncCheckpoints(patch);
 }

@@ -14,6 +14,7 @@ import type {
   SaleLine,
   SellingMode,
   ShiftRecord,
+  StockMovement,
   Supplier,
   SupplierPayment,
 } from "../types";
@@ -74,6 +75,12 @@ import {
 } from "../lib/inventoryCountCloudSync";
 import { mergeShiftsFromCloudPull } from "../lib/shiftRecovery";
 import { pullShiftsFromRpc, pushShiftToCloud } from "../lib/shiftCloudSync";
+import {
+  pullStockMovementsFull,
+  pullStockMovementsIncremental,
+  pushStockMovementToCloud,
+} from "../lib/stockMovementCloudSync";
+import { mergeStockMovementsFromCloudPull } from "../lib/stockMovementRecovery";
 import { mergeDayClosesFromCloudPull } from "../lib/dayCloseRecovery";
 import { pullDayClosesFromRpc, pushDayCloseToCloud } from "../lib/dayCloseCloudSync";
 import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
@@ -1528,6 +1535,8 @@ export type CloudPullStats = {
   expenses: number;
   payloadBytes: number;
   durationMs: number;
+  salesTruncated?: boolean;
+  stockMovements?: number;
 };
 
 export type CloudPullCheckpoints = {
@@ -1545,6 +1554,7 @@ export type CloudPullCheckpoints = {
   inventoryCountSessionsAt: string;
   shiftsAt: string;
   dayClosesAt: string;
+  stockMovementsAt: string;
 };
 
 export type CloudPullResult = {
@@ -1565,6 +1575,7 @@ export type CloudPullResult = {
   inventoryCountSessions: InventoryCountSession[];
   shifts: ShiftRecord[];
   dayCloses: DayCloseSummary[];
+  stockMovements: StockMovement[];
   deletedProductIds: string[];
   voidedSaleIds: string[];
   stats: CloudPullStats;
@@ -1572,7 +1583,8 @@ export type CloudPullResult = {
 };
 
 const FULL_SALES_PAGE = 800;
-const FULL_SALES_MAX_PAGES = 20;
+/** Safety guard only — not a business limit (500 pages × 800 = 400k sales). */
+const FULL_SALES_SAFETY_MAX_PAGES = 500;
 const INCREMENTAL_SALES_LIMIT = 500;
 const INCREMENTAL_PRODUCTS_LIMIT = 500;
 const INCREMENTAL_CUSTOMERS_LIMIT = 500;
@@ -1583,6 +1595,12 @@ const INCREMENTAL_SUPPLIERS_LIMIT = 500;
 const INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT = 500;
 const INCREMENTAL_DEBT_PAYMENTS_LIMIT = 500;
 const INCREMENTAL_MAX_PAGES = 40;
+
+let lastSalesPullTruncated = false;
+
+export function wasLastSalesPullTruncated(): boolean {
+  return lastSalesPullTruncated;
+}
 
 const CUSTOMER_DEBT_PAYMENTS_SELECT = "id, shop_id, customer_id, amount_ugx, created_at, metadata";
 
@@ -1637,12 +1655,22 @@ function parseSaleRows(rawRows: Record<string, unknown>[]): { sales: Sale[]; voi
   return { sales, voidedIds };
 }
 
-async function pullSalesFull(ctx: ShopCtx): Promise<{ sales: Sale[]; voidedIds: string[]; bytes: number }> {
+async function pullSalesFull(ctx: ShopCtx): Promise<{
+  sales: Sale[];
+  voidedIds: string[];
+  bytes: number;
+  truncated: boolean;
+}> {
   const sales: Sale[] = [];
   const voidedIds: string[] = [];
   let bytes = 0;
   let offset = 0;
-  for (let page = 0; page < FULL_SALES_MAX_PAGES; page++) {
+  let truncated = false;
+  for (let page = 0; ; page++) {
+    if (page >= FULL_SALES_SAFETY_MAX_PAGES) {
+      truncated = true;
+      break;
+    }
     const { data: saleRows, error: sErr } = await supabase!
       .from("sales")
       .select("*, sale_line_items(*)")
@@ -1663,19 +1691,27 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{ sales: Sale[]; voidedIds: 
     await yieldUiTick();
   }
 
-  const { data: voidedRows, error: vErr } = await supabase!
-    .from("sales")
-    .select("id")
-    .eq("shop_id", ctx.shopId)
-    .eq("status", "voided")
-    .limit(5000);
-  if (vErr) throw vErr;
-  for (const row of voidedRows ?? []) {
-    const id = String((row as { id?: string }).id ?? "");
-    if (isUuid(id) && !voidedIds.includes(id)) voidedIds.push(id);
+  let voidOffset = 0;
+  for (let page = 0; page < FULL_SALES_SAFETY_MAX_PAGES; page++) {
+    const { data: voidedRows, error: vErr } = await supabase!
+      .from("sales")
+      .select("id")
+      .eq("shop_id", ctx.shopId)
+      .eq("status", "voided")
+      .order("created_at", { ascending: true })
+      .range(voidOffset, voidOffset + FULL_SALES_PAGE - 1);
+    if (vErr) throw vErr;
+    const batch = voidedRows ?? [];
+    if (batch.length === 0) break;
+    for (const row of batch) {
+      const id = String((row as { id?: string }).id ?? "");
+      if (isUuid(id) && !voidedIds.includes(id)) voidedIds.push(id);
+    }
+    if (batch.length < FULL_SALES_PAGE) break;
+    voidOffset += FULL_SALES_PAGE;
   }
 
-  return { sales, voidedIds, bytes };
+  return { sales, voidedIds, bytes, truncated };
 }
 
 async function pullSalesIncremental(
@@ -1712,29 +1748,54 @@ async function pullSalesIncremental(
 }
 
 async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
-  const { data: productRows, error: pErr } = await supabase!
-    .from("products")
-    .select("*")
-    .eq("shop_id", ctx.shopId)
-    .eq("is_active", true)
-    .order("updated_at", { ascending: false })
-    .limit(5000);
-  if (pErr) throw pErr;
-  const rows = productRows ?? [];
-  const products = rows.map((r) => rowToProduct(r as Record<string, unknown>)).filter((p): p is Product => p != null);
+  const products: Product[] = [];
+  const deletedIds: string[] = [];
+  let bytes = 0;
+  let offset = 0;
+  for (let page = 0; page < FULL_SALES_SAFETY_MAX_PAGES; page++) {
+    const { data: productRows, error: pErr } = await supabase!
+      .from("products")
+      .select("*")
+      .eq("shop_id", ctx.shopId)
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false })
+      .range(offset, offset + INCREMENTAL_PRODUCTS_LIMIT - 1);
+    if (pErr) throw pErr;
+    const rows = productRows ?? [];
+    bytes += estimatePayloadBytes(rows);
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      const p = rowToProduct(r as Record<string, unknown>);
+      if (p) products.push(p);
+    }
+    if (rows.length < INCREMENTAL_PRODUCTS_LIMIT) break;
+    offset += INCREMENTAL_PRODUCTS_LIMIT;
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
+  }
 
-  const { data: deletedRows, error: dErr } = await supabase!
-    .from("products")
-    .select("id")
-    .eq("shop_id", ctx.shopId)
-    .eq("is_active", false)
-    .limit(5000);
-  if (dErr) throw dErr;
-  const deletedIds = (deletedRows ?? [])
-    .map((r) => String((r as { id?: string }).id ?? ""))
-    .filter((id) => isUuid(id));
+  let delOffset = 0;
+  for (let page = 0; page < FULL_SALES_SAFETY_MAX_PAGES; page++) {
+    const { data: deletedRows, error: dErr } = await supabase!
+      .from("products")
+      .select("id")
+      .eq("shop_id", ctx.shopId)
+      .eq("is_active", false)
+      .order("updated_at", { ascending: true })
+      .range(delOffset, delOffset + INCREMENTAL_PRODUCTS_LIMIT - 1);
+    if (dErr) throw dErr;
+    const rows = deletedRows ?? [];
+    bytes += estimatePayloadBytes(rows);
+    if (rows.length === 0) break;
+    for (const r of rows) {
+      const id = String((r as { id?: string }).id ?? "");
+      if (isUuid(id)) deletedIds.push(id);
+    }
+    if (rows.length < INCREMENTAL_PRODUCTS_LIMIT) break;
+    delOffset += INCREMENTAL_PRODUCTS_LIMIT;
+  }
 
-  return { products, deletedIds, bytes: estimatePayloadBytes(rows) + estimatePayloadBytes(deletedRows ?? []) };
+  return { products, deletedIds, bytes };
 }
 
 async function pullProductsIncremental(
@@ -2369,6 +2430,10 @@ async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashE
 export async function pullShopDataFromCloud(opts?: {
   mode?: CloudPullMode;
   forceFull?: boolean;
+  onRecoveryStep?: (
+    step: import("../lib/cloudRecoverySession").CloudRecoveryStepId,
+    counts?: Partial<import("../lib/cloudRecoverySession").CloudRecoveryEntityCounts>,
+  ) => void;
 }): Promise<CloudPullResult | null> {
   const started = performance.now();
   const ctx = await resolveShopCtx();
@@ -2391,6 +2456,7 @@ export async function pullShopDataFromCloud(opts?: {
   let inventoryCountSessions: InventoryCountSession[] = [];
   let shifts: ShiftRecord[] = [];
   let dayCloses: DayCloseSummary[] = [];
+  let stockMovements: StockMovement[] = [];
   let returnCloudRows: CloudReturnRow[] = [];
   let purchaseCloudRows: CloudPurchaseRow[] = [];
   let supplierCloudRows: CloudSupplierRow[] = [];
@@ -2404,6 +2470,8 @@ export async function pullShopDataFromCloud(opts?: {
   let debtPaymentCount = 0;
   let payloadBytes = 0;
   let pullCheckpoints: CloudPullCheckpoints | undefined;
+  let salesTruncated = false;
+  let stockMovementCount = 0;
 
   try {
     if (mode === "full") {
@@ -2411,15 +2479,20 @@ export async function pullShopDataFromCloud(opts?: {
       products = p.products;
       deletedProductIds = p.deletedIds;
       payloadBytes += p.bytes;
-
-      const c = await pullCustomersFull(ctx);
-      customers = c.customers;
-      payloadBytes += c.bytes;
+      opts?.onRecoveryStep?.("products", { products: products.length });
 
       const s = await pullSalesFull(ctx);
       sales = s.sales;
       voidedSaleIds = s.voidedIds;
       payloadBytes += s.bytes;
+      salesTruncated = s.truncated;
+      lastSalesPullTruncated = s.truncated;
+      opts?.onRecoveryStep?.("sales", { sales: sales.length });
+
+      const c = await pullCustomersFull(ctx);
+      customers = c.customers;
+      payloadBytes += c.bytes;
+      opts?.onRecoveryStep?.("customers", { customers: customers.length });
 
       const exFull = await pullCashExpensesFull(ctx);
       cashExpenses = exFull.cashExpenses;
@@ -2462,14 +2535,28 @@ export async function pullShopDataFromCloud(opts?: {
       const icsFull = await pullInventoryCountSessionsFromRpc(ctx, null);
       inventoryCountSessions = icsFull.sessions;
       payloadBytes += icsFull.bytes;
+      opts?.onRecoveryStep?.("inventory", {
+        inventory: inventoryCountSessions.length > 0 ? inventoryCountSessions.length : products.length,
+      });
 
       const shiftsFull = await pullShiftsFromRpc(ctx, null);
       shifts = shiftsFull.shifts;
       payloadBytes += shiftsFull.bytes;
+      opts?.onRecoveryStep?.("shifts", { shifts: shifts.length });
 
       const dcFull = await pullDayClosesFromRpc(ctx, null);
       dayCloses = dcFull.dayCloses;
       payloadBytes += dcFull.bytes;
+      opts?.onRecoveryStep?.("day_closes", { dayCloses: dayCloses.length });
+
+      opts?.onRecoveryStep?.("cash", {
+        cashRecords: cashDrawerAdjustments.length + dayDrawerOpens.length + cashExpenses.length,
+      });
+
+      const smFull = await pullStockMovementsFull(ctx);
+      stockMovements = smFull.movements;
+      stockMovementCount = smFull.movements.length;
+      payloadBytes += smFull.bytes;
     } else {
       const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
       const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
@@ -2551,6 +2638,12 @@ export async function pullShopDataFromCloud(opts?: {
       dayCloses = dc.dayCloses;
       payloadBytes += dc.bytes;
 
+      const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
+      const sm = await pullStockMovementsIncremental(ctx, sinceStockMovements);
+      stockMovements = sm.movements;
+      stockMovementCount = sm.movements.length;
+      payloadBytes += sm.bytes;
+
       pullCheckpoints = {
         salesAt: s.checkpointAt,
         productsAt: p.checkpointAt,
@@ -2566,6 +2659,7 @@ export async function pullShopDataFromCloud(opts?: {
         inventoryCountSessionsAt: ics.checkpointAt,
         shiftsAt: sh.checkpointAt,
         dayClosesAt: dc.checkpointAt,
+        stockMovementsAt: sm.checkpointAt,
       };
     }
   } catch {
@@ -2602,6 +2696,8 @@ export async function pullShopDataFromCloud(opts?: {
     supplierPayments: supplierPaymentCount,
     payloadBytes,
     durationMs: Math.round(performance.now() - started),
+    salesTruncated,
+    stockMovements: stockMovementCount,
   };
 
   const { isDiagnosticsEnabled, recordCloudPullStats } = await import("../lib/stabilityDiagnostics");
@@ -2624,6 +2720,7 @@ export async function pullShopDataFromCloud(opts?: {
     inventoryCountSessions,
     shifts,
     dayCloses,
+    stockMovements,
     deletedProductIds,
     voidedSaleIds,
     stats,
@@ -2632,7 +2729,13 @@ export async function pullShopDataFromCloud(opts?: {
 }
 
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
-export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean }): Promise<boolean> {
+export async function pullCloudAndMergeIntoStore(opts?: {
+  forceFull?: boolean;
+  onRecoveryStep?: (
+    step: import("../lib/cloudRecoverySession").CloudRecoveryStepId,
+    counts?: Partial<import("../lib/cloudRecoverySession").CloudRecoveryEntityCounts>,
+  ) => void;
+}): Promise<boolean> {
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
@@ -2646,7 +2749,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     "../store/usePosStore",
   );
   if (!hasSupabaseConfig) return false;
-  const cloud = await pullShopDataFromCloud({ forceFull: opts?.forceFull });
+  const cloud = await pullShopDataFromCloud({ forceFull: opts?.forceFull, onRecoveryStep: opts?.onRecoveryStep });
   if (!cloud) return false;
 
   const state = usePosStore.getState();
@@ -2666,6 +2769,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
     cloud.inventoryCountSessions.length > 0 ||
     cloud.shifts.length > 0 ||
     cloud.dayCloses.length > 0 ||
+    cloud.stockMovements.length > 0 ||
     cloud.deletedProductIds.length > 0 ||
     cloud.voidedSaleIds.length > 0;
   const localEmpty =
@@ -2689,6 +2793,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         inventoryCountSessions: true,
         shifts: true,
         dayCloses: true,
+        stockMovements: true,
         salesAt: cloud.checkpoints?.salesAt,
         productsAt: cloud.checkpoints?.productsAt,
         customersAt: cloud.checkpoints?.customersAt,
@@ -2703,6 +2808,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         inventoryCountSessionsAt: cloud.checkpoints?.inventoryCountSessionsAt,
         shiftsAt: cloud.checkpoints?.shiftsAt,
         dayClosesAt: cloud.checkpoints?.dayClosesAt,
+        stockMovementsAt: cloud.checkpoints?.stockMovementsAt,
       });
     }
     const { isDiagnosticsEnabled, recordSyncDuration } = await import("../lib/stabilityDiagnostics");
@@ -2741,6 +2847,10 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         : state.preferences.shifts ?? [];
     const mergedDayCloses =
       cloud.dayCloses.length > 0 ? mergeDayClosesFromCloudPull([], cloud.dayCloses) : state.dayCloses;
+    const mergedStockMovements =
+      cloud.stockMovements.length > 0
+        ? mergeStockMovementsFromCloudPull([], cloud.stockMovements)
+        : state.stockMovements;
 
     await applyRestoredSnapshotFromBackup({
       products: cloud.products,
@@ -2753,7 +2863,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       suppliers: purchaseRecovery.suppliers,
       purchases: purchaseRecovery.purchases,
       supplierPayments: purchaseRecovery.supplierPayments,
-      stockMovements: state.stockMovements,
+      stockMovements: mergedStockMovements,
       voidRecords: state.voidRecords,
       returnRecords: mergeReturnRecordsForRecovery([], cloud.returnCloudRows),
       cashExpenses: cloud.cashExpenses.length > 0 ? cloud.cashExpenses : state.cashExpenses,
@@ -2855,6 +2965,11 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       ? mergeDayClosesFromCloudPull(state.dayCloses, cloud.dayCloses)
       : state.dayCloses;
 
+  const mergedStockMovements =
+    cloud.stockMovements.length > 0
+      ? mergeStockMovementsFromCloudPull(state.stockMovements, cloud.stockMovements)
+      : state.stockMovements;
+
   const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
 
   const { suspendStorePersist } = await import("../store/usePosStore");
@@ -2874,6 +2989,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       dayDrawerOpens: mergedDayDrawerOpens,
       inventoryCountSessions: mergedInventoryCounts,
       dayCloses: mergedDayCloses,
+      stockMovements: mergedStockMovements,
       preferences: { ...state.preferences, shifts: mergedShifts },
       returnRecords,
       purchases: purchaseRecovery.purchases,
@@ -2920,6 +3036,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
         cloud.inventoryCountSessions.length > 0 || cloud.checkpoints?.inventoryCountSessionsAt != null,
       shifts: cloud.shifts.length > 0 || cloud.checkpoints?.shiftsAt != null,
       dayCloses: cloud.dayCloses.length > 0 || cloud.checkpoints?.dayClosesAt != null,
+      stockMovements: cloud.stockMovements.length > 0 || cloud.checkpoints?.stockMovementsAt != null,
       salesAt: cloud.checkpoints?.salesAt,
       productsAt: cloud.checkpoints?.productsAt,
       customersAt: cloud.checkpoints?.customersAt,
@@ -2934,6 +3051,7 @@ export async function pullCloudAndMergeIntoStore(opts?: { forceFull?: boolean })
       inventoryCountSessionsAt: cloud.checkpoints?.inventoryCountSessionsAt,
       shiftsAt: cloud.checkpoints?.shiftsAt,
       dayClosesAt: cloud.checkpoints?.dayClosesAt,
+      stockMovementsAt: cloud.checkpoints?.stockMovementsAt,
     });
   }
 
@@ -2998,6 +3116,11 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   for (const close of usePosStore.getState().dayCloses) {
     if (!close.pendingSync) continue;
     if (await pushDayCloseToCloud(close, ctx)) ok += 1;
+    else fail += 1;
+  }
+
+  for (const movement of usePosStore.getState().stockMovements) {
+    if (await pushStockMovementToCloud(movement, ctx)) ok += 1;
     else fail += 1;
   }
 

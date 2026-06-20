@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiBusinessSetupResult } from "../lib/ai/aiBusinessSchemas";
+import { awaitBusinessSetupPrefetch } from "../lib/ai/businessSetupPrefetch";
 import {
   fetchShopAiSetupCompleted,
   fetchShopAiSetupTemplate,
@@ -54,6 +55,14 @@ export function useAiBusinessSetup(params: {
     setError(null);
     setErrorCode(null);
     try {
+      const prefetched = await awaitBusinessSetupPrefetch(params.shopName, params.businessType);
+      if (prefetched?.ok) {
+        setShopId(prefetched.shopId || shopId);
+        setSetup(prefetched.setup);
+        setFromCache(prefetched.fromCache);
+        return prefetched.setup;
+      }
+
       const result = await generateBusinessSetupWithAi({
         shopId,
         shopName: params.shopName,

@@ -74,6 +74,18 @@ export function AccountPage({ lang, email, shopName, onSignOut, user, authMode }
         </p>
       </article>
 
+      {hasSupabaseConfig && actor.role === "owner" ? (
+        <article className="rounded-2xl border border-rose-200 bg-rose-50/80 p-4 shadow-sm">
+          <p className="text-sm font-semibold text-rose-950">{t(lang, "accountDeletionCardHint")}</p>
+          <Link
+            to="/office/account/delete"
+            className="mt-3 inline-flex min-h-[44px] items-center justify-center rounded-xl border border-rose-300 bg-white px-4 text-sm font-black text-rose-800"
+          >
+            {t(lang, "userMenuDeleteAccount")} →
+          </Link>
+        </article>
+      ) : null}
+
       <button
         type="button"
         onClick={() => onSignOut()}

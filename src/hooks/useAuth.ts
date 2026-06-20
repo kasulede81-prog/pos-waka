@@ -215,10 +215,9 @@ export function useAuth() {
             if (onboarding?.complete) {
               await finalizeOwnerOnboardingAfterCloudSave(uid);
             }
-            const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
-            if (isLocalShopDataEmpty()) {
-              void hydrateAccountFromCloud({ forcePull: true });
-            } else {
+            const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");
+            const needsRecovery = await shouldRequireRecoveryLock().catch(() => true);
+            if (!needsRecovery) {
               scheduleBackgroundCloudSync({
                 pull: false,
                 delayMs: isNativeApp() ? 2_500 : 1_200,

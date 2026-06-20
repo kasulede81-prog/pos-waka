@@ -450,6 +450,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     >
                       {t(lang, "userMenuProfile")}
                     </button>
+                    {authMode === "supabase" && !staffSession && actor.role === "owner" ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-rose-700 hover:bg-rose-50"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          navigate("/office/account/delete", { preventScrollReset: true });
+                        }}
+                      >
+                        {t(lang, "userMenuDeleteAccount")}
+                      </button>
+                    ) : null}
                     <div className="my-1 border-t border-stone-100" />
                     <button
                       type="button"

@@ -35,7 +35,6 @@ import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
 import { isCompletedSale } from "../lib/saleStatus";
 import { SalesHistoryHeroCard } from "../components/receipts/SalesHistoryHeroCard";
 import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
-import { SalesHistorySummaryStrip } from "../components/receipts/SalesHistorySummaryStrip";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
 import { useProtectedAction } from "../hooks/useProtectedAction";
@@ -282,7 +281,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       ) : null}
 
       {sales.length > 0 ? (
-        <>
+        <div className="sticky top-0 z-10 -mx-3 space-y-3 bg-stone-50/95 px-3 pb-3 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
           <SalesHistoryHeroCard
             lang={lang}
             salesLabel={salesHeroLabel}
@@ -296,6 +295,18 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             filter={filter}
             onFilterChange={setFilter}
             sparklinePoints={sparklinePoints}
+            summary={
+              hasAnyInRange
+                ? {
+                    cashSalesUgx: rangeFinancials.cashCollectedUgx,
+                    debtCollectedUgx,
+                    expensesUgx,
+                    expensesLabel,
+                    stockValueUgx,
+                    showShopSummaries,
+                  }
+                : undefined
+            }
           />
 
           {archiveNotice ? (
@@ -311,7 +322,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
           {needsArchive && archivedSalesCount === 0 ? (
             <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
           ) : null}
-        </>
+        </div>
       ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
@@ -347,18 +358,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             estimateRowPx={76}
           />
         </section>
-      ) : null}
-
-      {hasAnyInRange ? (
-        <SalesHistorySummaryStrip
-          lang={lang}
-          cashSalesUgx={rangeFinancials.cashCollectedUgx}
-          debtCollectedUgx={debtCollectedUgx}
-          expensesUgx={expensesUgx}
-          expensesLabel={expensesLabel}
-          stockValueUgx={stockValueUgx}
-          showShopSummaries={showShopSummaries}
-        />
       ) : null}
 
       {partitioned.cancelled.length > 0 ? (

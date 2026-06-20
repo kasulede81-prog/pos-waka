@@ -11,7 +11,12 @@ import { yieldUiTick } from "./uiYield";
 
 const MIN_UPLOAD_INTERVAL_MS = 5 * 60_000;
 let lastCloudSnapshotUploadAt = 0;
+let lastCloudSnapshotUploadIso: string | null = null;
 let cloudSnapshotUploadInFlight: Promise<boolean> | null = null;
+
+export function getLastCloudSnapshotUploadIso(): string | null {
+  return lastCloudSnapshotUploadIso;
+}
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -102,11 +107,57 @@ async function trimSnapshotForUpload(snap: PersistedSnapshot): Promise<Persisted
 
 export function isLocalShopDataEmpty(): boolean {
   const s = usePosStore.getState();
-  return s.products.length === 0 && s.sales.length === 0 && s.customers.length === 0;
+  const shifts = s.preferences.shifts ?? [];
+  return (
+    s.products.length === 0 &&
+    s.sales.length === 0 &&
+    s.customers.length === 0 &&
+    s.suppliers.length === 0 &&
+    s.purchases.length === 0 &&
+    shifts.length === 0 &&
+    s.dayCloses.length === 0
+  );
+}
+
+/** Probe Supabase for existing shop data (snapshot or catalog rows). */
+export async function probeCloudShopHasData(): Promise<{
+  hasSnapshot: boolean;
+  snapshotUpdatedAt: string | null;
+  hasCloudProducts: boolean;
+}> {
+  const ctx = await resolveShopCtx();
+  if (!ctx || !supabase) {
+    throw new Error("cloud_probe_no_shop_context");
+  }
+
+  let hasSnapshot = false;
+  let snapshotUpdatedAt: string | null = null;
+  const { data: snapRow } = await supabase
+    .from("shop_cloud_snapshots")
+    .select("updated_at")
+    .eq("shop_id", ctx.shopId)
+    .maybeSingle();
+  if (snapRow?.updated_at) {
+    hasSnapshot = true;
+    snapshotUpdatedAt = String(snapRow.updated_at);
+  }
+
+  let hasCloudProducts = false;
+  const { count } = await supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("shop_id", ctx.shopId);
+  hasCloudProducts = (count ?? 0) > 0;
+
+  return { hasSnapshot, snapshotUpdatedAt, hasCloudProducts };
 }
 
 /** Upload full local snapshot to Supabase (debounced; call after sales/products are synced when possible). */
 export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promise<boolean> {
+  const { isCloudRecoveryLockActive } = await import("./cloudRecoverySession");
+  if (isCloudRecoveryLockActive()) {
+    return false;
+  }
   const now = Date.now();
   if (!opts?.force && now - lastCloudSnapshotUploadAt < MIN_UPLOAD_INTERVAL_MS) {
     return false;
@@ -147,7 +198,10 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
     { onConflict: "shop_id" },
   );
 
-  if (!error) lastCloudSnapshotUploadAt = Date.now();
+  if (!error) {
+    lastCloudSnapshotUploadAt = Date.now();
+    lastCloudSnapshotUploadIso = new Date().toISOString();
+  }
   return !error;
   };
 

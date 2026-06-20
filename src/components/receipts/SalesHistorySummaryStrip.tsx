@@ -10,6 +10,8 @@ type Props = {
   expensesLabel: string;
   stockValueUgx: number;
   showShopSummaries: boolean;
+  /** When true, omits outer card chrome (used inside HistoryHeroCard). */
+  embedded?: boolean;
 };
 
 export function SalesHistorySummaryStrip({
@@ -20,6 +22,7 @@ export function SalesHistorySummaryStrip({
   expensesLabel,
   stockValueUgx,
   showShopSummaries,
+  embedded = false,
 }: Props) {
   const items = [
     {
@@ -65,7 +68,11 @@ export function SalesHistorySummaryStrip({
 
   return (
     <div
-      className={`grid divide-x divide-y divide-stone-200 rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm ${gridClass}`}
+      className={
+        embedded
+          ? `grid divide-x divide-y divide-stone-200 ${gridClass}`
+          : `grid divide-x divide-y divide-stone-200 rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm ${gridClass}`
+      }
     >
       {items.map(({ icon: Icon, label, value, iconClass, valueClass }) => (
         <div key={label} className="flex flex-col items-center px-2 py-4 text-center sm:px-3">

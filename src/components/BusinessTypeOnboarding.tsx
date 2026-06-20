@@ -14,6 +14,7 @@ import {
 } from "../config/hospitalityOnboarding";
 import { isHospitalityBusinessType } from "../lib/hospitality";
 import { useBusinessTypeVisibility } from "../hooks/useBusinessTypeVisibility";
+import { useSilentAiBusinessSetupPrefetch } from "../hooks/useSilentAiBusinessSetupPrefetch";
 import {
   filterHospitalityOnboardingStyles,
   filterNonHospitalityBusinessTypeIds,
@@ -62,6 +63,13 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
   const complete = usePosStore((s) => s.completeBusinessOnboarding);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const preferences = usePosStore((s) => s.preferences);
+  const { prefetch: prefetchAiSetup } = useSilentAiBusinessSetupPrefetch({ enabled: true });
+
+  const triggerAiSetupPrefetch = (bt: BusinessType) => {
+    const name = shopName.trim() || preferences.shopDisplayName?.trim() || "My Shop";
+    prefetchAiSetup({ shopName: name, businessType: bt });
+  };
+
   const [shopName, setShopName] = useState(() => preferences.shopDisplayName ?? "");
   const [businessType, setBusinessType] = useState<BusinessType>(() => preferences.businessType ?? "kiosk_duka");
   const [hospitalityFlow, setHospitalityFlow] = useState(() =>
@@ -118,6 +126,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
   const selectDirectType = (id: BusinessType) => {
     setHospitalityFlow(false);
     setBusinessType(id);
+    triggerAiSetupPrefetch(id);
     persistDraft({ shopName, businessType: id, phone, address });
   };
 
@@ -125,6 +134,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     setHospitalityFlow(true);
     const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
     setBusinessType(bt);
+    triggerAiSetupPrefetch(bt);
     persistDraft({ shopName, businessType: bt, phone, address });
   };
 
@@ -132,6 +142,7 @@ export function BusinessTypeOnboarding({ lang }: { lang: Language }) {
     setHospitalityStyleId(styleId);
     const bt = businessTypeForHospitalityStyle(styleId);
     setBusinessType(bt);
+    triggerAiSetupPrefetch(bt);
     persistDraft({ shopName, businessType: bt, phone, address });
   };
 
