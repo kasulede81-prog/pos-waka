@@ -2731,16 +2731,22 @@ export async function pullShopDataFromCloud(opts?: {
 /** Merge cloud into local store after disk bootstrap (new device / desktop login). */
 export async function pullCloudAndMergeIntoStore(opts?: {
   forceFull?: boolean;
+  cloudRecovery?: boolean;
   onRecoveryStep?: (
     step: import("../lib/cloudRecoverySession").CloudRecoveryStepId,
     counts?: Partial<import("../lib/cloudRecoverySession").CloudRecoveryEntityCounts>,
   ) => void;
 }): Promise<boolean> {
+  const failMerge = (errorKey: string): boolean => {
+    if (opts?.cloudRecovery) throw new Error(errorKey);
+    return false;
+  };
+
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return false;
+    return failMerge("organization_deleted");
   }
 
   const mergeStarted = Date.now();
@@ -2748,12 +2754,12 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   const { applyRestoredSnapshotFromBackup, persistRestoredSnapshotToDisk } = await import(
     "../store/usePosStore",
   );
-  if (!hasSupabaseConfig) return false;
+  if (!hasSupabaseConfig) return failMerge("cloud_pull_not_configured");
   const cloud = await pullShopDataFromCloud({ forceFull: opts?.forceFull, onRecoveryStep: opts?.onRecoveryStep });
-  if (!cloud) return false;
+  if (!cloud) return failMerge("cloud_pull_failed");
 
   const state = usePosStore.getState();
-  if (!state._hydrated) return false;
+  if (!state._hydrated) return failMerge("store_not_hydrated");
 
   const hasCloud =
     cloud.products.length > 0 ||
@@ -2852,7 +2858,8 @@ export async function pullCloudAndMergeIntoStore(opts?: {
         ? mergeStockMovementsFromCloudPull([], cloud.stockMovements)
         : state.stockMovements;
 
-    await applyRestoredSnapshotFromBackup({
+    await applyRestoredSnapshotFromBackup(
+      {
       products: cloud.products,
       customers,
       sales: cloud.sales,
@@ -2879,8 +2886,10 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       deletedProductIds: cloud.deletedProductIds,
       voidedSaleIds: cloud.voidedSaleIds,
       updatedAt: new Date().toISOString(),
-    });
-    await persistRestoredSnapshotToDisk();
+      },
+      { cloudRecovery: opts?.cloudRecovery },
+    );
+    await persistRestoredSnapshotToDisk(undefined, { cloudRecovery: opts?.cloudRecovery });
     markBootstrapSyncComplete();
     runPostSyncDebtValidation({
       customers: usePosStore.getState().customers,

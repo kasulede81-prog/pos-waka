@@ -34,8 +34,14 @@ export type CloudRecoverySessionState = {
   durationMs: number | null;
   currentStep: CloudRecoveryStepId | null;
   lastCompletedStep: CloudRecoveryStepId | null;
+  /** Rows downloaded from cloud during pull (may lead restored counts). */
+  downloadedCounts: CloudRecoveryEntityCounts;
+  /** Rows confirmed in local store after restore + persist. */
+  restoredCounts: CloudRecoveryEntityCounts;
+  /** @deprecated Prefer restoredCounts — kept for persisted diagnostics compatibility. */
   entityCounts: CloudRecoveryEntityCounts;
   errorMessage: string | null;
+  errorKey: string | null;
   validation: CloudRecoveryValidationResult | null;
   completeness: RecoveryCompletenessReport | null;
 };
@@ -63,8 +69,11 @@ let session: CloudRecoverySessionState = {
   durationMs: null,
   currentStep: null,
   lastCompletedStep: null,
+  downloadedCounts: emptyCounts(),
+  restoredCounts: emptyCounts(),
   entityCounts: emptyCounts(),
   errorMessage: null,
+  errorKey: null,
   validation: null,
   completeness: null,
 };
@@ -75,10 +84,19 @@ function emit(): void {
   for (const fn of listeners) fn();
 }
 
+function cloneSession(): CloudRecoverySessionState {
+  return {
+    ...session,
+    downloadedCounts: { ...session.downloadedCounts },
+    restoredCounts: { ...session.restoredCounts },
+    entityCounts: { ...session.restoredCounts },
+  };
+}
+
 function persistDiagnostics(): void {
   try {
     const payload: CloudRecoveryDiagnostics = {
-      ...session,
+      ...cloneSession(),
       lastRecoveryAt: session.finishedAt ?? session.startedAt,
     };
     localStorage.setItem(DIAGNOSTICS_KEY, JSON.stringify(payload));
@@ -93,17 +111,19 @@ export function subscribeCloudRecovery(listener: () => void): () => void {
 }
 
 export function getCloudRecoverySession(): CloudRecoverySessionState {
-  return {
-    ...session,
-    entityCounts: { ...session.entityCounts },
-  };
+  return cloneSession();
 }
 
 export function readLastCloudRecoveryDiagnostics(): CloudRecoveryDiagnostics | null {
   try {
     const raw = localStorage.getItem(DIAGNOSTICS_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as CloudRecoveryDiagnostics;
+    const parsed = JSON.parse(raw) as CloudRecoveryDiagnostics;
+    if (!parsed.restoredCounts && parsed.entityCounts) {
+      parsed.restoredCounts = { ...parsed.entityCounts };
+      parsed.downloadedCounts = parsed.downloadedCounts ?? { ...parsed.entityCounts };
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -122,8 +142,11 @@ export function beginCloudRecoverySession(): void {
     durationMs: null,
     currentStep: null,
     lastCompletedStep: null,
+    downloadedCounts: emptyCounts(),
+    restoredCounts: emptyCounts(),
     entityCounts: emptyCounts(),
     errorMessage: null,
+    errorKey: null,
     validation: null,
     completeness: null,
   };
@@ -138,13 +161,22 @@ export function reportRecoveryStep(
   session.currentStep = step;
   session.lastCompletedStep = step;
   if (counts) {
-    session.entityCounts = { ...session.entityCounts, ...counts };
+    session.downloadedCounts = { ...session.downloadedCounts, ...counts };
   }
   emit();
 }
 
+/** Update restored counts from the live store after merge + persist succeed. */
+export function syncRecoveryRestoredCountsFromStore(counts: CloudRecoveryEntityCounts): void {
+  session.restoredCounts = { ...counts };
+  session.entityCounts = { ...counts };
+  emit();
+}
+
+/** @deprecated Use syncRecoveryRestoredCountsFromStore */
 export function updateRecoveryEntityCounts(counts: Partial<CloudRecoveryEntityCounts>): void {
-  session.entityCounts = { ...session.entityCounts, ...counts };
+  session.restoredCounts = { ...session.restoredCounts, ...counts };
+  session.entityCounts = { ...session.restoredCounts };
   emit();
 }
 
@@ -163,7 +195,9 @@ export function completeCloudRecoverySession(
     lastCompletedStep: "validation",
     validation,
     errorMessage: null,
+    errorKey: null,
     completeness,
+    entityCounts: { ...session.restoredCounts },
   };
   persistDiagnostics();
   emit();
@@ -172,6 +206,7 @@ export function completeCloudRecoverySession(
 export function failCloudRecoverySession(
   errorMessage: string,
   validation: CloudRecoveryValidationResult | null = null,
+  errorKey: string | null = null,
 ): void {
   const finishedAt = new Date().toISOString();
   const startedMs = session.startedAt ? new Date(session.startedAt).getTime() : Date.now();
@@ -181,8 +216,10 @@ export function failCloudRecoverySession(
     finishedAt,
     durationMs: Date.now() - startedMs,
     errorMessage,
+    errorKey,
     validation,
     completeness: null,
+    entityCounts: { ...session.restoredCounts },
   };
   persistDiagnostics();
   emit();
@@ -196,8 +233,11 @@ export function resetCloudRecoverySessionForRetry(): void {
     durationMs: null,
     currentStep: null,
     lastCompletedStep: null,
+    downloadedCounts: emptyCounts(),
+    restoredCounts: emptyCounts(),
     entityCounts: emptyCounts(),
     errorMessage: null,
+    errorKey: null,
     validation: null,
     completeness: null,
   };

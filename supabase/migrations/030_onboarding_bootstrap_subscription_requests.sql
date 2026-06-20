@@ -413,6 +413,8 @@ revoke all on function public.internal_ops_subscription_requests_pending (int) f
 grant execute on function public.internal_ops_subscription_requests_pending (int) to authenticated;
 
 -- ---------- 6) Recent shops: resolve owner even when role column was backfilled inconsistently ----------
+drop function if exists public.internal_ops_recent_shops (int);
+
 create or replace function public.internal_ops_recent_shops (p_limit int default 20)
 returns table (
   id uuid,

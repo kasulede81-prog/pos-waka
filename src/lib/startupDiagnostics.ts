@@ -36,6 +36,7 @@ export type StartupDiagnosticsSnapshot = {
   durationMs: number;
   recoveryDurationMs: number | null;
   failureReason: string | null;
+  recoveryErrorKey: string | null;
   splashHiddenAt: string | null;
   stallDetectedAt: string | null;
   crashRecoveryApplied: boolean;
@@ -56,6 +57,7 @@ type PersistedSession = {
   currentStep: StartupStepId;
   lastSuccessfulStep: StartupStepId | null;
   failureReason: string | null;
+  recoveryErrorKey: string | null;
   splashHiddenAt: string | null;
   stallDetectedAt: string | null;
   crashRecoveryApplied: boolean;
@@ -75,6 +77,7 @@ function createFreshSession(): PersistedSession {
     currentStep: "app_launch",
     lastSuccessfulStep: "app_launch",
     failureReason: null,
+    recoveryErrorKey: null,
     splashHiddenAt: null,
     stallDetectedAt: null,
     crashRecoveryApplied: false,
@@ -113,8 +116,27 @@ export function recordStartupStep(step: StartupStepId, opts?: { failureReason?: 
     session.history.push({ step, at: now });
     if (session.history.length > 40) session.history.shift();
   }
-  if (step === "ready" || step === "local_disk" || step === "auth_session" || step === "finalizing") {
+  if (step === "ready" || step === "local_disk" || step === "auth_session") {
     session.lastSuccessfulStep = step;
+  }
+  persist();
+  emit();
+}
+
+/** Mark finalizing only after cloud recovery validation passes. */
+export function recordStartupRecoveryValidated(): void {
+  recordStartupStep("finalizing");
+}
+
+export function recordStartupRecoveryFailure(message: string, errorKey: string): void {
+  const now = new Date().toISOString();
+  session.currentStep = "cloud_recovery";
+  session.lastStepAt = now;
+  session.failureReason = message;
+  session.recoveryErrorKey = errorKey;
+  if (session.history[session.history.length - 1]?.step !== "cloud_recovery") {
+    session.history.push({ step: "cloud_recovery", at: now });
+    if (session.history.length > 40) session.history.shift();
   }
   persist();
   emit();
@@ -155,6 +177,7 @@ export function getStartupDiagnosticsSnapshot(): StartupDiagnosticsSnapshot {
     durationMs: Date.now() - startedMs,
     recoveryDurationMs: recovery?.durationMs ?? getCloudRecoverySession().durationMs,
     failureReason: session.failureReason ?? recovery?.errorMessage ?? null,
+    recoveryErrorKey: session.recoveryErrorKey ?? recovery?.errorKey ?? null,
     splashHiddenAt: session.splashHiddenAt,
     stallDetectedAt: session.stallDetectedAt,
     crashRecoveryApplied: session.crashRecoveryApplied,

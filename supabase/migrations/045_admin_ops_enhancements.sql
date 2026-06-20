@@ -1,6 +1,8 @@
 -- Admin ops: shop stats, normalized emails, grant marketing agents by registered email
 
 -- ---------- Recent shops: activity + product counts ----------
+drop function if exists public.internal_ops_recent_shops (int);
+
 create or replace function public.internal_ops_recent_shops (p_limit int default 20)
 returns table (
   id uuid,

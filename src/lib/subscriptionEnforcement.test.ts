@@ -118,6 +118,26 @@ describe("authorizeBackupRestore", () => {
     const r = authorizeBackupRestore({ actor: actor("owner"), snapshot: starterRemote(), authMode: "supabase" });
     expect(r.ok).toBe(true);
   });
+
+  it("requires actor for user-import restores", () => {
+    const r = authorizeBackupRestore({
+      actor: null,
+      snapshot: starterRemote(),
+      authMode: "supabase",
+      purpose: "user_import",
+    });
+    expect(r).toEqual({ ok: false, errorKey: "noSelection" });
+  });
+
+  it("allows system cloud recovery without session actor", () => {
+    const r = authorizeBackupRestore({
+      actor: null,
+      snapshot: freeRemote(),
+      authMode: "supabase",
+      purpose: "cloud_recovery",
+    });
+    expect(r.ok).toBe(true);
+  });
 });
 
 describe("product plan enforcement", () => {

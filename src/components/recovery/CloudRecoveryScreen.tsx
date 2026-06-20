@@ -65,7 +65,7 @@ function recoveryStepToStartupStep(step: CloudRecoveryStepId | null): void {
   else if (step === "customers") recordStartupStep("downloading_customers");
   else if (step === "inventory") recordStartupStep("downloading_inventory");
   else if (step === "shifts") recordStartupStep("downloading_shifts");
-  else if (step === "validation") recordStartupStep("finalizing");
+  else if (step === "validation") recordStartupStep("cloud_recovery");
   else recordStartupStep("cloud_recovery");
 }
 
@@ -110,7 +110,10 @@ export function CloudRecoveryScreen({
     return Math.min(100, Math.round((done / total) * 100));
   }, [lastIdx, probeFailed]);
 
-  const counts = session.entityCounts;
+  const downloaded = session.downloadedCounts;
+  const restored = session.restoredCounts;
+  const hasRestoredCounts =
+    restored.products > 0 || restored.sales > 0 || restored.customers > 0 || restored.cashRecords > 0;
   const showEscape = failed || probeFailed;
 
   if (probeFailed) {
@@ -169,13 +172,13 @@ export function CloudRecoveryScreen({
             const done = lastIdx >= idx;
             const active = currentIdx === idx && session.status === "active";
             let countLabel = "";
-            if (step === "products") countLabel = String(counts.products);
-            if (step === "sales") countLabel = String(counts.sales);
-            if (step === "customers") countLabel = String(counts.customers);
-            if (step === "inventory") countLabel = String(counts.inventory);
-            if (step === "shifts") countLabel = String(counts.shifts);
-            if (step === "day_closes") countLabel = String(counts.dayCloses);
-            if (step === "cash") countLabel = String(counts.cashRecords);
+            if (step === "products") countLabel = String(downloaded.products);
+            if (step === "sales") countLabel = String(downloaded.sales);
+            if (step === "customers") countLabel = String(downloaded.customers);
+            if (step === "inventory") countLabel = String(downloaded.inventory);
+            if (step === "shifts") countLabel = String(downloaded.shifts);
+            if (step === "day_closes") countLabel = String(downloaded.dayCloses);
+            if (step === "cash") countLabel = String(downloaded.cashRecords);
 
             return (
               <li
@@ -211,23 +214,40 @@ export function CloudRecoveryScreen({
         <div className="grid grid-cols-3 gap-2 text-center text-[10px] font-bold uppercase tracking-wide text-stone-500">
           <div className="rounded-xl bg-stone-50 px-2 py-2">
             <p>{t(lang, "recoveryCountProducts")}</p>
-            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">{counts.products}</p>
+            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">
+              {hasRestoredCounts ? restored.products : "—"}
+            </p>
           </div>
           <div className="rounded-xl bg-stone-50 px-2 py-2">
             <p>{t(lang, "recoveryCountSales")}</p>
-            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">{counts.sales}</p>
+            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">
+              {hasRestoredCounts ? restored.sales : "—"}
+            </p>
           </div>
           <div className="rounded-xl bg-stone-50 px-2 py-2">
             <p>{t(lang, "recoveryCountCustomers")}</p>
-            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">{counts.customers}</p>
+            <p className="mt-0.5 text-base font-black tabular-nums text-stone-900">
+              {hasRestoredCounts ? restored.customers : "—"}
+            </p>
           </div>
         </div>
+
+        {hasRestoredCounts ? (
+          <p className="text-center text-xs font-semibold text-emerald-800">{t(lang, "recoveryRestoredToDevice")}</p>
+        ) : downloaded.products > 0 || downloaded.sales > 0 ? (
+          <p className="text-center text-xs font-semibold text-stone-500">{t(lang, "recoveryDownloadedFromCloud")}</p>
+        ) : null}
 
         {showEscape ? (
           <div className="space-y-3">
             {session.errorMessage ? (
               <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-950">
                 {session.errorMessage}
+              </p>
+            ) : null}
+            {session.errorKey ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
+                {t(lang, "recoveryErrorKey")}: {session.errorKey}
               </p>
             ) : null}
             {session.validation?.failures.length ? (

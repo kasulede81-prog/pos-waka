@@ -54,6 +54,14 @@ export function StartupDiagnosticsPanel({ lang }: { lang: Language }) {
             <dd className="mt-1 rounded-lg bg-rose-50 px-2 py-1 text-rose-950">{recovery.errorMessage}</dd>
           </div>
         ) : null}
+        {recovery?.errorKey || snap?.recoveryErrorKey ? (
+          <div>
+            <dt className="text-stone-500">{t(lang, "startupDiagRecoveryErrorKey")}</dt>
+            <dd className="mt-1 rounded-lg bg-amber-50 px-2 py-1 font-mono text-amber-950">
+              {recovery?.errorKey ?? snap?.recoveryErrorKey}
+            </dd>
+          </div>
+        ) : null}
         {snap?.crashRecoveryApplied ? (
           <p className="rounded-lg bg-emerald-50 px-2 py-1 text-emerald-900">{t(lang, "startupDiagCrashRecovery")}</p>
         ) : null}

@@ -4686,7 +4686,10 @@ function reportRestoreProgress(
 }
 
 /** Write current in-memory store to IndexedDB after a restore (can run after UI unblocks). */
-export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise<void> {
+export async function persistRestoredSnapshotToDisk(
+  sessionId?: number,
+  opts?: { cloudRecovery?: boolean },
+): Promise<void> {
   const { assertOrganizationOperationsAllowed, ORGANIZATION_DELETED_ERROR } = await import(
     "../lib/organizationDeletionState",
   );
@@ -4706,6 +4709,7 @@ export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise
     actor: usePosStore.getState().sessionActor,
     snapshot,
     authMode,
+    purpose: opts?.cloudRecovery ? "cloud_recovery" : "user_import",
   });
   if (!restoreAuth.ok) {
     usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup persist", {
@@ -4730,7 +4734,7 @@ export async function persistRestoredSnapshotToDisk(sessionId?: number): Promise
  */
 export async function applyRestoredSnapshotFromBackup(
   snap: PersistedSnapshot,
-  opts?: { sessionId?: number; onProgress?: (percent: number) => void },
+  opts?: { sessionId?: number; onProgress?: (percent: number) => void; cloudRecovery?: boolean },
 ): Promise<void> {
   const { assertOrganizationOperationsAllowed, ORGANIZATION_DELETED_ERROR } = await import(
     "../lib/organizationDeletionState",
@@ -4754,6 +4758,7 @@ export async function applyRestoredSnapshotFromBackup(
     actor: usePosStore.getState().sessionActor,
     snapshot,
     authMode,
+    purpose: opts?.cloudRecovery ? "cloud_recovery" : "user_import",
   });
   if (!restoreAuth.ok) {
     usePosStore.getState().logAuditAction("auth_forbidden", "Denied backup restore", {

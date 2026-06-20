@@ -124,6 +124,8 @@ $$;
 revoke all on function public.audit_shop_device_event (uuid, text, text, text, jsonb) from public;
 grant execute on function public.audit_shop_device_event (uuid, text, text, text, jsonb) to authenticated;
 
+drop function if exists public.shop_device_heartbeat (uuid, text, text, text, text);
+
 create or replace function public.shop_device_heartbeat (
   p_shop_id uuid,
   p_device_fingerprint text,

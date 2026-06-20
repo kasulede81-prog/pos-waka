@@ -214,6 +214,7 @@ export async function uploadShopCloudSnapshot(opts?: { force?: boolean }): Promi
 /** Download cloud snapshot and replace local store (new phone). */
 export async function restoreShopFromCloudSnapshot(
   onProgress?: (percent: number) => void,
+  opts?: { cloudRecovery?: boolean },
 ): Promise<boolean> {
   const { assertOrganizationOperationsAllowed } = await import("./organizationDeletionState");
   await assertOrganizationOperationsAllowed();
@@ -241,12 +242,13 @@ export async function restoreShopFromCloudSnapshot(
     return false;
   }
 
-  await applyRestoredSnapshotFromBackup(envelope.snapshot, { onProgress });
+  const restoreOpts = { onProgress, cloudRecovery: opts?.cloudRecovery };
+  await applyRestoredSnapshotFromBackup(envelope.snapshot, restoreOpts);
   await yieldUiTick();
 
   const { pullDayDrawerOpensForRecovery } = await import("./dayDrawerOpenCloudSync");
   await pullDayDrawerOpensForRecovery(ctx).catch(() => false);
 
-  await persistRestoredSnapshotToDisk();
+  await persistRestoredSnapshotToDisk(undefined, { cloudRecovery: opts?.cloudRecovery });
   return true;
 }

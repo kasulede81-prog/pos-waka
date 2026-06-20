@@ -23,6 +23,8 @@ $$;
 -- Unique index is created in 084_remediate_sale_inventory_movement_duplicates.sql
 -- after historical duplicate sale rows are removed.
 
+drop function if exists public.apply_sale_stock_movements (uuid);
+
 create or replace function public.apply_sale_stock_movements (p_sale_id uuid)
 returns jsonb
 language plpgsql

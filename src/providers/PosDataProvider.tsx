@@ -29,6 +29,7 @@ import {
   getStartupDiagnosticsSnapshot,
   isRecoveryOfflineBypassActive,
   markStartupStalled,
+  recordStartupRecoveryValidated,
   recordStartupStep,
   resetStartupSessionForRetry,
   setRecoveryOfflineBypass,
@@ -115,7 +116,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     if (bootGenRef.current !== gen) return;
 
     if (result.success) {
-      recordStartupStep("finalizing");
+      recordStartupRecoveryValidated();
       setBootPhase("ready");
       recordStartupStep("ready");
       void hideNativeSplashWhenReady();

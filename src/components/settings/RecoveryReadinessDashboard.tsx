@@ -272,6 +272,11 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
             {lastRecovery.errorMessage ? (
               <p className="text-xs font-semibold text-rose-900">{lastRecovery.errorMessage}</p>
             ) : null}
+            {lastRecovery.errorKey ? (
+              <p className="text-xs font-semibold text-amber-900">
+                {t(lang, "recoveryErrorKey")}: {lastRecovery.errorKey}
+              </p>
+            ) : null}
           </>
         ) : (
           <p className="text-stone-500">{t(lang, "recoveryDiagnosticsNone")}</p>

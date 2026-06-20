@@ -1,5 +1,7 @@
 -- Waka POS — expand internal admin session RPC to include identity fields
 
+drop function if exists public.waka_internal_me ();
+
 create or replace function public.waka_internal_me ()
 returns table (
   id uuid,
