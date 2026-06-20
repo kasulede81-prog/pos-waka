@@ -1,19 +1,27 @@
 import { useEffect, useMemo } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { WakaPosLogo } from "../brand/WakaLogo";
+import { WakaStartupBrand } from "../brand/WakaStartupBrand";
+import { StartupProgressBar } from "../startup/StartupProgressBar";
+import { STARTUP_SCREEN_BG } from "../startup/StartupLoadingScreen";
 import {
   CLOUD_RECOVERY_STEP_ORDER,
   type CloudRecoveryStepId,
 } from "../../lib/cloudRecoverySession";
 import { useCloudRecoverySession } from "../../hooks/useCloudRecoverySession";
 import { getDeviceOnline } from "../../lib/deviceOnline";
+import { StartupEscapeActions } from "../startup/StartupEscapeActions";
+import { RecoveryInProgressEscapeFooter } from "../startup/RecoveryInProgressEscapeFooter";
+import { recordStartupStep } from "../../lib/startupDiagnostics";
 
 type Props = {
   lang: Language;
   failed: boolean;
   probeFailed?: boolean;
   onRetry: () => void;
+  onSignOut: () => void | Promise<void>;
+  onContinueOffline?: () => void;
+  canContinueOffline?: boolean;
 };
 
 const PROBE_AUTO_RETRY_MS = 4000;
@@ -48,10 +56,35 @@ function stepIndex(step: CloudRecoveryStepId): number {
   return CLOUD_RECOVERY_STEP_ORDER.indexOf(step);
 }
 
-export function CloudRecoveryScreen({ lang, failed, probeFailed = false, onRetry }: Props) {
+function recoveryStepToStartupStep(step: CloudRecoveryStepId | null): void {
+  if (!step) return;
+  if (step === "probing") recordStartupStep("cloud_probe");
+  else if (step === "snapshot") recordStartupStep("cloud_recovery");
+  else if (step === "products") recordStartupStep("downloading_products");
+  else if (step === "sales") recordStartupStep("downloading_sales");
+  else if (step === "customers") recordStartupStep("downloading_customers");
+  else if (step === "inventory") recordStartupStep("downloading_inventory");
+  else if (step === "shifts") recordStartupStep("downloading_shifts");
+  else if (step === "validation") recordStartupStep("finalizing");
+  else recordStartupStep("cloud_recovery");
+}
+
+export function CloudRecoveryScreen({
+  lang,
+  failed,
+  probeFailed = false,
+  onRetry,
+  onSignOut,
+  onContinueOffline,
+  canContinueOffline = false,
+}: Props) {
   const session = useCloudRecoverySession();
   const lastIdx = session.lastCompletedStep ? stepIndex(session.lastCompletedStep) : -1;
   const currentIdx = session.currentStep ? stepIndex(session.currentStep) : -1;
+
+  useEffect(() => {
+    recoveryStepToStartupStep(session.currentStep);
+  }, [session.currentStep]);
 
   useEffect(() => {
     if (!probeFailed) return;
@@ -78,20 +111,19 @@ export function CloudRecoveryScreen({ lang, failed, probeFailed = false, onRetry
   }, [lastIdx, probeFailed]);
 
   const counts = session.entityCounts;
+  const showEscape = failed || probeFailed;
 
   if (probeFailed) {
     return (
-      <div className="flex min-h-dvh flex-col items-center bg-[#fffaf5] px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
-        <WakaPosLogo size="splash" className="mb-6 mt-4" />
+      <div className={`flex min-h-dvh flex-col items-center ${STARTUP_SCREEN_BG} px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]`}>
+        <WakaStartupBrand compact className="mb-6 mt-2" />
         <div className="mx-auto w-full max-w-md space-y-5">
           <div className="text-center">
-            <p className="text-lg font-black text-stone-900">{t(lang, "recoveryProbeTitle")}</p>
+            <p className="text-base font-black text-stone-900">{t(lang, "recoveryProbeTitle")}</p>
             <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "recoveryProbeSub")}</p>
           </div>
 
-          <div className="h-2 overflow-hidden rounded-full bg-stone-200">
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-waka-600" />
-          </div>
+          <StartupProgressBar />
 
           {session.errorMessage ? (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
@@ -103,24 +135,24 @@ export function CloudRecoveryScreen({ lang, failed, probeFailed = false, onRetry
             {getDeviceOnline() ? t(lang, "recoveryProbeRetrying") : t(lang, "recoveryProbeOffline")}
           </p>
 
-          <button
-            type="button"
-            onClick={onRetry}
-            className="flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-stone-900 text-base font-black text-white"
-          >
-            {t(lang, "recoveryRetry")}
-          </button>
+          <StartupEscapeActions
+            lang={lang}
+            onRetry={onRetry}
+            onContinueOffline={onContinueOffline}
+            canContinueOffline={canContinueOffline}
+            onSignOut={onSignOut}
+          />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center bg-[#fffaf5] px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]">
-      <WakaPosLogo size="splash" className="mb-6 mt-4" />
+    <div className={`flex min-h-dvh flex-col items-center ${STARTUP_SCREEN_BG} px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(2rem,env(safe-area-inset-bottom))]`}>
+      <WakaStartupBrand compact className="mb-5 mt-2" />
       <div className="mx-auto w-full max-w-md space-y-5">
         <div className="text-center">
-          <p className="text-lg font-black text-stone-900">
+          <p className="text-base font-black text-stone-900">
             {failed ? t(lang, "recoveryFailedTitle") : t(lang, "recoveryTitle")}
           </p>
           <p className="mt-1 text-sm font-medium text-stone-600">
@@ -128,12 +160,7 @@ export function CloudRecoveryScreen({ lang, failed, probeFailed = false, onRetry
           </p>
         </div>
 
-        <div className="h-2 overflow-hidden rounded-full bg-stone-200">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${failed ? "bg-rose-500" : "bg-waka-600"}`}
-            style={{ width: `${progressPct}%` }}
-          />
-        </div>
+        <StartupProgressBar value={progressPct} />
         <p className="text-center text-xs font-bold tabular-nums text-stone-500">{progressPct}%</p>
 
         <ul className="space-y-2 rounded-2xl border border-stone-100 bg-white/95 p-4 shadow-waka-sm">
@@ -196,7 +223,7 @@ export function CloudRecoveryScreen({ lang, failed, probeFailed = false, onRetry
           </div>
         </div>
 
-        {failed ? (
+        {showEscape ? (
           <div className="space-y-3">
             {session.errorMessage ? (
               <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-950">
@@ -210,16 +237,19 @@ export function CloudRecoveryScreen({ lang, failed, probeFailed = false, onRetry
                 ))}
               </ul>
             ) : null}
-            <button
-              type="button"
-              onClick={onRetry}
-              className="flex min-h-[48px] w-full items-center justify-center rounded-2xl bg-stone-900 text-base font-black text-white"
-            >
-              {t(lang, "recoveryRetry")}
-            </button>
+            <StartupEscapeActions
+              lang={lang}
+              onRetry={onRetry}
+              onContinueOffline={onContinueOffline}
+              canContinueOffline={canContinueOffline}
+              onSignOut={onSignOut}
+            />
           </div>
         ) : (
-          <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
+          <>
+            <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
+            <RecoveryInProgressEscapeFooter lang={lang} onSignOut={onSignOut} />
+          </>
         )}
       </div>
     </div>

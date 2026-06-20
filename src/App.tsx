@@ -40,6 +40,7 @@ import { BackupSyncPage } from "./pages/BackupSyncPage";
 import { CashManagementPage } from "./pages/CashManagementPage";
 import { AccountPage } from "./pages/AccountPage";
 import { AccountDeletionPage } from "./pages/AccountDeletionPage";
+import { OwnerProtectedRoute } from "./components/OwnerProtectedRoute";
 import { VerifyEmailPage } from "./pages/VerifyEmailPage";
 import { MarketingHomePage } from "./pages/MarketingHomePage";
 import { AboutPage } from "./pages/public/AboutPage";
@@ -95,6 +96,7 @@ import { DeviceActivationGateOutlet } from "./components/DeviceActivationGateOut
 import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateOutlet";
 import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
+import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
 import { useUiLanguage } from "./hooks/useUiLanguage";
 
@@ -140,12 +142,14 @@ function AppRoutes() {
     if (showDiagnostics) installNetworkDiagnosticsProbe();
   }, [showDiagnostics]);
 
-  if (!langReady) {
-    return null;
-  }
-
   return (
-    <>
+    <StartupBootstrapGate
+      lang={lang}
+      langReady={langReady}
+      authInitializing={auth.initializing}
+      isAuthenticated={auth.isAuthenticated}
+      onSignOut={auth.signOut}
+    >
       {showDiagnostics ? <StabilityDiagnosticsOverlay /> : null}
       <RouteSeoController />
       <NativeSplashGate authReady={!auth.initializing} waitForPos={auth.isAuthenticated} />
@@ -308,7 +312,7 @@ function AppRoutes() {
                 </Route>
                 <Route
                   element={
-                    <PosDataProvider lang={lang} accountKey={auth.accountKey}>
+                    <PosDataProvider lang={lang} accountKey={auth.accountKey} onSignOut={auth.signOut}>
                       <OnboardingRouteGate
                         authMode={auth.mode}
                         user={auth.user}
@@ -477,13 +481,15 @@ function AppRoutes() {
             <Route
               path="office/account/delete"
               element={
-                <RoleProtectedRoute permission="settings.shop">
+                <OwnerProtectedRoute>
                   <AccountDeletionPage
                     lang={lang}
                     userId={auth.user?.id ?? null}
+                    email={auth.email}
+                    user={auth.user}
                     onSignOut={auth.signOut}
                   />
-                </RoleProtectedRoute>
+                </OwnerProtectedRoute>
               }
             />
             <Route
@@ -871,7 +877,7 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.shop">
                   <SettingsChangeGate lang={lang}>
-                    <SettingsDiagnosticsPage lang={lang} />
+                    <SettingsDiagnosticsPage lang={lang} user={auth.user} />
                   </SettingsChangeGate>
                 </RoleProtectedRoute>
               }
@@ -929,7 +935,7 @@ function AppRoutes() {
 
         <Route path="*" element={<Navigate to={auth.isAuthenticated ? "/" : unauthenticatedEntryPath()} replace />} />
       </Routes>
-    </>
+    </StartupBootstrapGate>
   );
 }
 

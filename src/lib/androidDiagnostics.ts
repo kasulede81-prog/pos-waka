@@ -3,6 +3,7 @@ import { App } from "@capacitor/app";
 import { getDeviceOnline } from "./deviceOnline";
 import { getHardwareCapabilitySnapshot, type HardwareCapabilitySnapshot } from "../services/hardware/hardwareCapabilities";
 import { readSyncHealthMeta } from "./syncMeta";
+import { getStartupDiagnosticsSnapshot, readPersistedStartupDiagnostics } from "./startupDiagnostics";
 
 export type AndroidDiagnosticsReport = {
   generatedAt: string;
@@ -15,6 +16,7 @@ export type AndroidDiagnosticsReport = {
   lastSyncAt: string | null;
   lastSyncError: string | null;
   hardware: HardwareCapabilitySnapshot;
+  startup: ReturnType<typeof getStartupDiagnosticsSnapshot> | null;
 };
 
 export async function buildAndroidDiagnosticsReport(): Promise<AndroidDiagnosticsReport> {
@@ -53,6 +55,7 @@ export async function buildAndroidDiagnosticsReport(): Promise<AndroidDiagnostic
     lastSyncAt: health.lastSuccessAt ?? null,
     lastSyncError: health.lastIssueCode !== "none" ? health.lastIssueCode : null,
     hardware,
+    startup: getStartupDiagnosticsSnapshot() ?? readPersistedStartupDiagnostics(),
   };
 }
 

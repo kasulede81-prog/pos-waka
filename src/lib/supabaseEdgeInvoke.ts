@@ -20,8 +20,12 @@ async function readEdgeResponseBody(
   return {};
 }
 
-function edgeNotDeployedMessage(functionName: string): string {
-  return `Deploy Supabase edge function "${functionName}" (run: npm run supabase:deploy:ai), then retry.`;
+function edgeNotDeployedMessage(functionName: string, deployScript = "supabase:deploy:admin"): string {
+  const hint =
+    functionName.startsWith("ai-") || functionName.startsWith("ai_")
+      ? "supabase:deploy:ai"
+      : deployScript;
+  return `Deploy Supabase edge function "${functionName}" (run: npm run ${hint}), then retry.`;
 }
 
 function isNotFoundBody(j: Record<string, unknown>): boolean {
@@ -36,7 +40,7 @@ function isNotFoundBody(j: Record<string, unknown>): boolean {
 export async function invokeSupabaseEdgeFunction<T extends Record<string, unknown>>(
   functionName: string,
   body: Record<string, unknown>,
-  opts?: { timeoutMs?: number },
+  opts?: { timeoutMs?: number; deployScript?: string },
 ): Promise<EdgeInvokeResult<T>> {
   if (!supabase) {
     return { ok: false, message: "Supabase is not configured." };
@@ -62,7 +66,7 @@ export async function invokeSupabaseEdgeFunction<T extends Record<string, unknow
     if (isNotFoundBody(j)) {
       return {
         ok: false,
-        message: edgeNotDeployedMessage(functionName),
+        message: edgeNotDeployedMessage(functionName, opts?.deployScript),
         errorCode: "function_not_deployed",
       };
     }
@@ -77,7 +81,7 @@ export async function invokeSupabaseEdgeFunction<T extends Record<string, unknow
       ) {
         return {
           ok: false,
-          message: edgeNotDeployedMessage(functionName),
+          message: edgeNotDeployedMessage(functionName, opts?.deployScript),
           errorCode: "function_not_deployed",
         };
       }
@@ -102,7 +106,7 @@ export async function invokeSupabaseEdgeFunction<T extends Record<string, unknow
     if (msg.includes("Failed to send") || msg.includes("fetch")) {
       return {
         ok: false,
-        message: edgeNotDeployedMessage(functionName),
+        message: edgeNotDeployedMessage(functionName, opts?.deployScript),
         errorCode: "function_not_deployed",
       };
     }

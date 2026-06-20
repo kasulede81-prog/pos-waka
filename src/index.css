@@ -250,6 +250,24 @@ body {
     animation: none;
     background: #e7e5e4;
   }
+  .startup-progress-indeterminate {
+    animation: none;
+    width: 40% !important;
+    margin-left: 30%;
+  }
+}
+
+@keyframes startup-progress-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.startup-progress-indeterminate {
+  animation: startup-progress-slide 1.35s ease-in-out infinite;
 }
 
 @layer utilities {

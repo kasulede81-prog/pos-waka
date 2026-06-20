@@ -6,15 +6,11 @@ import { getActiveAccountKey, setActiveAccountKey } from "../offline/accountScop
 
 import { initInventorySyncChannel } from "../lib/inventorySyncChannel";
 
-import { hideNativeSplashWhenReady } from "../lib/nativeSplash";
+import { forceHideNativeSplash, hideNativeSplashWhenReady, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "../lib/nativeSplash";
 
 import { hasSupabaseConfig } from "../lib/supabase";
 
-import { WakaPosLogo } from "../components/brand/WakaLogo";
-
-import { t } from "../lib/i18n";
-
-import type { Language } from "../types";
+import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
 
 import { CloudRecoveryScreen } from "../components/recovery/CloudRecoveryScreen";
 
@@ -25,111 +21,153 @@ import {
 
 import { runCloudRecoveryGated, shouldRequireRecoveryLock } from "../lib/postAuthCloudHydrate";
 
+import { StartupLoadingScreen, STARTUP_SCREEN_BG } from "../components/startup/StartupLoadingScreen";
+
+import { StartupEscapeActions } from "../components/startup/StartupEscapeActions";
+
+import {
+  getStartupDiagnosticsSnapshot,
+  isRecoveryOfflineBypassActive,
+  markStartupStalled,
+  recordStartupStep,
+  resetStartupSessionForRetry,
+  setRecoveryOfflineBypass,
+  subscribeStartupDiagnostics,
+  type StartupStepId,
+} from "../lib/startupDiagnostics";
+
+import { STARTUP_STALL_MS } from "../components/startup/StartupBootstrapGate";
+
+import type { Language } from "../types";
+
+import { t } from "../lib/i18n";
+
 type Props = {
   children: ReactNode;
   lang?: Language;
   accountKey: string | null;
+  onSignOut?: () => void | Promise<void>;
 };
-
-function LoadingSkeleton({ lang }: { lang: Language }) {
-  return (
-    <div className="flex min-h-dvh flex-col items-center bg-[#fffaf5] px-5 pt-[max(2rem,env(safe-area-inset-top))]">
-      <WakaPosLogo size="splash" className="mb-8 mt-4" />
-      <div className="mx-auto w-full max-w-md space-y-6">
-        <p className="text-center text-lg font-black text-stone-800">{t(lang, "openingShop")}</p>
-        <p className="text-center text-xs font-medium text-stone-500">{t(lang, "openingShopLocalHint")}</p>
-        <p className="text-center text-sm font-medium leading-relaxed text-waka-900/90">{t(lang, "loadingTrustLine")}</p>
-        <div className="space-y-3 rounded-3xl border border-stone-100 bg-white/90 p-5 shadow-waka-sm">
-          <div className="h-14 w-full rounded-2xl waka-skeleton-bar" />
-          <div className="h-14 w-full rounded-2xl waka-skeleton-bar opacity-90" />
-          <div className="h-14 w-[72%] rounded-2xl waka-skeleton-bar opacity-75" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function isStoreReadyForAccount(accountKey: string | null): boolean {
   return Boolean(accountKey && usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey);
 }
 
-/** Fail closed — if lock check throws, assume recovery is required. */
 async function needsRecoveryLockFailClosed(): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
+  if (isRecoveryOfflineBypassActive()) return false;
   return shouldRequireRecoveryLock().catch(() => true);
 }
 
 type BootPhase = "disk" | "recovery" | "ready";
 
-export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
+export function PosDataProvider({ children, lang = "en", accountKey, onSignOut = async () => {} }: Props) {
   const [bootPhase, setBootPhase] = useState<BootPhase>(() => (!accountKey ? "ready" : "disk"));
   const [recoveryFailed, setRecoveryFailed] = useState(false);
   const [probeFailed, setProbeFailed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stalled, setStalled] = useState(false);
+  const [startupStep, setStartupStep] = useState<StartupStepId>(() => "local_disk");
   const bootGenRef = useRef(0);
+
+  useEffect(() => {
+    scheduleSplashMaxDuration();
+    scheduleSplashSafetyTimeout();
+  }, []);
+
+  useEffect(() => {
+    if (!accountKey) return;
+    void forceHideNativeSplash();
+  }, [accountKey, bootPhase, error, recoveryFailed, probeFailed, stalled]);
+
+  useEffect(() => {
+    const sync = () => setStartupStep(getStartupDiagnosticsSnapshot().currentStep);
+    sync();
+    return subscribeStartupDiagnostics(sync);
+  }, []);
+
+  useEffect(() => {
+    if (bootPhase === "ready" && !error) {
+      setStalled(false);
+      return;
+    }
+    const tick = () => {
+      const snap = getStartupDiagnosticsSnapshot();
+      const stallMs = Date.now() - new Date(snap.lastStepAt).getTime();
+      if (stallMs >= STARTUP_STALL_MS) {
+        markStartupStalled();
+        setStalled(true);
+      }
+    };
+    tick();
+    const id = window.setInterval(tick, 2000);
+    return () => window.clearInterval(id);
+  }, [bootPhase, error, recoveryFailed, probeFailed]);
 
   const runRecovery = useCallback(async (gen: number) => {
     setRecoveryFailed(false);
     setProbeFailed(false);
     setBootPhase("recovery");
+    recordStartupStep("cloud_recovery");
 
     const result = await runCloudRecoveryGated({ forcePull: true });
 
     if (bootGenRef.current !== gen) return;
 
     if (result.success) {
+      recordStartupStep("finalizing");
       setBootPhase("ready");
+      recordStartupStep("ready");
       void hideNativeSplashWhenReady();
     } else if (result.probeFailed) {
+      recordStartupStep("cloud_probe", { failureReason: result.error ?? "Cloud probe failed" });
       setProbeFailed(true);
     } else {
+      recordStartupStep("cloud_recovery", { failureReason: result.error ?? "Recovery failed" });
       setRecoveryFailed(true);
     }
   }, []);
 
-  useEffect(() => {
-    if (!accountKey) return;
+  const runBoot = useCallback(
+    async (gen: number) => {
+      setError(null);
+      setRecoveryFailed(false);
+      setProbeFailed(false);
+      setStalled(false);
 
-    const dispose = initInventorySyncChannel((msg) => {
-      usePosStore.getState().applyRemoteInventorySync(msg);
-    });
+      if (!accountKey) {
+        setBootPhase("ready");
+        recordStartupStep("ready");
+        return;
+      }
 
-    return dispose;
-  }, [accountKey]);
+      if (getActiveAccountKey() !== accountKey) {
+        flushPendingPersist();
+        usePosStore.getState().resetForSignOut();
+        setActiveAccountKey(accountKey);
+      }
 
-  useEffect(() => {
-    const gen = ++bootGenRef.current;
-    setError(null);
-    setRecoveryFailed(false);
-    setProbeFailed(false);
-
-    if (!accountKey) {
-      setBootPhase("ready");
-      return;
-    }
-
-    if (getActiveAccountKey() !== accountKey) {
-      flushPendingPersist();
-      usePosStore.getState().resetForSignOut();
-      setActiveAccountKey(accountKey);
-    }
-
-    void (async () => {
+      recordStartupStep("recovery_check");
       const needsRecoveryCheck =
         hasSupabaseConfig && accountKey.startsWith("sb:") && (await needsRecoveryLockFailClosed());
 
       if (isStoreReadyForAccount(accountKey) && !needsRecoveryCheck && !isCloudRecoveryLockActive()) {
         setBootPhase("ready");
+        recordStartupStep("ready");
         void hideNativeSplashWhenReady();
         return;
       }
 
       setBootPhase("disk");
+      recordStartupStep("local_disk");
 
       try {
         await bootstrapPosFromDisk();
       } catch {
-        if (bootGenRef.current === gen) setError("load");
+        if (bootGenRef.current === gen) {
+          setError("load");
+          recordStartupStep("local_disk", { failureReason: "Local data load failed" });
+        }
         return;
       }
 
@@ -143,28 +181,100 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
         return;
       }
 
+      recordStartupStep("finalizing");
       setBootPhase("ready");
+      recordStartupStep("ready");
       void hideNativeSplashWhenReady();
-    })();
+    },
+    [accountKey, runRecovery],
+  );
 
+  useEffect(() => {
+    if (!accountKey) return;
+
+    const dispose = initInventorySyncChannel((msg) => {
+      usePosStore.getState().applyRemoteInventorySync(msg);
+    });
+
+    return dispose;
+  }, [accountKey]);
+
+  useEffect(() => {
+    const gen = ++bootGenRef.current;
+    void runBoot(gen);
     return () => {
       bootGenRef.current += 1;
     };
-  }, [accountKey, runRecovery]);
+  }, [accountKey, runBoot]);
 
   const handleRetryRecovery = useCallback(() => {
+    resetStartupSessionForRetry();
+    setStalled(false);
     const gen = bootGenRef.current;
     resetCloudRecoverySessionForRetry();
     void runRecovery(gen);
   }, [runRecovery]);
 
+  const handleRetryStartup = useCallback(() => {
+    resetStartupSessionForRetry();
+    setStalled(false);
+    setError(null);
+    const gen = ++bootGenRef.current;
+    void runBoot(gen);
+  }, [runBoot]);
+
+  const handleContinueOffline = useCallback(() => {
+    if (isLocalShopDataEmpty()) return;
+    setRecoveryOfflineBypass();
+    resetCloudRecoverySessionForRetry();
+    setRecoveryFailed(false);
+    setProbeFailed(false);
+    setStalled(false);
+    recordStartupStep("finalizing");
+    setBootPhase("ready");
+    recordStartupStep("ready");
+    void hideNativeSplashWhenReady();
+  }, []);
+
+  const canContinueOffline = !isLocalShopDataEmpty() && usePosStore.getState()._hydrated;
+
+  const handleSignOut = useCallback(async () => {
+    resetCloudRecoverySessionForRetry();
+    await onSignOut();
+  }, [onSignOut]);
+
+  if (stalled && bootPhase !== "ready") {
+    return (
+      <div className={`min-h-dvh ${STARTUP_SCREEN_BG} px-5 py-[max(2rem,env(safe-area-inset-top))]`}>
+        <StartupLoadingScreen lang={lang} step={startupStep} showLogo={false} />
+        <div className="mx-auto mt-6 max-w-md">
+          <StartupEscapeActions
+            lang={lang}
+            title={t(lang, "startupStalledTitle")}
+            subtitle={t(lang, "startupStalledSub")}
+            onRetry={error === "load" ? handleRetryStartup : handleRetryRecovery}
+            onContinueOffline={handleContinueOffline}
+            canContinueOffline={canContinueOffline}
+            onSignOut={handleSignOut}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (error) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-stone-100 px-6 text-center">
-        <div className="max-w-sm rounded-3xl border-2 border-amber-100 bg-amber-50/90 p-8 shadow-waka-sm">
+      <div className={`flex min-h-dvh flex-col items-center justify-center gap-4 ${STARTUP_SCREEN_BG} px-6 py-[max(2rem,env(safe-area-inset-top))]`}>
+        <div className="max-w-sm space-y-4 rounded-3xl border-2 border-amber-100 bg-amber-50/90 p-8 shadow-waka-sm">
           <p className="text-xl font-black text-stone-900">{t(lang, "localDataError")}</p>
-          <p className="mt-3 text-base font-medium leading-relaxed text-stone-700">{t(lang, "localDataErrorHint")}</p>
-          <p className="mt-4 text-sm font-semibold text-waka-900">{t(lang, "loadingTrustLine")}</p>
+          <p className="text-base font-medium leading-relaxed text-stone-700">{t(lang, "localDataErrorHint")}</p>
+          <StartupEscapeActions
+            lang={lang}
+            onRetry={handleRetryStartup}
+            onContinueOffline={canContinueOffline ? handleContinueOffline : undefined}
+            canContinueOffline={canContinueOffline}
+            onSignOut={handleSignOut}
+          />
         </div>
       </div>
     );
@@ -177,12 +287,15 @@ export function PosDataProvider({ children, lang = "en", accountKey }: Props) {
         failed={recoveryFailed}
         probeFailed={probeFailed}
         onRetry={handleRetryRecovery}
+        onSignOut={handleSignOut}
+        onContinueOffline={handleContinueOffline}
+        canContinueOffline={canContinueOffline}
       />
     );
   }
 
   if (bootPhase !== "ready") {
-    return <LoadingSkeleton lang={lang} />;
+    return <StartupLoadingScreen lang={lang} step={startupStep} />;
   }
 
   return <>{children}</>;

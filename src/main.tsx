@@ -12,11 +12,14 @@ import App from "./App";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { initCapacitorShell } from "./lib/capacitorInit";
 import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
+import { recoverStuckStartupState, recordStartupStep } from "./lib/startupDiagnostics";
 import { reportPwaIssue } from "./lib/monitoring";
 import { warmupLocalDb } from "./offline/localDb";
 
 initCrashReporting();
 installGlobalErrorHandlers();
+recoverStuckStartupState();
+recordStartupStep("app_launch");
 warmupLocalDb();
 
 if (!isElectronDesktop()) {
@@ -32,7 +35,7 @@ if (!isElectronDesktop()) {
     });
   });
 }
-void initCapacitorShell();
+void initCapacitorShell().then(() => recordStartupStep("capacitor_init"));
 const queryClient = new QueryClient();
 
 createRoot(document.getElementById('root')!).render(

@@ -16,7 +16,7 @@ const SIZE_CLASS: Record<NonNullable<LogoProps["size"]>, string> = {
   md: "h-14",
   lg: "h-20",
   xl: "h-28",
-  splash: "h-[min(52vh,320px)]",
+  splash: "h-[min(42vh,300px)]",
 };
 
 const SYMBOL_BY_SIZE: Record<NonNullable<LogoProps["size"]>, string> = {

@@ -7,12 +7,15 @@ import { buildAndroidDiagnosticsReport, formatAndroidDiagnosticsReport } from ".
 import { saveExportedFile } from "../lib/fileDownload";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { readSyncHealthMeta } from "../lib/syncMeta";
+import { StartupDiagnosticsPanel } from "../components/startup/StartupDiagnosticsPanel";
+import { SelfDeleteHealthPanel } from "../components/settings/SelfDeleteHealthPanel";
+import type { User } from "@supabase/supabase-js";
 
 function yesNo(lang: Language, ok: boolean): string {
   return ok ? t(lang, "diagnosticsSupported") : t(lang, "diagnosticsNotSupported");
 }
 
-export function SettingsDiagnosticsPage({ lang }: { lang: Language }) {
+export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: User | null }) {
   const sync = useSyncStatus();
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,6 +60,12 @@ export function SettingsDiagnosticsPage({ lang }: { lang: Language }) {
         <h1 className="text-2xl font-black text-stone-950">{t(lang, "diagnosticsPageTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "diagnosticsPageSub")}</p>
       </div>
+
+      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <StartupDiagnosticsPanel lang={lang} />
+      </section>
+
+      <SelfDeleteHealthPanel lang={lang} user={user} />
 
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         <dl className="space-y-3 text-sm">

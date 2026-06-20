@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { parseWakaInternalMeRow } from "../_shared/wakaInternalStaff.ts";
+import { runCertifiedHardDelete } from "../_shared/certifiedHardDelete.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -55,58 +56,57 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: "forbidden", detail: "Super admin only." }, 403);
   }
 
-  const { data: prep, error: prepErr } = await userClient.rpc("admin_permanently_delete_shop_account", {
-    p_shop_id: shopId,
-    p_confirmation: confirmation,
-  });
-
-  if (prepErr) {
-    return json({ ok: false, error: "delete_failed", detail: prepErr.message }, 500);
-  }
-
-  const j = (prep ?? {}) as {
-    ok?: boolean;
-    error?: string;
-    detail?: string;
-    owner_user_id?: string;
-    shop_name?: string;
-    sales_deleted?: number;
-  };
-
-  if (!j.ok) {
-    return json({ ok: false, error: j.error ?? "delete_failed", detail: j.detail }, 400);
-  }
-
-  const ownerId = j.owner_user_id;
-  if (!ownerId) {
-    return json({ ok: false, error: "owner_not_found" }, 404);
-  }
-
   const admin = createClient(supabaseUrl, serviceKey);
-  const { error: authDelErr } = await admin.auth.admin.deleteUser(ownerId);
+
+  let preparedOwnerId: string | null = null;
+
+  const result = await runCertifiedHardDelete({
+    userClient,
+    admin,
+    prepare: async () => {
+      const r = await userClient.rpc("admin_permanently_delete_shop_account", {
+        p_shop_id: shopId,
+        p_confirmation: confirmation,
+        p_phase: "prepare",
+      });
+      const prep = (r.data ?? {}) as { organization_id?: string; owner_user_id?: string };
+      if (prep.owner_user_id) preparedOwnerId = String(prep.owner_user_id);
+      return r;
+    },
+    execute: () =>
+      userClient.rpc("admin_permanently_delete_shop_account", {
+        p_shop_id: shopId,
+        p_confirmation: confirmation,
+        p_phase: "execute",
+      }),
+  });
 
   await userClient.rpc("admin_permanent_delete_auth_user_audit", {
-    p_owner_user_id: ownerId,
+    p_owner_user_id: preparedOwnerId ?? result.user_ids?.find((id) => id) ?? null,
     p_shop_id: shopId,
-    p_ok: !authDelErr,
-    p_detail: authDelErr?.message ?? null,
-  });
+    p_ok: result.ok,
+    p_detail: result.detail ?? null,
+  }).catch(() => undefined);
 
-  if (authDelErr) {
+  if (!result.ok) {
     return json({
       ok: false,
-      error: "auth_delete_failed",
-      detail: authDelErr.message,
-      partial: true,
-      message: "Shop data was removed but login user could not be deleted. Retry or remove user in Supabase Auth.",
-      sales_deleted: j.sales_deleted,
-    }, 500);
+      error: result.error ?? "delete_failed",
+      detail: result.detail,
+      partial: result.partial,
+      message: result.message ??
+        "Shop data was removed but certified deletion verification failed. Review the deletion report.",
+      deletion_report: result.deletion_report,
+      sales_deleted: result.sales_deleted,
+    }, result.partial ? 500 : 400);
   }
 
   return json({
     ok: true,
-    shop_name: j.shop_name,
-    sales_deleted: j.sales_deleted,
-    message: "Shop, organization data, and login account permanently deleted.",
+    shop_name: result.shop_name,
+    sales_deleted: result.sales_deleted,
+    deletion_report: result.deletion_report,
+    message: result.message ??
+      "Certified hard delete completed. Organization, staff logins, and all verification checks passed.",
   });
 });

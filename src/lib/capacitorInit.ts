@@ -1,7 +1,7 @@
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { initDeviceOnlineTracking } from "./deviceOnline";
-import { prepareNativeSplash } from "./nativeSplash";
+import { prepareNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "./nativeSplash";
 import { registerNativeOAuthDeepLinkHandler } from "./nativeGoogleAuth";
 
 /**
@@ -11,6 +11,8 @@ export async function initCapacitorShell(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   registerNativeOAuthDeepLinkHandler();
   await prepareNativeSplash();
+  scheduleSplashMaxDuration();
+  scheduleSplashSafetyTimeout();
   await initDeviceOnlineTracking();
   try {
     await StatusBar.setOverlaysWebView({ overlay: true });

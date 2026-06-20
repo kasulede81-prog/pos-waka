@@ -1,7 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 
 /** OAuth providers treated as verified without separate email confirmation. */
-const TRUSTED_OAUTH_PROVIDERS = new Set(["google", "apple"]);
+export const TRUSTED_OAUTH_PROVIDERS = new Set(["google", "apple"]);
 
 function hasTrustedOAuthProvider(user: User): boolean {
   const appMeta = user.app_metadata ?? {};
