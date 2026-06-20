@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { currentGlobalSyncKind, isGlobalSyncInFlight, withGlobalSyncMutex } from "./globalSyncMutex";
+import {
+  currentGlobalSyncKind,
+  globalSyncMutexDepth,
+  isGlobalSyncInFlight,
+  withGlobalSyncMutex,
+} from "./globalSyncMutex";
 
 describe("globalSyncMutex", () => {
   it("runs tasks sequentially when not nested", async () => {
@@ -41,5 +46,21 @@ describe("globalSyncMutex", () => {
     expect(order).toEqual(["start-1", "end-1", "start-2", "end-2"]);
     expect(isGlobalSyncInFlight()).toBe(false);
     expect(currentGlobalSyncKind()).toBeNull();
+  });
+
+  it("allows nested reentrant calls without deadlock (push → flush pattern)", async () => {
+    const order: string[] = [];
+    await withGlobalSyncMutex("pushPending", async () => {
+      order.push("push-start");
+      expect(globalSyncMutexDepth()).toBe(1);
+      await withGlobalSyncMutex("flushSyncQueue", async () => {
+        order.push("flush-inner");
+        expect(globalSyncMutexDepth()).toBe(2);
+      });
+      order.push("push-end");
+      expect(globalSyncMutexDepth()).toBe(1);
+    });
+    expect(order).toEqual(["push-start", "flush-inner", "push-end"]);
+    expect(isGlobalSyncInFlight()).toBe(false);
   });
 });

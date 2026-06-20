@@ -14,6 +14,7 @@ export type SyncHealthMeta = {
   lastAttemptAt: string | null;
   lastSuccessAt: string | null;
   lastPullAt: string | null;
+  lastPushAt: string | null;
   lastIssueAt: string | null;
   /** Friendly code for diagnostics UI */
   lastIssueCode: "none" | "partial" | "error";
@@ -29,6 +30,7 @@ const empty: SyncHealthMeta = {
   lastAttemptAt: null,
   lastSuccessAt: null,
   lastPullAt: null,
+  lastPushAt: null,
   lastIssueAt: null,
   lastIssueCode: "none",
   offlineSinceAt: null,
@@ -47,6 +49,7 @@ export function readSyncHealthMeta(): SyncHealthMeta {
       lastAttemptAt: typeof o.lastAttemptAt === "string" ? o.lastAttemptAt : null,
       lastSuccessAt: typeof o.lastSuccessAt === "string" ? o.lastSuccessAt : null,
       lastPullAt: typeof o.lastPullAt === "string" ? o.lastPullAt : null,
+      lastPushAt: typeof o.lastPushAt === "string" ? o.lastPushAt : null,
       lastIssueAt: typeof o.lastIssueAt === "string" ? o.lastIssueAt : null,
       lastIssueCode: o.lastIssueCode === "partial" || o.lastIssueCode === "error" ? o.lastIssueCode : "none",
       offlineSinceAt: typeof o.offlineSinceAt === "string" ? o.offlineSinceAt : null,

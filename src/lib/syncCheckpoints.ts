@@ -118,6 +118,11 @@ export function clearSyncCheckpoints(): void {
   }
 }
 
+/** Roll back premature bootstrap completion (recovery validation failure). */
+export function clearBootstrapSyncComplete(): SyncCheckpoints {
+  return writeSyncCheckpoints({ bootstrapComplete: false });
+}
+
 /** Mark bootstrap done and set all entity cursors to the same timestamp. */
 export function markBootstrapSyncComplete(at = new Date().toISOString()): SyncCheckpoints {
   return writeSyncCheckpoints({

@@ -42,10 +42,18 @@ export function ArchiveDataPage({ lang }: { lang: Language }) {
     return <Navigate to="/office" replace />;
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (totalArchived === 0) return;
     if (!window.confirm(t(lang, "retentionDeleteConfirm"))) return;
-    permanentlyDeleteArchived();
+    const result = await permanentlyDeleteArchived();
+    if (!result.ok) {
+      setMsg(
+        result.errorKey === "audit_sync_pending"
+          ? "Cannot delete archived data while audit logs are still uploading."
+          : "Cannot delete archived data while sync is incomplete. Try again after sync finishes.",
+      );
+      return;
+    }
     setMsg(t(lang, "retentionDeleteDone"));
   };
 

@@ -45,6 +45,16 @@ function product(
   };
 }
 
+const SHOP_UUID = "11111111-1111-4111-8111-111111111111";
+
+describe("inventoryIntegrity — shop namespace", () => {
+  it("uses shop uuid namespace matching server formula", () => {
+    const id = stableInventoryMovementId(SHOP_UUID, "sale", SALE_A, PRODUCT_ID);
+    expect(id).toBe(stableInventoryMovementId(SHOP_UUID, "sale", SALE_A, PRODUCT_ID));
+    expect(id).not.toBe(stableInventoryMovementId("sb:user-id", "sale", SALE_A, PRODUCT_ID));
+  });
+});
+
 describe("inventoryIntegrity — stable movement ids", () => {
   it("same sale + product yields deterministic id", () => {
     const a = stableInventoryMovementId(SHOP_KEY, "sale", SALE_A, PRODUCT_ID);

@@ -109,6 +109,8 @@ export type AuditAction =
   | "cash_drawer_adjustment"
   | "auth_forbidden"
   | "archive_purge"
+  | "archive_purge_blocked"
+  | "day_close_preflight_warning"
   | "day_close_override"
   | "sync_unknown_operation"
   | "device_viewed"

@@ -41,7 +41,7 @@ export async function flushSyncQueue(onProgress?: (done: number, total: number) 
   return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress));
 }
 
-async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void): Promise<{
+export async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;

@@ -8,6 +8,7 @@ import { saveExportedFile } from "../lib/fileDownload";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { readSyncHealthMeta } from "../lib/syncMeta";
 import { StartupDiagnosticsPanel } from "../components/startup/StartupDiagnosticsPanel";
+import { SyncHealthDashboard } from "../components/SyncHealthDashboard";
 import { SelfDeleteHealthPanel } from "../components/settings/SelfDeleteHealthPanel";
 import type { User } from "@supabase/supabase-js";
 
@@ -64,6 +65,8 @@ export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: 
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         <StartupDiagnosticsPanel lang={lang} />
       </section>
+
+      <SyncHealthDashboard lang={lang} />
 
       <SelfDeleteHealthPanel lang={lang} user={user} />
 

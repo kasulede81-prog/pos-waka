@@ -28,6 +28,9 @@ import { getDeviceOnline } from "../lib/deviceOnline";
 import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
+import { setCachedShopId } from "../lib/shopSyncContext";
+import { pullEntitySafe } from "../lib/pullEntitySafe";
+import { recordEntityPullErrors } from "../lib/pullDiagnostics";
 import {
   markBootstrapSyncComplete,
   needsBootstrapPull,
@@ -105,7 +108,11 @@ export async function resolveShopCtx(): Promise<ShopCtx | null> {
   if (!userId || !user) return null;
   if (!isSupabaseEmailVerified(user)) return null;
   const orgShop = await resolvePrimaryOrganizationForUser(userId);
-  if (!orgShop) return null;
+  if (!orgShop) {
+    setCachedShopId(null);
+    return null;
+  }
+  setCachedShopId(orgShop.shopId);
   return { shopId: orgShop.shopId, userId };
 }
 
@@ -1537,6 +1544,8 @@ export type CloudPullStats = {
   durationMs: number;
   salesTruncated?: boolean;
   stockMovements?: number;
+  entityErrors?: Record<string, string>;
+  partialSuccess?: boolean;
 };
 
 export type CloudPullCheckpoints = {
@@ -1580,6 +1589,7 @@ export type CloudPullResult = {
   voidedSaleIds: string[];
   stats: CloudPullStats;
   checkpoints?: CloudPullCheckpoints;
+  recoveredAuditLogs?: AuditLogEntry[];
 };
 
 const FULL_SALES_PAGE = 800;
@@ -2430,6 +2440,7 @@ async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashE
 export async function pullShopDataFromCloud(opts?: {
   mode?: CloudPullMode;
   forceFull?: boolean;
+  cloudRecovery?: boolean;
   onRecoveryStep?: (
     step: import("../lib/cloudRecoverySession").CloudRecoveryStepId,
     counts?: Partial<import("../lib/cloudRecoverySession").CloudRecoveryEntityCounts>,
@@ -2473,198 +2484,283 @@ export async function pullShopDataFromCloud(opts?: {
   let salesTruncated = false;
   let stockMovementCount = 0;
 
-  try {
-    if (mode === "full") {
-      const p = await pullProductsFull(ctx);
+  const entityErrors: Record<string, string> = {};
+  let recoveredAuditLogs: AuditLogEntry[] = [];
+
+  if (mode === "full") {
+    const p = await pullEntitySafe("products", entityErrors, () => pullProductsFull(ctx));
+    if (p) {
       products = p.products;
       deletedProductIds = p.deletedIds;
       payloadBytes += p.bytes;
       opts?.onRecoveryStep?.("products", { products: products.length });
+    }
 
-      const s = await pullSalesFull(ctx);
+    const s = await pullEntitySafe("sales", entityErrors, () => pullSalesFull(ctx));
+    if (s) {
       sales = s.sales;
       voidedSaleIds = s.voidedIds;
       payloadBytes += s.bytes;
       salesTruncated = s.truncated;
       lastSalesPullTruncated = s.truncated;
       opts?.onRecoveryStep?.("sales", { sales: sales.length });
+    }
 
-      const c = await pullCustomersFull(ctx);
+    const c = await pullEntitySafe("customers", entityErrors, () => pullCustomersFull(ctx));
+    if (c) {
       customers = c.customers;
       payloadBytes += c.bytes;
       opts?.onRecoveryStep?.("customers", { customers: customers.length });
+    }
 
-      const exFull = await pullCashExpensesFull(ctx);
+    const exFull = await pullEntitySafe("cash_expenses", entityErrors, () => pullCashExpensesFull(ctx));
+    if (exFull) {
       cashExpenses = exFull.cashExpenses;
       expenseCount = exFull.cashExpenses.length;
       payloadBytes += exFull.bytes;
+    }
 
-      const retFull = await pullReturnsFull(ctx);
+    const retFull = await pullEntitySafe("returns", entityErrors, () => pullReturnsFull(ctx));
+    if (retFull) {
       returnCloudRows = retFull.returnRows;
       returnCount = retFull.returnRows.length;
       payloadBytes += retFull.bytes;
+    }
 
-      const purFull = await pullPurchasesFull(ctx);
+    const purFull = await pullEntitySafe("purchases", entityErrors, () => pullPurchasesFull(ctx));
+    if (purFull) {
       purchaseCloudRows = purFull.purchaseRows;
       purchaseCount = purFull.purchaseRows.length;
       payloadBytes += purFull.bytes;
+    }
 
-      const supFull = await pullSuppliersFull(ctx);
+    const supFull = await pullEntitySafe("suppliers", entityErrors, () => pullSuppliersFull(ctx));
+    if (supFull) {
       supplierCloudRows = supFull.supplierRows;
       supplierCount = supFull.supplierRows.length;
       payloadBytes += supFull.bytes;
+    }
 
-      const payFull = await pullSupplierPaymentsFull(ctx);
+    const payFull = await pullEntitySafe("supplier_payments", entityErrors, () => pullSupplierPaymentsFull(ctx));
+    if (payFull) {
       supplierPayments = payFull.supplierPayments;
       supplierPaymentCount = payFull.supplierPayments.length;
       payloadBytes += payFull.bytes;
+    }
 
-      const dpFull = await pullDebtPaymentsFull(ctx);
+    const dpFull = await pullEntitySafe("debt_payments", entityErrors, () => pullDebtPaymentsFull(ctx));
+    if (dpFull) {
       debtPayments = dpFull.debtPayments;
       debtPaymentCount = dpFull.debtPayments.length;
       payloadBytes += dpFull.bytes;
+    }
 
-      const adjFull = await pullCashDrawerAdjustmentsFull(ctx);
+    const adjFull = await pullEntitySafe("cash_drawer_adjustments", entityErrors, () =>
+      pullCashDrawerAdjustmentsFull(ctx),
+    );
+    if (adjFull) {
       cashDrawerAdjustments = adjFull.cashDrawerAdjustments;
       payloadBytes += adjFull.bytes;
+    }
 
-      const ddoFull = await pullDayDrawerOpensFull(ctx);
+    const ddoFull = await pullEntitySafe("day_drawer_opens", entityErrors, () => pullDayDrawerOpensFull(ctx));
+    if (ddoFull) {
       dayDrawerOpens = ddoFull.dayDrawerOpens;
       payloadBytes += ddoFull.bytes;
+    }
 
-      const icsFull = await pullInventoryCountSessionsFromRpc(ctx, null);
+    const icsFull = await pullEntitySafe("inventory_count_sessions", entityErrors, () =>
+      pullInventoryCountSessionsFromRpc(ctx, null),
+    );
+    if (icsFull) {
       inventoryCountSessions = icsFull.sessions;
       payloadBytes += icsFull.bytes;
       opts?.onRecoveryStep?.("inventory", {
         inventory: inventoryCountSessions.length > 0 ? inventoryCountSessions.length : products.length,
       });
+    }
 
-      const shiftsFull = await pullShiftsFromRpc(ctx, null);
+    const shiftsFull = await pullEntitySafe("shifts", entityErrors, () => pullShiftsFromRpc(ctx, null));
+    if (shiftsFull) {
       shifts = shiftsFull.shifts;
       payloadBytes += shiftsFull.bytes;
       opts?.onRecoveryStep?.("shifts", { shifts: shifts.length });
+    }
 
-      const dcFull = await pullDayClosesFromRpc(ctx, null);
+    const dcFull = await pullEntitySafe("day_closes", entityErrors, () => pullDayClosesFromRpc(ctx, null));
+    if (dcFull) {
       dayCloses = dcFull.dayCloses;
       payloadBytes += dcFull.bytes;
       opts?.onRecoveryStep?.("day_closes", { dayCloses: dayCloses.length });
+    }
 
-      opts?.onRecoveryStep?.("cash", {
-        cashRecords: cashDrawerAdjustments.length + dayDrawerOpens.length + cashExpenses.length,
-      });
+    opts?.onRecoveryStep?.("cash", {
+      cashRecords: cashDrawerAdjustments.length + dayDrawerOpens.length + cashExpenses.length,
+    });
 
-      const smFull = await pullStockMovementsFull(ctx);
+    const smFull = await pullEntitySafe("stock_movements", entityErrors, () => pullStockMovementsFull(ctx));
+    if (smFull) {
       stockMovements = smFull.movements;
       stockMovementCount = smFull.movements.length;
       payloadBytes += smFull.bytes;
-    } else {
-      const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
-      const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
-      const sinceSales = cp.lastSalesSyncAt ?? new Date(0).toISOString();
-      const sinceExpenses = cp.lastExpensesSyncAt ?? new Date(0).toISOString();
-      const sinceReturns = cp.lastReturnsSyncAt ?? new Date(0).toISOString();
-      const sinceDebtPayments = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
+    }
+  } else {
+    const sinceProducts = cp.lastProductsSyncAt ?? new Date(0).toISOString();
+    const sinceCustomers = cp.lastCustomersSyncAt ?? new Date(0).toISOString();
+    const sinceSales = cp.lastSalesSyncAt ?? new Date(0).toISOString();
+    const sinceExpenses = cp.lastExpensesSyncAt ?? new Date(0).toISOString();
+    const sinceReturns = cp.lastReturnsSyncAt ?? new Date(0).toISOString();
+    const sinceDebtPayments = cp.lastDebtPaymentsSyncAt ?? new Date(0).toISOString();
 
-      const p = await pullProductsIncremental(ctx, sinceProducts);
+    const p = await pullEntitySafe("products", entityErrors, () => pullProductsIncremental(ctx, sinceProducts));
+    if (p) {
       products = p.products;
       deletedProductIds = p.deletedIds;
       payloadBytes += p.bytes;
+    }
 
-      const c = await pullCustomersIncremental(ctx, sinceCustomers);
+    const c = await pullEntitySafe("customers", entityErrors, () => pullCustomersIncremental(ctx, sinceCustomers));
+    if (c) {
       customers = c.customers;
       payloadBytes += c.bytes;
+    }
 
-      const s = await pullSalesIncremental(ctx, sinceSales);
+    const s = await pullEntitySafe("sales", entityErrors, () => pullSalesIncremental(ctx, sinceSales));
+    if (s) {
       sales = s.sales;
       voidedSaleIds = s.voidedIds;
       payloadBytes += s.bytes;
+    }
 
-      const ex = await pullExpensesIncremental(ctx, sinceExpenses);
+    const ex = await pullEntitySafe("cash_expenses", entityErrors, () => pullExpensesIncremental(ctx, sinceExpenses));
+    if (ex) {
       cashExpenses = ex.cashExpenses;
       expenseCount = ex.count;
       payloadBytes += ex.bytes;
+    }
 
-      const ret = await pullReturnsIncremental(ctx, sinceReturns);
+    const ret = await pullEntitySafe("returns", entityErrors, () => pullReturnsIncremental(ctx, sinceReturns));
+    if (ret) {
       returnCloudRows = ret.returnRows;
       returnCount = ret.returnRows.length;
       payloadBytes += ret.bytes;
+    }
 
-      const sincePurchases = cp.lastPurchasesSyncAt ?? new Date(0).toISOString();
-      const sinceSuppliers = cp.lastSuppliersSyncAt ?? new Date(0).toISOString();
-      const sinceSupplierPayments = cp.lastSupplierPaymentsSyncAt ?? new Date(0).toISOString();
+    const sincePurchases = cp.lastPurchasesSyncAt ?? new Date(0).toISOString();
+    const sinceSuppliers = cp.lastSuppliersSyncAt ?? new Date(0).toISOString();
+    const sinceSupplierPayments = cp.lastSupplierPaymentsSyncAt ?? new Date(0).toISOString();
 
-      const pur = await pullPurchasesIncremental(ctx, sincePurchases);
+    const pur = await pullEntitySafe("purchases", entityErrors, () => pullPurchasesIncremental(ctx, sincePurchases));
+    if (pur) {
       purchaseCloudRows = pur.purchaseRows;
       purchaseCount = pur.purchaseRows.length;
       payloadBytes += pur.bytes;
+    }
 
-      const sup = await pullSuppliersIncremental(ctx, sinceSuppliers);
+    const sup = await pullEntitySafe("suppliers", entityErrors, () => pullSuppliersIncremental(ctx, sinceSuppliers));
+    if (sup) {
       supplierCloudRows = sup.supplierRows;
       supplierCount = sup.supplierRows.length;
       payloadBytes += sup.bytes;
+    }
 
-      const pay = await pullSupplierPaymentsIncremental(ctx, sinceSupplierPayments);
+    const pay = await pullEntitySafe("supplier_payments", entityErrors, () =>
+      pullSupplierPaymentsIncremental(ctx, sinceSupplierPayments),
+    );
+    if (pay) {
       supplierPayments = pay.supplierPayments;
       supplierPaymentCount = pay.supplierPayments.length;
       payloadBytes += pay.bytes;
+    }
 
-      const dp = await pullDebtPaymentsIncremental(ctx, sinceDebtPayments);
+    const dp = await pullEntitySafe("debt_payments", entityErrors, () =>
+      pullDebtPaymentsIncremental(ctx, sinceDebtPayments),
+    );
+    if (dp) {
       debtPayments = dp.debtPayments;
       debtPaymentCount = dp.debtPayments.length;
       payloadBytes += dp.bytes;
+    }
 
-      const sinceCashDrawerAdjustments = cp.lastCashDrawerAdjustmentsSyncAt ?? new Date(0).toISOString();
-      const adj = await pullCashDrawerAdjustmentsIncremental(ctx, sinceCashDrawerAdjustments);
+    const sinceCashDrawerAdjustments = cp.lastCashDrawerAdjustmentsSyncAt ?? new Date(0).toISOString();
+    const adj = await pullEntitySafe("cash_drawer_adjustments", entityErrors, () =>
+      pullCashDrawerAdjustmentsIncremental(ctx, sinceCashDrawerAdjustments),
+    );
+    if (adj) {
       cashDrawerAdjustments = adj.cashDrawerAdjustments;
       payloadBytes += adj.bytes;
+    }
 
-      const sinceDayDrawerOpens = cp.lastDayDrawerOpensSyncAt ?? new Date(0).toISOString();
-      const ddo = await pullDayDrawerOpensIncremental(ctx, sinceDayDrawerOpens);
+    const sinceDayDrawerOpens = cp.lastDayDrawerOpensSyncAt ?? new Date(0).toISOString();
+    const ddo = await pullEntitySafe("day_drawer_opens", entityErrors, () =>
+      pullDayDrawerOpensIncremental(ctx, sinceDayDrawerOpens),
+    );
+    if (ddo) {
       dayDrawerOpens = ddo.dayDrawerOpens;
       payloadBytes += ddo.bytes;
+    }
 
-      const sinceIcs = cp.lastInventoryCountSessionsSyncAt ?? new Date(0).toISOString();
-      const ics = await pullInventoryCountSessionsFromRpc(ctx, sinceIcs);
+    const sinceIcs = cp.lastInventoryCountSessionsSyncAt ?? new Date(0).toISOString();
+    const ics = await pullEntitySafe("inventory_count_sessions", entityErrors, () =>
+      pullInventoryCountSessionsFromRpc(ctx, sinceIcs),
+    );
+    if (ics) {
       inventoryCountSessions = ics.sessions;
       payloadBytes += ics.bytes;
+    }
 
-      const sinceShifts = cp.lastShiftsSyncAt ?? new Date(0).toISOString();
-      const sh = await pullShiftsFromRpc(ctx, sinceShifts);
+    const sinceShifts = cp.lastShiftsSyncAt ?? new Date(0).toISOString();
+    const sh = await pullEntitySafe("shifts", entityErrors, () => pullShiftsFromRpc(ctx, sinceShifts));
+    if (sh) {
       shifts = sh.shifts;
       payloadBytes += sh.bytes;
+    }
 
-      const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
-      const dc = await pullDayClosesFromRpc(ctx, sinceDayCloses);
+    const sinceDayCloses = cp.lastDayClosesSyncAt ?? new Date(0).toISOString();
+    const dc = await pullEntitySafe("day_closes", entityErrors, () => pullDayClosesFromRpc(ctx, sinceDayCloses));
+    if (dc) {
       dayCloses = dc.dayCloses;
       payloadBytes += dc.bytes;
+    }
 
-      const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
-      const sm = await pullStockMovementsIncremental(ctx, sinceStockMovements);
+    const sinceStockMovements = cp.lastStockMovementsSyncAt ?? new Date(0).toISOString();
+    const sm = await pullEntitySafe("stock_movements", entityErrors, () =>
+      pullStockMovementsIncremental(ctx, sinceStockMovements),
+    );
+    if (sm) {
       stockMovements = sm.movements;
       stockMovementCount = sm.movements.length;
       payloadBytes += sm.bytes;
-
-      pullCheckpoints = {
-        salesAt: s.checkpointAt,
-        productsAt: p.checkpointAt,
-        customersAt: c.checkpointAt,
-        debtPaymentsAt: dp.checkpointAt,
-        expensesAt: ex.checkpointAt,
-        returnsAt: ret.checkpointAt,
-        purchasesAt: pur.checkpointAt,
-        suppliersAt: sup.checkpointAt,
-        supplierPaymentsAt: pay.checkpointAt,
-        cashDrawerAdjustmentsAt: adj.checkpointAt,
-        dayDrawerOpensAt: ddo.checkpointAt,
-        inventoryCountSessionsAt: ics.checkpointAt,
-        shiftsAt: sh.checkpointAt,
-        dayClosesAt: dc.checkpointAt,
-        stockMovementsAt: sm.checkpointAt,
-      };
     }
-  } catch {
-    return null;
+
+    pullCheckpoints = {
+      salesAt: s?.checkpointAt ?? sinceSales,
+      productsAt: p?.checkpointAt ?? sinceProducts,
+      customersAt: c?.checkpointAt ?? sinceCustomers,
+      debtPaymentsAt: dp?.checkpointAt ?? sinceDebtPayments,
+      expensesAt: ex?.checkpointAt ?? sinceExpenses,
+      returnsAt: ret?.checkpointAt ?? sinceReturns,
+      purchasesAt: pur?.checkpointAt ?? sincePurchases,
+      suppliersAt: sup?.checkpointAt ?? sinceSuppliers,
+      supplierPaymentsAt: pay?.checkpointAt ?? sinceSupplierPayments,
+      cashDrawerAdjustmentsAt: adj?.checkpointAt ?? sinceCashDrawerAdjustments,
+      dayDrawerOpensAt: ddo?.checkpointAt ?? sinceDayDrawerOpens,
+      inventoryCountSessionsAt: ics?.checkpointAt ?? sinceIcs,
+      shiftsAt: sh?.checkpointAt ?? sinceShifts,
+      dayClosesAt: dc?.checkpointAt ?? sinceDayCloses,
+      stockMovementsAt: sm?.checkpointAt ?? sinceStockMovements,
+    };
   }
+
+  if (opts?.cloudRecovery) {
+    const audit = await pullEntitySafe("audit_logs", entityErrors, async () => {
+      const { pullAuditLogsFromCloud } = await import("../lib/auditCloudSync");
+      return pullAuditLogsFromCloud(ctx.shopId);
+    });
+    if (audit) recoveredAuditLogs = audit;
+  }
+
+  recordEntityPullErrors(entityErrors);
 
   void supabase
     .from("sync_health")
@@ -2698,6 +2794,8 @@ export async function pullShopDataFromCloud(opts?: {
     durationMs: Math.round(performance.now() - started),
     salesTruncated,
     stockMovements: stockMovementCount,
+    entityErrors: Object.keys(entityErrors).length > 0 ? entityErrors : undefined,
+    partialSuccess: Object.keys(entityErrors).length > 0,
   };
 
   const { isDiagnosticsEnabled, recordCloudPullStats } = await import("../lib/stabilityDiagnostics");
@@ -2725,6 +2823,7 @@ export async function pullShopDataFromCloud(opts?: {
     voidedSaleIds,
     stats,
     checkpoints: pullCheckpoints,
+    recoveredAuditLogs: recoveredAuditLogs.length > 0 ? recoveredAuditLogs : undefined,
   };
 }
 
@@ -2737,6 +2836,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     counts?: Partial<import("../lib/cloudRecoverySession").CloudRecoveryEntityCounts>,
   ) => void;
 }): Promise<boolean> {
+  const shouldMarkBootstrap = opts?.cloudRecovery !== true;
   const failMerge = (errorKey: string): boolean => {
     if (opts?.cloudRecovery) throw new Error(errorKey);
     return false;
@@ -2755,7 +2855,11 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     "../store/usePosStore",
   );
   if (!hasSupabaseConfig) return failMerge("cloud_pull_not_configured");
-  const cloud = await pullShopDataFromCloud({ forceFull: opts?.forceFull, onRecoveryStep: opts?.onRecoveryStep });
+  const cloud = await pullShopDataFromCloud({
+    forceFull: opts?.forceFull,
+    onRecoveryStep: opts?.onRecoveryStep,
+    cloudRecovery: opts?.cloudRecovery,
+  });
   if (!cloud) return failMerge("cloud_pull_failed");
 
   const state = usePosStore.getState();
@@ -2782,7 +2886,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
 
   if (!hasCloud) {
-    if (cloud.stats.mode === "full") markBootstrapSyncComplete();
+    if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
     else {
       updateCheckpointsAfterIncrementalPull({
         sales: true,
@@ -2858,6 +2962,16 @@ export async function pullCloudAndMergeIntoStore(opts?: {
         ? mergeStockMovementsFromCloudPull([], cloud.stockMovements)
         : state.stockMovements;
 
+    let archivedAuditLogs = state.archivedAuditLogs;
+    if (cloud.recoveredAuditLogs?.length) {
+      const { mergeAuditLogsFromCloudPull } = await import("../lib/auditCloudSync");
+      archivedAuditLogs = mergeAuditLogsFromCloudPull(
+        state.auditLogs,
+        state.archivedAuditLogs,
+        cloud.recoveredAuditLogs,
+      ).archivedAuditLogs;
+    }
+
     await applyRestoredSnapshotFromBackup(
       {
       products: cloud.products,
@@ -2879,7 +2993,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       dayDrawerOpens: mergedDayDrawerOpens,
       inventoryCountSessions: mergedInventoryCounts,
       archivedSales: state.archivedSales,
-      archivedAuditLogs: state.archivedAuditLogs,
+      archivedAuditLogs,
       archivedDayCloses: state.archivedDayCloses,
       archivedVoidRecords: state.archivedVoidRecords,
       archivedReturnRecords: state.archivedReturnRecords,
@@ -2890,7 +3004,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       { cloudRecovery: opts?.cloudRecovery },
     );
     await persistRestoredSnapshotToDisk(undefined, { cloudRecovery: opts?.cloudRecovery });
-    markBootstrapSyncComplete();
+    if (shouldMarkBootstrap) markBootstrapSyncComplete();
     runPostSyncDebtValidation({
       customers: usePosStore.getState().customers,
       sales: usePosStore.getState().sales,
@@ -2981,6 +3095,16 @@ export async function pullCloudAndMergeIntoStore(opts?: {
 
   const returnRecords = mergeReturnRecordsForRecovery(state.returnRecords, cloud.returnCloudRows);
 
+  let mergedArchivedAuditLogs = state.archivedAuditLogs;
+  if (cloud.recoveredAuditLogs?.length) {
+    const { mergeAuditLogsFromCloudPull } = await import("../lib/auditCloudSync");
+    mergedArchivedAuditLogs = mergeAuditLogsFromCloudPull(
+      state.auditLogs,
+      state.archivedAuditLogs,
+      cloud.recoveredAuditLogs,
+    ).archivedAuditLogs;
+  }
+
   const { suspendStorePersist } = await import("../store/usePosStore");
   const release = suspendStorePersist();
   try {
@@ -3004,6 +3128,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       purchases: purchaseRecovery.purchases,
       suppliers: purchaseRecovery.suppliers,
       supplierPayments: purchaseRecovery.supplierPayments,
+      archivedAuditLogs: mergedArchivedAuditLogs,
     });
 
     const next = usePosStore.getState();
@@ -3025,7 +3150,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   await addVoidedSaleTombstones(cloud.voidedSaleIds);
 
   if (cloud.stats.mode === "full") {
-    markBootstrapSyncComplete();
+    if (shouldMarkBootstrap) markBootstrapSyncComplete();
   } else {
     updateCheckpointsAfterIncrementalPull({
       sales: true,
@@ -3065,6 +3190,20 @@ export async function pullCloudAndMergeIntoStore(opts?: {
   }
 
   await applyShopRecoverySignalsForCurrentShop();
+  if (opts?.cloudRecovery) {
+    const merged = usePosStore.getState();
+    const { verifyInventoryIntegrity } = await import("../lib/inventoryIntegrity");
+    const integrity = verifyInventoryIntegrity({
+      products: merged.products,
+      movements: merged.stockMovements,
+    });
+    if (!integrity.ok) {
+      const { reportSyncIssue } = await import("../lib/monitoring");
+      reportSyncIssue("recovery_inventory_integrity_mismatch", {
+        mismatchCount: integrity.mismatches.length,
+      });
+    }
+  }
   const { isDiagnosticsEnabled, recordCloudMergeDuration, recordSyncDuration } = await import(
     "../lib/stabilityDiagnostics",
   );
@@ -3161,9 +3300,10 @@ async function pushShopPendingToCloudInner(): Promise<{
   let queueFailed = 0;
   if (getDeviceOnline()) {
     push = await pushAllPendingToCloud();
-    const { flushSyncQueue } = await import("./syncEngine");
-    const result = await flushSyncQueue();
+    const { flushSyncQueueInner } = await import("./syncEngine");
+    const result = await flushSyncQueueInner();
     queueFailed = result.failed;
+    writeSyncHealthMeta({ lastPushAt: new Date().toISOString() });
     const ctx = await resolveShopCtx();
     if (ctx) {
       const { sendShopPresenceHeartbeat } = await import("../lib/shopPresence");

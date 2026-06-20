@@ -181,6 +181,8 @@ import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "
 import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
 import { saleStockMovementsFromSale } from "../lib/inventoryIntegrity";
+import { inventoryMovementNamespace } from "../lib/shopSyncContext";
+import { detectSaleStockConflict, logInventoryConflict } from "../lib/inventoryConflictLog";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { normalizeShopCurrency } from "../lib/shopCurrency";
 import { generateStaffUsername } from "../lib/staffAccountHelpers";
@@ -627,7 +629,7 @@ export type PosState = {
     countedCashUgx: number;
     override?: boolean;
     overrideReason?: string;
-  }) => Promise<{ ok: boolean; errorKey?: string }>;
+  }) => Promise<{ ok: boolean; errorKey?: string; warnings?: string[] }>;
   repairCustomerDebtIntegrity: () => {
     ok: boolean;
     healedCount: number;
@@ -673,7 +675,7 @@ export type PosState = {
     moved: { sales: number; auditLogs: number; dayCloses: number; voidRecords: number; returnRecords: number; shifts: number };
   };
   /** Owner-only permanent removal of archived buckets on this device. */
-  permanentlyDeleteArchived: () => void;
+  permanentlyDeleteArchived: () => Promise<{ ok: boolean; errorKey?: string }>;
 
   createInventoryCountSession: (notes?: string) => { ok: boolean; errorKey?: string; sessionId?: string };
   startInventoryCountSession: (sessionId: string) => { ok: boolean; errorKey?: string };
@@ -2390,7 +2392,15 @@ export const usePosStore = create<PosState>((set, get) => {
     for (const line of state.draftLines) {
       const idx = products.findIndex((p) => p.id === line.productId);
       if (idx === -1) return { ok: false, errorKey: "missingProduct" };
-      const p = products[idx];
+      const p = products[idx]!;
+      const conflict = detectSaleStockConflict({
+        productId: p.id,
+        productName: p.name,
+        stockOnHand: p.stockOnHand,
+        quantity: line.quantity,
+        minimumStockAlert: p.minimumStockAlert,
+      });
+      if (conflict) logInventoryConflict(conflict);
       const next = p.stockOnHand - line.quantity;
       if (next < -0.0001) return { ok: false, errorKey: "noStock" };
       const slotStart = resolvePackCostUnitsDepleted(p);
@@ -2465,7 +2475,7 @@ export const usePosStore = create<PosState>((set, get) => {
       );
     }
 
-    const shopKey = getActiveAccountKey() ?? "local";
+    const shopKey = inventoryMovementNamespace();
     const saleMovements: StockMovement[] = saleStockMovementsFromSale(shopKey, {
       id: sale.id,
       createdAt: sale.createdAt,
@@ -3969,9 +3979,19 @@ export const usePosStore = create<PosState>((set, get) => {
     return { moved: result.moved };
   },
 
-  permanentlyDeleteArchived: () => {
+  permanentlyDeleteArchived: async () => {
     const denied = denyUnlessEffectivePermission("settings.shop", "permanentlyDeleteArchived");
-    if (denied) return;
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const { canPermanentlyDeleteArchived } = await import("../lib/auditPreservation");
+    const gate = await canPermanentlyDeleteArchived();
+    if (!gate.ok) {
+      pushAudit("archive_purge_blocked", gate.reason, {
+        errorKey: gate.errorKey,
+        pendingAuditOps: gate.pendingAuditOps,
+      });
+      return { ok: false, errorKey: gate.errorKey };
+    }
 
     const state = get();
     const forensic = buildArchiveForensicSummary({
@@ -4015,6 +4035,7 @@ export const usePosStore = create<PosState>((set, get) => {
         archivedShifts: [],
       },
     });
+    return { ok: true };
   },
 
   addCashExpense: (input) => {
@@ -4225,6 +4246,10 @@ export const usePosStore = create<PosState>((set, get) => {
       return { ok: false, errorKey: "closeDaySalesNotLoaded" };
     }
 
+    const { runDayClosePreflight } = await import("../lib/dayClosePreflight");
+    const preflight = await runDayClosePreflight();
+    const preflightWarnings = preflight.warnings;
+
     const state = get();
     const gate = canRecordDayClose(state.dayCloses, dateKey, override);
     if (!gate.ok) return { ok: false, errorKey: gate.errorKey };
@@ -4336,8 +4361,9 @@ export const usePosStore = create<PosState>((set, get) => {
       debtCollectedUgx: drawer.debtCollectedUgx,
       refundsUgx: drawer.refundsUgx,
       expenseUgx: drawer.expenseUgx,
+      preflightWarnings,
     });
-    return { ok: true };
+    return { ok: true, warnings: preflightWarnings.length > 0 ? preflightWarnings : undefined };
   },
 
   repairCustomerDebtIntegrity: () => {

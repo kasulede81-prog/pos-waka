@@ -150,8 +150,6 @@ async function runCloudDataRestore(opts: {
 
     if (restored) {
       syncRestoredCountsFromStore();
-      const { markBootstrapSyncComplete } = await import("./syncCheckpoints");
-      markBootstrapSyncComplete();
       if (cloudRecovery) {
         reportRecoveryStepsFromStore();
       }
@@ -360,10 +358,15 @@ export async function runCloudRecoveryGated(opts?: {
 
       const gate = validateRecoveryCompletionGate(probe, validation);
       if (!gate.ok) {
+        const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
+        clearBootstrapSyncComplete();
         failCloudRecoverySession(gate.message, validation, gate.failures[0] ?? "recovery_validation_failed");
         recordStartupRecoveryFailure(gate.message, gate.failures[0] ?? "recovery_validation_failed");
         return { success: false, validation, error: gate.message, errorKey: gate.failures[0] };
       }
+
+      const { markBootstrapSyncComplete } = await import("./syncCheckpoints");
+      markBootstrapSyncComplete();
 
       const s = usePosStore.getState();
       const { buildRecoveryCompletenessReport } = await import("./cloudRecoveryCompleteness");
@@ -385,6 +388,8 @@ export async function runCloudRecoveryGated(opts?: {
       completeCloudRecoverySession(validation, completeness);
       return { success: true, validation };
     } catch (err) {
+      const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
+      clearBootstrapSyncComplete();
       captureAppException(err, { scope: "cloud_recovery_gated" });
       reportSyncIssue("cloud_recovery_gated_failed");
       const { message, errorKey } = recoveryErrorFromUnknown(err, "cloud_recovery_gated_failed");

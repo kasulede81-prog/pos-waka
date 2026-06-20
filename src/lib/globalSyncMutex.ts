@@ -1,4 +1,4 @@
-/** Ensures only one heavy cloud sync pipeline runs at a time. */
+/** Ensures only one heavy cloud sync pipeline runs at a time (reentrant-safe). */
 
 type SyncTaskKind = "syncShopWithCloud" | "flushSyncQueue" | "hydrateAccountFromCloud" | "pushPending";
 
@@ -14,10 +14,23 @@ export function currentGlobalSyncKind(): SyncTaskKind | null {
   return inFlightKind;
 }
 
+export function globalSyncMutexDepth(): number {
+  return execDepth;
+}
+
 export async function withGlobalSyncMutex<T>(
   kind: SyncTaskKind,
   fn: () => Promise<T>,
 ): Promise<T> {
+  if (execDepth > 0) {
+    execDepth += 1;
+    try {
+      return await fn();
+    } finally {
+      execDepth -= 1;
+    }
+  }
+
   const run = chain.then(async () => {
     execDepth += 1;
     inFlightKind = kind;
