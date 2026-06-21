@@ -65,11 +65,23 @@ export function buildCreditActivityTimeline(
   sales: Sale[],
   debtPayments: DebtPayment[],
 ): CreditActivityEntry[] {
-  const entries: CreditActivityEntry[] = [];
+  return creditActivityTimelineFromIndex(customerId, buildCreditActivityIndex(sales, debtPayments));
+}
+
+export type CreditActivityIndex = {
+  salesByCustomer: Map<string, CreditActivityEntry[]>;
+  paymentsByCustomer: Map<string, CreditActivityEntry[]>;
+};
+
+/** Single O(sales + payments) pass — use for large customer lists instead of per-customer scans. */
+export function buildCreditActivityIndex(sales: Sale[], debtPayments: DebtPayment[]): CreditActivityIndex {
+  const salesByCustomer = new Map<string, CreditActivityEntry[]>();
+  const paymentsByCustomer = new Map<string, CreditActivityEntry[]>();
 
   for (const s of sales) {
-    if (!isCompletedSale(s) || s.customerId !== customerId || s.debtUgx <= 0) continue;
-    entries.push({
+    if (!isCompletedSale(s) || !s.customerId || s.debtUgx <= 0) continue;
+    const list = salesByCustomer.get(s.customerId) ?? [];
+    list.push({
       id: s.id,
       kind: "credit_sale",
       at: s.createdAt,
@@ -77,20 +89,32 @@ export function buildCreditActivityTimeline(
       deltaUgx: s.debtUgx,
       receiptSeq: s.receiptSeq,
     });
+    salesByCustomer.set(s.customerId, list);
   }
 
   for (const p of debtPayments) {
-    if (p.customerId !== customerId || p.amountUgx <= 0) continue;
-    entries.push({
+    if (!p.customerId || p.amountUgx <= 0) continue;
+    const list = paymentsByCustomer.get(p.customerId) ?? [];
+    list.push({
       id: p.id,
       kind: "debt_payment",
       at: p.createdAt,
       amountUgx: p.amountUgx,
       deltaUgx: -p.amountUgx,
     });
+    paymentsByCustomer.set(p.customerId, list);
   }
 
-  return entries.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+  return { salesByCustomer, paymentsByCustomer };
+}
+
+export function creditActivityTimelineFromIndex(
+  customerId: string,
+  index: CreditActivityIndex,
+): CreditActivityEntry[] {
+  const sales = index.salesByCustomer.get(customerId) ?? [];
+  const payments = index.paymentsByCustomer.get(customerId) ?? [];
+  return [...sales, ...payments].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 }
 
 export function findOrphanDebtSales(sales: Sale[]): OrphanDebtSale[] {

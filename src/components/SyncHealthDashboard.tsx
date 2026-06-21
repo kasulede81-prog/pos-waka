@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { buildSyncHealthDashboardSnapshot, type SyncHealthDashboardSnapshot } from "../lib/syncHealthDashboard";
@@ -26,26 +26,59 @@ function Row({ label, value, warn }: { label: string; value: string; warn?: bool
   );
 }
 
-export function SyncHealthDashboard({ lang }: { lang: Language }) {
+type Props = {
+  lang: Language;
+  /** When true, load snapshot only after user expands the section. */
+  lazy?: boolean;
+  defaultExpanded?: boolean;
+};
+
+export function SyncHealthDashboard({ lang, lazy = false, defaultExpanded = !lazy }: Props) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [snap, setSnap] = useState<SyncHealthDashboardSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
+  const loadedRef = useRef(false);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setBusy(true);
     try {
       setSnap(await buildSyncHealthDashboardSnapshot());
+      loadedRef.current = true;
     } finally {
       setBusy(false);
     }
-  };
-
-  useEffect(() => {
-    void refresh();
-    const id = window.setInterval(() => void refresh(), 30_000);
-    return () => window.clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    if (!expanded || (lazy && loadedRef.current)) return;
+    void refresh();
+  }, [expanded, lazy, refresh]);
+
+  useEffect(() => {
+    if (!expanded || lazy) return;
+    const id = window.setInterval(() => void refresh(), 60_000);
+    return () => window.clearInterval(id);
+  }, [expanded, lazy, refresh]);
+
   const entityErrors = snap ? Object.entries(snap.entityPullErrors) : [];
+
+  if (lazy && !expanded) {
+    return (
+      <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <div>
+            <h2 className="text-lg font-black text-stone-950">{t(lang, "syncDiagnosticsTitle")}</h2>
+            <p className="mt-1 text-sm text-stone-500">Tap to load queue and pull diagnostics.</p>
+          </div>
+          <span className="text-xs font-black uppercase text-waka-700">{t(lang, "systemHealthSectionShow")}</span>
+        </button>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">

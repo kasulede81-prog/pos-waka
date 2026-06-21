@@ -5,6 +5,13 @@ import { reportSyncIssue } from "./monitoring";
 const AUDIT_SELECT =
   "id, shop_id, actor_user_id, role, action, payload_summary, payload, device_id, client_entry_id, created_at";
 
+const AUDIT_PULL_PAGE_SIZE = 500;
+
+export type AuditPullProgress = {
+  pulled: number;
+  page: number;
+};
+
 function rowToAuditEntry(row: Record<string, unknown>): AuditLogEntry | null {
   const clientId = typeof row.client_entry_id === "string" ? row.client_entry_id : null;
   const serverId = typeof row.id === "string" ? row.id : null;
@@ -25,20 +32,26 @@ function rowToAuditEntry(row: Record<string, unknown>): AuditLogEntry | null {
   };
 }
 
-export async function pullAuditLogsFromCloud(shopId: string): Promise<AuditLogEntry[]> {
+/**
+ * Pull all audit logs from cloud with cursor pagination until exhaustion.
+ * Active and archived local buckets are merged via mergeAuditLogsFromCloudPull.
+ */
+export async function pullAuditLogsFromCloud(
+  shopId: string,
+  opts?: { onProgress?: (progress: AuditPullProgress) => void },
+): Promise<AuditLogEntry[]> {
   if (!hasSupabaseConfig || !supabase || !shopId) return [];
 
   const out: AuditLogEntry[] = [];
-  const pageSize = 500;
   let offset = 0;
 
-  for (let page = 0; page < 200; page++) {
+  for (let page = 0; ; page++) {
     const { data, error } = await supabase
       .from("audit_logs")
       .select(AUDIT_SELECT)
       .eq("shop_id", shopId)
       .order("created_at", { ascending: true })
-      .range(offset, offset + pageSize - 1);
+      .range(offset, offset + AUDIT_PULL_PAGE_SIZE - 1);
 
     if (error) {
       reportSyncIssue("audit_log_pull_failed", { shopId, code: (error as { code?: string }).code ?? "unknown" });
@@ -53,8 +66,12 @@ export async function pullAuditLogsFromCloud(shopId: string): Promise<AuditLogEn
       if (entry) out.push(entry);
     }
 
-    if (rows.length < pageSize) break;
-    offset += pageSize;
+    opts?.onProgress?.({ pulled: out.length, page });
+
+    if (rows.length < AUDIT_PULL_PAGE_SIZE) break;
+    offset += AUDIT_PULL_PAGE_SIZE;
+    const { yieldUiTick } = await import("./uiYield");
+    await yieldUiTick();
   }
 
   return out;

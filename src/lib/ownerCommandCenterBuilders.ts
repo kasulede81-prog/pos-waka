@@ -789,14 +789,18 @@ export function buildFinancialExtended(input: {
   cashExpenses: CashExpense[];
   bounds: DateFilterBounds;
   salesIndex?: RevenueSalesIndex;
+  /** Reuse period financials from command-center context to avoid duplicate scans. */
+  currentPeriod?: { revenueUgx: number; profitUgx: number; transactionCount: number };
 }): OwnerFinancialExtended {
-  const current = financialForBounds(
-    input.sales,
-    input.returnRecords,
-    input.products,
-    input.bounds,
-    input.salesIndex,
-  );
+  const current =
+    input.currentPeriod ??
+    financialForBounds(
+      input.sales,
+      input.returnRecords,
+      input.products,
+      input.bounds,
+      input.salesIndex,
+    );
 
   const mix = {
     cashUgx: 0,

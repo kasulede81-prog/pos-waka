@@ -387,6 +387,22 @@ export function localGetInventoryInsights(products: Product[]): InventoryInsight
   return { stockValueAtCostUgx, lowStock, outOfStock, restockRecommendations };
 }
 
+function buildCustomerSalesIndex(
+  sales: Sale[],
+  filter: DateFilterValue,
+): Map<string, { purchaseCount: number; lifetimeRevenueUgx: number }> {
+  const index = new Map<string, { purchaseCount: number; lifetimeRevenueUgx: number }>();
+  const filtered = salesForFilter(sales, filter);
+  for (const s of filtered) {
+    if (!s.customerId) continue;
+    const cur = index.get(s.customerId) ?? { purchaseCount: 0, lifetimeRevenueUgx: 0 };
+    cur.purchaseCount += 1;
+    cur.lifetimeRevenueUgx += s.totalUgx;
+    index.set(s.customerId, cur);
+  }
+  return index;
+}
+
 export function localGetCustomerInsights(
   sales: Sale[],
   customers: Customer[],
@@ -396,16 +412,16 @@ export function localGetCustomerInsights(
   const bounds = resolveDateFilterBounds(filter);
   const startDay = bounds.fromKey;
   const endDay = bounds.toKey;
-  const filtered = salesForFilter(sales, filter);
+  const salesByCustomer = buildCustomerSalesIndex(sales, filter);
   const debtCustomers = customers.filter((c) => c.debtBalanceUgx > 0);
   const topCustomers = customers
     .map((c) => {
-      const customerSales = filtered.filter((s) => s.customerId === c.id);
+      const stats = salesByCustomer.get(c.id);
       return {
         customerId: c.id,
         name: c.name,
-        purchaseCount: customerSales.length,
-        lifetimeRevenueUgx: customerSales.reduce((a, s) => a + s.totalUgx, 0),
+        purchaseCount: stats?.purchaseCount ?? 0,
+        lifetimeRevenueUgx: stats?.lifetimeRevenueUgx ?? 0,
         debtBalanceUgx: c.debtBalanceUgx,
       };
     })

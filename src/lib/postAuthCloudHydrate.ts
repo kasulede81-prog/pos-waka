@@ -216,24 +216,15 @@ async function runCloudDataRestore(opts: {
     const counts = readStoreRecoveryCounts();
     const hasCoreData = storeHasCoreRecoveryData();
 
-    if (snapshotRestoreSucceeded && hasCoreData && !cloudRecovery) {
+    if (snapshotRestoreSucceeded && hasCoreData) {
       recordRecoveryIntegrityDiagnostics({
         snapshotRestoreProducedData: true,
         finalStoreCounts: counts,
       });
       syncRestoredCountsFromStore();
-      const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
-      await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
-      return;
-    }
-
-    if (snapshotRestoreSucceeded && hasCoreData && cloudRecovery) {
-      recordRecoveryIntegrityDiagnostics({
-        snapshotRestoreProducedData: true,
-        finalStoreCounts: counts,
-      });
-      syncRestoredCountsFromStore();
-      reportRecoveryStepsFromStore();
+      if (cloudRecovery) {
+        reportRecoveryStepsFromStore();
+      }
     }
 
     if (snapshotRestoreSucceeded && !hasCoreData) {
@@ -243,6 +234,8 @@ async function runCloudDataRestore(opts: {
     }
 
     await runFullCloudPull({ onStep: onStep, cloudRecovery });
+    const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
+    await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
     return;
   }
 

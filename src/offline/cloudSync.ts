@@ -88,6 +88,7 @@ import { mergeDayClosesFromCloudPull } from "../lib/dayCloseRecovery";
 import { pullDayClosesFromRpc, pushDayCloseToCloud } from "../lib/dayCloseCloudSync";
 import { normalizeUnitCostUgx, normalizePackCostUgx } from "../lib/costPrecision";
 import { runPostSyncDebtValidation } from "../lib/debtSyncDiagnostics";
+import { pullCursorUntilExhausted, pullOffsetRangeUntilExhausted } from "../lib/cloudPullPagination";
 
 type ShopCtx = { shopId: string; userId: string };
 
@@ -1601,8 +1602,6 @@ export type CloudPullResult = {
 };
 
 const FULL_SALES_PAGE = 800;
-/** Safety guard only — not a business limit (500 pages × 800 = 400k sales). */
-const FULL_SALES_SAFETY_MAX_PAGES = 500;
 const INCREMENTAL_SALES_LIMIT = 500;
 const INCREMENTAL_PRODUCTS_LIMIT = 500;
 const INCREMENTAL_CUSTOMERS_LIMIT = 500;
@@ -1683,12 +1682,7 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{
   const voidedIds: string[] = [];
   let bytes = 0;
   let offset = 0;
-  let truncated = false;
-  for (let page = 0; ; page++) {
-    if (page >= FULL_SALES_SAFETY_MAX_PAGES) {
-      truncated = true;
-      break;
-    }
+  for (;;) {
     const { data: saleRows, error: sErr } = await supabase!
       .from("sales")
       .select("*, sale_line_items(*)")
@@ -1710,7 +1704,7 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{
   }
 
   let voidOffset = 0;
-  for (let page = 0; page < FULL_SALES_SAFETY_MAX_PAGES; page++) {
+  for (;;) {
     const { data: voidedRows, error: vErr } = await supabase!
       .from("sales")
       .select("id")
@@ -1727,9 +1721,12 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{
     }
     if (batch.length < FULL_SALES_PAGE) break;
     voidOffset += FULL_SALES_PAGE;
+    const { yieldUiTick } = await import("../lib/uiYield");
+    await yieldUiTick();
   }
 
-  return { sales, voidedIds, bytes, truncated };
+  lastSalesPullTruncated = false;
+  return { sales, voidedIds, bytes, truncated: false };
 }
 
 async function pullSalesIncremental(
@@ -1766,51 +1763,49 @@ async function pullSalesIncremental(
 }
 
 async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
-  const products: Product[] = [];
-  const deletedIds: string[] = [];
   let bytes = 0;
-  let offset = 0;
-  for (let page = 0; page < FULL_SALES_SAFETY_MAX_PAGES; page++) {
-    const { data: productRows, error: pErr } = await supabase!
-      .from("products")
-      .select("*")
-      .eq("shop_id", ctx.shopId)
-      .eq("is_active", true)
-      .order("updated_at", { ascending: false })
-      .range(offset, offset + INCREMENTAL_PRODUCTS_LIMIT - 1);
-    if (pErr) throw pErr;
-    const rows = productRows ?? [];
-    bytes += estimatePayloadBytes(rows);
-    if (rows.length === 0) break;
-    for (const r of rows) {
-      const p = rowToProduct(r as Record<string, unknown>);
-      if (p) products.push(p);
-    }
-    if (rows.length < INCREMENTAL_PRODUCTS_LIMIT) break;
-    offset += INCREMENTAL_PRODUCTS_LIMIT;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
+  const productRows = await pullOffsetRangeUntilExhausted({
+    pageSize: INCREMENTAL_PRODUCTS_LIMIT,
+    fetchRange: async (offset) => {
+      const { data: rows, error: pErr } = await supabase!
+        .from("products")
+        .select("*")
+        .eq("shop_id", ctx.shopId)
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
+        .range(offset, offset + INCREMENTAL_PRODUCTS_LIMIT - 1);
+      if (pErr) throw pErr;
+      const batch = rows ?? [];
+      bytes += estimatePayloadBytes(batch);
+      return batch as Record<string, unknown>[];
+    },
+  });
+  const products: Product[] = [];
+  for (const r of productRows) {
+    const p = rowToProduct(r);
+    if (p) products.push(p);
   }
 
-  let delOffset = 0;
-  for (let page = 0; page < FULL_SALES_SAFETY_MAX_PAGES; page++) {
-    const { data: deletedRows, error: dErr } = await supabase!
-      .from("products")
-      .select("id")
-      .eq("shop_id", ctx.shopId)
-      .eq("is_active", false)
-      .order("updated_at", { ascending: true })
-      .range(delOffset, delOffset + INCREMENTAL_PRODUCTS_LIMIT - 1);
-    if (dErr) throw dErr;
-    const rows = deletedRows ?? [];
-    bytes += estimatePayloadBytes(rows);
-    if (rows.length === 0) break;
-    for (const r of rows) {
-      const id = String((r as { id?: string }).id ?? "");
-      if (isUuid(id)) deletedIds.push(id);
-    }
-    if (rows.length < INCREMENTAL_PRODUCTS_LIMIT) break;
-    delOffset += INCREMENTAL_PRODUCTS_LIMIT;
+  const deletedRaw = await pullOffsetRangeUntilExhausted({
+    pageSize: INCREMENTAL_PRODUCTS_LIMIT,
+    fetchRange: async (offset) => {
+      const { data: rows, error: dErr } = await supabase!
+        .from("products")
+        .select("id")
+        .eq("shop_id", ctx.shopId)
+        .eq("is_active", false)
+        .order("updated_at", { ascending: true })
+        .range(offset, offset + INCREMENTAL_PRODUCTS_LIMIT - 1);
+      if (dErr) throw dErr;
+      const batch = rows ?? [];
+      bytes += estimatePayloadBytes(batch);
+      return batch as Record<string, unknown>[];
+    },
+  });
+  const deletedIds: string[] = [];
+  for (const r of deletedRaw) {
+    const id = String(r.id ?? "");
+    if (isUuid(id)) deletedIds.push(id);
   }
 
   return { products, deletedIds, bytes };
@@ -1858,16 +1853,26 @@ async function pullProductsIncremental(
 }
 
 async function pullCustomersFull(ctx: ShopCtx): Promise<{ customers: Customer[]; bytes: number }> {
-  const { data: customerRows, error: cErr } = await supabase!
-    .from("customers")
-    .select("*")
-    .eq("shop_id", ctx.shopId)
-    .order("updated_at", { ascending: false })
-    .limit(2000);
-  if (cErr) throw cErr;
-  const rows = customerRows ?? [];
-  const customers = rows.map((r) => rowToCustomer(r as Record<string, unknown>)).filter((c): c is Customer => c != null);
-  return { customers, bytes: estimatePayloadBytes(rows) };
+  let bytes = 0;
+  const rows = await pullOffsetRangeUntilExhausted({
+    pageSize: INCREMENTAL_CUSTOMERS_LIMIT,
+    fetchRange: async (offset) => {
+      const { data: customerRows, error: cErr } = await supabase!
+        .from("customers")
+        .select("*")
+        .eq("shop_id", ctx.shopId)
+        .order("updated_at", { ascending: false })
+        .range(offset, offset + INCREMENTAL_CUSTOMERS_LIMIT - 1);
+      if (cErr) throw cErr;
+      const batch = customerRows ?? [];
+      bytes += estimatePayloadBytes(batch);
+      return batch as Record<string, unknown>[];
+    },
+  });
+  const customers = rows
+    .map((r) => rowToCustomer(r))
+    .filter((c): c is Customer => c != null);
+  return { customers, bytes };
 }
 
 async function pullCustomersIncremental(
@@ -1907,14 +1912,19 @@ const CASH_EXPENSE_SELECT =
 
 async function pullCashExpensesPage(
   ctx: ShopCtx,
-  filter: { since?: string; full?: boolean },
+  filter: { since?: string; full?: boolean; cursor?: string },
 ): Promise<{ rows: CashExpense[]; bytes: number; checkpointAt: string }> {
   let q = supabase!
     .from("expenses")
     .select(CASH_EXPENSE_SELECT)
     .eq("shop_id", ctx.shopId)
     .eq("expense_type", "cash_drawer");
-  if (!filter.full && filter.since) {
+  if (filter.full) {
+    const cursor = filter.cursor ?? new Date(0).toISOString();
+    if (cursor > new Date(0).toISOString()) {
+      q = q.gt("updated_at", cursor);
+    }
+  } else if (filter.since) {
     q = q.or(`created_at.gt.${filter.since},updated_at.gt.${filter.since}`);
   }
   const { data, error } = await q.order("updated_at", { ascending: true }).limit(INCREMENTAL_EXPENSES_LIMIT);
@@ -2072,21 +2082,12 @@ async function pullReturnsPage(
 }
 
 async function pullReturnsFull(ctx: ShopCtx): Promise<{ returnRows: CloudReturnRow[]; bytes: number }> {
-  const all: CloudReturnRow[] = [];
-  let bytes = 0;
-  let cursor = new Date(0).toISOString();
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { rows, bytes: b, checkpointAt } = await pullReturnsPage(ctx, cursor);
-    bytes += b;
-    if (rows.length === 0) break;
-    all.push(...rows);
-    if (checkpointAt <= cursor) break;
-    cursor = checkpointAt;
-    if (rows.length < INCREMENTAL_RETURNS_LIMIT) break;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
-  }
-  return { returnRows: all, bytes };
+  const result = await pullCursorUntilExhausted({
+    initialCursor: new Date(0).toISOString(),
+    pageSizeHint: INCREMENTAL_RETURNS_LIMIT,
+    pullPage: (cursor) => pullReturnsPage(ctx, cursor),
+  });
+  return { returnRows: result.rows, bytes: result.bytes };
 }
 
 async function pullReturnsIncremental(
@@ -2165,21 +2166,12 @@ async function pullPurchasesPage(
 }
 
 async function pullPurchasesFull(ctx: ShopCtx): Promise<{ purchaseRows: CloudPurchaseRow[]; bytes: number }> {
-  const all: CloudPurchaseRow[] = [];
-  let bytes = 0;
-  let cursor = new Date(0).toISOString();
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { rows, bytes: b, checkpointAt } = await pullPurchasesPage(ctx, cursor);
-    bytes += b;
-    if (rows.length === 0) break;
-    all.push(...rows);
-    if (checkpointAt <= cursor) break;
-    cursor = checkpointAt;
-    if (rows.length < INCREMENTAL_PURCHASES_LIMIT) break;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
-  }
-  return { purchaseRows: all, bytes };
+  const result = await pullCursorUntilExhausted({
+    initialCursor: new Date(0).toISOString(),
+    pageSizeHint: INCREMENTAL_PURCHASES_LIMIT,
+    pullPage: (cursor) => pullPurchasesPage(ctx, cursor),
+  });
+  return { purchaseRows: result.rows, bytes: result.bytes };
 }
 
 async function pullPurchasesIncremental(
@@ -2231,21 +2223,12 @@ async function pullSuppliersPage(
 }
 
 async function pullSuppliersFull(ctx: ShopCtx): Promise<{ supplierRows: CloudSupplierRow[]; bytes: number }> {
-  const all: CloudSupplierRow[] = [];
-  let bytes = 0;
-  let cursor = new Date(0).toISOString();
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { rows, bytes: b, checkpointAt } = await pullSuppliersPage(ctx, cursor);
-    bytes += b;
-    if (rows.length === 0) break;
-    all.push(...rows);
-    if (checkpointAt <= cursor) break;
-    cursor = checkpointAt;
-    if (rows.length < INCREMENTAL_SUPPLIERS_LIMIT) break;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
-  }
-  return { supplierRows: all, bytes };
+  const result = await pullCursorUntilExhausted({
+    initialCursor: new Date(0).toISOString(),
+    pageSizeHint: INCREMENTAL_SUPPLIERS_LIMIT,
+    pullPage: (cursor) => pullSuppliersPage(ctx, cursor),
+  });
+  return { supplierRows: result.rows, bytes: result.bytes };
 }
 
 async function pullSuppliersIncremental(
@@ -2299,21 +2282,12 @@ async function pullSupplierPaymentsPage(
 async function pullSupplierPaymentsFull(
   ctx: ShopCtx,
 ): Promise<{ supplierPayments: SupplierPayment[]; bytes: number }> {
-  const all: SupplierPayment[] = [];
-  let bytes = 0;
-  let cursor = new Date(0).toISOString();
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { rows, bytes: b, checkpointAt } = await pullSupplierPaymentsPage(ctx, cursor);
-    bytes += b;
-    if (rows.length === 0) break;
-    all.push(...rows);
-    if (checkpointAt <= cursor) break;
-    cursor = checkpointAt;
-    if (rows.length < INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT) break;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
-  }
-  return { supplierPayments: all, bytes };
+  const result = await pullCursorUntilExhausted({
+    initialCursor: new Date(0).toISOString(),
+    pageSizeHint: INCREMENTAL_SUPPLIER_PAYMENTS_LIMIT,
+    pullPage: (cursor) => pullSupplierPaymentsPage(ctx, cursor),
+  });
+  return { supplierPayments: result.rows, bytes: result.bytes };
 }
 
 async function pullSupplierPaymentsIncremental(
@@ -2373,21 +2347,12 @@ async function pullDebtPaymentsPage(
 }
 
 async function pullDebtPaymentsFull(ctx: ShopCtx): Promise<{ debtPayments: DebtPayment[]; bytes: number }> {
-  const all: DebtPayment[] = [];
-  let bytes = 0;
-  let cursor = new Date(0).toISOString();
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { rows, bytes: b, checkpointAt } = await pullDebtPaymentsPage(ctx, cursor);
-    bytes += b;
-    if (rows.length === 0) break;
-    all.push(...rows);
-    if (checkpointAt <= cursor) break;
-    cursor = checkpointAt;
-    if (rows.length < INCREMENTAL_DEBT_PAYMENTS_LIMIT) break;
-    const { yieldUiTick } = await import("../lib/uiYield");
-    await yieldUiTick();
-  }
-  return { debtPayments: all, bytes };
+  const result = await pullCursorUntilExhausted({
+    initialCursor: new Date(0).toISOString(),
+    pageSizeHint: INCREMENTAL_DEBT_PAYMENTS_LIMIT,
+    pullPage: (cursor) => pullDebtPaymentsPage(ctx, cursor),
+  });
+  return { debtPayments: result.rows, bytes: result.bytes };
 }
 
 async function pullDebtPaymentsIncremental(
@@ -2433,16 +2398,12 @@ export async function pullDebtPayments(opts?: {
 }
 
 async function pullCashExpensesFull(ctx: ShopCtx): Promise<{ cashExpenses: CashExpense[]; bytes: number }> {
-  const all: CashExpense[] = [];
-  let bytes = 0;
-  for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
-    const { rows, bytes: b } = await pullCashExpensesPage(ctx, { full: true });
-    bytes += b;
-    if (rows.length === 0) break;
-    all.push(...rows);
-    if (rows.length < INCREMENTAL_EXPENSES_LIMIT) break;
-  }
-  return { cashExpenses: all, bytes };
+  const result = await pullCursorUntilExhausted({
+    initialCursor: new Date(0).toISOString(),
+    pageSizeHint: INCREMENTAL_EXPENSES_LIMIT,
+    pullPage: (cursor) => pullCashExpensesPage(ctx, { full: true, cursor }),
+  });
+  return { cashExpenses: result.rows, bytes: result.bytes };
 }
 
 export async function pullShopDataFromCloud(opts?: {
@@ -2764,7 +2725,12 @@ export async function pullShopDataFromCloud(opts?: {
   if (opts?.cloudRecovery) {
     const audit = await pullEntitySafe("audit_logs", entityErrors, async () => {
       const { pullAuditLogsFromCloud } = await import("../lib/auditCloudSync");
-      return pullAuditLogsFromCloud(ctx.shopId);
+      return pullAuditLogsFromCloud(ctx.shopId, {
+        onProgress: (progress) => {
+          opts?.onRecoveryStep?.("audit");
+          void progress;
+        },
+      });
     });
     if (audit) {
       recoveredAuditLogs = audit;

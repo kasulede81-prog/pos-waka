@@ -74,7 +74,7 @@ async function snapshotFromStoreWithTombstones(): Promise<PersistedSnapshot | nu
   return { ...base, ...fields };
 }
 
-/** Trim snapshot JSON size for cloud upload by dropping oldest archived sales if needed. */
+/** Trim snapshot JSON for cloud upload — acceleration cache only; recovery always uses full paginated pull. */
 async function trimSnapshotForUpload(snap: PersistedSnapshot): Promise<PersistedSnapshot> {
   let env = buildExportEnvelope(snap);
   let json = JSON.stringify(env);

@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import {
-  buildCloudTrustCertificationReport,
-  fetchCloudEntityCounts,
-  readLocalEntityCounts,
-  type CloudTrustCertificationReport,
-} from "../../lib/cloudTrustCenter";
-import { getRecoveryCertification, readLastCloudRecoveryDiagnostics } from "../../lib/cloudRecoverySession";
+  buildProductionCertificationReport,
+  formatProductionCertificationMarkdown,
+  type ProductionCertificationReport,
+} from "../../lib/productionCertification";
+import { getRecoveryCertification, readLastCloudRecoveryDiagnostics, recordRecoveryCertification } from "../../lib/cloudRecoverySession";
 import { readSyncCheckpoints } from "../../lib/syncCheckpoints";
 
 type Props = {
@@ -15,7 +14,7 @@ type Props = {
 };
 
 export function CloudTrustCenter({ lang }: Props) {
-  const [report, setReport] = useState<CloudTrustCertificationReport | null>(null);
+  const [report, setReport] = useState<ProductionCertificationReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,13 +22,8 @@ export function CloudTrustCenter({ lang }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const { counts, errors } = await fetchCloudEntityCounts();
-      const next = buildCloudTrustCertificationReport({
-        cloud: counts,
-        cloudErrors: errors,
-        local: readLocalEntityCounts(),
-        requireCloudParity: true,
-      });
+      const next = await buildProductionCertificationReport({ requireCloudParity: true, largeShopMode: true });
+      recordRecoveryCertification(next);
       setReport(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : "certification_failed");
@@ -40,8 +34,30 @@ export function CloudTrustCenter({ lang }: Props) {
 
   useEffect(() => {
     const last = getRecoveryCertification() ?? readLastCloudRecoveryDiagnostics()?.certification ?? null;
-    if (last) setReport(last);
+    if (last) setReport(last as ProductionCertificationReport);
   }, []);
+
+  const exportJson = useCallback(() => {
+    if (!report) return;
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `waka-production-certification-${report.checkedAt.slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [report]);
+
+  const exportMarkdown = useCallback(() => {
+    if (!report) return;
+    const blob = new Blob([formatProductionCertificationMarkdown(report)], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `waka-production-certification-${report.checkedAt.slice(0, 10)}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [report]);
 
   const cp = readSyncCheckpoints();
 
@@ -52,14 +68,34 @@ export function CloudTrustCenter({ lang }: Props) {
           <p className="text-base font-black text-stone-900">{t(lang, "cloudTrustCenterTitle")}</p>
           <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "cloudTrustCenterSub")}</p>
         </div>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void runCertification()}
-          className="rounded-xl bg-waka-600 px-4 py-2 text-sm font-bold text-white shadow-waka-sm disabled:opacity-60"
-        >
-          {busy ? t(lang, "cloudTrustRunning") : t(lang, "cloudTrustRunCertification")}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {report ? (
+            <>
+              <button
+                type="button"
+                onClick={exportJson}
+                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-waka-sm"
+              >
+                {t(lang, "cloudTrustExportJson")}
+              </button>
+              <button
+                type="button"
+                onClick={exportMarkdown}
+                className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-bold text-stone-800 shadow-waka-sm"
+              >
+                {t(lang, "cloudTrustExportReport")}
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void runCertification()}
+            className="rounded-xl bg-waka-600 px-4 py-2 text-sm font-bold text-white shadow-waka-sm disabled:opacity-60"
+          >
+            {busy ? t(lang, "cloudTrustRunning") : t(lang, "cloudTrustRunCertification")}
+          </button>
+        </div>
       </div>
 
       {error ? (
@@ -76,9 +112,9 @@ export function CloudTrustCenter({ lang }: Props) {
           </p>
         </div>
         <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <p className="font-bold text-stone-500">{t(lang, "cloudTrustCertified")}</p>
+          <p className="font-bold text-stone-500">{t(lang, "cloudTrustVerdict")}</p>
           <p className="mt-0.5 text-sm font-black text-stone-900">
-            {report ? (report.certified ? t(lang, "cloudTrustPass") : t(lang, "cloudTrustFail")) : "—"}
+            {report ? (report.verdict === "PASS" ? t(lang, "cloudTrustPass") : t(lang, "cloudTrustFail")) : "—"}
           </p>
         </div>
         <div className="rounded-xl bg-stone-50 px-3 py-2">
@@ -91,6 +127,18 @@ export function CloudTrustCenter({ lang }: Props) {
           <p className="font-bold text-stone-500">{t(lang, "cloudTrustInvariant")}</p>
           <p className="mt-0.5 text-sm font-black text-stone-900">
             {report ? (report.recoveryInvariantPassed ? t(lang, "cloudTrustPass") : t(lang, "cloudTrustFail")) : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl bg-stone-50 px-3 py-2">
+          <p className="font-bold text-stone-500">{t(lang, "cloudTrustPendingSync")}</p>
+          <p className="mt-0.5 text-sm font-black text-stone-900">
+            {report ? report.pendingSync.totalPending : "—"}
+          </p>
+        </div>
+        <div className="rounded-xl bg-stone-50 px-3 py-2">
+          <p className="font-bold text-stone-500">{t(lang, "cloudTrustFingerprint")}</p>
+          <p className="mt-0.5 text-xs font-black tabular-nums text-stone-900">
+            {report ? report.operationalFingerprint.hash : "—"}
           </p>
         </div>
       </div>
@@ -142,6 +190,12 @@ export function CloudTrustCenter({ lang }: Props) {
               </p>
             </div>
             <div className="rounded-xl bg-stone-50 px-3 py-2">
+              <p className="font-bold text-stone-500">{t(lang, "cloudTrustExpectedCash")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+                {report.financial.expectedCashTodayUgx.toLocaleString()}
+              </p>
+            </div>
+            <div className="rounded-xl bg-stone-50 px-3 py-2">
               <p className="font-bold text-stone-500">{t(lang, "cloudTrustInventoryValue")}</p>
               <p className="mt-0.5 font-black tabular-nums text-stone-900">
                 {report.financial.inventoryValueUgx.toLocaleString()}
@@ -160,10 +214,29 @@ export function CloudTrustCenter({ lang }: Props) {
               </p>
             </div>
             <div className="rounded-xl bg-stone-50 px-3 py-2">
+              <p className="font-bold text-stone-500">{t(lang, "cloudTrustSupplierBalance")}</p>
+              <p className="mt-0.5 font-black tabular-nums text-stone-900">
+                {report.financial.totalSupplierBalanceUgx.toLocaleString()}
+              </p>
+            </div>
+            <div className="rounded-xl bg-stone-50 px-3 py-2">
               <p className="font-bold text-stone-500">{t(lang, "cloudTrustMovements")}</p>
               <p className="mt-0.5 font-black tabular-nums text-stone-900">{report.stockMovementCount}</p>
             </div>
           </div>
+
+          {report.recoveryValidation && report.recoveryValidation.failures.length > 0 ? (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-amber-900">
+                {t(lang, "cloudTrustRecoveryValidation")}
+              </p>
+              <ul className="mt-1 space-y-1 text-xs font-semibold text-amber-950">
+                {report.recoveryValidation.failures.map((f) => (
+                  <li key={f.code}>{f.code}: {f.message}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {report.failures.length > 0 ? (
             <ul className="mt-4 space-y-1 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">

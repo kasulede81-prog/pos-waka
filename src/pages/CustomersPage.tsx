@@ -4,8 +4,7 @@ import { ChevronDown, Plus } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import {
-  buildCreditActivityTimeline,
-  filterCreditActivityByBounds,
+  buildCreditActivityIndex,
   findOrphanDebtSales,
   sumCreditIssuedInBounds,
   sumDebtPaymentsInBounds,
@@ -33,6 +32,7 @@ import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { DebtsHeroCard } from "../components/debts/DebtsHeroCard";
 import { DebtCustomerRow } from "../components/debts/DebtCustomerRow";
+import { VirtualizedCustomerDebtList } from "../components/debts/VirtualizedCustomerDebtList";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { dateMatchesFilter } from "../lib/dateFilters";
 import { dateKeyKampala } from "../lib/datesUg";
@@ -93,14 +93,12 @@ export function CustomersPage({ lang }: { lang: Language }) {
     });
   }, [customers]);
 
-  const customerTimelines = useMemo(() => {
-    const map = new Map<string, ReturnType<typeof buildCreditActivityTimeline>>();
-    for (const c of customers) {
-      const full = buildCreditActivityTimeline(c.id, sales, debtPayments);
-      map.set(c.id, filterCreditActivityByBounds(full, bounds));
-    }
-    return map;
-  }, [customers, sales, debtPayments, bounds]);
+  const creditActivityIndex = useMemo(
+    () => buildCreditActivityIndex(sales, debtPayments),
+    [sales, debtPayments],
+  );
+
+  const useVirtualCustomerList = sortedCustomers.length > 80;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -276,17 +274,29 @@ export function CustomersPage({ lang }: { lang: Language }) {
             <h2 className="text-base font-black text-slate-950">{modeTerm("customers")}</h2>
             <p className="text-xs font-bold text-slate-500">{sortedCustomers.length}</p>
           </div>
-          {sortedCustomers.map((c, index) => (
-            <DebtCustomerRow
-              key={c.id}
+          {useVirtualCustomerList ? (
+            <VirtualizedCustomerDebtList
               lang={lang}
-              customer={c}
-              timeline={customerTimelines.get(c.id) ?? []}
+              customers={sortedCustomers}
+              creditIndex={creditActivityIndex}
+              bounds={bounds}
               canDebt={canDebt}
-              toneIndex={index}
               onSubmitPay={submitPay}
             />
-          ))}
+          ) : (
+            sortedCustomers.map((c, index) => (
+              <DebtCustomerRow
+                key={c.id}
+                lang={lang}
+                customer={c}
+                creditIndex={creditActivityIndex}
+                bounds={bounds}
+                canDebt={canDebt}
+                toneIndex={index}
+                onSubmitPay={submitPay}
+              />
+            ))
+          )}
         </section>
       ) : null}
 

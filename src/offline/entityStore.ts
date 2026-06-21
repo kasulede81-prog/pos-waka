@@ -389,20 +389,44 @@ export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot 
   };
 }
 
+const ALL_ENTITY_BUCKETS: EntityBucket[] = [
+  "product",
+  "customer",
+  "sale",
+  "archivedSale",
+  "debtPayment",
+  "dayClose",
+  "auditLog",
+  "supplier",
+  "purchase",
+  "supplierPayment",
+  "stockMovement",
+  "voidRecord",
+  "returnRecord",
+  "cashExpense",
+  "cashDrawerAdjustment",
+  "dayDrawerOpen",
+  "inventoryCountSession",
+  "archivedAuditLog",
+  "archivedDayClose",
+  "archivedVoidRecord",
+  "archivedReturnRecord",
+];
+
 export async function estimateEntityStoreBytes(): Promise<number> {
   const acc = accountOrNull();
   if (!acc) return 0;
   try {
-    const db = await getLocalDb();
-    const all = await db.getAll("records");
     let bytes = 0;
-    for (const row of all) {
-      const r = row as EntityRow;
-      if (r.accountKey !== acc) continue;
-      bytes += JSON.stringify(r).length;
-    }
-    const manifest = await readKv<unknown>(MANIFEST_KV_KEY);
+    const manifest = await readEntityManifest();
     if (manifest) bytes += JSON.stringify(manifest).length;
+
+    for (const bucket of ALL_ENTITY_BUCKETS) {
+      const rows = await getEntitiesByBucket<unknown>(bucket);
+      for (const row of rows) {
+        bytes += JSON.stringify(row).length;
+      }
+    }
     return bytes;
   } catch {
     return 0;

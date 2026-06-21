@@ -164,7 +164,7 @@ export function StockPage({ lang }: { lang: Language }) {
     return inferProductGuess(n, preferences.businessType, preferences.pharmacyModeEnabled);
   }, [qaName, preferences.businessType, preferences.pharmacyModeEnabled]);
 
-  const defaultGroupByCategory = products.length > 12;
+  const defaultGroupByCategory = products.length > 12 && products.length <= 250;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
 
   const stockCategoryPicklist = useMemo(() => {

@@ -75,7 +75,7 @@ export async function pullStockMovementsFull(
   let checkpointAt = new Date(0).toISOString();
   const seen = new Set<string>();
 
-  for (let page = 0; page < 500; page++) {
+  for (let page = 0; ; page++) {
     const batch = await pullStockMovementsFromRpc(ctx, since);
     bytes += batch.bytes;
     checkpointAt = batch.checkpointAt;

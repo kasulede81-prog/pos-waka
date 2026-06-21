@@ -67,7 +67,7 @@ export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: 
         <StartupDiagnosticsPanel lang={lang} />
       </section>
 
-      <SyncHealthDashboard lang={lang} />
+      <SyncHealthDashboard lang={lang} lazy />
 
       <CloudTrustCenter lang={lang} />
 

@@ -5,6 +5,7 @@ import { usePosStore } from "../../store/usePosStore";
 import {
   buildSharedSystemHealthSnapshot,
   readSharedSyncQueueSnapshot,
+  type SharedSystemHealthInput,
   type SharedSystemHealthSnapshot,
 } from "../../lib/systemHealthSharedDiagnostics";
 
@@ -18,18 +19,23 @@ type Ctx = {
 
 const SystemHealthDiagnosticsContext = createContext<Ctx | null>(null);
 
-export function SystemHealthDiagnosticsProvider({ children }: { children: ReactNode }) {
-  const products = usePosStore((s) => s.products);
-  const customers = usePosStore((s) => s.customers);
-  const sales = usePosStore((s) => s.sales);
-  const debtPayments = usePosStore((s) => s.debtPayments);
-  const stockMovements = usePosStore((s) => s.stockMovements);
-  const suppliers = usePosStore((s) => s.suppliers);
-  const purchases = usePosStore((s) => s.purchases);
-  const supplierPayments = usePosStore((s) => s.supplierPayments);
-  const archivedSales = usePosStore((s) => s.archivedSales);
-  const preferences = usePosStore((s) => s.preferences);
+function readSharedInputFromStore(): SharedSystemHealthInput {
+  const s = usePosStore.getState();
+  return {
+    products: s.products,
+    customers: s.customers,
+    sales: s.sales,
+    debtPayments: s.debtPayments,
+    stockMovements: s.stockMovements,
+    suppliers: s.suppliers,
+    purchases: s.purchases,
+    supplierPayments: s.supplierPayments,
+    archivedSales: s.archivedSales,
+    preferences: s.preferences,
+  };
+}
 
+export function SystemHealthDiagnosticsProvider({ children }: { children: ReactNode }) {
   const [queue, setQueue] = useState<SharedSystemHealthSnapshot["queue"] | null>(null);
   const [shared, setShared] = useState<SharedSystemHealthSnapshot | null>(null);
   const [loadingShared, setLoadingShared] = useState(false);
@@ -40,49 +46,18 @@ export function SystemHealthDiagnosticsProvider({ children }: { children: ReactN
     return snap;
   }, []);
 
-  useEffect(() => {
-    void refreshQueue();
-  }, [refreshQueue]);
-
-  const input = useMemo(
-    () => ({
-      products,
-      customers,
-      sales,
-      debtPayments,
-      stockMovements,
-      suppliers,
-      purchases,
-      supplierPayments,
-      archivedSales,
-      preferences,
-    }),
-    [
-      products,
-      customers,
-      sales,
-      debtPayments,
-      stockMovements,
-      suppliers,
-      purchases,
-      supplierPayments,
-      archivedSales,
-      preferences,
-    ],
-  );
-
   const ensureShared = useCallback(async () => {
     if (shared) return shared;
     setLoadingShared(true);
     try {
-      const next = await buildSharedSystemHealthSnapshot(input);
+      const next = await buildSharedSystemHealthSnapshot(readSharedInputFromStore());
       setShared(next);
       setQueue(next.queue);
       return next;
     } finally {
       setLoadingShared(false);
     }
-  }, [input, shared]);
+  }, [shared]);
 
   const value = useMemo(
     (): Ctx => ({
@@ -109,10 +84,14 @@ export function useSystemHealthDiagnostics(): Ctx {
 }
 
 export function SystemHealthSummaryStrip({ lang }: { lang: Language }) {
-  const { queue, loadingShared } = useSystemHealthDiagnostics();
+  const { queue, loadingShared, refreshQueue } = useSystemHealthDiagnostics();
   const products = usePosStore((s) => s.products.length);
   const sales = usePosStore((s) => s.sales.length);
   const customers = usePosStore((s) => s.customers.length);
+
+  useEffect(() => {
+    void refreshQueue();
+  }, [refreshQueue]);
 
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">

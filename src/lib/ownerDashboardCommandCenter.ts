@@ -218,6 +218,11 @@ export function buildOwnerCommandCenterBundle(input: OwnerCommandCenterInput): O
       cashExpenses: input.cashExpenses,
       bounds: input.bounds,
       salesIndex: revenueIndex,
+      currentPeriod: {
+        revenueUgx: overview.revenueUgx,
+        profitUgx: overview.profitUgx,
+        transactionCount: overview.transactionCount,
+      },
     }),
   };
 }

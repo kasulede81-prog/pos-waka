@@ -1,9 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { MoreHorizontal, Phone, User } from "lucide-react";
 import clsx from "clsx";
 import type { Customer, Language } from "../../types";
-import type { CreditActivityEntry } from "../../lib/customerDebtActivity";
+import type { CreditActivityEntry, CreditActivityIndex } from "../../lib/customerDebtActivity";
+import {
+  creditActivityTimelineFromIndex,
+  filterCreditActivityByBounds,
+} from "../../lib/customerDebtActivity";
+import type { DateFilterBounds } from "../../lib/dateFilters";
 import { t } from "../../lib/i18n";
 
 const ICON_TONES = [
@@ -189,18 +194,37 @@ function DebtCustomerMenuPanel({
 type Props = {
   lang: Language;
   customer: Customer;
-  timeline: CreditActivityEntry[];
+  /** @deprecated Prefer creditIndex + bounds for lazy timeline build */
+  timeline?: CreditActivityEntry[];
+  creditIndex?: CreditActivityIndex;
+  bounds?: DateFilterBounds;
   canDebt: boolean;
   toneIndex: number;
   onSubmitPay: (customerId: string, amountUgx: number) => void;
 };
 
-export function DebtCustomerRow({ lang, customer, timeline, canDebt, toneIndex, onSubmitPay }: Props) {
+export function DebtCustomerRow({
+  lang,
+  customer,
+  timeline: timelineProp,
+  creditIndex,
+  bounds,
+  canDebt,
+  toneIndex,
+  onSubmitPay,
+}: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPlacement, setMenuPlacement] = useState<MenuPlacement | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [showPayForm, setShowPayForm] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+
+  const timeline = useMemo(() => {
+    if (timelineProp) return timelineProp;
+    if (!menuOpen || !creditIndex || !bounds) return [];
+    const full = creditActivityTimelineFromIndex(customer.id, creditIndex);
+    return filterCreditActivityByBounds(full, bounds);
+  }, [timelineProp, menuOpen, creditIndex, bounds, customer.id]);
 
   const closeMenu = () => {
     setMenuOpen(false);
