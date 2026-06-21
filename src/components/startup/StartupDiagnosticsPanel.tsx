@@ -48,6 +48,27 @@ export function StartupDiagnosticsPanel({ lang }: { lang: Language }) {
             <dd className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-amber-950">{snap.failureReason}</dd>
           </div>
         ) : null}
+        {recovery?.completedWithInventoryWarnings ? (
+          <div>
+            <dt className="text-stone-500">{t(lang, "recoveryCompletedWithWarnings")}</dt>
+            <dd className="mt-1 rounded-lg bg-amber-50 px-2 py-1 text-amber-950">
+              {recovery.completionMessage ?? t(lang, "recoveryCompletedWithWarningsSub")}
+            </dd>
+          </div>
+        ) : null}
+        {recovery?.integrityDiagnostics.inventoryReconciliation?.mismatches.length ? (
+          <div>
+            <dt className="text-stone-500">{t(lang, "recoveryInventoryMismatchTitle")}</dt>
+            <dd className="mt-1 space-y-1">
+              {recovery.integrityDiagnostics.inventoryReconciliation.mismatches.slice(0, 5).map((m) => (
+                <p key={m.productId} className="rounded-lg bg-amber-50 px-2 py-1 text-amber-950">
+                  {m.productName}: {m.recordedStock} vs {m.expectedFromMovements} (Δ {m.delta > 0 ? "+" : ""}
+                  {m.delta})
+                </p>
+              ))}
+            </dd>
+          </div>
+        ) : null}
         {recovery?.errorMessage ? (
           <div>
             <dt className="text-stone-500">{t(lang, "startupDiagRecoveryError")}</dt>

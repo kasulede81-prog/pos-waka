@@ -8,6 +8,10 @@ import { isLocalShopDataEmpty, probeCloudShopHasData } from "./cloudSnapshotSync
 import type { CloudTrustCertificationReport } from "./cloudTrustCenter";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import type { CloudRecoveryValidationResult } from "./cloudRecoveryValidator";
+import {
+  entityCountMismatchBlocksRecovery,
+  isBlockingRecoveryCertificationFailure,
+} from "./recoveryEntityParity";
 
 export type CloudShopProbe = {
   hasSnapshot: boolean;
@@ -100,7 +104,14 @@ export type RecoveryCompletionGateResult = {
   ok: boolean;
   message: string;
   failures: string[];
+  warnings: string[];
+  inventoryWarnings: boolean;
 };
+
+const NON_BLOCKING_CERT_FAILURES = new Set([
+  "inventory_integrity_warning",
+  "stock_movement_count_mismatch",
+]);
 
 /** Strict gate after hydrate — required before unlocking the app. Bootstrap is marked after this passes. */
 export function validateRecoveryCompletionGate(
@@ -109,6 +120,7 @@ export function validateRecoveryCompletionGate(
   opts?: { certification?: CloudTrustCertificationReport | null },
 ): RecoveryCompletionGateResult {
   const failures: string[] = [];
+  const warnings: string[] = [];
   const c = validation.counts;
 
   const cloudExpectedData = probe.hasCloudProducts || probe.hasSnapshot;
@@ -133,22 +145,46 @@ export function validateRecoveryCompletionGate(
 
   const certification = opts?.certification;
   if (certification) {
-    if (!certification.inventoryIntegrityOk) {
+    if (certification.inventoryIntegrityStatus === "critical") {
       failures.push("inventory_integrity_mismatch");
+    } else if (certification.inventoryIntegrityStatus === "warning") {
+      warnings.push("inventory_integrity_warning");
     }
     if (!certification.recoveryInvariantPassed) {
       failures.push("recovery_invariant_failed");
     }
     for (const f of certification.failures) {
+      if (NON_BLOCKING_CERT_FAILURES.has(f)) {
+        if (!warnings.includes(f)) warnings.push(f);
+        continue;
+      }
+      if (f === "inventory_integrity_mismatch" && certification.inventoryIntegrityStatus !== "critical") {
+        continue;
+      }
+      if (!isBlockingRecoveryCertificationFailure(f)) {
+        if (!warnings.includes(f)) warnings.push(f);
+        continue;
+      }
       if (!failures.includes(f)) failures.push(f);
     }
     for (const row of certification.rows) {
       if (row.cloudCount !== null && row.cloudError === null && row.cloudCount !== row.localCount) {
         const key = `entity_count_mismatch_${row.id}`;
-        if (!failures.includes(key)) failures.push(key);
+        if (entityCountMismatchBlocksRecovery(row.id)) {
+          if (!failures.includes(key)) failures.push(key);
+        } else if (!warnings.includes(key)) {
+          warnings.push(key);
+        }
       }
     }
   }
+
+  const inventoryWarnings =
+    warnings.includes("inventory_integrity_warning") ||
+    validation.inventoryIntegrityStatus === "warning" ||
+    validation.failures.some((f) => f.code === "inventory_integrity" && f.severity === "warning");
+
+  const hasRecoveryWarnings = inventoryWarnings || warnings.length > 0;
 
   const ok = failures.length === 0;
   let message = "Recovery validation passed";
@@ -166,7 +202,9 @@ export function validateRecoveryCompletionGate(
     } else {
       message = "Recovery validation failed";
     }
+  } else if (hasRecoveryWarnings) {
+    message = "Recovery completed with warnings";
   }
 
-  return { ok, message, failures };
+  return { ok, message, failures, warnings, inventoryWarnings };
 }

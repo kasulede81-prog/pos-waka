@@ -55,6 +55,8 @@ export type CloudRecoveryGatedResult = {
   errorKey?: string;
   /** True when cloud probe failed — app must stay locked (fail closed). */
   probeFailed?: boolean;
+  inventoryWarnings?: boolean;
+  message?: string;
 };
 
 async function waitForPosStoreHydrated(timeoutMs = 30_000): Promise<boolean> {
@@ -454,8 +456,11 @@ export async function runCloudRecoveryGated(opts?: {
         await uploadShopCloudSnapshot({ force: true }).catch(() => false);
       }
 
-      completeCloudRecoverySession(validation, completeness);
-      return { success: true, validation };
+      completeCloudRecoverySession(validation, completeness, {
+        inventoryWarnings: gate.inventoryWarnings || gate.warnings.length > 0,
+        message: gate.message,
+      });
+      return { success: true, validation, inventoryWarnings: gate.inventoryWarnings, message: gate.message };
     } catch (err) {
       const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
       clearBootstrapSyncComplete();

@@ -2,6 +2,7 @@ import { readSyncCheckpoints } from "./syncCheckpoints";
 import { readSyncHealthMeta } from "./syncMeta";
 import { getAuditSyncHealth } from "./auditHealth";
 import { verifyInventoryIntegrity } from "./inventoryIntegrity";
+import { classifyInventoryIntegrityStatus } from "./recoveryInventoryReconciliation";
 import { getRecentInventoryConflicts } from "./inventoryConflictLog";
 import { getCloudRecoverySession } from "./cloudRecoverySession";
 import { readSyncQueue } from "../offline/localDb";
@@ -18,7 +19,9 @@ export type SyncHealthDashboardSnapshot = {
   retryWaitMs: number | null;
   queueHealth: "healthy" | "degraded" | "backing_off";
   inventoryIntegrityOk: boolean;
+  inventoryIntegrityStatus: "healthy" | "warning" | "critical";
   inventoryMismatchCount: number;
+  inventoryMismatches: import("./inventoryIntegrity").InventoryIntegrityMismatch[];
   inventoryConflictCount: number;
   auditPendingOps: number;
   auditSyncOk: boolean;
@@ -54,6 +57,7 @@ export async function buildSyncHealthDashboardSnapshot(): Promise<SyncHealthDash
     products: state.products,
     movements: state.stockMovements,
   });
+  const inventoryIntegrityStatus = classifyInventoryIntegrityStatus(integrity.mismatches);
   const recovery = getCloudRecoverySession();
 
   return {
@@ -63,7 +67,9 @@ export async function buildSyncHealthDashboardSnapshot(): Promise<SyncHealthDash
     retryWaitMs: queueRetryFromEngine(queue),
     queueHealth: deriveQueueHealth(queue),
     inventoryIntegrityOk: integrity.ok,
+    inventoryIntegrityStatus,
     inventoryMismatchCount: integrity.mismatches.length,
+    inventoryMismatches: integrity.mismatches,
     inventoryConflictCount: getRecentInventoryConflicts().length,
     auditPendingOps: auditHealth.pendingAuditOps,
     auditSyncOk: auditHealth.ok,

@@ -120,7 +120,13 @@ export function CloudTrustCenter({ lang }: Props) {
         <div className="rounded-xl bg-stone-50 px-3 py-2">
           <p className="font-bold text-stone-500">{t(lang, "cloudTrustInventory")}</p>
           <p className="mt-0.5 text-sm font-black text-stone-900">
-            {report ? (report.inventoryIntegrityOk ? t(lang, "cloudTrustPass") : t(lang, "cloudTrustFail")) : "—"}
+            {report
+              ? report.inventoryIntegrityStatus === "healthy"
+                ? t(lang, "cloudTrustPass")
+                : report.inventoryIntegrityStatus === "warning"
+                  ? t(lang, "recoveryStatusWarning")
+                  : t(lang, "cloudTrustFail")
+              : "—"}
           </p>
         </div>
         <div className="rounded-xl bg-stone-50 px-3 py-2">

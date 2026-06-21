@@ -8,9 +8,14 @@ import { readSyncCheckpoints } from "./syncCheckpoints";
 import { getCloudRecoverySession } from "./cloudRecoverySession";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { getCompletedFinancials } from "./financialMetrics";
-import { verifyInventoryIntegrity } from "./inventoryIntegrity";
+import { verifyInventoryIntegrity, type InventoryIntegrityMismatch } from "./inventoryIntegrity";
 import { verifyCustomerDebtIntegrity } from "./customerDebtIntegrity";
 import { storeHasCoreRecoveryData } from "./recoveryHydration";
+import {
+  classifyInventoryIntegrityStatus,
+  type InventoryIntegrityStatus,
+} from "./recoveryInventoryReconciliation";
+import { isBlockingRecoveryCertificationFailure } from "./recoveryEntityParity";
 
 export type FullEntityCounts = {
   products: number;
@@ -60,6 +65,8 @@ export type CloudTrustCertificationReport = {
   bootstrapComplete: boolean;
   recoveryInvariantPassed: boolean;
   inventoryIntegrityOk: boolean;
+  inventoryIntegrityStatus: InventoryIntegrityStatus;
+  inventoryMismatches: InventoryIntegrityMismatch[];
   stockMovementCount: number;
 };
 
@@ -249,6 +256,13 @@ export function buildEntityParityRows(input: {
   });
 }
 
+const NON_BLOCKING_TRUST_WARNINGS = new Set(["inventory_integrity_warning", "stock_movement_count_mismatch"]);
+
+function isNonBlockingTrustRowMismatch(entityId: keyof FullEntityCounts): boolean {
+  return NON_BLOCKING_TRUST_WARNINGS.has(`entity_count_mismatch_${entityId}` as never) ||
+    !isBlockingRecoveryCertificationFailure(`entity_count_mismatch_${entityId}`);
+}
+
 export function buildCloudTrustCertificationReport(input: {
   cloud: FullEntityCounts | null;
   cloudErrors?: Partial<Record<keyof FullEntityCounts, string>>;
@@ -269,8 +283,11 @@ export function buildCloudTrustCertificationReport(input: {
   const failures: string[] = [];
   const s = usePosStore.getState();
   const inventory = verifyInventoryIntegrity({ products: s.products, movements: s.stockMovements });
-  if (!inventory.ok) {
+  const inventoryIntegrityStatus = classifyInventoryIntegrityStatus(inventory.mismatches);
+  if (inventoryIntegrityStatus === "critical") {
     failures.push("inventory_integrity_mismatch");
+  } else if (inventoryIntegrityStatus === "warning") {
+    failures.push("inventory_integrity_warning");
   }
   if (s.stockMovements.length > 0 && input.cloud && input.cloud.stockMovements !== s.stockMovements.length) {
     failures.push("stock_movement_count_mismatch");
@@ -298,15 +315,20 @@ export function buildCloudTrustCertificationReport(input: {
   const recoveryInvariantPassed =
     session.integrityDiagnostics.recoveryInvariantPassed || storeHasCoreRecoveryData();
 
+  const blockingFailures = failures.filter(isBlockingRecoveryCertificationFailure);
+
   return {
     checkedAt: new Date().toISOString(),
-    certified: failures.length === 0 && rows.every((r) => r.match || r.cloudCount === null),
+    certified:
+      blockingFailures.length === 0 && rows.every((r) => r.match || r.cloudCount === null || isNonBlockingTrustRowMismatch(r.id)),
     failures,
     rows,
     financial: readFinancialParitySnapshot(),
     bootstrapComplete: cp.bootstrapComplete,
     recoveryInvariantPassed,
     inventoryIntegrityOk: inventory.ok,
+    inventoryIntegrityStatus,
+    inventoryMismatches: inventory.mismatches,
     stockMovementCount: s.stockMovements.length,
   };
 }

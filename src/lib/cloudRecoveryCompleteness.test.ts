@@ -35,6 +35,8 @@ describe("cloudRecoveryCompleteness", () => {
         inventoryValueUgx: 0,
         debtMismatches: 0,
         recoveryScorePct: 95,
+        inventoryIntegrityStatus: "healthy",
+        inventoryMismatches: [],
       },
       probe: {
         hasSnapshot: true,

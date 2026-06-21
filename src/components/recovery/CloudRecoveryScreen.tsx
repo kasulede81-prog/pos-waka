@@ -261,6 +261,39 @@ export function CloudRecoveryScreen({
                 ))}
               </ul>
             ) : null}
+            {session.validation?.inventoryMismatches?.length ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+                <p className="font-black uppercase text-amber-950">{t(lang, "recoveryInventoryMismatchTitle")}</p>
+                <ul className="mt-1 space-y-1 font-medium text-amber-900">
+                  {session.validation.inventoryMismatches.slice(0, 5).map((m) => (
+                    <li key={m.productId}>
+                      <span className="font-bold">{m.productName}</span>
+                      <span className="block text-[11px]">
+                        {t(lang, "recoveryInventoryRecorded")}: {m.recordedStock} ·{" "}
+                        {t(lang, "recoveryInventoryExpected")}: {m.expectedFromMovements} ·{" "}
+                        {t(lang, "recoveryInventoryDelta")}: {m.delta > 0 ? "+" : ""}
+                        {m.delta}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {session.integrityDiagnostics.inventoryReconciliation ? (
+              <div className="rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-800">
+                <p className="font-black uppercase text-stone-600">
+                  {t(lang, "recoveryInventoryReconciliationTitle")}
+                </p>
+                <p className="mt-1">
+                  {t(lang, "recoverySyntheticMovements")}:{" "}
+                  {session.integrityDiagnostics.inventoryReconciliation.syntheticMovementsGenerated}
+                </p>
+                <p>
+                  {t(lang, "recoveryRemainingMismatches")}:{" "}
+                  {session.integrityDiagnostics.inventoryReconciliation.remainingMismatchCount}
+                </p>
+              </div>
+            ) : null}
             <StartupEscapeActions
               lang={lang}
               onRetry={onRetry}

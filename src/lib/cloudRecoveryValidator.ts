@@ -19,7 +19,11 @@ import type {
 } from "../types";
 import { usePosStore } from "../store/usePosStore";
 import { verifyCustomerDebtIntegrity } from "./customerDebtIntegrity";
-import { verifyInventoryIntegrity } from "./inventoryIntegrity";
+import { verifyInventoryIntegrity, type InventoryIntegrityMismatch } from "./inventoryIntegrity";
+import {
+  classifyInventoryIntegrityStatus,
+  type InventoryIntegrityStatus,
+} from "./recoveryInventoryReconciliation";
 import { inventoryValueAtCostUgx } from "./costPrecision";
 import { buildCloudRecoverySnapshotFromStore } from "./cloudAuthorityAudit";
 import { buildPostRestoreValidationSnapshot } from "./postRestoreValidation";
@@ -61,6 +65,8 @@ export type CloudRecoveryValidationResult = {
   inventoryValueUgx: number;
   debtMismatches: number;
   recoveryScorePct: number;
+  inventoryIntegrityStatus: InventoryIntegrityStatus;
+  inventoryMismatches: InventoryIntegrityMismatch[];
 };
 
 export function validateCloudRecoveryLocalState(
@@ -91,11 +97,12 @@ export function validateCloudRecoveryLocalState(
     products: input.products,
     movements: input.stockMovements,
   });
+  const inventoryIntegrityStatus = classifyInventoryIntegrityStatus(inventory.mismatches);
   if (!inventory.ok) {
     failures.push({
       code: "inventory_integrity",
       message: `Inventory integrity: ${inventory.mismatches.length} mismatch(es)`,
-      severity: opts?.recoveryMode || inventory.mismatches.length >= 3 ? "critical" : "warning",
+      severity: inventoryIntegrityStatus === "critical" ? "critical" : "warning",
     });
   }
 
@@ -204,6 +211,8 @@ export function validateCloudRecoveryLocalState(
     inventoryValueUgx: inventoryValueAtCostUgx(input.products),
     debtMismatches: debt.mismatches.length,
     recoveryScorePct: opts?.recoveryMode ? 100 : buildCloudRecoverySnapshotFromStore().scorePct,
+    inventoryIntegrityStatus,
+    inventoryMismatches: inventory.mismatches,
   };
 }
 

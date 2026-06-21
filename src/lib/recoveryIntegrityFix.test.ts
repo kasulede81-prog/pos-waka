@@ -126,6 +126,8 @@ vi.mock("./cloudTrustCenter", () => ({
     bootstrapComplete: false,
     recoveryInvariantPassed: true,
     inventoryIntegrityOk: true,
+    inventoryIntegrityStatus: "healthy",
+    inventoryMismatches: [],
     stockMovementCount: 0,
   }),
   readLocalEntityCounts: vi.fn().mockReturnValue({
@@ -280,6 +282,8 @@ function baseValidation(overrides: Partial<CloudRecoveryValidationResult> = {}):
     inventoryValueUgx: 0,
     debtMismatches: 0,
     recoveryScorePct: 95,
+    inventoryIntegrityStatus: "healthy",
+    inventoryMismatches: [],
     ...overrides,
   };
 }

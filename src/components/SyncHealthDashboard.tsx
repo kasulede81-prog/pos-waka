@@ -111,9 +111,27 @@ export function SyncHealthDashboard({ lang, lazy = false, defaultExpanded = !laz
           <Row label="Queue health" value={snap.queueHealth} warn={snap.queueHealth !== "healthy"} />
           <Row
             label="Inventory integrity"
-            value={snap.inventoryIntegrityOk ? "OK" : `${snap.inventoryMismatchCount} mismatch(es)`}
-            warn={!snap.inventoryIntegrityOk}
+            value={
+              snap.inventoryIntegrityOk
+                ? "OK"
+                : `${snap.inventoryMismatchCount} mismatch(es) (${snap.inventoryIntegrityStatus})`
+            }
+            warn={snap.inventoryIntegrityStatus !== "healthy"}
           />
+          {snap.inventoryMismatches.length > 0 ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs">
+              <p className="font-black uppercase text-amber-950">Inventory mismatches</p>
+              <ul className="mt-1 space-y-1 font-medium text-amber-900">
+                {snap.inventoryMismatches.slice(0, 5).map((m) => (
+                  <li key={m.productId}>
+                    {m.productName}: recorded {m.recordedStock}, expected {m.expectedFromMovements} (Δ{" "}
+                    {m.delta > 0 ? "+" : ""}
+                    {m.delta})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <Row label="Inventory conflicts (recent)" value={String(snap.inventoryConflictCount)} warn={snap.inventoryConflictCount > 0} />
           <Row label="Audit pending upload" value={String(snap.auditPendingOps)} warn={!snap.auditSyncOk} />
           <Row label="Recovery status" value={snap.recoveryStatus ?? "idle"} />

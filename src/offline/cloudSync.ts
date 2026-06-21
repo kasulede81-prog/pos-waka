@@ -3204,16 +3204,25 @@ export async function pullCloudAndMergeIntoStore(opts?: {
 
   await applyShopRecoverySignalsForCurrentShop();
   if (opts?.cloudRecovery) {
-    const merged = usePosStore.getState();
-    const { verifyInventoryIntegrity } = await import("../lib/inventoryIntegrity");
-    const integrity = verifyInventoryIntegrity({
-      products: merged.products,
-      movements: merged.stockMovements,
+    const { reconcileRecoveryInventoryLedger } = await import("../lib/recoveryInventoryReconciliation");
+    const { recordRecoveryIntegrityDiagnostics } = await import("../lib/cloudRecoverySession");
+    const reconciliation = reconcileRecoveryInventoryLedger({ applyToStore: true });
+    recordRecoveryIntegrityDiagnostics({
+      inventoryReconciliation: {
+        productsRestored: reconciliation.productsRestored,
+        movementsRestored: reconciliation.movementsAfter,
+        syntheticMovementsGenerated:
+          reconciliation.syntheticSaleMovements + reconciliation.syntheticOpeningMovements,
+        remainingMismatchCount: reconciliation.remainingMismatches.length,
+        inventoryIntegrityStatus: reconciliation.status,
+        mismatches: reconciliation.remainingMismatches,
+      },
     });
-    if (!integrity.ok) {
+    if (!reconciliation.healed && reconciliation.remainingMismatches.length > 0) {
       const { reportSyncIssue } = await import("../lib/monitoring");
       reportSyncIssue("recovery_inventory_integrity_mismatch", {
-        mismatchCount: integrity.mismatches.length,
+        mismatchCount: reconciliation.remainingMismatches.length,
+        status: reconciliation.status,
       });
     }
   }

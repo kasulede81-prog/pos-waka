@@ -351,7 +351,8 @@ function mergeProductionFailures(
 
   if (!trust.bootstrapComplete) failures.push("bootstrap_incomplete");
   if (!trust.recoveryInvariantPassed) failures.push("recovery_invariant_failed");
-  if (!trust.inventoryIntegrityOk) failures.push("inventory_integrity_failed");
+  if (trust.inventoryIntegrityStatus === "critical") failures.push("inventory_integrity_failed");
+  else if (trust.inventoryIntegrityStatus === "warning") failures.push("inventory_integrity_warning");
 
   if (pending.totalPending > 0) failures.push("pending_sync_present");
   if (salesPullTruncated) failures.push("sales_pull_truncated");

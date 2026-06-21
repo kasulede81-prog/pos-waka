@@ -31,6 +31,15 @@ export type CloudRecoveryEntityCounts = {
   cashRecords: number;
 };
 
+export type RecoveryInventoryReconciliationDiagnostics = {
+  productsRestored: number;
+  movementsRestored: number;
+  syntheticMovementsGenerated: number;
+  remainingMismatchCount: number;
+  inventoryIntegrityStatus: import("./recoveryInventoryReconciliation").InventoryIntegrityStatus;
+  mismatches: import("./inventoryIntegrity").InventoryIntegrityMismatch[];
+};
+
 export type RecoveryIntegrityDiagnostics = {
   snapshotRowFound: boolean;
   snapshotContainsCoreData: boolean;
@@ -41,6 +50,7 @@ export type RecoveryIntegrityDiagnostics = {
   finalStoreCounts: CloudRecoveryEntityCounts;
   recoveryInvariantPassed: boolean;
   lastDiagnosticEvent: string | null;
+  inventoryReconciliation: RecoveryInventoryReconciliationDiagnostics | null;
 };
 
 export type CloudRecoverySessionState = {
@@ -62,6 +72,8 @@ export type CloudRecoverySessionState = {
   errorKey: string | null;
   validation: CloudRecoveryValidationResult | null;
   completeness: RecoveryCompletenessReport | null;
+  completedWithInventoryWarnings: boolean;
+  completionMessage: string | null;
 };
 
 export type CloudRecoveryDiagnostics = CloudRecoverySessionState & {
@@ -90,6 +102,7 @@ const emptyIntegrityDiagnostics = (): RecoveryIntegrityDiagnostics => ({
   finalStoreCounts: emptyCounts(),
   recoveryInvariantPassed: false,
   lastDiagnosticEvent: null,
+  inventoryReconciliation: null,
 });
 
 let session: CloudRecoverySessionState = {
@@ -108,6 +121,8 @@ let session: CloudRecoverySessionState = {
   errorKey: null,
   validation: null,
   completeness: null,
+  completedWithInventoryWarnings: false,
+  completionMessage: null,
 };
 
 const listeners = new Set<() => void>();
@@ -191,6 +206,8 @@ export function beginCloudRecoverySession(): void {
     errorKey: null,
     validation: null,
     completeness: null,
+    completedWithInventoryWarnings: false,
+    completionMessage: null,
   };
   emit();
 }
@@ -251,6 +268,7 @@ export function updateRecoveryEntityCounts(counts: Partial<CloudRecoveryEntityCo
 export function completeCloudRecoverySession(
   validation: CloudRecoveryValidationResult,
   completeness: RecoveryCompletenessReport | null = null,
+  opts?: { inventoryWarnings?: boolean; message?: string | null },
 ): void {
   const finishedAt = new Date().toISOString();
   const startedMs = session.startedAt ? new Date(session.startedAt).getTime() : Date.now();
@@ -267,6 +285,8 @@ export function completeCloudRecoverySession(
     completeness,
     entityCounts: { ...session.restoredCounts },
     certification: session.certification,
+    completedWithInventoryWarnings: opts?.inventoryWarnings === true,
+    completionMessage: opts?.message ?? null,
   };
   persistDiagnostics();
   emit();
@@ -290,6 +310,8 @@ export function failCloudRecoverySession(
     completeness: null,
     entityCounts: { ...session.restoredCounts },
     certification: session.certification,
+    completedWithInventoryWarnings: false,
+    completionMessage: null,
   };
   persistDiagnostics();
   emit();
@@ -312,6 +334,8 @@ export function resetCloudRecoverySessionForRetry(): void {
     errorKey: null,
     validation: null,
     completeness: null,
+    completedWithInventoryWarnings: false,
+    completionMessage: null,
   };
   emit();
 }
