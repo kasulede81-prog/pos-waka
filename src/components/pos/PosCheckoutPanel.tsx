@@ -211,7 +211,7 @@ function PaymentBlock({
         <p className="text-xs font-black uppercase tracking-wide text-stone-600 sm:text-sm">
           {t(lang, "paymentMethodLabel")}
         </p>
-        <div className={clsx("mt-2 grid gap-2", dockMode || compact ? "grid-cols-4" : "grid-cols-2 gap-2 mt-2")}>
+        <div className={clsx("mt-2 grid gap-2", dockMode || compact ? "grid-cols-4 max-[359px]:grid-cols-2" : "grid-cols-2 gap-2 mt-2")}>
           {checkoutMethods.map((method) => (
             <button
               key={method}
@@ -221,8 +221,12 @@ function PaymentBlock({
                 if (method === "cash" || method === "credit") onCheckoutAmountField("cash");
               }}
               className={clsx(
-                "rounded-xl border font-black leading-tight",
-                dockMode ? "min-h-[44px] px-1 text-sm" : compact ? "min-h-[34px] px-1 text-[10px]" : "min-h-[48px] rounded-2xl text-sm",
+                "rounded-xl border font-black leading-snug",
+                dockMode
+                  ? "min-h-[44px] px-1 text-sm"
+                  : compact
+                    ? "min-h-[44px] px-1.5 text-xs sm:text-sm"
+                    : "min-h-[48px] rounded-2xl text-sm",
                 paymentMethod === method
                   ? "border-waka-400 bg-waka-100 text-waka-950"
                   : "border-stone-200 bg-white text-stone-700",

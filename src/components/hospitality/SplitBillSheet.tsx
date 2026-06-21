@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { BillSplitLine, Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatUgx } from "../../lib/formatUgx";
+import { ModalSheet } from "../layout/ModalSheet";
 
 type Props = {
   lang: Language;
@@ -36,18 +37,33 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 p-3 sm:items-center">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
+    <ModalSheet
+      open
+      onClose={onClose}
+      zIndexClass="z-[70]"
+      clearNav={false}
+      title={
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-black text-stone-950">{t(lang, "splitBillTitle")}</h2>
             <p className="text-lg font-black text-waka-700">{formatUgx(totalUgx)}</p>
           </div>
-          <button type="button" className="text-sm font-bold text-slate-500" onClick={onClose}>
+          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-slate-500" onClick={onClose}>
             {t(lang, "cancel")}
           </button>
         </div>
-
+      }
+      footer={
+        <button
+          type="button"
+          disabled={mode === "custom" ? !customValid : totalUgx <= 0}
+          onClick={() => onApply(mode === "equal" ? equalSplits : rows)}
+          className="min-h-14 w-full rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-50"
+        >
+          {t(lang, "splitBillApply")}
+        </button>
+      }
+    >
         <div className="mb-4 grid grid-cols-2 gap-2">
           <button
             type="button"
@@ -99,13 +115,6 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                 </li>
               ))}
             </ul>
-            <button
-              type="button"
-              onClick={() => onApply(equalSplits)}
-              className="min-h-12 w-full rounded-2xl bg-waka-600 text-sm font-black text-white"
-            >
-              {t(lang, "splitBillApply")}
-            </button>
           </>
         ) : (
           <>
@@ -118,7 +127,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                     next[idx] = { ...row, label: e.target.value };
                     setRows(next);
                   }}
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold"
+                  className="min-h-[44px] rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold"
                 />
                 <input
                   value={row.amountUgx ? String(row.amountUgx) : ""}
@@ -129,31 +138,22 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                   }}
                   inputMode="numeric"
                   placeholder="UGX"
-                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-black"
+                  className="min-h-[44px] rounded-xl border border-slate-200 px-3 py-2 text-sm font-black"
                 />
               </div>
             ))}
             <button
               type="button"
               onClick={() => setRows([...rows, { label: String.fromCharCode(65 + rows.length), amountUgx: 0 }])}
-              className="mb-3 text-sm font-bold text-waka-700"
+              className="mb-3 min-h-[44px] text-sm font-bold text-waka-700"
             >
               {t(lang, "splitBillAddPerson")}
             </button>
-            <p className={clsx("mb-3 text-sm font-bold", customValid ? "text-emerald-700" : "text-rose-700")}>
+            <p className={clsx("text-sm font-bold", customValid ? "text-emerald-700" : "text-rose-700")}>
               {t(lang, "splitBillSum")}: {formatUgx(customSum)} / {formatUgx(totalUgx)}
             </p>
-            <button
-              type="button"
-              disabled={!customValid}
-              onClick={() => onApply(rows.filter((r) => r.amountUgx > 0))}
-              className="min-h-12 w-full rounded-2xl bg-waka-600 text-sm font-black text-white disabled:opacity-50"
-            >
-              {t(lang, "splitBillApply")}
-            </button>
           </>
         )}
-      </div>
-    </div>
+    </ModalSheet>
   );
 }

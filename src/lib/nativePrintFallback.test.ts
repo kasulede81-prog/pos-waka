@@ -35,16 +35,30 @@ describe("native print fallback", () => {
     expect(mocks.sharePdfBlob).not.toHaveBeenCalled();
   });
 
-  it("generates PDF and opens share sheet on native", async () => {
+  it("tries HTML print before share sheet on native", async () => {
     mocks.isNativePrintPlatform.mockReturnValue(true);
+    mocks.printHtmlDocumentWithDesktop.mockResolvedValueOnce(false);
     const ok = await printDocumentNativeFallback({
       pdfFilename: "test.pdf",
       buildPdfBlob: () => new Blob(["pdf"], { type: "application/pdf" }),
       htmlBody: "<p>Hi</p>",
-      shareDialogTitle: "Print or share",
+      shareDialogTitle: "Share receipt",
     });
     expect(ok).toBe(true);
+    expect(mocks.printHtmlDocumentWithDesktop).toHaveBeenCalled();
     expect(mocks.sharePdfBlob).toHaveBeenCalled();
-    expect(mocks.printHtmlDocumentWithDesktop).not.toHaveBeenCalled();
+  });
+
+  it("skips share when HTML print succeeds on native", async () => {
+    mocks.isNativePrintPlatform.mockReturnValue(true);
+    mocks.printHtmlDocumentWithDesktop.mockResolvedValueOnce(true);
+    const ok = await printDocumentNativeFallback({
+      pdfFilename: "test.pdf",
+      buildPdfBlob: () => new Blob(["pdf"], { type: "application/pdf" }),
+      htmlBody: "<p>Hi</p>",
+    });
+    expect(ok).toBe(true);
+    expect(mocks.printHtmlDocumentWithDesktop).toHaveBeenCalled();
+    expect(mocks.sharePdfBlob).not.toHaveBeenCalled();
   });
 });

@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Language } from "../../types";
+import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasPermission } from "../../lib/permissions";
+import { hasEffectivePermission, resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { useOwnerRiskCards } from "../../hooks/useOwnerRiskCards";
 import { usePosStore } from "../../store/usePosStore";
 import { isLowStock } from "../../lib/sellingEngine";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
 import { POS_SHOP_ROUTE } from "../../lib/posNavigation";
 import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
@@ -28,7 +27,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const products = usePosStore((s) => s.products);
   const savedOrder = usePosStore((s) => s.preferences.launcherTileOrder) ?? EMPTY_ORDER;
   const layout = usePosStore((s) => s.preferences.launcherTileLayout) ?? EMPTY_LAYOUT;
-  const { snapshot } = useSubscription();
+  const { snapshot, authMode } = useSubscription();
 
   const tier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(tier);
@@ -46,8 +45,9 @@ export function DesktopHomeTiles({ lang }: Props) {
   );
 
   const can = useCallback(
-    (perm?: Parameters<typeof hasPermission>[1]) => !perm || hasPermission(actor.role, perm),
-    [actor.role],
+    (perm?: Permission) =>
+      !perm || hasEffectivePermission(actor.role, perm, snapshot, authMode),
+    [actor.role, snapshot, authMode],
   );
 
   const badges = useMemo(

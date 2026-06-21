@@ -11,15 +11,17 @@ export type NativePrintFallbackOptions = {
   shareDialogTitle?: string;
 };
 
-/** On Android/iOS: generate PDF and open share sheet. On web/desktop: HTML print dialog. */
+/** On Android/iOS: try HTML print first, then share PDF. On web/desktop: HTML print dialog. */
 export async function printDocumentNativeFallback(options: NativePrintFallbackOptions): Promise<boolean> {
-  if (isNativePrintPlatform()) {
-    const blob = options.buildPdfBlob();
-    return sharePdfBlob(options.pdfFilename, blob, options.shareDialogTitle);
-  }
-  return printHtmlDocumentWithDesktop(
+  const htmlOk = await printHtmlDocumentWithDesktop(
     options.htmlBody,
     options.paper ?? "a4",
     options.title ?? "Waka document",
   );
+  if (htmlOk) return true;
+  if (isNativePrintPlatform()) {
+    const blob = options.buildPdfBlob();
+    return sharePdfBlob(options.pdfFilename, blob, options.shareDialogTitle);
+  }
+  return false;
 }

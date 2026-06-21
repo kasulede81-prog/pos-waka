@@ -30,6 +30,7 @@ import { brandingFromDebtPayment } from "../lib/receiptBranding";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
+import { ModalSheet } from "../components/layout/ModalSheet";
 import { DebtsHeroCard } from "../components/debts/DebtsHeroCard";
 import { DebtCustomerRow } from "../components/debts/DebtCustomerRow";
 import { VirtualizedCustomerDebtList } from "../components/debts/VirtualizedCustomerDebtList";
@@ -301,44 +302,45 @@ export function CustomersPage({ lang }: { lang: Language }) {
       ) : null}
 
       {debtReceiptCtx ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/40 p-4 sm:items-center"
-          role="dialog"
-          aria-modal
-        >
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
-            <h2 className="text-lg font-black text-stone-900">{t(lang, "payDown")}</h2>
-            <p className="mt-1 text-sm text-stone-600">{debtReceiptCtx.customer.name}</p>
-            <div className="mt-4">
-              <DocumentActionsBar
-                lang={lang}
-                compact
-                onPrint={() =>
-                  void printDebtPaymentReceipt(debtReceiptCtx).then(
-                    (r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")),
-                  )
-                }
-                onDownloadPdf={() =>
-                  void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then(
-                    (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
-                  )
-                }
-                onSharePdf={() =>
-                  void shareDebtPaymentReceiptPdf(debtReceiptCtx).then(
-                    (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
-                  )
-                }
-              />
-            </div>
+        <ModalSheet
+          open
+          onClose={() => setDebtReceiptCtx(null)}
+          zIndexClass="z-[80]"
+          clearNav={false}
+          title={t(lang, "payDown")}
+          footer={
             <button
               type="button"
-              className="mt-4 w-full rounded-2xl border-2 border-stone-200 py-3 font-bold"
+              className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 py-3 font-bold"
               onClick={() => setDebtReceiptCtx(null)}
             >
               {t(lang, "receiptClose")}
             </button>
+          }
+        >
+          <p className="text-sm text-stone-600">{debtReceiptCtx.customer.name}</p>
+          <div className="mt-4">
+            <DocumentActionsBar
+              lang={lang}
+              compact
+              onPrint={() =>
+                void printDebtPaymentReceipt(debtReceiptCtx).then(
+                  (r) => !r.ok && window.alert(t(lang, "receiptPdfFailed")),
+                )
+              }
+              onDownloadPdf={() =>
+                void downloadDebtPaymentReceiptPdf(debtReceiptCtx).then(
+                  (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
+                )
+              }
+              onSharePdf={() =>
+                void shareDebtPaymentReceiptPdf(debtReceiptCtx).then(
+                  (ok) => !ok && window.alert(t(lang, "receiptPdfFailed")),
+                )
+              }
+            />
           </div>
-        </div>
+        </ModalSheet>
       ) : null}
     </div>
   );

@@ -66,9 +66,7 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
         const msg =
           result.mode === "native"
             ? "Printed via native thermal path."
-            : result.mode === "share"
-              ? t(lang, "receiptPrintNativeOpened")
-              : "Printed via browser fallback.";
+            : "Printed via browser fallback.";
         setPrintingStatus(msg);
       } else {
         setPrintingStatus(result.error ?? t(lang, "receiptPrintBlocked"));

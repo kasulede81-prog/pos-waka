@@ -17,6 +17,7 @@ describe("launcher tile defaults", () => {
       "salesHistory",
       "shop",
       "reports",
+      "profit",
       "settings",
     ]);
   });

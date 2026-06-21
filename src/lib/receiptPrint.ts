@@ -7,7 +7,6 @@ import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { customerPaidUgxForSaleLine } from "./refundBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
-import { isNativePrintPlatform, sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 
 export type ReceiptLabels = {
   cashier: string;
@@ -559,7 +558,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 
 /** Print via hidden iframe (avoids popup blockers; works with AirPrint / system dialog). */
 export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
-  if (typeof document === "undefined" || isNativePrintPlatform()) return false;
+  if (typeof document === "undefined") return false;
 
   const html = receiptHtml(receiptPlain, paper);
   const iframe = document.createElement("iframe");
@@ -613,13 +612,13 @@ function toThermalWidth(paper: ReceiptPaperSize): PrinterPaperWidth {
 }
 
 /**
- * Prefer native ESC/POS path when available, fallback to browser print.
+ * Prefer native ESC/POS path when available, fallback to browser print dialog.
  * Returns true if either native or browser path was started successfully.
  */
 export async function printReceiptWithFallback(
   receiptPlain: string,
   paper: ReceiptPaperSize = "80mm",
-): Promise<{ ok: boolean; mode: "native" | "browser" | "share" | "none"; error?: string }> {
+): Promise<{ ok: boolean; mode: "native" | "browser" | "none"; error?: string }> {
   try {
     const caps = await detectPrinterCapabilities();
     if (caps.escPosAvailable) {
@@ -631,16 +630,6 @@ export async function printReceiptWithFallback(
     }
   } catch {
     // Continue into fallback.
-  }
-
-  if (isNativePrintPlatform()) {
-    const shared = await sharePlainReceiptForPrint(receiptPlain, paper);
-    if (shared) return { ok: true, mode: "share" };
-    return {
-      ok: false,
-      mode: "none",
-      error: "Could not open share sheet. Try Share receipt PDF from the receipt screen.",
-    };
   }
 
   const browserOk = printReceiptText(receiptPlain, paper);

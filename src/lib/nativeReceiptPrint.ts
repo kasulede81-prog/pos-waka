@@ -43,6 +43,6 @@ export async function sharePlainReceiptForPrint(
 ): Promise<boolean> {
   const blob = buildPlainReceiptPdfBlob(receiptPlain, paper);
   return saveExportedFile(plainReceiptPdfFilename(filenameStem), blob, "application/pdf", {
-    shareDialogTitle: "Print or share receipt",
+    shareDialogTitle: "Share receipt",
   });
 }

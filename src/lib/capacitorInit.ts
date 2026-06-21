@@ -21,4 +21,11 @@ export async function initCapacitorShell(): Promise<void> {
   } catch {
     /* older WebView or missing plugin */
   }
+  try {
+    const { Keyboard, KeyboardResize } = await import("@capacitor/keyboard");
+    await Keyboard.setResizeMode({ mode: KeyboardResize.Body });
+    await Keyboard.setScroll({ isDisabled: false });
+  } catch {
+    /* keyboard plugin optional on web */
+  }
 }

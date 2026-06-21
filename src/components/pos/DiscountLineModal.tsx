@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Language, SaleLine } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { ModalSheet } from "../layout/ModalSheet";
 import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { MoneyInput } from "../ui/MoneyInput";
 import { listPriceForLine } from "../../lib/saleAdjustments";
@@ -38,26 +38,35 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
   const discountGiven = Math.max(0, list - newPrice);
   const canApply = newPrice > 0;
 
-  const applyPrice = (priceUgx: number) => {
-    onApply(priceUgx);
-  };
-
   return (
     <PosScreenPortal>
-    <AppModalOverlay
-      clearNav={false}
-      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
-      role="dialog"
-      aria-modal
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 pb-4 shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
+      <ModalSheet
+        open
+        onClose={onClose}
+        zIndexClass="z-[var(--waka-z-pos-modal)]"
+        clearNav={false}
+        title={t(lang, "discountTitle")}
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="min-h-[52px] rounded-2xl border-2 border-slate-200 py-3 text-base font-bold text-slate-700"
+            >
+              {t(lang, "cancel")}
+            </button>
+            <button
+              type="button"
+              disabled={!canApply}
+              onClick={() => onApply(newPrice)}
+              className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-base font-black text-white disabled:opacity-40"
+            >
+              {t(lang, "discountApply")}
+            </button>
+          </div>
+        }
       >
-        <h2 className="text-xl font-black text-slate-900">{t(lang, "discountTitle")}</h2>
-
-        <p className="mt-4 line-clamp-3 text-2xl font-black text-slate-900">{line.name}</p>
+        <p className="line-clamp-3 text-2xl font-black text-slate-900">{line.name}</p>
         <p className="mt-1 text-base font-semibold text-slate-600">
           {t(lang, "discountOriginal")}:{" "}
           <span className="font-black text-slate-900">UGX {list.toLocaleString()}</span>
@@ -104,26 +113,7 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
             </button>
           ))}
         </div>
-
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-[52px] rounded-2xl border-2 border-slate-200 py-3 text-base font-bold text-slate-700"
-          >
-            {t(lang, "cancel")}
-          </button>
-          <button
-            type="button"
-            disabled={!canApply}
-            onClick={() => applyPrice(newPrice)}
-            className="min-h-[52px] rounded-2xl bg-waka-600 py-3 text-base font-black text-white disabled:opacity-40"
-          >
-            {t(lang, "discountApply")}
-          </button>
-        </div>
-      </div>
-    </AppModalOverlay>
+      </ModalSheet>
     </PosScreenPortal>
   );
 }

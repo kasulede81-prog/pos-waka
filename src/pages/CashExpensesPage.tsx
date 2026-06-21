@@ -7,6 +7,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { dateKeyKampala } from "../lib/datesUg";
 import { PageHeader } from "../components/layout/PageHeader";
+import { ModalSheet } from "../components/layout/ModalSheet";
 import { useSessionActor } from "../context/SessionActorContext";
 import {
   CASH_EXPENSE_CATEGORY_KEYS,
@@ -293,29 +294,24 @@ export function CashExpensesPage({ lang }: Props) {
       </section>
 
       {voidExpenseId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal>
-          <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
-            <p className="text-lg font-black text-slate-900">{t(lang, "cashExpenseVoidConfirm")}</p>
-            <label className="mt-4 block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
-              <textarea
-                value={voidReason}
-                onChange={(e) => setVoidReason(e.target.value)}
-                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
-                placeholder={t(lang, "auditReasonPlaceholder")}
-              />
-            </label>
-            <div className="mt-6 flex gap-3">
+        <ModalSheet
+          open
+          onClose={() => setVoidExpenseId(null)}
+          zIndexClass="z-50"
+          align="center"
+          title={t(lang, "cashExpenseVoidConfirm")}
+          footer={
+            <div className="flex gap-3">
               <button
                 type="button"
-                className="flex-1 rounded-2xl border-2 py-3 font-bold"
+                className="min-h-[48px] flex-1 rounded-2xl border-2 py-3 font-bold"
                 onClick={() => setVoidExpenseId(null)}
               >
                 {t(lang, "cancel")}
               </button>
               <button
                 type="button"
-                className="flex-1 rounded-2xl bg-rose-600 py-3 font-black text-white"
+                className="min-h-[48px] flex-1 rounded-2xl bg-rose-600 py-3 font-black text-white"
                 onClick={() => {
                   const r = voidCashExpense(voidExpenseId, voidReason);
                   if (!r.ok) {
@@ -329,8 +325,18 @@ export function CashExpensesPage({ lang }: Props) {
                 {t(lang, "voidBtn")}
               </button>
             </div>
-          </div>
-        </div>
+          }
+        >
+          <label className="block">
+            <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+            <textarea
+              value={voidReason}
+              onChange={(e) => setVoidReason(e.target.value)}
+              className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+              placeholder={t(lang, "auditReasonPlaceholder")}
+            />
+          </label>
+        </ModalSheet>
       ) : null}
 
       <p className="text-center">

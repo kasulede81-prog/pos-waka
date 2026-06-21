@@ -6,6 +6,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
+import { KeyboardSafePage } from "../components/layout/KeyboardSafePage";
 import { dateKeyKampala } from "../lib/datesUg";
 import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
 import {
@@ -94,7 +95,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-5 pb-16">
+    <KeyboardSafePage className="space-y-5 pb-16">
       <PageHeader lang={lang} title={t(lang, "dayOpenTitle")} subtitle={t(lang, "dayOpenSub")} backFallback="/office/cash-drawer" />
 
       <ManageDrawerSettingsLink lang={lang} />
@@ -259,6 +260,6 @@ export function DayOpenPage({ lang }: { lang: Language }) {
           ) : null}
         </div>
       ) : null}
-    </div>
+    </KeyboardSafePage>
   );
 }

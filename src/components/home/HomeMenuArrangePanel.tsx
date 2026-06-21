@@ -13,7 +13,9 @@ import {
 } from "../../lib/launcherTiles";
 import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasPermission } from "../../lib/permissions";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+import type { Permission } from "../../types";
 import { HomeLauncherTile } from "./HomeLauncherTile";
 import { ShelfColorWheel } from "../pos/ShelfColorWheel";
 import { ShelfScaleSlider } from "../pos/ShelfScaleSlider";
@@ -29,6 +31,7 @@ type Props = {
 
 export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
   const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
   const savedOrderRaw = usePosStore((s) => s.preferences.launcherTileOrder);
   const layoutRaw = usePosStore((s) => s.preferences.launcherTileLayout);
   const setPreferences = usePosStore((s) => s.setPreferences);
@@ -37,7 +40,11 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const can = useCallback((perm?: Parameters<typeof hasPermission>[1]) => !perm || hasPermission(actor.role, perm), [actor.role]);
+  const can = useCallback(
+    (perm?: Permission) =>
+      !perm || hasEffectivePermission(actor.role, perm, snapshot, authMode),
+    [actor.role, snapshot, authMode],
+  );
 
   const { hero, secondary } = useMemo(
     () =>

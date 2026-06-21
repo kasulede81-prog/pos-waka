@@ -21,6 +21,10 @@ const config: CapacitorConfig = {
     androidScheme: "https",
   },
   plugins: {
+    Keyboard: {
+      resize: "body",
+      resizeOnFullScreen: true,
+    },
     SplashScreen: {
       launchShowDuration: 2500,
       launchAutoHide: false,

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { ModalSheet } from "../layout/ModalSheet";
 import { PosScreenPortal } from "../layout/PosScreenPortal";
 import { MoneyInput } from "../ui/MoneyInput";
 
@@ -41,19 +41,38 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
 
   return (
     <PosScreenPortal>
-    <AppModalOverlay
-      clearNav={false}
-      className="z-[var(--waka-z-pos-modal)] flex items-end justify-center bg-black/55 pb-[env(safe-area-inset-bottom,0px)] sm:items-center"
-      role="dialog"
-      aria-modal
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 pb-4 shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
+      <ModalSheet
+        open
+        onClose={onClose}
+        zIndexClass="z-[var(--waka-z-pos-modal)]"
+        clearNav={false}
+        title={t(lang, "cartDiscountTitle")}
+        footer={
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                onApply(0);
+                onClose();
+              }}
+              className="min-h-[52px] rounded-2xl border-2 border-slate-200 text-base font-bold text-slate-700"
+            >
+              {t(lang, "cartDiscountClear")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onApply(discountUgx);
+                onClose();
+              }}
+              className="min-h-[52px] rounded-2xl bg-waka-600 text-base font-black text-white"
+            >
+              {t(lang, "discountApply")}
+            </button>
+          </div>
+        }
       >
-        <h2 className="text-xl font-black text-slate-900">{t(lang, "cartDiscountTitle")}</h2>
-        <p className="mt-2 text-sm font-semibold text-slate-600">
+        <p className="text-sm font-semibold text-slate-600">
           {t(lang, "cartDiscountOriginal")}:{" "}
           <span className="font-black text-slate-900">UGX {lineSubtotalUgx.toLocaleString()}</span>
         </p>
@@ -110,31 +129,7 @@ export function CartSaleDiscountModal({ lang, open, lineSubtotalUgx, currentDisc
             })}
           </p>
         ) : null}
-
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              onApply(0);
-              onClose();
-            }}
-            className="min-h-[52px] rounded-2xl border-2 border-slate-200 text-base font-bold text-slate-700"
-          >
-            {t(lang, "cartDiscountClear")}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onApply(discountUgx);
-              onClose();
-            }}
-            className="min-h-[52px] rounded-2xl bg-waka-600 text-base font-black text-white"
-          >
-            {t(lang, "discountApply")}
-          </button>
-        </div>
-      </div>
-    </AppModalOverlay>
+      </ModalSheet>
     </PosScreenPortal>
   );
 }

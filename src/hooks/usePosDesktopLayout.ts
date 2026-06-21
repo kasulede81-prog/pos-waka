@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
+import { POS_DESKTOP_LAYOUT_MIN_PX, usesPosDesktopLayout } from "../lib/tabletLayout";
 
-/** Tailwind `lg` — desktop split-view POS from 1024px. */
-export const POS_DESKTOP_LAYOUT_MIN_PX = 1024;
-
-export function usesPosDesktopLayout(widthPx: number): boolean {
-  return widthPx >= POS_DESKTOP_LAYOUT_MIN_PX;
-}
+export { POS_DESKTOP_LAYOUT_MIN_PX, usesPosDesktopLayout };
 
 export function usePosDesktopLayout(): boolean {
   const [desktop, setDesktop] = useState(() =>

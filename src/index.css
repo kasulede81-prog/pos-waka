@@ -131,7 +131,7 @@ body {
     padding-bottom: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
   }
 
-  @media (min-width: 1024px) {
+  @media (min-width: 768px) {
     .waka-overlay-clear-nav {
       padding-bottom: 0;
     }
@@ -191,7 +191,7 @@ body {
     appearance: textfield;
   }
 
-  @media (min-width: 1024px) {
+  @media (min-width: 768px) {
     .scroll-main-chrome,
     .scroll-main-chrome--pos {
       scroll-padding-bottom: 2rem;

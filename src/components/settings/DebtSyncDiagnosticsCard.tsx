@@ -114,30 +114,52 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
       {rows.length === 0 ? (
         <p className="mt-4 text-sm text-stone-500">{t(lang, "debtSyncNoRows")}</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[32rem] text-left text-xs">
-            <thead>
-              <tr className="border-b border-stone-200 text-stone-500">
-                <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColCustomer")}</th>
-                <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColStored")}</th>
-                <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColExpected")}</th>
-                <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColDifference")}</th>
-                <th className="py-2 font-bold">{t(lang, "debtSyncColStatus")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 50).map((row) => (
-                <tr key={row.customerId} className="border-b border-stone-100">
-                  <td className="py-2 pr-2 font-semibold text-stone-900">{row.customerName}</td>
-                  <td className="py-2 pr-2 tabular-nums">UGX {row.actual.toLocaleString()}</td>
-                  <td className="py-2 pr-2 tabular-nums">UGX {row.expected.toLocaleString()}</td>
-                  <td className="py-2 pr-2 tabular-nums">{row.delta >= 0 ? "+" : ""}{row.delta.toLocaleString()}</td>
-                  <td className="py-2 font-bold">{statusLabel(lang, row.status)}</td>
+        <>
+          <div className="mt-4 space-y-2 md:hidden">
+            {rows.slice(0, 50).map((row) => (
+              <div key={row.customerId} className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
+                <p className="font-black text-stone-900">{row.customerName}</p>
+                <dl className="mt-2 grid grid-cols-2 gap-x-2 gap-y-1">
+                  <dt className="text-stone-500">{t(lang, "debtSyncColStored")}</dt>
+                  <dd className="text-right tabular-nums font-semibold">UGX {row.actual.toLocaleString()}</dd>
+                  <dt className="text-stone-500">{t(lang, "debtSyncColExpected")}</dt>
+                  <dd className="text-right tabular-nums font-semibold">UGX {row.expected.toLocaleString()}</dd>
+                  <dt className="text-stone-500">{t(lang, "debtSyncColDifference")}</dt>
+                  <dd className="text-right tabular-nums font-semibold">
+                    {row.delta >= 0 ? "+" : ""}
+                    {row.delta.toLocaleString()}
+                  </dd>
+                  <dt className="text-stone-500">{t(lang, "debtSyncColStatus")}</dt>
+                  <dd className="text-right font-bold">{statusLabel(lang, row.status)}</dd>
+                </dl>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 hidden md:block">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-stone-200 text-stone-500">
+                  <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColCustomer")}</th>
+                  <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColStored")}</th>
+                  <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColExpected")}</th>
+                  <th className="py-2 pr-2 font-bold">{t(lang, "debtSyncColDifference")}</th>
+                  <th className="py-2 font-bold">{t(lang, "debtSyncColStatus")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.slice(0, 50).map((row) => (
+                  <tr key={row.customerId} className="border-b border-stone-100">
+                    <td className="py-2 pr-2 font-semibold text-stone-900">{row.customerName}</td>
+                    <td className="py-2 pr-2 tabular-nums">UGX {row.actual.toLocaleString()}</td>
+                    <td className="py-2 pr-2 tabular-nums">UGX {row.expected.toLocaleString()}</td>
+                    <td className="py-2 pr-2 tabular-nums">{row.delta >= 0 ? "+" : ""}{row.delta.toLocaleString()}</td>
+                    <td className="py-2 font-bold">{statusLabel(lang, row.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </article>
   );

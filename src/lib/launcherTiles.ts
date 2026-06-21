@@ -10,6 +10,7 @@ import {
   Settings,
   Briefcase,
   Receipt,
+  TrendingUp,
 } from "lucide-react";
 import type { LauncherTileColor, LauncherTileConfig, Permission } from "../types";
 import { POS_RECEIPTS_ROUTE, POS_SELL_ROUTE, POS_SHOP_ROUTE } from "./posNavigation";
@@ -101,6 +102,15 @@ export const LAUNCHER_TILE_CATALOG: LauncherTileDef[] = [
     hideable: true,
   },
   {
+    id: "profit",
+    labelKey: "desktopHomeTileProfit",
+    to: "/office/profit",
+    Icon: TrendingUp,
+    perm: "reports.profit",
+    group: "management",
+    hideable: true,
+  },
+  {
     id: "investigation",
     labelKey: "desktopHomeTileInvestigation",
     to: "/office/audit-center",
@@ -128,6 +138,7 @@ export const DEFAULT_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [
   "salesHistory",
   "shop",
   "reports",
+  "profit",
   "settings",
 ];
 
@@ -140,6 +151,7 @@ export const DEFAULT_LAUNCHER_TILE_LAYOUT: Record<string, LauncherTileConfig> = 
   salesHistory: { color: "green" },
   shop: { color: "orange" },
   reports: { color: "green", customColor: "#0d9488", scale: 50 },
+  profit: { color: "green", customColor: "#059669", scale: 45 },
   settings: { color: "orange" },
 };
 

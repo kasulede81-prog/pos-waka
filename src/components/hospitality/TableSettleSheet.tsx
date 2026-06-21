@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatUgx } from "../../lib/formatUgx";
+import { ModalSheet } from "../layout/ModalSheet";
 
 type PaymentMethod = "cash" | "mobile_money" | "mixed";
 
@@ -43,9 +44,13 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/45 p-3 sm:items-center">
-      <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl">
-        <div className="mb-4 flex items-start justify-between gap-3">
+    <ModalSheet
+      open
+      onClose={onClose}
+      zIndexClass="z-[60]"
+      clearNav={false}
+      title={
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-xl font-black text-stone-950">{t(lang, "tableSettleTitle")}</h2>
             <p className="mt-1 text-2xl font-black text-waka-700">{formatUgx(totalUgx)}</p>
@@ -59,59 +64,17 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
               </ul>
             ) : null}
           </div>
-          <button type="button" className="text-sm font-bold text-slate-500" onClick={onClose} disabled={busy}>
+          <button
+            type="button"
+            className="min-h-[44px] shrink-0 px-2 text-sm font-bold text-slate-500"
+            onClick={onClose}
+            disabled={busy}
+          >
             {t(lang, "cancel")}
           </button>
         </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          {(["cash", "mobile_money", "mixed"] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMethod(m)}
-              className={clsx(
-                "min-h-11 rounded-xl border text-xs font-black sm:text-sm",
-                method === m ? "border-waka-500 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-700",
-              )}
-            >
-              {m === "cash" ? t(lang, "paymentMethod_cash") : m === "mobile_money" ? t(lang, "paymentMethod_mobile_money") : t(lang, "paymentMethod_mixed")}
-            </button>
-          ))}
-        </div>
-
-        {(method === "cash" || method === "mixed") && (
-          <label className="mt-4 block">
-            <span className="text-sm font-bold text-slate-700">{t(lang, "paymentCashLabel")}</span>
-            <input
-              value={cashInput}
-              onChange={(e) => setCashInput(e.target.value.replace(/[^\d]/g, ""))}
-              inputMode="numeric"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-xl font-black"
-              placeholder="0"
-            />
-          </label>
-        )}
-
-        {(method === "mobile_money" || method === "mixed") && method === "mixed" && (
-          <label className="mt-3 block">
-            <span className="text-sm font-bold text-slate-700">{t(lang, "paymentMobileMoneyLabel")}</span>
-            <input
-              value={momoInput}
-              onChange={(e) => setMomoInput(e.target.value.replace(/[^\d]/g, ""))}
-              inputMode="numeric"
-              className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-xl font-black"
-              placeholder="0"
-            />
-          </label>
-        )}
-
-        {method === "cash" && changeUgx > 0 ? (
-          <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
-            {t(lang, "paymentChangeDueLabel")}: {formatUgx(changeUgx)}
-          </p>
-        ) : null}
-
+      }
+      footer={
         <button
           type="button"
           disabled={busy || !valid || totalUgx <= 0}
@@ -122,11 +85,63 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
               changeGivenUgx: changeUgx,
             })
           }
-          className="mt-5 flex min-h-14 w-full items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-50"
+          className="flex min-h-14 w-full items-center justify-center rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-50"
         >
           {busy ? "…" : t(lang, "tableSettleConfirm")}
         </button>
+      }
+    >
+      <div className="grid grid-cols-3 gap-2">
+        {(["cash", "mobile_money", "mixed"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => setMethod(m)}
+            className={clsx(
+              "min-h-11 rounded-xl border text-xs font-black sm:text-sm",
+              method === m ? "border-waka-500 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-700",
+            )}
+          >
+            {m === "cash"
+              ? t(lang, "paymentMethod_cash")
+              : m === "mobile_money"
+                ? t(lang, "paymentMethod_mobile_money")
+                : t(lang, "paymentMethod_mixed")}
+          </button>
+        ))}
       </div>
-    </div>
+
+      {(method === "cash" || method === "mixed") && (
+        <label className="mt-4 block">
+          <span className="text-sm font-bold text-slate-700">{t(lang, "paymentCashLabel")}</span>
+          <input
+            value={cashInput}
+            onChange={(e) => setCashInput(e.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-200 px-4 py-3 text-xl font-black"
+            placeholder="0"
+          />
+        </label>
+      )}
+
+      {method === "mixed" && (
+        <label className="mt-3 block">
+          <span className="text-sm font-bold text-slate-700">{t(lang, "paymentMobileMoneyLabel")}</span>
+          <input
+            value={momoInput}
+            onChange={(e) => setMomoInput(e.target.value.replace(/[^\d]/g, ""))}
+            inputMode="numeric"
+            className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-200 px-4 py-3 text-xl font-black"
+            placeholder="0"
+          />
+        </label>
+      )}
+
+      {method === "cash" && changeUgx > 0 ? (
+        <p className="mt-3 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
+          {t(lang, "paymentChangeDueLabel")}: {formatUgx(changeUgx)}
+        </p>
+      ) : null}
+    </ModalSheet>
   );
 }

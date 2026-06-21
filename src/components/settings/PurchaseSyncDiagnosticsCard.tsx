@@ -139,30 +139,43 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
       {rows.length === 0 ? (
         <p className="mt-4 text-sm text-stone-500">{t(lang, "purchaseSyncNoRows")}</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[32rem] text-left text-xs">
-            <thead>
-              <tr className="border-b border-stone-200 text-stone-500">
-                <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColKind")}</th>
-                <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColPurchase")}</th>
-                <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColSupplier")}</th>
-                <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColDetail")}</th>
-                <th className="py-2 font-bold">{t(lang, "purchaseSyncColStatus")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.slice(0, 50).map((row, idx) => (
-                <tr key={`${row.purchaseId}-${row.kind}-${idx}`} className="border-b border-stone-100">
-                  <td className="py-2 pr-2 font-semibold text-stone-900">{kindLabel(lang, row.kind)}</td>
-                  <td className="py-2 pr-2 font-mono text-[10px] text-stone-600">{row.purchaseId.slice(0, 8)}…</td>
-                  <td className="py-2 pr-2">{row.supplierName}</td>
-                  <td className="py-2 pr-2 text-stone-600">{row.detail || "—"}</td>
-                  <td className="py-2 font-bold">{statusLabel(lang, row.status)}</td>
+        <>
+          <div className="mt-4 space-y-2 md:hidden">
+            {rows.slice(0, 50).map((row, idx) => (
+              <div key={`${row.purchaseId}-${row.kind}-${idx}`} className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs">
+                <p className="font-black text-stone-900">{kindLabel(lang, row.kind)}</p>
+                <p className="mt-1 font-mono text-[10px] text-stone-600">{row.purchaseId.slice(0, 8)}…</p>
+                <p className="mt-1 font-semibold text-stone-800">{row.supplierName}</p>
+                {row.detail ? <p className="mt-1 text-stone-600">{row.detail}</p> : null}
+                <p className="mt-2 font-bold">{statusLabel(lang, row.status)}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 hidden md:block">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-stone-200 text-stone-500">
+                  <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColKind")}</th>
+                  <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColPurchase")}</th>
+                  <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColSupplier")}</th>
+                  <th className="py-2 pr-2 font-bold">{t(lang, "purchaseSyncColDetail")}</th>
+                  <th className="py-2 font-bold">{t(lang, "purchaseSyncColStatus")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.slice(0, 50).map((row, idx) => (
+                  <tr key={`${row.purchaseId}-${row.kind}-${idx}`} className="border-b border-stone-100">
+                    <td className="py-2 pr-2 font-semibold text-stone-900">{kindLabel(lang, row.kind)}</td>
+                    <td className="py-2 pr-2 font-mono text-[10px] text-stone-600">{row.purchaseId.slice(0, 8)}…</td>
+                    <td className="py-2 pr-2">{row.supplierName}</td>
+                    <td className="py-2 pr-2 text-stone-600">{row.detail || "—"}</td>
+                    <td className="py-2 font-bold">{statusLabel(lang, row.status)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </article>
   );

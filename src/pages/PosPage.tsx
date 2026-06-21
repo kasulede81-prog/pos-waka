@@ -37,7 +37,8 @@ import { lineDiscountUgx } from "../lib/saleAdjustments";
 import { PosPageScrollSpacer } from "../components/layout/posScrollSpacer";
 import { PosScreenPortal } from "../components/layout/PosScreenPortal";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
-import { useVisualViewportInset } from "../hooks/useVisualViewportInset";
+import { useKeyboardInset } from "../hooks/useKeyboardInset";
+import { combinedBottomInsetStyle } from "../lib/safeAreaInsets";
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
@@ -1160,7 +1161,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const moneyPresets = selected?.quickPresetsMoneyUgx?.filter((x) => x > 0) ?? [];
   const qtyPresets = selected?.quickPresetsQty?.filter((x) => x > 0) ?? [];
   const sellPresets = selected ? getPosSellPresets(selected) : [];
-  const keyboardInset = useVisualViewportInset();
+  const keyboardInset = useKeyboardInset();
+  const checkoutBottomPad = combinedBottomInsetStyle(keyboardInset) ?? "env(safe-area-inset-bottom, 0px)";
 
   const adjustFocusedCartQty = useCallback(
     (backwards: boolean) => {
@@ -1427,8 +1429,8 @@ export function PosPage({ lang }: { lang: Language }) {
 
       <div
         className={clsx(
-          products.length > 0 && "lg:grid lg:items-start lg:gap-4",
-          products.length > 0 && "lg:grid-cols-[minmax(0,1fr)_min(400px,36%)]",
+          products.length > 0 && "md:grid md:items-start md:gap-4",
+          products.length > 0 && "md:grid-cols-[minmax(0,1fr)_min(400px,36%)]",
         )}
       >
         <div ref={catalogRef} className="min-w-0 space-y-2">
@@ -1725,9 +1727,9 @@ export function PosPage({ lang }: { lang: Language }) {
       {mountMobileCheckoutOverlay ? (
         <PosScreenPortal>
           <div
-            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col pt-[env(safe-area-inset-top,0px)] lg:hidden"
+            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col pt-[env(safe-area-inset-top,0px)] md:hidden"
             style={{
-              paddingBottom: keyboardInset > 0 ? keyboardInset : "env(safe-area-inset-bottom, 0px)",
+              paddingBottom: checkoutBottomPad,
             }}
             role="dialog"
             aria-modal
@@ -1772,7 +1774,7 @@ export function PosPage({ lang }: { lang: Language }) {
           className="waka-overlay-full fixed inset-0 flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))] waka-overlay-clear-nav"
           style={
             keyboardInset > 0
-              ? { paddingBottom: keyboardInset }
+              ? { paddingBottom: combinedBottomInsetStyle(keyboardInset) ?? checkoutBottomPad }
               : undefined
           }
           role="dialog"

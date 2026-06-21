@@ -6,7 +6,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { AppModalOverlay } from "../components/layout/AppModalOverlay";
+import { ModalSheet } from "../components/layout/ModalSheet";
 export function SuppliersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const canView = hasPermission(actor.role, "suppliers.view");
@@ -147,13 +147,33 @@ export function SuppliersPage({ lang }: { lang: Language }) {
       </section>
 
       {paying ? (
-        <AppModalOverlay className="z-[56] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal>
-          <form
-            onSubmit={submitPay}
-            className="w-full max-w-md rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"
-          >
-            <p className="text-lg font-black text-slate-900">{t(lang, "supplierPayTitle")}</p>
-            <p className="mt-1 text-sm text-slate-600">{paying.name}</p>
+        <ModalSheet
+          open
+          onClose={() => setPayId(null)}
+          zIndexClass="z-[56]"
+          clearNav={false}
+          title={t(lang, "supplierPayTitle")}
+          footer={
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                form="supplier-pay-form"
+                className="min-h-[48px] flex-1 rounded-2xl bg-waka-600 py-3 font-black text-white"
+              >
+                {t(lang, "supplierPaySave")}
+              </button>
+              <button
+                type="button"
+                className="min-h-[48px] rounded-2xl border-2 px-4 py-3 font-bold"
+                onClick={() => setPayId(null)}
+              >
+                {t(lang, "cancel")}
+              </button>
+            </div>
+          }
+        >
+          <form id="supplier-pay-form" onSubmit={submitPay}>
+            <p className="text-sm text-slate-600">{paying.name}</p>
             <p className="mt-2 text-sm font-bold text-amber-900">
               {t(lang, "supplierBalanceLabel")}: UGX {paying.balanceOwedUgx.toLocaleString()}
             </p>
@@ -163,19 +183,11 @@ export function SuppliersPage({ lang }: { lang: Language }) {
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 inputMode="numeric"
-                className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                className="mt-1 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
               />
             </label>
-            <div className="mt-4 flex gap-2">
-              <button type="submit" className="flex-1 rounded-2xl bg-waka-600 py-3 font-black text-white">
-                {t(lang, "supplierPaySave")}
-              </button>
-              <button type="button" className="rounded-2xl border-2 px-4 py-3 font-bold" onClick={() => setPayId(null)}>
-                {t(lang, "cancel")}
-              </button>
-            </div>
           </form>
-        </AppModalOverlay>
+        </ModalSheet>
       ) : null}
     </div>
   );

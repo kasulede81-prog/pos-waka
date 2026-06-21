@@ -1,8 +1,7 @@
 import type { Language } from "../types";
 import { t } from "./i18n";
-import { isNativePrintPlatform } from "./nativeReceiptPrint";
 
-/** Primary receipt/day-close print button — native uses share-sheet fallback. */
+/** Primary receipt/day-close print button label. */
 export function receiptPrintActionLabel(lang: Language): string {
-  return isNativePrintPlatform() ? t(lang, "receiptPrintOrShare") : t(lang, "receiptPrint");
+  return t(lang, "receiptPrint");
 }

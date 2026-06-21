@@ -39,7 +39,7 @@ export function PosOperationalNav({ lang, sellLabelKey }: Props) {
   if (!canSell) return null;
 
   return (
-    <nav className="hidden lg:block" aria-label={t(lang, "posOperationalNavLabel")}>
+    <nav className="hidden md:block" aria-label={t(lang, "posOperationalNavLabel")}>
       <ul className="flex flex-wrap items-center gap-2 rounded-2xl border border-stone-200 bg-white p-2 shadow-waka-sm">
         <li>
           <button
