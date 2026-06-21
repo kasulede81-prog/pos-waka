@@ -25,7 +25,7 @@ import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
-import { shouldPausePosBackgroundWork } from "../lib/backgroundWorkPolicy";
+import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { setCachedShopId } from "../lib/shopSyncContext";
@@ -3360,9 +3360,6 @@ async function syncShopWithCloudInner(opts?: {
     return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
   }
 
-  if (shouldPausePosBackgroundWork()) {
-    return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
-  }
   if (hasSupabaseConfig && supabase) {
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
@@ -3370,11 +3367,17 @@ async function syncShopWithCloudInner(opts?: {
       return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
     }
   }
-  const doPull =
-    opts?.pull === false ? false : opts?.pull === true ? true : shouldPullFromCloud();
+  const pullBlocked = shouldPausePosBackgroundPull();
+  const doPull = pullBlocked
+    ? false
+    : opts?.pull === false
+      ? false
+      : opts?.pull === true
+        ? true
+        : shouldPullFromCloud();
   const pulled = doPull ? await pullCloudAndMergeIntoStore({ forceFull: opts?.forceFull }) : false;
   const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
-  if (getDeviceOnline()) {
+  if (getDeviceOnline() && !pullBlocked) {
     await pullHospitalityStateFromCloud(opts?.forceFull === true);
   }
   const { push, queueFailed } = await pushShopPendingToCloudInner();
@@ -3407,7 +3410,10 @@ let backgroundSyncTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function scheduleBackgroundCloudSync(opts?: { pull?: boolean; delayMs?: number }): void {
   if (!hasSupabaseConfig) return;
-  if (shouldPausePosBackgroundWork()) return;
+  if (shouldPausePosBackgroundPull()) {
+    void import("../lib/posPushScheduler").then(({ schedulePushPendingUploads }) => schedulePushPendingUploads());
+    return;
+  }
   if (backgroundSyncTimer != null) return;
   const delay = opts?.delayMs ?? 0;
   backgroundSyncTimer = globalThis.setTimeout(() => {

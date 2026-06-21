@@ -140,6 +140,14 @@ export function SyncHealthDashboard({ lang, lazy = false, defaultExpanded = !laz
           <Row label="Last successful push" value={fmt(snap.lastSuccessfulPush, lang)} />
           <Row label="Last sync attempt" value={fmt(snap.lastSyncAttempt, lang)} />
           <Row label="Last issue" value={snap.lastIssueCode} warn={snap.lastIssueCode !== "none"} />
+          <Row label="POS uploads attempted" value={String(snap.posPushAttempts)} />
+          <Row label="POS uploads successful" value={String(snap.posPushSuccesses)} />
+          <Row
+            label="POS uploads failed"
+            value={String(snap.posPushFailures)}
+            warn={snap.posPushFailures > 0}
+          />
+          <Row label="Last POS upload" value={fmt(snap.lastPosPushAt, lang)} />
         </dl>
       )}
 

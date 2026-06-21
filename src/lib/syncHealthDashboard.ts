@@ -32,6 +32,10 @@ export type SyncHealthDashboardSnapshot = {
   lastSyncAttempt: string | null;
   lastIssueCode: "none" | "partial" | "error";
   entityPullErrors: Record<string, string>;
+  posPushAttempts: number;
+  posPushSuccesses: number;
+  posPushFailures: number;
+  lastPosPushAt: string | null;
 };
 
 function oldestPendingCreatedAt(queue: SyncOperation[]): string | null {
@@ -80,5 +84,9 @@ export async function buildSyncHealthDashboardSnapshot(): Promise<SyncHealthDash
     lastSyncAttempt: health.lastAttemptAt,
     lastIssueCode: health.lastIssueCode,
     entityPullErrors: readLastEntityPullErrors(),
+    posPushAttempts: health.posPushAttempts ?? 0,
+    posPushSuccesses: health.posPushSuccesses ?? 0,
+    posPushFailures: health.posPushFailures ?? 0,
+    lastPosPushAt: health.lastPosPushAt ?? null,
   };
 }

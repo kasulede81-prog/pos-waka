@@ -24,6 +24,14 @@ export type SyncHealthMeta = {
   lastOnlineAt: string | null;
   /** Queue health for owner diagnostics. */
   queueHealth: "healthy" | "degraded" | "backing_off";
+  /** POS push-only upload diagnostics (no cloud pull). */
+  posPushAttempts?: number;
+  posPushSuccesses?: number;
+  posPushFailures?: number;
+  lastPosPushAt?: string | null;
+  lastPosPushSuccessAt?: string | null;
+  lastPosPushSkipReason?: string | null;
+  posPushUploadActive?: boolean;
 };
 
 const empty: SyncHealthMeta = {
@@ -36,6 +44,13 @@ const empty: SyncHealthMeta = {
   offlineSinceAt: null,
   lastOnlineAt: null,
   queueHealth: "healthy",
+  posPushAttempts: 0,
+  posPushSuccesses: 0,
+  posPushFailures: 0,
+  lastPosPushAt: null,
+  lastPosPushSuccessAt: null,
+  lastPosPushSkipReason: null,
+  posPushUploadActive: false,
 };
 
 export function readSyncHealthMeta(): SyncHealthMeta {
@@ -56,6 +71,13 @@ export function readSyncHealthMeta(): SyncHealthMeta {
       lastOnlineAt: typeof o.lastOnlineAt === "string" ? o.lastOnlineAt : null,
       queueHealth:
         o.queueHealth === "degraded" || o.queueHealth === "backing_off" ? o.queueHealth : "healthy",
+      posPushAttempts: typeof o.posPushAttempts === "number" ? o.posPushAttempts : 0,
+      posPushSuccesses: typeof o.posPushSuccesses === "number" ? o.posPushSuccesses : 0,
+      posPushFailures: typeof o.posPushFailures === "number" ? o.posPushFailures : 0,
+      lastPosPushAt: typeof o.lastPosPushAt === "string" ? o.lastPosPushAt : null,
+      lastPosPushSuccessAt: typeof o.lastPosPushSuccessAt === "string" ? o.lastPosPushSuccessAt : null,
+      lastPosPushSkipReason: typeof o.lastPosPushSkipReason === "string" ? o.lastPosPushSkipReason : null,
+      posPushUploadActive: o.posPushUploadActive === true,
     };
   } catch {
     return { ...empty };

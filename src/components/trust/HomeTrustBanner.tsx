@@ -24,7 +24,7 @@ export function HomeTrustBanner({ lang }: Props) {
       ) : null}
       {sync.isOnline && sync.pendingCount > 0 ? (
         <p className="text-sm font-semibold text-amber-950">
-          {tTemplate(lang, "autoSyncPendingBanner", { count: String(sync.pendingCount) })}
+          {tTemplate(lang, "posUploadPendingCount", { count: String(sync.pendingCount) })}
         </p>
       ) : null}
       {sync.isOnline && uploadIssues > 0 ? (

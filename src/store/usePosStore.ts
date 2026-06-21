@@ -2577,6 +2577,7 @@ export const usePosStore = create<PosState>((set, get) => {
     });
 
     void queueRemote("pending_sales", { saleId: sale.id });
+    void import("../lib/posPushScheduler").then(({ schedulePushPendingUploads }) => schedulePushPendingUploads());
     if (closedSessionId) queueHospitalityChange({ sessionIds: [closedSessionId] });
     for (const entry of auditEntries) {
       void queueRemote("audit_log", { entry });
@@ -5091,8 +5092,7 @@ async function runPostBootstrapTasks(): Promise<void> {
 
   const key = getActiveAccountKey();
   if (!hasSupabaseConfig || !key?.startsWith("sb:")) return;
-  const { shouldPausePosBackgroundWork } = await import("../lib/backgroundWorkPolicy");
-  if (shouldPausePosBackgroundWork()) return;
+  const { shouldPausePosBackgroundPull } = await import("../lib/backgroundWorkPolicy");
 
   const { supabase: sb } = await import("../lib/supabase");
   if (!sb) return;
@@ -5108,8 +5108,13 @@ async function runPostBootstrapTasks(): Promise<void> {
   const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");
   if (await shouldRequireRecoveryLock().catch(() => true)) return;
   const { isLocalShopDataEmpty } = await import("../lib/cloudSnapshotSync");
-  const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
   const localEmpty = isLocalShopDataEmpty();
+  if (shouldPausePosBackgroundPull()) {
+    const { schedulePushPendingUploads } = await import("../lib/posPushScheduler");
+    schedulePushPendingUploads();
+    return;
+  }
+  const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
   scheduleBackgroundCloudSync({
     pull: localEmpty,
     delayMs: isNativeApp() ? 2_500 : 800,

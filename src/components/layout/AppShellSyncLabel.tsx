@@ -28,15 +28,21 @@ function label(
   online: boolean,
   syncErrors: number,
   queueHealth: "healthy" | "degraded" | "backing_off",
+  pullPaused: boolean,
+  uploadPausedReason: string | null,
 ): string {
-  if (!online) return t(lang, "autoSyncOfflineBanner");
-  if (syncing) return t(lang, "syncingShort");
+  if (!online) return t(lang, "posUploadWaitingNetwork");
+  if (uploadPausedReason === "recovery_lock" || uploadPausedReason === "org_blocked") {
+    return t(lang, "posUploadPaused");
+  }
+  if (syncing) return t(lang, "posUploadInProgress");
   if (syncErrors > 0) return tTemplate(lang, "syncErrorCount", { count: String(syncErrors) });
   if (queueHealth === "backing_off") return t(lang, "autoSyncQueueBackoff");
   if (queueHealth === "degraded") return t(lang, "autoSyncQueueDegraded");
   if (pendingCount > 0) {
-    return tTemplate(lang, "autoSyncPendingBanner", { count: String(pendingCount) });
+    return tTemplate(lang, "posUploadPendingCount", { count: String(pendingCount) });
   }
+  if (pullPaused) return t(lang, "posUploadComplete");
   return t(lang, "autoSyncSyncedBanner");
 }
 
@@ -49,14 +55,23 @@ export const AppShellSyncLabel = memo(function AppShellSyncLabel({
   inverted?: boolean;
 }) {
   const { isOnline } = useOfflineStatus();
-  const { syncing, pendingCount, health } = useSyncStatus();
+  const { syncing, pendingCount, health, pullPaused } = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
   const salesHydration = usePosStore((s) => s.salesHistoryHydration);
   const needsAction = isOnline && syncErrors > 0;
 
-  const syncLine = label(lang, syncing, pendingCount, isOnline, syncErrors, health.queueHealth);
+  const syncLine = label(
+    lang,
+    syncing,
+    pendingCount,
+    isOnline,
+    syncErrors,
+    health.queueHealth,
+    pullPaused,
+    health.lastPosPushSkipReason ?? null,
+  );
   const offlineDur = !isOnline ? offlineDurationLabel(health.offlineSinceAt) : null;
-  const lastSuccess = fmtShort(health.lastSuccessAt, lang);
+  const lastSuccess = fmtShort(health.lastPosPushSuccessAt ?? health.lastSuccessAt, lang);
 
   const hydrationLine =
     salesHydration?.active
