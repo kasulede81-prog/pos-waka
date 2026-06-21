@@ -6,6 +6,7 @@ import {
   MAX_CLOUD_SNAPSHOT_BYTES,
   recordSnapshotUploadTrimAnalysis,
 } from "./snapshotTrimDiagnostics";
+import { storeHasCoreRecoveryData } from "./recoveryHydration";
 import { hasSupabaseConfig, supabase } from "./supabase";
 import { yieldUiTick } from "./uiYield";
 
@@ -105,6 +106,15 @@ async function trimSnapshotForUpload(snap: PersistedSnapshot): Promise<Persisted
   return { ...smaller, sales: sales.slice(-300) };
 }
 
+/** True when snapshot envelope contains at least one core business entity. */
+export function snapshotContainsCoreData(snapshot: PersistedSnapshot): boolean {
+  return (
+    (snapshot.products?.length ?? 0) > 0 ||
+    (snapshot.sales?.length ?? 0) > 0 ||
+    (snapshot.customers?.length ?? 0) > 0
+  );
+}
+
 export function isLocalShopDataEmpty(): boolean {
   const s = usePosStore.getState();
   const shifts = s.preferences.shifts ?? [];
@@ -119,28 +129,45 @@ export function isLocalShopDataEmpty(): boolean {
   );
 }
 
-/** Probe Supabase for existing shop data (snapshot or catalog rows). */
-export async function probeCloudShopHasData(): Promise<{
+export type CloudShopProbeResult = {
   hasSnapshot: boolean;
   snapshotUpdatedAt: string | null;
   hasCloudProducts: boolean;
-}> {
+  snapshotRowFound: boolean;
+  snapshotContainsCoreData: boolean;
+};
+
+/** Probe Supabase for existing shop data (snapshot or catalog rows). */
+export async function probeCloudShopHasData(): Promise<CloudShopProbeResult> {
   const ctx = await resolveShopCtx();
   if (!ctx || !supabase) {
     throw new Error("cloud_probe_no_shop_context");
   }
 
-  let hasSnapshot = false;
+  let snapshotRowFound = false;
+  let snapshotContainsCoreDataFlag = false;
   let snapshotUpdatedAt: string | null = null;
   const { data: snapRow } = await supabase
     .from("shop_cloud_snapshots")
-    .select("updated_at")
+    .select("snapshot, updated_at")
     .eq("shop_id", ctx.shopId)
     .maybeSingle();
-  if (snapRow?.updated_at) {
-    hasSnapshot = true;
-    snapshotUpdatedAt = String(snapRow.updated_at);
+  if (snapRow) {
+    snapshotRowFound = true;
+    if (snapRow.updated_at) {
+      snapshotUpdatedAt = String(snapRow.updated_at);
+    }
+    if (snapRow.snapshot) {
+      try {
+        const envelope = validateImportEnvelope(snapRow.snapshot);
+        snapshotContainsCoreDataFlag = snapshotContainsCoreData(envelope.snapshot);
+      } catch {
+        snapshotContainsCoreDataFlag = false;
+      }
+    }
   }
+
+  const hasSnapshot = snapshotRowFound && snapshotContainsCoreDataFlag;
 
   let hasCloudProducts = false;
   const { count } = await supabase
@@ -149,7 +176,13 @@ export async function probeCloudShopHasData(): Promise<{
     .eq("shop_id", ctx.shopId);
   hasCloudProducts = (count ?? 0) > 0;
 
-  return { hasSnapshot, snapshotUpdatedAt, hasCloudProducts };
+  return {
+    hasSnapshot,
+    snapshotUpdatedAt,
+    hasCloudProducts,
+    snapshotRowFound,
+    snapshotContainsCoreData: snapshotContainsCoreDataFlag,
+  };
 }
 
 /** Upload full local snapshot to Supabase (debounced; call after sales/products are synced when possible). */
@@ -242,6 +275,10 @@ export async function restoreShopFromCloudSnapshot(
     return false;
   }
 
+  if (!snapshotContainsCoreData(envelope.snapshot)) {
+    return false;
+  }
+
   const restoreOpts = { onProgress, cloudRecovery: opts?.cloudRecovery };
   await applyRestoredSnapshotFromBackup(envelope.snapshot, restoreOpts);
   await yieldUiTick();
@@ -250,5 +287,6 @@ export async function restoreShopFromCloudSnapshot(
   await pullDayDrawerOpensForRecovery(ctx).catch(() => false);
 
   await persistRestoredSnapshotToDisk(undefined, { cloudRecovery: opts?.cloudRecovery });
-  return true;
+
+  return storeHasCoreRecoveryData();
 }

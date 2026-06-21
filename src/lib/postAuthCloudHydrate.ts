@@ -16,8 +16,11 @@ import {
   completeCloudRecoverySession,
   failCloudRecoverySession,
   getCloudRecoverySession,
+  logRecoveryDiagnosticEvent,
+  recordRecoveryIntegrityDiagnostics,
   reportRecoveryStep,
   resetCloudRecoverySessionForRetry,
+  recordRecoveryCertification,
   syncRecoveryRestoredCountsFromStore,
   type CloudRecoveryEntityCounts,
 } from "./cloudRecoverySession";
@@ -31,6 +34,11 @@ import {
 } from "./cloudRecoveryGate";
 import type { CloudRecoveryValidationResult } from "./cloudRecoveryValidator";
 import { ensureRecoverySessionActor } from "./recoverySystemActor";
+import {
+  RECOVERY_EMPTY_STORE_ERROR,
+  storeHasCoreRecoveryData,
+  verifyRecoveryHydration,
+} from "./recoveryHydration";
 import { recordStartupRecoveryFailure } from "./startupDiagnostics";
 
 const HYDRATE_COOLDOWN_MS = 120_000;
@@ -106,6 +114,63 @@ function recoveryErrorFromUnknown(err: unknown, fallbackKey: string): { message:
   return { message: fallbackKey, errorKey: fallbackKey };
 }
 
+function assertRecoveryHydratedOrThrow(): void {
+  const verification = verifyRecoveryHydration();
+  recordRecoveryIntegrityDiagnostics({
+    finalStoreCounts: readStoreRecoveryCounts(),
+    recoveryInvariantPassed: verification.hydrated,
+  });
+  if (!verification.hydrated) {
+    throw new Error(RECOVERY_EMPTY_STORE_ERROR);
+  }
+}
+
+function recordProbeIntegrityDiagnostics(probe: CloudShopProbe): void {
+  recordRecoveryIntegrityDiagnostics({
+    snapshotRowFound: probe.snapshotRowFound,
+    snapshotContainsCoreData: probe.snapshotContainsCoreData,
+  });
+}
+
+async function runFullCloudPull(opts: {
+  onStep?: (
+    step: import("./cloudRecoverySession").CloudRecoveryStepId,
+    counts?: Partial<import("./cloudRecoverySession").CloudRecoveryEntityCounts>,
+  ) => void;
+  cloudRecovery: boolean;
+}): Promise<void> {
+  recordRecoveryIntegrityDiagnostics({ fullPullAttempted: true });
+  const { pullCloudAndMergeIntoStore } = await import("../offline/cloudSync");
+  const merged = await pullCloudAndMergeIntoStore({
+    forceFull: true,
+    onRecoveryStep: opts.onStep,
+    cloudRecovery: opts.cloudRecovery,
+  });
+  if (!merged) {
+    if (opts.cloudRecovery) {
+      const errorKey = "cloud_merge_failed";
+      const message = "Cloud data merge did not complete";
+      failCloudRecoverySession(message, null, errorKey);
+      recordStartupRecoveryFailure(message, errorKey);
+      throw new Error(errorKey);
+    }
+    return;
+  }
+  syncRestoredCountsFromStore();
+  recordRecoveryIntegrityDiagnostics({
+    fullPullDownloadedCounts: { ...getCloudRecoverySession().downloadedCounts },
+    finalStoreCounts: readStoreRecoveryCounts(),
+  });
+  if (opts.cloudRecovery) {
+    assertRecoveryHydratedOrThrow();
+    const { pullAndMergeStaffAccountsForRecovery } = await import("./staffRecovery");
+    const staffCount = await pullAndMergeStaffAccountsForRecovery();
+    reportRecoveryStep("staff");
+    void staffCount;
+    syncRestoredCountsFromStore();
+  }
+}
+
 async function runCloudDataRestore(opts: {
   forcePull?: boolean;
   onProgress?: (percent: number) => void;
@@ -120,7 +185,6 @@ async function runCloudDataRestore(opts: {
   const shouldRecoverFromCloud = force || localEmpty || needsBootstrap || cloudHasData;
   if (!shouldRecoverFromCloud) return;
 
-  const { pullCloudAndMergeIntoStore } = await import("../offline/cloudSync");
   const cloudRecovery = opts?.recoveryMode === true;
   const onStep = cloudRecovery
     ? (
@@ -133,12 +197,13 @@ async function runCloudDataRestore(opts: {
 
   if (localEmpty) {
     if (cloudRecovery) {
+      recordRecoveryIntegrityDiagnostics({ snapshotRestoreAttempted: true });
       reportRecoveryStep("snapshot");
     }
 
-    let restored = false;
+    let snapshotRestoreSucceeded = false;
     try {
-      restored = await restoreShopFromCloudSnapshot(opts?.onProgress, { cloudRecovery });
+      snapshotRestoreSucceeded = await restoreShopFromCloudSnapshot(opts?.onProgress, { cloudRecovery });
     } catch (err) {
       const { message, errorKey } = recoveryErrorFromUnknown(err, "cloud_snapshot_restore_failed");
       if (cloudRecovery) {
@@ -148,51 +213,41 @@ async function runCloudDataRestore(opts: {
       throw err;
     }
 
-    if (restored) {
+    const counts = readStoreRecoveryCounts();
+    const hasCoreData = storeHasCoreRecoveryData();
+
+    if (snapshotRestoreSucceeded && hasCoreData && !cloudRecovery) {
+      recordRecoveryIntegrityDiagnostics({
+        snapshotRestoreProducedData: true,
+        finalStoreCounts: counts,
+      });
       syncRestoredCountsFromStore();
-      if (cloudRecovery) {
-        reportRecoveryStepsFromStore();
-      }
       const { applyShopRecoverySignalsForCurrentShop } = await import("./shopRecoverySignals");
       await applyShopRecoverySignalsForCurrentShop().catch(() => undefined);
       return;
     }
 
-    const merged = await pullCloudAndMergeIntoStore({
-      forceFull: true,
-      onRecoveryStep: onStep,
-      cloudRecovery,
-    });
-    if (!merged) {
-      if (cloudRecovery) {
-        const errorKey = "cloud_merge_failed";
-        const message = "Cloud data merge did not complete";
-        failCloudRecoverySession(message, null, errorKey);
-        recordStartupRecoveryFailure(message, errorKey);
-        throw new Error(errorKey);
-      }
-      return;
+    if (snapshotRestoreSucceeded && hasCoreData && cloudRecovery) {
+      recordRecoveryIntegrityDiagnostics({
+        snapshotRestoreProducedData: true,
+        finalStoreCounts: counts,
+      });
+      syncRestoredCountsFromStore();
+      reportRecoveryStepsFromStore();
     }
-    syncRestoredCountsFromStore();
+
+    if (snapshotRestoreSucceeded && !hasCoreData) {
+      reportRecoveryStep("snapshot_empty_after_restore");
+      logRecoveryDiagnosticEvent("snapshot_empty_after_restore");
+      recordRecoveryIntegrityDiagnostics({ snapshotRestoreProducedData: false });
+    }
+
+    await runFullCloudPull({ onStep: onStep, cloudRecovery });
     return;
   }
 
   if (needsBootstrap || force) {
-    const merged = await pullCloudAndMergeIntoStore({
-      forceFull: true,
-      onRecoveryStep: onStep,
-      cloudRecovery,
-    });
-    if (!merged) {
-      if (cloudRecovery) {
-        const errorKey = "cloud_merge_failed";
-        failCloudRecoverySession("Cloud data merge did not complete", null, errorKey);
-        recordStartupRecoveryFailure("Cloud data merge did not complete", errorKey);
-        throw new Error(errorKey);
-      }
-      return;
-    }
-    syncRestoredCountsFromStore();
+    await runFullCloudPull({ onStep: onStep, cloudRecovery });
   }
 }
 
@@ -275,6 +330,9 @@ async function runHydrateAccountFromCloudInner(opts?: {
   const shouldRecoverFromCloud = force || localEmpty || needsBootstrap || cloudHasData;
 
   if (shouldRecoverFromCloud) {
+    if (opts?.cloudProbe) {
+      recordProbeIntegrityDiagnostics(opts.cloudProbe);
+    }
     await runCloudDataRestore({ ...opts, cloudProbe });
   } else if (getDeviceOnline()) {
     await syncShopWithCloud({ pull: false }).catch(() => undefined);
@@ -338,6 +396,7 @@ export async function runCloudRecoveryGated(opts?: {
     }
 
     const probe = probeResult.probe;
+    recordProbeIntegrityDiagnostics(probe);
 
     try {
       await runHydrateAccountFromCloudInner({
@@ -353,17 +412,34 @@ export async function runCloudRecoveryGated(opts?: {
       const { buildCloudRecoverySimulationReport, recordCloudRecoveryValidation } = await import(
         "./cloudRecoveryValidator"
       );
-      const validation = buildCloudRecoverySimulationReport();
+      const validation = buildCloudRecoverySimulationReport({ recoveryMode: true });
       recordCloudRecoveryValidation(validation);
 
-      const gate = validateRecoveryCompletionGate(probe, validation);
+      const {
+        fetchCloudEntityCounts,
+        buildCloudTrustCertificationReport,
+        readLocalEntityCounts,
+      } = await import("./cloudTrustCenter");
+      const { counts: cloudCounts, errors: cloudErrors } = await fetchCloudEntityCounts();
+      const certification = buildCloudTrustCertificationReport({
+        cloud: cloudCounts,
+        cloudErrors,
+        local: readLocalEntityCounts(),
+        requireCloudParity: true,
+      });
+      recordRecoveryCertification(certification);
+
+      const gate = validateRecoveryCompletionGate(probe, validation, { certification });
       if (!gate.ok) {
         const { clearBootstrapSyncComplete } = await import("./syncCheckpoints");
         clearBootstrapSyncComplete();
+        recordRecoveryIntegrityDiagnostics({ recoveryInvariantPassed: false });
         failCloudRecoverySession(gate.message, validation, gate.failures[0] ?? "recovery_validation_failed");
         recordStartupRecoveryFailure(gate.message, gate.failures[0] ?? "recovery_validation_failed");
         return { success: false, validation, error: gate.message, errorKey: gate.failures[0] };
       }
+
+      assertRecoveryHydratedOrThrow();
 
       const { markBootstrapSyncComplete } = await import("./syncCheckpoints");
       markBootstrapSyncComplete();
@@ -442,5 +518,5 @@ export async function hydrateAccountFromCloud(opts?: {
   return hydrateInFlight;
 }
 
-export { evaluateCloudRecoveryLock, shouldRequireRecoveryLock };
+export { evaluateCloudRecoveryLock, shouldRequireRecoveryLock, verifyRecoveryHydration };
 

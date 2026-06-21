@@ -1328,6 +1328,10 @@ export const usePosStore = create<PosState>((set, get) => {
         }),
       },
     }));
+    const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
+    if (updated) {
+      void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(updated));
+    }
   },
 
   removeStaffAccount: (id) => {
@@ -1352,6 +1356,11 @@ export const usePosStore = create<PosState>((set, get) => {
         activeStaffId: s.preferences.activeStaffId === id ? null : s.preferences.activeStaffId,
       },
     }));
+    void import("../offline/cloudSync").then(async ({ resolveShopCtx }) => {
+      const { deleteCloudStaff } = await import("../lib/shopStaffCloud");
+      const ctx = await resolveShopCtx();
+      if (ctx) await deleteCloudStaff(ctx.shopId, id);
+    });
   },
 
   resetStaffSecret: (id, patch) => {
@@ -1392,6 +1401,10 @@ export const usePosStore = create<PosState>((set, get) => {
         ),
       },
     }));
+    const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
+    if (updated) {
+      void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(updated));
+    }
   },
 
   switchStaffAccount: (id, opts) => {

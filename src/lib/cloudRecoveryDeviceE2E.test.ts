@@ -127,7 +127,13 @@ describe("cloudRecoveryDeviceE2E", () => {
       dayClosesCount: DEVICE_A.dayCloses.length,
     });
 
-    const probe = { hasSnapshot: true, snapshotUpdatedAt: null, hasCloudProducts: true };
+    const probe = {
+      hasSnapshot: true,
+      snapshotUpdatedAt: null,
+      hasCloudProducts: true,
+      snapshotRowFound: true,
+      snapshotContainsCoreData: true,
+    };
     const gate = validateRecoveryCompletionGate(probe, {
       ...validation,
       counts: { ...validation.counts, shifts: DEVICE_A.shifts.length, dayCloses: DEVICE_A.dayCloses.length },

@@ -1281,7 +1281,15 @@ async function pushSupplierPaymentToCloud(payment: SupplierPayment, ctx: ShopCtx
     return false;
   }
   const result = data as { ok?: boolean } | null;
-  return result?.ok === true;
+  const ok = result?.ok === true;
+  if (ok) {
+    usePosStore.setState((s) => ({
+      supplierPayments: s.supplierPayments.map((p) =>
+        p.id === payment.id ? { ...p, pendingSync: false } : p,
+      ),
+    }));
+  }
+  return ok;
 }
 
 /** Push one sale to Supabase as soon as possible (after checkout). */
@@ -2525,6 +2533,7 @@ export async function pullShopDataFromCloud(opts?: {
       returnCloudRows = retFull.returnRows;
       returnCount = retFull.returnRows.length;
       payloadBytes += retFull.bytes;
+      opts?.onRecoveryStep?.("returns");
     }
 
     const purFull = await pullEntitySafe("purchases", entityErrors, () => pullPurchasesFull(ctx));
@@ -2757,7 +2766,10 @@ export async function pullShopDataFromCloud(opts?: {
       const { pullAuditLogsFromCloud } = await import("../lib/auditCloudSync");
       return pullAuditLogsFromCloud(ctx.shopId);
     });
-    if (audit) recoveredAuditLogs = audit;
+    if (audit) {
+      recoveredAuditLogs = audit;
+      opts?.onRecoveryStep?.("audit");
+    }
   }
 
   recordEntityPullErrors(entityErrors);
@@ -2842,6 +2854,35 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     return false;
   };
 
+  const assertCloudRecoveryStoreHydrated = async (): Promise<void> => {
+    if (!opts?.cloudRecovery) return;
+    const { storeHasCoreRecoveryData, MERGE_PRODUCED_EMPTY_STORE_ERROR } = await import("../lib/recoveryHydration");
+    const { logRecoveryDiagnosticEvent, recordRecoveryIntegrityDiagnostics } = await import(
+      "../lib/cloudRecoverySession"
+    );
+    const merged = usePosStore.getState();
+    const shifts = merged.preferences.shifts ?? [];
+    recordRecoveryIntegrityDiagnostics({
+      finalStoreCounts: {
+        products: merged.products.length,
+        sales: merged.sales.length,
+        customers: merged.customers.length,
+        inventory:
+          merged.inventoryCountSessions.length > 0
+            ? merged.inventoryCountSessions.length
+            : merged.products.length,
+        shifts: shifts.length,
+        dayCloses: merged.dayCloses.length,
+        cashRecords:
+          merged.cashDrawerAdjustments.length + merged.dayDrawerOpens.length + merged.cashExpenses.length,
+      },
+    });
+    if (!storeHasCoreRecoveryData()) {
+      logRecoveryDiagnosticEvent("merge_produced_empty_store");
+      throw new Error(MERGE_PRODUCED_EMPTY_STORE_ERROR);
+    }
+  };
+
   const { assertOrganizationOperationsAllowed } = await import("../lib/organizationDeletionState");
   try {
     await assertOrganizationOperationsAllowed();
@@ -2886,6 +2927,11 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     state.products.length === 0 && state.sales.length === 0 && state.customers.length === 0;
 
   if (!hasCloud) {
+    if (opts?.cloudRecovery) {
+      const { logRecoveryDiagnosticEvent } = await import("../lib/cloudRecoverySession");
+      logRecoveryDiagnosticEvent("merge_produced_empty_store");
+      return failMerge("merge_produced_empty_store");
+    }
     if (cloud.stats.mode === "full" && shouldMarkBootstrap) markBootstrapSyncComplete();
     else {
       updateCheckpointsAfterIncrementalPull({
@@ -3018,6 +3064,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
       recordCloudMergeDuration(Date.now() - mergeStarted);
       recordSyncDuration(cloud.stats.durationMs);
     }
+    await assertCloudRecoveryStoreHydrated();
     return true;
   }
 
@@ -3211,6 +3258,7 @@ export async function pullCloudAndMergeIntoStore(opts?: {
     recordCloudMergeDuration(Date.now() - mergeStarted);
     recordSyncDuration(cloud.stats.durationMs);
   }
+  await assertCloudRecoveryStoreHydrated();
   return true;
 }
 

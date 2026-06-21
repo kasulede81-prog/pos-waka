@@ -5,14 +5,16 @@
 import { getActiveAccountKey } from "../offline/accountScope";
 import { needsCloudRecoveryBootstrap } from "./cloudAuthorityAudit";
 import { isLocalShopDataEmpty, probeCloudShopHasData } from "./cloudSnapshotSync";
+import type { CloudTrustCertificationReport } from "./cloudTrustCenter";
 import { hasSupabaseConfig, supabase } from "./supabase";
-import { readSyncCheckpoints } from "./syncCheckpoints";
 import type { CloudRecoveryValidationResult } from "./cloudRecoveryValidator";
 
 export type CloudShopProbe = {
   hasSnapshot: boolean;
   snapshotUpdatedAt: string | null;
   hasCloudProducts: boolean;
+  snapshotRowFound: boolean;
+  snapshotContainsCoreData: boolean;
 };
 
 export type CloudProbeResult =
@@ -100,26 +102,24 @@ export type RecoveryCompletionGateResult = {
   failures: string[];
 };
 
-/** Strict gate after hydrate — required before unlocking the app. */
+/** Strict gate after hydrate — required before unlocking the app. Bootstrap is marked after this passes. */
 export function validateRecoveryCompletionGate(
   probe: CloudShopProbe,
   validation: CloudRecoveryValidationResult,
+  opts?: { certification?: CloudTrustCertificationReport | null },
 ): RecoveryCompletionGateResult {
   const failures: string[] = [];
   const c = validation.counts;
-  const cp = readSyncCheckpoints();
-
-  if (probe.hasCloudProducts && c.products === 0) {
-    failures.push("products_not_restored");
-  }
 
   const cloudExpectedData = probe.hasCloudProducts || probe.hasSnapshot;
-  if (cloudExpectedData && c.products === 0 && c.sales === 0 && c.customers === 0) {
+  const hasCoreData = c.products > 0 || c.sales > 0 || c.customers > 0;
+
+  if (cloudExpectedData && !hasCoreData) {
     failures.push("shop_still_empty");
   }
 
-  if (!cp.bootstrapComplete) {
-    failures.push("bootstrap_incomplete");
+  if (probe.hasCloudProducts && c.products === 0) {
+    failures.push("products_not_restored");
   }
 
   if (cloudExpectedData && c.products === 0) {
@@ -131,13 +131,34 @@ export function validateRecoveryCompletionGate(
     failures.push("integrity_critical");
   }
 
+  const certification = opts?.certification;
+  if (certification) {
+    if (!certification.inventoryIntegrityOk) {
+      failures.push("inventory_integrity_mismatch");
+    }
+    if (!certification.recoveryInvariantPassed) {
+      failures.push("recovery_invariant_failed");
+    }
+    for (const f of certification.failures) {
+      if (!failures.includes(f)) failures.push(f);
+    }
+    for (const row of certification.rows) {
+      if (row.cloudCount !== null && row.cloudError === null && row.cloudCount !== row.localCount) {
+        const key = `entity_count_mismatch_${row.id}`;
+        if (!failures.includes(key)) failures.push(key);
+      }
+    }
+  }
+
   const ok = failures.length === 0;
   let message = "Recovery validation passed";
   if (!ok) {
     if (failures.includes("shop_still_empty")) {
       message = "Cloud shop data was not restored to this device";
-    } else if (failures.includes("bootstrap_incomplete")) {
-      message = "Cloud bootstrap did not complete";
+    } else if (failures.some((f) => f.startsWith("entity_count_mismatch_"))) {
+      message = "Cloud and local entity counts do not match";
+    } else if (failures.includes("inventory_integrity_mismatch")) {
+      message = "Inventory does not match after recovery";
     } else if (failures.includes("products_not_restored")) {
       message = "Products were not downloaded from cloud";
     } else if (failures.includes("integrity_critical")) {

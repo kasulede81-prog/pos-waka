@@ -56,6 +56,16 @@ function baseValidation(overrides: Partial<CloudRecoveryValidationResult> = {}):
       purchases: 3,
       shifts: 1,
       dayCloses: 1,
+      returns: 0,
+      debtPayments: 0,
+      expenses: 0,
+      supplierPayments: 0,
+      cashAdjustments: 0,
+      dayOpens: 0,
+      inventoryCounts: 0,
+      stockMovements: 0,
+      staff: 0,
+      auditLogs: 0,
     },
     financial: { revenueUgx: 0, profitUgx: 0 },
     inventoryValueUgx: 0,
@@ -82,7 +92,13 @@ describe("cloudRecoveryGate", () => {
   describe("validateRecoveryCompletionGate", () => {
     it("passes when cloud had products and local restored", () => {
       const result = validateRecoveryCompletionGate(
-        { hasCloudProducts: true, hasSnapshot: false, snapshotUpdatedAt: null },
+        {
+          hasCloudProducts: true,
+          hasSnapshot: false,
+          snapshotUpdatedAt: null,
+          snapshotRowFound: false,
+          snapshotContainsCoreData: false,
+        },
         baseValidation(),
       );
       expect(result.ok).toBe(true);
@@ -90,7 +106,13 @@ describe("cloudRecoveryGate", () => {
 
     it("fails when cloud had products but local is empty", () => {
       const result = validateRecoveryCompletionGate(
-        { hasCloudProducts: true, hasSnapshot: true, snapshotUpdatedAt: null },
+        {
+          hasCloudProducts: true,
+          hasSnapshot: true,
+          snapshotUpdatedAt: null,
+          snapshotRowFound: true,
+          snapshotContainsCoreData: true,
+        },
         baseValidation({
           counts: {
             products: 0,
@@ -100,6 +122,16 @@ describe("cloudRecoveryGate", () => {
             purchases: 0,
             shifts: 0,
             dayCloses: 0,
+            returns: 0,
+            debtPayments: 0,
+            expenses: 0,
+            supplierPayments: 0,
+            cashAdjustments: 0,
+            dayOpens: 0,
+            inventoryCounts: 0,
+            stockMovements: 0,
+            staff: 0,
+            auditLogs: 0,
           },
         }),
       );
@@ -133,6 +165,8 @@ describe("cloudRecoveryGate", () => {
         hasSnapshot: false,
         snapshotUpdatedAt: null,
         hasCloudProducts: true,
+        snapshotRowFound: true,
+        snapshotContainsCoreData: false,
       });
 
       const evaluation = await evaluateCloudRecoveryLock();
@@ -146,6 +180,8 @@ describe("cloudRecoveryGate", () => {
         hasSnapshot: false,
         snapshotUpdatedAt: null,
         hasCloudProducts: false,
+        snapshotRowFound: false,
+        snapshotContainsCoreData: false,
       });
 
       const evaluation = await evaluateCloudRecoveryLock();

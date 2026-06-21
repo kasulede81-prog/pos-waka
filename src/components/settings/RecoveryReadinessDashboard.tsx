@@ -176,7 +176,13 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
     const s = usePosStore.getState();
     return buildRecoveryCompletenessReport({
       validation: buildCloudRecoverySimulationReport(),
-      probe: { hasSnapshot: true, snapshotUpdatedAt: null, hasCloudProducts: products.length > 0 },
+      probe: {
+        hasSnapshot: products.length > 0 || sales.length > 0,
+        snapshotUpdatedAt: null,
+        hasCloudProducts: products.length > 0,
+        snapshotRowFound: products.length > 0 || sales.length > 0,
+        snapshotContainsCoreData: products.length > 0 || sales.length > 0,
+      },
       stockMovements: s.stockMovements.length,
       inventoryCountSessions: s.inventoryCountSessions.length,
       archivedSales: archivedSales.length,

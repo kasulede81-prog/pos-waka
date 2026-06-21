@@ -40,13 +40,17 @@ function stepLabelKey(step: CloudRecoveryStepId): string {
   const map: Record<CloudRecoveryStepId, string> = {
     probing: "recoveryStepProbing",
     snapshot: "recoveryStepSnapshot",
+    snapshot_empty_after_restore: "recoveryStepSnapshot",
     products: "recoveryStepProducts",
     sales: "recoveryStepSales",
     customers: "recoveryStepCustomers",
+    returns: "recoveryStepReturns",
     inventory: "recoveryStepInventory",
     shifts: "recoveryStepShifts",
     day_closes: "recoveryStepDayCloses",
     cash: "recoveryStepCash",
+    staff: "recoveryStepStaff",
+    audit: "recoveryStepAudit",
     validation: "recoveryStepValidation",
   };
   return map[step];

@@ -9,6 +9,7 @@ import { useSyncStatus } from "../hooks/useSyncStatus";
 import { readSyncHealthMeta } from "../lib/syncMeta";
 import { StartupDiagnosticsPanel } from "../components/startup/StartupDiagnosticsPanel";
 import { SyncHealthDashboard } from "../components/SyncHealthDashboard";
+import { CloudTrustCenter } from "../components/settings/CloudTrustCenter";
 import { SelfDeleteHealthPanel } from "../components/settings/SelfDeleteHealthPanel";
 import type { User } from "@supabase/supabase-js";
 
@@ -67,6 +68,8 @@ export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: 
       </section>
 
       <SyncHealthDashboard lang={lang} />
+
+      <CloudTrustCenter lang={lang} />
 
       <SelfDeleteHealthPanel lang={lang} user={user} />
 

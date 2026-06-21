@@ -8,13 +8,17 @@ import type { RecoveryCompletenessReport } from "./cloudRecoveryCompleteness";
 export type CloudRecoveryStepId =
   | "probing"
   | "snapshot"
+  | "snapshot_empty_after_restore"
   | "products"
   | "sales"
   | "customers"
+  | "returns"
   | "inventory"
   | "shifts"
   | "day_closes"
   | "cash"
+  | "staff"
+  | "audit"
   | "validation";
 
 export type CloudRecoveryEntityCounts = {
@@ -25,6 +29,18 @@ export type CloudRecoveryEntityCounts = {
   shifts: number;
   dayCloses: number;
   cashRecords: number;
+};
+
+export type RecoveryIntegrityDiagnostics = {
+  snapshotRowFound: boolean;
+  snapshotContainsCoreData: boolean;
+  snapshotRestoreAttempted: boolean;
+  snapshotRestoreProducedData: boolean;
+  fullPullAttempted: boolean;
+  fullPullDownloadedCounts: CloudRecoveryEntityCounts;
+  finalStoreCounts: CloudRecoveryEntityCounts;
+  recoveryInvariantPassed: boolean;
+  lastDiagnosticEvent: string | null;
 };
 
 export type CloudRecoverySessionState = {
@@ -40,6 +56,8 @@ export type CloudRecoverySessionState = {
   restoredCounts: CloudRecoveryEntityCounts;
   /** @deprecated Prefer restoredCounts — kept for persisted diagnostics compatibility. */
   entityCounts: CloudRecoveryEntityCounts;
+  integrityDiagnostics: RecoveryIntegrityDiagnostics;
+  certification: import("./cloudTrustCenter").CloudTrustCertificationReport | null;
   errorMessage: string | null;
   errorKey: string | null;
   validation: CloudRecoveryValidationResult | null;
@@ -62,6 +80,18 @@ const emptyCounts = (): CloudRecoveryEntityCounts => ({
   cashRecords: 0,
 });
 
+const emptyIntegrityDiagnostics = (): RecoveryIntegrityDiagnostics => ({
+  snapshotRowFound: false,
+  snapshotContainsCoreData: false,
+  snapshotRestoreAttempted: false,
+  snapshotRestoreProducedData: false,
+  fullPullAttempted: false,
+  fullPullDownloadedCounts: emptyCounts(),
+  finalStoreCounts: emptyCounts(),
+  recoveryInvariantPassed: false,
+  lastDiagnosticEvent: null,
+});
+
 let session: CloudRecoverySessionState = {
   status: "idle",
   startedAt: null,
@@ -72,6 +102,8 @@ let session: CloudRecoverySessionState = {
   downloadedCounts: emptyCounts(),
   restoredCounts: emptyCounts(),
   entityCounts: emptyCounts(),
+  integrityDiagnostics: emptyIntegrityDiagnostics(),
+  certification: null,
   errorMessage: null,
   errorKey: null,
   validation: null,
@@ -90,6 +122,11 @@ function cloneSession(): CloudRecoverySessionState {
     downloadedCounts: { ...session.downloadedCounts },
     restoredCounts: { ...session.restoredCounts },
     entityCounts: { ...session.restoredCounts },
+    integrityDiagnostics: {
+      ...session.integrityDiagnostics,
+      fullPullDownloadedCounts: { ...session.integrityDiagnostics.fullPullDownloadedCounts },
+      finalStoreCounts: { ...session.integrityDiagnostics.finalStoreCounts },
+    },
   };
 }
 
@@ -123,6 +160,9 @@ export function readLastCloudRecoveryDiagnostics(): CloudRecoveryDiagnostics | n
       parsed.restoredCounts = { ...parsed.entityCounts };
       parsed.downloadedCounts = parsed.downloadedCounts ?? { ...parsed.entityCounts };
     }
+    if (!parsed.integrityDiagnostics) {
+      parsed.integrityDiagnostics = emptyIntegrityDiagnostics();
+    }
     return parsed;
   } catch {
     return null;
@@ -145,10 +185,38 @@ export function beginCloudRecoverySession(): void {
     downloadedCounts: emptyCounts(),
     restoredCounts: emptyCounts(),
     entityCounts: emptyCounts(),
+    integrityDiagnostics: emptyIntegrityDiagnostics(),
+    certification: null,
     errorMessage: null,
     errorKey: null,
     validation: null,
     completeness: null,
+  };
+  emit();
+}
+
+export function recordRecoveryIntegrityDiagnostics(
+  patch: Partial<RecoveryIntegrityDiagnostics>,
+): void {
+  session.integrityDiagnostics = { ...session.integrityDiagnostics, ...patch };
+  emit();
+}
+
+export function recordRecoveryCertification(
+  report: import("./cloudTrustCenter").CloudTrustCertificationReport,
+): void {
+  session.certification = report;
+  emit();
+}
+
+export function getRecoveryCertification(): import("./cloudTrustCenter").CloudTrustCertificationReport | null {
+  return session.certification ? { ...session.certification, rows: [...session.certification.rows] } : null;
+}
+
+export function logRecoveryDiagnosticEvent(event: string): void {
+  session.integrityDiagnostics = {
+    ...session.integrityDiagnostics,
+    lastDiagnosticEvent: event,
   };
   emit();
 }
@@ -198,6 +266,7 @@ export function completeCloudRecoverySession(
     errorKey: null,
     completeness,
     entityCounts: { ...session.restoredCounts },
+    certification: session.certification,
   };
   persistDiagnostics();
   emit();
@@ -220,6 +289,7 @@ export function failCloudRecoverySession(
     validation,
     completeness: null,
     entityCounts: { ...session.restoredCounts },
+    certification: session.certification,
   };
   persistDiagnostics();
   emit();
@@ -236,6 +306,8 @@ export function resetCloudRecoverySessionForRetry(): void {
     downloadedCounts: emptyCounts(),
     restoredCounts: emptyCounts(),
     entityCounts: emptyCounts(),
+    integrityDiagnostics: emptyIntegrityDiagnostics(),
+    certification: null,
     errorMessage: null,
     errorKey: null,
     validation: null,
