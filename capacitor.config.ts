@@ -20,7 +20,7 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
   },
-  plugins: {
+    plugins: {
     Keyboard: {
       resize: "body",
       resizeOnFullScreen: true,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
@@ -66,6 +67,12 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
       </div>
 
       <div className="grid gap-2">
+        <Link
+          to="/internal/waka/billing/pricing-campaigns"
+          className="min-h-[44px] rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-left text-sm font-black text-orange-950"
+        >
+          Pricing campaigns →
+        </Link>
         <button
           type="button"
           onClick={() => setSheet("annual")}

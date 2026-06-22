@@ -16,6 +16,8 @@ import { wakaSupportMailtoUrl, wakaSupportWhatsAppUrl } from "../config/wakaSupp
 import { Navigate } from "react-router-dom";
 import { canTogglePilotMode } from "../lib/pilotMode";
 import { submitPilotSupportTicket } from "../lib/internalOpsHardening";
+import { Capacitor } from "@capacitor/core";
+import { pickImageForUpload } from "../lib/nativeImagePicker";
 
 type Props = { lang: Language };
 
@@ -169,6 +171,15 @@ export function PilotSupportCenterPage({ lang }: Props) {
     setScreenshotName(file.name);
   };
 
+  const onPickScreenshot = async () => {
+    try {
+      const picked = await pickImageForUpload();
+      onScreenshot(picked?.file ?? null);
+    } catch {
+      window.alert(t(lang, "ocrCameraDenied"));
+    }
+  };
+
   return (
     <div className="space-y-4 pb-10">
       <PageHeader lang={lang} title={t(lang, "pilotSupportCenterTitle")} backLabel={t(lang, "officeBackToHub")} />
@@ -194,19 +205,31 @@ export function PilotSupportCenterPage({ lang }: Props) {
         />
       </label>
 
-      <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-3">
-        <Camera className="h-5 w-5 text-stone-500" aria-hidden />
-        <span className="text-sm font-semibold text-stone-700">
-          {screenshotName ? screenshotName : t(lang, "pilotSupportScreenshot")}
-        </span>
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="sr-only"
-          onChange={(e) => onScreenshot(e.target.files?.[0] ?? null)}
-        />
-      </label>
+      {Capacitor.isNativePlatform() ? (
+        <button
+          type="button"
+          onClick={() => void onPickScreenshot()}
+          className="flex w-full cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-3 text-left"
+        >
+          <Camera className="h-5 w-5 shrink-0 text-stone-500" aria-hidden />
+          <span className="text-sm font-semibold text-stone-700">
+            {screenshotName ? screenshotName : t(lang, "pilotSupportScreenshot")}
+          </span>
+        </button>
+      ) : (
+        <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-stone-300 bg-stone-50 px-4 py-3">
+          <Camera className="h-5 w-5 text-stone-500" aria-hidden />
+          <span className="text-sm font-semibold text-stone-700">
+            {screenshotName ? screenshotName : t(lang, "pilotSupportScreenshot")}
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            onChange={(e) => onScreenshot(e.target.files?.[0] ?? null)}
+          />
+        </label>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <button

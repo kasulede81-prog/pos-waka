@@ -19,6 +19,7 @@ import { InternalMarketingAgents } from "../components/internal-admin/InternalMa
 import { AdminPilotPage } from "../components/internal-admin/v2/pages/AdminPilotPage";
 import { AdminBusinessTypesPage } from "../components/internal-admin/v2/pages/AdminBusinessTypesPage";
 import { AdminGrowthCampaignPage } from "../components/internal-admin/v2/pages/AdminGrowthCampaignPage";
+import { AdminPricingCampaignsPage } from "../components/internal-admin/v2/pages/AdminPricingCampaignsPage";
 import { AdminAiSettingsPage } from "../components/internal-admin/v2/pages/AdminAiSettingsPage";
 
 type Props = {
@@ -33,6 +34,7 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/analytics") return "analytics";
   if (pathname === "/internal/waka/support") return "support";
   if (pathname === "/internal/waka/billing") return "billing";
+  if (pathname === "/internal/waka/billing/pricing-campaigns") return "pricing_campaigns";
   if (pathname === "/internal/waka/agents") return "agents";
   if (pathname === "/internal/waka/activations") return "activations";
   if (pathname === "/internal/waka/pilot") return "pilot";
@@ -83,6 +85,8 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     body = <AdminSupportPage lang={lang} adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "billing") {
     body = <AdminBillingPage lang={lang} adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "pricing_campaigns") {
+    body = <AdminPricingCampaignsPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "activations") {
     body = <InternalActivationOpsPage lang={lang} lovableUi previewMode={previewMode} />;
   } else if (section === "agents") {

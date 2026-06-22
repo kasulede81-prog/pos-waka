@@ -32,6 +32,7 @@ export type AdminSectionId =
   | "agents"
   | "support"
   | "billing"
+  | "pricing_campaigns"
   | "analytics"
   | "activations"
   | "admins"
@@ -98,6 +99,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   }
 
   const row = adminRow!;
+  const navActive = active === "pricing_campaigns" ? "billing" : active;
   const roleLabel = (row.role ?? "admin").replace(/_/g, " ");
   const showNav = active !== "shop";
   const showBack = active === "shop";
@@ -148,7 +150,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
             <div className="flex gap-1 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
               {visibleTabs.map((tab) => {
                 const href = tabTo(tab.path);
-                const isActive = active === tab.id;
+                const isActive = navActive === tab.id;
                 return (
                   <button
                     key={tab.id}
@@ -174,7 +176,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
             <nav className="flex flex-col gap-0.5 p-3">
               {visibleTabs.map((tab) => {
                 const href = tabTo(tab.path);
-                const isActive = active === tab.id;
+                const isActive = navActive === tab.id;
                 return (
                   <button
                     key={tab.id}

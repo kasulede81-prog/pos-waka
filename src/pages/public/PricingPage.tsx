@@ -2,6 +2,10 @@ import { Link } from "react-router-dom";
 import type { Language } from "../../types";
 import { MarketingLayout } from "../../components/marketing/MarketingLayout";
 import { SeoHead } from "../../components/marketing/SeoHead";
+import { usePublicPricing } from "../../hooks/usePublicPricing";
+import { PlanPriceDisplay } from "../../components/pricing/PlanPriceDisplay";
+import type { PaidPlanCode } from "../../lib/subscriptionPricing";
+import { pricingForPlan } from "../../lib/subscriptionPricing";
 
 type Props = {
   lang: Language;
@@ -10,9 +14,8 @@ type Props = {
 };
 
 type PricingPlan = {
+  code: PaidPlanCode | "free";
   name: string;
-  monthlyUgx: number;
-  annualUgx: number;
   blurb: string;
   features: string[];
   limits: string[];
@@ -22,9 +25,8 @@ type PricingPlan = {
 
 const PLANS: PricingPlan[] = [
   {
+    code: "free",
     name: "Free",
-    monthlyUgx: 0,
-    annualUgx: 0,
     blurb: "Perfect for trying Waka POS and running a very small shop.",
     features: [
       "Sales & Checkout",
@@ -39,9 +41,8 @@ const PLANS: PricingPlan[] = [
     goodFor: "Testing, kiosks, startups, very small shops",
   },
   {
+    code: "starter",
     name: "Starter",
-    monthlyUgx: 18_000,
-    annualUgx: 172_800,
     blurb: "For owners who run the shop themselves.",
     features: [
       "Unlimited Products",
@@ -62,9 +63,8 @@ const PLANS: PricingPlan[] = [
     goodFor: "Boutiques, salons, groceries, pharmacies, mini markets",
   },
   {
+    code: "business",
     name: "Business",
-    monthlyUgx: 36_000,
-    annualUgx: 345_600,
     blurb: "For growing businesses with employees.",
     popular: true,
     features: [
@@ -91,9 +91,8 @@ const PLANS: PricingPlan[] = [
     goodFor: "Supermarkets, hardware stores, pharmacies, businesses with employees",
   },
   {
+    code: "waka_plus",
     name: "Waka Plus",
-    monthlyUgx: 82_000,
-    annualUgx: 787_200,
     blurb: "For wholesalers and larger businesses.",
     features: [
       "Everything in Business",
@@ -139,6 +138,8 @@ function formatUgx(amount: number): string {
 }
 
 export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
+  const { pricing, loading } = usePublicPricing();
+
   return (
     <MarketingLayout lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
       <SeoHead
@@ -159,8 +160,17 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
           </p>
         </header>
 
+        {pricing.campaignActive && pricing.campaignName ? (
+          <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-900">
+            Limited offer: {pricing.campaignName}
+          </p>
+        ) : null}
+
         <div className="space-y-6">
-          {PLANS.map((plan) => (
+          {PLANS.map((plan) => {
+            const paidPrice =
+              plan.code !== "free" ? pricingForPlan(pricing, plan.code) : null;
+            return (
             <section
               key={plan.name}
               className={`rounded-3xl border p-6 shadow-waka-sm sm:p-8 ${
@@ -173,12 +183,18 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                     {plan.name}
                     {plan.popular ? <span className="ml-2 text-base text-orange-600">★ Most Popular</span> : null}
                   </h2>
-                  <p className="mt-2 text-3xl font-black text-orange-700">{formatUgx(plan.monthlyUgx)}</p>
-                  {plan.monthlyUgx > 0 ? (
-                    <p className="mt-1 text-sm font-bold text-stone-600">
-                      {formatUgx(plan.annualUgx)}/year <span className="text-emerald-700">(Save 20%)</span>
-                    </p>
-                  ) : null}
+                  {plan.code === "free" ? (
+                    <p className="mt-2 text-3xl font-black text-orange-700">{formatUgx(0)}</p>
+                  ) : paidPrice && !loading ? (
+                    <div className="mt-2">
+                      <PlanPriceDisplay price={paidPrice} interval="month" />
+                      <div className="mt-2">
+                        <PlanPriceDisplay price={paidPrice} interval="year" size="sm" />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-3xl font-black text-orange-700">—</p>
+                  )}
                   <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-stone-700">{plan.blurb}</p>
                 </div>
               </div>
@@ -208,7 +224,8 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                 </div>
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
 
         <section className="rounded-3xl border border-stone-100 bg-white p-6 shadow-waka-sm sm:p-8">

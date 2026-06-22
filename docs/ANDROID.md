@@ -170,7 +170,7 @@ Play Store icon: `resources/brand/icon-1024-cream.png` (1024×1024).
 - **Edge-to-edge** — `MainActivity` + CSS `safe-area` / `viewport-fit=cover`
 - **Android back button** — `useAndroidBackButton` in `AppShell`
 - **HTTPS-only** network security config (no cleartext in production)
-- **Permissions** — `INTERNET`, `CAMERA`, `READ_MEDIA_IMAGES` (optional camera for stock OCR)
+- **Permissions** — `INTERNET`, `CAMERA` (barcode scan / take-photo OCR). Gallery picks use the **Android Photo Picker** — no `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, or legacy storage permissions.
 - **On-device OCR** — custom `WakaMlkitOcrPlugin` (ML Kit)
 
 ---

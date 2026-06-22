@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSubscription } from "../context/SubscriptionContext";
+import { usePublicPricing } from "../hooks/usePublicPricing";
+import { PlanPriceDisplay } from "../components/pricing/PlanPriceDisplay";
+import { pricingForPlan, type PaidPlanCode } from "../lib/subscriptionPricing";
 import {
   getPaidPlanRenewalCountdown,
   maxDevicesHintForTier,
@@ -36,6 +39,10 @@ function planPriceKey(plan: SubscriptionPlanCode): string {
   return "planWakaPlusPrice";
 }
 
+function isPaidPlan(plan: SubscriptionPlanCode): plan is PaidPlanCode {
+  return plan !== "free";
+}
+
 function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | "goodFor" | "note" | "cta"): string {
   const prefix = plan === "waka_plus" ? "wakaPlus" : plan;
   return `${prefix}_${suffix}`;
@@ -50,6 +57,7 @@ function usersHintForPlan(plan: SubscriptionPlanCode): number {
 
 export function UpgradePage({ lang }: { lang: Language }) {
   const { snapshot, authMode, loading, refetch } = useSubscription();
+  const { pricing, loading: pricingLoading } = usePublicPricing();
   const current = resolveEffectivePlanTier(snapshot);
   const showFreePitch = shouldShowFreeUpgradePitch(snapshot);
   const renewalCountdown = getPaidPlanRenewalCountdown(snapshot);
@@ -156,7 +164,13 @@ export function UpgradePage({ lang }: { lang: Language }) {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <p className="text-xl font-black text-slate-900">{t(lang, planLabelKey(plan))}</p>
-                    <p className="mt-1 text-2xl font-black text-waka-700">{t(lang, planPriceKey(plan))}</p>
+                    {isPaid && !pricingLoading ? (
+                      <div className="mt-1">
+                        <PlanPriceDisplay price={pricingForPlan(pricing, plan)} interval="month" size="sm" />
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-2xl font-black text-waka-700">{t(lang, planPriceKey(plan))}</p>
+                    )}
                     <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, planTextKey(plan, "blurb"))}</p>
                   </div>
                   {isCurrent ? (
@@ -214,13 +228,24 @@ export function UpgradePage({ lang }: { lang: Language }) {
         <h2 className="text-lg font-black text-orange-950">{t(lang, "upgradeYearlyTitle")}</h2>
         <p className="mt-2 text-sm font-semibold text-orange-900">{t(lang, "upgradeYearlySub")}</p>
         <ul className="mt-4 grid gap-3 sm:grid-cols-3">
-          {PAID_ANNUAL.map(({ plan, annualKey, saveKey }) => (
+          {PAID_ANNUAL.map(({ plan }) => {
+            const price = isPaidPlan(plan) ? pricingForPlan(pricing, plan) : null;
+            return (
             <li key={plan} className="rounded-2xl border border-orange-200 bg-white px-4 py-3">
               <p className="text-sm font-black text-stone-900">{t(lang, planLabelKey(plan))}</p>
-              <p className="mt-1 text-lg font-black text-waka-800">{t(lang, annualKey)}</p>
-              <p className="mt-1 text-xs font-bold text-emerald-800">{t(lang, saveKey)}</p>
+              {price && !pricingLoading ? (
+                <div className="mt-1">
+                  <PlanPriceDisplay price={price} interval="year" size="sm" />
+                </div>
+              ) : (
+                <>
+                  <p className="mt-1 text-lg font-black text-waka-800">{t(lang, PAID_ANNUAL.find((p) => p.plan === plan)!.annualKey)}</p>
+                  <p className="mt-1 text-xs font-bold text-emerald-800">{t(lang, PAID_ANNUAL.find((p) => p.plan === plan)!.saveKey)}</p>
+                </>
+              )}
             </li>
-          ))}
+            );
+          })}
         </ul>
         <Link
           to="/pilot-support"
