@@ -1,7 +1,6 @@
 import clsx from "clsx";
 import type { CSSProperties, MouseEvent, ReactNode } from "react";
 import { useKeyboardInset } from "../../hooks/useKeyboardInset";
-import { combinedBottomInsetStyle } from "../../lib/safeAreaInsets";
 import { AppModalOverlay } from "./AppModalOverlay";
 
 type Props = {
@@ -11,7 +10,7 @@ type Props = {
   /** Sticky footer — actions stay visible above keyboard and gesture bar. */
   footer?: ReactNode;
   title?: ReactNode;
-  /** Bottom sheet (mobile) or centered dialog. */
+  /** Bottom sheet (mobile) or centered dialog (sm+). */
   align?: "bottom" | "center";
   zIndexClass?: string;
   clearNav?: boolean;
@@ -28,6 +27,7 @@ const DEFAULT_MAX_H = "max-h-[min(92dvh,720px)]";
 
 /**
  * Universal modal/sheet — scrollable body, sticky footer, safe-area + keyboard insets.
+ * Keyboard inset lifts the panel from the bottom (not overlay padding) so flex layout stays stable.
  */
 export function ModalSheet({
   open,
@@ -50,10 +50,10 @@ export function ModalSheet({
 
   if (!open) return null;
 
-  const bottomPad = combinedBottomInsetStyle(keyboardInset);
-  const overlayStyle: CSSProperties | undefined = bottomPad
-    ? { paddingBottom: bottomPad }
-    : undefined;
+  const panelLiftPx = keyboardInset > 0 ? keyboardInset : undefined;
+  const panelStyle: CSSProperties | undefined = panelLiftPx
+    ? { marginBottom: panelLiftPx, transition: "margin-bottom 160ms ease-out" }
+    : { transition: "margin-bottom 160ms ease-out" };
 
   const handleBackdrop = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
@@ -69,18 +69,20 @@ export function ModalSheet({
       className={clsx(
         zIndexClass,
         "flex bg-black/55 pt-[max(0.25rem,env(safe-area-inset-top,0px))]",
-        align === "bottom" ? "items-end justify-center sm:items-center" : "items-center justify-center p-3 sm:p-4",
+        align === "center"
+          ? "items-end justify-center sm:items-center sm:p-4"
+          : "items-end justify-center sm:items-center sm:p-4",
       )}
-      style={overlayStyle}
       onClick={handleBackdrop}
     >
       <div
         className={clsx(
           "flex w-full max-w-md min-h-0 flex-col overflow-hidden bg-white shadow-2xl",
           maxHeightClass,
-          align === "bottom" ? "rounded-t-[1.75rem] sm:rounded-3xl" : "rounded-3xl",
+          "rounded-t-[1.75rem] sm:rounded-3xl",
           panelClassName,
         )}
+        style={panelStyle}
         onClick={(e) => e.stopPropagation()}
       >
         {title ? (
@@ -98,10 +100,7 @@ export function ModalSheet({
         </div>
 
         {footer ? (
-          <div
-            className="shrink-0 border-t border-stone-100 bg-white px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]"
-            style={bottomPad ? { paddingBottom: bottomPad } : undefined}
-          >
+          <div className="shrink-0 border-t border-stone-100 bg-white px-5 py-4 pb-[max(0.75rem,env(safe-area-inset-bottom,0px))]">
             {footer}
           </div>
         ) : null}

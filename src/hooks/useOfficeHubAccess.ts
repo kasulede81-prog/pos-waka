@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { fetchWakaInternalAdminMe } from "../lib/wakaInternalAdmin";
 import { fetchMarketingAgentMe } from "../lib/referralAgents";
+import { useMarketingAgentPortal } from "./useMarketingAgentPortal";
 import type { Permission } from "../types";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -22,29 +23,12 @@ export function useOfficeHubAccess() {
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const wholesaleMode = isWholesaleMode(preferences.businessType);
   const { snapshot, authMode } = useSubscription();
+  const { isMarketingAgent: showAgentPortal } = useMarketingAgentPortal();
   const [showDeferredHub, setShowDeferredHub] = useState(false);
-  const [showAgentPortal, setShowAgentPortal] = useState(false);
 
   useEffect(() => {
     runWhenIdle(() => setShowDeferredHub(true));
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    runWhenIdle(() => {
-      void (async () => {
-        if (!supabase) {
-          if (!cancelled) setShowAgentPortal(false);
-          return;
-        }
-        const agent = await fetchMarketingAgentMe();
-        if (!cancelled) setShowAgentPortal(Boolean(agent));
-      })();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [actor.userId]);
 
   const can = (perm: Permission) => hasEffectivePermission(actor.role, perm, snapshot, authMode);
   const canBackup = canUseBackupRestore(snapshot, authMode);

@@ -311,14 +311,14 @@ export function SalesHistoryRow({
 
   return (
     <div className="border-b border-stone-100 last:border-b-0">
-      <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
+      <div className="flex items-center gap-2.5 px-3 py-2 sm:gap-3 sm:px-4 sm:py-2.5">
         <div
           className={clsx(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-10 sm:w-10",
             ICON_TONES[toneIndex % ICON_TONES.length],
           )}
         >
-          <FileText className="h-5 w-5" aria-hidden />
+          <FileText className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
         </div>
 
         <div className="min-w-0 flex-1">

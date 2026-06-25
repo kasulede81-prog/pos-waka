@@ -137,6 +137,16 @@ Functions:
 |----------|---------|
 | `admin-set-owner-password` | Support/super admin sets owner login password (no email link) |
 | `admin-permanently-delete-shop-account` | Super admin deletes org data + auth user |
+| `auth-send-email` | Supabase Auth **Send Email** hook → Resend (`noreply@waka.ug`) |
+
+Deploy transactional email (after migration **115**):
+
+```bash
+npm run supabase:deploy:email
+supabase secrets set --env-file supabase/functions/.env --project-ref <your-project-ref>
+```
+
+Then enable **Authentication → Hooks → Send Email** in the Supabase dashboard (see `supabase/functions/.env.example`).
 
 ## Troubleshooting
 

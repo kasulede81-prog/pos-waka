@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
@@ -17,7 +18,15 @@ type Props = {
 
 export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Props) {
   const keyboardInset = useKeyboardInset();
-  const bottomPad = combinedBottomInsetStyle(keyboardInset);
+  const [stableKeyboardInset, setStableKeyboardInset] = useState(0);
+
+  useEffect(() => {
+    const delay = keyboardInset > 0 ? 48 : 0;
+    const id = window.setTimeout(() => setStableKeyboardInset(keyboardInset), delay);
+    return () => window.clearTimeout(id);
+  }, [keyboardInset]);
+
+  const bottomPad = combinedBottomInsetStyle(stableKeyboardInset);
 
   return (
     <div

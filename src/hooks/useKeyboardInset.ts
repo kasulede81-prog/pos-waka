@@ -36,5 +36,9 @@ export function useKeyboardInset(): number {
     };
   }, []);
 
-  return Math.max(viewportInset, nativeInset);
+  if (Capacitor.isNativePlatform()) {
+    return nativeInset;
+  }
+
+  return viewportInset;
 }

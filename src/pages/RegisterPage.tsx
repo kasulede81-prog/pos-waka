@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { formatAuthError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
@@ -13,7 +13,7 @@ import { normalizeUgPhoneE164 } from "../lib/businessProfile";
 import { storePendingReferralCode } from "../lib/pendingReferral";
 import { normalizeReferralCode, validateReferralCode } from "../lib/referralAgents";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
-import { tTemplate } from "../lib/i18n";
+import { useMountedRef } from "../hooks/useMountedRef";
 
 type Props = {
   lang: Language;
@@ -36,6 +36,8 @@ const fieldClass =
 
 export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGoogleSignIn }: Props) {
   const navigate = useNavigate();
+  const mountedRef = useMountedRef();
+  const submitLockRef = useRef(false);
   const [searchParams] = useSearchParams();
   const [shopName, setShopName] = useState("");
   const [ownerName, setOwnerName] = useState("");
@@ -55,47 +57,63 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
   const showGoogle = hasSupabaseConfig && isGoogleAuthUiAvailable();
 
   const loadDistricts = useCallback(async () => {
+    if (!mountedRef.current) return;
     setDistrictsLoading(true);
     setDistrictsError(null);
     try {
       const { districts: d, error: err } = await fetchDistricts();
+      if (!mountedRef.current) return;
       setDistricts(d);
       if (err) setDistrictsError(err);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setDistrictsError((e as Error).message || "Could not load districts.");
     } finally {
-      setDistrictsLoading(false);
+      if (mountedRef.current) setDistrictsLoading(false);
     }
-  }, []);
+  }, [mountedRef]);
 
   useEffect(() => {
     const ref = searchParams.get("ref")?.trim();
-    if (ref) {
-      const code = ref.toUpperCase();
-      setReferralCode(code);
-      storePendingReferralCode(code);
-    }
+    if (!ref) return;
+    const code = ref.toUpperCase();
+    setReferralCode(code);
+    storePendingReferralCode(code);
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!isAuthenticated || busy || submitLockRef.current) return;
+    navigate("/onboarding", { replace: true });
+  }, [busy, isAuthenticated, navigate]);
 
   const validateReferralField = useCallback(
     async (raw: string): Promise<boolean> => {
       const trimmed = normalizeReferralCode(raw);
       if (!trimmed) {
-        setReferralHint(null);
+        if (mountedRef.current) setReferralHint(null);
         return true;
       }
-      setReferralValidating(true);
-      const res = await validateReferralCode(trimmed);
-      setReferralValidating(false);
-      if (!res.ok) {
-        setReferralHint(t(lang, "registerReferralInvalid"));
+      if (mountedRef.current) setReferralValidating(true);
+      try {
+        const res = await validateReferralCode(trimmed);
+        if (!mountedRef.current) return res.ok;
+        if (!res.ok) {
+          setReferralHint(t(lang, "registerReferralInvalid"));
+          return false;
+        }
+        setReferralHint(
+          res.agentName ? tTemplate(lang, "registerReferralValid", { name: res.agentName }) : null,
+        );
+        if (res.referralCode) setReferralCode(res.referralCode);
+        return true;
+      } catch {
+        if (mountedRef.current) setReferralHint(t(lang, "registerReferralInvalid"));
         return false;
+      } finally {
+        if (mountedRef.current) setReferralValidating(false);
       }
-      setReferralHint(
-        res.agentName ? tTemplate(lang, "registerReferralValid", { name: res.agentName }) : null,
-      );
-      if (res.referralCode) setReferralCode(res.referralCode);
-      return true;
     },
-    [lang],
+    [lang, mountedRef],
   );
 
   useEffect(() => {
@@ -104,6 +122,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (submitLockRef.current || busy) return;
     setError(null);
     const emailNorm = email.trim().toLowerCase();
     if (!shopName.trim() || !ownerName.trim() || !emailNorm) {
@@ -129,11 +148,12 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
     if (referralCode.trim()) {
       const ok = await validateReferralField(referralCode);
       if (!ok) {
-        setError(t(lang, "registerReferralInvalid"));
+        if (mountedRef.current) setError(t(lang, "registerReferralInvalid"));
         return;
       }
     }
-    setBusy(true);
+    submitLockRef.current = true;
+    if (mountedRef.current) setBusy(true);
     try {
       const result = await signUpQuick({
         shopName: shopName.trim(),
@@ -144,14 +164,20 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
         password,
         referralCode: referralCode.trim() || undefined,
       });
+      if (!mountedRef.current) return;
       if (referralCode.trim()) storePendingReferralCode(referralCode.trim());
       if (result.needsEmailVerification) {
-        navigate("/verify-email", { replace: true, state: { email: emailNorm } });
+        queueMicrotask(() => {
+          navigate("/verify-email", { replace: true, state: { email: emailNorm } });
+        });
         return;
       }
-      navigate("/onboarding", { replace: true });
+      queueMicrotask(() => {
+        navigate("/onboarding", { replace: true });
+      });
     } catch (err) {
-      const msg = (err as Error).message || "";
+      if (!mountedRef.current) return;
+      const msg = formatAuthError(err);
       const lower = msg.toLowerCase();
       if (
         lower.includes("database error saving new user") ||
@@ -159,27 +185,37 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
       ) {
         setError(t(lang, "signupWorkspaceError"));
       } else {
-        setError(formatAuthError(err));
+        setError(msg);
       }
     } finally {
-      setBusy(false);
+      submitLockRef.current = false;
+      if (mountedRef.current) setBusy(false);
     }
   };
 
   const googleSubmit = async () => {
-    setGoogleBusy(true);
-    setError(null);
+    if (googleBusy || submitLockRef.current) return;
+    if (mountedRef.current) {
+      setGoogleBusy(true);
+      setError(null);
+    }
     try {
       const code = referralCode.trim() || searchParams.get("ref")?.trim();
       await onGoogleSignIn(code ? { referralCode: code } : undefined);
     } catch (err) {
-      setError(formatAuthError(err));
+      if (mountedRef.current) setError(formatAuthError(err));
     } finally {
-      setGoogleBusy(false);
+      if (mountedRef.current) setGoogleBusy(false);
     }
   };
 
-  if (isAuthenticated) return <Navigate to="/onboarding" replace />;
+  if (isAuthenticated && !busy) {
+    return (
+      <AuthLayout lang={lang} setLang={setLang}>
+        <p className="py-12 text-center text-sm font-semibold text-stone-600">…</p>
+      </AuthLayout>
+    );
+  }
 
   return (
     <AuthLayout lang={lang} setLang={setLang}>
@@ -326,7 +362,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
             <button
               disabled={busy || districtsLoading || districts.length === 0}
               type="submit"
-              className="min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
+              className="min-h-[52px] w-full touch-manipulation rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50"
             >
               {busy ? "…" : t(lang, "createAccount")}
             </button>

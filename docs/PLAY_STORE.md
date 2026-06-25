@@ -13,7 +13,7 @@ Use this document when filling in [Google Play Console](https://play.google.com/
 | **Support** | https://pos.waka.ug/support |
 | **Website** | https://pos.waka.ug |
 | **Developer / company** | WAKA MARKETPLACE LIMITED (Uganda) |
-| **Support email** | info@waka.ug |
+| **Support email** | support@waka.ug |
 
 Bump `versionCode` and `versionName` in `android/app/build.gradle` before every new upload.
 
@@ -76,7 +76,7 @@ ABOUT WAKA
 Waka POS is a product of WAKA MARKETPLACE LIMITED, a Ugandan technology company focused on practical tools for everyday business.
 
 SUPPORT
-Email: info@waka.ug
+Email: support@waka.ug
 Web: https://pos.waka.ug/support
 
 Privacy policy: https://pos.waka.ug/privacy
@@ -89,7 +89,7 @@ Terms: https://pos.waka.ug/terms
 ### Contact details
 | Field | Value |
 |-------|--------|
-| Email | info@waka.ug |
+| Email | support@waka.ug |
 | Website | https://pos.waka.ug |
 | Phone | *(optional — your Uganda support line)* |
 
@@ -120,7 +120,7 @@ Welcome to Waka POS on Android.
 • Offline mode with cloud sync when online
 • Back office for reports, settings, and backup
 
-We are a Uganda-first product from WAKA MARKETPLACE LIMITED. Questions: info@waka.ug
+We are a Uganda-first product from WAKA MARKETPLACE LIMITED. Questions: support@waka.ug
 ```
 
 ### Example update (version 1.0.1)
@@ -129,7 +129,7 @@ We are a Uganda-first product from WAKA MARKETPLACE LIMITED. Questions: info@wak
 • Improved offline sync reliability
 • Bug fixes and stability improvements
 
-Thank you for using Waka POS. Support: info@waka.ug
+Thank you for using Waka POS. Support: support@waka.ug
 ```
 
 ---
@@ -188,7 +188,7 @@ Answer based on your live app. Adjust if you change features.
 **Yes** (HTTPS / TLS to Supabase and your APIs)
 
 ### Do you provide a way for users to request that their data is deleted?
-**Yes** — via support email (info@waka.ug) and as described in the privacy policy.
+**Yes** — via support email (support@waka.ug) and as described in the privacy policy.
 
 ---
 
@@ -331,7 +331,7 @@ Never lose `waka-release.jks` and passwords. Back them up offline.
 ## 11. Support blurb (Play “About the developer” if shown)
 
 ```
-WAKA MARKETPLACE LIMITED builds practical technology for everyday business in Uganda. Waka POS helps shops manage sales, stock, and daily operations on Android. Support: info@waka.ug | https://pos.waka.ug
+WAKA MARKETPLACE LIMITED builds practical technology for everyday business in Uganda. Waka POS helps shops manage sales, stock, and daily operations on Android. Support: support@waka.ug | https://pos.waka.ug
 ```
 
 ---

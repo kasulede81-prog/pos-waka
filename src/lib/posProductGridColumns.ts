@@ -1,20 +1,24 @@
-/** Max product grid columns until AppShell / checkout layout is redesigned. */
-export const POS_GRID_MAX_COLUMNS = 6;
+/** Max product grid columns on wide / ultrawide catalogs. */
+export const POS_GRID_MAX_COLUMNS = 8;
 
 /** Catalog container width breakpoints (px). */
+export const POS_CATALOG_COL_BREAKPOINT_1600 = 1600;
 export const POS_CATALOG_COL_BREAKPOINT_1200 = 1200;
-export const POS_CATALOG_COL_BREAKPOINT_900 = 900;
-export const POS_CATALOG_COL_BREAKPOINT_700 = 700;
+export const POS_CATALOG_COL_BREAKPOINT_1000 = 1000;
+export const POS_CATALOG_COL_BREAKPOINT_820 = 820;
+export const POS_CATALOG_COL_BREAKPOINT_640 = 640;
 
 /**
  * Product grid columns from measured catalog container width (not viewport).
- * <700 → 3, 700–899 → 4, 900–1199 → 5, 1200+ → 6 (capped).
+ * Tuned for Windows POS terminals: 1024×768 → 4+ cols, 1280 → 5+, 1920 → 6–7, ultrawide → 8.
  */
 export function catalogColumnCount(catalogWidthPx: number): number {
   const w = Math.max(0, catalogWidthPx);
-  if (w >= POS_CATALOG_COL_BREAKPOINT_1200) return POS_GRID_MAX_COLUMNS;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_900) return 5;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_700) return 4;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_1600) return POS_GRID_MAX_COLUMNS;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_1200) return 7;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_1000) return 6;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_820) return 5;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_640) return 4;
   return 3;
 }
 

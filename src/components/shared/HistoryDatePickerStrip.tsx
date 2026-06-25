@@ -1,4 +1,5 @@
 import { useId, useState, type ReactNode } from "react";
+import clsx from "clsx";
 import { CalendarDays, ChevronDown } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -32,9 +33,11 @@ type Props = {
   labelOverride?: string;
   /** Extra controls below presets (e.g. custom date range). */
   footer?: ReactNode;
+  /** Shorter closed picker button (sales history). */
+  compact?: boolean;
 };
 
-export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOverride, footer }: Props) {
+export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOverride, footer, compact = false }: Props) {
   const dateInputId = useId();
   const [pickerOpen, setPickerOpen] = useState(false);
   const customDayKey = filter.kind === "day" ? filter.dateKey : dateKeyKampala(new Date());
@@ -54,13 +57,16 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
   const rangeTo = filter.kind === "range" ? filter.toKey : rangeFrom;
 
   return (
-    <div className="relative border-t border-white/10 bg-waka-800/35 px-3 py-2">
+    <div className={clsx("relative border-t border-white/10 bg-waka-800/35", compact ? "px-2 py-1" : "px-3 py-2")}>
       <button
         type="button"
         onClick={() => setPickerOpen((v) => !v)}
-        className="mx-auto flex min-h-[40px] w-full max-w-sm items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold text-white/95 active:bg-white/10"
+        className={clsx(
+          "mx-auto flex w-full max-w-sm items-center justify-center gap-1.5 rounded-xl px-2 font-bold text-white/95 active:bg-white/10",
+          compact ? "min-h-[34px] text-xs" : "min-h-[40px] text-sm",
+        )}
       >
-        <CalendarDays className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+        <CalendarDays className={clsx("shrink-0 opacity-90", compact ? "h-3.5 w-3.5" : "h-4 w-4")} aria-hidden />
         <span>{pickerDateLabel}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${pickerOpen ? "rotate-180" : ""}`} aria-hidden />
       </button>

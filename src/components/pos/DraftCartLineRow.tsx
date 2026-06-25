@@ -96,14 +96,14 @@ export function DraftCartLineRow({
             type="button"
             onClick={onDecrement}
             aria-label={t(lang, "posQtyDecrease")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-slate-200 bg-white text-slate-900 active:bg-slate-100"
+            className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-900 active:bg-slate-100"
           >
             <Minus className="h-5 w-5 stroke-[3]" aria-hidden />
           </button>
           <button
             type="button"
             onClick={onQtyTap}
-            className="flex min-h-[40px] min-w-0 flex-1 flex-col items-center justify-center rounded-xl border-2 border-waka-300 bg-waka-50 px-1.5 active:bg-waka-100"
+            className="flex min-h-[44px] min-w-[44px] flex-1 flex-col items-center justify-center rounded-xl border-2 border-waka-300 bg-waka-50 px-1.5 active:bg-waka-100"
           >
             <span className="text-[9px] font-black uppercase tracking-wide text-waka-800">
               {t(lang, "posQtyLabel")}
@@ -114,14 +114,14 @@ export function DraftCartLineRow({
             type="button"
             onClick={onIncrement}
             aria-label={t(lang, "posQtyIncrease")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-waka-400 bg-waka-600 text-white active:brightness-95"
+            className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-xl border-2 border-waka-400 bg-waka-600 text-white active:brightness-95"
           >
             <Plus className="h-5 w-5 stroke-[3]" aria-hidden />
           </button>
           <button
             type="button"
             onClick={onDiscount}
-            className="min-h-[40px] shrink-0 rounded-xl border border-waka-200 bg-white px-2.5 text-xs font-black text-waka-900"
+            className="min-h-[44px] shrink-0 rounded-xl border border-waka-200 bg-white px-2.5 text-xs font-black text-waka-900"
           >
             {t(lang, "discountBtn")}
           </button>
@@ -129,7 +129,7 @@ export function DraftCartLineRow({
             type="button"
             onClick={onRemove}
             aria-label={t(lang, "removeLine")}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-800"
+            className="flex h-11 min-h-[44px] w-11 min-w-[44px] shrink-0 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-800"
           >
             ✕
           </button>

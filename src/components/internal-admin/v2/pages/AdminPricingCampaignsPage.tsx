@@ -96,7 +96,7 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
 
   const [loading, setLoading] = useState(true);
   const [campaigns, setCampaigns] = useState<PricingCampaign[]>([]);
-  const [discounts, setDiscounts] = useState<PricingCampaignPlanDiscount[]>([]);
+  const [, setDiscounts] = useState<PricingCampaignPlanDiscount[]>([]);
   const [draft, setDraft] = useState<CampaignDraft>(EMPTY_CAMPAIGN);
   const [planDrafts, setPlanDrafts] = useState<Record<PaidPlanCode, PlanDraft>>({
     starter: emptyPlanDraft(),

@@ -11,7 +11,7 @@ import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
 import { summarizeTodaySales } from "../lib/todaySalesSummary";
-import { usePosDesktopLayout } from "../hooks/usePosDesktopLayout";
+import { usePosLayoutMode } from "../hooks/usePosLayoutMode";
 import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
 import { resolveConfirmSaleAction } from "../lib/posCheckoutFocus";
 import { resolveScanToCartInput } from "../lib/posScanToCart";
@@ -24,9 +24,13 @@ import {
   type PosShortcutModalState,
 } from "../lib/posKeyboardShortcuts";
 import {
+  shouldMountCompactCheckoutSlideover,
   shouldMountDesktopCheckoutSidebar,
   shouldMountMobileCheckoutOverlay,
+  shouldShowMinimizedCheckoutFab,
 } from "../lib/posCheckoutMount";
+import { PosCompactCheckoutSlideover } from "../components/pos/PosCompactCheckoutSlideover";
+import { PosMinimizedCheckoutFab } from "../components/pos/PosMinimizedCheckoutFab";
 import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
 import { ShiftSellGateway } from "../components/pos/ShiftSellGateway";
@@ -343,7 +347,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const customerSelectRef = useRef<HTMLSelectElement>(null);
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutPanelRef = useRef<HTMLDivElement>(null);
-  const isDesktopPos = usePosDesktopLayout();
+  const posLayoutMode = usePosLayoutMode();
+  const isFullDesktopPos = posLayoutMode === "full";
   const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
@@ -684,7 +689,7 @@ export function PosPage({ lang }: { lang: Language }) {
           }
           bumpRecentProduct(p.id);
           if (hapticsOn) void hapticTap();
-          if (!isDesktopPos) setSaleCheckoutMinimized(true);
+          if (posLayoutMode !== "full") setSaleCheckoutMinimized(true);
           setToast(t(lang, "posAddedToCart"));
           window.setTimeout(() => setToast(null), 1200);
           searchInputRef.current?.focus();
@@ -700,7 +705,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setDraftInput(null);
       setSheetOpen(true);
     },
-    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, isDesktopPos, lang, lockedIds, runWithExpiredGuard, setDraftInput],
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, posLayoutMode, lang, lockedIds, runWithExpiredGuard, setDraftInput],
   );
 
   const fastAddFromScan = useCallback(
@@ -717,14 +722,14 @@ export function PosPage({ lang }: { lang: Language }) {
         }
         bumpRecentProduct(p.id);
         if (hapticsOn) void hapticTap();
-        if (!isDesktopPos) setSaleCheckoutMinimized(true);
+        if (posLayoutMode !== "full") setSaleCheckoutMinimized(true);
         setToast(t(lang, "posScanAdded"));
         window.setTimeout(() => setToast(null), 1200);
         searchInputRef.current?.blur();
       });
       return true;
     },
-    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, isDesktopPos, lang, runWithExpiredGuard, setDraftInput],
+    [addDraftLineFromInput, bumpRecentProduct, hapticsOn, posLayoutMode, lang, runWithExpiredGuard, setDraftInput],
   );
 
   const handleBarcodeProduct = useCallback(
@@ -849,7 +854,7 @@ export function PosPage({ lang }: { lang: Language }) {
       if (hapticsOn) void hapticTap();
       setDisplay("");
       setDraftInput(null);
-      if (!isDesktopPos) setSaleCheckoutMinimized(true);
+      if (posLayoutMode !== "full") setSaleCheckoutMinimized(true);
       if (opts?.closeSheet !== false) {
         setSheetOpen(false);
         setSelected(null);
@@ -858,7 +863,7 @@ export function PosPage({ lang }: { lang: Language }) {
       window.setTimeout(() => setToast(null), 1200);
       window.requestAnimationFrame(() => searchInputRef.current?.focus());
     },
-    [bumpRecentProduct, hapticsOn, isDesktopPos, setDraftInput, lang],
+    [bumpRecentProduct, hapticsOn, posLayoutMode, setDraftInput, lang],
   );
 
   const applyDraftInput = useCallback(() => {
@@ -1102,10 +1107,20 @@ export function PosPage({ lang }: { lang: Language }) {
     setExpiryWarnProduct(null);
   }, []);
 
-  const mobileCheckoutOpen = draftLines.length > 0 && !saleCheckoutMinimized && !isDesktopPos;
-  const mountDesktopCheckoutSidebar = shouldMountDesktopCheckoutSidebar(isDesktopPos, products.length > 0);
+  const mountDesktopCheckoutSidebar = shouldMountDesktopCheckoutSidebar(posLayoutMode, products.length > 0);
+  const mountCompactCheckoutSlideover = shouldMountCompactCheckoutSlideover(
+    posLayoutMode,
+    draftLines.length,
+    saleCheckoutMinimized,
+  );
   const mountMobileCheckoutOverlay = shouldMountMobileCheckoutOverlay(
-    isDesktopPos,
+    posLayoutMode,
+    draftLines.length,
+    saleCheckoutMinimized,
+  );
+  const checkoutPanelOpen = mountMobileCheckoutOverlay || mountCompactCheckoutSlideover;
+  const showMinimizedCheckoutFab = shouldShowMinimizedCheckoutFab(
+    posLayoutMode,
     draftLines.length,
     saleCheckoutMinimized,
   );
@@ -1113,7 +1128,7 @@ export function PosPage({ lang }: { lang: Language }) {
   usePosAndroidBackStack({
     cameraScanOpen,
     setCameraScanOpen,
-    checkoutOverlayOpen: mobileCheckoutOpen,
+    checkoutOverlayOpen: checkoutPanelOpen,
     setSaleCheckoutMinimized,
     sheetOpen,
     setSheetOpen,
@@ -1208,7 +1223,7 @@ export function PosPage({ lang }: { lang: Language }) {
           searchInputRef.current?.focus();
           break;
         case "focus_checkout":
-          if (isDesktopPos) {
+          if (isFullDesktopPos) {
             saveButtonRef.current?.focus();
           } else if (draftLines.length > 0) {
             setSaleCheckoutMinimized(false);
@@ -1229,9 +1244,9 @@ export function PosPage({ lang }: { lang: Language }) {
             if (!(quickSell && !showAdvanced && sellPresets.length > 0)) applyDraftInput();
           } else {
             const confirmAction = resolveConfirmSaleAction({
-              isDesktopPos,
+              layoutMode: posLayoutMode,
               draftLineCount: draftLines.length,
-              mobileCheckoutOpen,
+              checkoutPanelOpen,
               activeElement: document.activeElement,
               checkoutRoot: checkoutPanelRef.current,
               saveButton: saveButtonRef.current,
@@ -1248,7 +1263,7 @@ export function PosPage({ lang }: { lang: Language }) {
           else if (discountLine) setDiscountLine(null);
           else if (qtyEditLine) setQtyEditLine(null);
           else if (sheetOpen) setSheetOpen(false);
-          else if (mobileCheckoutOpen) setSaleCheckoutMinimized(true);
+          else if (checkoutPanelOpen) setSaleCheckoutMinimized(true);
           else if (productLockedOpen) setProductLockedOpen(false);
           else if (expiryWarnProduct) closeExpiryWarn();
           else if (firstSaleOpen) dismissFirstSale();
@@ -1281,8 +1296,8 @@ export function PosPage({ lang }: { lang: Language }) {
     expiryWarnProduct,
     finishSale,
     firstSaleOpen,
-    isDesktopPos,
-    mobileCheckoutOpen,
+    posLayoutMode,
+    checkoutPanelOpen,
     productLockedOpen,
     qtyEditLine,
     quickSell,
@@ -1360,6 +1375,7 @@ export function PosPage({ lang }: { lang: Language }) {
       <PosSellHeroCard
         lang={lang}
         sellLabel={t(lang, sellNavLabelKey)}
+        dense={posLayoutMode === "compact"}
         cartStats={draftCartStats}
         cartHasItems={draftLines.length > 0}
         payableUgx={draftPayable}
@@ -1377,7 +1393,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <button
                   type="button"
                   onClick={() => clearDraft()}
-                  className="inline-flex shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                  className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
                 >
                   {modeTerm("clearSale")}
                 </button>
@@ -1385,7 +1401,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {canSavePending ? (
                 <Link
                   to="/pending-sales"
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
                 >
                   {t(lang, "pendingSalesLink")}
                   {pendingCount > 0 ? (
@@ -1399,7 +1415,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <button
                   type="button"
                   onClick={() => setExpenseModalOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
                 >
                   <Banknote className="h-3 w-3 shrink-0" aria-hidden />
                   {t(lang, "posRecordExpenseBtn")}
@@ -1409,7 +1425,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <button
                   type="button"
                   onClick={() => setShiftCloseOpen(true)}
-                  className="inline-flex shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+                  className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
                 >
                   {t(lang, "shiftCloseBtn")}
                 </button>
@@ -1429,8 +1445,8 @@ export function PosPage({ lang }: { lang: Language }) {
 
       <div
         className={clsx(
-          products.length > 0 && "md:grid md:items-start md:gap-4",
-          products.length > 0 && "md:grid-cols-[minmax(0,1fr)_min(400px,36%)]",
+          products.length > 0 && isFullDesktopPos && "grid items-start gap-4",
+          products.length > 0 && isFullDesktopPos && "grid-cols-[minmax(0,1fr)_min(400px,36%)]",
         )}
       >
         <div ref={catalogRef} className="min-w-0 space-y-2">
@@ -1453,7 +1469,7 @@ export function PosPage({ lang }: { lang: Language }) {
             />
             <button
               type="button"
-              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 active:bg-stone-100"
+              className="absolute right-1.5 top-1/2 flex h-11 min-h-[44px] w-11 min-w-[44px] -translate-y-1/2 items-center justify-center rounded-xl text-stone-500 active:bg-stone-100"
               onClick={() => {
                 if (searchQuery.trim()) setSearchQuery("");
                 else if (detectBarcodeCapabilities().cameraScan) setCameraScanOpen(true);
@@ -1671,7 +1687,7 @@ export function PosPage({ lang }: { lang: Language }) {
                   ) : null}
                   <button
                     type="button"
-                    className="absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
+                    className="absolute right-2.5 top-2.5 flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-full border border-stone-200 bg-white text-base shadow-sm active:bg-stone-50"
                       aria-label={favoriteIdSet.has(p.id) ? t(lang, "posRemoveFavorite") : t(lang, "posToggleFavorite")}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1698,7 +1714,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     type="button"
                     onClick={() => openProduct(p)}
                     className={clsx(
-                      "mt-2 min-h-[38px] rounded-2xl px-3 py-2 text-base font-black",
+                      "mt-2 min-h-[44px] rounded-2xl px-3 py-2 text-base font-black",
                       locked
                         ? "border-2 border-stone-300 bg-stone-200 text-stone-600"
                         : "bg-waka-600 text-white active:bg-waka-700",
@@ -1714,7 +1730,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </section>
       )}
 
-        <PosPageScrollSpacer minimizedCheckout={!isDesktopPos && draftLines.length > 0 && saleCheckoutMinimized} />
+        <PosPageScrollSpacer minimizedCheckout={showMinimizedCheckoutFab} />
         </div>
 
         {mountDesktopCheckoutSidebar ? (
@@ -1723,6 +1739,20 @@ export function PosPage({ lang }: { lang: Language }) {
           </aside>
         ) : null}
       </div>
+
+      {mountCompactCheckoutSlideover ? (
+        <PosCompactCheckoutSlideover
+          open
+          onClose={() => setSaleCheckoutMinimized(true)}
+          checkoutBottomPad={checkoutBottomPad}
+        >
+          <PosCheckoutPanel
+            variant="overlay"
+            {...checkoutPanelCommon}
+            onMinimize={() => setSaleCheckoutMinimized(true)}
+          />
+        </PosCompactCheckoutSlideover>
+      ) : null}
 
       {mountMobileCheckoutOverlay ? (
         <PosScreenPortal>
@@ -1744,28 +1774,19 @@ export function PosPage({ lang }: { lang: Language }) {
         </PosScreenPortal>
       ) : null}
 
-      {draftLines.length > 0 && saleCheckoutMinimized && !isDesktopPos ? (
-        <div className="fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom))] left-0 right-0 z-[48] border-t border-waka-200 bg-white px-3 py-2 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]">
-          <div className="mx-auto flex max-w-lg items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[11px] font-bold text-stone-600">
-                {draftCartStats.productCount} {t(lang, "posCartProductsShort").toLowerCase()} ·{" "}
-                {Number.isInteger(draftCartStats.unitCount)
-                  ? draftCartStats.unitCount
-                  : draftCartStats.unitCount.toFixed(2).replace(/\.?0+$/, "")}{" "}
-                {t(lang, "posCartUnitsShort").toLowerCase()}
-              </p>
-              <p className="truncate text-lg font-black leading-tight text-waka-700">UGX {draftPayable.toLocaleString()}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setSaleCheckoutMinimized(false)}
-              className="shrink-0 rounded-xl bg-waka-600 px-3.5 py-2.5 text-sm font-black text-white shadow-md active:bg-waka-700"
-            >
-              {t(lang, "posReviewPay")}
-            </button>
-          </div>
-        </div>
+      {showMinimizedCheckoutFab ? (
+        <PosMinimizedCheckoutFab
+          lang={lang}
+          variant={posLayoutMode === "compact" ? "compact" : "mobile"}
+          productCount={draftCartStats.productCount}
+          unitCount={
+            Number.isInteger(draftCartStats.unitCount)
+              ? draftCartStats.unitCount
+              : draftCartStats.unitCount.toFixed(2).replace(/\.?0+$/, "")
+          }
+          payableUgx={draftPayable}
+          onOpen={() => setSaleCheckoutMinimized(false)}
+        />
       ) : null}
 
       {sheetOpen && selected && (

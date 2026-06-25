@@ -71,7 +71,7 @@ Copy examples:
      - `https://waka.ug/auth/callback`
      - `https://waka.ug/reset-password`
      - `https://waka.ug/auth/recovery`
-4. **Email templates** — ensure links use the redirect host Supabase generates (tied to `emailRedirectTo` / `redirectTo` in `src/hooks/useAuth.ts`, which use `authRedirectOrigin()` from `VITE_APP_URL` or `window.location.origin`).
+4. **Email templates** — auth mail is sent via the **Send Email** hook (`auth-send-email` edge function + Resend). See `supabase/functions/.env.example` and migration `115_email_delivery_log.sql`.
 5. **Secrets:** service role key only in Edge Functions / backend jobs — **not** in this SPA.
 
 ---
@@ -151,7 +151,7 @@ Hooks today:
 
 - [ ] Migrations applied to target project  
 - [ ] Site URL + redirect allowlist match `VITE_APP_URL` / previews  
-- [ ] Email provider configured (if using magic links / confirm signup)  
+- [ ] Email provider configured (Resend + Send Email hook deployed; see `supabase/functions/.env.example`)  
 - [ ] RLS smoke-tested for member vs non-member  
 
 ### Auth flows

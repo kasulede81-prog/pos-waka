@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { visualViewportKeyboardGap } from "../lib/safeAreaInsets";
 
 /** Extra bottom inset when the on-screen keyboard shrinks the visual viewport (mobile browsers). */
 export function useVisualViewportInset(): number {
@@ -9,8 +10,7 @@ export function useVisualViewportInset(): number {
     if (!vv) return;
 
     const update = () => {
-      const gap = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
-      setInset(gap);
+      setInset(visualViewportKeyboardGap(window.innerHeight, vv.height, vv.offsetTop));
     };
 
     update();

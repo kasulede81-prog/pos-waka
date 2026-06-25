@@ -9,10 +9,10 @@ describe("tablet layout", () => {
     expect(usesTabletSidebar(1024)).toBe(true);
   });
 
-  it("uses POS desktop split from 768px", () => {
+  it("uses POS compact desktop from 768px until 1279px", () => {
     expect(POS_DESKTOP_LAYOUT_MIN_PX).toBe(768);
     expect(usesPosDesktopLayout(767)).toBe(false);
     expect(usesPosDesktopLayout(768)).toBe(true);
-    expect(usesPosDesktopLayout(884)).toBe(true);
+    expect(usesPosDesktopLayout(1024)).toBe(true);
   });
 });

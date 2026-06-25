@@ -16,6 +16,8 @@ type Props = {
   todaySalesUgx: number;
   pendingCount: number;
   actionFooter?: ReactNode;
+  /** Tighter hero for POS terminals / compact desktop. */
+  dense?: boolean;
 };
 
 export function PosSellHeroCard({
@@ -29,6 +31,7 @@ export function PosSellHeroCard({
   todaySalesUgx,
   pendingCount,
   actionFooter,
+  dense = false,
 }: Props) {
   const unitShown =
     Number.isInteger(cartStats.unitCount)
@@ -42,6 +45,7 @@ export function PosSellHeroCard({
     <HistoryHeroCard
       lang={lang}
       footer={actionFooter}
+      dense={dense}
       metrics={[
         {
           label: cartHasItems ? t(lang, "posCartProductsShort") : sellLabel,

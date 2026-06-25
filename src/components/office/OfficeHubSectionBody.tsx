@@ -231,6 +231,15 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
   if (section === "insights" && access.hasInsights) {
     return (
       <ul className={listClass}>
+        {access.showAgentPortal ? (
+          <OfficeNavCard
+            to="/agent"
+            title={t(lang, "officeCardAgentPortal")}
+            subtitle={t(lang, "officeCardAgentPortalSub")}
+            Icon={Share2}
+            highlight
+          />
+        ) : null}
         {access.can("receipts.view") ? (
           <OfficeNavCard
             to="/receipts"

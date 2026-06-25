@@ -1,5 +1,4 @@
 import type { User } from "@supabase/supabase-js";
-import { isSupabaseEmailVerified } from "./emailVerification";
 import { supabase } from "./supabase";
 import { bootstrapOwnerWorkspace, type BootstrapArgs } from "./workspaceBootstrap";
 
@@ -29,10 +28,6 @@ export async function repairOwnerWorkspaceIfNeeded(
 
   const health = await fetchOwnerWorkspaceHealth();
   if (health?.ok) return { repaired: false, health };
-
-  if (!isSupabaseEmailVerified(user)) {
-    return { repaired: false, health };
-  }
 
   const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
   const orgName =

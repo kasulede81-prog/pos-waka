@@ -23,7 +23,7 @@ const Numpad = memo(function Numpad({
 }) {
   const row4 = allowDecimal ? [".", "0", "⌫"] : ["0", "⌫", "C"];
   const keyClass = compact
-    ? "min-h-[42px] rounded-xl bg-slate-100 py-1.5 text-lg font-semibold text-slate-900 active:bg-slate-200"
+    ? "min-h-[44px] rounded-xl bg-slate-100 py-1.5 text-lg font-semibold text-slate-900 active:bg-slate-200"
     : "min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200 active:brightness-95 motion-reduce:active:brightness-100";
 
   return (
@@ -188,7 +188,7 @@ function PaymentBlock({
   onSaleCustomerPhone,
 }: PaymentBlockProps) {
   const amountBtnClass = compact
-    ? "mt-1.5 flex min-h-[40px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-lg font-black"
+    ? "mt-1.5 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-lg font-black"
     : "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black";
 
   return (
@@ -326,7 +326,7 @@ function PaymentBlock({
                 onChange={(e) => onSaleCustomerName(e.target.value)}
                 className={clsx(
                   "mt-1 w-full rounded-xl border-2 border-slate-200 bg-white font-semibold",
-                  compact ? "min-h-[40px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-3 text-lg",
+                  compact ? "min-h-[44px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-3 text-lg",
                 )}
                 placeholder={t(lang, "paymentDebtNamePlaceholder")}
               />
@@ -338,7 +338,7 @@ function PaymentBlock({
                 onChange={(e) => onSaleCustomerPhone(e.target.value)}
                 className={clsx(
                   "mt-1 w-full rounded-xl border-2 border-slate-200 bg-white font-semibold",
-                  compact ? "min-h-[40px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-3 text-lg",
+                  compact ? "min-h-[44px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-3 text-lg",
                 )}
                 placeholder={t(lang, "personPhonePh")}
                 inputMode="tel"
@@ -354,7 +354,7 @@ function PaymentBlock({
                 onChange={(e) => onSaleCustomerId(e.target.value)}
                 className={clsx(
                   "mt-1 w-full rounded-xl border-2 border-slate-200 bg-white font-medium",
-                  compact ? "min-h-[40px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-4 text-lg",
+                  compact ? "min-h-[44px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-4 text-lg",
                 )}
               >
                 <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
@@ -500,7 +500,7 @@ function CartScrollBody({
           onClick={onOpenCartDiscount}
           className={clsx(
             "shrink-0 rounded-xl border-2 border-waka-400 bg-white font-black text-waka-900 active:bg-waka-100",
-            compact ? "min-h-[36px] px-3 text-xs" : "min-h-[44px] rounded-2xl px-4 text-sm",
+            compact ? "min-h-[44px] px-3 text-xs" : "min-h-[44px] rounded-2xl px-4 text-sm",
           )}
         >
           {t(lang, "cartDiscountBtn")}
@@ -713,7 +713,7 @@ export function PosCheckoutPanel({
       className={clsx(
         "flex min-h-0 flex-col",
         isSidebar
-          ? "h-full max-h-[calc(100dvh-7rem)] rounded-[1.35rem] border border-waka-200 bg-waka-50/90 shadow-waka-sm"
+          ? "h-full max-h-[calc(100dvh-5rem)] rounded-[1.35rem] border border-waka-200 bg-waka-50/90 shadow-waka-sm"
           : "h-full bg-waka-50",
       )}
     >
@@ -852,7 +852,7 @@ export function PosCheckoutPanel({
             onClick={onSavePending}
             className={clsx(
               "mb-1.5 w-full rounded-2xl border-2 border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
-              isCompact ? "min-h-[40px] text-sm" : "mb-2 min-h-[48px] text-lg",
+              isCompact ? "min-h-[44px] text-sm" : "mb-2 min-h-[48px] text-lg",
             )}
           >
             {savePendingLabel}

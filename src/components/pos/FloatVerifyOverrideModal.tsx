@@ -36,7 +36,6 @@ export function FloatVerifyOverrideModal({
     <ModalSheet
       open
       onClose={onClose}
-      align="center"
       zIndexClass="z-[90]"
       clearNav={false}
       title={t(lang, "shiftFloatOverrideTitle")}

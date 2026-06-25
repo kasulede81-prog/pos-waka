@@ -130,8 +130,9 @@ export function mapPublicPricingRpc(data: unknown): PublicPricingSnapshot {
   const plans = plansRaw
     .map((row) => {
       const r = row as RpcPlanRow;
-      const code = r.plan_code as PaidPlanCode;
-      if (!code || code === "free") return null;
+      const rawCode = String(r.plan_code ?? "");
+      if (!rawCode || rawCode === "free") return null;
+      const code = rawCode as PaidPlanCode;
       return {
         planCode: code,
         originalMonthlyUgx: Number(r.original_monthly_ugx),

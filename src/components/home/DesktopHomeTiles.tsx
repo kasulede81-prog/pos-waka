@@ -1,17 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { Share2 } from "lucide-react";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { hasEffectivePermission, resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { useOwnerRiskCards } from "../../hooks/useOwnerRiskCards";
+import { useMarketingAgentPortal } from "../../hooks/useMarketingAgentPortal";
 import { usePosStore } from "../../store/usePosStore";
 import { isLowStock } from "../../lib/sellingEngine";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { lockedProductIds } from "../../lib/productPlanLock";
 import { POS_SHOP_ROUTE } from "../../lib/posNavigation";
 import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
-import { launcherMasonryGridClass, resolveHomeMenuTiles } from "../../lib/launcherTiles";
+import { launcherMasonryGridClass, resolveHomeMenuTiles, type ResolvedHomeTile } from "../../lib/launcherTiles";
 import { HomeLauncherTile } from "./HomeLauncherTile";
 
 type Props = { lang: Language };
@@ -28,6 +30,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const savedOrder = usePosStore((s) => s.preferences.launcherTileOrder) ?? EMPTY_ORDER;
   const layout = usePosStore((s) => s.preferences.launcherTileLayout) ?? EMPTY_LAYOUT;
   const { snapshot, authMode } = useSubscription();
+  const { isMarketingAgent } = useMarketingAgentPortal();
 
   const tier = resolveEffectivePlanTier(snapshot);
   const productLimit = maxProductsForTier(tier);
@@ -58,7 +61,7 @@ export function DesktopHomeTiles({ lang }: Props) {
     [lowStockCount, riskCount],
   );
 
-  const { hero, secondary } = useMemo(
+  const { hero, secondary: baseSecondary } = useMemo(
     () =>
       resolveHomeMenuTiles({
         savedOrder,
@@ -68,6 +71,25 @@ export function DesktopHomeTiles({ lang }: Props) {
       }),
     [savedOrder, layout, can, badges],
   );
+
+  const secondary = useMemo((): ResolvedHomeTile[] => {
+    if (!isMarketingAgent) return baseSecondary;
+    const agentTile: ResolvedHomeTile = {
+      id: "agent",
+      labelKey: "desktopHomeTileAgent",
+      to: "/agent",
+      Icon: Share2,
+      group: "management",
+      hideable: false,
+      color: "orange",
+      customColor: null,
+      scale: 35,
+      pinned: true,
+      hidden: false,
+    };
+    if (baseSecondary.some((t) => t.id === "agent")) return baseSecondary;
+    return [agentTile, ...baseSecondary];
+  }, [baseSecondary, isMarketingAgent]);
 
   const focusableIds = useMemo(() => {
     const ids: string[] = [];

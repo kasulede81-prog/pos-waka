@@ -1,16 +1,41 @@
-/** Desktop persistent checkout sidebar — mutually exclusive with mobile overlay. */
-export function shouldMountDesktopCheckoutSidebar(isDesktopPos: boolean, hasProducts: boolean): boolean {
-  return isDesktopPos && hasProducts;
+import type { PosLayoutMode } from "./posLayoutMode";
+
+/** Full desktop — persistent checkout sidebar (catalog + checkout columns). */
+export function shouldMountDesktopCheckoutSidebar(layoutMode: PosLayoutMode, hasProducts: boolean): boolean {
+  return layoutMode === "full" && hasProducts;
 }
 
-export function shouldMountMobileCheckoutOverlay(
-  isDesktopPos: boolean,
+/** Compact desktop — slide-over checkout from the right. */
+export function shouldMountCompactCheckoutSlideover(
+  layoutMode: PosLayoutMode,
   draftLineCount: number,
   saleCheckoutMinimized: boolean,
 ): boolean {
-  return !isDesktopPos && draftLineCount > 0 && !saleCheckoutMinimized;
+  return layoutMode === "compact" && draftLineCount > 0 && !saleCheckoutMinimized;
 }
 
-export function checkoutPanelsAreExclusive(mountDesktopSidebar: boolean, mountMobileOverlay: boolean): boolean {
-  return !(mountDesktopSidebar && mountMobileOverlay);
+/** Mobile — full-screen checkout overlay. */
+export function shouldMountMobileCheckoutOverlay(
+  layoutMode: PosLayoutMode,
+  draftLineCount: number,
+  saleCheckoutMinimized: boolean,
+): boolean {
+  return layoutMode === "mobile" && draftLineCount > 0 && !saleCheckoutMinimized;
+}
+
+export function shouldShowMinimizedCheckoutFab(
+  layoutMode: PosLayoutMode,
+  draftLineCount: number,
+  saleCheckoutMinimized: boolean,
+): boolean {
+  return layoutMode !== "full" && draftLineCount > 0 && saleCheckoutMinimized;
+}
+
+export function checkoutPanelsAreExclusive(
+  mountDesktopSidebar: boolean,
+  mountCompactSlideover: boolean,
+  mountMobileOverlay: boolean,
+): boolean {
+  const mounted = [mountDesktopSidebar, mountCompactSlideover, mountMobileOverlay].filter(Boolean).length;
+  return mounted <= 1;
 }

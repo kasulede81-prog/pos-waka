@@ -13,3 +13,6 @@ verify_jwt = true
 
 [functions.owner-permanently-delete-account]
 verify_jwt = true
+
+[functions.auth-send-email]
+verify_jwt = false

@@ -15,14 +15,40 @@ describe("posCheckoutFocus", () => {
     expect(isCheckoutFocusTarget(input, root, null)).toBe(true);
   });
 
-  it("focuses checkout instead of finishing on desktop when catalog focused", () => {
+  it("focuses checkout instead of finishing on full desktop when catalog focused", () => {
     const search = { tagName: "INPUT" } as HTMLInputElement;
     expect(
       resolveConfirmSaleAction({
-        isDesktopPos: true,
+        layoutMode: "full",
         draftLineCount: 2,
-        mobileCheckoutOpen: false,
+        checkoutPanelOpen: false,
         activeElement: search,
+        checkoutRoot: null,
+        saveButton: null,
+      }),
+    ).toBe("focus_checkout");
+  });
+
+  it("finishes when compact slideover is open", () => {
+    expect(
+      resolveConfirmSaleAction({
+        layoutMode: "compact",
+        draftLineCount: 1,
+        checkoutPanelOpen: true,
+        activeElement: null,
+        checkoutRoot: null,
+        saveButton: null,
+      }),
+    ).toBe("finish");
+  });
+
+  it("opens checkout on compact when panel closed", () => {
+    expect(
+      resolveConfirmSaleAction({
+        layoutMode: "compact",
+        draftLineCount: 1,
+        checkoutPanelOpen: false,
+        activeElement: null,
         checkoutRoot: null,
         saveButton: null,
       }),
@@ -32,9 +58,9 @@ describe("posCheckoutFocus", () => {
   it("finishes on mobile checkout", () => {
     expect(
       resolveConfirmSaleAction({
-        isDesktopPos: false,
+        layoutMode: "mobile",
         draftLineCount: 1,
-        mobileCheckoutOpen: true,
+        checkoutPanelOpen: true,
         activeElement: null,
         checkoutRoot: null,
         saveButton: null,

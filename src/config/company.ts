@@ -36,7 +36,7 @@ export const WAKA_OFFICE_REGION = "Central Region";
 export const WAKA_OFFICE_COUNTRY = "Uganda";
 export const WAKA_COMPANY_POSTAL_ADDRESS = "P.O Box 4010, Kampala, Uganda";
 
-export const WAKA_SUPPORT_EMAILS = ["info@waka.ug", "wakamarketplace@gmail.com"] as const;
+export const WAKA_SUPPORT_EMAILS = ["support@waka.ug", "wakamarketplace@gmail.com"] as const;
 export const WAKA_SUPPORT_EMAIL = WAKA_SUPPORT_EMAILS[0];
 export const WAKA_SUPPORT_WHATSAPP_WA_ME = "256792521711";
 

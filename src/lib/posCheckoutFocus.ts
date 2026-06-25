@@ -1,3 +1,5 @@
+import type { PosLayoutMode } from "./posLayoutMode";
+
 /** True when focus is inside checkout (desktop Enter-to-pay guard). */
 export function isCheckoutFocusTarget(
   activeElement: Element | null,
@@ -13,19 +15,22 @@ export function isCheckoutFocusTarget(
 export type ConfirmSaleAction = "finish" | "focus_checkout" | "noop";
 
 export function resolveConfirmSaleAction(params: {
-  isDesktopPos: boolean;
+  layoutMode: PosLayoutMode;
   draftLineCount: number;
-  mobileCheckoutOpen: boolean;
+  checkoutPanelOpen: boolean;
   activeElement: Element | null;
   checkoutRoot: HTMLElement | null;
   saveButton: HTMLButtonElement | null;
 }): ConfirmSaleAction {
   if (params.draftLineCount <= 0) return "noop";
-  if (params.mobileCheckoutOpen) return "finish";
-  if (params.isDesktopPos) {
+  if (params.checkoutPanelOpen) return "finish";
+  if (params.layoutMode === "full") {
     return isCheckoutFocusTarget(params.activeElement, params.checkoutRoot, params.saveButton)
       ? "finish"
       : "focus_checkout";
+  }
+  if (params.layoutMode === "compact" || params.layoutMode === "mobile") {
+    return "focus_checkout";
   }
   return "noop";
 }

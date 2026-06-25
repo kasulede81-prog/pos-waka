@@ -26,7 +26,7 @@ export function VirtualizedReceiptList<T>({
   });
 
   if (items.length <= VIRTUALIZE_THRESHOLD) {
-    return <div className="space-y-2">{items.map((item, index) => renderItem(item, index))}</div>;
+    return <div className="divide-y divide-stone-100">{items.map((item, index) => renderItem(item, index))}</div>;
   }
 
   return (

@@ -112,7 +112,6 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
       <ModalSheet
         open
         onClose={() => navigate(POS_HOME_ROUTE)}
-        align="center"
         zIndexClass="z-[80]"
         clearNav={false}
         title={t(lang, "dayOpenTitle")}
@@ -181,7 +180,6 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
       <ModalSheet
         open
         onClose={() => navigate(POS_HOME_ROUTE)}
-        align="center"
         zIndexClass="z-[80]"
         clearNav={false}
         title={t(lang, "shiftOpenTitle")}

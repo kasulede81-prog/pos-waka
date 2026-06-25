@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Cloud } from "lucide-react";
+import { Cloud, Share2 } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
@@ -51,7 +51,7 @@ function OfficeSyncStatusChip({ lang }: { lang: Language }) {
 }
 
 export function OfficeHubPage({ lang }: { lang: Language }) {
-  const { sectionVisible, canOwnerDashboard } = useOfficeHubAccess();
+  const { sectionVisible, canOwnerDashboard, showAgentPortal } = useOfficeHubAccess();
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
   const preferences = usePosStore((s) => s.preferences);
@@ -126,8 +126,17 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
         </div>
       )}
 
-      {(showInternalAdmin || isInternalAdminPreviewEnabled()) && (
-        <div className="border-t border-stone-100 pt-4">
+      {(showInternalAdmin || showAgentPortal || isInternalAdminPreviewEnabled()) && (
+        <div className="border-t border-stone-100 pt-4 space-y-2">
+          {showAgentPortal ? (
+            <Link
+              to="/agent"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900"
+            >
+              <Share2 className="h-4 w-4 shrink-0" aria-hidden />
+              {t(lang, "officeCardAgentPortal")}
+            </Link>
+          ) : null}
           {showInternalAdmin ? (
             <Link
               to="/internal/waka"

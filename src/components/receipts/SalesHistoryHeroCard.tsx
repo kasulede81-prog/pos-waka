@@ -48,7 +48,7 @@ function ProfitSparkline({ points }: { points: number[] }) {
   const line = coords.join(" ");
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="mt-1 h-7 w-[5.5rem]" aria-hidden>
+    <svg viewBox={`0 0 ${w} ${h}`} className="mt-0.5 h-5 w-[4.5rem]" aria-hidden>
       <defs>
         <linearGradient id="salesSparkFill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="rgb(255 237 213)" stopOpacity="0.9" />
@@ -90,7 +90,7 @@ export function SalesHistoryHeroCard({
       footer: showReportsLink ? (
         <Link
           to="/reports"
-          className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-waka-50/95 hover:text-white sm:mt-2 sm:text-xs"
+          className="mt-1 inline-flex items-center gap-0.5 text-[9px] font-bold text-waka-50/95 hover:text-white sm:text-[10px]"
         >
           {t(lang, "salesHistoryViewSummary")}
           <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
@@ -119,7 +119,7 @@ export function SalesHistoryHeroCard({
       footer: showDebtsLink ? (
         <Link
           to="/debts"
-          className="mt-1.5 inline-flex items-center gap-0.5 text-[10px] font-bold text-waka-50/95 hover:text-white sm:mt-2 sm:text-xs"
+          className="mt-1 inline-flex items-center gap-0.5 text-[9px] font-bold text-waka-50/95 hover:text-white sm:text-[10px]"
         >
           {t(lang, "salesHistoryViewDebts")}
           <ChevronRight className="h-3 w-3 sm:h-3.5 sm:w-3.5" aria-hidden />
@@ -134,6 +134,8 @@ export function SalesHistoryHeroCard({
       filter={filter}
       onFilterChange={onFilterChange}
       metrics={metrics}
+      dense
+      compactDatePicker
       bottomSection={
         summary ? (
           <SalesHistorySummaryStrip
@@ -145,6 +147,7 @@ export function SalesHistoryHeroCard({
             stockValueUgx={summary.stockValueUgx}
             showShopSummaries={summary.showShopSummaries}
             embedded
+            compact
           />
         ) : undefined
       }

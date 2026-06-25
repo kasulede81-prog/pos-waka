@@ -16,7 +16,6 @@ import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
-import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
 import { assertAccountSwitchAllowed, ORGANIZATION_DELETED_MESSAGE, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
@@ -126,6 +125,7 @@ export function useAuth() {
   const workspaceEnsurePromisesRef = useRef<Record<string, Promise<void>>>({});
   const workspaceEnsuredForUserRef = useRef<string | null>(null);
   const signUpInProgressRef = useRef(false);
+  const signUpLockRef = useRef(false);
   const backgroundSyncScheduledRef = useRef<Record<string, true>>({});
 
   const tryApplyPendingReferral = useCallback(async (next: Session | null) => {
@@ -157,8 +157,6 @@ export function useAuth() {
       if (inFlight) return inFlight;
 
       const promise = (async () => {
-        const verified = isSupabaseEmailVerified(next.user);
-
         const alreadyEnsured =
           workspaceEnsuredForUserRef.current === uid ||
           bootstrappedUserIdsRef.current[uid] ||
@@ -170,9 +168,6 @@ export function useAuth() {
             userId: uid,
             email: next.user.email,
           });
-          if (verified) {
-            await repairOwnerWorkspaceIfNeeded(next.user);
-          }
           if (accountKey) {
             const deleted = await refreshOrganizationDeletionState(uid, accountKey);
             if (deleted) {
@@ -184,26 +179,20 @@ export function useAuth() {
               return;
             }
           }
+          await repairOwnerWorkspaceIfNeeded(next.user);
           markWorkspaceEnsured(uid);
-          if (verified) {
-            await tryApplyPendingReferral(next);
-            if (!backgroundSyncScheduledRef.current[uid]) {
-              backgroundSyncScheduledRef.current[uid] = true;
-              scheduleBackgroundCloudSync({
-                pull: false,
-                delayMs: isNativeApp() ? 3_000 : 1_500,
-              });
-            }
+          await tryApplyPendingReferral(next);
+          if (!backgroundSyncScheduledRef.current[uid]) {
+            backgroundSyncScheduledRef.current[uid] = true;
+            scheduleBackgroundCloudSync({
+              pull: false,
+              delayMs: isNativeApp() ? 3_000 : 1_500,
+            });
           }
           return;
         }
 
         try {
-          if (!verified) {
-            markWorkspaceEnsured(uid);
-            return;
-          }
-
           await repairOwnerWorkspaceIfNeeded(next.user);
 
           const existing = await resolvePrimaryOrganizationForUser(uid);
@@ -512,6 +501,10 @@ export function useAuth() {
     if (!hasSupabaseConfig || !supabase) {
       throw new Error("Configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to create an account.");
     }
+    if (signUpLockRef.current) {
+      throw new Error("Registration is already in progress. Please wait a moment.");
+    }
+    signUpLockRef.current = true;
     const redirectTo = getAuthCallbackUrl();
     const orgLabel = (profile?.organizationName ?? businessName).trim();
     const shopLabel = (profile?.shopDisplayName ?? businessName).trim();
@@ -544,10 +537,6 @@ export function useAuth() {
         computeAccountKey({ mode: "supabase", userId: active.user?.id, email: active.user?.email }),
       );
       applySignupProfileToLocalStore(active);
-      if (!isSupabaseEmailVerified(active.user)) {
-        setSession(active);
-        return { needsEmailVerification: true };
-      }
       await ensureWorkspaceForSession(active);
       setSession(active);
       return { needsEmailVerification: false, session: active };
@@ -623,6 +612,7 @@ export function useAuth() {
       return { needsEmailVerification: true };
     } finally {
       signUpInProgressRef.current = false;
+      signUpLockRef.current = false;
     }
   },
   [ensureWorkspaceForSession]);

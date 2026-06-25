@@ -1,5 +1,8 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { PageBackBar } from "../components/layout/PageBackBar";
+import { useSessionActor } from "../context/SessionActorContext";
+import { useSubscription } from "../context/SubscriptionContext";
+import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { Copy, MapPin, Users } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -19,6 +22,9 @@ const LovableFieldMap = lazy(async () => {
 });
 
 export function MarketingAgentPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
+  const { snapshot, authMode } = useSubscription();
+  const agentBackTo = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode) ? "/office" : "/";
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<MarketingAgentMe | null>(null);
   const [referrals, setReferrals] = useState<AgentReferralRow[]>([]);
@@ -116,7 +122,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
   if (!agent) {
     return (
       <div className="mx-auto max-w-lg space-y-4 px-4 pb-16 pt-2">
-        <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+        <PageBackBar lang={lang} fallbackTo={agentBackTo} label={t(lang, "officeBackToHub")} />
         <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "agentPortalTitle")}</h1>
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm font-semibold text-amber-950">
           {t(lang, "agentPortalNotAgent")}
@@ -127,7 +133,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 pb-16 pt-2">
-      <PageBackBar lang={lang} fallbackTo="/office" label={t(lang, "officeBackToHub")} />
+      <PageBackBar lang={lang} fallbackTo={agentBackTo} label={t(lang, "officeBackToHub")} />
       <div>
         <h1 className="text-2xl font-black text-stone-900 sm:text-3xl">{t(lang, "agentPortalTitle")}</h1>
         <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "agentPortalSub")}</p>

@@ -5,6 +5,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
 import { RoleProtectedRoute } from "./components/RoleProtectedRoute";
+import { MarketingAgentProtectedRoute } from "./components/MarketingAgentProtectedRoute";
 import { ActivationGateOutlet } from "./components/ActivationGateOutlet";
 import { ActivationProvider } from "./context/ActivationContext";
 import { useAuth } from "./hooks/useAuth";
@@ -179,13 +180,15 @@ function AppRoutes() {
         <Route
           path="/register"
           element={
-            <RegisterPage
-              lang={lang}
-              setLang={setLang}
-              isAuthenticated={auth.isAuthenticated}
-              signUpQuick={auth.signUpQuick}
-              onGoogleSignIn={auth.signInWithGoogle}
-            />
+            <RouteErrorBoundary scope="Registration">
+              <RegisterPage
+                lang={lang}
+                setLang={setLang}
+                isAuthenticated={auth.isAuthenticated}
+                signUpQuick={auth.signUpQuick}
+                onGoogleSignIn={auth.signInWithGoogle}
+              />
+            </RouteErrorBoundary>
           }
         />
 
@@ -466,11 +469,11 @@ function AppRoutes() {
             <Route
               path="agent"
               element={
-                <RoleProtectedRoute permission="settings.view">
+                <MarketingAgentProtectedRoute>
                   <Suspense fallback={<LazyWait />}>
                     <MarketingAgentPage lang={lang} />
                   </Suspense>
-                </RoleProtectedRoute>
+                </MarketingAgentProtectedRoute>
               }
             />
             <Route path="upgrade" element={<UpgradePage lang={lang} />} />

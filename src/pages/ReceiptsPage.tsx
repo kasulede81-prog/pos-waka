@@ -255,11 +255,13 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   );
 
   return (
-    <div className="space-y-4 pb-8 md:pb-4">
-      <div className="flex items-start justify-between gap-3">
+    <div className="space-y-3 pb-8 md:pb-4">
+      <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-2xl font-black tracking-tight text-slate-950">{term ? term("receipts") : t(lang, "receipts")}</h2>
-          <p className="mt-1 text-sm font-medium text-slate-500">{term ? term("receiptsHint") : t(lang, "receiptsHint")}</p>
+          <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+            {term ? term("receipts") : t(lang, "receipts")}
+          </h2>
+          <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">{term ? term("receiptsHint") : t(lang, "receiptsHint")}</p>
         </div>
         {partitioned.completed.length > 0 ? (
           <button
@@ -281,7 +283,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       ) : null}
 
       {sales.length > 0 ? (
-        <div className="sticky top-0 z-10 -mx-3 space-y-3 bg-stone-50/95 px-3 pb-3 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+        <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
           <SalesHistoryHeroCard
             lang={lang}
             salesLabel={salesHeroLabel}
@@ -342,8 +344,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
       {listSales.length > 0 ? (
         <section className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
-          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
-            <h3 className="text-base font-black text-slate-950">{t(lang, "salesHistoryRecentSales")}</h3>
+          <div className="flex items-center justify-between border-b border-stone-100 px-3 py-2 sm:px-4">
+            <h3 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "salesHistoryRecentSales")}</h3>
             <p className="text-xs font-bold text-slate-500">
               {tTemplate(lang, "receiptsDayGroupMeta", {
                 count: String(listSales.length),
@@ -355,7 +357,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             items={listSales}
             getKey={(sale) => sale.id}
             renderItem={(sale, index) => renderSaleRow(sale, index)}
-            estimateRowPx={76}
+            estimateRowPx={68}
           />
         </section>
       ) : null}
