@@ -1,6 +1,6 @@
 import clsx from "clsx";
-import type { CSSProperties, MouseEvent, ReactNode } from "react";
-import { useKeyboardInset } from "../../hooks/useKeyboardInset";
+import type { CSSProperties, FocusEvent, MouseEvent, ReactNode } from "react";
+import { useVisualViewportBounds } from "../../hooks/useVisualViewportBounds";
 import { AppModalOverlay } from "./AppModalOverlay";
 
 type Props = {
@@ -27,7 +27,7 @@ const DEFAULT_MAX_H = "max-h-[min(92dvh,720px)]";
 
 /**
  * Universal modal/sheet — scrollable body, sticky footer, safe-area + keyboard insets.
- * Keyboard inset lifts the panel from the bottom (not overlay padding) so flex layout stays stable.
+ * Overlay tracks the visual viewport so the sheet stays above the on-screen keyboard.
  */
 export function ModalSheet({
   open,
@@ -46,18 +46,33 @@ export function ModalSheet({
   "aria-labelledby": ariaLabelledby,
   onBackdropClick,
 }: Props) {
-  const keyboardInset = useKeyboardInset();
+  const viewport = useVisualViewportBounds();
 
   if (!open) return null;
 
-  const panelLiftPx = keyboardInset > 0 ? keyboardInset : undefined;
-  const panelStyle: CSSProperties | undefined = panelLiftPx
-    ? { marginBottom: panelLiftPx, transition: "margin-bottom 160ms ease-out" }
-    : { transition: "margin-bottom 160ms ease-out" };
+  const overlayStyle: CSSProperties = {
+    top: viewport.offsetTop,
+    left: viewport.offsetLeft,
+    width: viewport.width,
+    height: viewport.height,
+    right: "auto",
+    bottom: "auto",
+  };
+
+  const panelMaxHeightPx = Math.min(Math.round(viewport.height * 0.92), 720);
+  const panelStyle: CSSProperties = { maxHeight: panelMaxHeightPx };
 
   const handleBackdrop = (e: MouseEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return;
     (onBackdropClick ?? onClose)();
+  };
+
+  const scrollFocusedFieldIntoView = (e: FocusEvent<HTMLDivElement>) => {
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+    requestAnimationFrame(() => {
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
   };
 
   return (
@@ -66,6 +81,7 @@ export function ModalSheet({
       role={role}
       aria-modal={ariaModal}
       aria-labelledby={ariaLabelledby}
+      style={overlayStyle}
       className={clsx(
         zIndexClass,
         "flex bg-black/55 pt-[max(0.25rem,env(safe-area-inset-top,0px))]",
@@ -95,7 +111,10 @@ export function ModalSheet({
           </div>
         ) : null}
 
-        <div className={clsx("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4", bodyClassName)}>
+        <div
+          onFocusCapture={scrollFocusedFieldIntoView}
+          className={clsx("min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4", bodyClassName)}
+        >
           {children}
         </div>
 

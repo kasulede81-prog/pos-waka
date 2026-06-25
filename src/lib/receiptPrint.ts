@@ -7,6 +7,7 @@ import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { customerPaidUgxForSaleLine } from "./refundBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
+import { isNativePrintPlatform } from "./nativeReceiptPrint";
 
 export type ReceiptLabels = {
   cashier: string;
@@ -559,6 +560,7 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 /** Print via hidden iframe (avoids popup blockers; works with AirPrint / system dialog). */
 export function printReceiptText(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): boolean {
   if (typeof document === "undefined") return false;
+  if (isNativePrintPlatform()) return false;
 
   const html = receiptHtml(receiptPlain, paper);
   const iframe = document.createElement("iframe");
@@ -632,7 +634,9 @@ export async function printReceiptWithFallback(
     // Continue into fallback.
   }
 
-  const browserOk = printReceiptText(receiptPlain, paper);
-  if (browserOk) return { ok: true, mode: "browser" };
+  if (!isNativePrintPlatform()) {
+    const browserOk = printReceiptText(receiptPlain, paper);
+    if (browserOk) return { ok: true, mode: "browser" };
+  }
   return { ok: false, mode: "none", error: "No printing method available." };
 }

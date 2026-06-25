@@ -46,6 +46,27 @@ body:has(.app-shell-root) #root {
   overflow: hidden;
 }
 
+/** Auth / public pages: let the document scroll (long registration forms on mobile web). */
+html:has(.auth-scroll-root),
+body:has(.auth-scroll-root) {
+  overflow-y: auto;
+  height: auto;
+  min-height: 100dvh;
+  max-height: none;
+}
+
+body:has(.auth-scroll-root) #root {
+  height: auto;
+  min-height: 100dvh;
+  max-height: none;
+  overflow: visible;
+}
+
+.auth-scroll-root {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
 body {
   margin: 0;
   font-family: "DM Sans", Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;

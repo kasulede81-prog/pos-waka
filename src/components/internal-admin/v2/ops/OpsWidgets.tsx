@@ -4,7 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Search, ShieldAlert } from "lucide-react";
 import type { FleetDeviceRow, RecentShopRow, SupportTicketRow } from "../../../../lib/wakaInternalAdmin";
-import { formatDisplayEmail } from "../../../../lib/wakaInternalAdmin";
+import { formatDisplayEmail, formatOwnerDisplayLabel } from "../../../../lib/wakaInternalAdmin";
 import { internalAdminShopHref } from "../../../../lib/internalAdminPreview";
 import {
   CURRENT_APP_VERSION,
@@ -164,7 +164,10 @@ export function GlobalSearchBar({
     if (needle.length < 2) return [];
     const shopHits = shops
       .filter((s) => {
-        const owner = formatDisplayEmail(s.owner_email) ?? s.owner_label ?? "";
+        const owner =
+          formatDisplayEmail(s.owner_email) ??
+          formatOwnerDisplayLabel({ ownerFullName: s.owner_full_name, ownerLabel: s.owner_label }) ??
+          "";
         return (
           s.name.toLowerCase().includes(needle) ||
           (s.shop_number ?? "").toLowerCase().includes(needle) ||

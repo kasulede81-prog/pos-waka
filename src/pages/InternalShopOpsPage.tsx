@@ -39,6 +39,7 @@ import {
   fetchShopOpsDetail,
   fetchWakaInternalAdminMe,
   formatDisplayEmail,
+  formatOwnerDisplayLabel,
   formatLastActive,
   googleMapsDirectionsUrl,
   type AdminPlanCode,
@@ -442,11 +443,19 @@ export function InternalShopOpsPage({ lang }: Props) {
           ) : null}
 
           <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-            {formatDisplayEmail(detail.owner_email) ? (
-              <p className="text-xs font-semibold text-stone-600">{formatDisplayEmail(detail.owner_email)}</p>
-            ) : detail.owner_label ? (
-              <p className="text-xs font-semibold text-stone-600">{detail.owner_label}</p>
-            ) : null}
+            {(() => {
+              const ownerName = formatOwnerDisplayLabel({
+                ownerFullName: detail.owner_full_name,
+                ownerLabel: detail.owner_label,
+              });
+              const ownerEmail = formatDisplayEmail(detail.owner_email);
+              return (
+                <>
+                  {ownerName ? <p className="text-xs font-semibold text-stone-700">{ownerName}</p> : null}
+                  {ownerEmail ? <p className="text-xs font-semibold text-stone-600">{ownerEmail}</p> : null}
+                </>
+              );
+            })()}
             <h1 className="mt-0.5 text-xl font-black text-stone-900">{detail.shop.name}</h1>
             {formatWakaShopNumber(detail.shop.shop_number) ? (
               <p className="mt-1 font-mono text-sm font-black text-orange-700">

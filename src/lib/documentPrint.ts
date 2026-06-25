@@ -1,5 +1,6 @@
 import type { ReceiptPaperSize } from "../types";
 import { saveExportedFile } from "./fileDownload";
+import { isNativePrintPlatform } from "./nativeReceiptPrint";
 import { paperCss } from "./receiptPrint";
 
 declare global {
@@ -25,6 +26,8 @@ body { font-family: Inter, system-ui, sans-serif; padding: 8px; color: #111; mar
 
 export function printHtmlDocument(bodyHtml: string, paper: ReceiptPaperSize = "80mm", title = "Waka document"): boolean {
   if (typeof document === "undefined") return false;
+  /** Android/iOS WebView: iframe window.print() is a no-op — use share PDF fallback instead. */
+  if (isNativePrintPlatform()) return false;
 
   const html = wrapPrintHtml(bodyHtml, paper, title);
   const iframe = document.createElement("iframe");

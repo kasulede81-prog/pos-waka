@@ -100,6 +100,7 @@ import {
 } from "../lib/receiptPrint";
 import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../lib/auditReceiptLog";
 import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../lib/receiptDocuments";
+import { isNativePrintPlatform } from "../lib/nativeReceiptPrint";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { posSearchAliases } from "../lib/pharmacyUx";
@@ -2011,8 +2012,12 @@ export function PosPage({ lang }: { lang: Language }) {
                     customerBalanceUgx: cust?.debtBalanceUgx ?? null,
                   });
                   void printSaleReceipt(ctx).then((r) => {
-                    if (r.ok) logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
-                    if (!r.ok) window.alert(t(lang, "receiptPrintBlocked"));
+                    if (r.ok) {
+                      logReceiptReprintAudit(receiptSale, ctx.receiptNumber);
+                      if (isNativePrintPlatform()) setToast(t(lang, "receiptPrintNativeOpened"));
+                    } else {
+                      window.alert(t(lang, "receiptPrintBlocked"));
+                    }
                   });
                 }}
                 onDownloadPdf={() => {

@@ -39,6 +39,7 @@ import {
   fetchSubscriptionGrowthBuckets7d,
   fetchSupportTickets,
   formatDisplayEmail,
+  formatOwnerDisplayLabel,
   type BusinessTypeSlice,
   type DayBucket,
   type DistrictOpsRow,
@@ -669,7 +670,9 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                       {[row.district, row.city].filter(Boolean).join(" · ") || "—"}
                     </td>
                     <td className="max-w-[10rem] truncate px-3 py-2 text-xs font-semibold text-stone-700">
-                      {formatDisplayEmail(row.owner_email) ?? row.owner_label ?? "—"}
+                      {formatDisplayEmail(row.owner_email) ??
+                        formatOwnerDisplayLabel({ ownerLabel: row.owner_label }) ??
+                        "—"}
                     </td>
                     <td className="px-3 py-2 font-mono text-xs uppercase">{row.plan_code ?? "—"}</td>
                     <td className="px-3 py-2 text-xs text-stone-500">

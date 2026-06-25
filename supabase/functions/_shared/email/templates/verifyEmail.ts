@@ -1,4 +1,4 @@
-import { wrapEmailLayout } from "./layout.ts";
+import { wrapEmailLayout } from "../layout.ts";
 
 export type VerifyEmailTemplateInput = {
   confirmationUrl: string;

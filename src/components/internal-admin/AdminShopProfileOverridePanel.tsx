@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ShopOpsDetail } from "../../lib/wakaInternalAdmin";
-import { adminShopUpdateProfile } from "../../lib/wakaInternalAdmin";
+import { adminShopUpdateProfile, formatDisplayEmail, formatOwnerDisplayLabel } from "../../lib/wakaInternalAdmin";
 import { fetchDistricts, type DistrictRow } from "../../lib/shopDistricts";
 import { BUSINESS_TYPE_IDS } from "../../config/businessTypes";
 import type { BusinessType } from "../../types";
@@ -24,8 +24,15 @@ export function AdminShopProfileOverridePanel({
 }: Props) {
   const shop = detail.shop;
   const [shopName, setShopName] = useState(shop.name);
+  const [ownerFullName, setOwnerFullName] = useState(
+    () =>
+      formatOwnerDisplayLabel({
+        ownerFullName: detail.owner_full_name,
+        ownerLabel: detail.owner_label,
+      }) ?? "",
+  );
   const [phone, setPhone] = useState(shop.phone_e164 ?? "");
-  const [ownerEmail, setOwnerEmail] = useState(detail.owner_email ?? "");
+  const [ownerEmail, setOwnerEmail] = useState(formatDisplayEmail(detail.owner_email) ?? "");
   const [address, setAddress] = useState(shop.address_line ?? "");
   const [city, setCity] = useState(shop.city ?? "");
   const [area, setArea] = useState(shop.area ?? "");
@@ -39,14 +46,32 @@ export function AdminShopProfileOverridePanel({
 
   useEffect(() => {
     setShopName(shop.name);
+    setOwnerFullName(
+      formatOwnerDisplayLabel({
+        ownerFullName: detail.owner_full_name,
+        ownerLabel: detail.owner_label,
+      }) ?? "",
+    );
     setPhone(shop.phone_e164 ?? "");
-    setOwnerEmail(detail.owner_email ?? "");
+    setOwnerEmail(formatDisplayEmail(detail.owner_email) ?? "");
     setAddress(shop.address_line ?? "");
     setCity(shop.city ?? "");
     setArea(shop.area ?? "");
     setDistrictId(shop.district_id ?? "");
     setBusinessType((shop.business_type as BusinessType) ?? "kiosk_duka");
-  }, [shop.id, shop.name, shop.phone_e164, shop.address_line, shop.city, shop.area, shop.district_id, shop.business_type, detail.owner_email]);
+  }, [
+    shop.id,
+    shop.name,
+    shop.phone_e164,
+    shop.address_line,
+    shop.city,
+    shop.area,
+    shop.district_id,
+    shop.business_type,
+    detail.owner_email,
+    detail.owner_full_name,
+    detail.owner_label,
+  ]);
 
   useEffect(() => {
     void fetchDistricts().then((r) => setDistricts(r.districts));
@@ -67,6 +92,7 @@ export function AdminShopProfileOverridePanel({
     const r = await adminShopUpdateProfile({
       shopId: shop.id,
       shopName: shopName.trim(),
+      ownerFullName: ownerFullName.trim() || null,
       phoneE164: phone.trim() || null,
       ownerEmail: ownerEmail.trim() || null,
       districtId: districtId || null,
@@ -115,12 +141,22 @@ export function AdminShopProfileOverridePanel({
             />
           </label>
           <label className="block text-xs font-bold text-stone-800">
+            Owner full name
+            <input
+              value={ownerFullName}
+              onChange={(e) => setOwnerFullName(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm"
+              placeholder="As entered at registration"
+            />
+          </label>
+          <label className="block text-xs font-bold text-stone-800">
             Owner email (recovery)
             <input
               type="email"
               value={ownerEmail}
               onChange={(e) => setOwnerEmail(e.target.value)}
               className="mt-1 w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm"
+              placeholder="you@example.com"
             />
           </label>
           <label className="block text-xs font-bold text-stone-800">

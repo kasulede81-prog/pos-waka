@@ -417,7 +417,24 @@ export function googleMapsDirectionsUrl(lat: number, lng: number): string {
 
 export function formatDisplayEmail(raw: string | null | undefined): string | null {
   const e = (raw ?? "").trim().toLowerCase();
-  return e || null;
+  if (!e || e.endsWith("@login.waka.ug")) return null;
+  return e;
+}
+
+const UUID_LABEL_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Human-readable owner line for internal admin — never show raw auth user UUIDs. */
+export function formatOwnerDisplayLabel(input: {
+  ownerLabel?: string | null;
+  ownerEmail?: string | null;
+  ownerFullName?: string | null;
+}): string | null {
+  const email = formatDisplayEmail(input.ownerEmail);
+  const fullName = (input.ownerFullName ?? "").trim();
+  if (fullName && !UUID_LABEL_RE.test(fullName)) return fullName;
+  const label = (input.ownerLabel ?? "").trim();
+  if (label && !UUID_LABEL_RE.test(label)) return label;
+  return email;
 }
 
 export function formatLastActive(iso: string | null | undefined): string {
@@ -457,6 +474,7 @@ export type RecentShopRow = {
   /** Display label from profile / email (internal RPC). */
   owner_label?: string | null;
   owner_email?: string | null;
+  owner_full_name?: string | null;
   phone_e164?: string | null;
   business_type?: string | null;
   gps_missing?: boolean | null;
@@ -531,6 +549,7 @@ export type ShopOpsDetail = {
   };
   owner_label: string | null;
   owner_email: string | null;
+  owner_full_name?: string | null;
   product_count: number;
   sale_count_30d: number;
   product_count_table?: number;
@@ -948,6 +967,7 @@ function mapRecentShopRpcRow(row: Record<string, unknown>): RecentShopRow {
     trial_days_left: trialDaysLeft(trialEnds, status),
     owner_label: (row.owner_label as string) ?? null,
     owner_email: formatDisplayEmail(row.owner_email as string) ?? null,
+    owner_full_name: (row.owner_full_name as string) ?? null,
     phone_e164: (row.phone_e164 as string) ?? null,
     business_type: (row.business_type as string) ?? null,
     gps_missing: row.gps_missing === null || row.gps_missing === undefined ? null : Boolean(row.gps_missing),
@@ -1151,6 +1171,7 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
       },
       owner_label: (j.owner_label as string) ?? null,
       owner_email: formatDisplayEmail(j.owner_email as string),
+      owner_full_name: (j.owner_full_name as string) ?? null,
       product_count: Number(j.product_count ?? 0),
       sale_count_30d: Number(j.sale_count_30d ?? 0),
       product_count_table: j.product_count_table != null ? Number(j.product_count_table) : undefined,
@@ -1240,6 +1261,7 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
     },
     owner_label: null,
     owner_email: null,
+    owner_full_name: null,
     product_count: 0,
     sale_count_30d: 0,
     last_sale_at: null,
@@ -1256,6 +1278,7 @@ export type AdminShopProfileUpdateInput = {
   shopName: string;
   phoneE164?: string | null;
   ownerEmail?: string | null;
+  ownerFullName?: string | null;
   districtId?: string | null;
   addressLine?: string | null;
   city?: string | null;
@@ -1345,6 +1368,7 @@ export async function adminShopUpdateProfile(
     p_shop_name: input.shopName.trim(),
     p_phone_e164: phone,
     p_owner_email: input.ownerEmail?.trim().toLowerCase() || null,
+    p_owner_full_name: input.ownerFullName?.trim() || null,
     p_district_id: input.districtId || null,
     p_address_line: input.addressLine?.trim() || null,
     p_city: input.city?.trim() || null,

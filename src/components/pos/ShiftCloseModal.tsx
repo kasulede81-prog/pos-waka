@@ -108,7 +108,6 @@ export function ShiftCloseModal({ lang, open, shift, onClose, onConfirm }: Props
           value={counted}
           onChange={(e) => setCounted(e.target.value.replace(/\D/g, "").slice(0, 12))}
           inputMode="numeric"
-          autoFocus
           className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-waka-300 px-4 text-3xl font-black outline-none ring-waka-300 focus:ring"
         />
       </label>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Language } from "../../../../types";
 import { internalAdminShopHref } from "../../../../lib/internalAdminPreview";
-import { adminSetShopActive, formatDisplayEmail, type WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
+import { adminSetShopActive, formatDisplayEmail, formatOwnerDisplayLabel, type WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { MassActionBar, SupportTagsRow } from "../ops/OpsWidgets";
@@ -50,7 +50,10 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
       if (status === "active" && !s.is_active) return false;
       if (status === "inactive" && s.is_active) return false;
       if (!q) return true;
-      const owner = formatDisplayEmail(s.owner_email) ?? s.owner_label ?? "";
+      const owner =
+        formatDisplayEmail(s.owner_email) ??
+        formatOwnerDisplayLabel({ ownerFullName: s.owner_full_name, ownerLabel: s.owner_label }) ??
+        "";
       return (
         s.name.toLowerCase().includes(q) ||
         (s.shop_number ?? "").toLowerCase().includes(q) ||
@@ -198,7 +201,11 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
                   district={[s.district, s.city].filter(Boolean).join(" · ") || "—"}
                   planCode={s.plan_code ?? "—"}
                   isActive={s.is_active}
-                  ownerLabel={formatDisplayEmail(s.owner_email) ?? s.owner_label ?? undefined}
+                  ownerLabel={
+                    formatDisplayEmail(s.owner_email) ??
+                    formatOwnerDisplayLabel({ ownerFullName: s.owner_full_name, ownerLabel: s.owner_label }) ??
+                    undefined
+                  }
                   productCount={s.product_count}
                   salesHint={s.sale_count_30d != null ? `${s.sale_count_30d} sales (30d)` : undefined}
                   healthScore={health?.score}

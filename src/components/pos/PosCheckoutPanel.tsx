@@ -1,6 +1,6 @@
 import { memo, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
-import { Check } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats, DraftCheckoutTotals } from "../../lib/draftCart";
@@ -238,7 +238,7 @@ function PaymentBlock({
         </div>
       </div>
 
-      {paymentMethod === "cash" || paymentMethod === "credit" ? (
+      {paymentMethod === "cash" || (paymentMethod === "credit" && !dockMode) ? (
         <div className={dockMode ? "mt-2" : compact ? "mt-2" : "mt-4"}>
           <p
             className={
@@ -267,7 +267,7 @@ function PaymentBlock({
         </div>
       ) : null}
 
-      {paymentMethod === "credit" ? (
+      {paymentMethod === "credit" && !dockMode ? (
         <div className={compact ? "mt-2" : "mt-4"}>
           <p className={compact ? "text-xs font-semibold text-slate-800" : "text-base font-semibold text-slate-800"}>
             {t(lang, "paymentMobileMoneyLabel")}
@@ -285,6 +285,99 @@ function PaymentBlock({
             UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
           </button>
         </div>
+      ) : null}
+
+      {paymentMethod === "credit" && dockMode ? (
+        <>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[11px] font-semibold leading-tight text-slate-800">{t(lang, "paymentCashLabel")}</p>
+              <button
+                type="button"
+                onClick={() => onCheckoutAmountField("cash")}
+                className={clsx(
+                  "mt-1 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-2 py-1.5 text-base font-black",
+                  checkoutAmountField === "cash"
+                    ? "border-waka-500 bg-waka-50 text-slate-900"
+                    : "border-slate-200 bg-white text-slate-900",
+                )}
+              >
+                UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+              </button>
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold leading-tight text-slate-800">{t(lang, "paymentMobileMoneyLabel")}</p>
+              <button
+                type="button"
+                onClick={() => onCheckoutAmountField("mobile")}
+                className={clsx(
+                  "mt-1 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-2 py-1.5 text-base font-black",
+                  checkoutAmountField === "mobile"
+                    ? "border-waka-500 bg-waka-50 text-slate-900"
+                    : "border-slate-200 bg-white text-slate-900",
+                )}
+              >
+                UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+              </button>
+            </div>
+          </div>
+          <p className="mt-1.5 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">
+            {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
+          </p>
+          <details className="group mt-1.5 rounded-xl border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
+              <span>{t(lang, "paymentCreditCustomerDetails")}</span>
+              <span className="flex min-w-0 items-center gap-1 text-xs font-semibold text-amber-900">
+                <span className="truncate">
+                  {saleCustomerName.trim() || t(lang, "paymentCreditCustomerDetailsTap")}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" aria-hidden />
+              </span>
+            </summary>
+            <div className="space-y-2 border-t border-slate-100 px-3 py-2">
+              <label className="block text-xs font-semibold text-slate-800">
+                {t(lang, "paymentDebtNameLabel")}
+                <input
+                  value={saleCustomerName}
+                  onChange={(e) => onSaleCustomerName(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
+                  placeholder={t(lang, "paymentDebtNamePlaceholder")}
+                />
+              </label>
+              <label className="block text-xs font-semibold text-slate-800">
+                {t(lang, "paymentDebtPhoneLabel")}
+                <input
+                  value={saleCustomerPhone}
+                  onChange={(e) => onSaleCustomerPhone(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
+                  placeholder={t(lang, "personPhonePh")}
+                  inputMode="tel"
+                />
+              </label>
+              {customers.length > 0 ? (
+                <label className="block text-xs font-semibold text-slate-800">
+                  {t(lang, "paymentPickExistingDebt")}
+                  <select
+                    ref={customerSelectRef}
+                    value={saleCustomerId}
+                    onChange={(e) => onSaleCustomerId(e.target.value)}
+                    className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-medium"
+                  >
+                    <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                        {c.debtBalanceUgx > 0
+                          ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+          </details>
+        </>
       ) : null}
 
       {(paymentMethod === "cash" || paymentMethod === "credit") && !hideNumpad && (
@@ -313,12 +406,12 @@ function PaymentBlock({
         </p>
       ) : null}
 
-      {paymentMethod === "credit" ? (
+      {paymentMethod === "credit" && !dockMode ? (
         <>
-          <p className={clsx("rounded-xl bg-amber-100 font-bold text-amber-900", dockMode ? "mt-1 px-2 py-1 text-[10px]" : compact ? "mt-2 px-3 py-1.5 text-xs" : "mt-3 px-4 py-2 text-sm")}>
+          <p className={clsx("rounded-xl bg-amber-100 font-bold text-amber-900", compact ? "mt-2 px-3 py-1.5 text-xs" : "mt-3 px-4 py-2 text-sm")}>
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
-          <div className={clsx("grid gap-2", dockMode ? "mt-1 max-h-[18dvh] overflow-y-auto" : compact ? "mt-2" : "mt-4 sm:grid-cols-2 sm:gap-3")}>
+          <div className={clsx("grid gap-2", compact ? "mt-2" : "mt-4 sm:grid-cols-2 sm:gap-3")}>
             <label className={clsx("block font-semibold text-slate-800", compact ? "text-xs" : "text-base")}>
               {t(lang, "paymentDebtNameLabel")}
               <input
@@ -794,7 +887,7 @@ export function PosCheckoutPanel({
               onOpenCartDiscount={onOpenCartDiscount}
             />
           </div>
-          <div className="min-h-0 shrink-0 overflow-y-auto px-3 py-2">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
             <PaymentBlock {...paymentProps} />
           </div>
           <div className="shrink-0 border-t border-waka-200 bg-white px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
