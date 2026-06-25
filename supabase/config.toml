@@ -2,6 +2,39 @@
 #   npm run supabase:deploy:admin
 project_id = "ljaedextsenbkxzzgxcg"
 
+[auth]
+enabled = true
+site_url = "https://pos.waka.ug"
+additional_redirect_urls = [
+  "https://pos.waka.ug",
+  "https://pos.waka.ug/auth/callback",
+  "https://pos.waka.ug/auth/recovery",
+  "https://pos.waka.ug/reset-password",
+  "https://waka.ug/auth/callback",
+  "https://waka.ug/auth/recovery",
+  "https://waka.ug/reset-password",
+  "http://localhost:5173",
+  "http://localhost:5173/auth/callback",
+  "http://localhost:5173/auth/recovery",
+  "http://localhost:5173/reset-password",
+  "https://localhost/auth/callback",
+  "https://localhost/auth/recovery",
+  "https://localhost/reset-password",
+]
+jwt_expiry = 3600
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+max_frequency = "1m0s"
+otp_length = 8
+otp_expiry = 3600
+
 [functions.admin-set-owner-password]
 verify_jwt = true
 
@@ -16,3 +49,9 @@ verify_jwt = true
 
 [functions.auth-send-email]
 verify_jwt = false
+
+# Branded auth emails via Resend (auth-send-email edge function).
+[auth.hook.send_email]
+enabled = true
+uri = "https://ljaedextsenbkxzzgxcg.supabase.co/functions/v1/auth-send-email"
+secrets = "env(SEND_EMAIL_HOOK_SECRET)"
