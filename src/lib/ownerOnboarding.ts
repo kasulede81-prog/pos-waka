@@ -40,3 +40,9 @@ export async function fetchOwnerOnboardingStatus(): Promise<OwnerOnboardingStatu
   if (userData.user?.id) writeCachedOwnerOnboardingComplete(userData.user.id, complete);
   return { complete, missing };
 }
+
+/** True when cloud RPC says the post-signup wizard is still required. */
+export async function isFreshOwnerPendingSetup(): Promise<boolean> {
+  const status = await fetchOwnerOnboardingStatus().catch(() => null);
+  return status != null && !status.complete;
+}

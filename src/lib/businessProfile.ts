@@ -252,8 +252,8 @@ export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
     shopCurrency: currency,
   });
 
-  // Returning owner on a fresh device: do not repeat the local “new shop” overlay.
-  if (onboarding?.complete || shopName !== "My Shop") {
+  // Only skip the wizard when cloud onboarding is actually complete.
+  if (onboarding?.complete) {
     store.completeBusinessOnboarding(businessType);
   }
 }

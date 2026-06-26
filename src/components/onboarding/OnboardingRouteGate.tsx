@@ -7,7 +7,6 @@ import {
   fetchOwnerOnboardingStatus,
   readCachedOwnerOnboardingComplete,
 } from "../../lib/ownerOnboarding";
-import { isWorkspaceBootstrapped } from "../../lib/workspaceBootstrapCache";
 import { usePosStore } from "../../store/usePosStore";
 import type { UserRole } from "../../types";
 
@@ -20,7 +19,6 @@ type Props = {
 
 function ownerAlreadyProvisioned(userId: string | undefined, authMode: "supabase" | "local"): boolean {
   if (!userId || authMode !== "supabase") return false;
-  if (isWorkspaceBootstrapped(userId)) return true;
   const cached = readCachedOwnerOnboardingComplete(userId);
   return cached === true;
 }

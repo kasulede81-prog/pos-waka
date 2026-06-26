@@ -11,6 +11,8 @@ import { forceHideNativeSplash, hideNativeSplashWhenReady, scheduleSplashMaxDura
 import { hasSupabaseConfig } from "../lib/supabase";
 
 import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
+import { isShopOnboardingComplete } from "../lib/onboardingState";
+import { isFreshOwnerPendingSetup } from "../lib/ownerOnboarding";
 
 import { CloudRecoveryScreen } from "../components/recovery/CloudRecoveryScreen";
 
@@ -56,10 +58,28 @@ function isStoreReadyForAccount(accountKey: string | null): boolean {
 
 import { withTimeout } from "../lib/promiseTimeout";
 
-async function needsRecoveryLockFailClosed(): Promise<boolean> {
+async function shouldRunCloudRecoveryForAccount(): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
   if (isRecoveryOfflineBypassActive()) return false;
-  return withTimeout(shouldRequireRecoveryLock().catch(() => true), 8000, true);
+  const accountKey = getActiveAccountKey();
+  if (!accountKey?.startsWith("sb:")) return false;
+
+  if (isLocalShopDataEmpty()) {
+    const freshPending = await withTimeout(isFreshOwnerPendingSetup(), 5000, false);
+    if (freshPending) return false;
+    const prefs = usePosStore.getState().preferences;
+    if (usePosStore.getState()._hydrated && !isShopOnboardingComplete(prefs)) {
+      return false;
+    }
+  }
+
+  return withTimeout(shouldRequireRecoveryLock().catch(() => false), 8000, false);
+}
+
+async function markFreshAccountBootstrapReady(): Promise<void> {
+  const { markBootstrapSyncComplete } = await import("../lib/syncCheckpoints");
+  markBootstrapSyncComplete();
+  resetCloudRecoverySessionForRetry();
 }
 
 type BootPhase = "disk" | "recovery" | "ready";
@@ -144,6 +164,13 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
         return;
       }
 
+      if (isCloudRecoveryLockActive()) {
+        const stillNeedsRecovery = await shouldRunCloudRecoveryForAccount();
+        if (!stillNeedsRecovery) {
+          resetCloudRecoverySessionForRetry();
+        }
+      }
+
       if (getActiveAccountKey() !== accountKey) {
         flushPendingPersist();
         usePosStore.getState().resetForSignOut();
@@ -152,7 +179,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
 
       recordStartupStep("recovery_check");
       const needsRecoveryCheck =
-        hasSupabaseConfig && accountKey.startsWith("sb:") && (await needsRecoveryLockFailClosed());
+        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount());
 
       if (isStoreReadyForAccount(accountKey) && !needsRecoveryCheck && !isCloudRecoveryLockActive()) {
         setBootPhase("ready");
@@ -178,11 +205,19 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       if (bootGenRef.current !== gen) return;
 
       const needsRecovery =
-        hasSupabaseConfig && accountKey.startsWith("sb:") && (await needsRecoveryLockFailClosed());
+        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount());
 
       if (needsRecovery) {
         await runRecovery(gen);
         return;
+      }
+
+      if (hasSupabaseConfig && accountKey.startsWith("sb:") && isLocalShopDataEmpty()) {
+        await markFreshAccountBootstrapReady();
+      }
+
+      if (isCloudRecoveryLockActive()) {
+        resetCloudRecoverySessionForRetry();
       }
 
       if (bootGenRef.current !== gen) return;

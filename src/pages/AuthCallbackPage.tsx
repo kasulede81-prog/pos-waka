@@ -6,22 +6,21 @@ import { hardSignOutToLogin } from "../lib/authRecovery";
 import { bootstrapAuthCallbackSession } from "../lib/authCallbackSession";
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
+import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
 import { supabase } from "../lib/supabase";
-import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { tryOpenInstalledAppFromBrowserCallback } from "../lib/nativeAuthDeepLink";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
 type CallbackState = "loading" | "success" | "error";
 
 async function postCallbackDestination(userId: string): Promise<string> {
-  if (isWorkspaceBootstrapped(userId)) return "/";
-  if (readCachedOwnerOnboardingComplete(userId) === true) return "/";
   try {
     const status = await fetchOwnerOnboardingStatus();
     if (status?.complete) return "/";
   } catch {
     /* onboarding check is best-effort */
   }
+  if (readCachedOwnerOnboardingComplete(userId) === true) return "/";
   return "/onboarding";
 }
 
@@ -98,6 +97,7 @@ export function AuthCallbackPage() {
       }
 
       const nextPath = await postCallbackDestination(session.user.id);
+      resetCloudRecoverySessionForRetry();
       if (!cancelled) {
         setDestination(nextPath);
         setState("success");
