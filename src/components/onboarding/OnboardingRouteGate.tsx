@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import type { User } from "@supabase/supabase-js";
+import { bootTrace } from "../../lib/bootTrace";
 import { resolveSessionActor } from "../../lib/sessionActor";
 import { isShopOnboardingComplete } from "../../lib/onboardingState";
 import { logOnboardingRequired } from "../../lib/firstTimeOwnerDevice";
@@ -25,9 +26,15 @@ export function OnboardingRouteGate({ authMode, user, email, staffSession = null
   );
 
   useEffect(() => {
+    bootTrace("BOOT-016", "OnboardingRouteGate", "START", {
+      path: location.pathname,
+      complete: isShopOnboardingComplete(preferences),
+      role: actor.role,
+    });
     if (authMode !== "supabase" || !user?.id || actor.role !== "owner") return;
     logOnboardingRequired(user.id);
-  }, [authMode, user?.id, actor.role, preferences.onboardingWizardDone, preferences.onboardingDone]);
+    bootTrace("BOOT-016", "OnboardingRouteGate", "SUCCESS", { required: !isShopOnboardingComplete(preferences) });
+  }, [authMode, user?.id, actor.role, preferences.onboardingWizardDone, preferences.onboardingDone, location.pathname, preferences, actor.role]);
 
   if (actor.role !== "owner") return <Outlet />;
 

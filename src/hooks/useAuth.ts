@@ -1,6 +1,8 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { authDevLog, formatAuthError, getAuthEmailCallbackUrl, getAuthEmailRecoveryUrl, stashAuthRedirectError } from "../lib/authConfig";
+import { subscribeAuthSessionBridge } from "../lib/authSessionBridge";
+import { bootTrace } from "../lib/bootTrace";
 import { Capacitor } from "@capacitor/core";
 import { isGoogleAuthUiEnabled } from "../lib/authFeatureFlags";
 import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
@@ -332,6 +334,39 @@ export function useAuth() {
   const ensureWorkspaceRef = useRef(ensureWorkspaceForSession);
   ensureWorkspaceRef.current = ensureWorkspaceForSession;
 
+  const applySupabaseSession = useCallback(
+    (next: Session, via: string) => {
+      clearStaffAuth();
+      setStaffSession(null);
+      tryApplyAccountSwitchSync(
+        computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
+        () => {
+          void supabase?.auth.signOut();
+          setSession(null);
+        },
+      );
+      if (!getActiveAccountKey()?.startsWith("sb:")) {
+        return;
+      }
+      applySignupProfileToLocalStore(next);
+      setLocalEmail(null);
+      setSession(next);
+      setInitializing(false);
+      bootTrace("BOOT-007", "useAuth state", "SUCCESS", { via, userId: next.user.id });
+      logStartupPhase("auth_restored", { userId: next.user.id, via });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    return subscribeAuthSessionBridge((next) => {
+      applySupabaseSession(next, "callback_bridge");
+      void ensureWorkspaceRef.current(next).catch((e) => {
+        console.error("[waka-auth] bootstrap on callback bridge failed", e);
+      });
+    });
+  }, [applySupabaseSession]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -380,6 +415,7 @@ export function useAuth() {
         setLocalEmail(null);
         setInitializing(false);
         logStartupPhase("auth_restored", { userId: next.user.id, via: "finishInit" });
+        bootTrace("BOOT-007", "useAuth state", "SUCCESS", { via: "finishInit", userId: next.user.id });
         void ensureWorkspaceRef.current(next).catch((e) => {
           console.error("[waka-auth] bootstrap on initial session failed", e);
         });
@@ -400,9 +436,15 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, next) => {
+      bootTrace("BOOT-006", "Auth event", "START", { event, userId: next?.user?.id ?? null });
       if (next?.user) {
         if (event === "TOKEN_REFRESHED") {
-          setSession((prev) => (prev?.user?.id === next.user.id ? prev : next));
+          setSession((prev) => {
+            if (prev?.user?.id !== next.user.id) return next;
+            if (prev.user.email_confirmed_at !== next.user.email_confirmed_at) return next;
+            return prev;
+          });
+          bootTrace("BOOT-006", "Auth event", "SUCCESS", { event, userId: next.user.id });
           return;
         }
         clearStaffAuth();
@@ -415,6 +457,7 @@ export function useAuth() {
           },
         );
         if (!getActiveAccountKey()?.startsWith("sb:")) {
+          bootTrace("BOOT-006", "Auth event", "FAILED", { event, reason: "account_switch_blocked" });
           return;
         }
         applySignupProfileToLocalStore(next);
@@ -423,7 +466,14 @@ export function useAuth() {
             console.error("[waka-auth] bootstrap on auth state change failed", e);
           });
         }
-        setSession((prev) => (prev?.user?.id === next.user.id ? prev : next));
+        setSession((prev) => {
+          if (prev?.user?.id !== next.user.id) return next;
+          if (prev.user.email_confirmed_at !== next.user.email_confirmed_at) return next;
+          return prev;
+        });
+        setInitializing(false);
+        bootTrace("BOOT-007", "useAuth state", "SUCCESS", { via: event, userId: next.user.id });
+        bootTrace("BOOT-006", "Auth event", "SUCCESS", { event, userId: next.user.id });
         return;
       }
       if (event === "SIGNED_OUT") {

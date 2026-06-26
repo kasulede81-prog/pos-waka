@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { authDevLog } from "../lib/authConfig";
+import { publishAuthSessionFromCallback } from "../lib/authSessionBridge";
+import { bootTrace, bootTraceAsync } from "../lib/bootTrace";
 import { hardSignOutToLogin } from "../lib/authRecovery";
 import { bootstrapAuthCallbackSession } from "../lib/authCallbackSession";
 import {
-  isOnboardingWizardRequiredLocally,
   markFirstTimeOwnerOnDevice,
   resolvePostAuthDestination,
 } from "../lib/firstTimeOwnerDevice";
@@ -63,6 +64,7 @@ export function AuthCallbackPage() {
     };
 
     const run = async () => {
+      bootTrace("BOOT-002", "AuthCallback entered", "START");
       try {
         const result = await bootstrapAuthCallbackSession();
         if (cancelled) return;
@@ -86,6 +88,12 @@ export function AuthCallbackPage() {
           userId: session.user.id,
           emailConfirmed: Boolean(session.user.email_confirmed_at),
         });
+        bootTrace("BOOT-006", "Session restored", "SUCCESS", {
+          userId: session.user.id,
+          emailConfirmed: Boolean(session.user.email_confirmed_at),
+        });
+
+        publishAuthSessionFromCallback(session);
 
         try {
           await sb.auth.refreshSession();
@@ -99,7 +107,9 @@ export function AuthCallbackPage() {
         });
 
         try {
-          await withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined);
+          await bootTraceAsync("BOOT-008", "bootstrap_owner_workspace", () =>
+            withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined),
+          );
           logStartupPhase("workspace_ready", { userId: session.user.id });
         } catch (e) {
           authDevLog("error", "Auth callback workspace bootstrap deferred", e);
@@ -110,9 +120,7 @@ export function AuthCallbackPage() {
           });
         }
 
-        if (isOnboardingWizardRequiredLocally()) {
-          markFirstTimeOwnerOnDevice(session.user.id);
-        }
+        markFirstTimeOwnerOnDevice(session.user.id);
 
         const nextPath = postCallbackDestination(session.user.id);
         resetCloudRecoverySessionForRetry();
@@ -121,19 +129,25 @@ export function AuthCallbackPage() {
           required: nextPath === "/onboarding",
           destination: nextPath,
         });
+        bootTrace("BOOT-010", "navigate", "SUCCESS", { destination: nextPath });
 
         if (!cancelled) {
           finishedRef.current = true;
           setDestination(nextPath);
           setState("success");
+          bootTrace("BOOT-002", "AuthCallback entered", "SUCCESS", { destination: nextPath });
         }
       } catch (e) {
+        bootTrace("BOOT-002", "AuthCallback entered", "FAILED", {
+          error: e instanceof Error ? e.message : String(e),
+        });
         finishError(e instanceof Error ? e.message : "Could not complete sign-in.");
       }
     };
 
     const timeoutId = window.setTimeout(() => {
       if (!cancelled && !finishedRef.current) {
+        bootTrace("BOOT-002", "AuthCallback entered", "TIMEOUT", { timeoutMs: CALLBACK_RUN_TIMEOUT_MS });
         finishError("Sign-in took too long. Please try again from the login page.");
       }
     }, CALLBACK_RUN_TIMEOUT_MS);
@@ -144,6 +158,8 @@ export function AuthCallbackPage() {
 
     return () => {
       cancelled = true;
+      // React StrictMode re-runs effects in dev; allow the second pass to complete sign-in.
+      if (!finishedRef.current) handled.current = false;
     };
   }, []);
 

@@ -1,5 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { authDevLog, formatAuthError, parseOAuthCallbackError } from "./authConfig";
+import { bootTrace, bootTraceAsync } from "./bootTrace";
 import { supabase } from "./supabase";
 
 export type AuthCallbackBootstrapStatus = "ready" | "invalid" | "expired";
@@ -80,6 +81,35 @@ function stripAuthCallbackParamsFromUrl(): void {
   }
 }
 
+async function establishSessionFromUrlHash(): Promise<Session | null> {
+  if (typeof window === "undefined" || !supabase) return null;
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash) return null;
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (!accessToken || !refreshToken) return null;
+
+  bootTrace("BOOT-004", "setSessionFromUrlHash", "START");
+  const { data, error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
+  if (error || !data.session) {
+    bootTrace("BOOT-004", "setSessionFromUrlHash", "FAILED", {
+      error: error?.message ?? "no_session",
+    });
+    return null;
+  }
+  stripAuthCallbackParamsFromUrl();
+  bootTrace("BOOT-004", "setSessionFromUrlHash", "SUCCESS", {
+    userId: data.session.user.id,
+    type: params.get("type"),
+  });
+  authDevLog("log", "auth callback session established from URL hash");
+  return data.session;
+}
+
 async function sessionReadyIfPresent(): Promise<Session | null> {
   if (!supabase) return null;
   const { data, error } = await supabase.auth.getSession();
@@ -94,7 +124,9 @@ async function sessionReadyIfPresent(): Promise<Session | null> {
  * Handles PKCE `code`, legacy hash tokens, and direct `token_hash` links.
  */
 export async function bootstrapAuthCallbackSession(): Promise<AuthCallbackBootstrap> {
+  bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "START");
   if (!supabase) {
+    bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "FAILED", { reason: "no_supabase" });
     return { status: "invalid", message: "Cloud sign-in is not configured." };
   }
 
@@ -114,8 +146,16 @@ export async function bootstrapAuthCallbackSession(): Promise<AuthCallbackBootst
 
   // Let detectSessionInUrl finish before exchanging the same PKCE code twice.
   await new Promise((r) => window.setTimeout(r, 150));
+
+  const fromHash = await establishSessionFromUrlHash();
+  if (fromHash) {
+    bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "SUCCESS", { via: "url_hash_setSession" });
+    return { status: "ready", session: fromHash };
+  }
+
   const existing = await sessionReadyIfPresent();
   if (existing) {
+    bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "SUCCESS", { via: "existing_session" });
     return { status: "ready", session: existing };
   }
 
@@ -126,10 +166,12 @@ export async function bootstrapAuthCallbackSession(): Promise<AuthCallbackBootst
 
   if (tokenHash && SIGNUP_OTP_TYPES.has(type)) {
     authDevLog("log", "auth callback: verifyOtp(token_hash)", { type });
-    const { data, error } = await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: type as "signup" | "email" | "email_change" | "invite" | "magiclink",
-    });
+    const { data, error } = await bootTraceAsync("BOOT-005", "verifyOtp", () =>
+      supabase!.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as "signup" | "email" | "email_change" | "invite" | "magiclink",
+      }),
+    );
     if (error) {
       const retry = await sessionReadyIfPresent();
       if (retry) return { status: "ready", session: retry };
@@ -137,12 +179,15 @@ export async function bootstrapAuthCallbackSession(): Promise<AuthCallbackBootst
       return messageFromAuthError(error);
     }
     stripAuthCallbackParamsFromUrl();
+    bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "SUCCESS", { via: "verifyOtp" });
     return { status: "ready", session: data.session ?? (await sessionReadyIfPresent()) };
   }
 
   if (code) {
     authDevLog("log", "auth callback: exchangeCodeForSession");
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await bootTraceAsync("BOOT-004", "exchangeCodeForSession", () =>
+      supabase!.auth.exchangeCodeForSession(code),
+    );
     if (error) {
       const retry = await sessionReadyIfPresent();
       if (retry) {
@@ -153,6 +198,7 @@ export async function bootstrapAuthCallbackSession(): Promise<AuthCallbackBootst
       return messageFromAuthError(error);
     }
     stripAuthCallbackParamsFromUrl();
+    bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "SUCCESS", { via: "exchangeCodeForSession" });
     return { status: "ready", session: data.session ?? (await sessionReadyIfPresent()) };
   }
 
@@ -175,5 +221,6 @@ export async function bootstrapAuthCallbackSession(): Promise<AuthCallbackBootst
     };
   }
 
+  bootTrace("BOOT-003", "bootstrapAuthCallbackSession", "SUCCESS", { via: "existing_session" });
   return { status: "ready", session: data.session };
 }

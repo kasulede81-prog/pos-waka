@@ -13,6 +13,7 @@ import App from "./App";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { initCapacitorShell } from "./lib/capacitorInit";
 import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
+import { bootTrace } from "./lib/bootTrace";
 import { recoverStuckStartupState, recordStartupStep } from "./lib/startupDiagnostics";
 import { reportPwaIssue } from "./lib/monitoring";
 import { installChunkLoadRecovery } from "./lib/siteDataRecovery";
@@ -22,7 +23,9 @@ initCrashReporting();
 installGlobalErrorHandlers();
 installChunkLoadRecovery();
 recoverStuckStartupState();
+bootTrace("BOOT-001", "App mounted", "START");
 recordStartupStep("app_launch");
+bootTrace("BOOT-001", "App mounted", "SUCCESS");
 warmupLocalDb();
 
 if (!isElectronDesktop()) {

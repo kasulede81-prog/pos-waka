@@ -17,6 +17,7 @@ import {
   userIdFromAccountKey,
 } from "../lib/firstTimeOwnerDevice";
 
+import { bootTrace } from "../lib/bootTrace";
 import { CloudRecoveryScreen } from "../components/recovery/CloudRecoveryScreen";
 
 import {
@@ -126,6 +127,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupStep("ready");
       logStartupPhase("dashboard_ready", { via: "cloud_recovery" });
       logOnboardingRequired(userId);
+      bootTrace("BOOT-014", "Cloud Recovery", "SUCCESS", { userId });
       void hideNativeSplashWhenReady();
     } else if (result.probeFailed) {
       recordStartupStep("cloud_probe", { failureReason: result.error ?? "Cloud probe failed" });
@@ -138,6 +140,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
 
   const runBoot = useCallback(
     async (gen: number) => {
+      bootTrace("BOOT-012", "PosDataProvider.runBoot", "START", { accountKey });
       setError(null);
       setRecoveryFailed(false);
       setProbeFailed(false);
@@ -198,6 +201,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
         hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount(userId));
 
       if (needsRecovery) {
+        bootTrace("BOOT-014", "Cloud Recovery", "START", { userId });
         await runRecovery(gen, userId);
         return;
       }
@@ -217,6 +221,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupStep("ready");
       logStartupPhase("dashboard_ready", { via: "first_time_or_local_boot" });
       logOnboardingRequired(userId);
+      bootTrace("BOOT-012", "PosDataProvider.runBoot", "SUCCESS", { via: "first_time_or_local_boot" });
       void hideNativeSplashWhenReady();
     },
     [accountKey, runRecovery],
@@ -247,6 +252,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupStep("ready");
       logStartupPhase("dashboard_ready", { via: "boot_timeout_escape" });
       logOnboardingRequired(userIdFromAccountKey(accountKey));
+      bootTrace("BOOT-012", "PosDataProvider.runBoot", "TIMEOUT", { via: "boot_timeout_escape", accountKey });
       if (isCloudRecoveryLockActive()) {
         resetCloudRecoverySessionForRetry();
       }

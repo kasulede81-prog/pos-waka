@@ -1,4 +1,6 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import { bootTrace } from "../lib/bootTrace";
 import { unauthenticatedEntryPath } from "../lib/nativeApp";
 
 type Props = {
@@ -8,6 +10,19 @@ type Props = {
 
 export function ProtectedRoute({ initializing, isAuthenticated }: Props) {
   const location = useLocation();
+
+  useEffect(() => {
+    bootTrace("BOOT-011", "ProtectedRoute", "START", {
+      initializing,
+      isAuthenticated,
+      path: location.pathname,
+    });
+    if (!initializing) {
+      bootTrace("BOOT-011", "ProtectedRoute", isAuthenticated ? "SUCCESS" : "FAILED", {
+        path: location.pathname,
+      });
+    }
+  }, [initializing, isAuthenticated, location.pathname]);
 
   if (initializing) {
     return (

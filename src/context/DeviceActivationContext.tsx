@@ -57,6 +57,7 @@ export function pathAllowedWhenDeviceBlocked(path: string): boolean {
     p === "/device-limit" ||
     p === "/upgrade" ||
     p === "/login" ||
+    p === "/onboarding" ||
     p.startsWith("/auth/") ||
     p === "/account"
   );
