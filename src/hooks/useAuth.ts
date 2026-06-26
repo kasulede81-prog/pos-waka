@@ -25,6 +25,7 @@ import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/works
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
 import { storePendingReferralCode } from "../lib/pendingReferral";
+import { withTimeout } from "../lib/promiseTimeout";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
   authenticateOfflineStaff,
@@ -344,8 +345,8 @@ export function useAuth() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      const next = data.session ?? null;
+      const sessionResult = await withTimeout(supabase.auth.getSession(), 6000, null);
+      const next = sessionResult?.data.session ?? null;
       if (cancelled) return;
       if (next?.user) {
         clearStaffAuth();
@@ -377,20 +378,6 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, next) => {
-      // #region agent log
-      void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-        debugSessionLog({
-          location: "useAuth:onAuthStateChange",
-          message: "auth event",
-          hypothesisId: "A",
-          data: {
-            event,
-            hasUser: Boolean(next?.user),
-            emailConfirmed: Boolean(next?.user?.email_confirmed_at),
-          },
-        }),
-      );
-      // #endregion
       if (next?.user) {
         if (event === "TOKEN_REFRESHED") {
           setSession((prev) => (prev?.user?.id === next.user.id ? prev : next));
@@ -433,16 +420,6 @@ export function useAuth() {
       const { data: signInData, error } = await supabase.auth.signInWithPassword({ email: trimmed, password });
       if (error) {
         reportAuthIssue("sign_in_failed", { status: error.status ?? 0 });
-        // #region agent log
-        void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-          debugSessionLog({
-            location: "useAuth:signIn",
-            message: "signInWithPassword failed",
-            hypothesisId: "A",
-            data: { code: error.code, status: error.status },
-          }),
-        );
-        // #endregion
         if (error.code === "email_not_confirmed") {
           throw new Error(
             "Please confirm your email before signing in. Check your inbox (and spam), or open the verify page to resend the link.",
@@ -456,20 +433,6 @@ export function useAuth() {
       if (!signedIn?.user) {
         throw new Error("Sign-in did not complete. Please try again.");
       }
-      // #region agent log
-      void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-        debugSessionLog({
-          location: "useAuth:signIn",
-          message: "signInWithPassword ok",
-          hypothesisId: "A",
-          data: {
-            hasSession: true,
-            emailConfirmed: Boolean(signedIn.user.email_confirmed_at),
-            userId: signedIn.user.id?.slice(0, 8),
-          },
-        }),
-      );
-      // #endregion
       applyAccountSwitchSync(
         computeAccountKey({ mode: "supabase", userId: signedIn.user.id, email: signedIn.user.email }),
       );
@@ -666,19 +629,6 @@ export function useAuth() {
           throw e;
         }
       }
-      // #region agent log
-      void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-        debugSessionLog({
-          location: "useAuth:signUp",
-          message: "signup needs email verification",
-          hypothesisId: "D",
-          data: {
-            hasUser: Boolean(data.user),
-            identities: data.user?.identities?.length ?? 0,
-          },
-        }),
-      );
-      // #endregion
       return { needsEmailVerification: true };
     } finally {
       signUpInProgressRef.current = false;
@@ -726,16 +676,6 @@ export function useAuth() {
       email,
       options: { emailRedirectTo: getAuthCallbackUrl() },
     });
-    // #region agent log
-    void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-      debugSessionLog({
-        location: "useAuth:resendVerificationEmail",
-        message: error ? "resend failed" : "resend ok",
-        hypothesisId: "D",
-        data: { ok: !error, status: error?.status, code: error?.code },
-      }),
-    );
-    // #endregion
     if (error) {
       reportAuthIssue("resend_verification_failed", { status: error.status ?? 0 });
       throw error;

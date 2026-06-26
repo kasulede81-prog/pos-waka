@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
@@ -43,18 +43,6 @@ export function LoginPage({
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const showGoogle = mode === "supabase" && hasSupabaseConfig && isGoogleAuthUiAvailable();
-
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-      debugSessionLog({
-        location: "LoginPage",
-        message: "authenticated redirect to home",
-        hypothesisId: "A",
-        data: { path: window.location.pathname },
-      }),
-    );
-  }, [isAuthenticated]);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;

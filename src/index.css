@@ -29,7 +29,9 @@ html {
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
 }
 
 /** Logged-in app shell: one scroll surface (main), no document scrollbar or white tail. */

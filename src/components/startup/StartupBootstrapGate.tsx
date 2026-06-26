@@ -13,10 +13,12 @@ import {
   type StartupStepId,
 } from "../../lib/startupDiagnostics";
 import { forceHideNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "../../lib/nativeSplash";
-import { isAuthHandoffPath } from "../../lib/nativeApp";
+import { isAuthHandoffPath, isStartupPublicPath } from "../../lib/nativeApp";
 import { STARTUP_SCREEN_BG } from "./StartupLoadingScreen";
 
 export const STARTUP_STALL_MS = 15_000;
+/** iOS Safari can stall Supabase getSession — never block the shell longer than this. */
+export const AUTH_BOOT_TIMEOUT_MS = 6_000;
 
 type Props = {
   lang: Language;
@@ -36,7 +38,12 @@ export function StartupBootstrapGate({
   children,
 }: Props) {
   const [stalled, setStalled] = useState(false);
+  const [authBootTimedOut, setAuthBootTimedOut] = useState(false);
   const [step, setStep] = useState<StartupStepId>(() => getStartupDiagnosticsSnapshot().currentStep);
+
+  const publicPath =
+    typeof window !== "undefined" &&
+    (isStartupPublicPath(window.location.pathname) || isAuthHandoffPath(window.location.pathname));
 
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
@@ -46,11 +53,20 @@ export function StartupBootstrapGate({
   }, []);
 
   useEffect(() => {
+    if (!authInitializing) {
+      setAuthBootTimedOut(false);
+      return;
+    }
+    const id = window.setTimeout(() => setAuthBootTimedOut(true), AUTH_BOOT_TIMEOUT_MS);
+    return () => window.clearTimeout(id);
+  }, [authInitializing]);
+
+  useEffect(() => {
     if (!langReady) {
       recordStartupStep("language_load");
       return;
     }
-    if (authInitializing) {
+    if (authInitializing && !authBootTimedOut) {
       recordStartupStep("auth_session");
       return;
     }
@@ -58,7 +74,7 @@ export function StartupBootstrapGate({
       recordStartupStep("ready");
       void forceHideNativeSplash();
     }
-  }, [langReady, authInitializing, isAuthenticated]);
+  }, [langReady, authInitializing, isAuthenticated, authBootTimedOut]);
 
   useEffect(() => {
     const sync = () => setStep(getStartupDiagnosticsSnapshot().currentStep);
@@ -67,7 +83,7 @@ export function StartupBootstrapGate({
   }, []);
 
   useEffect(() => {
-    if (langReady && !authInitializing) {
+    if ((langReady && !authInitializing) || authBootTimedOut) {
       setStalled(false);
       return;
     }
@@ -83,25 +99,11 @@ export function StartupBootstrapGate({
     tick();
     const id = window.setInterval(tick, 2000);
     return () => window.clearInterval(id);
-  }, [langReady, authInitializing]);
+  }, [langReady, authInitializing, authBootTimedOut]);
 
-  const bypassForAuthHandoff =
-    typeof window !== "undefined" && isAuthHandoffPath(window.location.pathname);
+  const bootComplete = langReady && (!authInitializing || authBootTimedOut);
 
-  // #region agent log
-  useEffect(() => {
-    void import("../../lib/debugSessionLog").then(({ debugSessionLog }) =>
-      debugSessionLog({
-        location: "StartupBootstrapGate",
-        message: "gate state",
-        hypothesisId: "B",
-        data: { langReady, authInitializing, isAuthenticated, bypassForAuthHandoff, path: window.location.pathname },
-      }),
-    );
-  }, [langReady, authInitializing, isAuthenticated, bypassForAuthHandoff]);
-  // #endregion
-
-  if ((langReady && !authInitializing) || bypassForAuthHandoff) {
+  if (bootComplete || publicPath) {
     return <>{children}</>;
   }
 

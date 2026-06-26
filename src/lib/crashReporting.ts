@@ -118,16 +118,6 @@ export function installGlobalErrorHandlers(): void {
 
   window.addEventListener("unhandledrejection", (event) => {
     const err = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
-    void import("./debugSessionLog")
-      .then(({ debugSessionLog }) =>
-        debugSessionLog({
-          location: "crashReporting:unhandledrejection",
-          message: "unhandled promise rejection",
-          hypothesisId: "C",
-          data: { name: err.name, msg: err.message.slice(0, 200) },
-        }),
-      )
-      .catch(() => undefined);
     captureAppException(err, { kind: "unhandledrejection" });
     if (!isCrashReportingEnabled()) {
       void import("./monitoring")
@@ -144,16 +134,6 @@ export function installGlobalErrorHandlers(): void {
 
   window.addEventListener("error", (event) => {
     if (event.error) {
-      void import("./debugSessionLog")
-        .then(({ debugSessionLog }) =>
-          debugSessionLog({
-            location: "crashReporting:window_error",
-            message: "uncaught error",
-            hypothesisId: "C",
-            data: { msg: String(event.message).slice(0, 200) },
-          }),
-        )
-        .catch(() => undefined);
       captureAppException(event.error, { kind: "window_error" });
     }
   });

@@ -31,6 +31,16 @@ export function isAuthHandoffPath(pathname: string): boolean {
   return p === "/auth/callback" || p === "/auth/recovery" || p === "/reset-password";
 }
 
+/** Paths that must render before auth/session bootstrap finishes (marketing + sign-in). */
+export function isStartupPublicPath(pathname: string): boolean {
+  const p = pathname.split("?")[0] || "/";
+  if (p === "/" || p === "/home") return true;
+  if (NATIVE_PUBLIC_PATHS.has(p)) return true;
+  if (isAuthHandoffPath(p)) return true;
+  if (isVerifyAgentPath(p)) return true;
+  return isNativeMarketingPath(p);
+}
+
 /** Paths reachable before sign-in on Android/iOS (auth + legal footer links). */
 export const NATIVE_PUBLIC_PATHS = new Set([
   "/login",

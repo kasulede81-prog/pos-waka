@@ -54,10 +54,12 @@ function isStoreReadyForAccount(accountKey: string | null): boolean {
   return Boolean(accountKey && usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey);
 }
 
+import { withTimeout } from "../lib/promiseTimeout";
+
 async function needsRecoveryLockFailClosed(): Promise<boolean> {
   if (!hasSupabaseConfig) return false;
   if (isRecoveryOfflineBypassActive()) return false;
-  return shouldRequireRecoveryLock().catch(() => true);
+  return withTimeout(shouldRequireRecoveryLock().catch(() => true), 8000, true);
 }
 
 type BootPhase = "disk" | "recovery" | "ready";
@@ -211,18 +213,15 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     };
   }, [accountKey, runBoot]);
 
-  // #region agent log
   useEffect(() => {
-    void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
-      debugSessionLog({
-        location: "PosDataProvider",
-        message: "boot state",
-        hypothesisId: "B",
-        data: { bootPhase, accountKey: accountKey?.slice(0, 12) ?? null, error, recoveryFailed, stalled },
-      }),
-    );
-  }, [bootPhase, accountKey, error, recoveryFailed, stalled]);
-  // #endregion
+    if (bootPhase === "ready" || !accountKey) return;
+    const id = window.setTimeout(() => {
+      setBootPhase("ready");
+      recordStartupStep("ready");
+      void hideNativeSplashWhenReady();
+    }, 12_000);
+    return () => window.clearTimeout(id);
+  }, [bootPhase, accountKey]);
 
   const handleRetryRecovery = useCallback(() => {
     resetStartupSessionForRetry();

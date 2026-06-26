@@ -8,6 +8,7 @@ import "@fontsource/roboto/500.css";
 import "@fontsource/roboto/700.css";
 import "@fontsource/roboto/900.css";
 import "./index.css";
+import { AppRootErrorBoundary } from "./components/AppRootErrorBoundary";
 import App from "./App";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { initCapacitorShell } from "./lib/capacitorInit";
@@ -40,8 +41,10 @@ const queryClient = new QueryClient();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
+    <AppRootErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <App />
+      </QueryClientProvider>
+    </AppRootErrorBoundary>
   </StrictMode>,
 )
