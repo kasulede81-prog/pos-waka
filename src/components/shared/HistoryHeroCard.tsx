@@ -47,7 +47,7 @@ export function HistoryHeroCard({
   const gridClass = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3";
 
   return (
-    <div className="overflow-hidden rounded-[1.35rem] bg-gradient-to-br from-waka-600 via-waka-600 to-waka-700 text-white shadow-waka-md">
+    <div className="rounded-[1.35rem] bg-gradient-to-br from-waka-600 via-waka-600 to-waka-700 text-white shadow-waka-md">
       <div className={`grid ${gridClass} divide-x divide-white/15`}>
         {metrics.slice(0, 3).map((metric, index) => {
           const Icon = metric.icon;

@@ -77,7 +77,14 @@ export async function bootstrapOwnerWorkspace(user: User, args: BootstrapArgs): 
         msg.includes("network") ||
         msg.includes("email_not_verified"));
     if (retryable) {
-      await new Promise((r) => setTimeout(r, 350 * attempt));
+      if (msg.includes("email_not_verified")) {
+        try {
+          await supabase.auth.refreshSession();
+        } catch {
+          /* session may still be propagating after email confirm */
+        }
+      }
+      await new Promise((r) => window.setTimeout(r, msg.includes("email_not_verified") ? 800 * attempt : 350 * attempt));
       continue;
     }
     break;

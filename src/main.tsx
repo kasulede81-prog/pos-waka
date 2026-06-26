@@ -15,10 +15,12 @@ import { initCapacitorShell } from "./lib/capacitorInit";
 import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
 import { recoverStuckStartupState, recordStartupStep } from "./lib/startupDiagnostics";
 import { reportPwaIssue } from "./lib/monitoring";
+import { installChunkLoadRecovery } from "./lib/siteDataRecovery";
 import { warmupLocalDb } from "./offline/localDb";
 
 initCrashReporting();
 installGlobalErrorHandlers();
+installChunkLoadRecovery();
 recoverStuckStartupState();
 recordStartupStep("app_launch");
 warmupLocalDb();

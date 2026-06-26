@@ -14,6 +14,7 @@ import {
 } from "../../lib/startupDiagnostics";
 import { forceHideNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "../../lib/nativeSplash";
 import { isAuthHandoffPath, isStartupPublicPath } from "../../lib/nativeApp";
+import { clearChunkReloadAttempted } from "../../lib/siteDataRecovery";
 import { STARTUP_SCREEN_BG } from "./StartupLoadingScreen";
 
 export const STARTUP_STALL_MS = 15_000;
@@ -102,6 +103,10 @@ export function StartupBootstrapGate({
   }, [langReady, authInitializing, authBootTimedOut]);
 
   const bootComplete = langReady && (!authInitializing || authBootTimedOut);
+
+  useEffect(() => {
+    if (bootComplete || publicPath) clearChunkReloadAttempted();
+  }, [bootComplete, publicPath]);
 
   if (bootComplete || publicPath) {
     return <>{children}</>;

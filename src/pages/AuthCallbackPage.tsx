@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Navigate } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { authDevLog } from "../lib/authConfig";
+import { hardSignOutToLogin } from "../lib/authRecovery";
 import { bootstrapAuthCallbackSession } from "../lib/authCallbackSession";
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
@@ -32,6 +33,7 @@ export function AuthCallbackPage() {
   const [state, setState] = useState<CallbackState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [destination, setDestination] = useState("/");
+  const [signingOut, setSigningOut] = useState(false);
   const handled = useRef(false);
 
   useEffect(() => {
@@ -77,14 +79,22 @@ export function AuthCallbackPage() {
         return;
       }
 
-      authDevLog("log", "Auth callback session ready", { userId: session.user.id });
+      try {
+        await sb.auth.refreshSession();
+      } catch {
+        /* ignore */
+      }
+
+      authDevLog("log", "Auth callback session ready", {
+        userId: session.user.id,
+        emailConfirmed: Boolean(session.user.email_confirmed_at),
+      });
 
       try {
         await ensureOwnerWorkspaceIfNeeded(session);
       } catch (e) {
-        authDevLog("error", "Auth callback workspace bootstrap failed", e);
-        finishError("Your account is verified but we could not finish setting up your shop. Try signing in.");
-        return;
+        authDevLog("error", "Auth callback workspace bootstrap deferred", e);
+        // Session is valid — shell bootstrap will retry; still send user to onboarding.
       }
 
       const nextPath = await postCallbackDestination(session.user.id);
@@ -100,6 +110,11 @@ export function AuthCallbackPage() {
       cancelled = true;
     };
   }, []);
+
+  const handleBackToLogin = () => {
+    setSigningOut(true);
+    void hardSignOutToLogin();
+  };
 
   if (state === "success") return <Navigate to={destination} replace />;
 
@@ -124,12 +139,14 @@ export function AuthCallbackPage() {
         <div className="mt-8 max-w-sm rounded-2xl border border-red-100 bg-white p-5 text-center shadow-sm">
           <p className="text-sm font-bold text-red-700">Could not complete sign-in</p>
           <p className="mt-2 text-sm text-stone-600">{errorMessage ?? "Unknown error"}</p>
-          <Link
-            to="/login"
-            className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-orange-600 px-5 text-sm font-black text-white"
+          <button
+            type="button"
+            disabled={signingOut}
+            onClick={handleBackToLogin}
+            className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-orange-600 px-5 text-sm font-black text-white disabled:opacity-70"
           >
-            Back to sign in
-          </Link>
+            {signingOut ? "Signing out…" : "Back to sign in"}
+          </button>
         </div>
       ) : null}
     </div>

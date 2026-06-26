@@ -56,8 +56,18 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
     filter.kind === "range" ? filter.fromKey : filter.kind === "day" ? filter.dateKey : customDayKey;
   const rangeTo = filter.kind === "range" ? filter.toKey : rangeFrom;
 
+  const panelPositionClass = compact
+    ? "top-full mt-1"
+    : "bottom-full mb-1";
+
   return (
-    <div className={clsx("relative border-t border-white/10 bg-waka-800/35", compact ? "px-2 py-1" : "px-3 py-2")}>
+    <div
+      className={clsx(
+        "relative border-t border-white/10 bg-waka-800/35",
+        compact ? "px-2 py-1" : "px-3 py-2",
+        pickerOpen && "z-50",
+      )}
+    >
       <button
         type="button"
         onClick={() => setPickerOpen((v) => !v)}
@@ -79,7 +89,12 @@ export function HistoryDatePickerStrip({ lang, filter, onFilterChange, labelOver
             aria-label={t(lang, "cancel")}
             onClick={() => setPickerOpen(false)}
           />
-          <div className="absolute bottom-full left-3 right-3 z-[45] mb-1 rounded-2xl border border-stone-200 bg-white p-3 text-stone-900 shadow-xl">
+          <div
+            className={clsx(
+              "absolute left-3 right-3 z-[45] rounded-2xl border border-stone-200 bg-white p-3 text-stone-900 shadow-xl",
+              panelPositionClass,
+            )}
+          >
             <div className="flex flex-wrap gap-2">
               {PRESETS.map((preset) => (
                 <button

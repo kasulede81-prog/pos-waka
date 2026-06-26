@@ -15,6 +15,12 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
   const uid = session.user.id;
   if (isWorkspaceBootstrapped(uid)) return;
 
+  try {
+    await supabase.auth.refreshSession();
+  } catch {
+    /* JWT may still be updating right after email confirmation */
+  }
+
   const existing = await resolvePrimaryOrganizationForUser(uid);
   if (existing?.shopId) {
     markWorkspaceBootstrapped(uid);

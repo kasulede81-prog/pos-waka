@@ -17,7 +17,7 @@ import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
-import { assertAccountSwitchAllowed, ORGANIZATION_DELETED_MESSAGE, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
+import { assertAccountSwitchAllowed, isOrganizationDeletedError, ORGANIZATION_DELETED_MESSAGE, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
@@ -69,6 +69,21 @@ function applyAccountSwitchSync(nextKey: string | null): void {
   flushPendingPersist();
   usePosStore.getState().resetForSignOut();
   setActiveAccountKey(nextKey);
+}
+
+/** Avoid crashing auth callbacks when a wiped shop namespace is still in local storage. */
+function tryApplyAccountSwitchSync(
+  nextKey: string | null,
+  onBlocked?: () => void,
+): void {
+  try {
+    applyAccountSwitchSync(nextKey);
+  } catch (err) {
+    if (!isOrganizationDeletedError(err)) throw err;
+    stashAuthRedirectError(ORGANIZATION_DELETED_MESSAGE);
+    onBlocked?.();
+    applyAccountSwitchSync(null);
+  }
 }
 
 function applySignupProfileToLocalStore(next: Session | null): void {
@@ -350,9 +365,17 @@ export function useAuth() {
       if (cancelled) return;
       if (next?.user) {
         clearStaffAuth();
-        applyAccountSwitchSync(
+        tryApplyAccountSwitchSync(
           computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
+          () => {
+            void supabase?.auth.signOut();
+            setSession(null);
+          },
         );
+        if (!getActiveAccountKey()?.startsWith("sb:")) {
+          if (!cancelled) setInitializing(false);
+          return;
+        }
         applySignupProfileToLocalStore(next);
         setSession(next);
         setStaffSession(null);
@@ -385,9 +408,16 @@ export function useAuth() {
         }
         clearStaffAuth();
         setStaffSession(null);
-        applyAccountSwitchSync(
+        tryApplyAccountSwitchSync(
           computeAccountKey({ mode: "supabase", userId: next.user.id, email: next.user.email }),
+          () => {
+            void supabase?.auth.signOut();
+            setSession(null);
+          },
         );
+        if (!getActiveAccountKey()?.startsWith("sb:")) {
+          return;
+        }
         applySignupProfileToLocalStore(next);
         if (event === "SIGNED_IN" && !signUpInProgressRef.current) {
           void ensureWorkspaceRef.current(next).catch((e) => {
