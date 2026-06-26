@@ -25,6 +25,12 @@ export function isVerifyAgentPath(pathname: string): boolean {
   return p === "/verify-agent" || p.startsWith("/verify-agent/");
 }
 
+/** Paths where Supabase returns after email/OAuth — must render immediately (no startup gate). */
+export function isAuthHandoffPath(pathname: string): boolean {
+  const p = pathname.split("?")[0] || "/";
+  return p === "/auth/callback" || p === "/auth/recovery" || p === "/reset-password";
+}
+
 /** Paths reachable before sign-in on Android/iOS (auth + legal footer links). */
 export const NATIVE_PUBLIC_PATHS = new Set([
   "/login",

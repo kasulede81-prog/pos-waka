@@ -13,6 +13,7 @@ import {
   type StartupStepId,
 } from "../../lib/startupDiagnostics";
 import { forceHideNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "../../lib/nativeSplash";
+import { isAuthHandoffPath } from "../../lib/nativeApp";
 import { STARTUP_SCREEN_BG } from "./StartupLoadingScreen";
 
 export const STARTUP_STALL_MS = 15_000;
@@ -84,7 +85,10 @@ export function StartupBootstrapGate({
     return () => window.clearInterval(id);
   }, [langReady, authInitializing]);
 
-  if (langReady && !authInitializing) {
+  const bypassForAuthHandoff =
+    typeof window !== "undefined" && isAuthHandoffPath(window.location.pathname);
+
+  if ((langReady && !authInitializing) || bypassForAuthHandoff) {
     return <>{children}</>;
   }
 

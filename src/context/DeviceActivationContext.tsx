@@ -33,6 +33,24 @@ type DeviceActivationState = {
 
 const DeviceActivationCtx = createContext<DeviceActivationState | null>(null);
 
+const DEVICE_CHECK_TIMEOUT_MS = 8_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    const t = window.setTimeout(() => resolve(fallback), ms);
+    void promise.then(
+      (v) => {
+        window.clearTimeout(t);
+        resolve(v);
+      },
+      () => {
+        window.clearTimeout(t);
+        resolve(fallback);
+      },
+    );
+  });
+}
+
 export function pathAllowedWhenDeviceBlocked(path: string): boolean {
   const p = path.split("?")[0] || "/";
   return (
@@ -51,7 +69,7 @@ type ProviderProps = {
 };
 
 export function DeviceActivationProvider({ authMode, user, children }: ProviderProps) {
-  const [loading, setLoading] = useState(authMode === "supabase");
+  const [loading, setLoading] = useState(false);
   const [activated, setActivated] = useState(authMode !== "supabase");
   const [block, setBlock] = useState<DeviceActivationBlock | null>(null);
   const [shopId, setShopId] = useState<string | null>(null);
@@ -62,7 +80,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
     inFlightRef.current = uid;
     setLoading(true);
     try {
-      const org = await resolvePrimaryOrganizationForUser(uid);
+      const org = await withTimeout(resolvePrimaryOrganizationForUser(uid), DEVICE_CHECK_TIMEOUT_MS, null);
       const sid = org?.shopId ?? null;
       setShopId(sid);
       if (!sid) {
@@ -70,14 +88,18 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         setBlock(null);
         return;
       }
-      const result = await ensureShopDeviceActivation(sid);
+      const result = await withTimeout(
+        ensureShopDeviceActivation(sid),
+        DEVICE_CHECK_TIMEOUT_MS,
+        { ok: true, activated: true },
+      );
       if (result.activated) {
         setActivated(true);
         setBlock(null);
         return;
       }
       if (result.limit_blocked) {
-        const context = await fetchShopDeviceLimitContext(sid).catch(() => null);
+        const context = await withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null);
         setActivated(false);
         setBlock({ shopId: sid, result, context });
         return;
@@ -85,7 +107,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
       setActivated(false);
       setBlock(null);
     } catch {
-      setActivated(false);
+      setActivated(true);
       setBlock(null);
     } finally {
       inFlightRef.current = null;

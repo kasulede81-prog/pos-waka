@@ -1,11 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { WakaPosLogo } from "../components/brand/WakaLogo";
-import { authDevLog, formatAuthError, parseOAuthCallbackError } from "../lib/authConfig";
+import { authDevLog } from "../lib/authConfig";
+import { bootstrapAuthCallbackSession } from "../lib/authCallbackSession";
+import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
+import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { supabase } from "../lib/supabase";
+import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
 type CallbackState = "loading" | "success" | "error";
+
+async function postCallbackDestination(userId: string): Promise<string> {
+  if (isWorkspaceBootstrapped(userId)) return "/";
+  if (readCachedOwnerOnboardingComplete(userId) === true) return "/";
+  try {
+    const status = await fetchOwnerOnboardingStatus();
+    if (status?.complete) return "/";
+  } catch {
+    /* onboarding check is best-effort */
+  }
+  return "/onboarding";
+}
 
 /**
  * OAuth / email confirmation return URL.
@@ -14,6 +30,7 @@ type CallbackState = "loading" | "success" | "error";
 export function AuthCallbackPage() {
   const [state, setState] = useState<CallbackState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [destination, setDestination] = useState("/");
   const handled = useRef(false);
 
   useEffect(() => {
@@ -27,19 +44,7 @@ export function AuthCallbackPage() {
     if (handled.current) return undefined;
     handled.current = true;
 
-    const urlError = parseOAuthCallbackError();
-    if (urlError) {
-      authDevLog("error", "OAuth callback URL error", urlError);
-      setErrorMessage(urlError);
-      setState("error");
-      return undefined;
-    }
-
     let cancelled = false;
-
-    const finishSuccess = () => {
-      if (!cancelled) setState("success");
-    };
 
     const finishError = (msg: string) => {
       if (!cancelled) {
@@ -48,55 +53,50 @@ export function AuthCallbackPage() {
       }
     };
 
-    const { data: listener } = sb.auth.onAuthStateChange((event, session) => {
-      authDevLog("log", "Auth callback state", { event, hasSession: Boolean(session) });
-      if (session && (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION")) {
-        finishSuccess();
-      }
-    });
-
     const run = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
+      const result = await bootstrapAuthCallbackSession();
+      if (cancelled) return;
 
-      if (code) {
-        const { error } = await sb.auth.exchangeCodeForSession(code);
-        if (error) {
-          authDevLog("error", "exchangeCodeForSession failed", error);
-          finishError(formatAuthError(error));
-          return;
-        }
-        finishSuccess();
+      if (result.status !== "ready") {
+        finishError(result.message ?? "Could not complete sign-in.");
         return;
       }
 
-      const { data, error } = await sb.auth.getSession();
-      if (error) {
-        authDevLog("error", "getSession on callback failed", error);
-        finishError(formatAuthError(error));
-        return;
+      let session = result.session ?? null;
+      if (!session) {
+        const { data } = await sb.auth.getSession();
+        session = data.session ?? null;
       }
-      if (data.session) {
-        finishSuccess();
+      if (!session) {
+        finishError("Sign-in timed out. Please try again from the login page.");
         return;
       }
 
-      window.setTimeout(async () => {
-        const retry = await sb.auth.getSession();
-        if (retry.data.session) finishSuccess();
-        else finishError("Sign-in timed out. Please try again from the login page.");
-      }, 4500);
+      authDevLog("log", "Auth callback session ready", { userId: session.user.id });
+
+      try {
+        await ensureOwnerWorkspaceIfNeeded(session);
+      } catch (e) {
+        authDevLog("error", "Auth callback workspace bootstrap failed", e);
+        finishError("Your account is verified but we could not finish setting up your shop. Try signing in.");
+        return;
+      }
+
+      const nextPath = await postCallbackDestination(session.user.id);
+      if (!cancelled) {
+        setDestination(nextPath);
+        setState("success");
+      }
     };
 
     void run();
 
     return () => {
       cancelled = true;
-      listener.subscription.unsubscribe();
     };
   }, []);
 
-  if (state === "success") return <Navigate to="/" replace />;
+  if (state === "success") return <Navigate to={destination} replace />;
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-orange-50 via-white to-stone-50 px-4 py-10">
