@@ -2,14 +2,14 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { initDeviceOnlineTracking } from "./deviceOnline";
 import { prepareNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "./nativeSplash";
-import { registerNativeOAuthDeepLinkHandler } from "./nativeGoogleAuth";
+import { registerNativeAuthDeepLinkHandler } from "./nativeAuthDeepLink";
 
 /**
  * Native shell polish: status bar matches Waka header (dark on light is inverted — we use dark bar + light icons).
  */
 export async function initCapacitorShell(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
-  registerNativeOAuthDeepLinkHandler();
+  registerNativeAuthDeepLinkHandler();
   await prepareNativeSplash();
   scheduleSplashMaxDuration();
   scheduleSplashSafetyTimeout();

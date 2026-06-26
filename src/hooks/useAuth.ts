@@ -1,6 +1,6 @@
 import type { Session } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { authDevLog, formatAuthError, getAuthCallbackUrl, getAuthRecoveryUrl, stashAuthRedirectError } from "../lib/authConfig";
+import { authDevLog, formatAuthError, getAuthEmailCallbackUrl, getAuthEmailRecoveryUrl, stashAuthRedirectError } from "../lib/authConfig";
 import { Capacitor } from "@capacitor/core";
 import { isGoogleAuthUiEnabled } from "../lib/authFeatureFlags";
 import { requestGoogleIdToken, requireGoogleOAuthClientId } from "../lib/googleIdentity";
@@ -525,7 +525,7 @@ export function useAuth() {
       throw new Error("Registration is already in progress. Please wait a moment.");
     }
     signUpLockRef.current = true;
-    const redirectTo = getAuthCallbackUrl();
+    const emailRedirectTo = getAuthEmailCallbackUrl();
     const orgLabel = (profile?.organizationName ?? businessName).trim();
     const shopLabel = (profile?.shopDisplayName ?? businessName).trim();
     const meta: Record<string, unknown> = {
@@ -568,7 +568,7 @@ export function useAuth() {
         email,
         password,
         options: {
-          emailRedirectTo: redirectTo,
+          emailRedirectTo,
           data: meta,
         },
       });
@@ -582,7 +582,7 @@ export function useAuth() {
         const retry = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: redirectTo, data: meta },
+          options: { emailRedirectTo, data: meta },
         });
         data = retry.data;
         error = retry.error;
@@ -674,7 +674,7 @@ export function useAuth() {
     const { error } = await supabase.auth.resend({
       type: "signup",
       email,
-      options: { emailRedirectTo: getAuthCallbackUrl() },
+      options: { emailRedirectTo: getAuthEmailCallbackUrl() },
     });
     if (error) {
       reportAuthIssue("resend_verification_failed", { status: error.status ?? 0 });
@@ -704,7 +704,7 @@ export function useAuth() {
       throw new Error("This account uses phone-only login. Contact Waka support to reset your password.");
     }
     const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-      redirectTo: getAuthRecoveryUrl(),
+      redirectTo: getAuthEmailRecoveryUrl(),
     });
     if (error) {
       reportAuthIssue("password_reset_request_failed", { status: error.status ?? 0 });

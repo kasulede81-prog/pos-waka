@@ -85,8 +85,22 @@ export function getAuthCallbackUrl(): string {
   return `${authRedirectOrigin()}${AUTH_CALLBACK_PATH}`;
 }
 
+/**
+ * Email confirmation / resend links must use the public HTTPS URL so Gmail and mobile
+ * mail clients can open them (and Android App Links can return to the native app).
+ * Never use https://localhost in emails — it fails outside the Capacitor WebView.
+ */
+export function getAuthEmailCallbackUrl(): string {
+  return `${CANONICAL_APP_URL}${AUTH_CALLBACK_PATH}`;
+}
+
 export function getAuthRecoveryUrl(): string {
   return `${authRedirectOrigin()}${AUTH_RECOVERY_PATH}`;
+}
+
+/** Password-reset emails must use the public site URL (same as email confirmation). */
+export function getAuthEmailRecoveryUrl(): string {
+  return `${CANONICAL_APP_URL}${AUTH_RECOVERY_PATH}`;
 }
 
 export function getSupabaseProjectRef(): string | null {

@@ -7,6 +7,7 @@ import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
 import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { supabase } from "../lib/supabase";
 import { isWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
+import { tryOpenInstalledAppFromBrowserCallback } from "../lib/nativeAuthDeepLink";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
 type CallbackState = "loading" | "success" | "error";
@@ -32,6 +33,10 @@ export function AuthCallbackPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [destination, setDestination] = useState("/");
   const handled = useRef(false);
+
+  useEffect(() => {
+    tryOpenInstalledAppFromBrowserCallback();
+  }, []);
 
   useEffect(() => {
     const sb = supabase;
