@@ -88,6 +88,19 @@ export function StartupBootstrapGate({
   const bypassForAuthHandoff =
     typeof window !== "undefined" && isAuthHandoffPath(window.location.pathname);
 
+  // #region agent log
+  useEffect(() => {
+    void import("../../lib/debugSessionLog").then(({ debugSessionLog }) =>
+      debugSessionLog({
+        location: "StartupBootstrapGate",
+        message: "gate state",
+        hypothesisId: "B",
+        data: { langReady, authInitializing, isAuthenticated, bypassForAuthHandoff, path: window.location.pathname },
+      }),
+    );
+  }, [langReady, authInitializing, isAuthenticated, bypassForAuthHandoff]);
+  // #endregion
+
   if ((langReady && !authInitializing) || bypassForAuthHandoff) {
     return <>{children}</>;
   }

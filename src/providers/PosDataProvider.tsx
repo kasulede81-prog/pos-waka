@@ -167,6 +167,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       } catch {
         if (bootGenRef.current === gen) {
           setError("load");
+          setBootPhase("ready");
           recordStartupStep("local_disk", { failureReason: "Local data load failed" });
         }
         return;
@@ -181,6 +182,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
         await runRecovery(gen);
         return;
       }
+
+      if (bootGenRef.current !== gen) return;
 
       recordStartupStep("finalizing");
       setBootPhase("ready");
@@ -207,6 +210,19 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       bootGenRef.current += 1;
     };
   }, [accountKey, runBoot]);
+
+  // #region agent log
+  useEffect(() => {
+    void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
+      debugSessionLog({
+        location: "PosDataProvider",
+        message: "boot state",
+        hypothesisId: "B",
+        data: { bootPhase, accountKey: accountKey?.slice(0, 12) ?? null, error, recoveryFailed, stalled },
+      }),
+    );
+  }, [bootPhase, accountKey, error, recoveryFailed, stalled]);
+  // #endregion
 
   const handleRetryRecovery = useCallback(() => {
     resetStartupSessionForRetry();

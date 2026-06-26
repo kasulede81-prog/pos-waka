@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
@@ -43,6 +43,18 @@ export function LoginPage({
   const [googleBusy, setGoogleBusy] = useState(false);
 
   const showGoogle = mode === "supabase" && hasSupabaseConfig && isGoogleAuthUiAvailable();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void import("../lib/debugSessionLog").then(({ debugSessionLog }) =>
+      debugSessionLog({
+        location: "LoginPage",
+        message: "authenticated redirect to home",
+        hypothesisId: "A",
+        data: { path: window.location.pathname },
+      }),
+    );
+  }, [isAuthenticated]);
 
   if (isAuthenticated) {
     return <Navigate to="/" replace />;
@@ -145,7 +157,16 @@ export function LoginPage({
             />
           </label>
 
-          {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
+          {error ? (
+            <p className="text-sm font-medium text-red-600">
+              {error}{" "}
+              {error.toLowerCase().includes("confirm your email") ? (
+                <Link to="/verify-email" state={{ email }} className="font-bold underline">
+                  Resend verification
+                </Link>
+              ) : null}
+            </p>
+          ) : null}
 
           <button
             disabled={busy}
