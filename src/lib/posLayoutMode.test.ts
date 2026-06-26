@@ -7,13 +7,13 @@ describe("resolvePosLayoutMode", () => {
     expect(resolvePosLayoutMode(767)).toBe("mobile");
   });
 
-  it("compact desktop 768–1279px", () => {
+  it("compact desktop 768–1023px", () => {
     expect(resolvePosLayoutMode(768)).toBe("compact");
-    expect(resolvePosLayoutMode(1024)).toBe("compact");
-    expect(resolvePosLayoutMode(1279)).toBe("compact");
+    expect(resolvePosLayoutMode(1023)).toBe("compact");
   });
 
-  it("full desktop from 1280px", () => {
+  it("full desktop from 1024px", () => {
+    expect(resolvePosLayoutMode(1024)).toBe("full");
     expect(resolvePosLayoutMode(1280)).toBe("full");
     expect(resolvePosLayoutMode(1920)).toBe("full");
   });

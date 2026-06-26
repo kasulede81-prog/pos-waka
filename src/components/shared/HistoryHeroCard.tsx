@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { LucideIcon } from "lucide-react";
 import type { Language } from "../../types";
 import type { DateFilterValue } from "../../lib/dateFilters";
+import { KPI_VALUE_CLASS, historyHeroMetricGridClass } from "../../lib/desktopLayout";
 import { HistoryDatePickerStrip } from "./HistoryDatePickerStrip";
 
 export type HistoryHeroMetric = {
@@ -44,17 +45,27 @@ export function HistoryHeroCard({
   compactDatePicker = false,
 }: Props) {
   const count = Math.min(3, Math.max(1, metrics.length));
-  const gridClass = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3";
+  const gridClass = historyHeroMetricGridClass(count);
+  const stackedOnNarrow = count > 1;
 
   return (
-    <div className="rounded-[1.35rem] bg-gradient-to-br from-waka-600 via-waka-600 to-waka-700 text-white shadow-waka-md">
-      <div className={`grid ${gridClass} divide-x divide-white/15`}>
+    <div className="min-w-0 overflow-hidden rounded-[1.35rem] bg-gradient-to-br from-waka-600 via-waka-600 to-waka-700 text-white shadow-waka-md">
+      <div
+        className={clsx(
+          "grid divide-white/15",
+          gridClass,
+          stackedOnNarrow ? "divide-y min-[480px]:divide-y-0 min-[480px]:divide-x" : "divide-x",
+        )}
+      >
         {metrics.slice(0, 3).map((metric, index) => {
           const Icon = metric.icon;
           return (
             <div
               key={index}
-              className={`relative ${dense ? "px-2 py-2 sm:px-3 sm:py-3" : "px-2 py-3 sm:px-4 sm:py-5"}`}
+              className={clsx(
+                "relative min-w-0",
+                dense ? "px-2 py-2 sm:px-3 sm:py-3" : "px-2 py-3 sm:px-4 sm:py-5",
+              )}
             >
               {Icon ? (
                 <div
@@ -68,8 +79,14 @@ export function HistoryHeroCard({
                   <Icon className={clsx("text-white/95", dense ? "h-3 w-3" : "h-3.5 w-3.5 sm:h-4 sm:w-4")} aria-hidden />
                 </div>
               ) : null}
-              <p className="text-[10px] font-bold text-waka-100/90 sm:text-xs">{metric.label}</p>
-              <p className={`mt-1 font-black tracking-tight ${dense ? "text-base sm:text-xl" : "text-lg sm:text-2xl lg:text-[1.65rem]"}`}>
+              <p className="pr-8 text-[10px] font-bold text-waka-100/90 sm:text-xs">{metric.label}</p>
+              <p
+                className={clsx(
+                  "mt-1 font-black tracking-tight",
+                  KPI_VALUE_CLASS,
+                  dense ? "text-base sm:text-xl" : "text-lg sm:text-2xl lg:text-[1.65rem]",
+                )}
+              >
                 {metric.value}
               </p>
               {metric.belowValue}

@@ -109,7 +109,7 @@ export function SalesHistorySummaryStrip({
             >
               {label}
             </p>
-            <p className={clsx("font-black", compact ? "text-[11px] sm:text-xs" : "mt-1 text-xs sm:text-sm", valueClass)}>
+            <p className={clsx("font-black tabular-nums break-words leading-tight min-w-0", compact ? "text-[11px] sm:text-xs" : "mt-1 text-xs sm:text-sm", valueClass)}>
               UGX {value.toLocaleString()}
             </p>
           </div>

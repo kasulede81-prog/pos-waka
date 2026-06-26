@@ -164,7 +164,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
       ) : null}
 
       {stats ? (
-        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <section className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 lg:grid-cols-4">
           <article className="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-emerald-900">{t(lang, "hospitalityDashOpenTables")}</p>
             <p className="mt-1 text-3xl font-black text-emerald-950">{stats.openTables}</p>

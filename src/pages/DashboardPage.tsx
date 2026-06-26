@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import { Link, useLocation } from "react-router-dom";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
+import { dashboardKpiGridClass, KPI_VALUE_CLASS } from "../lib/desktopLayout";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDashboardAnalytics } from "../hooks/useShopReporting";
@@ -296,13 +298,13 @@ export function DashboardPage({ lang }: { lang: Language }) {
         </details>
       ) : null}
 
-      <section className={`grid grid-cols-2 gap-3 ${gridCols}`}>
+      <section className={dashboardKpiGridClass(gridCols.includes("lg:grid-cols-3") ? "3" : "2")}>
         {homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue ? (
-          <article className="rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
+          <article className="min-w-0 rounded-3xl bg-gradient-to-br from-stone-900 to-stone-700 p-4 text-white shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-white/80">
               {wholesaleHome ? t(lang, "wholesaleDashLargeInvoices") : t(lang, "todaySection")}
             </p>
-            <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {salesTodayTotal.toLocaleString()}</p>
+            <p className={clsx("mt-1 text-2xl font-black sm:text-3xl", KPI_VALUE_CLASS)}>UGX {salesTodayTotal.toLocaleString()}</p>
             <p className="mt-1 text-xs font-semibold text-white/70">
               {wholesaleHome ? t(lang, "wholesaleDashNoInvoices") : t(lang, "dashboardTodaySalesHint")}
             </p>
@@ -314,7 +316,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
           </article>
         ) : null}
         {homeMetrics.showInventoryMetrics && canStock ? (
-          <article className="rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-waka-sm">
+          <article className="min-w-0 rounded-3xl border border-rose-200 bg-rose-50 p-4 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-rose-900">
               {wholesaleHome ? t(lang, "wholesaleDashReorderRequired") : t(lang, "cardLowStock")}
             </p>
@@ -323,21 +325,25 @@ export function DashboardPage({ lang }: { lang: Language }) {
           </article>
         ) : null}
         {homeMetrics.showShopWideDebt ? (
-          <article className="rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
+          <article className="min-w-0 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">
               {wholesaleHome ? t(lang, "wholesaleDashReceivables") : t(lang, "cardDebtToday")}
             </p>
-            <p className="mt-1 text-2xl font-black sm:text-3xl">UGX {debtToday.toLocaleString()}</p>
+            <p className={clsx("mt-1 text-2xl font-black sm:text-3xl", KPI_VALUE_CLASS)}>UGX {debtToday.toLocaleString()}</p>
             <p className="mt-1 text-xs font-semibold text-amber-950/80">{t(lang, "dashboardDebtTodayHint")}</p>
           </article>
         ) : null}
         {canProfit && (homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue) ? (
-          <article className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 shadow-waka-sm">
+          <article className="min-w-0 rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-100 p-4 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-emerald-900">
               {t(lang, "cardProfitToday")}
             </p>
             <p
-              className={`mt-1 text-2xl font-black sm:text-3xl ${todayProfitUgx < 0 ? "text-stone-700" : "text-emerald-950"}`}
+              className={clsx(
+                "mt-1 text-2xl font-black sm:text-3xl",
+                KPI_VALUE_CLASS,
+                todayProfitUgx < 0 ? "text-stone-700" : "text-emerald-950",
+              )}
             >
               UGX {todayProfitUgx.toLocaleString()}
             </p>

@@ -287,3 +287,29 @@ export function resetStartupSessionForRetry(): void {
   persist();
   emit();
 }
+
+export type StartupPhaseId =
+  | "auth_restored"
+  | "workspace_ready"
+  | "device_classification"
+  | "recovery_applicable"
+  | "onboarding_required"
+  | "dashboard_ready";
+
+/** Structured startup phase log for diagnosing registration / boot failures. */
+export function logStartupPhase(phase: StartupPhaseId, detail?: Record<string, unknown>): void {
+  const payload = {
+    scope: "waka_startup",
+    phase,
+    at: new Date().toISOString(),
+    accountKey: getActiveAccountKey(),
+    sessionId: session.sessionId,
+    currentStep: session.currentStep,
+    ...detail,
+  };
+  if (import.meta.env.DEV) {
+    console.info("[waka-startup]", payload);
+  } else {
+    console.info(JSON.stringify(payload));
+  }
+}

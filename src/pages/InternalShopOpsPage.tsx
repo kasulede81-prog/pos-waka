@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AdminShell } from "../components/internal-admin/v2/AdminShell";
 import { BottomSheet } from "../components/internal-admin/v2/primitives";
 import { adminPermissions } from "../components/internal-admin/v2/adminRoles";
@@ -50,6 +50,7 @@ import {
   INTERNAL_ADMIN_PREVIEW_ROW,
   PREVIEW_SHOP_ID,
   PREVIEW_SHOP_OPS_DETAIL,
+  internalAdminShopRescueHref,
   isInternalAdminPreviewActive,
 } from "../lib/internalAdminPreview";
 import { adminSetShopPilotCohort } from "../lib/internalOpsHardening";
@@ -103,6 +104,7 @@ export function InternalShopOpsPage({ lang }: Props) {
   const [planControlDays, setPlanControlDays] = useState(30);
   const [auditRows, setAuditRows] = useState<OpsAuditRow[]>([]);
   const [pilotCohort, setPilotCohort] = useState(false);
+  const [importedPending, setImportedPending] = useState<number | null>(null);
 
   const loadShop = useCallback(async () => {
     if (!shopId) return;
@@ -466,6 +468,12 @@ export function InternalShopOpsPage({ lang }: Props) {
             <p className="mt-1 text-xs font-semibold text-stone-600">
               {[detail.shop.district, detail.shop.city].filter(Boolean).join(" · ") || "—"}
             </p>
+            <Link
+              to={internalAdminShopRescueHref(detail.shop.id, previewMode)}
+              className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-orange-600 px-4 text-xs font-black text-white"
+            >
+              Open Rescue Console →
+            </Link>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span
                 className={`rounded-full px-2.5 py-0.5 text-[10px] font-black ${
@@ -532,10 +540,14 @@ export function InternalShopOpsPage({ lang }: Props) {
           ) : null}
 
           {canSupport ? (
-            <AdminDiagnosticsImportPanel previewMode={previewMode} defaultShopId={detail.shop.id} />
+            <AdminDiagnosticsImportPanel
+              previewMode={previewMode}
+              defaultShopId={detail.shop.id}
+              onParsed={(p) => setImportedPending(p?.valid ? p.pendingSyncQueue : null)}
+            />
           ) : null}
 
-          {canSupport ? <AdminSyncInvestigationPanel detail={detail} /> : null}
+          {canSupport ? <AdminSyncInvestigationPanel detail={detail} diagnosticsPending={importedPending} /> : null}
 
           {canSupport ? (
             <AdminCollapsible

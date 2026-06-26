@@ -11,8 +11,11 @@ import { forceHideNativeSplash, hideNativeSplashWhenReady, scheduleSplashMaxDura
 import { hasSupabaseConfig } from "../lib/supabase";
 
 import { isLocalShopDataEmpty } from "../lib/cloudSnapshotSync";
-import { isShopOnboardingComplete } from "../lib/onboardingState";
-import { isFreshOwnerPendingSetup } from "../lib/ownerOnboarding";
+import {
+  logOnboardingRequired,
+  shouldRunCloudRecoveryForAccount,
+  userIdFromAccountKey,
+} from "../lib/firstTimeOwnerDevice";
 
 import { CloudRecoveryScreen } from "../components/recovery/CloudRecoveryScreen";
 
@@ -21,7 +24,7 @@ import {
   resetCloudRecoverySessionForRetry,
 } from "../lib/cloudRecoverySession";
 
-import { runCloudRecoveryGated, shouldRequireRecoveryLock } from "../lib/postAuthCloudHydrate";
+import { runCloudRecoveryGated } from "../lib/postAuthCloudHydrate";
 
 import { StartupLoadingScreen, STARTUP_SCREEN_BG } from "../components/startup/StartupLoadingScreen";
 
@@ -29,7 +32,7 @@ import { StartupEscapeActions } from "../components/startup/StartupEscapeActions
 
 import {
   getStartupDiagnosticsSnapshot,
-  isRecoveryOfflineBypassActive,
+  logStartupPhase,
   markStartupStalled,
   recordStartupRecoveryValidated,
   recordStartupStep,
@@ -54,26 +57,6 @@ type Props = {
 
 function isStoreReadyForAccount(accountKey: string | null): boolean {
   return Boolean(accountKey && usePosStore.getState()._hydrated && getActiveAccountKey() === accountKey);
-}
-
-import { withTimeout } from "../lib/promiseTimeout";
-
-async function shouldRunCloudRecoveryForAccount(): Promise<boolean> {
-  if (!hasSupabaseConfig) return false;
-  if (isRecoveryOfflineBypassActive()) return false;
-  const accountKey = getActiveAccountKey();
-  if (!accountKey?.startsWith("sb:")) return false;
-
-  if (isLocalShopDataEmpty()) {
-    const freshPending = await withTimeout(isFreshOwnerPendingSetup(), 5000, false);
-    if (freshPending) return false;
-    const prefs = usePosStore.getState().preferences;
-    if (usePosStore.getState()._hydrated && !isShopOnboardingComplete(prefs)) {
-      return false;
-    }
-  }
-
-  return withTimeout(shouldRequireRecoveryLock().catch(() => false), 8000, false);
 }
 
 async function markFreshAccountBootstrapReady(): Promise<void> {
@@ -127,7 +110,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     return () => window.clearInterval(id);
   }, [bootPhase, error, recoveryFailed, probeFailed]);
 
-  const runRecovery = useCallback(async (gen: number) => {
+  const runRecovery = useCallback(async (gen: number, userId: string | null) => {
     setRecoveryFailed(false);
     setProbeFailed(false);
     setBootPhase("recovery");
@@ -141,6 +124,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupRecoveryValidated();
       setBootPhase("ready");
       recordStartupStep("ready");
+      logStartupPhase("dashboard_ready", { via: "cloud_recovery" });
+      logOnboardingRequired(userId);
       void hideNativeSplashWhenReady();
     } else if (result.probeFailed) {
       recordStartupStep("cloud_probe", { failureReason: result.error ?? "Cloud probe failed" });
@@ -158,14 +143,17 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       setProbeFailed(false);
       setStalled(false);
 
+      const userId = userIdFromAccountKey(accountKey);
+
       if (!accountKey) {
         setBootPhase("ready");
         recordStartupStep("ready");
+        logStartupPhase("dashboard_ready", { via: "no_account" });
         return;
       }
 
       if (isCloudRecoveryLockActive()) {
-        const stillNeedsRecovery = await shouldRunCloudRecoveryForAccount();
+        const stillNeedsRecovery = await shouldRunCloudRecoveryForAccount(userId);
         if (!stillNeedsRecovery) {
           resetCloudRecoverySessionForRetry();
         }
@@ -179,11 +167,13 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
 
       recordStartupStep("recovery_check");
       const needsRecoveryCheck =
-        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount());
+        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount(userId));
 
       if (isStoreReadyForAccount(accountKey) && !needsRecoveryCheck && !isCloudRecoveryLockActive()) {
         setBootPhase("ready");
         recordStartupStep("ready");
+        logStartupPhase("dashboard_ready", { via: "store_already_ready" });
+        logOnboardingRequired(userId);
         void hideNativeSplashWhenReady();
         return;
       }
@@ -205,10 +195,10 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       if (bootGenRef.current !== gen) return;
 
       const needsRecovery =
-        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount());
+        hasSupabaseConfig && accountKey.startsWith("sb:") && (await shouldRunCloudRecoveryForAccount(userId));
 
       if (needsRecovery) {
-        await runRecovery(gen);
+        await runRecovery(gen, userId);
         return;
       }
 
@@ -225,6 +215,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
       recordStartupStep("finalizing");
       setBootPhase("ready");
       recordStartupStep("ready");
+      logStartupPhase("dashboard_ready", { via: "first_time_or_local_boot" });
+      logOnboardingRequired(userId);
       void hideNativeSplashWhenReady();
     },
     [accountKey, runRecovery],
@@ -253,6 +245,11 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     const id = window.setTimeout(() => {
       setBootPhase("ready");
       recordStartupStep("ready");
+      logStartupPhase("dashboard_ready", { via: "boot_timeout_escape" });
+      logOnboardingRequired(userIdFromAccountKey(accountKey));
+      if (isCloudRecoveryLockActive()) {
+        resetCloudRecoverySessionForRetry();
+      }
       void hideNativeSplashWhenReady();
     }, 12_000);
     return () => window.clearTimeout(id);
@@ -263,8 +260,8 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     setStalled(false);
     const gen = bootGenRef.current;
     resetCloudRecoverySessionForRetry();
-    void runRecovery(gen);
-  }, [runRecovery]);
+    void runRecovery(gen, userIdFromAccountKey(accountKey));
+  }, [accountKey, runRecovery]);
 
   const handleRetryStartup = useCallback(() => {
     resetStartupSessionForRetry();
@@ -284,6 +281,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     recordStartupStep("finalizing");
     setBootPhase("ready");
     recordStartupStep("ready");
+    logStartupPhase("dashboard_ready", { via: "continue_offline" });
     void hideNativeSplashWhenReady();
   }, []);
 
@@ -331,7 +329,7 @@ export function PosDataProvider({ children, lang = "en", accountKey, onSignOut =
     );
   }
 
-  if (bootPhase === "recovery" || isCloudRecoveryLockActive()) {
+  if (bootPhase === "recovery") {
     return (
       <CloudRecoveryScreen
         lang={lang}

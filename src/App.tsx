@@ -84,6 +84,7 @@ import { LegalPolicyPage } from "./pages/LegalPolicyPage";
 import { InternalWakaAdminPage } from "./pages/InternalWakaAdminPage";
 import { InternalAdminOutlet } from "./components/routing/InternalAdminOutlet";
 import { InternalShopOpsPage } from "./pages/InternalShopOpsPage";
+import { ShopRescueConsolePage } from "./pages/ShopRescueConsolePage";
 import { ShopOnboardingPage } from "./pages/ShopOnboardingPage";
 import { OnboardingRouteGate } from "./components/onboarding/OnboardingRouteGate";
 import { RouteErrorBoundary } from "./components/RouteErrorBoundary";
@@ -316,6 +317,7 @@ function AppRoutes() {
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
+                  <Route path="internal/waka/shop/:shopId/rescue" element={<ShopRescueConsolePage lang={lang} email={auth.email} />} />
                 </Route>
                 <Route
                   element={

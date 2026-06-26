@@ -58,6 +58,11 @@ export function internalAdminShopHref(shopId: string, previewMode: boolean): str
   return previewMode ? internalAdminPreviewHref(path) : path;
 }
 
+export function internalAdminShopRescueHref(shopId: string, previewMode: boolean): string {
+  const path = `/internal/waka/shop/${shopId}/rescue`;
+  return previewMode ? internalAdminPreviewHref(path) : path;
+}
+
 const now = new Date();
 const daysAgo = (n: number) => new Date(now.getTime() - n * 86_400_000).toISOString();
 

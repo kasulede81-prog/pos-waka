@@ -803,39 +803,69 @@ export async function fetchSupportTickets(limit = 25): Promise<SupportTicketRow[
   if (!supabase) return [];
   const { data, error } = await supabase.rpc("internal_ops_support_queue", { p_limit: limit });
   const rows = normalizeSupportQueueRpcData(data);
+  let tickets: SupportTicketRow[] = [];
   if (!error && rows.length) {
-    return rows.map((row) => mapSupportRpcRow(row));
+    tickets = rows.map((row) => mapSupportRpcRow(row));
+  } else {
+    const { data: fallback, error: fbErr } = await supabase
+      .from("support_requests")
+      .select(
+        "id, subject, body, status, priority, channel, created_at, contact_phone_e164, issue_type, app_version, device_fingerprint, diagnostics_json, screenshot_meta, sync_health_snapshot, shops ( id, name, district, phone_e164 )",
+      )
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (fbErr || !fallback) return [];
+    tickets = (fallback as Array<Record<string, unknown> & { shops?: { id?: string; name?: string; district?: string; phone_e164?: string }[] }>).map(
+      (row) => {
+        const sh = row.shops;
+        const shop = Array.isArray(sh) ? sh[0] : sh;
+        return mapSupportRpcRow({
+          ...row,
+          organization_id: null,
+          shop_id: shop?.id ?? null,
+          shop_name: shop?.name ?? null,
+          shop_district: shop?.district ?? null,
+          shop_phone_e164: shop?.phone_e164 ?? null,
+          owner_name: null,
+          owner_email: null,
+          issue_type: row.issue_type ?? null,
+          device_fingerprint: row.device_fingerprint ?? null,
+          app_version: row.app_version ?? null,
+          sync_health_snapshot: row.sync_health_snapshot ?? {},
+          assigned_internal_admin_id: null,
+          assigned_admin_email: null,
+        });
+      },
+    );
   }
-  const { data: fallback, error: fbErr } = await supabase
+
+  const needsDiagnostics = tickets.some((t) => !t.diagnostics_json && t.id);
+  if (!needsDiagnostics) return tickets;
+
+  const ids = tickets.filter((t) => !t.diagnostics_json).map((t) => t.id);
+  const { data: diagRows } = await supabase
     .from("support_requests")
-    .select(
-      "id, subject, body, status, priority, channel, created_at, contact_phone_e164, issue_type, app_version, device_fingerprint, diagnostics_json, screenshot_meta, sync_health_snapshot, shops ( id, name, district, phone_e164 )",
-    )
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (fbErr || !fallback) return [];
-  return (fallback as Array<Record<string, unknown> & { shops?: { id?: string; name?: string; district?: string; phone_e164?: string }[] }>).map(
-    (row) => {
-      const sh = row.shops;
-      const shop = Array.isArray(sh) ? sh[0] : sh;
-      return mapSupportRpcRow({
-        ...row,
-        organization_id: null,
-        shop_id: shop?.id ?? null,
-        shop_name: shop?.name ?? null,
-        shop_district: shop?.district ?? null,
-        shop_phone_e164: shop?.phone_e164 ?? null,
-        owner_name: null,
-        owner_email: null,
-        issue_type: null,
-        device_fingerprint: null,
-        app_version: null,
-        sync_health_snapshot: {},
-        assigned_internal_admin_id: null,
-        assigned_admin_email: null,
-      });
-    },
-  );
+    .select("id, diagnostics_json, screenshot_meta, issue_type")
+    .in("id", ids);
+  if (!diagRows?.length) return tickets;
+
+  const byId = new Map(diagRows.map((r) => [String(r.id), r]));
+  return tickets.map((t) => {
+    const extra = byId.get(t.id);
+    if (!extra) return t;
+    return {
+      ...t,
+      diagnostics_json:
+        extra.diagnostics_json && typeof extra.diagnostics_json === "object"
+          ? (extra.diagnostics_json as Record<string, unknown>)
+          : t.diagnostics_json,
+      screenshot_meta:
+        extra.screenshot_meta && typeof extra.screenshot_meta === "object"
+          ? (extra.screenshot_meta as Record<string, unknown>)
+          : t.screenshot_meta,
+      issue_type: t.issue_type ?? (extra.issue_type != null ? String(extra.issue_type) : null),
+    };
+  });
 }
 
 export async function fetchFieldMapPins(opts?: { districtId?: string | null; limit?: number }): Promise<FieldMapPin[]> {

@@ -8,7 +8,7 @@ type Props = {
   children: ReactNode;
 };
 
-/** Right-side checkout panel for compact desktop (768–1279px). */
+/** Right-side checkout panel for compact desktop (768–1023px). */
 export function PosCompactCheckoutSlideover({ open, onClose, checkoutBottomPad, children }: Props) {
   if (!open) return null;
 
@@ -27,7 +27,7 @@ export function PosCompactCheckoutSlideover({ open, onClose, checkoutBottomPad, 
           aria-label="Close checkout"
         />
         <div
-          className="absolute inset-y-0 right-0 flex w-[clamp(360px,38vw,420px)] max-w-full flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)] shadow-2xl"
+          className="absolute inset-y-0 right-0 flex w-[clamp(320px,34vw,400px)] max-w-full flex-col bg-waka-50 pt-[env(safe-area-inset-top,0px)] shadow-2xl"
           style={checkoutBottomPad ? { paddingBottom: checkoutBottomPad } : undefined}
         >
           {children}

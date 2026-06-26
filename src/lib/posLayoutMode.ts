@@ -2,7 +2,8 @@
 
 export const POS_MOBILE_MAX_PX = 767;
 export const POS_COMPACT_DESKTOP_MIN_PX = 768;
-export const POS_FULL_DESKTOP_MIN_PX = 1280;
+/** Persistent catalog + checkout split from 1024px (POS terminals and laptops). */
+export const POS_FULL_DESKTOP_MIN_PX = 1024;
 
 export type PosLayoutMode = "mobile" | "compact" | "full";
 

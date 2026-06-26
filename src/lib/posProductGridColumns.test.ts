@@ -6,12 +6,17 @@ describe("catalogColumnCount", () => {
     expect(catalogColumnCount(4000)).toBe(POS_GRID_MAX_COLUMNS);
   });
 
-  it("returns 3 columns below 640px catalog width", () => {
+  it("returns 3 columns below 520px catalog width", () => {
     expect(catalogColumnCount(0)).toBe(3);
-    expect(catalogColumnCount(639)).toBe(3);
+    expect(catalogColumnCount(519)).toBe(3);
   });
 
-  it("returns 4 columns from 640px (1024×768 full-width catalog)", () => {
+  it("returns 4 columns from 520px (1024×768 split catalog)", () => {
+    expect(catalogColumnCount(520)).toBe(4);
+    expect(catalogColumnCount(639)).toBe(4);
+  });
+
+  it("returns 4 columns from 640px", () => {
     expect(catalogColumnCount(640)).toBe(4);
     expect(catalogColumnCount(819)).toBe(4);
   });

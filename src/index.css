@@ -304,4 +304,34 @@ body {
     transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
     transition-duration: 180ms;
   }
+
+  .waka-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@layer components {
+  .waka-data-table-shell {
+    @apply w-full min-w-0 overflow-x-auto rounded-xl ring-1 ring-stone-200;
+  }
+
+  .waka-data-table {
+    @apply w-full min-w-full border-collapse text-left text-sm;
+  }
+
+  .waka-data-table--sticky-head thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    @apply bg-stone-50 px-3 py-2.5 text-xs font-bold uppercase tracking-wide text-stone-600 shadow-[inset_0_-1px_0_theme(colors.stone.200)];
+  }
+
+  .waka-data-table tbody td {
+    @apply px-3 py-2.5 align-middle;
+  }
+
+  .waka-data-table tbody tr {
+    @apply border-b border-stone-100 last:border-b-0;
+  }
 }

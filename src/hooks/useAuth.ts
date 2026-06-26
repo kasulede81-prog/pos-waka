@@ -15,12 +15,14 @@ import { appendPilotEvent } from "../lib/pilotEventLog";
 import { setCrashReportingUser } from "../lib/crashReporting";
 import type { BusinessType, UserRole } from "../types";
 import { finalizeOwnerOnboardingAfterCloudSave, normalizeUgPhoneE164, parseRegistrationProfileFromMeta, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
+import { isShopOnboardingComplete } from "../lib/onboardingState";
+import { hasFirstTimeOwnerMarker, markFirstTimeOwnerOnDevice } from "../lib/firstTimeOwnerDevice";
+import { logStartupPhase } from "../lib/startupDiagnostics";
 import { isPhoneLoginEmail } from "../lib/authPhoneEmail";
 import { repairOwnerWorkspaceIfNeeded } from "../lib/workspaceHealth";
 import { assertAccountSwitchAllowed, isOrganizationDeletedError, ORGANIZATION_DELETED_MESSAGE, refreshOrganizationDeletionState } from "../lib/organizationDeletionState";
 import { computeAccountKey, getActiveAccountKey, setActiveAccountKey } from "../offline/accountScope";
 import { bootstrapOwnerWorkspace } from "../lib/workspaceBootstrap";
-import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "../lib/workspaceBootstrapCache";
 import { cachePendingRegistrationProfile } from "../lib/registrationProfileCache";
 import { ensureReferralAttributionForSession } from "../lib/referralAgents";
@@ -89,18 +91,19 @@ function tryApplyAccountSwitchSync(
 function applySignupProfileToLocalStore(next: Session | null): void {
   if (!next?.user) return;
   const profile = parseRegistrationProfileFromMeta(next.user.user_metadata as Record<string, unknown>);
-  const store = usePosStore.getState();
-  const existingOwner =
-    isWorkspaceBootstrapped(next.user.id) || readCachedOwnerOnboardingComplete(next.user.id) === true;
   cachePendingRegistrationProfile(profile, next.user.id);
   applyRegistrationProfileToLocalStore(profile);
-  if (existingOwner) {
-    store.setPreferences({
-      onboardingDone: true,
-      onboardingWizardDone: true,
-      schemaVersion: 2 as const,
+}
+
+async function schedulePostWorkspaceCloudHydrate(userId: string): Promise<void> {
+  if (hasFirstTimeOwnerMarker(userId) || !isShopOnboardingComplete(usePosStore.getState().preferences)) {
+    scheduleBackgroundCloudSync({
+      pull: false,
+      delayMs: isNativeApp() ? 5_000 : 3_000,
     });
+    return;
   }
+  void hydrateAccountFromCloud({ forcePull: true });
 }
 
 export type SignUpResult =
@@ -216,17 +219,13 @@ export function useAuth() {
             markWorkspaceBootstrapped(uid);
             markWorkspaceEnsured(uid);
             await tryApplyPendingReferral(next);
-            const onboarding = await fetchOwnerOnboardingStatus();
-            if (onboarding?.complete) {
+            if (isShopOnboardingComplete(usePosStore.getState().preferences)) {
               await finalizeOwnerOnboardingAfterCloudSave(uid);
             }
-            const { shouldRequireRecoveryLock } = await import("../lib/postAuthCloudHydrate");
-            const needsRecovery = await shouldRequireRecoveryLock().catch(() => true);
+            const { shouldRunCloudRecoveryForAccount } = await import("../lib/firstTimeOwnerDevice");
+            const needsRecovery = await shouldRunCloudRecoveryForAccount(uid);
             if (!needsRecovery) {
-              scheduleBackgroundCloudSync({
-                pull: false,
-                delayMs: isNativeApp() ? 2_500 : 1_200,
-              });
+              await schedulePostWorkspaceCloudHydrate(uid);
             }
             return;
           }
@@ -310,11 +309,10 @@ export function useAuth() {
           markWorkspaceBootstrapped(next.user.id);
           markWorkspaceEnsured(uid);
           await tryApplyPendingReferral(next);
-          const onboarding = await fetchOwnerOnboardingStatus();
-          if (onboarding?.complete) {
+          if (isShopOnboardingComplete(usePosStore.getState().preferences)) {
             await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
           }
-          void hydrateAccountFromCloud({ forcePull: true });
+          await schedulePostWorkspaceCloudHydrate(uid);
         } catch (e) {
           console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
           throw new Error("Could not finish creating your shop. Please try again.");
@@ -381,6 +379,7 @@ export function useAuth() {
         setStaffSession(null);
         setLocalEmail(null);
         setInitializing(false);
+        logStartupPhase("auth_restored", { userId: next.user.id, via: "finishInit" });
         void ensureWorkspaceRef.current(next).catch((e) => {
           console.error("[waka-auth] bootstrap on initial session failed", e);
         });
@@ -658,6 +657,9 @@ export function useAuth() {
           console.error("[waka-auth] signUp immediate bootstrap failed", e);
           throw e;
         }
+      }
+      if (data.user?.id) {
+        markFirstTimeOwnerOnDevice(data.user.id);
       }
       return { needsEmailVerification: true };
     } finally {

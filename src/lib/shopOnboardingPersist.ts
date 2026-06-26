@@ -4,6 +4,7 @@ import {
   normalizeUgPhoneE164,
   saveOwnerBusinessProfileBundleRpc,
 } from "./businessProfile";
+import { clearFirstTimeOwnerMarker } from "./firstTimeOwnerDevice";
 import { supabase } from "./supabase";
 import { usePosStore } from "../store/usePosStore";
 
@@ -43,7 +44,18 @@ export async function persistOnboardingChoices(input: {
     });
     if (!rpc.ok) throw new Error(rpc.message ?? "save_failed");
     const { data: authData } = await supabase.auth.getUser();
-    if (authData.user?.id) await finalizeOwnerOnboardingAfterCloudSave(authData.user.id);
+    if (authData.user?.id) {
+      await finalizeOwnerOnboardingAfterCloudSave(authData.user.id);
+      clearFirstTimeOwnerMarker(authData.user.id);
+    }
   }
-  window.dispatchEvent(new Event("waka:onboarding-updated"));
+  if (typeof window !== "undefined") {
+    try {
+      const { scheduleBackgroundCloudSync } = await import("../offline/cloudSync");
+      scheduleBackgroundCloudSync({ pull: true, delayMs: 2_000 });
+    } catch {
+      /* background sync is best-effort after wizard */
+    }
+    window.dispatchEvent(new Event("waka:onboarding-updated"));
+  }
 }

@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Sparkles,
 } from "lucide-react";
+import { ResponsiveDataTable } from "../shared/ResponsiveDataTable";
 import { AdminHero, AdminOpsPanel, AdminSectionSelect } from "./adminUi";
 import { LovableFieldMap } from "./LovableFieldMap";
 import clsx from "clsx";
@@ -635,19 +636,18 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
         onClose={closePanel}
         wide
       >
-        <div className="overflow-x-auto rounded-xl ring-1 ring-border">
-          <table className="min-w-[720px] w-full border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2">{t(lang, "internalRecentColName")}</th>
-                <th className="px-3 py-2">{t(lang, "internalRecentColDistrict")}</th>
-                <th className="px-3 py-2">{t(lang, "internalRecentColOwner")}</th>
-                <th className="px-3 py-2">{t(lang, "internalRecentColPlan")}</th>
-                <th className="px-3 py-2">{t(lang, "internalRecentColJoined")}</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
+        <ResponsiveDataTable minWidthPx={720}>
+          <thead>
+            <tr className="border-b border-border bg-muted/50 text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              <th className="px-3 py-2">{t(lang, "internalRecentColName")}</th>
+              <th className="px-3 py-2">{t(lang, "internalRecentColDistrict")}</th>
+              <th className="px-3 py-2">{t(lang, "internalRecentColOwner")}</th>
+              <th className="px-3 py-2">{t(lang, "internalRecentColPlan")}</th>
+              <th className="px-3 py-2">{t(lang, "internalRecentColJoined")}</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
               {opsLoading && !shopOpenings.length ? (
                 [...Array(5)].map((_, i) => (
                   <tr key={i} className="border-b border-stone-50">
@@ -691,8 +691,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                 ))
               )}
             </tbody>
-          </table>
-        </div>
+        </ResponsiveDataTable>
       </AdminOpsPanel>
 
       <AdminOpsPanel

@@ -198,7 +198,9 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
         ) : null}
 
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-stone-50/90 [-webkit-overflow-scrolling:touch]">
-          <div className="mx-auto w-full max-w-2xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:max-w-3xl">{children}</div>
+          <div className="mx-auto w-full min-w-0 max-w-2xl p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] lg:max-w-4xl xl:max-w-6xl 2xl:max-w-7xl">
+            {children}
+          </div>
         </main>
       </div>
     </div>,

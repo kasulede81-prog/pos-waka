@@ -513,7 +513,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden",
             isLauncherHome ? "px-0 py-0" : onSellScreen && !isDesktopLayout ? "px-2 py-1" : "px-3 py-3 sm:px-4 md:px-6",
             fullWidthChrome || isLauncherHome ? "max-w-none" : "max-w-6xl",
-            fullWidthChrome && !desktopTerminalHome && !isLauncherHome && "lg:px-8 xl:px-10",
+            fullWidthChrome && !desktopTerminalHome && !isLauncherHome && (
+              onSellScreen ? "lg:px-4 xl:px-6 2xl:px-8" : "lg:px-8 xl:px-10"
+            ),
           )}
         >
           {!independentModule ? (

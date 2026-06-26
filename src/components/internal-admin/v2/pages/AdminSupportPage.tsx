@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";
-import { internalAdminShopHref } from "../../../../lib/internalAdminPreview";
+import { internalAdminShopRescueHref } from "../../../../lib/internalAdminPreview";
+import { formatDisplayEmail } from "../../../../lib/wakaInternalAdmin";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
   deleteSupportTicket,
@@ -93,11 +94,13 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
         <ul className="space-y-3">
           {list.map((tk) => {
             const phone = tk.shop_phone_e164 ?? tk.contact_phone_e164 ?? undefined;
+            const ownerEmail = formatDisplayEmail(tk.owner_email);
             return (
               <li key={tk.id}>
                 <SupportTicketCard
                   title={tk.subject ?? tk.issue_type ?? "Support"}
                   shopName={tk.shop_name ?? "—"}
+                  ownerEmail={ownerEmail}
                   phone={phone}
                   status={tk.status}
                   timeLabel={new Date(tk.created_at).toLocaleString("en-GB")}
@@ -122,7 +125,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
                   }
                   onOpenShop={
                     tk.shop_id
-                      ? () => navigate(internalAdminShopHref(tk.shop_id!, previewMode))
+                      ? () => navigate(internalAdminShopRescueHref(tk.shop_id!, previewMode))
                       : undefined
                   }
                   onDelete={

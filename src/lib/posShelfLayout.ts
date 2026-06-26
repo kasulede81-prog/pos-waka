@@ -293,7 +293,7 @@ export function shelfGridSpanClass(size: PosShelfSize): string {
 
 /** Shared masonry grid: fixed row tracks so row-span-2 large tiles get real height. */
 export function shelfMasonryGridClass(): string {
-  return "grid grid-flow-dense auto-rows-[5.5rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5.75rem] sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6";
+  return "grid grid-flow-dense auto-rows-[5.5rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5.75rem] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
 }
 
 export function shelfMinHeightClass(_size: PosShelfSize): string {

@@ -4,24 +4,25 @@ import { WakaPosLogo } from "../components/brand/WakaLogo";
 import { authDevLog } from "../lib/authConfig";
 import { hardSignOutToLogin } from "../lib/authRecovery";
 import { bootstrapAuthCallbackSession } from "../lib/authCallbackSession";
+import {
+  isOnboardingWizardRequiredLocally,
+  markFirstTimeOwnerOnDevice,
+  resolvePostAuthDestination,
+} from "../lib/firstTimeOwnerDevice";
 import { ensureOwnerWorkspaceIfNeeded } from "../lib/ownerWorkspaceOnSignIn";
-import { fetchOwnerOnboardingStatus, readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { resetCloudRecoverySessionForRetry } from "../lib/cloudRecoverySession";
+import { logStartupPhase } from "../lib/startupDiagnostics";
 import { supabase } from "../lib/supabase";
 import { tryOpenInstalledAppFromBrowserCallback } from "../lib/nativeAuthDeepLink";
+import { withTimeout } from "../lib/promiseTimeout";
 import { WAKA_LEGAL_COMPANY_NAME } from "../config/wakaSupport";
 
 type CallbackState = "loading" | "success" | "error";
 
-async function postCallbackDestination(userId: string): Promise<string> {
-  try {
-    const status = await fetchOwnerOnboardingStatus();
-    if (status?.complete) return "/";
-  } catch {
-    /* onboarding check is best-effort */
-  }
-  if (readCachedOwnerOnboardingComplete(userId) === true) return "/";
-  return "/onboarding";
+const CALLBACK_RUN_TIMEOUT_MS = 20_000;
+
+function postCallbackDestination(userId: string): string {
+  return resolvePostAuthDestination(userId);
 }
 
 /**
@@ -31,9 +32,10 @@ async function postCallbackDestination(userId: string): Promise<string> {
 export function AuthCallbackPage() {
   const [state, setState] = useState<CallbackState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [destination, setDestination] = useState("/");
+  const [destination, setDestination] = useState("/onboarding");
   const [signingOut, setSigningOut] = useState(false);
   const handled = useRef(false);
+  const finishedRef = useRef(false);
 
   useEffect(() => {
     tryOpenInstalledAppFromBrowserCallback();
@@ -53,6 +55,7 @@ export function AuthCallbackPage() {
     let cancelled = false;
 
     const finishError = (msg: string) => {
+      finishedRef.current = true;
       if (!cancelled) {
         setErrorMessage(msg);
         setState("error");
@@ -60,51 +63,84 @@ export function AuthCallbackPage() {
     };
 
     const run = async () => {
-      const result = await bootstrapAuthCallbackSession();
-      if (cancelled) return;
-
-      if (result.status !== "ready") {
-        finishError(result.message ?? "Could not complete sign-in.");
-        return;
-      }
-
-      let session = result.session ?? null;
-      if (!session) {
-        const { data } = await sb.auth.getSession();
-        session = data.session ?? null;
-      }
-      if (!session) {
-        finishError("Sign-in timed out. Please try again from the login page.");
-        return;
-      }
-
       try {
-        await sb.auth.refreshSession();
-      } catch {
-        /* ignore */
-      }
+        const result = await bootstrapAuthCallbackSession();
+        if (cancelled) return;
 
-      authDevLog("log", "Auth callback session ready", {
-        userId: session.user.id,
-        emailConfirmed: Boolean(session.user.email_confirmed_at),
-      });
+        if (result.status !== "ready") {
+          finishError(result.message ?? "Could not complete sign-in.");
+          return;
+        }
 
-      try {
-        await ensureOwnerWorkspaceIfNeeded(session);
+        let session = result.session ?? null;
+        if (!session) {
+          const { data } = await sb.auth.getSession();
+          session = data.session ?? null;
+        }
+        if (!session) {
+          finishError("Sign-in timed out. Please try again from the login page.");
+          return;
+        }
+
+        logStartupPhase("auth_restored", {
+          userId: session.user.id,
+          emailConfirmed: Boolean(session.user.email_confirmed_at),
+        });
+
+        try {
+          await sb.auth.refreshSession();
+        } catch {
+          /* ignore */
+        }
+
+        authDevLog("log", "Auth callback session ready", {
+          userId: session.user.id,
+          emailConfirmed: Boolean(session.user.email_confirmed_at),
+        });
+
+        try {
+          await withTimeout(ensureOwnerWorkspaceIfNeeded(session), 12_000, undefined);
+          logStartupPhase("workspace_ready", { userId: session.user.id });
+        } catch (e) {
+          authDevLog("error", "Auth callback workspace bootstrap deferred", e);
+          logStartupPhase("workspace_ready", {
+            userId: session.user.id,
+            deferred: true,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+
+        if (isOnboardingWizardRequiredLocally()) {
+          markFirstTimeOwnerOnDevice(session.user.id);
+        }
+
+        const nextPath = postCallbackDestination(session.user.id);
+        resetCloudRecoverySessionForRetry();
+        logStartupPhase("onboarding_required", {
+          userId: session.user.id,
+          required: nextPath === "/onboarding",
+          destination: nextPath,
+        });
+
+        if (!cancelled) {
+          finishedRef.current = true;
+          setDestination(nextPath);
+          setState("success");
+        }
       } catch (e) {
-        authDevLog("error", "Auth callback workspace bootstrap deferred", e);
-        // Session is valid — shell bootstrap will retry; still send user to onboarding.
-      }
-
-      const nextPath = await postCallbackDestination(session.user.id);
-      resetCloudRecoverySessionForRetry();
-      if (!cancelled) {
-        setDestination(nextPath);
-        setState("success");
+        finishError(e instanceof Error ? e.message : "Could not complete sign-in.");
       }
     };
 
-    void run();
+    const timeoutId = window.setTimeout(() => {
+      if (!cancelled && !finishedRef.current) {
+        finishError("Sign-in took too long. Please try again from the login page.");
+      }
+    }, CALLBACK_RUN_TIMEOUT_MS);
+
+    void run().finally(() => {
+      window.clearTimeout(timeoutId);
+    });
 
     return () => {
       cancelled = true;

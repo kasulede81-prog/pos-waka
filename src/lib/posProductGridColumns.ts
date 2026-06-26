@@ -6,6 +6,7 @@ export const POS_CATALOG_COL_BREAKPOINT_1600 = 1600;
 export const POS_CATALOG_COL_BREAKPOINT_1200 = 1200;
 export const POS_CATALOG_COL_BREAKPOINT_1000 = 1000;
 export const POS_CATALOG_COL_BREAKPOINT_820 = 820;
+export const POS_CATALOG_COL_BREAKPOINT_520 = 520;
 export const POS_CATALOG_COL_BREAKPOINT_640 = 640;
 
 /**
@@ -18,7 +19,7 @@ export function catalogColumnCount(catalogWidthPx: number): number {
   if (w >= POS_CATALOG_COL_BREAKPOINT_1200) return 7;
   if (w >= POS_CATALOG_COL_BREAKPOINT_1000) return 6;
   if (w >= POS_CATALOG_COL_BREAKPOINT_820) return 5;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_640) return 4;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_520) return 4;
   return 3;
 }
 

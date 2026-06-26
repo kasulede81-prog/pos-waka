@@ -24,10 +24,10 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
       <h2 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "ownerFinancialTitle")}</h2>
       <p className="text-[11px] font-semibold text-slate-500">{periodLabel}</p>
 
-      <dl className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div className="rounded-xl bg-stone-50 px-2.5 py-2">
+      <dl className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:grid-cols-4">
+        <div className="min-w-0 rounded-xl bg-stone-50 px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-stone-500">{t(lang, "ownerFinancialRevenue")}</dt>
-          <dd className="text-sm font-black tabular-nums">UGX {financial.revenueUgx.toLocaleString()}</dd>
+          <dd className="break-words text-sm font-black tabular-nums [overflow-wrap:anywhere]">UGX {financial.revenueUgx.toLocaleString()}</dd>
           {financial.trendVsPriorDay?.pctRevenue != null ? (
             <dd className="text-[10px] font-bold text-stone-600">{trendLabel(financial.trendVsPriorDay.pctRevenue)} vs day</dd>
           ) : null}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Language } from "../../../../types";
-import { internalAdminShopHref } from "../../../../lib/internalAdminPreview";
+import { internalAdminShopRescueHref } from "../../../../lib/internalAdminPreview";
 import { adminSetShopActive, formatDisplayEmail, formatOwnerDisplayLabel, type WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
@@ -216,7 +216,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
                       ? () => setSelected((prev) => ({ ...prev, [s.id]: !prev[s.id] }))
                       : undefined
                   }
-                  onOpen={() => navigate(internalAdminShopHref(s.id, previewMode))}
+                  onOpen={() => navigate(internalAdminShopRescueHref(s.id, previewMode))}
                 />
                 {health ? <SupportTagsRow tags={health.tags} /> : null}
               </li>

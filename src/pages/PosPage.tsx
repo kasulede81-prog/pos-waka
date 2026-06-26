@@ -12,6 +12,8 @@ import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
 import { summarizeTodaySales } from "../lib/todaySalesSummary";
 import { usePosLayoutMode } from "../hooks/usePosLayoutMode";
+import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
+import { posSplitGridTemplateColumns } from "../lib/posDesktopSplit";
 import { useCatalogContainerWidth } from "../hooks/useCatalogContainerWidth";
 import { resolveConfirmSaleAction } from "../lib/posCheckoutFocus";
 import { resolveScanToCartInput } from "../lib/posScanToCart";
@@ -349,7 +351,10 @@ export function PosPage({ lang }: { lang: Language }) {
   const saveButtonRef = useRef<HTMLButtonElement>(null);
   const checkoutPanelRef = useRef<HTMLDivElement>(null);
   const posLayoutMode = usePosLayoutMode();
+  const posViewportWidth = usePosViewportWidth();
   const isFullDesktopPos = posLayoutMode === "full";
+  const posSplitColumns =
+    products.length > 0 && isFullDesktopPos ? posSplitGridTemplateColumns(posViewportWidth) : null;
   const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
@@ -1446,9 +1451,9 @@ export function PosPage({ lang }: { lang: Language }) {
 
       <div
         className={clsx(
-          products.length > 0 && isFullDesktopPos && "grid items-start gap-4",
-          products.length > 0 && isFullDesktopPos && "grid-cols-[minmax(0,1fr)_min(400px,36%)]",
+          products.length > 0 && isFullDesktopPos && "grid items-start gap-3 xl:gap-4",
         )}
+        style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
       >
         <div ref={catalogRef} className="min-w-0 space-y-2">
 

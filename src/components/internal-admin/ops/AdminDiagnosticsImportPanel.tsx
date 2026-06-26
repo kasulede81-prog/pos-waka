@@ -1,21 +1,30 @@
 import { useState } from "react";
 import { Upload } from "lucide-react";
 import { parsePilotDiagnosticsJson, type ParsedPilotDiagnostics } from "../../../lib/pilotDiagnosticsParse";
-import { internalAdminShopHref } from "../../../lib/internalAdminPreview";
+import { internalAdminShopRescueHref } from "../../../lib/internalAdminPreview";
 import { Link } from "react-router-dom";
 
 type Props = {
   previewMode?: boolean;
   defaultShopId?: string | null;
+  onParsed?: (parsed: ParsedPilotDiagnostics | null) => void;
+  rescueMode?: boolean;
 };
 
-export function AdminDiagnosticsImportPanel({ previewMode = false, defaultShopId }: Props) {
+export function AdminDiagnosticsImportPanel({
+  previewMode = false,
+  defaultShopId,
+  onParsed,
+  rescueMode = false,
+}: Props) {
   const [text, setText] = useState("");
   const [parsed, setParsed] = useState<ParsedPilotDiagnostics | null>(null);
 
   const loadText = (raw: string) => {
     setText(raw);
-    setParsed(parsePilotDiagnosticsJson(raw));
+    const next = parsePilotDiagnosticsJson(raw);
+    setParsed(next);
+    onParsed?.(next);
   };
 
   const onFile = (file: File | null) => {
@@ -29,8 +38,12 @@ export function AdminDiagnosticsImportPanel({ previewMode = false, defaultShopId
 
   return (
     <section className="rounded-2xl border border-teal-200 bg-teal-50/50 p-4">
-      <h2 className="text-base font-black text-stone-900">Import pilot diagnostics</h2>
-      <p className="mt-1 text-xs font-medium text-stone-600">Paste or upload owner JSON — no WhatsApp screenshots needed.</p>
+      <h2 className="text-base font-black text-stone-900">
+        {rescueMode ? "Import diagnostics (legacy panel)" : "Import pilot diagnostics"}
+      </h2>
+      <p className="mt-1 text-xs font-medium text-stone-600">
+        Paste or upload owner JSON — pilot, Cloud Trust, production certification, startup, sync health.
+      </p>
 
       <textarea
         value={text}
@@ -111,10 +124,10 @@ export function AdminDiagnosticsImportPanel({ previewMode = false, defaultShopId
           ) : null}
           {shopId ? (
             <Link
-              to={internalAdminShopHref(shopId, previewMode)}
+              to={internalAdminShopRescueHref(shopId, previewMode)}
               className="mt-2 inline-flex min-h-[40px] items-center rounded-xl bg-teal-700 px-4 text-xs font-black text-white"
             >
-              Open shop profile →
+              Open rescue console →
             </Link>
           ) : null}
         </dl>

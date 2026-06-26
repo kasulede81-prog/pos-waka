@@ -13,6 +13,7 @@ import {
   GlobalSearchBar,
   SystemStatusCenter,
 } from "../ops/OpsWidgets";
+import { adminKpiGridClass } from "../../../../lib/desktopLayout";
 import { AdminHeroV2, BottomSheet, EmptyState, KpiPulseCard } from "../primitives";
 import { InternalOpsQueuePanels } from "../../InternalOpsQueuePanels";
 
@@ -106,7 +107,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
 
       <section>
         <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Quick pulse</h2>
-        <div className="grid grid-cols-2 gap-2">
+        <div className={adminKpiGridClass()}>
           <KpiPulseCard label={t(lang, "internalStat_totalShops")} value={data.statGrid.total} onOpen={() => go("/internal/waka/shops")} />
           <KpiPulseCard label={t(lang, "internalStat_activeToday")} value={data.statGrid.active} onOpen={() => go("/internal/waka/shops")} />
           <KpiPulseCard label={t(lang, "internalStat_paidSubs")} value={data.statGrid.paid} onOpen={() => go("/internal/waka/billing")} />

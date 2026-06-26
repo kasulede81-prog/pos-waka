@@ -4,6 +4,7 @@ import { normalizeUgPhoneE164 } from "./businessProfile";
 import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
 import { bootstrapOwnerWorkspace } from "./workspaceBootstrap";
 import { isWorkspaceBootstrapped, markWorkspaceBootstrapped } from "./workspaceBootstrapCache";
+import { logStartupPhase } from "./startupDiagnostics";
 import { supabase } from "./supabase";
 
 /**
@@ -24,6 +25,7 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
   const existing = await resolvePrimaryOrganizationForUser(uid);
   if (existing?.shopId) {
     markWorkspaceBootstrapped(uid);
+    logStartupPhase("workspace_ready", { userId: uid, shopId: existing.shopId, via: "existing_org" });
     return;
   }
 
@@ -82,4 +84,5 @@ export async function ensureOwnerWorkspaceIfNeeded(session: Session): Promise<vo
   }
 
   markWorkspaceBootstrapped(uid);
+  logStartupPhase("workspace_ready", { userId: uid, via: "bootstrap_owner_workspace" });
 }

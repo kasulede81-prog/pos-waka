@@ -317,6 +317,7 @@ export function SupportTicketCard({
   title,
   shopName,
   phone,
+  ownerEmail,
   status,
   timeLabel,
   onWhatsApp,
@@ -328,6 +329,7 @@ export function SupportTicketCard({
   title: string;
   shopName: string;
   phone?: string;
+  ownerEmail?: string | null;
   status: string;
   timeLabel: string;
   onWhatsApp?: () => void;
@@ -345,6 +347,7 @@ export function SupportTicketCard({
         </span>
       </div>
       <p className="mt-1 text-sm font-semibold text-stone-700">{shopName}</p>
+      {ownerEmail ? <p className="font-mono text-xs text-stone-600">{ownerEmail}</p> : null}
       {phone ? <p className="text-xs text-stone-500">{phone}</p> : null}
       <p className="mt-1 text-[11px] text-stone-400">{timeLabel}</p>
       {showActions ? (
