@@ -129,6 +129,11 @@ export function messageForProfileSaveError(codeOrMessage: string, lang: Language
   if (raw.includes("invalid_phone")) {
     return lang === "lg" ? "Ennamba ya Uganda si ntuufu." : "Enter a valid Uganda mobile number.";
   }
+  if (raw.includes("shop_already_has_owner")) {
+    return lang === "lg"
+      ? "Tewali kyongerwako — dduuka lino lirina nannyini waakyo."
+      : "Could not save — your shop owner account is already set up.";
+  }
   return codeOrMessage;
 }
 

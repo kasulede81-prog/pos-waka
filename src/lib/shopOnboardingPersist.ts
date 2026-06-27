@@ -1,6 +1,7 @@
 import type { BusinessType, ShopSellingStyle } from "../types";
 import {
   finalizeOwnerOnboardingAfterCloudSave,
+  messageForProfileSaveError,
   normalizeUgPhoneE164,
   saveOwnerBusinessProfileBundleRpc,
 } from "./businessProfile";
@@ -42,7 +43,7 @@ export async function persistOnboardingChoices(input: {
       latitude: input.gpsSkipped ? null : (input.latitude ?? null),
       longitude: input.gpsSkipped ? null : (input.longitude ?? null),
     });
-    if (!rpc.ok) throw new Error(rpc.message ?? "save_failed");
+    if (!rpc.ok) throw new Error(messageForProfileSaveError(rpc.message ?? "save_failed", "en"));
     const { data: authData } = await supabase.auth.getUser();
     if (authData.user?.id) {
       await finalizeOwnerOnboardingAfterCloudSave(authData.user.id);

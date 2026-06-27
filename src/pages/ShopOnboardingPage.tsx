@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
-import type { BusinessType, Language, ShopSellingStyle, UserRole } from "../types";
+import type { BusinessType, Language, ShopSellingStyle } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { t } from "../lib/i18n";
-import {
-  ONBOARDING_BUSINESS_CARDS,
-  ONBOARDING_SELLING_STYLES,
-  ONBOARDING_STAFF_ROLES,
-  type OnboardingStaffRole,
-} from "../config/onboardingFlow";
+import { ONBOARDING_BUSINESS_CARDS, ONBOARDING_SELLING_STYLES } from "../config/onboardingFlow";
 import {
   HOSPITALITY_ONBOARDING_GROUP_ID,
   businessTypeForHospitalityStyle,
@@ -26,11 +21,9 @@ import { persistOnboardingChoices } from "../lib/shopOnboardingPersist";
 import { captureAppException } from "../lib/crashReporting";
 import { getDevicePosition, DeviceLocationRequestError } from "../lib/deviceLocation";
 import { inferProductGuess } from "../lib/pharmacyUx";
-import { PinInput } from "../components/ui/PinInput";
 import { fetchDistricts, type DistrictRow } from "../lib/shopDistricts";
 import { normalizeUgPhoneE164, loadRegistrationProfileFromAuth, applyRegistrationProfileToLocalStore } from "../lib/businessProfile";
 import { useSubscription } from "../context/SubscriptionContext";
-import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { supabase } from "../lib/supabase";
 import { useBusinessTypeVisibility } from "../hooks/useBusinessTypeVisibility";
 import {
@@ -40,7 +33,7 @@ import {
 
 type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () => Promise<void> };
 
-type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "staff" | "products";
+type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "products";
 
 const fieldClass =
   "mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
@@ -59,8 +52,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const navigate = useNavigate();
   const preferences = usePosStore((s) => s.preferences);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
-  const addStaffAccount = usePosStore((s) => s.addStaffAccount);
-  const { snapshot, authMode } = useSubscription();
+  const { authMode } = useSubscription();
   const {
     settings: bizTypeSettings,
     isSuperAdmin: bizTypeSuperAdmin,
@@ -84,9 +76,6 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   );
 
   const shopName = preferences.shopDisplayName?.trim() || "My Shop";
-  const planTier =
-    authMode === "local" ? ("waka_plus" as const) : resolveEffectivePlanTier(snapshot);
-  const showStaffStep = maxStaffAccountsForTier(planTier) > 0;
 
   const [booting, setBooting] = useState(true);
   const [ownerName, setOwnerName] = useState("");
@@ -185,19 +174,12 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     }
   }, [preferences.businessType]);
 
-  const [staffOpen, setStaffOpen] = useState(false);
-  const [staffName, setStaffName] = useState("");
-  const [staffRole, setStaffRole] = useState<OnboardingStaffRole>("cashier");
-  const [staffPin, setStaffPin] = useState("");
-
   const stepOrder = useMemo(() => {
     const order: Step[] = ["welcome", "business"];
     if (pickedHospitalityGroup) order.push("hospitality_style");
-    order.push("selling", "location");
-    if (showStaffStep) order.push("staff");
-    order.push("products");
+    order.push("selling", "location", "products");
     return order;
-  }, [showStaffStep, pickedHospitalityGroup]);
+  }, [pickedHospitalityGroup]);
 
   const stepIndex = useMemo(() => stepOrder.indexOf(step), [stepOrder, step]);
   const progressTotal = Math.max(stepOrder.length - 1, 1);
@@ -227,10 +209,6 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   };
 
   const advanceAfterLocation = async () => {
-    if (showStaffStep) {
-      setStep("staff");
-      return;
-    }
     const ok = await finishCore({ gpsSkipped, lat, lng });
     if (ok) setStep("products");
   };
@@ -570,78 +548,6 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 {t(lang, "onboardContinue")}
               </button>
             ) : null}
-          </div>
-        ) : null}
-
-        {!booting && step === "staff" ? (
-          <div className="space-y-4">
-            <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setStep("location")}>
-              <ChevronLeft className="mr-1 inline h-4 w-4" />
-              {t(lang, "onboardBack")}
-            </button>
-            <h2 className="text-xl font-black text-stone-900">{t(lang, "onboardStaffTitle")}</h2>
-            <p className="text-sm font-medium text-stone-600">{t(lang, "onboardStaffSub")}</p>
-            <button
-              type="button"
-              className={primaryBtn}
-              disabled={busy}
-              onClick={async () => {
-                const ok = await finishCore({ gpsSkipped, lat, lng });
-                if (ok) setStep("products");
-              }}
-            >
-              {busy ? "…" : t(lang, "onboardStaffSkip")}
-            </button>
-            <details
-              className="rounded-2xl border border-stone-200 bg-stone-50/80"
-              open={staffOpen}
-              onToggle={(e) => setStaffOpen(e.currentTarget.open)}
-            >
-              <summary className="cursor-pointer px-4 py-3 text-sm font-black text-stone-800">{t(lang, "onboardStaffAddOne")}</summary>
-              <div className="space-y-3 border-t border-stone-100 px-4 pb-4 pt-3">
-                <input value={staffName} onChange={(e) => setStaffName(e.target.value)} placeholder={t(lang, "staffNamePh")} className={fieldClass} />
-                <select
-                  value={staffRole}
-                  onChange={(e) => setStaffRole(e.target.value as OnboardingStaffRole)}
-                  className={fieldClass}
-                >
-                  {ONBOARDING_STAFF_ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {t(lang, `role_${r}`)}
-                    </option>
-                  ))}
-                </select>
-                <PinInput
-                  value={staffPin}
-                  onChange={(e) => setStaffPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder={t(lang, "staffPinPh")}
-                  maxLength={6}
-                  autoComplete="off"
-                  className={fieldClass}
-                />
-                <button
-                  type="button"
-                  className="min-h-[44px] w-full rounded-xl border-2 border-waka-300 bg-white text-sm font-black text-waka-900"
-                  onClick={async () => {
-                    if (!staffName.trim() || staffPin.length < 4) {
-                      setErr(t(lang, "registerFieldRequired"));
-                      return;
-                    }
-                    addStaffAccount({
-                      name: staffName.trim(),
-                      username: `${staffRole}01`,
-                      role: staffRole as UserRole,
-                      pin: staffPin,
-                    });
-                    const ok = await finishCore({ gpsSkipped, lat, lng });
-                    if (ok) setStep("products");
-                  }}
-                >
-                  {t(lang, "onboardStaffSave")}
-                </button>
-              </div>
-            </details>
-            {err ? <p className="text-sm font-medium text-red-600">{err}</p> : null}
           </div>
         ) : null}
 
