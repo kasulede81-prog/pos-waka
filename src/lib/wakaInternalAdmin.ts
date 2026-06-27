@@ -1011,6 +1011,10 @@ function mapRecentShopRpcRow(row: Record<string, unknown>): RecentShopRow {
 export async function fetchShopsBySignupDate(limit = 50): Promise<RecentShopRow[]> {
   if (!supabase) return [];
   const cap = Math.min(Math.max(limit, 1), 100);
+  const { data: rpcRows, error: rpcError } = await supabase.rpc("internal_ops_shops_by_signup", { p_limit: cap });
+  if (!rpcError && rpcRows && Array.isArray(rpcRows)) {
+    return (rpcRows as Array<Record<string, unknown>>).map((row) => mapRecentShopRpcRow(row));
+  }
   const { data: shops, error } = await supabase
     .from("shops")
     .select("id, shop_number, name, district, city, is_active, created_at, organization_id, last_seen_at")
