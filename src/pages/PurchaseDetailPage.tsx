@@ -15,8 +15,19 @@ import { findPurchaseVoidAudit, isPurchaseVoided } from "../lib/purchaseCorrecti
 import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
 
-export function PurchaseDetailPage({ lang }: { lang: Language }) {
-  const { purchaseId } = useParams<{ purchaseId: string }>();
+export function PurchaseDetailPage({
+  lang,
+  purchaseId: purchaseIdProp,
+  embedded,
+  onClose,
+}: {
+  lang: Language;
+  purchaseId?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+}) {
+  const { purchaseId: routePurchaseId } = useParams<{ purchaseId: string }>();
+  const purchaseId = purchaseIdProp ?? routePurchaseId;
   const actor = useSessionActor();
   const canView = hasPermission(actor.role, "purchases.view");
   const canVoid = hasPermission(actor.role, "purchases.void");
@@ -55,7 +66,7 @@ export function PurchaseDetailPage({ lang }: { lang: Language }) {
   if (!purchase) {
     return (
       <div className="space-y-4 pb-12">
-        <PageHeader lang={lang} title={t(lang, "purchaseDetailTitle")} backFallback="/office/purchases" />
+        {!embedded ? <PageHeader lang={lang} title={t(lang, "purchaseDetailTitle")} backFallback="/stock?tab=purchases" /> : null}
         <p className="text-stone-600">{t(lang, "purchaseNotFound")}</p>
       </div>
     );
@@ -63,7 +74,9 @@ export function PurchaseDetailPage({ lang }: { lang: Language }) {
 
   const voided = isPurchaseVoided(purchase);
   const qtyReceived = purchaseQuantityReceivedForPurchase(purchase, stockMovements);
-  const supplierLink = !isWalkInSupplierId(purchase.supplierId) ? `/suppliers/${purchase.supplierId}` : null;
+  const supplierLink = !isWalkInSupplierId(purchase.supplierId)
+    ? `/stock?tab=suppliers&supplierId=${encodeURIComponent(purchase.supplierId)}`
+    : null;
 
   const submitVoid = () => {
     setVoidError(null);
@@ -78,12 +91,18 @@ export function PurchaseDetailPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-16">
-      <PageHeader
-        lang={lang}
-        title={t(lang, "purchaseDetailTitle")}
-        backFallback="/office/purchases"
-        backLabel={t(lang, "purchasesTitle")}
-      />
+      {!embedded ? (
+        <PageHeader
+          lang={lang}
+          title={t(lang, "purchaseDetailTitle")}
+          backFallback="/stock?tab=purchases"
+          backLabel={t(lang, "purchasesTitle")}
+        />
+      ) : onClose ? (
+        <button type="button" onClick={onClose} className="text-sm font-black text-waka-700">
+          ← {t(lang, "purchasesTitle")}
+        </button>
+      ) : null}
 
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         <h2 className="text-sm font-black uppercase text-stone-500">{t(lang, "purchaseAuditMeta")}</h2>

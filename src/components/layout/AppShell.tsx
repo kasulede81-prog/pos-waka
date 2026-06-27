@@ -351,7 +351,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             "relative z-20 shrink-0 overflow-visible border-b shadow-sm backdrop-blur",
             isLauncherHome
               ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
-              : "border-stone-200/90 bg-white/95 supports-[backdrop-filter]:bg-white/90",
+              : onSellScreen && !isDesktopLayout
+                ? "border-stone-200/80 bg-gradient-to-b from-orange-50/90 via-white to-white supports-[backdrop-filter]:from-orange-50/80"
+                : "border-stone-200/90 bg-white/95 supports-[backdrop-filter]:bg-white/90",
           )}
         >
           <div
@@ -364,12 +366,16 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
-              {showHeaderExitButton ? <HeaderExitButton lang={lang} /> : null}
+              {showHeaderExitButton ? (
+                <HeaderExitButton lang={lang} variant={onSellScreen && !isDesktopLayout ? "sellOrange" : "default"} />
+              ) : null}
               {showHeaderExit ? <HeaderBackButton lang={lang} /> : null}
               {onSellScreen && !isDesktopLayout ? null : <WakaSymbolIcon size="xs" className="h-8 w-8 shrink-0" />}
               <div className="min-w-0">
                 {onSellScreen && !isDesktopLayout ? (
-                  <p className="truncate text-xs font-bold text-stone-700">{t(lang, sellNavLabelKey)}</p>
+                  <h1 className="truncate text-base font-black tracking-tight text-stone-950 sm:text-lg">
+                    {t(lang, sellNavLabelKey)}
+                  </h1>
                 ) : (
                   <AppShellSyncLabel lang={lang} inverted={isLauncherHome} />
                 )}

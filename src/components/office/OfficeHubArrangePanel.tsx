@@ -95,7 +95,7 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
     <div className="space-y-4">
       <p className="text-sm font-medium text-stone-600">{t(lang, "officeMenuArrangeSub")}</p>
 
-      <div className="grid grid-cols-2 gap-3 sm:max-w-2xl sm:gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
         {sections.map((section, index) => (
           <OfficeHubSectionTile
             key={section.id}

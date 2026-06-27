@@ -4,6 +4,7 @@ import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { OfficeHubArrangePanel } from "../components/office/OfficeHubArrangePanel";
 
 export function SettingsOfficeMenuPage({ lang }: { lang: Language }) {
@@ -14,13 +15,17 @@ export function SettingsOfficeMenuPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-5 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "settingsHubOfficeMenu")}
-        subtitle={t(lang, "settingsHubOfficeMenuSub")}
-      />
+    <BackOfficePageLayout
+      header={
+        <SettingsPageHeader
+          lang={lang}
+          title={t(lang, "settingsHubOfficeMenu")}
+          subtitle={t(lang, "settingsHubOfficeMenuSub")}
+        />
+      }
+      className="pb-8"
+    >
       <OfficeHubArrangePanel lang={lang} embedded />
-    </div>
+    </BackOfficePageLayout>
   );
 }

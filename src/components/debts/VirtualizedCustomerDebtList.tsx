@@ -2,28 +2,27 @@ import { memo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Customer, Language } from "../../types";
 import type { CreditActivityIndex } from "../../lib/customerDebtActivity";
-import type { DateFilterBounds } from "../../lib/dateFilters";
-import { DebtCustomerRow } from "./DebtCustomerRow";
+import { DebtCustomerCard } from "./DebtCustomerCard";
 
-const ROW_ESTIMATE = 72;
-const BOTTOM_SCROLL_GUTTER = 16;
+const ROW_ESTIMATE = 132;
+const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
   lang: Language;
   customers: Customer[];
   creditIndex: CreditActivityIndex;
-  bounds: DateFilterBounds;
   canDebt: boolean;
-  onSubmitPay: (customerId: string, amountUgx: number) => void;
+  onOpenDetail: (customer: Customer) => void;
+  onReceive: (customer: Customer) => void;
 };
 
 function VirtualizedCustomerDebtListInner({
   lang,
   customers,
   creditIndex,
-  bounds,
   canDebt,
-  onSubmitPay,
+  onOpenDetail,
+  onReceive,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -34,8 +33,26 @@ function VirtualizedCustomerDebtListInner({
       document.querySelector<HTMLElement>(".scroll-main-chrome") ??
       parentRef.current,
     estimateSize: () => ROW_ESTIMATE,
-    overscan: 8,
+    overscan: 6,
   });
+
+  if (customers.length <= 12) {
+    return (
+      <div className="space-y-2">
+        {customers.map((customer) => (
+          <DebtCustomerCard
+            key={customer.id}
+            lang={lang}
+            customer={customer}
+            creditIndex={creditIndex}
+            canDebt={canDebt}
+            onOpenDetail={() => onOpenDetail(customer)}
+            onReceive={() => onReceive(customer)}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div ref={parentRef} className="w-full">
@@ -49,20 +66,19 @@ function VirtualizedCustomerDebtListInner({
           return (
             <div
               key={customer.id}
-              className="absolute left-0 top-0 w-full"
+              className="absolute left-0 top-0 w-full pb-2"
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 height: `${virtualRow.size}px`,
               }}
             >
-              <DebtCustomerRow
+              <DebtCustomerCard
                 lang={lang}
                 customer={customer}
                 creditIndex={creditIndex}
-                bounds={bounds}
                 canDebt={canDebt}
-                toneIndex={virtualRow.index}
-                onSubmitPay={onSubmitPay}
+                onOpenDetail={() => onOpenDetail(customer)}
+                onReceive={() => onReceive(customer)}
               />
             </div>
           );

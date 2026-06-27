@@ -1,16 +1,10 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import clsx from "clsx";
-import { Download, FileText, RotateCcw, Search, ShieldCheck, Users } from "lucide-react";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
-import { t, tTemplate } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { useMarkOwnerRisksReviewed } from "../hooks/useMarkOwnerRisksReviewed";
 import { PageHeader } from "../components/layout/PageHeader";
-import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
-import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
-import { HistoryListCard } from "../components/shared/HistoryListCard";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { AuditDetailDrawer } from "../components/audit/AuditDetailDrawer";
 import { RefundCalculationDrawer } from "../components/returns/RefundCalculationDrawer";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
@@ -20,27 +14,40 @@ import {
   AUDIT_FILTER_RESULT_LIMIT,
   buildAuditLogSearchIndex,
   filterAuditLogsIndexed,
-  groupAuditByStaff,
-  INVESTIGATION_ACTIONS,
   type AuditSearchFilters,
 } from "../lib/auditSearch";
-import { extractAuditEntityLabel, actorDisplayLabel } from "../lib/activityNarrative";
-import { auditActionLabel, formatAuditRowSummary } from "../lib/auditCenterDetails";
+import { actorDisplayLabel } from "../lib/activityNarrative";
 import { buildAuditCsv, buildAuditPdfBlob } from "../lib/auditExport";
 import { dateKeyKampala } from "../lib/datesUg";
 import { auditRefundIntegrity } from "../lib/auditRefundIntegrity";
 import { resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
+import { formatDateFilterViewingLabel } from "../lib/dateFilterLabels";
+import { printHtmlDocument } from "../lib/documentPrint";
+import { shareText } from "../lib/reportExport";
+import { InvestigationKpiGrid } from "../features/investigation-center/components/InvestigationKpiGrid";
+import { InvestigationCategoryChips } from "../features/investigation-center/components/InvestigationCategoryChips";
+import { InvestigationSearchBar } from "../features/investigation-center/components/InvestigationSearchBar";
+import { VirtualizedActivityTimeline } from "../features/investigation-center/components/VirtualizedActivityTimeline";
+import { InvestigationFiltersSheet } from "../features/investigation-center/components/InvestigationFiltersSheet";
+import { InvestigationExportSheet } from "../features/investigation-center/components/InvestigationExportSheet";
+import { ActivityActionsSheet } from "../features/investigation-center/components/ActivityActionsSheet";
+import { ActivityDetailSheet } from "../features/investigation-center/components/ActivityDetailSheet";
+import { InvestigationTabs } from "../features/investigation-center/components/InvestigationTabs";
+import { InvestigationStaffSection } from "../features/investigation-center/components/InvestigationStaffSection";
+import { InvestigationRefundsSection } from "../features/investigation-center/components/InvestigationRefundsSection";
+import { useInvestigationCenter } from "../features/investigation-center/hooks/useInvestigationCenter";
+import {
+  applyKpiFilter,
+  buildActivityDetailText,
+  buildAuditJsonExport,
+  buildAuditPrintHtml,
+  buildExcelCompatibleCsv,
+  computeInvestigationKpis,
+  matchesCategory,
+} from "../features/investigation-center/lib/activityPresentation";
+import type { InvestigationKpiId } from "../features/investigation-center/types";
 
 const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
-
-type AuditTab = "timeline" | "staff" | "refunds" | "search" | "exports";
-
-const AUDIT_TABS: AuditTab[] = ["timeline", "staff", "refunds", "search", "exports"];
-
-function parseAuditTab(raw: string | null): AuditTab {
-  if (raw && AUDIT_TABS.includes(raw as AuditTab)) return raw as AuditTab;
-  return "timeline";
-}
 
 function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue {
   const from = searchParams.get("from");
@@ -49,75 +56,10 @@ function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue 
   return { kind: "preset", preset: "this_month" };
 }
 
-function AuditTimelineList({
-  lang,
-  entries,
-  productById,
-  customerById,
-  onSelect,
-}: {
-  lang: Language;
-  entries: AuditLogEntry[];
-  productById: Map<string, { name: string }>;
-  customerById: Map<string, { name: string }>;
-  onSelect: (entry: AuditLogEntry) => void;
-}) {
-  if (entries.length === 0) {
-    return (
-      <HistoryListCard
-        isEmpty
-        empty={<p className="text-sm font-semibold text-slate-600">{t(lang, "auditEmpty")}</p>}
-      />
-    );
-  }
-
-  return (
-    <HistoryListCard>
-      <ul>
-      {entries.map((e) => {
-        const staff = e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang);
-        const when = new Date(e.at).toLocaleString([], {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-        const narrative = formatAuditRowSummary(lang, e, { productById, customerById });
-        const entity = extractAuditEntityLabel(e, productById, customerById);
-        return (
-          <li key={e.id} className="border-b border-stone-100 last:border-b-0">
-            <button
-              type="button"
-              onClick={() => onSelect(e)}
-              className="flex w-full items-center gap-3 px-3 py-3 text-left active:bg-stone-50 sm:px-4"
-            >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-waka-100 text-waka-700">
-                <ShieldCheck className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-black text-slate-950">{staff}</p>
-                <p className="truncate text-xs font-semibold text-waka-700">
-                  {auditActionLabel(lang, e.action)}
-                  {entity ? ` · ${entity}` : ""}
-                </p>
-                <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-500">{narrative}</p>
-              </div>
-              <time className="shrink-0 text-[11px] font-semibold text-slate-500" dateTime={e.at}>
-                {when}
-              </time>
-            </button>
-          </li>
-        );
-      })}
-      </ul>
-    </HistoryListCard>
-  );
-}
-
 export function AuditCenterPage({ lang }: { lang: Language }) {
   useMarkOwnerRisksReviewed();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = parseAuditTab(searchParams.get("tab"));
+  const { tab, setTab, category, setCategory, activeKpi, setActiveKpi } = useInvestigationCenter();
   const [includeArchived, setIncludeArchived] = useState(false);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
@@ -127,10 +69,7 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const [quickFilter, setQuickFilter] = useState(() => initialAuditDateFilter(searchParams));
-  const monthBounds = useMemo(
-    () => resolveDateFilterBounds({ kind: "preset", preset: "this_month" }),
-    [],
-  );
+  const monthBounds = useMemo(() => resolveDateFilterBounds({ kind: "preset", preset: "this_month" }), []);
   const [dateFrom, setDateFrom] = useState(() => searchParams.get("from") ?? monthBounds.fromKey);
   const [dateTo, setDateTo] = useState(() => searchParams.get("to") ?? monthBounds.toKey);
   const [actorUserId, setActorUserId] = useState(() => searchParams.get("staff") ?? "all");
@@ -143,7 +82,11 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const [searchText, setSearchText] = useState(() => searchParams.get("q") ?? "");
   const debouncedSearchText = useDebouncedValue(searchText, 250);
   const [selected, setSelected] = useState<AuditLogEntry | null>(null);
+  const [menuEntry, setMenuEntry] = useState<AuditLogEntry | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [traceReturn, setTraceReturn] = useState<ReturnRecord | null>(null);
+
   const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
@@ -170,7 +113,6 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
     () => buildAuditLogSearchIndex(auditLogs, { products, customers, suppliers, lang }),
     [auditLogs, products, customers, suppliers, lang],
   );
-  const actors = auditIndex.actors;
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, { name: p.name }])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, { name: c.name }])), [customers]);
@@ -189,13 +131,24 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
     [dateFrom, dateTo, actorUserId, action, productId, customerId, supplierId, debouncedSearchText],
   );
 
-  const filtered = useMemo(
-    () =>
-      filterAuditLogsIndexed(auditIndex, filters, { products, customers, suppliers, lang }, PAGE_SIZE),
+  const baseFiltered = useMemo(
+    () => filterAuditLogsIndexed(auditIndex, filters, { products, customers, suppliers, lang }, PAGE_SIZE),
     [auditIndex, filters, products, customers, suppliers, lang],
   );
 
-  const staffGroups = useMemo(() => groupAuditByStaff(filtered), [filtered]);
+  const filtered = useMemo(() => {
+    const todayKey = dateKeyKampala(new Date());
+    let rows = baseFiltered.filter((entry) => matchesCategory(entry, category));
+    rows = applyKpiFilter(rows, activeKpi, todayKey);
+    return rows;
+  }, [baseFiltered, category, activeKpi]);
+
+  const kpiCards = useMemo(
+    () => computeInvestigationKpis(auditIndex, dateFrom, dateTo, returnsInRange.length),
+    [auditIndex, dateFrom, dateTo, returnsInRange.length],
+  );
+
+  const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, quickFilter), [lang, quickFilter]);
 
   const shiftsInRange = useMemo(
     () =>
@@ -208,389 +161,225 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
     [shifts, dateFrom, dateTo],
   );
 
-  const actionOptions = useMemo(() => [...INVESTIGATION_ACTIONS].sort(), []);
-
-  const setActiveTab = (tab: string) => {
-    const next = new URLSearchParams(searchParams);
-    next.set("tab", tab);
-    setSearchParams(next, { replace: true });
+  const syncUrl = (next: Partial<{ from: string; to: string; staff: string; action: string; q: string }>) => {
+    const params = new URLSearchParams(searchParams);
+    if (next.from) params.set("from", next.from);
+    if (next.to) params.set("to", next.to);
+    if (next.staff) params.set("staff", next.staff);
+    if (next.action) params.set("action", next.action);
+    if (next.q !== undefined) {
+      if (next.q) params.set("q", next.q);
+      else params.delete("q");
+    }
+    setSearchParams(params, { replace: true });
   };
 
-  const downloadCsv = () => {
-    const csv = buildAuditCsv(lang, filtered);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const applyFilters = (next: {
+    dateFrom: string;
+    dateTo: string;
+    quickDate: DateFilterValue;
+    actorUserId: string;
+    action: AuditAction | "all";
+    productId: string;
+    customerId: string;
+    supplierId: string;
+  }) => {
+    setDateFrom(next.dateFrom);
+    setDateTo(next.dateTo);
+    setQuickFilter(next.quickDate);
+    setActorUserId(next.actorUserId);
+    setAction(next.action);
+    setProductId(next.productId);
+    setCustomerId(next.customerId);
+    setSupplierId(next.supplierId);
+    syncUrl({
+      from: next.dateFrom,
+      to: next.dateTo,
+      staff: next.actorUserId,
+      action: next.action,
+      q: debouncedSearchText,
+    });
+  };
+
+  const downloadBlob = (filename: string, blob: Blob) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `audit-${dateKeyKampala(new Date())}.csv`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
   };
 
-  const downloadPdf = async () => {
-    const blob = await buildAuditPdfBlob(lang, filtered, shopName);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `audit-${dateKeyKampala(new Date())}.pdf`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const downloadCsv = (entries: AuditLogEntry[] = filtered) => {
+    downloadBlob(`audit-${dateKeyKampala(new Date())}.csv`, new Blob([buildAuditCsv(lang, entries)], { type: "text/csv;charset=utf-8" }));
   };
 
-  const inputClass =
-    "mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 px-3 text-sm font-semibold outline-none focus:border-waka-500";
-
-  const onQuickFilterChange = (next: DateFilterValue) => {
-    setQuickFilter(next);
-    const bounds = resolveDateFilterBounds(next);
-    setDateFrom(bounds.fromKey);
-    setDateTo(bounds.toKey);
+  const downloadExcel = (entries: AuditLogEntry[] = filtered) => {
+    downloadBlob(`audit-${dateKeyKampala(new Date())}.csv`, new Blob([buildExcelCompatibleCsv(lang, entries)], { type: "text/csv;charset=utf-8" }));
   };
 
-  const tabDefs = useMemo(
-    () => [
-      { id: "timeline", label: t(lang, "auditTabTimeline") },
-      { id: "staff", label: t(lang, "auditTabStaff") },
-      { id: "refunds", label: t(lang, "auditTabRefunds") },
-      { id: "search", label: t(lang, "auditTabSearch") },
-      { id: "exports", label: t(lang, "auditTabExports") },
-    ],
-    [lang],
-  );
+  const downloadPdf = async (entries: AuditLogEntry[] = filtered) => {
+    const blob = await buildAuditPdfBlob(lang, entries, shopName);
+    downloadBlob(`audit-${dateKeyKampala(new Date())}.pdf`, blob);
+  };
 
-  const showSplitLayout = activeTab === "timeline" || activeTab === "staff";
-  const showFiltersSidebar = showSplitLayout || activeTab === "search";
+  const downloadJson = (entries: AuditLogEntry[] = filtered) => {
+    downloadBlob(`audit-${dateKeyKampala(new Date())}.json`, new Blob([buildAuditJsonExport(lang, entries)], { type: "application/json;charset=utf-8" }));
+  };
 
-  const filtersPanel = (
-    <section className="space-y-3 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-      <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "auditFiltersTitle")}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
-        <label className="block text-sm font-bold text-slate-800">
-          {t(lang, "auditFilterDateFrom")}
-          <input type="date" className={inputClass} value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
-        </label>
-        <label className="block text-sm font-bold text-slate-800">
-          {t(lang, "auditFilterDateTo")}
-          <input type="date" className={inputClass} value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
-        </label>
-        <label className="block text-sm font-bold text-slate-800">
-          {t(lang, "auditFilterStaff")}
-          <select className={inputClass} value={actorUserId} onChange={(e) => setActorUserId(e.target.value)}>
-            <option value="all">{t(lang, "auditFilterAll")}</option>
-            {actors.map((a) => (
-              <option key={a.userId} value={a.userId}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm font-bold text-slate-800">
-          {t(lang, "auditFilterAction")}
-          <select
-            className={inputClass}
-            value={action}
-            onChange={(e) => setAction(e.target.value as AuditAction | "all")}
-          >
-            <option value="all">{t(lang, "auditFilterAll")}</option>
-            {actionOptions.map((a) => (
-              <option key={a} value={a}>
-                {auditActionLabel(lang, a)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm font-bold text-slate-800">
-          {t(lang, "auditFilterProduct")}
-          <select className={inputClass} value={productId} onChange={(e) => setProductId(e.target.value)}>
-            <option value="">{t(lang, "auditFilterAll")}</option>
-            {[...products]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label className="block text-sm font-bold text-slate-800">
-          {t(lang, "auditFilterCustomer")}
-          <select className={inputClass} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-            <option value="">{t(lang, "auditFilterAll")}</option>
-            {[...customers]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label className="block text-sm font-bold text-slate-800 sm:col-span-2 lg:col-span-1">
-          {t(lang, "auditFilterSupplier")}
-          <select className={inputClass} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-            <option value="">{t(lang, "auditFilterAll")}</option>
-            {[...suppliers]
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label className="block text-sm font-bold text-slate-800 sm:col-span-2 lg:col-span-1">
-          <span className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-slate-400" aria-hidden />
-            {t(lang, "auditFilterSearch")}
-          </span>
-          <input
-            type="search"
-            className={inputClass}
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder={t(lang, "auditFilterSearchPlaceholder")}
+  const printEntries = (entries: AuditLogEntry[] = filtered) => {
+    printHtmlDocument(buildAuditPrintHtml(lang, entries, shopName), "80mm", t(lang, "auditCenterTitle"));
+  };
+
+  const shareEntries = async (entries: AuditLogEntry[] = filtered) => {
+    const body = entries
+      .slice(0, 40)
+      .map((e) => buildActivityDetailText(lang, e, { productById, customerById }))
+      .join("\n\n---\n\n");
+    await shareText(body, t(lang, "auditCenterTitle"));
+  };
+
+  const copyEntry = async (entry: AuditLogEntry) => {
+    const text = buildActivityDetailText(lang, entry, { productById, customerById });
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      await shareText(text, t(lang, "auditCenterTitle"));
+    }
+  };
+
+  const handleKpiSelect = (id: InvestigationKpiId) => {
+    if (activeKpi === id) {
+      setActiveKpi(null);
+      return;
+    }
+    setActiveKpi(id);
+    if (id === "refunds") setTab("refunds");
+    else setTab("timeline");
+  };
+
+  return (
+    <div className="space-y-4 pb-12">
+      <PageHeader
+        lang={lang}
+        title={t(lang, "auditCenterTitle")}
+        subtitle={t(lang, "icPageSub")}
+        backLabel={t(lang, "officeBackToHub")}
+      />
+
+      <InvestigationKpiGrid
+        lang={lang}
+        cards={kpiCards}
+        activeKpi={activeKpi}
+        periodLabel={periodLabel}
+        onSelect={handleKpiSelect}
+      />
+
+      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
+
+      <InvestigationTabs lang={lang} active={tab} onChange={setTab} />
+
+      {tab === "timeline" ? (
+        <div className="space-y-3">
+          <InvestigationSearchBar
+            lang={lang}
+            searchText={searchText}
+            onSearchChange={(value) => {
+              setSearchText(value);
+              syncUrl({ from: dateFrom, to: dateTo, staff: actorUserId, action, q: value });
+            }}
+            onOpenFilters={() => setFiltersOpen(true)}
+            onOpenExport={() => setExportOpen(true)}
+            resultCount={filtered.length}
           />
-        </label>
-      </div>
-    </section>
-  );
-
-  const refundsPanel = (
-    <div className="space-y-4">
-      <section className="rounded-[1.5rem] border border-emerald-200/80 bg-gradient-to-br from-emerald-50/80 to-white p-4 shadow-sm">
-        <div className="flex items-start gap-3">
-          <ShieldCheck className="mt-0.5 h-6 w-6 shrink-0 text-emerald-700" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-black text-slate-900">{t(lang, "refundIntegrityTitle")}</h2>
-            <p className="mt-0.5 text-xs font-medium text-slate-600">{t(lang, "refundIntegritySub")}</p>
-            <p className={`mt-2 text-sm font-bold ${integrityReport.ok ? "text-emerald-800" : "text-rose-800"}`}>
-              {integrityReport.ok
-                ? t(lang, "refundIntegrityOk")
-                : tTemplate(lang, "refundIntegrityViolations", {
-                    count: String(integrityReport.violations.length),
-                  })}
-            </p>
-            {!integrityReport.ok ? (
-              <ul className="mt-2 space-y-1 text-xs font-semibold text-rose-900">
-                {integrityReport.violations.slice(0, 8).map((v, i) => (
-                  <li key={`${v.code}-${i}`} className="rounded-lg bg-rose-50 px-2 py-1">
-                    {v.message}
-                    {v.saleId ? ` · ${v.saleId.slice(0, 8)}` : ""}
-                    {v.expected != null && v.actual != null ? ` (${v.actual} / max ${v.expected})` : ""}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <p className="mt-2 text-[10px] font-semibold text-slate-500">
-              {integrityReport.returnsScanned} returns · {integrityReport.salesScanned} sales scanned
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "refundHistoryTitle")}</h2>
-        {returnsInRange.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">{t(lang, "refundHistoryEmpty")}</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {returnsInRange.map((r) => {
-              const staff = r.actorName?.trim() || actorDisplayLabel(r.actorUserId, lang);
-              const when = new Date(r.createdAt).toLocaleString([], {
-                month: "short",
-                day: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              return (
-                <li
-                  key={r.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 bg-slate-50/50 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900">
-                      {r.productName} · UGX {r.refundAmountUgx.toLocaleString()}
-                    </p>
-                    <p className="text-xs text-slate-600">
-                      {staff} · {when}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setTraceReturn(r)}
-                    className="shrink-0 rounded-xl border border-waka-200 bg-waka-50 px-3 py-1.5 text-xs font-black text-waka-900"
-                  >
-                    {t(lang, "refundTraceView")}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </div>
-  );
-
-  const exportsPanel = (
-    <section className="space-y-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm font-semibold text-slate-700">
-        {t(lang, "auditResultCount")}: {filtered.length}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={downloadCsv}
-          disabled={filtered.length === 0}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-4 text-sm font-black text-slate-800 disabled:opacity-40"
-        >
-          <Download className="h-4 w-4" aria-hidden />
-          {t(lang, "auditExportCsv")}
-        </button>
-        <button
-          type="button"
-          onClick={() => void downloadPdf()}
-          disabled={filtered.length === 0}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border-2 border-waka-600 bg-waka-50 px-4 text-sm font-black text-waka-900 disabled:opacity-40"
-        >
-          <FileText className="h-4 w-4" aria-hidden />
-          {t(lang, "auditExportPdf")}
-        </button>
-      </div>
-    </section>
-  );
-
-  const staffPanel =
-    staffGroups.length === 0 ? (
-      <p className="rounded-[1.5rem] border border-slate-200 bg-white p-6 text-slate-600">{t(lang, "staffActivityEmpty")}</p>
-    ) : (
-      <div className="space-y-8">
-        {shiftsInRange.length > 0 ? (
-          <section>
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{t(lang, "shiftsTodayTitle")}</h2>
-            <ul className="mt-3 space-y-3">
-              {shiftsInRange.map((s) => (
-                <li
-                  key={s.id}
-                  className="rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm ring-1 ring-slate-100/80"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-black text-slate-900">{s.actorName ?? s.actorUserId}</p>
-                    <p className="text-xs font-semibold text-slate-500">
-                      {s.endAt ? t(lang, "shiftClosed") : t(lang, "shiftOpen")}
-                    </p>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-600">
-                    {new Date(s.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} -{" "}
-                    {s.endAt ? new Date(s.endAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
-                  </p>
-                  <p className="mt-2 text-sm font-semibold text-slate-800">
-                    UGX {s.salesTotalUgx.toLocaleString()} · {t(lang, "cardDebtToday")} UGX {s.debtTotalUgx.toLocaleString()}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-        {staffGroups.map((group) => (
-          <section key={group.actorId}>
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">{group.actorLabel}</h2>
-            <AuditTimelineList
-              lang={lang}
-              entries={group.entries}
-              productById={productById}
-              customerById={customerById}
-              onSelect={setSelected}
-            />
-          </section>
-        ))}
-      </div>
-    );
-
-  const mainPanel = (
-    <div className="space-y-4">
-      {activeTab === "timeline" ? (
-        <>
-          <p className="text-sm font-semibold text-slate-600">
-            {t(lang, "auditResultCount")}: {filtered.length}
-          </p>
-          <AuditTimelineList
+          <InvestigationCategoryChips lang={lang} active={category} onChange={setCategory} />
+          <VirtualizedActivityTimeline
             lang={lang}
             entries={filtered}
             productById={productById}
             customerById={customerById}
             onSelect={setSelected}
+            onMenu={setMenuEntry}
           />
-        </>
+        </div>
       ) : null}
-      {activeTab === "staff" ? staffPanel : null}
-      {activeTab === "refunds" ? refundsPanel : null}
-      {activeTab === "search" ? filtersPanel : null}
-      {activeTab === "exports" ? exportsPanel : null}
-    </div>
-  );
 
-  return (
-    <div className="space-y-6 pb-12">
-      <PageHeader
+      {tab === "staff" ? (
+        <InvestigationStaffSection
+          lang={lang}
+          entries={filtered}
+          shifts={shiftsInRange}
+          productById={productById}
+          customerById={customerById}
+          onSelect={setSelected}
+          onMenu={setMenuEntry}
+        />
+      ) : null}
+
+      {tab === "refunds" ? (
+        <InvestigationRefundsSection
+          lang={lang}
+          integrityReport={integrityReport}
+          returns={returnsInRange}
+          onTraceReturn={setTraceReturn}
+        />
+      ) : null}
+
+      <InvestigationFiltersSheet
         lang={lang}
-        title={t(lang, "auditCenterTitle")}
-        subtitle={t(lang, "auditCenterSub")}
-        backLabel={t(lang, "officeBackToHub")}
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        filters={filters}
+        quickDate={quickFilter}
+        actors={auditIndex.actors}
+        products={products}
+        customers={customers}
+        suppliers={suppliers}
+        onApply={applyFilters}
       />
 
-      <HistoryHeroCard
+      <InvestigationExportSheet
         lang={lang}
-        filter={quickFilter}
-        onFilterChange={onQuickFilterChange}
-        metrics={[
-          {
-            label: t(lang, "auditTabTimeline"),
-            icon: Search,
-            value: String(filtered.length),
-            hint: `${t(lang, "auditResultCount")} ${filtered.length}`,
-          },
-          {
-            label: t(lang, "auditTabRefunds"),
-            icon: RotateCcw,
-            value: String(returnsInRange.length),
-          },
-          {
-            label: t(lang, "auditTabStaff"),
-            icon: Users,
-            value: String(staffGroups.length),
-          },
-        ]}
+        open={exportOpen}
+        disabled={filtered.length === 0}
+        onClose={() => setExportOpen(false)}
+        onExportCsv={() => downloadCsv()}
+        onExportExcel={() => downloadExcel()}
+        onExportPdf={() => void downloadPdf()}
+        onExportJson={() => downloadJson()}
+        onPrint={() => printEntries()}
+        onShare={() => void shareEntries()}
       />
 
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
-
-      <HorizontalTabBar
-        tabs={tabDefs}
-        activeId={activeTab}
-        onChange={setActiveTab}
-        ariaLabel={t(lang, "auditCenterTitle")}
-      />
-
-      <div
-        className={clsx(
-          showSplitLayout && "lg:grid lg:grid-cols-[minmax(260px,320px)_minmax(0,1fr)] lg:items-start lg:gap-6",
-        )}
-      >
-        {showFiltersSidebar ? (
-          <div className={clsx(showSplitLayout && "hidden lg:block", activeTab === "search" && "block")}>
-            {filtersPanel}
-          </div>
-        ) : null}
-
-        <div className={clsx(activeTab === "search" && "hidden lg:block")}>{mainPanel}</div>
-      </div>
-
-      <AuditDetailDrawer
+      <ActivityDetailSheet
         lang={lang}
         entry={selected}
+        shopName={shopName}
         productById={productById}
         customerById={customerById}
+        open={selected !== null}
         onClose={() => setSelected(null)}
+        onCopy={() => selected && void copyEntry(selected)}
+        onShare={() => selected && void shareEntries([selected])}
+        onPrint={() => selected && printEntries([selected])}
+        onExportPdf={() => selected && void downloadPdf([selected])}
+      />
+
+      <ActivityActionsSheet
+        lang={lang}
+        entry={menuEntry}
+        open={menuEntry !== null}
+        onClose={() => setMenuEntry(null)}
+        onViewDetails={() => {
+          if (menuEntry) setSelected(menuEntry);
+          setMenuEntry(null);
+        }}
+        onCopy={() => menuEntry && void copyEntry(menuEntry)}
+        onShare={() => menuEntry && void shareEntries([menuEntry])}
+        onPrint={() => menuEntry && printEntries([menuEntry])}
+        onExportPdf={() => menuEntry && void downloadPdf([menuEntry])}
+        onExportCsv={() => menuEntry && downloadCsv([menuEntry])}
+        onReportIssue={() => menuEntry && void shareEntries([menuEntry])}
       />
 
       <RefundCalculationDrawer

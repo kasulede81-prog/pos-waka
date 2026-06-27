@@ -19,36 +19,36 @@ export function OfficeNavCard({ to, title, subtitle, Icon, highlight, deemphasiz
       <Link
         to={to}
         className={clsx(
-          "flex min-h-[60px] items-center gap-3 rounded-2xl border px-3.5 py-2.5 transition active:scale-[0.99] motion-reduce:active:scale-100",
+          "relative flex min-h-[80px] flex-col justify-between gap-1 rounded-xl border p-2.5 transition active:scale-[0.99] motion-reduce:active:scale-100",
           highlight
-            ? "border-waka-300 bg-gradient-to-r from-waka-50 to-white shadow-sm"
+            ? "border-waka-300 bg-gradient-to-br from-waka-50 to-white shadow-sm"
             : deemphasized
               ? "border-stone-100 bg-stone-50/80 shadow-none"
               : "border-stone-200/90 bg-white shadow-sm",
         )}
       >
+        {trailing ? (
+          <span className="absolute right-2 top-2 text-[10px] font-black leading-none text-waka-800">{trailing}</span>
+        ) : null}
         <span
           className={clsx(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
             highlight ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
           )}
         >
-          <Icon className="h-5 w-5" strokeWidth={2.25} aria-hidden />
+          <Icon className="h-4 w-4" strokeWidth={2.25} aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-black leading-snug text-stone-950">{title}</span>
+          <span className="line-clamp-2 text-xs font-black leading-tight text-stone-950">{title}</span>
           {subtitle ? (
-            <span className="mt-0.5 block truncate text-xs font-semibold text-stone-500">{subtitle}</span>
+            <span className="mt-0.5 line-clamp-1 text-[10px] font-semibold leading-snug text-stone-500">{subtitle}</span>
           ) : null}
         </span>
-        {trailing ? (
-          <span className="shrink-0 text-right text-xs font-black text-waka-800">{trailing}</span>
-        ) : null}
       </Link>
       {nestedLink ? (
         <Link
           to={nestedLink.to}
-          className="ml-14 mt-1 inline-flex min-h-[36px] items-center text-xs font-black text-waka-800 underline decoration-waka-300 underline-offset-2"
+          className="mt-1 inline-flex min-h-[32px] items-center px-0.5 text-[10px] font-black text-waka-800 underline decoration-waka-300 underline-offset-2"
         >
           {nestedLink.label}
         </Link>

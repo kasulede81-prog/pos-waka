@@ -32,11 +32,8 @@ export type ResolvedBackOfficeSearchEntry = {
 
 const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "shop-hub", path: "/office", titleKey: "officeHubNav", subtitleKey: "officeHubSub", sectionKey: "officeSectionDaily", keywords: ["shop", "office", "hub", "home"] },
-  { id: "stock", path: "/stock", titleKey: "officeCardStock", subtitleKey: "officeCardStockSub", sectionKey: "officeSectionDaily", perm: "stock.view", keywords: ["inventory", "products", "items", "medicine", "warehouse"] },
+  { id: "inventory-purchasing", path: "/stock", titleKey: "ipPageTitle", subtitleKey: "ipPageSub", sectionKey: "officeSectionDaily", keywords: ["inventory", "products", "items", "medicine", "warehouse", "purchase", "buy", "stock in", "vendor", "supplier", "orders", "restock"] },
   { id: "shelf-arrange", path: "/settings/shelves", titleKey: "officeCardShelfArrange", subtitleKey: "officeCardShelfArrangeSub", sectionKey: "settingsHubGroupApp", perm: "shelves.customize", keywords: ["shelf", "arrange", "order", "sell", "category", "drag", "customize"] },
-  { id: "restock", path: "/restock", titleKey: "officeCardRestock", subtitleKey: "officeCardRestockSub", sectionKey: "officeSectionDaily", perm: "purchases.record", keywords: ["purchase", "buy", "stock in"] },
-  { id: "suppliers", path: "/suppliers", titleKey: "officeCardSuppliers", subtitleKey: "officeCardSuppliersSub", sectionKey: "officeSectionDaily", perm: "suppliers.view", keywords: ["vendor", "supplier"] },
-  { id: "purchases", path: "/office/purchases", titleKey: "officeCardPurchases", subtitleKey: "officeCardPurchasesSub", sectionKey: "officeSectionDaily", perm: "purchases.view", keywords: ["purchase history", "orders"] },
   { id: "customers", path: "/customers", titleKey: "customers", subtitleKey: "officeCardCustomersSub", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["customer", "patient", "account", "debtor"] },
   { id: "debts", path: "/debts", titleKey: "debts", subtitleKey: "debtsHelp", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["debt", "credit", "owe", "loan"] },
   { id: "cash-expenses", path: "/cash-expenses", titleKey: "officeCardCashExpenses", subtitleKey: "officeCardCashExpensesSub", sectionKey: "officeSectionDaily", keywords: ["expense", "petty cash", "drawer"] },

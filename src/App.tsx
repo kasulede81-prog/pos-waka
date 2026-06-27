@@ -63,18 +63,15 @@ import { SettingsChangeGate } from "./components/security/SettingsChangeGate";
 import { SettingsBiometricPage } from "./pages/SettingsBiometricPage";
 import { ProfitPage } from "./pages/ProfitPage";
 import { PharmacyMarginReportPage } from "./pages/PharmacyMarginReportPage";
-import { StockPage } from "./pages/StockPage";
+import { InventoryPurchasingPage } from "./pages/InventoryPurchasingPage";
+import { InventoryPurchasingProtectedRoute } from "./components/InventoryPurchasingProtectedRoute";
+import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./components/inventory/LegacyInventoryRedirects";
 import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
 import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
-import { ReportsPage } from "./pages/ReportsPage";
-import { SuppliersPage } from "./pages/SuppliersPage";
-import { RestockPage } from "./pages/RestockPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
 import { CashPositionPage } from "./pages/CashPositionPage";
 import { DayOpenPage } from "./pages/DayOpenPage";
-import { PurchasesPage } from "./pages/PurchasesPage";
-import { PurchaseDetailPage } from "./pages/PurchaseDetailPage";
-import { SupplierDetailPage } from "./pages/SupplierDetailPage";
+import { ReportsPage } from "./pages/ReportsPage";
 import { CashExpensesPage } from "./pages/CashExpensesPage";
 import { StaffAccessPage } from "./pages/StaffAccessPage";
 import { UpgradePage } from "./pages/UpgradePage";
@@ -434,22 +431,8 @@ function AppRoutes() {
               path="office/shift-reports"
               element={<Navigate to="/office/open-shifts" replace />}
             />
-            <Route
-              path="office/purchases"
-              element={
-                <RoleProtectedRoute permission="purchases.view">
-                  <PurchasesPage lang={lang} />
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="office/purchases/:purchaseId"
-              element={
-                <RoleProtectedRoute permission="purchases.view">
-                  <PurchaseDetailPage lang={lang} />
-                </RoleProtectedRoute>
-              }
-            />
+            <Route path="office/purchases" element={<Navigate to="/stock?tab=purchases" replace />} />
+            <Route path="office/purchases/:purchaseId" element={<LegacyPurchaseDetailRedirect />} />
             <Route
               path="office/pharmacy-margins"
               element={
@@ -519,9 +502,9 @@ function AppRoutes() {
             <Route
               path="stock"
               element={
-                <RoleProtectedRoute permission="stock.view">
-                  <StockPage lang={lang} />
-                </RoleProtectedRoute>
+                <InventoryPurchasingProtectedRoute>
+                  <InventoryPurchasingPage lang={lang} />
+                </InventoryPurchasingProtectedRoute>
               }
             />
             <Route
@@ -540,30 +523,9 @@ function AppRoutes() {
                 </RoleProtectedRoute>
               }
             />
-            <Route
-              path="suppliers"
-              element={
-                <RoleProtectedRoute permission="suppliers.view">
-                  <SuppliersPage lang={lang} />
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="suppliers/:supplierId"
-              element={
-                <RoleProtectedRoute permission="suppliers.view">
-                  <SupplierDetailPage lang={lang} />
-                </RoleProtectedRoute>
-              }
-            />
-            <Route
-              path="restock"
-              element={
-                <RoleProtectedRoute permission="purchases.record">
-                  <RestockPage lang={lang} />
-                </RoleProtectedRoute>
-              }
-            />
+            <Route path="suppliers" element={<Navigate to="/stock?tab=suppliers" replace />} />
+            <Route path="suppliers/:supplierId" element={<LegacySupplierDetailRedirect />} />
+            <Route path="restock" element={<Navigate to="/stock?tab=purchases&new=1" replace />} />
             <Route path="inventory" element={<Navigate to="/stock" replace />} />
             <Route
               path="pos"

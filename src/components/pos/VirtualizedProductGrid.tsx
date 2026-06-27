@@ -8,8 +8,10 @@ import { formatStockLabel } from "../../lib/sellingEngine";
 import { shelfIconFor } from "../../lib/productCategories";
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../lib/pharmacy";
+import { PosSellProductCard } from "./PosSellProductCard";
 
-const ROW_ESTIMATE = 132;
+const ROW_ESTIMATE_DEFAULT = 148;
+const ROW_ESTIMATE_SELL_MOBILE = 120;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
@@ -18,8 +20,10 @@ type Props = {
   onPick: (p: Product) => void;
   stockLabel: string;
   noShelfLabel: string;
+  addLabel?: string;
   isLocked?: (p: Product) => boolean;
   lockedBadge?: string;
+  variant?: "default" | "sellMobile";
 };
 
 /** Scrolls long product lists smoothly; column count is set by viewport (desktop: 4–8 cols). */
@@ -29,19 +33,23 @@ function VirtualizedProductGridInner({
   onPick,
   stockLabel,
   noShelfLabel,
+  addLabel = "+",
   isLocked,
   lockedBadge,
+  variant = "default",
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const cols = Math.max(2, columnCount);
   const rowCount = Math.ceil(products.length / cols);
+  const sellMobile = variant === "sellMobile";
+  const rowEstimate = sellMobile ? ROW_ESTIMATE_SELL_MOBILE : ROW_ESTIMATE_DEFAULT;
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () =>
       parentRef.current?.closest<HTMLElement>(".scroll-main-chrome") ??
       document.querySelector<HTMLElement>(".scroll-main-chrome"),
-    estimateSize: () => ROW_ESTIMATE,
+    estimateSize: () => rowEstimate,
     overscan: 5,
   });
 
@@ -59,7 +67,7 @@ function VirtualizedProductGridInner({
           return (
             <div
               key={virtualRow.key}
-              className="absolute left-0 top-0 grid w-full gap-2.5 px-0.5"
+              className={clsx("absolute left-0 top-0 grid w-full px-0.5", sellMobile ? "gap-2" : "gap-2.5")}
               style={{
                 gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                 transform: `translateY(${virtualRow.start}px)`,
@@ -68,6 +76,19 @@ function VirtualizedProductGridInner({
             >
               {slice.map((p) => {
                 const locked = isLocked?.(p) ?? false;
+                if (sellMobile) {
+                  return (
+                    <PosSellProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={stockLabel}
+                      addLabel={addLabel}
+                      locked={locked}
+                      lockedBadge={lockedBadge}
+                      onPick={onPick}
+                    />
+                  );
+                }
                 const preferences = usePosStore.getState().preferences;
                 const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
                 const detail = pharmacyMode ? formatMedicineListSecondary(p) : null;
@@ -77,10 +98,10 @@ function VirtualizedProductGridInner({
                     type="button"
                     onClick={() => onPick(p)}
                     className={clsx(
-                      "relative flex min-h-[122px] flex-col justify-between rounded-[1.35rem] border p-3 text-left shadow-sm motion-reduce:transition-none",
+                      "relative flex min-h-[132px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm motion-reduce:transition-none",
                       locked
                         ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-                        : "border-slate-200 bg-white active:scale-[0.98] active:border-waka-500",
+                        : "border-slate-200 bg-white shadow-md active:scale-[0.98] active:border-waka-500 active:shadow-sm",
                     )}
                     style={{ contentVisibility: "auto" }}
                   >

@@ -1,15 +1,14 @@
-import { useMemo, useState } from "react";
-import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useDeferredValue, useMemo, useState } from "react";
+import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { Navigate } from "react-router-dom";
-import { CalendarDays, FileDown } from "lucide-react";
+import { Link, Navigate } from "react-router-dom";
+import { BarChart3, FileDown, Receipt } from "lucide-react";
 import type { Language, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
-import { dateKeyKampala } from "../lib/datesUg";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
 import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
@@ -33,11 +32,59 @@ import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { expenseCountsInDrawer } from "../lib/cashExpenses";
 import { inventoryValueAtCostUgx } from "../lib/purchaseRecovery";
 import { isCompletedSale } from "../lib/saleStatus";
-import { SalesHistoryHeroCard } from "../components/receipts/SalesHistoryHeroCard";
 import { SalesHistoryRow } from "../components/receipts/SalesHistoryRow";
 import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { sumDebtPaymentsInBounds } from "../lib/customerDebtActivity";
 import { useProtectedAction } from "../hooks/useProtectedAction";
+import { SalesHistoryStatGrid } from "../components/receipts/SalesHistoryStatGrid";
+import { SalesHistorySecondaryChips, buildSecondaryChips } from "../components/receipts/SalesHistorySecondaryChips";
+import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
+import { SalesHistorySearchBar } from "../components/receipts/SalesHistorySearchBar";
+import { SalesHistoryAnalyticsPanel } from "../components/receipts/SalesHistoryAnalyticsPanel";
+import { SalesHistorySkeletonList } from "../components/receipts/SalesHistorySkeletonList";
+import { buildReceiptNumberForSale } from "../lib/receiptPrint";
+
+function countItemsSold(sales: Sale[]): number {
+  let count = 0;
+  for (const sale of sales) {
+    for (const line of sale.lines) {
+      if (!line.voided) count += line.quantity;
+    }
+  }
+  return count;
+}
+
+function bestSellingProductName(sales: Sale[]): string | null {
+  const map = new Map<string, number>();
+  for (const sale of sales) {
+    for (const line of sale.lines) {
+      if (line.voided) continue;
+      map.set(line.name, (map.get(line.name) ?? 0) + line.quantity);
+    }
+  }
+  let bestName: string | null = null;
+  let bestQty = 0;
+  for (const [name, qty] of map) {
+    if (qty > bestQty) {
+      bestQty = qty;
+      bestName = name;
+    }
+  }
+  return bestName;
+}
+
+function paymentMethodsSummary(lang: Language, sales: Sale[]): string {
+  let cash = 0;
+  let debt = 0;
+  for (const s of sales) {
+    cash += s.cashPaidUgx;
+    debt += s.debtUgx;
+  }
+  const parts: string[] = [];
+  if (cash > 0) parts.push(`${t(lang, "paymentMethod_cash")}: UGX ${cash.toLocaleString()}`);
+  if (debt > 0) parts.push(`${t(lang, "paymentMethod_credit")}: UGX ${debt.toLocaleString()}`);
+  return parts.length > 0 ? parts.join(" · ") : "—";
+}
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -52,7 +99,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     archivedSalesCount,
     needsArchive,
   } = useReportingDateFilter();
-  const sales = useDeferredReportingSales(includeArchived);
+  const rawSales = useReportingSales(includeArchived);
+  const sales = useDeferredValue(rawSales);
+  const salesRefreshing = rawSales !== sales;
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
@@ -74,6 +123,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
   const [showCancelled, setShowCancelled] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
   const [returnSale, setReturnSale] = useState<Sale | null>(null);
   const [returnReceiptCtx, setReturnReceiptCtx] = useState<import("../lib/receiptDocuments").ReturnReceiptContext | null>(null);
@@ -164,28 +214,23 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     [partitioned.completed, filteredReturns, products],
   );
 
+  const itemsSoldCount = useMemo(() => countItemsSold(partitioned.completed), [partitioned.completed]);
+
   const listSales = useMemo(() => {
     const primary = [...partitioned.completed, ...partitioned.pending];
     primary.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
-    return primary;
-  }, [partitioned.completed, partitioned.pending]);
 
-  const sparklinePoints = useMemo(() => {
-    if (!showProfit) return [];
-    const dayMap = new Map<string, Sale[]>();
-    for (const sale of partitioned.completed) {
-      const key = dateKeyKampala(sale.createdAt);
-      const bucket = dayMap.get(key);
-      if (bucket) bucket.push(sale);
-      else dayMap.set(key, [sale]);
-    }
-    const keys = [...dayMap.keys()].sort();
-    return keys.map((dayKey) => {
-      const daySales = dayMap.get(dayKey) ?? [];
-      const dayReturns = allReturns.filter((r) => dateKeyKampala(r.createdAt) === dayKey);
-      return getCompletedFinancialsFromScoped(daySales, dayReturns, products).profitUgx;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return primary;
+
+    return primary.filter((sale) => {
+      const invoice = buildReceiptNumberForSale(sale, sales).toLowerCase();
+      if (invoice.includes(q)) return true;
+      if (customerNameFor(sale).toLowerCase().includes(q)) return true;
+      if (soldByLabel(sale).toLowerCase().includes(q)) return true;
+      return sale.lines.some((line) => line.name.toLowerCase().includes(q));
     });
-  }, [partitioned.completed, allReturns, products, showProfit]);
+  }, [partitioned.completed, partitioned.pending, searchQuery, sales, customers, staffNameById, lang]);
 
   const selectedDay = selectedDayKeyForFilter(filter);
   const isSingleDay = selectedDay != null;
@@ -213,8 +258,57 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   );
 
   const canViewDebts = hasPermission(actor.role, "customers.view");
-
   const syncErrorCount = countSalesWithSyncErrors();
+
+  const secondaryChips = useMemo(
+    () =>
+      buildSecondaryChips(lang, {
+        cashSalesUgx: rangeFinancials.cashCollectedUgx,
+        debtCollectedUgx,
+        expensesUgx,
+        expensesLabel: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"),
+        stockValueUgx,
+        showShopSummaries,
+      }),
+    [lang, rangeFinancials.cashCollectedUgx, debtCollectedUgx, expensesUgx, isSingleDay, stockValueUgx, showShopSummaries],
+  );
+
+  const analyticsMetrics = useMemo(() => {
+    const bestProduct = bestSellingProductName(partitioned.completed);
+    const metrics = [
+      { label: isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange"), value: `UGX ${rangeRevenueUgx.toLocaleString()}` },
+      ...(showProfit
+        ? [{ label: t(lang, "salesHistoryProfits"), value: `UGX ${rangeFinancials.profitUgx.toLocaleString()}` }]
+        : []),
+      { label: t(lang, "salesHistoryCashInHand"), value: `UGX ${rangeFinancials.cashCollectedUgx.toLocaleString()}` },
+      ...(showShopSummaries
+        ? [
+            { label: t(lang, "salesHistoryDebtCollected"), value: `UGX ${debtCollectedUgx.toLocaleString()}` },
+            { label: isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange"), value: `UGX ${expensesUgx.toLocaleString()}` },
+          ]
+        : []),
+      { label: t(lang, "salesHistoryItemsSold"), value: String(itemsSoldCount) },
+      { label: t(lang, "salesHistoryAverageSale"), value: `UGX ${rangeFinancials.averageTransactionUgx.toLocaleString()}` },
+      { label: t(lang, "salesHistoryBestProduct"), value: bestProduct ?? "—" },
+      { label: t(lang, "salesHistoryPaymentMethods"), value: paymentMethodsSummary(lang, partitioned.completed) },
+      ...(showShopSummaries
+        ? [{ label: t(lang, "salesHistoryStockValue"), value: `UGX ${stockValueUgx.toLocaleString()}` }]
+        : []),
+    ];
+    return metrics;
+  }, [
+    lang,
+    isSingleDay,
+    rangeRevenueUgx,
+    showProfit,
+    rangeFinancials,
+    showShopSummaries,
+    debtCollectedUgx,
+    expensesUgx,
+    itemsSoldCount,
+    partitioned.completed,
+    stockValueUgx,
+  ]);
 
   if (!hasPermission(actor.role, "receipts.view")) {
     return <Navigate to="/" replace />;
@@ -222,6 +316,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const onDownloadAll = async () => {
     const { saveSalesListPdf } = await import("../lib/receiptsPdf");
+    const { dateKeyKampala } = await import("../lib/datesUg");
     await saveSalesListPdf({
       sales: partitioned.completed,
       title: t(lang, "receiptsPdfAllTitle"),
@@ -232,9 +327,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const hasAnyInRange = filteredInRange.length > 0;
   const salesHeroLabel = isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange");
-  const expensesLabel = isSingleDay ? t(lang, "salesHistoryTodayExpenses") : t(lang, "salesHistoryExpensesInRange");
+  const hasSellAccess = hasPermission(actor.role, "pos.sell");
 
-  const renderSaleRow = (sale: Sale, index: number) => (
+  const renderSaleRow = (sale: Sale) => (
     <SalesHistoryRow
       key={sale.id}
       lang={lang}
@@ -244,10 +339,9 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       customerName={customerNameFor(sale)}
       cashierLabel={soldByLabel(sale)}
       canVoid={canVoid && isCompletedSale(sale)}
-      toneIndex={index}
       onPrint={printSale}
-      onReceiptPdf={(sale) => void runProtected("export_data", () => receiptPdfSale(sale))}
-      onReturn={(sale) => void runProtected("refund_sale", () => setReturnSale(sale))}
+      onReceiptPdf={(s) => void runProtected("export_data", () => receiptPdfSale(s))}
+      onReturn={(s) => void runProtected("refund_sale", () => setReturnSale(s))}
       onVoidLine={(s, lineIndex, line) =>
         void runProtected("void_sale", () => setVoidTarget({ sale: s, lineIndex, line }))
       }
@@ -258,22 +352,35 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     <div className="space-y-3 pb-8 md:pb-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-xl font-black tracking-tight text-slate-950 sm:text-2xl">
+          <h2 className="text-xl font-black tracking-tight text-stone-950 sm:text-2xl">
             {term ? term("receipts") : t(lang, "receipts")}
           </h2>
-          <p className="mt-0.5 text-xs font-medium text-slate-500 sm:text-sm">{term ? term("receiptsHint") : t(lang, "receiptsHint")}</p>
+          <p className="mt-0.5 text-xs font-medium text-stone-500 sm:text-sm">
+            {term ? term("receiptsHint") : t(lang, "receiptsHint")}
+          </p>
         </div>
-        {partitioned.completed.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => void runProtected("export_data", onDownloadAll)}
-            className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-waka-200 bg-white px-3 text-xs font-black text-waka-800 shadow-sm transition-waka active:bg-waka-50"
-            title={t(lang, "receiptsDownloadPdf")}
-          >
-            <FileDown className="h-4 w-4 shrink-0" aria-hidden />
-            <span className="hidden sm:inline">{t(lang, "receiptsDownloadPdf")}</span>
-          </button>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-1.5">
+          {partitioned.completed.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void runProtected("export_data", onDownloadAll)}
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-stone-50"
+              title={t(lang, "receiptsDownloadPdf")}
+            >
+              <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">{t(lang, "salesHistoryExport")}</span>
+            </button>
+          ) : null}
+          {showShopSummaries ? (
+            <Link
+              to="/reports"
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+            >
+              <BarChart3 className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">{t(lang, "salesHistoryReports")}</span>
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {syncErrorCount > 0 ? (
@@ -283,83 +390,83 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       ) : null}
 
       {sales.length > 0 ? (
-        <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
-          <SalesHistoryHeroCard
+        <>
+          <SalesHistoryStatGrid
             lang={lang}
             salesLabel={salesHeroLabel}
             salesUgx={rangeRevenueUgx}
             profitUgx={showProfit ? rangeFinancials.profitUgx : null}
             showProfit={showProfit}
-            showShopDebt={showShopSummaries}
-            showReportsLink={showShopSummaries}
+            itemsSold={itemsSoldCount}
             totalDebtUgx={totalDebtUgx}
-            showDebtsLink={canViewDebts}
-            filter={filter}
-            onFilterChange={setFilter}
-            sparklinePoints={sparklinePoints}
-            summary={
-              hasAnyInRange
-                ? {
-                    cashSalesUgx: rangeFinancials.cashCollectedUgx,
-                    debtCollectedUgx,
-                    expensesUgx,
-                    expensesLabel,
-                    stockValueUgx,
-                    showShopSummaries,
-                  }
-                : undefined
-            }
+            showShopDebt={showShopSummaries && canViewDebts}
           />
 
-          {archiveNotice ? (
-            <DateFilterArchiveNotice
-              lang={lang}
-              archivedCount={archivedSalesCount}
-              onEnableArchived={() => setIncludeArchived(true)}
-            />
+          {hasAnyInRange && secondaryChips.length > 0 ? (
+            <SalesHistorySecondaryChips chips={secondaryChips} />
           ) : null}
-          {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-            <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
-          ) : null}
-          {needsArchive && archivedSalesCount === 0 ? (
-            <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
-          ) : null}
-        </div>
+
+          <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+            <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+            <SalesHistorySearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} />
+
+            {archiveNotice ? (
+              <DateFilterArchiveNotice
+                lang={lang}
+                archivedCount={archivedSalesCount}
+                onEnableArchived={() => setIncludeArchived(true)}
+              />
+            ) : null}
+            {needsArchive && includeArchived && archivedSalesCount > 0 ? (
+              <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+            ) : null}
+            {needsArchive && archivedSalesCount === 0 ? (
+              <p className="text-xs font-semibold text-amber-800">{t(lang, "dateFilterArchiveEmpty")}</p>
+            ) : null}
+          </div>
+
+          {hasAnyInRange ? <SalesHistoryAnalyticsPanel lang={lang} metrics={analyticsMetrics} /> : null}
+        </>
       ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
       {sales.length > 0 && !hasAnyInRange ? (
-        <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-bold text-stone-600">
+        <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-bold text-stone-600">
           {t(lang, "receiptsNoSalesInRange")}
         </p>
       ) : null}
 
-      {sales.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
-          <CalendarDays className="mx-auto h-7 w-7 text-stone-300" />
-          <p className="mt-2 text-sm font-bold text-slate-500">{t(lang, "noSalesYet")}</p>
+      {sales.length === 0 && !salesRefreshing ? (
+        <div className="rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
+          <Receipt className="mx-auto h-8 w-8 text-stone-300" aria-hidden />
+          <p className="mt-3 text-base font-black text-stone-800">{t(lang, "salesHistoryEmptyTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "salesHistoryEmptyHint")}</p>
+          {hasSellAccess ? (
+            <Link
+              to="/pos"
+              className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white shadow-sm active:bg-waka-700"
+            >
+              {t(lang, "salesHistoryStartSelling")}
+            </Link>
+          ) : null}
         </div>
       ) : null}
 
-      {listSales.length > 0 ? (
-        <section className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
-          <div className="flex items-center justify-between border-b border-stone-100 px-3 py-2 sm:px-4">
-            <h3 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "salesHistoryRecentSales")}</h3>
-            <p className="text-xs font-bold text-slate-500">
-              {tTemplate(lang, "receiptsDayGroupMeta", {
-                count: String(listSales.length),
-                amount: rangeRevenueUgx.toLocaleString(),
-              })}
-            </p>
-          </div>
+      {salesRefreshing ? (
+        <SalesHistorySkeletonList />
+      ) : listSales.length > 0 ? (
+        <section className="transition-opacity duration-300 ease-out">
           <VirtualizedReceiptList
             items={listSales}
             getKey={(sale) => sale.id}
-            renderItem={(sale, index) => renderSaleRow(sale, index)}
-            estimateRowPx={68}
+            renderItem={(sale) => renderSaleRow(sale)}
           />
         </section>
+      ) : hasAnyInRange && searchQuery.trim() ? (
+        <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-bold text-stone-600">
+          {t(lang, "posSellNoMatch")}
+        </p>
       ) : null}
 
       {partitioned.cancelled.length > 0 ? (
@@ -369,12 +476,11 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
             onClick={() => setShowCancelled((v) => !v)}
             className="px-1 text-sm font-bold text-stone-500 underline-offset-2 hover:underline"
           >
-            {showCancelled ? t(lang, "receiptsHideCancelled") : t(lang, "receiptsShowCancelled")} ({partitioned.cancelled.length})
+            {showCancelled ? t(lang, "receiptsHideCancelled") : t(lang, "receiptsShowCancelled")} (
+            {partitioned.cancelled.length})
           </button>
           {showCancelled ? (
-            <div className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
-              {partitioned.cancelled.map((sale, index) => renderSaleRow(sale, index))}
-            </div>
+            <div className="space-y-2">{partitioned.cancelled.map((sale) => renderSaleRow(sale))}</div>
           ) : null}
         </section>
       ) : null}

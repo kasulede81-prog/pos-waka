@@ -20,16 +20,18 @@ type Props = {
 
 export function StockSectionTabs({ lang, active, onChange }: Props) {
   return (
-    <div className="-mx-1 overflow-x-auto pb-1">
-      <div className="flex min-w-max gap-2 px-1">
+    <div className="-mx-0.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
+      <div className="flex min-w-max gap-1.5 px-0.5">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
             className={clsx(
-              "min-h-[44px] shrink-0 rounded-2xl px-4 py-2 text-sm font-black transition",
-              active === tab.id ? "bg-slate-900 text-white shadow-sm" : "border-2 border-slate-200 bg-white text-slate-700",
+              "min-h-[40px] shrink-0 rounded-full px-3.5 py-1.5 text-xs font-black transition-all duration-150",
+              active === tab.id
+                ? "bg-waka-600 text-white shadow-sm"
+                : "border border-stone-200 bg-white text-stone-700 active:bg-stone-50",
             )}
           >
             {t(lang, tab.labelKey as "stockTabOverview")}

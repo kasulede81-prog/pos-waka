@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import clsx from "clsx";
+import { OFFICE_NAV_TILE_GRID } from "./BackOfficePageLayout";
 
 type Props = {
   title: string;
@@ -12,9 +13,7 @@ type Props = {
 };
 
 export function OfficeNavSection({ title, children, desktopGrid = true, collapsible = true }: Props) {
-  const listClass = desktopGrid
-    ? "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3"
-    : "space-y-2";
+  const listClass = desktopGrid ? OFFICE_NAV_TILE_GRID : "grid grid-cols-1 gap-2";
 
   if (!collapsible) {
     return (

@@ -10,6 +10,7 @@ import { VirtualizedProductGrid } from "../components/pos/VirtualizedProductGrid
 import { PosCheckoutPanel } from "../components/pos/PosCheckoutPanel";
 import { PosOperationalNav } from "../components/pos/PosOperationalNav";
 import { PosSellHeroCard } from "../components/pos/PosSellHeroCard";
+import { PosSellActionChip, PosSellActionChips } from "../components/pos/PosSellActionChips";
 import { summarizeTodaySales } from "../lib/todaySalesSummary";
 import { usePosLayoutMode } from "../hooks/usePosLayoutMode";
 import { usePosViewportWidth } from "../hooks/usePosViewportWidth";
@@ -37,6 +38,9 @@ import { DiscountLineModal } from "../components/pos/DiscountLineModal";
 import { ShiftCloseModal } from "../components/pos/ShiftCloseModal";
 import { ShiftSellGateway } from "../components/pos/ShiftSellGateway";
 import { ActiveShiftBanner } from "../components/pos/ActiveShiftBanner";
+import { PosShiftSummaryCollapsible } from "../components/pos/PosShiftSummaryCollapsible";
+import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
+import { PosSellProductCard } from "../components/pos/PosSellProductCard";
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
 import { registerPosExitHandler } from "../lib/posExitGuard";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
@@ -113,6 +117,7 @@ import {
   buildPosShelfDisplayCards,
   buildQuickSellShelfCard,
   QUICK_SELL_SHELF_KEY,
+  sellCatalogGridClass,
   shelfMasonryGridClass,
 } from "../lib/posShelfLayout";
 import { PosShelfTile } from "../components/pos/PosShelfTile";
@@ -1361,15 +1366,149 @@ export function PosPage({ lang }: { lang: Language }) {
     onFinishSale: finishSale,
   };
 
+  const mobileSellFocus = posLayoutMode === "mobile";
+
+  const showMobileShelfGrid =
+    mobileSellFocus && products.length > 0 && sellSearchContext.q.length === 0;
+  const showMobileProductsBelow =
+    mobileSellFocus && sellCategoryKey !== CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
+  const showMobileSearchResults = mobileSellFocus && sellSearchContext.q.length > 0;
+  const showDesktopProductView = !mobileSellFocus && hasSellViewFilter;
+
+  const mobileShelfCards = useMemo(() => {
+    if (!mobileSellFocus) return shelfCards;
+    return [...shelfCards].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
+  }, [shelfCards, mobileSellFocus]);
+
+  const quickProductChips = useMemo(() => {
+    if (!mobileSellFocus) return [];
+    const seen = new Set<string>();
+    const out: Product[] = [];
+    for (const p of quickSellProducts) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        out.push(p);
+      }
+    }
+    for (const { product } of frequentToday) {
+      if (!seen.has(product.id) && out.length < 12) {
+        seen.add(product.id);
+        out.push(product);
+      }
+    }
+    return out.slice(0, 12);
+  }, [mobileSellFocus, quickSellProducts, frequentToday]);
+
+  const handleMobileShelfTap = useCallback(
+    (shelfKey: string) => {
+      if (sellCategoryKey === shelfKey) {
+        setSellCategoryFilter(CATEGORY_FILTER_ALL);
+      } else {
+        setSellCategoryFilter(shelfKey);
+      }
+    },
+    [sellCategoryKey, setSellCategoryFilter],
+  );
+
+  const sellActionFooter =
+    draftLines.length > 0 ||
+    canSavePending ||
+    canRecordCashExpenses(actor.role, shopPreferences) ||
+    activeShift ? (
+      mobileSellFocus ? (
+        <PosSellActionChips>
+          {draftLines.length > 0 ? (
+            <PosSellActionChip onClick={() => clearDraft()}>{modeTerm("clearSale")}</PosSellActionChip>
+          ) : null}
+          {canSavePending ? (
+            <Link to="/pending-sales" className="inline-flex min-h-[36px] shrink-0 items-center gap-1 rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[11px] font-bold text-stone-800 active:bg-stone-100">
+              {t(lang, "pendingSalesLink")}
+              {pendingCount > 0 ? (
+                <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
+                  {pendingCount}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
+          {canRecordCashExpenses(actor.role, shopPreferences) ? (
+            <PosSellActionChip onClick={() => setExpenseModalOpen(true)}>
+              <Banknote className="h-3 w-3 shrink-0" aria-hidden />
+              {t(lang, "posRecordExpenseBtn")}
+            </PosSellActionChip>
+          ) : null}
+          {activeShift ? (
+            <PosSellActionChip onClick={() => setShiftCloseOpen(true)}>{t(lang, "shiftCloseBtn")}</PosSellActionChip>
+          ) : null}
+        </PosSellActionChips>
+      ) : (
+        <div className="flex max-w-full gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
+          {draftLines.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => clearDraft()}
+              className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+            >
+              {modeTerm("clearSale")}
+            </button>
+          ) : null}
+          {canSavePending ? (
+            <Link
+              to="/pending-sales"
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+            >
+              {t(lang, "pendingSalesLink")}
+              {pendingCount > 0 ? (
+                <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
+                  {pendingCount}
+                </span>
+              ) : null}
+            </Link>
+          ) : null}
+          {canRecordCashExpenses(actor.role, shopPreferences) ? (
+            <button
+              type="button"
+              onClick={() => setExpenseModalOpen(true)}
+              className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+            >
+              <Banknote className="h-3 w-3 shrink-0" aria-hidden />
+              {t(lang, "posRecordExpenseBtn")}
+            </button>
+          ) : null}
+          {activeShift ? (
+            <button
+              type="button"
+              onClick={() => setShiftCloseOpen(true)}
+              className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
+            >
+              {t(lang, "shiftCloseBtn")}
+            </button>
+          ) : null}
+        </div>
+      )
+    ) : undefined;
+
   if (!hasPermission(actor.role, "pos.sell")) {
     return <Navigate to="/" replace />;
   }
 
   return (
     <ShiftSellGateway lang={lang}>
-    <div className="space-y-2">
-      <PosOfflineBanner lang={lang} />
-      {activeShift ? (
+    <div className={clsx("space-y-2", mobileSellFocus && "space-y-1.5")}>
+      <PosOfflineBanner lang={lang} compact={mobileSellFocus} />
+      {activeShift && mobileSellFocus ? (
+        <PosShiftSummaryCollapsible
+          lang={lang}
+          shift={activeShift}
+          cashierName={actor.displayName ?? actor.userId}
+          todaySaleCount={todaySalesSummary.count}
+          todaySalesUgx={todaySalesSummary.total}
+          pendingCount={pendingCount}
+          onCloseShift={() => setShiftCloseOpen(true)}
+          onRecordExpense={() => setExpenseModalOpen(true)}
+          canRecordExpense={canRecordCashExpenses(actor.role, shopPreferences)}
+          canSavePending={canSavePending}
+        />
+      ) : activeShift ? (
         <ActiveShiftBanner
           lang={lang}
           shift={activeShift}
@@ -1378,68 +1517,21 @@ export function PosPage({ lang }: { lang: Language }) {
         />
       ) : null}
       <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} />
-      <PosSellHeroCard
-        lang={lang}
-        sellLabel={t(lang, sellNavLabelKey)}
-        dense={posLayoutMode === "compact"}
-        cartStats={draftCartStats}
-        cartHasItems={draftLines.length > 0}
-        payableUgx={draftPayable}
-        cartDiscountUgx={draftCartDiscountUgx}
-        todaySaleCount={todaySalesSummary.count}
-        todaySalesUgx={todaySalesSummary.total}
-        pendingCount={pendingCount}
-        actionFooter={
-          draftLines.length > 0 ||
-          canSavePending ||
-          canRecordCashExpenses(actor.role, shopPreferences) ||
-          activeShift ? (
-            <div className="flex max-w-full gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-              {draftLines.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => clearDraft()}
-                  className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
-                >
-                  {modeTerm("clearSale")}
-                </button>
-              ) : null}
-              {canSavePending ? (
-                <Link
-                  to="/pending-sales"
-                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
-                >
-                  {t(lang, "pendingSalesLink")}
-                  {pendingCount > 0 ? (
-                    <span className="rounded-full bg-amber-400 px-1.5 py-px text-[10px] font-black text-amber-950">
-                      {pendingCount}
-                    </span>
-                  ) : null}
-                </Link>
-              ) : null}
-              {canRecordCashExpenses(actor.role, shopPreferences) ? (
-                <button
-                  type="button"
-                  onClick={() => setExpenseModalOpen(true)}
-                  className="inline-flex min-h-[44px] shrink-0 items-center gap-1 rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
-                >
-                  <Banknote className="h-3 w-3 shrink-0" aria-hidden />
-                  {t(lang, "posRecordExpenseBtn")}
-                </button>
-              ) : null}
-              {activeShift ? (
-                <button
-                  type="button"
-                  onClick={() => setShiftCloseOpen(true)}
-                  className="inline-flex min-h-[44px] shrink-0 items-center rounded-full border border-white/30 bg-white/15 px-2.5 py-1 text-[11px] font-bold text-white active:bg-white/25"
-                >
-                  {t(lang, "shiftCloseBtn")}
-                </button>
-              ) : null}
-            </div>
-          ) : undefined
-        }
-      />
+      {!mobileSellFocus ? (
+        <PosSellHeroCard
+          lang={lang}
+          sellLabel={t(lang, sellNavLabelKey)}
+          dense={posLayoutMode === "compact"}
+          cartStats={draftCartStats}
+          cartHasItems={draftLines.length > 0}
+          payableUgx={draftPayable}
+          cartDiscountUgx={draftCartDiscountUgx}
+          todaySaleCount={todaySalesSummary.count}
+          todaySalesUgx={todaySalesSummary.total}
+          pendingCount={pendingCount}
+          actionFooter={sellActionFooter}
+        />
+      ) : null}
 
       {lockedProductCount > 0 ? (
         <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950">
@@ -1458,7 +1550,13 @@ export function PosPage({ lang }: { lang: Language }) {
         <div ref={catalogRef} className="min-w-0 space-y-2">
 
       {products.length > 0 ? (
-        <div className="space-y-1.5 rounded-[1.35rem] border border-stone-200 bg-white p-2 shadow-waka-sm">
+        <div
+          className={clsx(
+            mobileSellFocus
+              ? "sticky top-0 z-20 -mx-0.5 space-y-0 bg-stone-50/95 pb-1.5 pt-0.5 backdrop-blur-md"
+              : "space-y-1.5 rounded-[1.35rem] border border-stone-200 bg-white p-2 shadow-waka-sm",
+          )}
+        >
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <input
@@ -1471,7 +1569,10 @@ export function PosPage({ lang }: { lang: Language }) {
               }}
               placeholder={pharmacyMode || hospitalityMode || wholesaleMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
               aria-label={pharmacyMode || hospitalityMode || wholesaleMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
-              className="h-11 w-full rounded-2xl border border-stone-200 bg-stone-50/90 pl-9 pr-10 text-base font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 focus:border-waka-400 focus:bg-white focus:ring-1"
+              className={clsx(
+                "w-full rounded-2xl border border-stone-200 bg-white pl-9 pr-10 font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
+                mobileSellFocus ? "h-12 text-base shadow-sm" : "h-11 bg-stone-50/90 text-base focus:bg-white focus:ring-1",
+              )}
             />
             <button
               type="button"
@@ -1485,7 +1586,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
             </button>
           </div>
-          {recentSearches.length > 0 ? (
+          {!mobileSellFocus && recentSearches.length > 0 ? (
             <ul
               className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
               aria-label={t(lang, "posRecentSearches")}
@@ -1503,7 +1604,7 @@ export function PosPage({ lang }: { lang: Language }) {
               ))}
             </ul>
           ) : null}
-          {frequentTodayVisible.length > 0 ? (
+          {!mobileSellFocus && frequentTodayVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
@@ -1520,7 +1621,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
-          {favoriteProductsVisible.length > 0 ? (
+          {!mobileSellFocus && favoriteProductsVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
@@ -1537,7 +1638,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
-          {recentProductsVisible.length > 0 ? (
+          {!mobileSellFocus && recentProductsVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
@@ -1557,6 +1658,10 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
+      {mobileSellFocus && quickProductChips.length > 0 ? (
+        <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} />
+      ) : null}
+
       {products.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
           <p className="text-2xl font-black text-slate-900">{t(lang, "posEmptyTitle")}</p>
@@ -1570,6 +1675,115 @@ export function PosPage({ lang }: { lang: Language }) {
             </Link>
           ) : (
             <p className="mt-4 text-base font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>
+          )}
+        </section>
+      ) : showMobileShelfGrid ? (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
+              {t(lang, "posSellCategoryHeading")}
+            </p>
+            <p className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-black text-stone-600">
+              {mobileShelfCards.length}
+            </p>
+          </div>
+          <div className={sellCatalogGridClass()}>
+            {mobileShelfCards.map((shelf) => (
+              <PosShelfTile
+                key={shelf.key}
+                shelf={shelf}
+                lang={lang}
+                mode="sell"
+                sellCatalogGrid
+                selected={sellCategoryKey === shelf.key}
+                countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
+                onClick={() => handleMobileShelfTap(shelf.key)}
+              />
+            ))}
+          </div>
+          {showMobileProductsBelow ? (
+            <div className="space-y-2 border-t border-stone-100 pt-3">
+              <p className="px-0.5 text-xs font-black text-stone-800">
+                {sellCategoryKey !== CATEGORY_FILTER_ALL && shelfIconFor(selectedShelfLabel) ? (
+                  <span className="mr-1" aria-hidden>
+                    {shelfIconFor(selectedShelfLabel)}
+                  </span>
+                ) : null}
+                {selectedShelfLabel}
+              </p>
+              {filteredProducts.length === 0 ? (
+                <p className="rounded-xl bg-amber-50 px-3 py-4 text-center text-sm font-bold text-amber-950">
+                  {t(lang, "posSellNoMatch")}
+                </p>
+              ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
+                <VirtualizedProductGrid
+                  products={filteredProducts}
+                  columnCount={productGridCols}
+                  onPick={openProduct}
+                  stockLabel={t(lang, "stockLabel")}
+                  noShelfLabel={t(lang, "posNoShelf")}
+                  addLabel={t(lang, "addToSale")}
+                  isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
+                  lockedBadge={t(lang, "productLockedBadge")}
+                  variant="sellMobile"
+                />
+              ) : (
+                <div
+                  className="grid gap-2"
+                  style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+                >
+                  {filteredProducts.map((p) => (
+                    <PosSellProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={t(lang, "stockLabel")}
+                      addLabel={t(lang, "addToSale")}
+                      locked={isProductPlanLocked(p.id, lockedIds)}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      onPick={openProduct}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </section>
+      ) : showMobileSearchResults ? (
+        <section className="space-y-2">
+          <p className="px-0.5 text-xs font-black text-stone-700">{t(lang, "posSearchResults")}</p>
+          {filteredProducts.length === 0 ? (
+            <p className="rounded-xl bg-amber-50 px-3 py-4 text-center text-sm font-bold text-amber-950">
+              {t(lang, "posSellNoMatch")}
+            </p>
+          ) : filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
+            <VirtualizedProductGrid
+              products={filteredProducts}
+              columnCount={productGridCols}
+              onPick={openProduct}
+              stockLabel={t(lang, "stockLabel")}
+              noShelfLabel={t(lang, "posNoShelf")}
+              addLabel={t(lang, "addToSale")}
+              isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
+              lockedBadge={t(lang, "productLockedBadge")}
+              variant="sellMobile"
+            />
+          ) : (
+            <div
+              className="grid gap-2"
+              style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+            >
+              {filteredProducts.map((p) => (
+                <PosSellProductCard
+                  key={p.id}
+                  product={p}
+                  stockLabel={t(lang, "stockLabel")}
+                  addLabel={t(lang, "addToSale")}
+                  locked={isProductPlanLocked(p.id, lockedIds)}
+                  lockedBadge={t(lang, "productLockedBadge")}
+                  onPick={openProduct}
+                />
+              ))}
+            </div>
           )}
         </section>
       ) : showShelfBoxes ? (
@@ -1606,20 +1820,21 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           ) : null}
 
-          <div className={shelfMasonryGridClass()}>
+          <div className={shelfMasonryGridClass(mobileSellFocus)}>
             {shelfCards.map((shelf) => (
               <PosShelfTile
                 key={shelf.key}
                 shelf={shelf}
                 lang={lang}
                 mode="sell"
+                sellFocus={mobileSellFocus}
                 countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
                 onClick={() => setSellCategoryFilter(shelf.key)}
               />
             ))}
           </div>
         </section>
-      ) : filteredProducts.length === 0 ? (
+      ) : showDesktopProductView && filteredProducts.length === 0 ? (
         <section className="space-y-2">
           {hasSellViewFilter ? (
             <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
@@ -1638,7 +1853,7 @@ export function PosPage({ lang }: { lang: Language }) {
           ) : null}
           <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
         </section>
-      ) : (
+      ) : showDesktopProductView ? (
         <section className="space-y-2">
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
             <button
@@ -1734,7 +1949,7 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           )}
         </section>
-      )}
+      ) : null}
 
         <PosPageScrollSpacer minimizedCheckout={showMinimizedCheckoutFab} />
         </div>

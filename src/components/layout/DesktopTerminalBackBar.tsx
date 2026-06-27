@@ -9,7 +9,11 @@ import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 type Props = { lang: Language };
 
 /** Fixed app header: return to terminal launcher (desktop / sell). */
-export function HeaderExitButton({ lang, className = "" }: Props & { className?: string }) {
+export function HeaderExitButton({
+  lang,
+  className = "",
+  variant = "default",
+}: Props & { className?: string; variant?: "default" | "sellOrange" }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -27,7 +31,11 @@ export function HeaderExitButton({ lang, className = "" }: Props & { className?:
     <a
       href={POS_HOME_ROUTE}
       onClick={handleClick}
-      className={`inline-flex min-h-[38px] shrink-0 touch-manipulation items-center gap-1.5 rounded-xl border border-red-700 bg-red-600 px-3 py-1.5 text-xs font-black text-white shadow-[0_4px_14px_rgba(220,38,38,0.35)] transition-colors hover:border-red-800 hover:bg-red-700 active:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 lg:min-h-[44px] lg:gap-2 lg:px-4 lg:py-2 lg:text-sm ${className}`}
+      className={`inline-flex min-h-[38px] shrink-0 touch-manipulation items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 lg:min-h-[44px] lg:gap-2 lg:px-4 lg:py-2 lg:text-sm ${
+        variant === "sellOrange"
+          ? "border-waka-600 bg-waka-600 shadow-[0_4px_14px_rgba(249,115,22,0.35)] hover:border-waka-700 hover:bg-waka-700 active:bg-waka-800 focus-visible:ring-waka-500"
+          : "border-red-700 bg-red-600 shadow-[0_4px_14px_rgba(220,38,38,0.35)] hover:border-red-800 hover:bg-red-700 active:bg-red-800 focus-visible:ring-red-500"
+      } ${className}`}
     >
       <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2.5} aria-hidden />
       {t(lang, "posNavExit")}

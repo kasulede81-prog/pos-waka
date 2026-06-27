@@ -5,6 +5,7 @@ import {
   scaleToShelfSize,
   shelfColorClasses,
   shelfGridSpanStyle,
+  shelfIconCircleClass,
   shelfMinHeightClass,
   shelfTileSurfaceStyle,
   shelfTypographyFromScale,
@@ -18,6 +19,10 @@ type Props = {
   lang: Language;
   /** Sell screen: tap to open shelf. Arrange mode: drag to reorder. */
   mode: "sell" | "arrange";
+  /** Mobile sell: taller premium shelf cards (2-col hero layout). */
+  sellFocus?: boolean;
+  /** Mobile sell catalog: uniform white 4-col grid tiles. */
+  sellCatalogGrid?: boolean;
   dragging?: boolean;
   dragOver?: boolean;
   selected?: boolean;
@@ -87,6 +92,8 @@ export function PosShelfTile({
   countLabel,
   lang,
   mode,
+  sellFocus = false,
+  sellCatalogGrid = false,
   dragging = false,
   dragOver = false,
   selected = false,
@@ -95,15 +102,37 @@ export function PosShelfTile({
 }: Props) {
   const isArrange = mode === "arrange";
   const badge = badgeLabel(lang, shelf);
-  const typo = shelfTypographyFromScale(shelf.scale);
-  const customStyle = shelfTileSurfaceStyle(shelf);
-  const isBold = Boolean(customStyle) || shelf.color !== "default";
-  const colorClass = customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured);
-  const heightClass = shelfMinHeightClass(shelf.size);
-  const layoutSize = scaleToShelfSize(shelf.scale);
-  const tilePadding: CSSProperties = { padding: `${typo.paddingRem}rem` };
+  const typo = shelfTypographyFromScale(sellFocus && !isArrange && !sellCatalogGrid ? Math.max(shelf.scale, 58) : shelf.scale);
+  const customStyle = sellCatalogGrid ? undefined : shelfTileSurfaceStyle(shelf);
+  const isBold = !sellCatalogGrid && (Boolean(customStyle) || shelf.color !== "default");
+  const colorClass = sellCatalogGrid ? "" : customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured);
+  const heightClass = sellCatalogGrid ? "min-h-[88px]" : shelfMinHeightClass(shelf.size);
+  const layoutSize = sellFocus && !isArrange && !sellCatalogGrid ? "large" : scaleToShelfSize(shelf.scale);
+  const tilePadding: CSSProperties = sellCatalogGrid ? { padding: "0.5rem" } : { padding: `${typo.paddingRem}rem` };
 
-  const inner = (
+  const catalogBody = sellCatalogGrid ? (
+    <>
+      <span
+        className={clsx(
+          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base leading-none",
+          selected ? "bg-white/25 text-white" : shelfIconCircleClass(shelf.color),
+        )}
+        aria-hidden
+      >
+        {shelf.icon ?? "📦"}
+      </span>
+      <span className="mt-1.5 line-clamp-2 w-full text-center text-[10px] font-black leading-tight">
+        {shelf.label}
+      </span>
+      <span className={clsx("mt-0.5 line-clamp-1 w-full text-center text-[9px] font-semibold", selected ? "text-white/85" : "text-stone-500")}>
+        {countLabel}
+      </span>
+    </>
+  ) : null;
+
+  const inner = sellCatalogGrid ? (
+    catalogBody
+  ) : (
     <>
       {badge ? (
         <span
@@ -132,20 +161,33 @@ export function PosShelfTile({
   );
 
   const sharedClass = clsx(
-    "relative w-full touch-manipulation overflow-hidden rounded-2xl border text-left shadow-sm transition-all",
-    heightClass,
-    colorClass,
-    selected && "ring-2 ring-waka-500 ring-offset-1",
-    dragging && "z-10 scale-[0.98] opacity-60 shadow-lg",
-    dragOver && "ring-2 ring-waka-400",
-    !isArrange && "active:scale-[0.98]",
+    "relative w-full touch-manipulation overflow-hidden text-left transition-all duration-150 motion-reduce:transition-none",
+    sellCatalogGrid
+      ? clsx(
+          "flex flex-col items-center justify-center rounded-xl border shadow-sm",
+          selected
+            ? "border-waka-600 bg-waka-600 text-white shadow-md ring-2 ring-waka-400/40"
+            : "border-stone-200/90 bg-white text-stone-950 active:scale-[0.97] active:border-waka-300 active:shadow-md motion-reduce:active:scale-100",
+        )
+      : clsx(
+          "rounded-2xl border shadow-sm",
+          heightClass,
+          colorClass,
+          sellFocus && !isArrange && "shadow-md active:shadow-sm",
+          selected && "ring-2 ring-waka-500 ring-offset-1",
+          dragging && "z-10 scale-[0.98] opacity-60 shadow-lg",
+          dragOver && "ring-2 ring-waka-400",
+          !isArrange && "active:scale-[0.98]",
+        ),
   );
 
-  const sharedStyle: CSSProperties = {
-    ...shelfGridSpanStyle(shelf.scale),
-    ...tilePadding,
-    ...customStyle,
-  };
+  const sharedStyle: CSSProperties = sellCatalogGrid
+    ? tilePadding
+    : {
+        ...shelfGridSpanStyle(shelf.scale),
+        ...tilePadding,
+        ...customStyle,
+      };
 
   if (isArrange) {
     return (

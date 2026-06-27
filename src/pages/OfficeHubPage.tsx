@@ -5,6 +5,7 @@ import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { OfficePremiumSection } from "../components/office/OfficePremiumSection";
 import { OfficeHubSectionTile } from "../components/office/OfficeHubSectionTile";
+import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { runWhenIdle } from "../lib/uiYield";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../offline/cloudSync";
@@ -38,13 +39,13 @@ function OfficeSyncStatusChip({ lang }: { lang: Language }) {
   return (
     <Link
       to="/office/backup"
-      className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black ${
+      className={`inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-black ${
         ok
           ? "border border-emerald-200/80 bg-emerald-50 text-emerald-900"
           : "border border-amber-200 bg-amber-50 text-amber-950"
       }`}
     >
-      <Cloud className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+      <Cloud className="h-3 w-3 shrink-0 opacity-80" aria-hidden />
       <span className="truncate">{label}</span>
     </Link>
   );
@@ -90,30 +91,31 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   }, [canOwnerDashboard]);
 
   return (
-    <div className="space-y-5 pb-4">
-      <header>
-        <h1 className="text-2xl font-black tracking-tight text-stone-950 sm:text-3xl">{t(lang, "officeHubTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
-        <div className="mt-2">
+    <BackOfficePageLayout
+      header={
+        <div className="space-y-1.5">
+          <div>
+            <h1 className="text-xl font-black tracking-tight text-stone-950 sm:text-2xl">{t(lang, "officeHubTitle")}</h1>
+            <p className="text-xs font-medium text-stone-500">{t(lang, "officeHubSub")}</p>
+          </div>
           <OfficeSyncStatusChip lang={lang} />
         </div>
-        {canOwnerDashboard && showRiskBadge ? (
-          <div className="mt-3">
-            <Suspense fallback={null}>
-              <OfficeHubRiskBadge lang={lang} />
-            </Suspense>
-          </div>
-        ) : null}
-      </header>
+      }
+    >
+      {canOwnerDashboard && showRiskBadge ? (
+        <Suspense fallback={null}>
+          <OfficeHubRiskBadge lang={lang} />
+        </Suspense>
+      ) : null}
 
       {needsDayOpen ? <DayDrawerOpenAlert lang={lang} /> : null}
 
       <OfficePremiumSection lang={lang} />
 
       {empty ? (
-        <p className="rounded-2xl bg-amber-50 px-4 py-4 text-sm font-bold text-amber-950">{t(lang, "officeHubEmpty")}</p>
+        <p className="rounded-xl bg-amber-50 px-3 py-3 text-sm font-bold text-amber-950">{t(lang, "officeHubEmpty")}</p>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:max-w-2xl sm:gap-4 lg:max-w-4xl">
+        <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:max-w-4xl">
           {visibleSections.map((section, index) => (
             <OfficeHubSectionTile
               key={section.id}
@@ -127,20 +129,20 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
       )}
 
       {(showInternalAdmin || showAgentPortal || isInternalAdminPreviewEnabled()) && (
-        <div className="border-t border-stone-100 pt-4 space-y-2">
+        <div className="space-y-2 border-t border-stone-100 pt-3">
           {showAgentPortal ? (
             <Link
               to="/agent"
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-2 text-sm font-black text-waka-900"
+              className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-xs font-black text-waka-900"
             >
-              <Share2 className="h-4 w-4 shrink-0" aria-hidden />
+              <Share2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
               {t(lang, "officeCardAgentPortal")}
             </Link>
           ) : null}
           {showInternalAdmin ? (
             <Link
               to="/internal/waka"
-              className="inline-flex min-h-[40px] items-center text-xs font-bold text-stone-500 underline decoration-stone-300"
+              className="inline-flex min-h-[36px] items-center text-xs font-bold text-stone-500 underline decoration-stone-300"
             >
               {t(lang, "internalAdminFooterLink")}
             </Link>
@@ -148,13 +150,13 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
           {isInternalAdminPreviewEnabled() ? (
             <Link
               to={internalAdminPreviewHref("/internal/waka")}
-              className="ml-4 inline-flex min-h-[40px] items-center text-xs font-bold text-orange-700 underline"
+              className="ml-4 inline-flex min-h-[36px] items-center text-xs font-bold text-orange-700 underline"
             >
               {t(lang, "internalAdminPreviewOfficeLink")}
             </Link>
           ) : null}
         </div>
       )}
-    </div>
+    </BackOfficePageLayout>
   );
 }

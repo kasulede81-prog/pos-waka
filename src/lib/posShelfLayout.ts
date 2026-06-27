@@ -291,8 +291,34 @@ export function shelfGridSpanClass(size: PosShelfSize): string {
   }
 }
 
+/** Uniform 4-column catalog grid for mobile sell screen. */
+export function sellCatalogGridClass(): string {
+  return "grid grid-cols-4 gap-2 sm:gap-2.5";
+}
+
+/** Icon circle background from shelf color preset. */
+export function shelfIconCircleClass(color: PosShelfColor): string {
+  switch (color) {
+    case "red":
+      return "bg-rose-100 text-rose-700";
+    case "orange":
+      return "bg-orange-100 text-orange-700";
+    case "blue":
+      return "bg-sky-100 text-sky-700";
+    case "green":
+      return "bg-emerald-100 text-emerald-700";
+    case "purple":
+      return "bg-violet-100 text-violet-700";
+    default:
+      return "bg-stone-100 text-stone-700";
+  }
+}
+
 /** Shared masonry grid: fixed row tracks so row-span-2 large tiles get real height. */
-export function shelfMasonryGridClass(): string {
+export function shelfMasonryGridClass(sellFocusedMobile = false): string {
+  if (sellFocusedMobile) {
+    return "grid grid-flow-dense auto-rows-[7.5rem] grid-cols-2 items-stretch gap-3 sm:auto-rows-[5.75rem] sm:grid-cols-3 sm:gap-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
+  }
   return "grid grid-flow-dense auto-rows-[5.5rem] grid-cols-2 items-stretch gap-2 sm:auto-rows-[5.75rem] sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6";
 }
 

@@ -9,6 +9,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { PageBackBar } from "../components/layout/PageBackBar";
+import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { ShopSupportNumberCard } from "../components/settings/ShopSupportNumberCard";
@@ -55,20 +56,25 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const showHospitalitySettings = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
 
   return (
-    <div className="space-y-6 pb-8">
-      <PageBackBar lang={lang} />
-      <div>
-        <h1 className="text-2xl font-black text-stone-950">{t(lang, "settingsHubTitle")}</h1>
-        <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
-        <p className="mt-2 text-sm font-medium text-stone-600">
-          {t(lang, "settingsYourPlanLabel")}: <span className="font-black text-stone-900">{planTier}</span>
-          <span className="mx-2 text-stone-300" aria-hidden>
-            ·
-          </span>
-          {t(lang, "settingsAppVersionLine")}: <span className="font-mono font-black text-stone-900">{appVersion}</span>
-        </p>
-      </div>
-
+    <BackOfficePageLayout
+      header={
+        <>
+          <PageBackBar lang={lang} />
+          <div className="mt-2">
+            <h1 className="text-xl font-black text-stone-950 sm:text-2xl">{t(lang, "settingsHubTitle")}</h1>
+            <p className="text-xs font-medium text-stone-500">{t(lang, "settingsHubSub")}</p>
+            <p className="mt-1 text-xs font-medium text-stone-600">
+              {t(lang, "settingsYourPlanLabel")}: <span className="font-black text-stone-900">{planTier}</span>
+              <span className="mx-2 text-stone-300" aria-hidden>
+                ·
+              </span>
+              {t(lang, "settingsAppVersionLine")}: <span className="font-mono font-black text-stone-900">{appVersion}</span>
+            </p>
+          </div>
+        </>
+      }
+      className="pb-8"
+    >
       {canShop ? <ShopSupportNumberCard lang={lang} /> : null}
 
       <OfficeNavSection title={t(lang, "settingsHubGroupShop")}>
@@ -261,6 +267,6 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
 
       {pilotActive ? <SyncHealthCard lang={lang} variant="full" /> : null}
       {pilotActive ? <PilotSupportCard lang={lang} userId={userId} pilotModeEnabled /> : null}
-    </div>
+    </BackOfficePageLayout>
   );
 }

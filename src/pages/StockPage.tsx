@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import clsx from "clsx";
 import type { Language, Product } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -28,9 +29,14 @@ import { StockSectionTabs, type StockHubTab } from "../components/stock/StockSec
 import { StockOverviewPanel } from "../components/stock/StockOverviewPanel";
 import { StockMovementsPanel } from "../components/stock/StockMovementsPanel";
 import { SimpleProductRestockModal } from "../components/stock/SimpleProductRestockModal";
+import { StockPinnedSearch } from "../components/stock/StockPinnedSearch";
+import { StockShelfGrid } from "../components/stock/StockShelfGrid";
+import { StockFab } from "../components/stock/StockFab";
+import { InventoryStatGrid } from "../components/stock/InventoryStatGrid";
+import { StockProductDetailSheet } from "../components/stock/StockProductDetailSheet";
+import { StockProductActionSheet } from "../components/stock/StockProductActionSheet";
 import { productToWizardPrefill, type BuiltWizardProduct } from "../lib/simpleProductWizard";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
-import { shelfIconFor } from "../lib/productCategories";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
   costPerUnitFromPackAndStock,
@@ -56,7 +62,7 @@ import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } fr
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
-export function StockPage({ lang }: { lang: Language }) {
+export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceEmbed?: boolean }) {
   usePageLoadMark("stock");
   const actor = useSessionActor();
   const { snapshot } = useSubscription();
@@ -126,6 +132,8 @@ export function StockPage({ lang }: { lang: Language }) {
   const [selectedShelf, setSelectedShelf] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [actionSheetProduct, setActionSheetProduct] = useState<Product | null>(null);
 
   const navigate = useNavigate();
   const [listQuery, setListQuery] = useState("");
@@ -152,11 +160,20 @@ export function StockPage({ lang }: { lang: Language }) {
   }, []);
 
   useEffect(() => {
+    if (workspaceEmbed) {
+      const view = searchParams.get("stockView");
+      if (view === "shelves" || view === "low" || view === "movements" || view === "overview") {
+        setStockTab(view);
+      } else {
+        setStockTab("products");
+      }
+      return;
+    }
     const tab = searchParams.get("tab");
     if (tab === "shelves" || tab === "products" || tab === "low" || tab === "movements" || tab === "overview") {
       setStockTab(tab);
     }
-  }, [searchParams]);
+  }, [searchParams, workspaceEmbed]);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -207,7 +224,6 @@ export function StockPage({ lang }: { lang: Language }) {
   }, [products, listQuery, listFilter, listSort, stockCategoryFilter]);
 
   const lowStockCount = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)).length, [unlockedProducts]);
-  const outOfStockCount = useMemo(() => unlockedProducts.filter((p) => p.stockOnHand <= 0).length, [unlockedProducts]);
   const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
   const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
 
@@ -232,10 +248,13 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const productsInSelectedShelf = useMemo(() => {
     if (!selectedShelf) return [];
-    return unlockedProducts
-      .filter((p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === selectedShelf)
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [selectedShelf, unlockedProducts]);
+    let list = unlockedProducts.filter(
+      (p) => (normalizedCategoryKey(p) || UNCATEGORIZED_SENTINEL) === selectedShelf,
+    );
+    const q = listQuery.trim();
+    if (q) list = list.filter((p) => productMatchesSellSearch(p, q));
+    return list.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [selectedShelf, unlockedProducts, listQuery]);
 
   const recentMovements = useMemo(
     () => [...stockMovements].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()),
@@ -556,10 +575,10 @@ export function StockPage({ lang }: { lang: Language }) {
 
   const onlyProductInStock = unlockedProducts.length === 1;
 
-  const renderProductCards = (items: Product[]) => {
+  const renderProductCards = (items: Product[], variant: "default" | "lowStock" = "default") => {
     if (items.length === 0) {
       return (
-        <p className="rounded-2xl bg-slate-50 px-4 py-10 text-center text-base font-semibold text-slate-500">
+        <p className="rounded-xl bg-stone-50 px-3 py-8 text-center text-sm font-semibold text-stone-500">
           {t(lang, "stockNoListMatch")}
         </p>
       );
@@ -576,10 +595,31 @@ export function StockPage({ lang }: { lang: Language }) {
         canSell={canSell}
         canRestock={canRestock}
         isOnlyProduct={onlyProductInStock}
+        variant={variant}
         onAction={handleRowAction}
+        onOpenDetail={setDetailProduct}
       />
     );
   };
+
+  const shelfGridItems = useMemo(
+    () =>
+      shelfFolders.map((key) => ({
+        key,
+        label: key === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : key,
+        count: shelfProductCounts.get(key) ?? 0,
+      })),
+    [shelfFolders, shelfProductCounts, lang],
+  );
+
+  const handlePinnedSearch = (q: string) => {
+    setListQuery(q);
+    if (q.trim() && (stockTab === "overview" || stockTab === "shelves")) {
+      setStockTab("products");
+    }
+  };
+
+  const showPinnedSearch = unlockedProducts.length > 0 && stockTab !== "movements";
 
   const handleStockTabChange = (tab: StockHubTab) => {
     setStockTab(tab);
@@ -587,18 +627,21 @@ export function StockPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="page-content-pad space-y-5">
-      <PageHeader
-        lang={lang}
-        title={modeTerm("stockTitle")}
-        subtitle={modeTerm("stockPageSub")}
-        backLabel={t(lang, "officeBackToHub")}
-      />
+    <div className={clsx(workspaceEmbed ? "space-y-3" : "page-content-pad space-y-3 pb-24")}>
+      {!workspaceEmbed ? (
+        <PageHeader
+          lang={lang}
+          title={modeTerm("stockTitle")}
+          subtitle={modeTerm("stockPageSub")}
+          backLabel={t(lang, "officeBackToHub")}
+          compact
+        />
+      ) : null}
 
-      {hasPermission(actor.role, "stock.count") ? (
+      {!workspaceEmbed && hasPermission(actor.role, "stock.count") ? (
         <Link
           to="/stock/count"
-          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-black text-indigo-950"
+          className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-950"
         >
           {t(lang, "stockCountNav")}
         </Link>
@@ -670,31 +713,46 @@ export function StockPage({ lang }: { lang: Language }) {
         </section>
       ) : (
         <>
-          <StockSectionTabs lang={lang} active={stockTab} onChange={handleStockTabChange} />
+          {stockTab !== "movements" ? (
+            <InventoryStatGrid
+              lang={lang}
+              totalProducts={unlockedProducts.length}
+              lowStockCount={lowStockCount}
+              shelfCount={shelfFolders.length}
+              inventoryValueUgx={inventoryValueUgx}
+              onLowStockTap={() => setStockTab("low")}
+            />
+          ) : null}
+
+          <div
+            className={clsx(
+              "sticky top-0 z-20 -mx-3 space-y-2 border-b border-stone-200/80 bg-stone-50/95 px-3 py-2 backdrop-blur-md",
+              "supports-[backdrop-filter]:bg-stone-50/88 md:-mx-6 md:px-6",
+            )}
+          >
+            <StockSectionTabs lang={lang} active={stockTab} onChange={handleStockTabChange} />
+            {showPinnedSearch ? (
+              <StockPinnedSearch lang={lang} value={listQuery} onChange={handlePinnedSearch} />
+            ) : null}
+          </div>
 
           {stockTab === "overview" ? (
             <StockOverviewPanel
               lang={lang}
-              totalProducts={unlockedProducts.length}
-              lowStockCount={lowStockCount}
-              outOfStockCount={outOfStockCount}
-              inventoryValueUgx={inventoryValueUgx}
               canAdd={canAdd}
               canRestock={canRestock}
+              canArrangeShelves={canArrangeShelves}
               freeProductLimitReached={freeProductLimitReached}
               onAddProduct={openAddProductSheet}
-              aiProductAssistantEnabled={aiProductAssistantEnabled}
-              onAddProductWithAi={openAiProductAssist}
-              onBulkInventoryWithAi={aiInventoryAssistantEnabled ? openBulkInventoryAi : undefined}
+              showImport={aiInventoryAssistantEnabled}
+              onImportProducts={openBulkInventoryAi}
             />
           ) : null}
 
           {stockTab === "products" ? (
-            <section className="space-y-4">
+            <section className="space-y-3">
               <StockListToolbar
                 lang={lang}
-                listQuery={listQuery}
-                onListQuery={setListQuery}
                 listSort={listSort}
                 onListSort={setListSort}
                 listFilter={listFilter}
@@ -705,12 +763,13 @@ export function StockPage({ lang }: { lang: Language }) {
                 stockHasUncategorized={stockHasUncategorized}
                 groupByCategory={groupByCategory}
                 onGroupByCategory={(v) => setStockGroupByCategoryOverride(v)}
+                compact
               />
               {groupByCategory && categoryGroups && listableProducts.length > 0 ? (
-                <div className="space-y-5">
+                <div className="space-y-4">
                   {categoryGroups.keys.map((gk) => (
                     <div key={gk}>
-                      <h3 className="mb-3 text-xs font-black uppercase tracking-wide text-waka-800">
+                      <h3 className="mb-2 px-0.5 text-[10px] font-black uppercase tracking-wide text-stone-500">
                         {gk === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : gk}
                       </h3>
                       {renderProductCards(categoryGroups.map.get(gk) ?? [])}
@@ -724,74 +783,54 @@ export function StockPage({ lang }: { lang: Language }) {
           ) : null}
 
           {stockTab === "shelves" ? (
-            <section className="space-y-4">
-              {selectedShelf ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedShelf(null)}
-                    className="text-sm font-bold text-waka-800 underline-offset-2 hover:underline"
-                  >
-                    {t(lang, "stockShelfBack")}
-                  </button>
-                  <h2 className="text-lg font-black text-slate-900">
-                    {selectedShelf === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : selectedShelf}
-                  </h2>
-                  {renderProductCards(productsInSelectedShelf)}
-                </>
-              ) : (
-                <>
-                  {canArrangeShelves ? (
-                    <Link
-                      to="/settings/shelves"
-                      className="inline-flex min-h-[48px] items-center rounded-2xl bg-waka-600 px-5 py-2.5 text-sm font-black text-white shadow-waka-sm"
-                    >
-                      {t(lang, "officeCardShelfArrange")}
-                    </Link>
-                  ) : null}
-                  <p className="text-sm text-slate-600">{t(lang, "stockShelvesHint")}</p>
-                  <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {shelfFolders.map((shelf) => {
-                      const label = shelf === UNCATEGORIZED_SENTINEL ? t(lang, "uncategorized") : shelf;
-                      const count = shelfProductCounts.get(shelf) ?? 0;
-                      return (
-                        <li key={shelf}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedShelf(shelf)}
-                            className="flex min-h-[72px] w-full items-center gap-3 rounded-[1.35rem] border border-slate-200 bg-white p-4 text-left shadow-sm active:bg-slate-50"
-                          >
-                            <span className="text-2xl">{shelfIconFor(label) ?? "📦"}</span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-base font-black text-slate-900">{label}</span>
-                              <span className="mt-0.5 block text-sm font-semibold text-slate-500">
-                                {tTemplate(lang, "stockShelfProductCount", { count: String(count) })}
-                              </span>
-                            </span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </>
-              )}
-            </section>
+            <StockShelfGrid
+              lang={lang}
+              shelves={shelfGridItems}
+              selectedShelf={selectedShelf}
+              canArrangeShelves={canArrangeShelves}
+              onSelectShelf={setSelectedShelf}
+              onBack={() => setSelectedShelf(null)}
+              shelfDetailHeader={
+                selectedShelf ? (
+                  <StockListToolbar
+                    lang={lang}
+                    listSort={listSort}
+                    onListSort={setListSort}
+                    listFilter="all"
+                    onListFilter={() => undefined}
+                    stockCategoryFilter={CATEGORY_FILTER_ALL}
+                    onStockCategoryFilter={() => undefined}
+                    stockCategoryPicklist={[]}
+                    stockHasUncategorized={false}
+                    groupByCategory={false}
+                    onGroupByCategory={() => undefined}
+                    compact
+                  />
+                ) : undefined
+              }
+            >
+              {selectedShelf ? renderProductCards(productsInSelectedShelf) : null}
+            </StockShelfGrid>
           ) : null}
 
           {stockTab === "low" ? (
-            <section className="space-y-4">
+            <section className="space-y-3">
               {lowStockProducts.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-emerald-200 bg-emerald-50 px-4 py-10 text-center text-base font-semibold text-emerald-900">
+                <p className="rounded-xl border border-dashed border-emerald-200 bg-emerald-50 px-3 py-8 text-center text-sm font-semibold text-emerald-900">
                   {t(lang, "stockLowStockEmpty")}
                 </p>
               ) : (
-                renderProductCards(lowStockProducts)
+                renderProductCards(lowStockProducts, "lowStock")
               )}
             </section>
           ) : null}
 
           {stockTab === "movements" ? (
             <StockMovementsPanel lang={lang} movements={recentMovements} pharmacyMode={pharmacyMode} wholesaleMode={wholesaleMode} />
+          ) : null}
+
+          {canAdd && !freeProductLimitReached ? (
+            <StockFab lang={lang} onClick={openAddProductSheet} />
           ) : null}
         </>
       )}
@@ -1056,6 +1095,39 @@ export function StockPage({ lang }: { lang: Language }) {
           </div>
         </AppModalOverlay>
       ) : null}
+
+      <StockProductDetailSheet
+        lang={lang}
+        open={detailProduct !== null}
+        product={detailProduct}
+        preferences={preferences}
+        locked={detailProduct ? lockedIds.has(detailProduct.id) : false}
+        canAdd={canAdd}
+        canSell={canSell}
+        onClose={() => setDetailProduct(null)}
+        onSell={() => detailProduct && handleRowAction(detailProduct, "sell")}
+        onEdit={() => detailProduct && handleRowAction(detailProduct, "edit")}
+        onMore={() => {
+          if (detailProduct) {
+            setActionSheetProduct(detailProduct);
+            setDetailProduct(null);
+          }
+        }}
+      />
+
+      <StockProductActionSheet
+        lang={lang}
+        open={actionSheetProduct !== null}
+        productName={actionSheetProduct?.name ?? ""}
+        canAdd={canAdd}
+        canRestock={canRestock}
+        canRemove={canRemove}
+        onClose={() => setActionSheetProduct(null)}
+        onAction={(action) => {
+          if (actionSheetProduct) handleRowAction(actionSheetProduct, action);
+          setActionSheetProduct(null);
+        }}
+      />
     </div>
   );
 }

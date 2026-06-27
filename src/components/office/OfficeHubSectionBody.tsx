@@ -1,7 +1,6 @@
 import { lazy, Suspense } from "react";
 import {
   Package,
-  Truck,
   Users,
   BarChart3,
   LayoutDashboard,
@@ -38,12 +37,13 @@ import { activeDayDrawerOpenForDate, isFormulaV2 } from "../../lib/dayDrawerOpen
 import type { OfficeHubSectionId } from "../../lib/officeHubSections";
 import { OfficeNavCard } from "./OfficeNavCard";
 import { DayDrawerOpenAlert } from "./DayDrawerOpenAlert";
+import { OFFICE_NAV_TILE_GRID } from "./BackOfficePageLayout";
 
 const OfficeHubDeferredCards = lazy(() =>
   import("./OfficeHubDeferredCards").then((m) => ({ default: m.OfficeHubDeferredCards })),
 );
 
-const listClass = "space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3";
+const listClass = OFFICE_NAV_TILE_GRID;
 
 type Props = {
   lang: Language;
@@ -61,8 +61,6 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
   const pt = usePharmacyTerms(lang, access.preferences.businessType, access.preferences.pharmacyModeEnabled);
   const ht = useHospitalityTerms(lang, access.preferences.businessType, access.preferences.hospitalityModeEnabled);
   const wt = useWholesaleTerms(lang, access.preferences.businessType);
-  const modeTerm = access.hospitalityMode ? ht : access.wholesaleMode ? wt : pt;
-  const deemphasizePurchasing = access.pharmacyMode || access.hospitalityMode;
   const highlightCustomers = !access.pharmacyMode && !access.hospitalityMode && !access.wholesaleMode;
   const highlightPharmacyPatients = access.pharmacyMode;
   const highlightStock = true;
@@ -154,11 +152,11 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             highlight
           />
         ) : null}
-        {access.can("stock.view") ? (
+        {access.can("stock.view") || access.can("purchases.view") || access.can("purchases.record") || access.can("suppliers.view") ? (
           <OfficeNavCard
             to="/stock"
-            title={modeTerm("officeCardStock")}
-            subtitle={modeTerm("officeCardStockSub")}
+            title={t(lang, "ipPageTitle")}
+            subtitle={t(lang, "ipPageSub")}
             Icon={Package}
             highlight={highlightStock}
           />
@@ -169,33 +167,6 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
             title={t(lang, "officeCardShelfArrange")}
             subtitle={t(lang, "officeCardShelfArrangeSub")}
             Icon={LayoutGrid}
-          />
-        ) : null}
-        {access.can("purchases.record") ? (
-          <OfficeNavCard
-            to="/restock"
-            title={t(lang, "officeCardRestock")}
-            subtitle={t(lang, "officeCardRestockSub")}
-            Icon={Truck}
-            deemphasized={deemphasizePurchasing}
-          />
-        ) : null}
-        {access.can("suppliers.view") ? (
-          <OfficeNavCard
-            to="/suppliers"
-            title={t(lang, "officeCardSuppliers")}
-            subtitle={t(lang, "officeCardSuppliersSub")}
-            Icon={Users}
-            deemphasized={deemphasizePurchasing}
-          />
-        ) : null}
-        {access.can("purchases.view") ? (
-          <OfficeNavCard
-            to="/office/purchases"
-            title={t(lang, "officeCardPurchases")}
-            subtitle={t(lang, "officeCardPurchasesSub")}
-            Icon={Truck}
-            deemphasized={deemphasizePurchasing}
           />
         ) : null}
         {access.canRecordExpense ? (
@@ -219,8 +190,8 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
           <Suspense fallback={null}>
             <OfficeHubDeferredCards
               lang={lang}
-              showSuppliers={access.can("suppliers.view")}
-              showRestock={access.can("purchases.record")}
+              showSuppliers={false}
+              showRestock={false}
             />
           </Suspense>
         ) : null}

@@ -22,8 +22,21 @@ import { dateKeyKampala } from "../lib/datesUg";
 import { isWalkInSupplierId } from "../lib/walkInSupplier";
 import { dateMatchesFilter, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 
-export function SupplierDetailPage({ lang }: { lang: Language }) {
-  const { supplierId } = useParams<{ supplierId: string }>();
+export function SupplierDetailPage({
+  lang,
+  supplierId: supplierIdProp,
+  embedded,
+  onClose,
+  onOpenPurchase: _onOpenPurchase,
+}: {
+  lang: Language;
+  supplierId?: string;
+  embedded?: boolean;
+  onClose?: () => void;
+  onOpenPurchase?: (purchaseId: string) => void;
+}) {
+  const { supplierId: routeSupplierId } = useParams<{ supplierId: string }>();
+  const supplierId = supplierIdProp ?? routeSupplierId;
   const actor = useSessionActor();
   const canView = hasPermission(actor.role, "suppliers.view");
   const canManage = hasPermission(actor.role, "suppliers.manage");
@@ -117,7 +130,8 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
   }
 
   if (!supplier || isWalkInSupplierId(supplier.id)) {
-    return <Navigate to="/suppliers" replace />;
+    if (embedded) return <p className="text-sm text-stone-600">{t(lang, "suppliersEmpty")}</p>;
+    return <Navigate to="/stock?tab=suppliers" replace />;
   }
 
   const openEdit = () => {
@@ -146,13 +160,19 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-5 pb-16">
-      <PageHeader
-        lang={lang}
-        title={supplier.name}
-        subtitle={t(lang, "supplierDetailTitle")}
-        backFallback="/suppliers"
-        backLabel={t(lang, "suppliersTitle")}
-      />
+      {!embedded ? (
+        <PageHeader
+          lang={lang}
+          title={supplier.name}
+          subtitle={t(lang, "supplierDetailTitle")}
+          backFallback="/stock?tab=suppliers"
+          backLabel={t(lang, "suppliersTitle")}
+        />
+      ) : onClose ? (
+        <button type="button" onClick={onClose} className="text-sm font-black text-waka-700">
+          ← {t(lang, "suppliersTitle")}
+        </button>
+      ) : null}
 
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         {editSaved ? (
@@ -320,7 +340,7 @@ export function SupplierDetailPage({ lang }: { lang: Language }) {
                     </p>
                     {entry.kind === "purchase" ? (
                       <Link
-                        to={`/office/purchases/${entry.purchaseId}`}
+                        to={`/stock?tab=purchases&purchaseId=${encodeURIComponent(entry.purchaseId)}`}
                         className="text-xs font-semibold text-waka-700 underline"
                       >
                         UGX {entry.amountUgx.toLocaleString()}

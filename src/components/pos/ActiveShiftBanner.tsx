@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Banknote, Clock, User, Wallet } from "lucide-react";
 import type { Language, ShiftRecord } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatShiftDuration } from "../../lib/shiftEnforcement";
@@ -13,6 +14,30 @@ type Props = {
   cashierName: string;
   onCloseShift: () => void;
 };
+
+function MetricPill({
+  icon: Icon,
+  label,
+  value,
+  emphasize,
+}: {
+  icon: typeof Wallet;
+  label: string;
+  value: string;
+  emphasize?: boolean;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-teal-600" aria-hidden />
+      <div className="min-w-0">
+        <p className="text-[9px] font-bold uppercase tracking-wide text-teal-700/90">{label}</p>
+        <p className={`truncate text-xs leading-tight ${emphasize ? "font-black text-teal-950" : "font-bold text-teal-900"}`}>
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export function ActiveShiftBanner({ lang, shift, cashierName, onCloseShift }: Props) {
   const [now, setNow] = useState(() => Date.now());
@@ -41,45 +66,43 @@ export function ActiveShiftBanner({ lang, shift, cashierName, onCloseShift }: Pr
     return () => window.clearInterval(id);
   }, []);
 
-  const startedLabel = new Date(shift.startAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const duration = formatShiftDuration(shift.startAt, now);
+  const fmt = (n: number) => `UGX ${n.toLocaleString()}`;
 
   return (
-    <div className="rounded-2xl border border-teal-200 bg-teal-50/90 px-3 py-2.5 text-xs shadow-waka-sm sm:text-sm">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 space-y-0.5">
-          <p className="font-black text-teal-950">
-            {t(lang, "activeShiftCashier")}: {cashierName}
-          </p>
-          <p className="font-semibold text-teal-900">
-            {t(lang, "activeShiftStarted")} {startedLabel} · {formatShiftDuration(shift.startAt, now)}
-          </p>
+    <div className="rounded-2xl border border-teal-200/80 bg-gradient-to-br from-teal-50 to-white px-3 py-2 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-teal-100 text-teal-800">
+            <User className="h-4 w-4" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-black text-teal-950">
+              {t(lang, "activeShiftCashier")}: {cashierName}
+            </p>
+            <p className="flex items-center gap-1 text-[11px] font-semibold text-teal-800">
+              <Clock className="h-3 w-3 shrink-0" aria-hidden />
+              Shift · {duration}
+            </p>
+          </div>
         </div>
         <button
           type="button"
           onClick={onCloseShift}
-          className="shrink-0 rounded-xl border border-teal-700 bg-teal-700 px-3 py-1.5 text-[11px] font-black text-white sm:text-xs"
+          className="shrink-0 rounded-xl bg-teal-700 px-3 py-1.5 text-[11px] font-black text-white shadow-sm active:bg-teal-800"
         >
           {t(lang, "shiftCloseBtn")}
         </button>
       </div>
-      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 font-semibold text-teal-900 sm:grid-cols-4">
-        <div>
-          <dt className="text-[10px] uppercase tracking-wide text-teal-700">{t(lang, "shiftCloseOpeningFloat")}</dt>
-          <dd>UGX {openingFloatDisplay.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-wide text-teal-700">{t(lang, "shiftCloseSales")}</dt>
-          <dd>UGX {parts.sales.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-wide text-teal-700">{t(lang, "shiftCloseDebtPayments")}</dt>
-          <dd>UGX {parts.debtPayments.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] uppercase tracking-wide text-teal-700">{t(lang, "shiftCloseExpected")}</dt>
-          <dd className="font-black">UGX {expected.toLocaleString()}</dd>
-        </div>
-      </dl>
+      <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1.5 border-t border-teal-100/80 pt-2">
+        <MetricPill icon={Wallet} label={t(lang, "shiftCloseOpeningFloat")} value={fmt(openingFloatDisplay)} />
+        <MetricPill icon={Banknote} label={t(lang, "shiftCloseSales")} value={fmt(parts.sales)} />
+        <MetricPill icon={Wallet} label={t(lang, "shiftCloseExpected")} value={fmt(expected)} emphasize />
+      </div>
+      <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-teal-800">
+        <Banknote className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+        {t(lang, "shiftCloseDebtPayments")}: {fmt(parts.debtPayments)}
+      </p>
     </div>
   );
 }

@@ -1,10 +1,13 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { ChevronDown, Plus } from "lucide-react";
-import type { Language } from "../types";
-import { t } from "../lib/i18n";
+import { ChevronDown, FileDown, UserPlus } from "lucide-react";
+import clsx from "clsx";
+import type { Customer, Language } from "../types";
+import { t, tTemplate } from "../lib/i18n";
 import {
   buildCreditActivityIndex,
+  creditActivityTimelineFromIndex,
+  filterCreditActivityByBounds,
   findOrphanDebtSales,
   sumCreditIssuedInBounds,
   sumDebtPaymentsInBounds,
@@ -31,12 +34,28 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { ModalSheet } from "../components/layout/ModalSheet";
-import { DebtsHeroCard } from "../components/debts/DebtsHeroCard";
-import { DebtCustomerRow } from "../components/debts/DebtCustomerRow";
+import { PageHeader } from "../components/layout/PageHeader";
 import { VirtualizedCustomerDebtList } from "../components/debts/VirtualizedCustomerDebtList";
+import { DebtsStatGrid } from "../components/debts/DebtsStatGrid";
+import { DebtsFilterChips } from "../components/debts/DebtsFilterChips";
+import { DebtsSearchBar } from "../components/debts/DebtsSearchBar";
+import { DebtReceivePaymentSheet } from "../components/debts/DebtReceivePaymentSheet";
+import { DebtCustomerDetailSheet } from "../components/debts/DebtCustomerDetailSheet";
+import { DebtAddCustomerSheet } from "../components/debts/DebtAddCustomerSheet";
+import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { dateMatchesFilter } from "../lib/dateFilters";
 import { dateKeyKampala } from "../lib/datesUg";
+import { selectedDayKeyForFilter } from "../lib/dateFilterLabels";
+import {
+  computeAverageCollectionDays,
+  countCustomersOwing,
+  countOverdueAccounts,
+  customerMatchesQuickFilter,
+  customerMatchesSearch,
+  type DebtsQuickFilter,
+} from "../lib/debtsPageView";
+import { shareText } from "../lib/reportExport";
 
 export function CustomersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -58,16 +77,24 @@ export function CustomersPage({ lang }: { lang: Language }) {
   const addDebtPayment = usePosStore((s) => s.addDebtPayment);
   const assignOrphanDebtSale = usePosStore((s) => s.assignOrphanDebtSale);
   const { filter, setFilter, bounds } = useReportingDateFilter();
+  const debtsSearchId = "debts-search-input";
 
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [quickFilter, setQuickFilter] = useState<DebtsQuickFilter>("all");
+  const [sortBy, setSortBy] = useState<"balance_desc" | "balance_asc" | "name_az">("balance_desc");
   const [orphanOpen, setOrphanOpen] = useState(false);
   const [assignCustomerBySale, setAssignCustomerBySale] = useState<Record<string, string>>({});
   const [assignMessage, setAssignMessage] = useState<string | null>(null);
   const [debtReceiptCtx, setDebtReceiptCtx] = useState<DebtPaymentReceiptContext | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [payCustomer, setPayCustomer] = useState<Customer | null>(null);
+  const [detailCustomer, setDetailCustomer] = useState<Customer | null>(null);
+
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
   const { snapshot, authMode } = useSubscription();
   const receiptPlanTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
+  const todayKey = dateKeyKampala(new Date());
+  const isSingleDay = selectedDayKeyForFilter(filter) != null;
 
   const orphanDebts = useMemo(() => findOrphanDebtSales(sales), [sales]);
   const orphanDebtTotal = useMemo(() => sumOrphanDebtUgx(sales), [sales]);
@@ -87,26 +114,45 @@ export function CustomersPage({ lang }: { lang: Language }) {
     [sales, bounds],
   );
 
-  const sortedCustomers = useMemo(() => {
-    return [...customers].sort((a, b) => {
-      if (b.debtBalanceUgx !== a.debtBalanceUgx) return b.debtBalanceUgx - a.debtBalanceUgx;
-      return a.name.localeCompare(b.name);
-    });
-  }, [customers]);
-
   const creditActivityIndex = useMemo(
     () => buildCreditActivityIndex(sales, debtPayments),
     [sales, debtPayments],
   );
 
-  const useVirtualCustomerList = sortedCustomers.length > 80;
+  const customersOwing = useMemo(() => countCustomersOwing(customers), [customers]);
+  const overdueCount = useMemo(
+    () => countOverdueAccounts(customers, creditActivityIndex),
+    [customers, creditActivityIndex],
+  );
+  const avgCollectionDays = useMemo(
+    () => computeAverageCollectionDays(debtPayments, creditActivityIndex),
+    [debtPayments, creditActivityIndex],
+  );
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    addCustomer({ name: name.trim(), phone: phone.trim(), location: "Uganda" });
-    setName("");
-    setPhone("");
-  };
+  const filteredCustomers = useMemo(() => {
+    let list = customers.filter(
+      (c) =>
+        customerMatchesSearch(c, searchQuery) &&
+        customerMatchesQuickFilter(c, quickFilter, creditActivityIndex, bounds, todayKey),
+    );
+    list = [...list].sort((a, b) => {
+      if (sortBy === "name_az") return a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (sortBy === "balance_asc") return a.debtBalanceUgx - b.debtBalanceUgx;
+      return b.debtBalanceUgx - a.debtBalanceUgx;
+    });
+    return list;
+  }, [customers, searchQuery, quickFilter, creditActivityIndex, bounds, todayKey, sortBy]);
+
+  const detailTimeline = useMemo(() => {
+    if (!detailCustomer) return [];
+    const full = creditActivityTimelineFromIndex(detailCustomer.id, creditActivityIndex);
+    return filterCreditActivityByBounds(full, bounds);
+  }, [detailCustomer, creditActivityIndex, bounds]);
+
+  const orphanInRange = useMemo(
+    () => orphanDebts.filter((o) => dateMatchesFilter(dateKeyKampala(o.createdAt), bounds)),
+    [orphanDebts, bounds],
+  );
 
   const submitPay = (customerId: string, amountUgx: number) => {
     const r = addDebtPayment(customerId, amountUgx);
@@ -149,58 +195,114 @@ export function CustomersPage({ lang }: { lang: Language }) {
     }
   };
 
-  const orphanInRange = useMemo(
-    () => orphanDebts.filter((o) => dateMatchesFilter(dateKeyKampala(o.createdAt), bounds)),
-    [orphanDebts, bounds],
-  );
+  const exportDebts = async () => {
+    const lines = [
+      modeTerm("debts"),
+      `${t(lang, "debtsStatOutstanding")}: UGX ${totalDebtUgx.toLocaleString()}`,
+      `${t(lang, "debtsStatCustomersOwing")}: ${customersOwing}`,
+      `${t(lang, "debtsStatCollectedToday")}: UGX ${collectedUgx.toLocaleString()}`,
+      "",
+      ...filteredCustomers.map(
+        (c) => `${c.name}${c.phone ? ` (${c.phone})` : ""}: UGX ${c.debtBalanceUgx.toLocaleString()}`,
+      ),
+    ];
+    await shareText(lines.join("\n"), modeTerm("debts"));
+  };
 
   if (!canView) {
     return <Navigate to="/" replace />;
   }
 
   return (
-    <div className="space-y-4 pb-8">
-      <div>
-        <h1 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{modeTerm("debts")}</h1>
-        <p className="mt-1 text-sm font-medium text-slate-500">{t(lang, "debtsHelp")}</p>
+    <div className="space-y-3 pb-24">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <PageHeader
+            lang={lang}
+            title={modeTerm("debts")}
+            subtitle={t(lang, "debtsPageSub")}
+            showBack={false}
+            compact
+          />
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5 pt-8">
+          <button
+            type="button"
+            onClick={() => document.getElementById(debtsSearchId)?.focus()}
+            className="inline-flex min-h-[36px] items-center justify-center rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+          >
+            {t(lang, "debtsActionSearch")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-stone-700 shadow-sm active:bg-stone-50"
+          >
+            <UserPlus className="h-4 w-4" aria-hidden />
+            <span className="hidden sm:inline">{t(lang, "debtsAddPerson")}</span>
+          </button>
+          {customers.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void exportDebts()}
+              className="inline-flex min-h-[36px] items-center justify-center gap-1 rounded-xl border border-stone-200 bg-white px-2.5 text-xs font-bold text-waka-700 shadow-sm active:bg-stone-50"
+            >
+              <FileDown className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="hidden sm:inline">{t(lang, "salesHistoryExport")}</span>
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <DebtsHeroCard
+      <DebtsStatGrid
         lang={lang}
-        totalDebtUgx={totalDebtUgx}
+        outstandingUgx={totalDebtUgx}
+        customersOwing={customersOwing}
         collectedUgx={collectedUgx}
-        creditIssuedUgx={creditIssuedUgx}
-        filter={filter}
-        onFilterChange={setFilter}
+        creditSalesUgx={creditIssuedUgx}
+        overdueCount={overdueCount}
+        avgCollectionDays={avgCollectionDays}
+        collectedLabel={
+          isSingleDay ? t(lang, "debtsStatCollectedToday") : t(lang, "debtsHeroCollectedInRange")
+        }
+        creditSalesLabel={
+          isSingleDay ? t(lang, "debtsStatCreditSales") : t(lang, "debtsHeroCreditInRange")
+        }
       />
+
+      <div className="sticky top-0 z-10 -mx-3 space-y-2 bg-stone-50/95 px-3 pb-2 pt-0 backdrop-blur-sm sm:-mx-4 sm:px-4 md:-mx-6 md:px-6">
+        <SalesHistoryDateFilterChips lang={lang} filter={filter} onFilterChange={setFilter} />
+        <DebtsFilterChips lang={lang} active={quickFilter} onChange={setQuickFilter} />
+        <DebtsSearchBar lang={lang} value={searchQuery} onChange={setSearchQuery} inputId={debtsSearchId} />
+      </div>
 
       {orphanDebts.length > 0 ? (
         <details
           open={orphanOpen}
           onToggle={(e) => setOrphanOpen((e.currentTarget as HTMLDetailsElement).open)}
-          className="overflow-hidden rounded-[1.35rem] border-2 border-red-200 bg-red-50"
+          className="overflow-hidden rounded-2xl border border-rose-200 bg-rose-50/50"
         >
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 marker:content-none [&::-webkit-details-marker]:hidden">
             <div className="min-w-0">
-              <p className="text-sm font-black text-red-950">{t(lang, "orphanDebtTitle")}</p>
-              <p className="text-xs font-semibold text-red-800">
+              <p className="text-sm font-black text-rose-950">{t(lang, "orphanDebtTitle")}</p>
+              <p className="text-xs font-semibold text-rose-800">
                 UGX {orphanDebtTotal.toLocaleString()} · {orphanDebts.length}{" "}
                 {orphanDebts.length === 1 ? t(lang, "orphanDebtSaleOne") : t(lang, "orphanDebtSaleMany")}
               </p>
             </div>
-            <ChevronDown className={`h-5 w-5 shrink-0 text-red-700 transition-transform ${orphanOpen ? "rotate-180" : ""}`} />
+            <ChevronDown className={clsx("h-5 w-5 shrink-0 text-rose-700 transition-transform", orphanOpen && "rotate-180")} />
           </summary>
-          <div className="space-y-3 border-t border-red-200 px-4 py-3">
-            <p className="text-xs text-red-900">{t(lang, "orphanDebtHelp")}</p>
-            {assignMessage ? <p className="text-xs font-bold text-red-900">{assignMessage}</p> : null}
+          <div className="space-y-2 border-t border-rose-200 px-3 py-3">
+            <p className="text-xs text-rose-900">{t(lang, "orphanDebtHelp")}</p>
+            {assignMessage ? <p className="text-xs font-bold text-rose-900">{assignMessage}</p> : null}
             <ul className="space-y-2">
               {(orphanInRange.length > 0 ? orphanInRange : orphanDebts).map((o) => (
-                <li key={o.saleId} className="rounded-xl border border-red-200 bg-white/90 p-3">
-                  <p className="text-xs font-semibold text-red-950">
+                <li key={o.saleId} className="rounded-xl border border-rose-200 bg-white p-3">
+                  <p className="text-xs font-semibold text-rose-950">
                     {new Date(o.createdAt).toLocaleString()}
                     {o.receiptSeq != null ? ` · #${String(o.receiptSeq).padStart(3, "0")}` : ""}
                   </p>
-                  <p className="mt-1 text-base font-black text-red-950">UGX {o.debtUgx.toLocaleString()}</p>
+                  <p className="mt-1 text-base font-black text-rose-950">UGX {o.debtUgx.toLocaleString()}</p>
                   {canDebt && customers.length > 0 ? (
                     <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                       <select
@@ -208,7 +310,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                         onChange={(e) =>
                           setAssignCustomerBySale((prev) => ({ ...prev, [o.saleId]: e.target.value }))
                         }
-                        className="min-h-[44px] flex-1 rounded-xl border border-red-200 bg-white px-3 text-sm font-semibold"
+                        className="min-h-[44px] flex-1 rounded-xl border border-rose-200 bg-white px-3 text-sm font-semibold"
                         aria-label={t(lang, "orphanDebtAssignCustomer")}
                       >
                         <option value="">{t(lang, "orphanDebtAssignCustomer")}</option>
@@ -221,7 +323,7 @@ export function CustomersPage({ lang }: { lang: Language }) {
                       <button
                         type="button"
                         onClick={() => submitAssignOrphan(o.saleId)}
-                        className="min-h-[44px] rounded-xl bg-red-900 px-4 text-sm font-black text-white"
+                        className="min-h-[44px] rounded-xl bg-rose-900 px-4 text-sm font-black text-white"
                       >
                         {t(lang, "orphanDebtAssign")}
                       </button>
@@ -234,72 +336,77 @@ export function CustomersPage({ lang }: { lang: Language }) {
         </details>
       ) : null}
 
-      <details className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 marker:content-none [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-2 text-sm font-black text-slate-900">
-            <Plus className="h-4 w-4 text-waka-600" aria-hidden />
-            {t(lang, "debtsAddPerson")}
-          </span>
-          <ChevronDown className="h-5 w-5 text-stone-400" />
-        </summary>
-        <form onSubmit={submit} className="space-y-3 border-t border-stone-100 px-4 py-4">
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t(lang, "personNamePh")}
-            required
-            className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-semibold"
-          />
-          <input
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder={t(lang, "personPhonePh")}
-            className="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-base font-semibold"
-          />
-          <button type="submit" className="w-full rounded-xl bg-slate-900 py-3 text-base font-black text-white">
+      {customers.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
+          <p className="text-base font-black text-stone-800">{modeTerm("customersEmptyTitle")}</p>
+          <p className="mt-1 text-sm font-medium text-stone-500">{modeTerm("customersEmptySub")}</p>
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white active:bg-waka-700"
+          >
             {modeTerm("addCustomer")}
           </button>
-        </form>
-      </details>
-
-      {customers.length === 0 ? (
-        <section className="rounded-[1.35rem] border border-dashed border-amber-200 bg-amber-50/50 p-6 text-center">
-          <p className="text-lg font-black text-slate-900">{modeTerm("customersEmptyTitle")}</p>
-          <p className="mt-1 text-sm text-slate-600">{modeTerm("customersEmptySub")}</p>
         </section>
       ) : null}
 
-      {sortedCustomers.length > 0 ? (
-        <section className="rounded-[1.35rem] border border-stone-200 bg-white shadow-waka-sm">
-          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
-            <h2 className="text-base font-black text-slate-950">{modeTerm("customers")}</h2>
-            <p className="text-xs font-bold text-slate-500">{sortedCustomers.length}</p>
+      {filteredCustomers.length > 0 ? (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-0.5">
+            <h2 className="text-xs font-black text-stone-800">
+              {tTemplate(lang, "debtsCustomerListTitle", { count: String(filteredCustomers.length) })}
+            </h2>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="rounded-lg border border-stone-200 bg-white px-2 py-1 text-[10px] font-bold text-stone-700"
+              aria-label={t(lang, "debtsSortBy")}
+            >
+              <option value="balance_desc">{t(lang, "debtsSortBalanceDesc")}</option>
+              <option value="balance_asc">{t(lang, "debtsSortBalanceAsc")}</option>
+              <option value="name_az">{t(lang, "debtsSortName")}</option>
+            </select>
           </div>
-          {useVirtualCustomerList ? (
-            <VirtualizedCustomerDebtList
-              lang={lang}
-              customers={sortedCustomers}
-              creditIndex={creditActivityIndex}
-              bounds={bounds}
-              canDebt={canDebt}
-              onSubmitPay={submitPay}
-            />
-          ) : (
-            sortedCustomers.map((c, index) => (
-              <DebtCustomerRow
-                key={c.id}
-                lang={lang}
-                customer={c}
-                creditIndex={creditActivityIndex}
-                bounds={bounds}
-                canDebt={canDebt}
-                toneIndex={index}
-                onSubmitPay={submitPay}
-              />
-            ))
-          )}
+          <VirtualizedCustomerDebtList
+            lang={lang}
+            customers={filteredCustomers}
+            creditIndex={creditActivityIndex}
+            canDebt={canDebt}
+            onOpenDetail={setDetailCustomer}
+            onReceive={setPayCustomer}
+          />
         </section>
+      ) : customers.length > 0 ? (
+        <p className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-bold text-stone-600">
+          {t(lang, "posSellNoMatch")}
+        </p>
       ) : null}
+
+      <DebtAddCustomerSheet
+        lang={lang}
+        open={addOpen}
+        addLabel={modeTerm("addCustomer")}
+        onClose={() => setAddOpen(false)}
+        onSubmit={(name, phone) => addCustomer({ name, phone, location: "Uganda" })}
+      />
+
+      <DebtReceivePaymentSheet
+        lang={lang}
+        open={payCustomer !== null}
+        customer={payCustomer}
+        onClose={() => setPayCustomer(null)}
+        onSubmit={(amount) => payCustomer && submitPay(payCustomer.id, amount)}
+      />
+
+      <DebtCustomerDetailSheet
+        lang={lang}
+        open={detailCustomer !== null}
+        customer={detailCustomer}
+        timeline={detailTimeline}
+        onClose={() => setDetailCustomer(null)}
+        onReceive={() => detailCustomer && setPayCustomer(detailCustomer)}
+        canDebt={canDebt}
+      />
 
       {debtReceiptCtx ? (
         <ModalSheet

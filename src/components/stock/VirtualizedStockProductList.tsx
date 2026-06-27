@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Language, Product, ShopPreferences } from "../../types";
 import { StockProductCard } from "./StockProductCard";
 
-const ROW_ESTIMATE = 196;
+const ROW_ESTIMATE = 118;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 type RowAction = "edit" | "sell" | "restock" | "duplicate" | "remove";
@@ -19,6 +19,8 @@ type Props = {
   canRestock: boolean;
   isOnlyProduct: boolean;
   onAction: (product: Product, action: RowAction) => void;
+  onOpenDetail?: (product: Product) => void;
+  variant?: "default" | "lowStock";
 };
 
 function VirtualizedStockProductListInner({
@@ -32,6 +34,8 @@ function VirtualizedStockProductListInner({
   canRestock,
   isOnlyProduct,
   onAction,
+  onOpenDetail,
+  variant = "default",
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -57,7 +61,7 @@ function VirtualizedStockProductListInner({
           return (
             <div
               key={p.id}
-              className="absolute left-0 top-0 w-full px-0.5 pb-3"
+              className="absolute left-0 top-0 w-full px-0.5 pb-2"
               style={{
                 transform: `translateY(${virtualRow.start}px)`,
                 height: `${virtualRow.size}px`,
@@ -73,7 +77,9 @@ function VirtualizedStockProductListInner({
                 canSell={canSell}
                 canRestock={canRestock}
                 isOnlyProduct={isOnlyProduct}
+                variant={variant}
                 onAction={(action) => onAction(p, action)}
+                onOpenDetail={onOpenDetail ? () => onOpenDetail(p) : undefined}
               />
             </div>
           );

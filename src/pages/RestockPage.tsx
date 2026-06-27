@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
 import { Plus } from "lucide-react";
 import clsx from "clsx";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -13,7 +12,15 @@ import { RestockProductPicker } from "../components/stock/RestockProductPicker";
 
 type BuySource = "town" | "supplier";
 
-export function RestockPage({ lang }: { lang: Language }) {
+export function RestockPage({
+  lang,
+  embedded,
+  onSaved,
+}: {
+  lang: Language;
+  embedded?: boolean;
+  onSaved?: () => void;
+}) {
   const suppliers = usePosStore((s) => s.suppliers);
   const products = usePosStore((s) => s.products);
   const recordPurchase = usePosStore((s) => s.recordPurchase);
@@ -128,14 +135,17 @@ export function RestockPage({ lang }: { lang: Language }) {
     setBuySource("town");
     setMsgTone("ok");
     setMsg(t(lang, "restockSavedShort"));
+    onSaved?.();
   };
 
   const inputClass =
     "mt-1 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-base font-bold text-slate-900 outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200";
 
   return (
-    <div className="pb-28">
-      <PageHeader lang={lang} title={t(lang, "restockTitle")} subtitle={t(lang, "restockSub")} backLabel={t(lang, "officeBackToHub")} />
+    <div className={embedded ? "pb-8" : "pb-28"}>
+      {!embedded ? (
+        <PageHeader lang={lang} title={t(lang, "restockTitle")} subtitle={t(lang, "restockSub")} backLabel={t(lang, "officeBackToHub")} />
+      ) : null}
 
       {msg ? (
         <p
@@ -200,11 +210,7 @@ export function RestockPage({ lang }: { lang: Language }) {
           )}
 
           {!walkIn && suppliers.length === 0 ? (
-            <p className="text-sm font-semibold text-slate-600">
-              <Link to="/suppliers" className="font-black text-waka-800 underline">
-                {t(lang, "restockAddSupplierLink")}
-              </Link>
-            </p>
+            <p className="text-sm font-semibold text-slate-600">{t(lang, "restockNoSuppliersShort")}</p>
           ) : null}
         </section>
 
@@ -283,7 +289,7 @@ export function RestockPage({ lang }: { lang: Language }) {
           />
         </label>
 
-        <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 border-t border-slate-200/90 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none">
+        <div className={embedded ? "mt-4" : "fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 border-t border-slate-200/90 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"}>
           <button
             type="submit"
             disabled={!lines.length}
