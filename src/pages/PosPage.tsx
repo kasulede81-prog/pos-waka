@@ -40,6 +40,10 @@ import { ShiftSellGateway } from "../components/pos/ShiftSellGateway";
 import { ActiveShiftBanner } from "../components/pos/ActiveShiftBanner";
 import { PosShiftSummaryCollapsible } from "../components/pos/PosShiftSummaryCollapsible";
 import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
+import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHeader";
+import { PosDesktopCategoryChips } from "../components/pos/PosDesktopCategoryChips";
+import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
+import { PosDesktopStatusBar } from "../components/pos/PosDesktopStatusBar";
 import { PosSellProductCard } from "../components/pos/PosSellProductCard";
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
 import { registerPosExitHandler } from "../lib/posExitGuard";
@@ -665,7 +669,10 @@ export function PosPage({ lang }: { lang: Language }) {
   );
 
   const showShelfBoxes =
-    products.length > 0 && sellCategoryKey === CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
+    products.length > 0 &&
+    sellCategoryKey === CATEGORY_FILTER_ALL &&
+    sellSearchContext.q.length === 0 &&
+    !isFullDesktopPos;
   const hasSellViewFilter = sellCategoryKey !== CATEGORY_FILTER_ALL || sellSearchContext.q.length > 0;
 
   const selectedShelfLabel =
@@ -1373,7 +1380,8 @@ export function PosPage({ lang }: { lang: Language }) {
   const showMobileProductsBelow =
     mobileSellFocus && sellCategoryKey !== CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
   const showMobileSearchResults = mobileSellFocus && sellSearchContext.q.length > 0;
-  const showDesktopProductView = !mobileSellFocus && hasSellViewFilter;
+  const showDesktopProductView =
+    (!mobileSellFocus && hasSellViewFilter) || (isFullDesktopPos && products.length > 0);
 
   const mobileShelfCards = useMemo(() => {
     if (!mobileSellFocus) return shelfCards;
@@ -1493,9 +1501,20 @@ export function PosPage({ lang }: { lang: Language }) {
 
   return (
     <ShiftSellGateway lang={lang}>
-    <div className={clsx("space-y-2", mobileSellFocus && "space-y-1.5")}>
-      <PosOfflineBanner lang={lang} compact={mobileSellFocus} />
-      {activeShift && mobileSellFocus ? (
+    <div className={clsx(isFullDesktopPos ? "flex h-full min-h-0 flex-col" : "space-y-2", mobileSellFocus && !isFullDesktopPos && "space-y-1.5")}>
+      <PosOfflineBanner lang={lang} compact={mobileSellFocus || isFullDesktopPos} />
+      {isFullDesktopPos ? (
+        <PosDesktopCompactHeader
+          lang={lang}
+          sellLabelKey={sellNavLabelKey}
+          cashierName={actor.displayName ?? actor.userId}
+          shift={activeShift}
+          todaySaleCount={todaySalesSummary.count}
+          todaySalesUgx={todaySalesSummary.total}
+          pendingCount={pendingCount}
+          onCloseShift={() => setShiftCloseOpen(true)}
+        />
+      ) : activeShift && mobileSellFocus ? (
         <PosShiftSummaryCollapsible
           lang={lang}
           shift={activeShift}
@@ -1516,8 +1535,8 @@ export function PosPage({ lang }: { lang: Language }) {
           onCloseShift={() => setShiftCloseOpen(true)}
         />
       ) : null}
-      <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} />
-      {!mobileSellFocus ? (
+      {!isFullDesktopPos ? <PosOperationalNav lang={lang} sellLabelKey={sellNavLabelKey} /> : null}
+      {!mobileSellFocus && !isFullDesktopPos ? (
         <PosSellHeroCard
           lang={lang}
           sellLabel={t(lang, sellNavLabelKey)}
@@ -1543,18 +1562,23 @@ export function PosPage({ lang }: { lang: Language }) {
 
       <div
         className={clsx(
-          products.length > 0 && isFullDesktopPos && "grid items-start gap-3 xl:gap-4",
+          products.length > 0 && isFullDesktopPos && "grid min-h-0 flex-1 items-stretch gap-2",
         )}
         style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
       >
-        <div ref={catalogRef} className="min-w-0 space-y-2">
+        <div
+          ref={catalogRef}
+          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : "min-w-0 space-y-2")}
+        >
 
       {products.length > 0 ? (
         <div
           className={clsx(
             mobileSellFocus
               ? "sticky top-0 z-20 -mx-0.5 space-y-0 bg-stone-50/95 pb-1.5 pt-0.5 backdrop-blur-md"
-              : "space-y-1.5 rounded-[1.35rem] border border-stone-200 bg-white p-2 shadow-waka-sm",
+              : isFullDesktopPos
+                ? "shrink-0 space-y-1"
+                : "space-y-1.5 rounded-[1.35rem] border border-stone-200 bg-white p-2 shadow-waka-sm",
           )}
         >
           <div className="relative">
@@ -1567,11 +1591,27 @@ export function PosPage({ lang }: { lang: Language }) {
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitSearch(searchQuery);
               }}
-              placeholder={pharmacyMode || hospitalityMode || wholesaleMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
-              aria-label={pharmacyMode || hospitalityMode || wholesaleMode ? modeTerm("searchPlaceholder") : t(lang, "posSellSearchPlaceholder")}
+              placeholder={
+                isFullDesktopPos
+                  ? t(lang, "posDesktopSearchPlaceholder")
+                  : pharmacyMode || hospitalityMode || wholesaleMode
+                    ? modeTerm("searchPlaceholder")
+                    : t(lang, "posSellSearchPlaceholder")
+              }
+              aria-label={
+                isFullDesktopPos
+                  ? t(lang, "posDesktopSearchPlaceholder")
+                  : pharmacyMode || hospitalityMode || wholesaleMode
+                    ? modeTerm("searchPlaceholder")
+                    : t(lang, "posSellSearchPlaceholder")
+              }
               className={clsx(
                 "w-full rounded-2xl border border-stone-200 bg-white pl-9 pr-10 font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
-                mobileSellFocus ? "h-12 text-base shadow-sm" : "h-11 bg-stone-50/90 text-base focus:bg-white focus:ring-1",
+                mobileSellFocus
+                  ? "h-12 text-base shadow-sm"
+                  : isFullDesktopPos
+                    ? "h-10 bg-stone-50/90 text-sm focus:bg-white focus:ring-1"
+                    : "h-11 bg-stone-50/90 text-base focus:bg-white focus:ring-1",
               )}
             />
             <button
@@ -1586,7 +1626,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {searchQuery.trim() ? <X className="h-4 w-4" /> : <ScanLine className="h-4 w-4" />}
             </button>
           </div>
-          {!mobileSellFocus && recentSearches.length > 0 ? (
+          {!mobileSellFocus && !isFullDesktopPos && recentSearches.length > 0 ? (
             <ul
               className="m-0 flex max-w-full list-none gap-1 overflow-x-auto p-0 pb-0.5"
               aria-label={t(lang, "posRecentSearches")}
@@ -1604,7 +1644,7 @@ export function PosPage({ lang }: { lang: Language }) {
               ))}
             </ul>
           ) : null}
-          {!mobileSellFocus && frequentTodayVisible.length > 0 ? (
+          {!mobileSellFocus && !isFullDesktopPos && frequentTodayVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFrequentToday")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
@@ -1621,7 +1661,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
-          {!mobileSellFocus && favoriteProductsVisible.length > 0 ? (
+          {!mobileSellFocus && !isFullDesktopPos && favoriteProductsVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posFavorites")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
@@ -1638,7 +1678,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </div>
             </div>
           ) : null}
-          {!mobileSellFocus && recentProductsVisible.length > 0 ? (
+          {!mobileSellFocus && !isFullDesktopPos && recentProductsVisible.length > 0 ? (
             <div>
               <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posRecentProducts")}</p>
               <div className="mt-1 flex max-w-full gap-1 overflow-x-auto pb-0.5">
@@ -1656,6 +1696,16 @@ export function PosPage({ lang }: { lang: Language }) {
             </div>
           ) : null}
         </div>
+      ) : null}
+
+      {isFullDesktopPos && products.length > 0 ? (
+        <PosDesktopCategoryChips
+          lang={lang}
+          shelves={shelfCards}
+          selectedKey={sellCategoryKey}
+          onSelect={setSellCategoryFilter}
+          canAddProduct={hasPermission(actor.role, "products.add")}
+        />
       ) : null}
 
       {mobileSellFocus && quickProductChips.length > 0 ? (
@@ -1835,8 +1885,8 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
         </section>
       ) : showDesktopProductView && filteredProducts.length === 0 ? (
-        <section className="space-y-2">
-          {hasSellViewFilter ? (
+        <section className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1")}>
+          {hasSellViewFilter && !isFullDesktopPos ? (
             <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
               <button
                 type="button"
@@ -1854,7 +1904,11 @@ export function PosPage({ lang }: { lang: Language }) {
           <p className="rounded-2xl bg-amber-50 px-4 py-6 text-center text-lg font-bold text-amber-950">{t(lang, "posSellNoMatch")}</p>
         </section>
       ) : showDesktopProductView ? (
-        <section className="space-y-2">
+        <section
+          className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}
+          data-pos-catalog-scroll={isFullDesktopPos ? true : undefined}
+        >
+          {!isFullDesktopPos ? (
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
             <button
               type="button"
@@ -1873,6 +1927,7 @@ export function PosPage({ lang }: { lang: Language }) {
               {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
             </p>
           </div>
+          ) : null}
           {filteredProducts.length > VIRTUAL_PRODUCT_THRESHOLD ? (
             <VirtualizedProductGrid
               products={filteredProducts}
@@ -1880,16 +1935,35 @@ export function PosPage({ lang }: { lang: Language }) {
               onPick={openProduct}
               stockLabel={t(lang, "stockLabel")}
               noShelfLabel={t(lang, "posNoShelf")}
+              addLabel={t(lang, "addToSale")}
               isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
               lockedBadge={t(lang, "productLockedBadge")}
+              variant={isFullDesktopPos ? "sellDesktop" : "default"}
+              favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
+              onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
             />
           ) : (
             <div
-              className="grid gap-2.5"
+              className={clsx("grid", isFullDesktopPos ? "gap-1.5" : "gap-2.5")}
               style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
             >
               {filteredProducts.map((p) => {
                 const locked = isProductPlanLocked(p.id, lockedIds);
+                if (isFullDesktopPos) {
+                  return (
+                    <PosDesktopProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={t(lang, "stockLabel")}
+                      sellLabel={t(lang, "addToSale")}
+                      locked={locked}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      favorite={favoriteIdSet.has(p.id)}
+                      onPick={openProduct}
+                      onToggleFavorite={toggleFavoriteProduct}
+                    />
+                  );
+                }
                 return (
                 <article
                   key={p.id}
@@ -1955,11 +2029,13 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
 
         {mountDesktopCheckoutSidebar ? (
-          <aside className="sticky top-3">
+          <aside className={clsx(isFullDesktopPos ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
             <PosCheckoutPanel variant="sidebar" {...checkoutPanelCommon} />
           </aside>
         ) : null}
       </div>
+
+      {isFullDesktopPos ? <PosDesktopStatusBar lang={lang} /> : null}
 
       {mountCompactCheckoutSlideover ? (
         <PosCompactCheckoutSlideover

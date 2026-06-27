@@ -15,27 +15,35 @@ const Numpad = memo(function Numpad({
   onClear,
   allowDecimal,
   compact = false,
+  enterprise = false,
 }: {
   onDigit: (d: string) => void;
   onClear: () => void;
   allowDecimal: boolean;
   compact?: boolean;
+  enterprise?: boolean;
 }) {
-  const row4 = allowDecimal ? [".", "0", "⌫"] : ["0", "⌫", "C"];
-  const keyClass = compact
-    ? "min-h-[44px] rounded-xl bg-slate-100 py-1.5 text-lg font-semibold text-slate-900 active:bg-slate-200"
-    : "min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200 active:brightness-95 motion-reduce:active:brightness-100";
+  const row4 = enterprise
+    ? (["0", "00", "⌫"] as const)
+    : allowDecimal
+      ? [".", "0", "⌫"]
+      : ["0", "⌫", "C"];
+  const keyClass = enterprise
+    ? "min-h-[36px] rounded-lg bg-slate-100 py-1 text-base font-semibold text-slate-900 active:bg-slate-200"
+    : compact
+      ? "min-h-[44px] rounded-xl bg-slate-100 py-1.5 text-lg font-semibold text-slate-900 active:bg-slate-200"
+      : "min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200 active:brightness-95 motion-reduce:active:brightness-100";
 
   return (
-    <div className={compact ? "space-y-1.5" : "space-y-2"}>
-      <div className={clsx("grid grid-cols-3", compact ? "gap-1.5" : "gap-2")}>
+    <div className={enterprise ? "space-y-1" : compact ? "space-y-1.5" : "space-y-2"}>
+      <div className={clsx("grid grid-cols-3", enterprise ? "gap-1" : compact ? "gap-1.5" : "gap-2")}>
         {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
           <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
             {k}
           </button>
         ))}
       </div>
-      <div className={clsx("grid grid-cols-3", compact ? "gap-1.5" : "gap-2")}>
+      <div className={clsx("grid grid-cols-3", enterprise ? "gap-1" : compact ? "gap-1.5" : "gap-2")}>
         {row4.map((k) => (
           <button
             key={k}
@@ -51,7 +59,15 @@ const Numpad = memo(function Numpad({
           </button>
         ))}
       </div>
-      {allowDecimal && !compact ? (
+      {enterprise ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="w-full min-h-[32px] rounded-lg bg-amber-100 py-1 text-sm font-bold text-amber-900 active:bg-amber-200"
+        >
+          C
+        </button>
+      ) : allowDecimal && !compact ? (
         <button
           type="button"
           onClick={onClear}
@@ -137,6 +153,7 @@ type PaymentBlockProps = {
   compact: boolean;
   dockMode?: boolean;
   hideNumpad?: boolean;
+  enterprise?: boolean;
   draftPayable: number;
   checkoutTotals: DraftCheckoutTotals;
   paymentMethod: PaymentMethod;
@@ -165,6 +182,7 @@ function PaymentBlock({
   compact,
   dockMode = false,
   hideNumpad = false,
+  enterprise = false,
   draftPayable,
   checkoutTotals,
   paymentMethod,
@@ -187,9 +205,11 @@ function PaymentBlock({
   onSaleCustomerName,
   onSaleCustomerPhone,
 }: PaymentBlockProps) {
-  const amountBtnClass = compact
-    ? "mt-1.5 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-lg font-black"
-    : "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black";
+  const amountBtnClass = enterprise
+    ? "mt-1 flex min-h-[40px] w-full items-center justify-end rounded-lg border-2 px-3 py-1.5 text-lg font-black"
+    : compact
+      ? "mt-1.5 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-lg font-black"
+      : "mt-2 flex min-h-[52px] w-full items-center justify-end rounded-2xl border-2 px-4 py-3 text-xl font-black";
 
   return (
     <>
@@ -197,7 +217,11 @@ function PaymentBlock({
         <p
           className={clsx(
             "font-black text-slate-900",
-            compact ? "flex items-baseline justify-between gap-2 text-lg" : "text-3xl",
+            enterprise
+              ? "flex items-baseline justify-between gap-2 text-base"
+              : compact
+                ? "flex items-baseline justify-between gap-2 text-lg"
+                : "text-3xl",
           )}
         >
           <span className={compact ? "text-sm font-bold text-stone-600" : undefined}>
@@ -381,9 +405,10 @@ function PaymentBlock({
       ) : null}
 
       {(paymentMethod === "cash" || paymentMethod === "credit") && !hideNumpad && (
-        <div className={compact ? "mt-2" : "mt-4"}>
+        <div className={enterprise ? "mt-1.5" : compact ? "mt-2" : "mt-4"}>
           <Numpad
             compact={compact}
+            enterprise={enterprise}
             allowDecimal={false}
             onDigit={onAppendCheckoutDigit}
             onClear={onClearCheckoutAmount}
@@ -753,13 +778,15 @@ export function PosCheckoutPanel({
 }: PosCheckoutPanelProps) {
   const isSidebar = variant === "sidebar";
   const isCompact = !isSidebar;
+  const isEnterpriseSidebar = isSidebar;
   const emptyCart = draftLines.length === 0;
 
   const paymentProps: PaymentBlockProps = {
     lang,
-    compact: isCompact,
+    compact: isCompact || isEnterpriseSidebar,
     dockMode: isCompact,
     hideNumpad: isCompact,
+    enterprise: isEnterpriseSidebar,
     draftPayable,
     checkoutTotals,
     paymentMethod,
@@ -785,7 +812,7 @@ export function PosCheckoutPanel({
 
   const cartBodyProps = {
     lang,
-    compact: isCompact,
+    compact: isCompact || isEnterpriseSidebar,
     draftLines,
     draftCartStats,
     checkoutTotals,
@@ -806,7 +833,7 @@ export function PosCheckoutPanel({
       className={clsx(
         "flex min-h-0 flex-col",
         isSidebar
-          ? "h-full max-h-[calc(100dvh-5rem)] rounded-[1.35rem] border border-waka-200 bg-waka-50/90 shadow-waka-sm"
+          ? "h-full max-h-[calc(100dvh-5.25rem)] rounded-xl border border-waka-200 bg-waka-50/90 shadow-waka-sm"
           : "h-full bg-waka-50",
       )}
     >
@@ -922,6 +949,15 @@ export function PosCheckoutPanel({
             )}
           </div>
         </div>
+      ) : isEnterpriseSidebar ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2.5 py-2 [-webkit-overflow-scrolling:touch]">
+            <CartScrollBody {...cartBodyProps} />
+          </div>
+          <div className="shrink-0 border-t border-waka-200 bg-waka-50/95 px-2.5 py-2">
+            <PaymentBlock {...paymentProps} />
+          </div>
+        </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 lg:p-3 [-webkit-overflow-scrolling:touch]">
           <CartScrollBody {...cartBodyProps} />
@@ -935,8 +971,8 @@ export function PosCheckoutPanel({
       <footer
         className={clsx(
           "shrink-0 border-t border-waka-200 bg-waka-50 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]",
-          isCompact ? "hidden" : "px-4 py-3",
-          isSidebar && "rounded-b-[1.35rem] pb-3",
+          isCompact ? "hidden" : isEnterpriseSidebar ? "px-2.5 py-2" : "px-4 py-3",
+          isSidebar && "rounded-b-xl",
         )}
       >
         {canSavePending && paymentMethod !== "credit" && !emptyCart ? (
@@ -944,8 +980,8 @@ export function PosCheckoutPanel({
             type="button"
             onClick={onSavePending}
             className={clsx(
-              "mb-1.5 w-full rounded-2xl border-2 border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
-              isCompact ? "min-h-[44px] text-sm" : "mb-2 min-h-[48px] text-lg",
+              "mb-1.5 w-full rounded-xl border-2 border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
+              isEnterpriseSidebar ? "min-h-[40px] text-sm" : "mb-2 min-h-[48px] text-lg",
             )}
           >
             {savePendingLabel}
@@ -957,8 +993,8 @@ export function PosCheckoutPanel({
           onClick={onFinishSale}
           disabled={emptyCart}
           className={clsx(
-            "w-full rounded-2xl bg-waka-600 font-black text-white shadow-lg active:bg-waka-700 disabled:opacity-40",
-            isCompact ? "min-h-[44px] py-2.5 text-lg" : "min-h-[56px] rounded-3xl py-4 text-2xl",
+            "w-full rounded-xl bg-waka-600 font-black text-white shadow-lg active:bg-waka-700 disabled:opacity-40",
+            isEnterpriseSidebar ? "min-h-[44px] text-base" : "min-h-[56px] rounded-3xl py-4 text-2xl",
           )}
         >
           {saveSaleLabel}

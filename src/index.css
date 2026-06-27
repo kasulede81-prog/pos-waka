@@ -219,6 +219,13 @@ body {
     appearance: textfield;
   }
 
+  /** Enterprise desktop POS — compact header replaces AppShell chrome. */
+  @media (min-width: 1024px) {
+    .app-shell--pos-enterprise .scroll-main-chrome {
+      scroll-padding-bottom: 0;
+    }
+  }
+
   @media (min-width: 768px) {
     .scroll-main-chrome,
     .scroll-main-chrome--pos {

@@ -44,6 +44,7 @@ import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
+import { usePosLayoutMode } from "../../hooks/usePosLayoutMode";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
 import { resolveModuleExit } from "../../lib/moduleExit";
 
@@ -273,9 +274,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
 
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
   const isDesktopLayout = usePosDesktopLayout();
+  const posLayoutMode = usePosLayoutMode();
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
   const isLauncherHome = location.pathname === "/";
   const onSellScreen = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
+  const fullDesktopSell = onSellScreen && posLayoutMode === "full";
   const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
   const desktopTerminalMode = isDesktopLayout && !internalAdminRoute;
@@ -329,6 +332,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           "app-shell-root flex h-dvh max-h-dvh w-full max-w-full flex-col overflow-hidden text-stone-900 transition-colors duration-300",
           isLauncherHome ? "bg-gradient-to-b from-waka-500 via-waka-50 to-white" : "bg-stone-50",
           onSellScreen && "app-shell--sell-focus",
+          fullDesktopSell && "app-shell--pos-enterprise",
           isLauncherHome && "app-shell--launcher",
           showMobileModuleExit && "app-shell--module-exit",
         )}
@@ -346,6 +350,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           </div>
         ) : null}
         {pilotActive ? <PilotModeBanner lang={lang} /> : null}
+        {!fullDesktopSell ? (
         <header
           className={clsx(
             "relative z-20 shrink-0 overflow-visible border-b shadow-sm backdrop-blur",
@@ -500,6 +505,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </div>
         </header>
+        ) : null}
         {showBackOfficeSearch ? (
           <div
             className={clsx(
@@ -563,7 +569,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           ) : null}
           <section className={clsx("flex min-h-0 min-w-0 max-w-full flex-1 flex-col", independentModule ? "pb-0" : "md:pb-0")}>
             <div
-              className={`scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] ${
+              className={`scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch] ${
+                fullDesktopSell
+                  ? "overflow-hidden"
+                  : "overflow-y-auto"
+              } ${
                 location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : ""
               }`}
             >

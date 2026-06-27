@@ -16,7 +16,7 @@ describe("posDesktopSplit", () => {
     const hd = posCheckoutColumnWidthPx(1920);
     const uhd = posCheckoutColumnWidthPx(3440);
     expect(uhd).toBeGreaterThan(hd);
-    expect(uhd).toBeLessThanOrEqual(480);
+    expect(uhd).toBeLessThanOrEqual(460);
   });
 
   it("builds grid template with fluid catalog column", () => {

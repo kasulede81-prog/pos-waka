@@ -9,9 +9,11 @@ import { shelfIconFor } from "../../lib/productCategories";
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { PosSellProductCard } from "./PosSellProductCard";
+import { PosDesktopProductCard } from "./PosDesktopProductCard";
 
 const ROW_ESTIMATE_DEFAULT = 148;
 const ROW_ESTIMATE_SELL_MOBILE = 120;
+const ROW_ESTIMATE_SELL_DESKTOP = 112;
 const BOTTOM_SCROLL_GUTTER = 24;
 
 type Props = {
@@ -23,10 +25,12 @@ type Props = {
   addLabel?: string;
   isLocked?: (p: Product) => boolean;
   lockedBadge?: string;
-  variant?: "default" | "sellMobile";
+  variant?: "default" | "sellMobile" | "sellDesktop";
+  favoriteIds?: Set<string>;
+  onToggleFavorite?: (productId: string) => void;
 };
 
-/** Scrolls long product lists smoothly; column count is set by viewport (desktop: 4–8 cols). */
+/** Scrolls long product lists smoothly; column count is set by measured catalog width. */
 function VirtualizedProductGridInner({
   products,
   columnCount,
@@ -37,21 +41,31 @@ function VirtualizedProductGridInner({
   isLocked,
   lockedBadge,
   variant = "default",
+  favoriteIds,
+  onToggleFavorite,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const cols = Math.max(2, columnCount);
   const rowCount = Math.ceil(products.length / cols);
   const sellMobile = variant === "sellMobile";
-  const rowEstimate = sellMobile ? ROW_ESTIMATE_SELL_MOBILE : ROW_ESTIMATE_DEFAULT;
+  const sellDesktop = variant === "sellDesktop";
+  const rowEstimate = sellMobile
+    ? ROW_ESTIMATE_SELL_MOBILE
+    : sellDesktop
+      ? ROW_ESTIMATE_SELL_DESKTOP
+      : ROW_ESTIMATE_DEFAULT;
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () =>
+      parentRef.current?.closest<HTMLElement>("[data-pos-catalog-scroll]") ??
       parentRef.current?.closest<HTMLElement>(".scroll-main-chrome") ??
       document.querySelector<HTMLElement>(".scroll-main-chrome"),
     estimateSize: () => rowEstimate,
     overscan: 5,
   });
+
+  const gapClass = sellDesktop ? "gap-1.5" : sellMobile ? "gap-2" : "gap-2.5";
 
   return (
     <div ref={parentRef} className="w-full">
@@ -67,7 +81,7 @@ function VirtualizedProductGridInner({
           return (
             <div
               key={virtualRow.key}
-              className={clsx("absolute left-0 top-0 grid w-full px-0.5", sellMobile ? "gap-2" : "gap-2.5")}
+              className={clsx("absolute left-0 top-0 grid w-full px-0.5", gapClass)}
               style={{
                 gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                 transform: `translateY(${virtualRow.start}px)`,
@@ -86,6 +100,21 @@ function VirtualizedProductGridInner({
                       locked={locked}
                       lockedBadge={lockedBadge}
                       onPick={onPick}
+                    />
+                  );
+                }
+                if (sellDesktop) {
+                  return (
+                    <PosDesktopProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={stockLabel}
+                      sellLabel={addLabel}
+                      locked={locked}
+                      lockedBadge={lockedBadge}
+                      favorite={favoriteIds?.has(p.id)}
+                      onPick={onPick}
+                      onToggleFavorite={onToggleFavorite}
                     />
                   );
                 }
