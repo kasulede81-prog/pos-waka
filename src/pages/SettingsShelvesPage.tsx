@@ -5,6 +5,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { PosShelfArrangePanel } from "../components/pos/PosShelfArrangePanel";
 
 export function SettingsShelvesPage({ lang }: { lang: Language }) {
@@ -16,13 +17,18 @@ export function SettingsShelvesPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-5 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "settingsHubShelves")}
-        subtitle={t(lang, "settingsHubShelvesSub")}
-      />
+    <BackOfficePageLayout
+      header={
+        <SettingsPageHeader
+          lang={lang}
+          title={t(lang, "settingsHubShelves")}
+          subtitle={t(lang, "settingsHubShelvesSub")}
+          backTo="/settings"
+        />
+      }
+      className="pb-8"
+    >
       <PosShelfArrangePanel lang={lang} products={products} embedded />
-    </div>
+    </BackOfficePageLayout>
   );
 }

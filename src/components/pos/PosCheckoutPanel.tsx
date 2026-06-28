@@ -1,4 +1,4 @@
-import { memo, type ReactNode, type RefObject } from "react";
+import { memo, useEffect, useState, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
 import { Check, ChevronDown } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
@@ -80,7 +80,7 @@ const Numpad = memo(function Numpad({
   );
 });
 
-/** Italian-style numpad with clear + confirm on the right — always visible on mobile checkout. */
+/** Italian-style numpad with clear + confirm on the right — mobile checkout & desktop sidebar. */
 const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   onDigit,
   onClear,
@@ -88,6 +88,7 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveLabel,
   saveDisabled,
   saveButtonRef,
+  sidebar = false,
 }: {
   onDigit: (d: string) => void;
   onClear: () => void;
@@ -95,21 +96,23 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveLabel: string;
   saveDisabled: boolean;
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
+  sidebar?: boolean;
 }) {
-  const keyClass =
-    "min-h-[52px] rounded-xl bg-slate-100 py-1.5 text-2xl font-bold text-slate-900 active:bg-slate-200";
+  const keyClass = sidebar
+    ? "min-h-[44px] rounded-lg bg-slate-100 py-1 text-xl font-bold text-slate-900 active:bg-slate-200"
+    : "min-h-[52px] rounded-xl bg-slate-100 py-1.5 text-2xl font-bold text-slate-900 active:bg-slate-200";
 
   return (
-    <div className="grid grid-cols-[1fr_5rem] gap-2">
-      <div className="space-y-2">
-        <div className="grid grid-cols-3 gap-2">
+    <div className={clsx("grid gap-2", sidebar ? "grid-cols-[1fr_4.25rem]" : "grid-cols-[1fr_5rem]")}>
+      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-1.5" : "gap-2")}>
+        <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
           {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
             <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
               {k}
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
           {(["00", "0", "⌫"] as const).map((k) => (
             <button
               key={k}
@@ -129,7 +132,10 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
         <button
           type="button"
           onClick={onClear}
-          className="min-h-[52px] rounded-xl bg-rose-500 text-xl font-black text-white active:bg-rose-600"
+          className={clsx(
+            "rounded-xl bg-rose-500 font-black text-white active:bg-rose-600",
+            sidebar ? "min-h-[44px] text-lg" : "min-h-[52px] text-xl",
+          )}
         >
           C
         </button>
@@ -138,9 +144,12 @@ const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           type="button"
           onClick={onSave}
           disabled={saveDisabled}
-          className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-1 py-2 text-sm font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
+          className={clsx(
+            "flex min-h-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-1 py-2 font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40",
+            sidebar ? "text-xs" : "text-sm",
+          )}
         >
-          <Check className="h-7 w-7 stroke-[3]" aria-hidden />
+          <Check className={clsx("stroke-[3]", sidebar ? "h-6 w-6" : "h-7 w-7")} aria-hidden />
           <span className="text-center">{saveLabel}</span>
         </button>
       </div>
@@ -539,128 +548,9 @@ export type PosCheckoutPanelProps = {
   onSaleCustomerPhone: (phone: string) => void;
   onSavePending: () => void;
   onFinishSale: () => void;
+  /** Desktop sidebar — focus catalog to add more products. */
+  onAddItems?: () => void;
 };
-
-function CartScrollBody({
-  lang,
-  compact,
-  draftLines,
-  draftCartStats,
-  checkoutTotals,
-  draftPayable,
-  draftDiscountTotal,
-  productById,
-  onIncrement,
-  onDecrement,
-  onQtyTap,
-  onLineDiscount,
-  onRemoveLine,
-  onOpenCartDiscount,
-}: {
-  lang: Language;
-  compact: boolean;
-  draftLines: SaleLine[];
-  draftCartStats: DraftCartStats;
-  checkoutTotals: DraftCheckoutTotals;
-  draftPayable: number;
-  draftDiscountTotal: number;
-  productById: Map<string, Product>;
-  onIncrement: (line: SaleLine) => void;
-  onDecrement: (line: SaleLine) => void;
-  onQtyTap: (line: SaleLine) => void;
-  onLineDiscount: (line: SaleLine) => void;
-  onRemoveLine: (productId: string) => void;
-  onOpenCartDiscount: () => void;
-}): ReactNode {
-  const hasDiscountBreakdown = draftDiscountTotal > 0 || checkoutTotals.cartDiscountUgx > 0;
-
-  return (
-    <>
-      <DraftCartSummary
-        lang={lang}
-        stats={draftCartStats}
-        payableUgx={draftPayable}
-        cartDiscountUgx={checkoutTotals.cartDiscountUgx}
-        compact={compact}
-      />
-      <ul className={clsx("rounded-2xl border border-waka-200 bg-white shadow-sm", compact ? "mt-2 space-y-1.5 p-2" : "mt-3 space-y-2 p-3")}>
-        {draftLines.map((line) => (
-          <DraftCartLineRow
-            key={line.productId}
-            lang={lang}
-            line={line}
-            product={productById.get(line.productId)}
-            compact={compact}
-            onIncrement={() => onIncrement(line)}
-            onDecrement={() => onDecrement(line)}
-            onQtyTap={() => onQtyTap(line)}
-            onDiscount={() => onLineDiscount(line)}
-            onRemove={() => onRemoveLine(line.productId)}
-          />
-        ))}
-      </ul>
-      {draftDiscountTotal > 0 && !compact ? (
-        <p className="mt-2 text-sm font-bold text-amber-800">
-          {t(lang, "draftLineDiscountTotal")}: UGX {draftDiscountTotal.toLocaleString()}
-        </p>
-      ) : null}
-      <div
-        className={clsx(
-          "flex items-center justify-between gap-2 rounded-xl border border-waka-200 bg-waka-50/80",
-          compact ? "mt-2 px-2.5 py-2" : "mt-4 rounded-2xl p-3",
-        )}
-      >
-        <p className={clsx("font-black text-slate-800", compact ? "text-xs" : "text-sm")}>
-          {t(lang, "cartDiscountApplied")}
-        </p>
-        <button
-          type="button"
-          onClick={onOpenCartDiscount}
-          className={clsx(
-            "shrink-0 rounded-xl border-2 border-waka-400 bg-white font-black text-waka-900 active:bg-waka-100",
-            compact ? "min-h-[44px] px-3 text-xs" : "min-h-[44px] rounded-2xl px-4 text-sm",
-          )}
-        >
-          {t(lang, "cartDiscountBtn")}
-        </button>
-      </div>
-      {checkoutTotals.cartDiscountUgx > 0 && !compact ? (
-        <p className="mt-2 text-sm font-bold text-emerald-900">
-          − UGX {checkoutTotals.cartDiscountUgx.toLocaleString()}
-        </p>
-      ) : null}
-      {hasDiscountBreakdown ? (
-        <div
-          className={clsx(
-            "space-y-1 rounded-xl border border-slate-200 bg-slate-50/80 font-semibold text-slate-700",
-            compact ? "mt-2 p-2 text-xs" : "mt-3 rounded-2xl p-3 text-sm",
-          )}
-        >
-          <p className="flex justify-between gap-2">
-            <span>{t(lang, "checkoutSubtotalLabel")}</span>
-            <span>UGX {(checkoutTotals.lineSubtotalUgx + draftDiscountTotal).toLocaleString()}</span>
-          </p>
-          {draftDiscountTotal > 0 ? (
-            <p className="flex justify-between gap-2 text-amber-900">
-              <span>{t(lang, "checkoutLineDiscountsLabel")}</span>
-              <span>− UGX {draftDiscountTotal.toLocaleString()}</span>
-            </p>
-          ) : null}
-          {checkoutTotals.cartDiscountUgx > 0 ? (
-            <p className="flex justify-between gap-2 text-emerald-900">
-              <span>{t(lang, "checkoutCartDiscountLabel")}</span>
-              <span>− UGX {checkoutTotals.cartDiscountUgx.toLocaleString()}</span>
-            </p>
-          ) : null}
-          <p className="flex justify-between gap-2 border-t border-slate-200 pt-1 font-black text-slate-900">
-            <span>{t(lang, "checkoutFinalTotalLabel")}</span>
-            <span>UGX {draftPayable.toLocaleString()}</span>
-          </p>
-        </div>
-      ) : null}
-    </>
-  );
-}
 
 function CartDockBody({
   lang,
@@ -739,7 +629,7 @@ export function PosCheckoutPanel({
   draftCartStats,
   checkoutTotals,
   draftPayable,
-  draftDiscountTotal,
+  draftDiscountTotal: _draftDiscountTotal,
   productById,
   checkoutBlockMessage,
   paymentMethod,
@@ -775,18 +665,24 @@ export function PosCheckoutPanel({
   onSaleCustomerPhone,
   onSavePending,
   onFinishSale,
+  onAddItems,
 }: PosCheckoutPanelProps) {
   const isSidebar = variant === "sidebar";
   const isCompact = !isSidebar;
-  const isEnterpriseSidebar = isSidebar;
   const emptyCart = draftLines.length === 0;
+  const [sidebarNumpadOpen, setSidebarNumpadOpen] = useState(false);
+  const needsAmountKeypad = paymentMethod === "cash" || paymentMethod === "credit";
+
+  useEffect(() => {
+    if (!needsAmountKeypad) setSidebarNumpadOpen(false);
+  }, [needsAmountKeypad]);
 
   const paymentProps: PaymentBlockProps = {
     lang,
-    compact: isCompact || isEnterpriseSidebar,
-    dockMode: isCompact,
-    hideNumpad: isCompact,
-    enterprise: isEnterpriseSidebar,
+    compact: true,
+    dockMode: true,
+    hideNumpad: true,
+    enterprise: false,
     draftPayable,
     checkoutTotals,
     paymentMethod,
@@ -808,23 +704,6 @@ export function PosCheckoutPanel({
     onSaleCustomerId,
     onSaleCustomerName,
     onSaleCustomerPhone,
-  };
-
-  const cartBodyProps = {
-    lang,
-    compact: isCompact || isEnterpriseSidebar,
-    draftLines,
-    draftCartStats,
-    checkoutTotals,
-    draftPayable,
-    draftDiscountTotal,
-    productById,
-    onIncrement,
-    onDecrement,
-    onQtyTap,
-    onLineDiscount,
-    onRemoveLine,
-    onOpenCartDiscount,
   };
 
   return (
@@ -875,6 +754,14 @@ export function PosCheckoutPanel({
           >
             {t(lang, "posAddMoreItems")}
           </button>
+        ) : isSidebar && onAddItems ? (
+          <button
+            type="button"
+            onClick={onAddItems}
+            className="shrink-0 rounded-full border border-waka-300 bg-white px-3 py-2 text-sm font-bold text-waka-900 shadow-sm active:bg-waka-50"
+          >
+            {t(lang, "posAddMoreItems")}
+          </button>
         ) : (
           <span className={clsx("shrink-0", isCompact ? "w-12" : "w-[4.5rem]")} aria-hidden />
         )}
@@ -896,9 +783,18 @@ export function PosCheckoutPanel({
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <p className="py-8 text-center text-sm font-semibold text-slate-500">{t(lang, "posCartEmptyHint")}</p>
         </div>
-      ) : isCompact ? (
+      ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="max-h-[min(36dvh,14rem)] shrink-0 overflow-y-auto overscroll-y-contain border-b border-waka-200 px-3 py-2 [-webkit-overflow-scrolling:touch]">
+          <div
+            className={clsx(
+              "shrink-0 overflow-y-auto overscroll-y-contain border-b border-waka-200 [-webkit-overflow-scrolling:touch]",
+              isSidebar
+                ? sidebarNumpadOpen
+                  ? "max-h-[min(28%,10rem)] px-2.5 py-2"
+                  : "max-h-[min(42%,15rem)] px-2.5 py-2"
+                : "max-h-[min(36dvh,14rem)] px-3 py-2",
+            )}
+          >
             <CartDockBody
               lang={lang}
               draftLines={draftLines}
@@ -914,20 +810,68 @@ export function PosCheckoutPanel({
               onOpenCartDiscount={onOpenCartDiscount}
             />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-3 py-2">
+          <div
+            className={clsx(
+              "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
+              isSidebar ? "px-2.5 py-2" : "px-3 py-2",
+            )}
+          >
             <PaymentBlock {...paymentProps} />
           </div>
-          <div className="shrink-0 border-t border-waka-200 bg-white px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] shadow-[0_-4px_12px_rgba(0,0,0,0.06)]">
+          <div
+            className={clsx(
+              "shrink-0 border-t border-waka-200 bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.06)]",
+              isSidebar ? "px-2.5 py-2" : "px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]",
+            )}
+          >
             {canSavePending && paymentMethod !== "credit" ? (
               <button
                 type="button"
                 onClick={onSavePending}
-                className="mb-2 w-full rounded-xl border border-amber-300 bg-amber-50 py-2 text-sm font-black text-amber-950 active:bg-amber-100"
+                className={clsx(
+                  "mb-2 w-full rounded-xl border border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
+                  isSidebar ? "py-1.5 text-xs" : "py-2 text-sm",
+                )}
               >
                 {savePendingLabel}
               </button>
             ) : null}
-            {paymentMethod === "cash" || paymentMethod === "credit" ? (
+            {isSidebar ? (
+              sidebarNumpadOpen && needsAmountKeypad ? (
+                <CheckoutNumpadDock
+                  sidebar
+                  onDigit={onAppendCheckoutDigit}
+                  onClear={onClearCheckoutAmount}
+                  onSave={onFinishSale}
+                  saveLabel={saveSaleLabel}
+                  saveDisabled={emptyCart}
+                  saveButtonRef={saveButtonRef}
+                />
+              ) : (
+                <div className="flex gap-2">
+                  {needsAmountKeypad ? (
+                    <button
+                      type="button"
+                      onClick={() => setSidebarNumpadOpen(true)}
+                      aria-label={t(lang, "posKeypadShow")}
+                      title={t(lang, "posKeypadShow")}
+                      className="flex h-12 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-emerald-600 text-xs font-black leading-none text-white shadow-md active:bg-emerald-700"
+                    >
+                      ABC
+                    </button>
+                  ) : null}
+                  <button
+                    ref={saveButtonRef}
+                    type="button"
+                    onClick={onFinishSale}
+                    disabled={emptyCart}
+                    className="min-h-[48px] flex-1 rounded-xl bg-emerald-600 py-3 text-base font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
+                  >
+                    {saveSaleLabel}
+                  </button>
+                </div>
+              )
+            ) : needsAmountKeypad ? (
               <CheckoutNumpadDock
                 onDigit={onAppendCheckoutDigit}
                 onClear={onClearCheckoutAmount}
@@ -947,59 +891,20 @@ export function PosCheckoutPanel({
                 {saveSaleLabel}
               </button>
             )}
+            {isSidebar && sidebarNumpadOpen && needsAmountKeypad ? (
+              <button
+                type="button"
+                onClick={() => setSidebarNumpadOpen(false)}
+                className="mt-2 w-full rounded-lg py-1 text-center text-[11px] font-bold text-stone-500 active:text-stone-800"
+              >
+                {t(lang, "posKeypadHide")}
+              </button>
+            ) : null}
           </div>
-        </div>
-      ) : isEnterpriseSidebar ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-2.5 py-2 [-webkit-overflow-scrolling:touch]">
-            <CartScrollBody {...cartBodyProps} />
-          </div>
-          <div className="shrink-0 border-t border-waka-200 bg-waka-50/95 px-2.5 py-2">
-            <PaymentBlock {...paymentProps} />
-          </div>
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 lg:p-3 [-webkit-overflow-scrolling:touch]">
-          <CartScrollBody {...cartBodyProps} />
-          <div className="mt-4">
-            <PaymentBlock {...paymentProps} />
-          </div>
-          <div aria-hidden className="h-4 shrink-0" />
         </div>
       )}
 
-      <footer
-        className={clsx(
-          "shrink-0 border-t border-waka-200 bg-waka-50 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]",
-          isCompact ? "hidden" : isEnterpriseSidebar ? "px-2.5 py-2" : "px-4 py-3",
-          isSidebar && "rounded-b-xl",
-        )}
-      >
-        {canSavePending && paymentMethod !== "credit" && !emptyCart ? (
-          <button
-            type="button"
-            onClick={onSavePending}
-            className={clsx(
-              "mb-1.5 w-full rounded-xl border-2 border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
-              isEnterpriseSidebar ? "min-h-[40px] text-sm" : "mb-2 min-h-[48px] text-lg",
-            )}
-          >
-            {savePendingLabel}
-          </button>
-        ) : null}
-        <button
-          ref={saveButtonRef}
-          type="button"
-          onClick={onFinishSale}
-          disabled={emptyCart}
-          className={clsx(
-            "w-full rounded-xl bg-waka-600 font-black text-white shadow-lg active:bg-waka-700 disabled:opacity-40",
-            isEnterpriseSidebar ? "min-h-[44px] text-base" : "min-h-[56px] rounded-3xl py-4 text-2xl",
-          )}
-        >
-          {saveSaleLabel}
-        </button>
-      </footer>
+      <footer className="hidden" aria-hidden />
     </div>
   );
 }

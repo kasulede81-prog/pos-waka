@@ -97,6 +97,7 @@ import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
+import { BusinessBuilderProvider } from "./context/BusinessBuilderContext";
 import { useUiLanguage } from "./hooks/useUiLanguage";
 
 const OwnerDashboardPage = lazy(() =>
@@ -270,7 +271,7 @@ function AppRoutes() {
                 </ActivationProvider>
               }
             >
-              <Route path="activate" element={<BusinessActivationPage lang={lang} />} />
+              <Route path="activate" element={<BusinessActivationPage lang={lang} setLang={setLang} />} />
                 <Route
                   element={
                     <SubscriptionProvider user={auth.user} authMode={auth.mode}>
@@ -914,7 +915,9 @@ function App() {
   const Router = isElectronDesktop() ? HashRouter : BrowserRouter;
   return (
     <Router>
-      <AppRoutes />
+      <BusinessBuilderProvider>
+        <AppRoutes />
+      </BusinessBuilderProvider>
     </Router>
   );
 }

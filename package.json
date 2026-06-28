@@ -69,6 +69,7 @@
     "framer-motion": "^12.40.0",
     "idb": "^8.0.3",
     "jspdf": "^3.0.4",
+    "lottie-react": "^2.4.1",
     "lucide-react": "1.17.0",
     "mapbox-gl": "^3.23.1",
     "react": "^19.2.5",

@@ -2,7 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft } from "lucide-react";
 import type { BusinessType, Language, ShopSellingStyle } from "../types";
-import { AuthLayout } from "../components/AuthLayout";
+import { BusinessBuilderShell } from "../components/businessBuilder/BusinessBuilderShell";
+import { BuilderBusinessTypeArt } from "../components/businessBuilder/BuilderBusinessTypeArt";
+import { BuilderSellingStyleArt } from "../components/businessBuilder/BuilderSellingStyleArt";
+import { BuilderCard, BuilderPrimaryButton } from "../components/businessBuilder/BuilderField";
+import { BuilderGrandOpening } from "../components/businessBuilder/BuilderGrandOpening";
+import { useBusinessBuilder } from "../context/BusinessBuilderContext";
+import { onboardingUnlocks } from "../lib/businessBuilder/businessSceneState";
+import type { BuilderFunnelStep } from "../components/businessBuilder/BusinessBuilderShell";
 import { t } from "../lib/i18n";
 import { ONBOARDING_BUSINESS_CARDS, ONBOARDING_SELLING_STYLES } from "../config/onboardingFlow";
 import {
@@ -36,20 +43,18 @@ type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () =>
 type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "products";
 
 const fieldClass =
-  "mt-1.5 w-full min-h-[48px] rounded-xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
+  "mt-1.5 w-full min-h-[48px] rounded-2xl border border-stone-200 px-4 py-3 text-base outline-none ring-orange-200 focus:border-orange-400 focus:ring-2";
 
-function ProgressDots({ step, total }: { step: number; total: number }) {
-  return (
-    <div className="flex justify-center gap-1.5 py-2" aria-hidden>
-      {Array.from({ length: total }, (_, i) => (
-        <span key={i} className={`h-1.5 rounded-full transition-all ${i <= step ? "w-6 bg-waka-600" : "w-1.5 bg-stone-200"}`} />
-      ))}
-    </div>
-  );
+function funnelStepFor(step: Step): BuilderFunnelStep {
+  if (step === "welcome" || step === "business" || step === "hospitality_style") return "business";
+  if (step === "selling") return "setup";
+  if (step === "location") return "review";
+  return "open";
 }
 
 export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const navigate = useNavigate();
+  const { scene, patchScene } = useBusinessBuilder();
   const preferences = usePosStore((s) => s.preferences);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
   const { authMode } = useSubscription();
@@ -98,6 +103,8 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const [districts, setDistricts] = useState<DistrictRow[]>([]);
   const [districtId, setDistrictId] = useState("");
   const [phoneFallback, setPhoneFallback] = useState("");
+  const [productTally, setProductTally] = useState(0);
+  const [showGrandOpening, setShowGrandOpening] = useState(false);
 
   useEffect(() => {
     if (bizTypeSettingsLoading || visibleBusinessCards.length === 0) return;
@@ -174,15 +181,6 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
     }
   }, [preferences.businessType]);
 
-  const stepOrder = useMemo(() => {
-    const order: Step[] = ["welcome", "business"];
-    if (pickedHospitalityGroup) order.push("hospitality_style");
-    order.push("selling", "location", "products");
-    return order;
-  }, [pickedHospitalityGroup]);
-
-  const stepIndex = useMemo(() => stepOrder.indexOf(step), [stepOrder, step]);
-  const progressTotal = Math.max(stepOrder.length - 1, 1);
   const districtLabel = useMemo(
     () => districts.find((d) => d.id === districtId)?.name ?? "",
     [districts, districtId],
@@ -190,6 +188,71 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
   const contactFromSignup = Boolean(
     registrationDistrictId && (normalizeUgPhoneE164(phoneFallback) || normalizeUgPhoneE164(preferences.shopPhoneE164 ?? "")),
   );
+
+  const unlocks = useMemo(
+    () =>
+      onboardingUnlocks({
+        ...scene,
+        shopName,
+        businessType,
+        businessCardId: selectedBusinessCardId,
+        sellingStyle,
+        hasShelves: step !== "welcome" && step !== "business",
+        hasProducts: productTally > 0,
+        productCount: productTally,
+        hasMapPin: Boolean(districtId || registrationDistrictId),
+        districtName: districtLabel,
+        hasCloudSync: step === "products",
+        hasAiAssistant: authMode !== "local" && step === "products",
+      }),
+    [
+      scene,
+      shopName,
+      businessType,
+      selectedBusinessCardId,
+      sellingStyle,
+      step,
+      productTally,
+      districtId,
+      registrationDistrictId,
+      districtLabel,
+      authMode,
+    ],
+  );
+
+  useEffect(() => {
+    patchScene({
+      shopName,
+      ownerName,
+      businessType,
+      businessCardId: selectedBusinessCardId,
+      sellingStyle,
+      hasBuilding: true,
+      hasSign: true,
+      hasOwner: Boolean(ownerName),
+      hasShelves: step !== "welcome" && step !== "business",
+      hasProducts: productTally > 0,
+      productCount: productTally,
+      hasMapPin: Boolean(districtId || registrationDistrictId),
+      districtName: districtLabel,
+      hasPrinter: productTally > 0,
+      hasCloudSync: step === "products",
+      hasAiAssistant: authMode !== "local" && step === "products",
+    });
+  }, [
+    shopName,
+    ownerName,
+    businessType,
+    selectedBusinessCardId,
+    sellingStyle,
+    step,
+    productTally,
+    districtId,
+    registrationDistrictId,
+    districtLabel,
+    authMode,
+    patchScene,
+  ]);
 
   const resolveOnboardingPhone = async (): Promise<string | null> => {
     const candidates = [
@@ -281,6 +344,8 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
         baseUnit: row.unit,
       });
     }
+    setProductTally((n) => n + rows.length);
+    patchScene({ hasProducts: true, productCount: productTally + rows.length, hasShelves: true });
   };
 
   const addStarterProduct = (line: StarterLine) => {
@@ -299,20 +364,26 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
       medicineStrength: line.medicineStrength ?? null,
       medicineForm: line.medicineForm ?? null,
     });
+    setProductTally((n) => n + 1);
+    patchScene({ hasProducts: true, hasShelves: true, hasPrinter: true });
   };
 
-  const cardBtn =
-    "min-h-[72px] w-full rounded-2xl border-2 px-4 py-3 text-left transition active:scale-[0.99]";
-  const primaryBtn =
-    "min-h-[52px] w-full rounded-2xl bg-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-waka-sm disabled:opacity-50";
+  if (showGrandOpening) {
+    return <BuilderGrandOpening lang={lang} />;
+  }
 
   return (
-    <AuthLayout lang={lang} setLang={setLang}>
-      <div className="mx-auto max-w-md rounded-3xl border border-stone-200/80 bg-white p-5 shadow-waka-sm sm:p-6">
+    <BusinessBuilderShell
+      lang={lang}
+      setLang={setLang}
+      funnelStep={funnelStepFor(step)}
+      unlocks={unlocks}
+      brandHref="/"
+    >
+      <div className="rounded-[28px] border border-white/80 bg-white/95 p-5 shadow-lg backdrop-blur-sm sm:rounded-[32px] sm:p-6">
         {booting ? (
           <p className="py-16 text-center text-sm font-semibold text-stone-500">…</p>
         ) : null}
-        {!booting && step !== "welcome" ? <ProgressDots step={stepIndex} total={progressTotal} /> : null}
 
         {!booting && step === "welcome" ? (
           <div className="space-y-5 py-2 text-center">
@@ -327,9 +398,9 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             ) : null}
             <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "registerShopNameLabel")}</p>
             <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-waka-900">{shopName}</p>
-            <button type="button" className={primaryBtn} onClick={() => setStep("business")}>
+            <BuilderPrimaryButton type="button" onClick={() => setStep("business")}>
               {t(lang, "onboardLetsGo")}
-            </button>
+            </BuilderPrimaryButton>
             <button
               type="button"
               className="mt-2 text-sm font-bold text-stone-500 underline-offset-2 hover:text-stone-800 hover:underline"
@@ -365,9 +436,9 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                     : selectedBusinessCardId === card.id ||
                       (card.businessType != null && businessType === card.businessType && !pickedHospitalityGroup);
                 return (
-                  <button
+                  <BuilderCard
                     key={card.id}
-                    type="button"
+                    selected={selected}
                     onClick={() => {
                       setSelectedBusinessCardId(card.id);
                       if (card.hospitalityGroup) {
@@ -381,18 +452,18 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                         triggerAiSetupPrefetch(card.businessType);
                       }
                     }}
-                    className={`${cardBtn} ${selected ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"}`}
                   >
-                    <span className="text-2xl">{card.emoji}</span>
-                    <span className="mt-1 block text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
-                  </button>
+                    <div className="flex items-center gap-3">
+                      <BuilderBusinessTypeArt cardId={card.id} />
+                      <span className="text-base font-black text-stone-900">{t(lang, card.labelKey)}</span>
+                    </div>
+                  </BuilderCard>
                 );
               })}
             </div>
-            <button
+            <BuilderPrimaryButton
               type="button"
               disabled={bizTypeSettingsLoading || visibleBusinessCards.length === 0}
-              className={primaryBtn}
               onClick={() => {
                 if (pickedHospitalityGroup || isHospitalityOnboardingGroupCard(selectedBusinessCardId)) {
                   const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
@@ -406,7 +477,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               }}
             >
               {t(lang, "onboardContinue")}
-            </button>
+            </BuilderPrimaryButton>
           </div>
         ) : null}
 
@@ -420,26 +491,24 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardHospitalityStyleSub")}</p>
             <div className="grid gap-2">
               {visibleHospitalityStyles.map((style) => (
-                <button
+                <BuilderCard
                   key={style.id}
-                  type="button"
+                  selected={hospitalityStyleId === style.id}
                   onClick={() => {
                     setHospitalityStyleId(style.id);
                     setBusinessType(style.businessType);
                     triggerAiSetupPrefetch(style.businessType);
                   }}
-                  className={`${cardBtn} ${
-                    hospitalityStyleId === style.id ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"
-                  }`}
                 >
-                  <span className="text-2xl">{style.emoji}</span>
-                  <span className="mt-1 block text-base font-black text-stone-900">{t(lang, style.labelKey)}</span>
-                </button>
+                  <div className="flex items-center gap-3">
+                    <BuilderBusinessTypeArt cardId="hospitality" />
+                    <span className="text-base font-black text-stone-900">{t(lang, style.labelKey)}</span>
+                  </div>
+                </BuilderCard>
               ))}
             </div>
-            <button
+            <BuilderPrimaryButton
               type="button"
-              className={primaryBtn}
               onClick={() => {
                 const bt = businessTypeForHospitalityStyle(hospitalityStyleId);
                 setBusinessType(bt);
@@ -448,7 +517,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               }}
             >
               {t(lang, "onboardContinue")}
-            </button>
+            </BuilderPrimaryButton>
           </div>
         ) : null}
 
@@ -466,26 +535,27 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
             <p className="text-sm font-medium text-stone-600">{t(lang, "onboardSellSub")}</p>
             <div className="grid gap-2">
               {ONBOARDING_SELLING_STYLES.map((opt) => (
-                <button
+                <BuilderCard
                   key={opt.id}
-                  type="button"
+                  selected={sellingStyle === opt.id}
                   onClick={() => setSellingStyle(opt.id)}
-                  className={`${cardBtn} ${
-                    sellingStyle === opt.id ? "border-waka-500 bg-waka-50" : "border-stone-200 bg-white"
-                  }`}
                 >
-                  <span className="text-xl">{opt.emoji}</span>
-                  <span className="mt-0.5 block text-base font-black">{t(lang, opt.labelKey)}</span>
-                  <span className="block text-xs font-medium text-stone-600">{t(lang, opt.hintKey)}</span>
-                </button>
+                  <div className="flex items-start gap-3">
+                    <BuilderSellingStyleArt style={opt.id} />
+                    <div>
+                      <span className="block text-base font-black">{t(lang, opt.labelKey)}</span>
+                      <span className="block text-xs font-medium text-stone-600">{t(lang, opt.hintKey)}</span>
+                    </div>
+                  </div>
+                </BuilderCard>
               ))}
             </div>
             {sellingStyle === "mixed" ? (
               <p className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-900">{t(lang, "onboardSellMixedNote")}</p>
             ) : null}
-            <button type="button" className={primaryBtn} onClick={() => setStep("location")}>
+            <BuilderPrimaryButton type="button" onClick={() => setStep("location")}>
               {t(lang, "onboardContinue")}
-            </button>
+            </BuilderPrimaryButton>
           </div>
         ) : null}
 
@@ -527,9 +597,9 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 {lat.toFixed(5)}, {lng?.toFixed(5)}
               </p>
             ) : null}
-            <button type="button" className={primaryBtn} disabled={busy} onClick={() => void captureLocation()}>
+            <BuilderPrimaryButton type="button" disabled={busy} onClick={() => void captureLocation()}>
               {t(lang, "onboardLocUse")}
-            </button>
+            </BuilderPrimaryButton>
             <button
               type="button"
               className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white text-base font-black text-stone-800"
@@ -544,9 +614,9 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               {t(lang, "onboardLocSkip")}
             </button>
             {!gpsSkipped && lat != null ? (
-              <button type="button" className={primaryBtn} disabled={busy} onClick={() => void advanceAfterLocation()}>
+              <BuilderPrimaryButton type="button" disabled={busy} onClick={() => void advanceAfterLocation()}>
                 {t(lang, "onboardContinue")}
-              </button>
+              </BuilderPrimaryButton>
             ) : null}
           </div>
         ) : null}
@@ -579,15 +649,15 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
                 </button>
               ))}
             </div>
-            <button type="button" className={primaryBtn} onClick={() => navigate("/pos", { replace: true })}>
-              {t(lang, "onboardStartSelling")}
-            </button>
-            <button type="button" className="text-sm font-bold text-stone-500 underline" onClick={() => navigate("/", { replace: true })}>
+            <BuilderPrimaryButton type="button" onClick={() => setShowGrandOpening(true)}>
+              {`🚀 ${t(lang, "builderOpenMyBusiness")}`}
+            </BuilderPrimaryButton>
+            <button type="button" className="text-sm font-bold text-stone-500 underline" onClick={() => setShowGrandOpening(true)}>
               {t(lang, "onboardProductsLater")}
             </button>
           </div>
         ) : null}
       </div>
-    </AuthLayout>
+    </BusinessBuilderShell>
   );
 }

@@ -291,8 +291,11 @@ export function shelfGridSpanClass(size: PosShelfSize): string {
   }
 }
 
-/** Uniform 4-column catalog grid for mobile sell screen. */
-export function sellCatalogGridClass(): string {
+/** Uniform catalog grid for mobile (4-col) and enterprise desktop sell (5-col). */
+export function sellCatalogGridClass(desktop = false): string {
+  if (desktop) {
+    return "grid grid-cols-5 gap-2 lg:gap-2.5";
+  }
   return "grid grid-cols-4 gap-2 sm:gap-2.5";
 }
 

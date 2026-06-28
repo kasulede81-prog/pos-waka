@@ -36,6 +36,11 @@ export class RouteErrorBoundary extends Component<Props, State> {
               {this.props.scope ? `${this.props.scope} could not load.` : "This page could not load."} Try going back or
               restarting the app.
             </p>
+            {import.meta.env.DEV && this.state.error?.message ? (
+              <p className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-left font-mono text-xs text-rose-800">
+                {this.state.error.message}
+              </p>
+            ) : null}
             <button
               type="button"
               className="mt-4 rounded-2xl bg-stone-900 px-5 py-2.5 text-sm font-black text-white"

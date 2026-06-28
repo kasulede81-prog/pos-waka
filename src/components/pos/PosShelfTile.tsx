@@ -21,8 +21,10 @@ type Props = {
   mode: "sell" | "arrange";
   /** Mobile sell: taller premium shelf cards (2-col hero layout). */
   sellFocus?: boolean;
-  /** Mobile sell catalog: uniform white 4-col grid tiles. */
+  /** Mobile sell catalog: uniform white grid tiles. */
   sellCatalogGrid?: boolean;
+  /** Larger tiles in 5-col desktop catalog grid. */
+  sellCatalogGridDesktop?: boolean;
   dragging?: boolean;
   dragOver?: boolean;
   selected?: boolean;
@@ -94,6 +96,7 @@ export function PosShelfTile({
   mode,
   sellFocus = false,
   sellCatalogGrid = false,
+  sellCatalogGridDesktop = false,
   dragging = false,
   dragOver = false,
   selected = false,
@@ -106,25 +109,43 @@ export function PosShelfTile({
   const customStyle = sellCatalogGrid ? undefined : shelfTileSurfaceStyle(shelf);
   const isBold = !sellCatalogGrid && (Boolean(customStyle) || shelf.color !== "default");
   const colorClass = sellCatalogGrid ? "" : customStyle ? "" : shelfColorClasses(shelf.color, shelf.featured);
-  const heightClass = sellCatalogGrid ? "min-h-[88px]" : shelfMinHeightClass(shelf.size);
+  const heightClass = sellCatalogGrid
+    ? sellCatalogGridDesktop
+      ? "min-h-[96px]"
+      : "min-h-[88px]"
+    : shelfMinHeightClass(shelf.size);
   const layoutSize = sellFocus && !isArrange && !sellCatalogGrid ? "large" : scaleToShelfSize(shelf.scale);
   const tilePadding: CSSProperties = sellCatalogGrid ? { padding: "0.5rem" } : { padding: `${typo.paddingRem}rem` };
+  const catalogIconSize = sellCatalogGridDesktop ? "h-10 w-10 text-xl" : "h-8 w-8 text-base";
 
   const catalogBody = sellCatalogGrid ? (
     <>
       <span
         className={clsx(
-          "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-base leading-none",
-          selected ? "bg-white/25 text-white" : shelfIconCircleClass(shelf.color),
+          "flex shrink-0 items-center justify-center rounded-full leading-none",
+          catalogIconSize,
+          shelfIconCircleClass(shelf.color),
         )}
         aria-hidden
       >
         {shelf.icon ?? "📦"}
       </span>
-      <span className="mt-1.5 line-clamp-2 w-full text-center text-[10px] font-black leading-tight">
+      <span
+        className={clsx(
+          "mt-1.5 line-clamp-2 w-full text-center font-black leading-tight",
+          sellCatalogGridDesktop ? "text-xs" : "text-[10px]",
+          selected ? "text-orange-600" : "text-stone-950",
+        )}
+      >
         {shelf.label}
       </span>
-      <span className={clsx("mt-0.5 line-clamp-1 w-full text-center text-[9px] font-semibold", selected ? "text-white/85" : "text-stone-500")}>
+      <span
+        className={clsx(
+          "mt-0.5 line-clamp-1 w-full text-center font-semibold",
+          sellCatalogGridDesktop ? "text-[10px]" : "text-[9px]",
+          selected ? "text-orange-500/90" : "text-stone-500",
+        )}
+      >
         {countLabel}
       </span>
     </>
@@ -164,10 +185,11 @@ export function PosShelfTile({
     "relative w-full touch-manipulation overflow-hidden text-left transition-all duration-150 motion-reduce:transition-none",
     sellCatalogGrid
       ? clsx(
-          "flex flex-col items-center justify-center rounded-xl border shadow-sm",
+          "flex flex-col items-center justify-center rounded-xl border shadow-sm transition-[border-color,box-shadow,transform] duration-150",
+          heightClass,
           selected
-            ? "border-waka-600 bg-waka-600 text-white shadow-md ring-2 ring-waka-400/40"
-            : "border-stone-200/90 bg-white text-stone-950 active:scale-[0.97] active:border-waka-300 active:shadow-md motion-reduce:active:scale-100",
+            ? "border-orange-500 bg-white text-stone-950 shadow-md ring-1 ring-orange-500/30"
+            : "border-stone-200/90 bg-white text-stone-950 active:scale-[0.97] active:border-orange-300 active:shadow-md motion-reduce:active:scale-100",
         )
       : clsx(
           "rounded-2xl border shadow-sm",

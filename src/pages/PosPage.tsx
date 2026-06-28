@@ -41,7 +41,7 @@ import { ActiveShiftBanner } from "../components/pos/ActiveShiftBanner";
 import { PosShiftSummaryCollapsible } from "../components/pos/PosShiftSummaryCollapsible";
 import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
 import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHeader";
-import { PosDesktopCategoryChips } from "../components/pos/PosDesktopCategoryChips";
+import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShelfSection";
 import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
 import { PosDesktopStatusBar } from "../components/pos/PosDesktopStatusBar";
 import { PosSellProductCard } from "../components/pos/PosSellProductCard";
@@ -121,7 +121,6 @@ import {
   buildPosShelfDisplayCards,
   buildQuickSellShelfCard,
   QUICK_SELL_SHELF_KEY,
-  sellCatalogGridClass,
   shelfMasonryGridClass,
 } from "../lib/posShelfLayout";
 import { PosShelfTile } from "../components/pos/PosShelfTile";
@@ -625,12 +624,13 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const filteredProducts = useMemo(() => {
     const { q, aliasTerms } = sellSearchContext;
-    return products.filter((p) => {
-      if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
-      if (!productMatchesSellSearch(p, q, aliasTerms)) return false;
-      if (sellCategoryKey === CATEGORY_FILTER_ALL) return true;
-      return productMatchesCategoryFilter(p, sellCategoryKey);
-    }).sort((a, b) => {
+    return products
+      .filter((p) => {
+        if (!q) return productMatchesCategoryFilter(p, sellCategoryKey);
+        // Master search — any product in the shop, not limited to the active shelf.
+        return productMatchesSellSearch(p, q, aliasTerms);
+      })
+      .sort((a, b) => {
       const favA = favoriteIdSet.has(a.id) ? 0 : 1;
       const favB = favoriteIdSet.has(b.id) ? 0 : 1;
       if (favA !== favB) return favA - favB;
@@ -1327,6 +1327,11 @@ export function PosPage({ lang }: { lang: Language }) {
     showAdvanced,
   ]);
 
+  const focusCatalogForAdd = useCallback(() => {
+    catalogRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    window.requestAnimationFrame(() => searchInputRef.current?.focus());
+  }, []);
+
   const checkoutPanelCommon = {
     lang,
     saleTitle: hospitalityMode ? ht("thisSale") : t(lang, "thisSale"),
@@ -1374,19 +1379,18 @@ export function PosPage({ lang }: { lang: Language }) {
   };
 
   const mobileSellFocus = posLayoutMode === "mobile";
+  const catalogSellMode = mobileSellFocus || isFullDesktopPos;
 
-  const showMobileShelfGrid =
-    mobileSellFocus && products.length > 0 && sellSearchContext.q.length === 0;
-  const showMobileProductsBelow =
-    mobileSellFocus && sellCategoryKey !== CATEGORY_FILTER_ALL && sellSearchContext.q.length === 0;
-  const showMobileSearchResults = mobileSellFocus && sellSearchContext.q.length > 0;
-  const showDesktopProductView =
-    (!mobileSellFocus && hasSellViewFilter) || (isFullDesktopPos && products.length > 0);
+  const showCatalogShelfGrid =
+    catalogSellMode && products.length > 0 && sellSearchContext.q.length === 0;
+  const showCatalogProductsBelow =
+    showCatalogShelfGrid && sellCategoryKey !== CATEGORY_FILTER_ALL;
+  const showCatalogSearchResults = catalogSellMode && sellSearchContext.q.length > 0;
+  const showDesktopProductView = !catalogSellMode && hasSellViewFilter;
 
-  const mobileShelfCards = useMemo(() => {
-    if (!mobileSellFocus) return shelfCards;
-    return [...shelfCards].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: "base" }));
-  }, [shelfCards, mobileSellFocus]);
+  const catalogShelfCards = shelfCards;
+
+  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
 
   const quickProductChips = useMemo(() => {
     if (!mobileSellFocus) return [];
@@ -1407,7 +1411,7 @@ export function PosPage({ lang }: { lang: Language }) {
     return out.slice(0, 12);
   }, [mobileSellFocus, quickSellProducts, frequentToday]);
 
-  const handleMobileShelfTap = useCallback(
+  const handleCatalogShelfTap = useCallback(
     (shelfKey: string) => {
       if (sellCategoryKey === shelfKey) {
         setSellCategoryFilter(CATEGORY_FILTER_ALL);
@@ -1698,16 +1702,6 @@ export function PosPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      {isFullDesktopPos && products.length > 0 ? (
-        <PosDesktopCategoryChips
-          lang={lang}
-          shelves={shelfCards}
-          selectedKey={sellCategoryKey}
-          onSelect={setSellCategoryFilter}
-          canAddProduct={hasPermission(actor.role, "products.add")}
-        />
-      ) : null}
-
       {mobileSellFocus && quickProductChips.length > 0 ? (
         <PosQuickProductChips lang={lang} products={quickProductChips} onTap={quickTapAddProduct} />
       ) : null}
@@ -1727,31 +1721,16 @@ export function PosPage({ lang }: { lang: Language }) {
             <p className="mt-4 text-base font-semibold text-stone-600">{t(lang, "posEmptyAskOwner")}</p>
           )}
         </section>
-      ) : showMobileShelfGrid ? (
-        <section className="space-y-2">
-          <div className="flex items-center justify-between gap-2 px-0.5">
-            <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
-              {t(lang, "posSellCategoryHeading")}
-            </p>
-            <p className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-black text-stone-600">
-              {mobileShelfCards.length}
-            </p>
-          </div>
-          <div className={sellCatalogGridClass()}>
-            {mobileShelfCards.map((shelf) => (
-              <PosShelfTile
-                key={shelf.key}
-                shelf={shelf}
-                lang={lang}
-                mode="sell"
-                sellCatalogGrid
-                selected={sellCategoryKey === shelf.key}
-                countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
-                onClick={() => handleMobileShelfTap(shelf.key)}
-              />
-            ))}
-          </div>
-          {showMobileProductsBelow ? (
+      ) : showCatalogShelfGrid ? (
+        <PosSellCatalogShelfSection
+          lang={lang}
+          shelves={catalogShelfCards}
+          selectedKey={sellCategoryKey}
+          onShelfTap={handleCatalogShelfTap}
+          desktop={isFullDesktopPos}
+          canAddShelf={canArrangeShelves}
+        >
+          {showCatalogProductsBelow ? (
             <div className="space-y-2 border-t border-stone-100 pt-3">
               <p className="px-0.5 text-xs font-black text-stone-800">
                 {sellCategoryKey !== CATEGORY_FILTER_ALL && shelfIconFor(selectedShelfLabel) ? (
@@ -1775,8 +1754,29 @@ export function PosPage({ lang }: { lang: Language }) {
                   addLabel={t(lang, "addToSale")}
                   isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
                   lockedBadge={t(lang, "productLockedBadge")}
-                  variant="sellMobile"
+                  variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
+                  favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
+                  onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
                 />
+              ) : isFullDesktopPos ? (
+                <div
+                  className="grid gap-1.5"
+                  style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+                >
+                  {filteredProducts.map((p) => (
+                    <PosDesktopProductCard
+                      key={p.id}
+                      product={p}
+                      stockLabel={t(lang, "stockLabel")}
+                      sellLabel={t(lang, "addToSale")}
+                      locked={isProductPlanLocked(p.id, lockedIds)}
+                      lockedBadge={t(lang, "productLockedBadge")}
+                      favorite={favoriteIdSet.has(p.id)}
+                      onPick={openProduct}
+                      onToggleFavorite={toggleFavoriteProduct}
+                    />
+                  ))}
+                </div>
               ) : (
                 <div
                   className="grid gap-2"
@@ -1797,10 +1797,16 @@ export function PosPage({ lang }: { lang: Language }) {
               )}
             </div>
           ) : null}
-        </section>
-      ) : showMobileSearchResults ? (
-        <section className="space-y-2">
-          <p className="px-0.5 text-xs font-black text-stone-700">{t(lang, "posSearchResults")}</p>
+        </PosSellCatalogShelfSection>
+      ) : showCatalogSearchResults ? (
+        <section className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+          <p className="px-0.5 text-xs font-black text-stone-700">
+            {t(lang, "posSearchResults")}
+            <span className="font-semibold text-stone-500"> · {t(lang, "posMasterSearchAll")}</span>
+            {filteredProducts.length > 0 ? (
+              <span className="font-semibold text-stone-500"> ({filteredProducts.length})</span>
+            ) : null}
+          </p>
           {filteredProducts.length === 0 ? (
             <p className="rounded-xl bg-amber-50 px-3 py-4 text-center text-sm font-bold text-amber-950">
               {t(lang, "posSellNoMatch")}
@@ -1815,8 +1821,29 @@ export function PosPage({ lang }: { lang: Language }) {
               addLabel={t(lang, "addToSale")}
               isLocked={(p) => isProductPlanLocked(p.id, lockedIds)}
               lockedBadge={t(lang, "productLockedBadge")}
-              variant="sellMobile"
+              variant={isFullDesktopPos ? "sellDesktop" : "sellMobile"}
+              favoriteIds={isFullDesktopPos ? favoriteIdSet : undefined}
+              onToggleFavorite={isFullDesktopPos ? toggleFavoriteProduct : undefined}
             />
+          ) : isFullDesktopPos ? (
+            <div
+              className="grid gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${productGridCols}, minmax(0, 1fr))` }}
+            >
+              {filteredProducts.map((p) => (
+                <PosDesktopProductCard
+                  key={p.id}
+                  product={p}
+                  stockLabel={t(lang, "stockLabel")}
+                  sellLabel={t(lang, "addToSale")}
+                  locked={isProductPlanLocked(p.id, lockedIds)}
+                  lockedBadge={t(lang, "productLockedBadge")}
+                  favorite={favoriteIdSet.has(p.id)}
+                  onPick={openProduct}
+                  onToggleFavorite={toggleFavoriteProduct}
+                />
+              ))}
+            </div>
           ) : (
             <div
               className="grid gap-2"
@@ -2030,7 +2057,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
         {mountDesktopCheckoutSidebar ? (
           <aside className={clsx(isFullDesktopPos ? "sticky top-0 min-h-0 self-stretch" : "sticky top-3")}>
-            <PosCheckoutPanel variant="sidebar" {...checkoutPanelCommon} />
+            <PosCheckoutPanel variant="sidebar" {...checkoutPanelCommon} onAddItems={focusCatalogForAdd} />
           </aside>
         ) : null}
       </div>
