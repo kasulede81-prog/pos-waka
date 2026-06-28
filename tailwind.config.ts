@@ -2,6 +2,7 @@ import type { Config } from "tailwindcss";
 
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
+  darkMode: ["class", ".marketing-theme-dark"],
   theme: {
     extend: {
       fontFamily: {
@@ -24,6 +25,14 @@ export default {
         ring: "hsl(var(--ring) / <alpha-value>)",
         destructive: "hsl(var(--destructive) / <alpha-value>)",
         "destructive-foreground": "hsl(var(--destructive-foreground) / <alpha-value>)",
+        "mkt-bg": "rgb(var(--mkt-bg) / <alpha-value>)",
+        "mkt-bg-secondary": "rgb(var(--mkt-bg-secondary) / <alpha-value>)",
+        "mkt-card": "rgb(var(--mkt-card) / <alpha-value>)",
+        "mkt-border": "rgb(var(--mkt-border) / <alpha-value>)",
+        "mkt-text": "rgb(var(--mkt-text) / <alpha-value>)",
+        "mkt-text-secondary": "rgb(var(--mkt-text-secondary) / <alpha-value>)",
+        "mkt-nav": "rgb(var(--mkt-nav) / <alpha-value>)",
+        "mkt-footer": "rgb(var(--mkt-footer) / <alpha-value>)",
         waka: {
           50: "#fff7ed",
           100: "#ffedd5",
@@ -41,6 +50,8 @@ export default {
       boxShadow: {
         waka: "0 1px 2px rgb(28 25 23 / 0.06), 0 8px 24px rgb(234 88 12 / 0.08)",
         "waka-sm": "0 1px 2px rgb(28 25 23 / 0.05), 0 4px 12px rgb(234 88 12 / 0.06)",
+        mkt: "0 1px 2px rgb(var(--mkt-shadow) / 0.06), 0 4px 16px rgb(var(--mkt-shadow) / 0.05)",
+        "mkt-lg": "0 8px 32px rgb(var(--mkt-shadow) / 0.12), 0 2px 8px rgb(var(--mkt-shadow) / 0.06)",
       },
     },
   },

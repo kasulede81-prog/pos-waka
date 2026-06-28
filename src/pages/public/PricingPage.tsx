@@ -108,7 +108,6 @@ const PLANS: PricingPlan[] = [
       "Inventory Intelligence",
       "Business Performance Insights",
       "Early Access Features",
-      "AI Assistant (Coming Soon)",
     ],
     limits: ["Up to 10 Devices", "Up to 10 Staff Accounts"],
     goodFor: "Wholesalers, distributors, chain stores, multi-branch businesses",

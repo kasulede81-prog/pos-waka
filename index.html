@@ -7,8 +7,26 @@
     <link rel="apple-touch-icon" href="/icons/icon-192.webp" />
     <link rel="apple-touch-icon" href="/icons/icon-192.webp" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#fffaf5" />
-    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      (function () {
+        var k = "waka-marketing-theme";
+        var paths = ["/home", "/pricing", "/about", "/contact", "/founder", "/company", "/support", "/demo", "/terms", "/privacy", "/solutions"];
+        var path = location.pathname;
+        var isMarketing = paths.some(function (p) {
+          return path === p || path.indexOf(p + "/") === 0;
+        });
+        if (!isMarketing) return;
+        var raw = localStorage.getItem(k);
+        var pref = raw === "light" || raw === "dark" || raw === "system" ? raw : null;
+        var dark = pref === "dark" || (pref !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("marketing-theme-dark", dark);
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute("content", dark ? "#0B0F19" : "#FFFFFF");
+      })();
+    </script>
     <meta name="application-name" content="Waka POS" />
     <title>Waka POS – POS Software &amp; Inventory Management for Shops in Uganda</title>
     <meta

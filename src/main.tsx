@@ -18,6 +18,9 @@ import { recoverStuckStartupState, recordStartupStep } from "./lib/startupDiagno
 import { reportPwaIssue } from "./lib/monitoring";
 import { installChunkLoadRecovery } from "./lib/siteDataRecovery";
 import { warmupLocalDb } from "./offline/localDb";
+import { bootstrapMarketingThemeClass } from "./lib/marketingTheme";
+
+bootstrapMarketingThemeClass();
 
 initCrashReporting();
 installGlobalErrorHandlers();

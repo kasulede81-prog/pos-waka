@@ -342,3 +342,34 @@ body {
     @apply border-b border-stone-100 last:border-b-0;
   }
 }
+
+/** Marketing site theme tokens — scoped via `.marketing-theme-dark` on `<html>`. */
+:root {
+  --mkt-bg: 255 255 255;
+  --mkt-bg-secondary: 248 250 252;
+  --mkt-card: 255 255 255;
+  --mkt-border: 229 231 235;
+  --mkt-text: 17 24 39;
+  --mkt-text-secondary: 107 114 128;
+  --mkt-nav: 255 255 255;
+  --mkt-footer: 248 250 252;
+  --mkt-shadow: 17 24 39;
+}
+
+html.marketing-theme-dark {
+  --mkt-bg: 11 15 25;
+  --mkt-bg-secondary: 17 24 39;
+  --mkt-card: 20 26 36;
+  --mkt-border: 42 51 66;
+  --mkt-text: 248 250 252;
+  --mkt-text-secondary: 161 168 181;
+  --mkt-nav: 11 15 25;
+  --mkt-footer: 17 24 39;
+  --mkt-shadow: 0 0 0;
+}
+
+.marketing-site {
+  transition:
+    background-color 400ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 400ms cubic-bezier(0.22, 1, 0.36, 1);
+}
