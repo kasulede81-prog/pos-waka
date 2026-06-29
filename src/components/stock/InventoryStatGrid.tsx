@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { AlertTriangle, Boxes, FolderOpen, Package } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { formatUgx } from "../../lib/formatUgx";
 
 type Props = {
   lang: Language;
@@ -10,12 +11,6 @@ type Props = {
   shelfCount: number;
   inventoryValueUgx: number;
   onLowStockTap?: () => void;
-};
-
-function formatShortUgx(n: number): string {
-  if (n >= 1_000_000) return `UGX ${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 10_000) return `UGX ${Math.round(n / 1000)}K`;
-  return `UGX ${n.toLocaleString()}`;
 };
 
 function StatCard({
@@ -96,7 +91,7 @@ export function InventoryStatGrid({
       <StatCard
         icon={Boxes}
         label={t(lang, "stockStatValueShort")}
-        value={formatShortUgx(inventoryValueUgx)}
+        value={formatUgx(inventoryValueUgx)}
         hint={t(lang, "stockStatValueHint")}
       />
     </div>

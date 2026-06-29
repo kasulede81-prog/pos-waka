@@ -44,6 +44,7 @@ import {
   kpiCategoryForId,
   productLeaderboard,
 } from "../features/business-analytics/lib/analyticsPageView";
+import { buildSoldByNameByUserId } from "../lib/soldByLabels";
 
 export function ReportsPage({ lang }: { lang: Language }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -59,6 +60,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const cashDrawerAdjustments = usePosStore((s) => s.cashDrawerAdjustments);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const preferences = usePosStore((s) => s.preferences);
+  const auditLogs = usePosStore((s) => s.auditLogs);
   const stockMovements = usePosStore((s) => s.stockMovements);
 
   const {
@@ -180,9 +182,30 @@ export function ReportsPage({ lang }: { lang: Language }) {
     [report, analytics, canProfit],
   );
 
+  const soldByNameByUserId = useMemo(
+    () =>
+      buildSoldByNameByUserId({
+        staffAccounts: preferences.staffAccounts,
+        shifts,
+        auditLogs,
+        ownerUserId: actor.userId.startsWith("staff:") ? null : actor.userId,
+        ownerDisplayName: actor.displayName,
+        shopDisplayName: preferences.shopDisplayName,
+      }),
+    [preferences.staffAccounts, preferences.shopDisplayName, shifts, auditLogs, actor.userId, actor.displayName],
+  );
+
   const topProducts = useMemo(() => productLeaderboard(report.topProducts, "revenue"), [report.topProducts]);
   const topCustomers = useMemo(() => customerLeaderboard(customers, sales, filter), [customers, sales, filter]);
-  const topCashiers = useMemo(() => computeTopCashiers(sales, analytics.bounds), [sales, analytics.bounds]);
+  const topCashiers = useMemo(
+    () =>
+      computeTopCashiers(sales, analytics.bounds, {
+        lang,
+        nameByUserId: soldByNameByUserId,
+        shopDisplayName: preferences.shopDisplayName,
+      }),
+    [sales, analytics.bounds, lang, soldByNameByUserId, preferences.shopDisplayName],
+  );
 
   const pageTitle = wholesaleMode
     ? t(lang, "wholesaleReportsHubTitle")
@@ -249,7 +272,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="space-y-4 pb-24">
+    <div className="min-w-0 max-w-full space-y-4 pb-24">
       <PageHeader lang={lang} title={pageTitle} subtitle={t(lang, "baPageSub")} backLabel={t(lang, "officeBackToHub")} />
 
       <AnalyticsPageToolbar

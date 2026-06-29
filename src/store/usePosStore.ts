@@ -102,8 +102,10 @@ import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { canEnableBiometricAuth } from "../lib/sensitiveActionAuth";
 import { archiveSalesBeyondActiveWindow, INITIAL_SALES_LOAD_COUNT, SALES_PAGE_LOAD_SIZE } from "../lib/activeSalesWindow";
 import { partitionForArchive } from "../lib/recordArchive";
-import { normalizePosShelfLayout, clampShelfScale } from "../lib/posShelfLayout";
+import { normalizePosShelfLayout, clampShelfScale, fillDefaultShelfLayout } from "../lib/posShelfLayout";
+import { distinctTrimmedCategories } from "../lib/productCategories";
 import { POS_SHELF_PRESET_IDS } from "../lib/posShelfPresets";
+import { normalizeShelfHex } from "../lib/shelfColor";
 import { normalizeLauncherTileLayout } from "../lib/launcherTiles";
 import { normalizeOfficeHubTileLayout } from "../lib/officeHubSections";
 import type { PosShelfPresetId } from "../types";
@@ -302,6 +304,19 @@ function normalizePosShelfLayoutFromStore(raw: unknown) {
   return normalizePosShelfLayout(raw);
 }
 
+function preferencesWithDefaultShelfLayout(
+  preferences: ShopPreferences,
+  products: Product[],
+): ShopPreferences {
+  const layout = fillDefaultShelfLayout(
+    preferences.posShelfLayout ?? {},
+    distinctTrimmedCategories(products),
+    preferences.posPinnedShelfKeys ?? [],
+  );
+  if (layout === preferences.posShelfLayout) return preferences;
+  return { ...preferences, posShelfLayout: layout };
+}
+
 type DraftLineInput = {
   product: Product;
   inputMode: LineInputMode;
@@ -420,7 +435,7 @@ export type PosState = {
 
   setSessionActor: (actor: SessionActor | null) => void;
 
-  setPreferences: (p: Partial<ShopPreferences>) => void;
+  setPreferences: (p: Partial<ShopPreferences>, opts?: { silent?: boolean }) => void;
   addStaffAccount: (input: {
     name: string;
     username?: string;
@@ -1066,12 +1081,14 @@ export const usePosStore = create<PosState>((set, get) => {
       draftCartDiscountUgx: 0,
     }),
 
-  hydrateEssentials: (data) =>
+  hydrateEssentials: (data) => {
+    const products = data.products.map(normalizeProduct);
+    const preferences = preferencesWithDefaultShelfLayout(data.preferences, products);
     set({
-      products: data.products.map(normalizeProduct),
+      products,
       customers: data.customers.map(normalizeCustomer),
       sales: [],
-      preferences: data.preferences,
+      preferences,
       debtPayments: [],
       dayCloses: [],
       auditLogs: [],
@@ -1093,7 +1110,8 @@ export const usePosStore = create<PosState>((set, get) => {
       draftLines: [],
       draftInput: null,
       draftCartDiscountUgx: 0,
-    }),
+    });
+  },
 
   hydrateRemainder: (data) =>
     set((s) => ({
@@ -1185,7 +1203,7 @@ export const usePosStore = create<PosState>((set, get) => {
 
   setSessionActor: (actor) => set({ sessionActor: actor }),
 
-  setPreferences: (p) => {
+  setPreferences: (p, opts) => {
     const state = get();
     const { snapshot, authMode } = getStoreSubscriptionContext();
     const denied = authorizePreferencesPatch(state.sessionActor, p, {
@@ -1194,24 +1212,28 @@ export const usePosStore = create<PosState>((set, get) => {
       currentStaffAccounts: state.preferences.staffAccounts ?? [],
     });
     if (!denied.ok) {
-      pushAudit("auth_forbidden", "Denied setPreferences", {
-        permission: requiredPermissionsForPreferencesPatch(p).join(","),
-        action: "setPreferences",
-        attemptedRole: state.sessionActor?.role ?? null,
-        errorKey: denied.errorKey,
-        keys: Object.keys(p),
-      });
+      if (!opts?.silent) {
+        pushAudit("auth_forbidden", "Denied setPreferences", {
+          permission: requiredPermissionsForPreferencesPatch(p).join(","),
+          action: "setPreferences",
+          attemptedRole: state.sessionActor?.role ?? null,
+          errorKey: denied.errorKey,
+          keys: Object.keys(p),
+        });
+      }
       return;
     }
     if (p.biometricAuthEnabled === true) {
       const pin = p.backOfficePin ?? state.preferences.backOfficePin;
       if (!canEnableBiometricAuth({ backOfficePin: pin })) {
-        pushAudit("auth_forbidden", "Denied biometric enable without Owner PIN", {
-          action: "setPreferences",
-          attemptedRole: state.sessionActor?.role ?? null,
-          errorKey: "biometricRequiresOwnerPin",
-          keys: Object.keys(p),
-        });
+        if (!opts?.silent) {
+          pushAudit("auth_forbidden", "Denied biometric enable without Owner PIN", {
+            action: "setPreferences",
+            attemptedRole: state.sessionActor?.role ?? null,
+            errorKey: "biometricRequiresOwnerPin",
+            keys: Object.keys(p),
+          });
+        }
         return;
       }
     }
@@ -3144,7 +3166,11 @@ export const usePosStore = create<PosState>((set, get) => {
       quickPresetsMoneyUgx: p.quickPresetsMoneyUgx ?? qp.quickPresetsMoneyUgx,
       quickPresetsQty: p.quickPresetsQty ?? qp.quickPresetsQty,
     };
-    set((s) => ({ products: [normalizeProduct(row), ...s.products] }));
+    set((s) => {
+      const products = [normalizeProduct(row), ...s.products];
+      const preferences = preferencesWithDefaultShelfLayout(s.preferences, products);
+      return { products, preferences };
+    });
     void queueRemote("product", { id: row.id, isNew: true });
     pushAudit("product_add", row.name, {
       productId: row.id,
@@ -3296,10 +3322,20 @@ export const usePosStore = create<PosState>((set, get) => {
       updatedAt: at,
     });
 
-    set((s) => ({
-      products: s.products.map((p) => (p.id === productId ? normalized : p)),
-      stockMovements: movement ? mergeStockMovements([movement], s.stockMovements) : s.stockMovements,
-    }));
+    set((s) => {
+      const products = s.products.map((p) => (p.id === productId ? normalized : p));
+      const categoryChanged =
+        patch.category !== undefined &&
+        String(patch.category ?? "").trim() !== String(prev.category ?? "").trim();
+      const preferences = categoryChanged
+        ? preferencesWithDefaultShelfLayout(s.preferences, products)
+        : s.preferences;
+      return {
+        products,
+        preferences,
+        stockMovements: movement ? mergeStockMovements([movement], s.stockMovements) : s.stockMovements,
+      };
+    });
 
     if (Math.abs(stockDelta) > 1e-6) {
       void queueRemote("pending_stock_updates", {
@@ -3934,8 +3970,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   runDataArchive: () => {
-    const denied = denyUnlessEffectivePermission("settings.shop", "runDataArchive");
-    if (denied) {
+    const actor = get().sessionActor;
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    if (!checkStorePermissionEffective(actor, "settings.shop", snapshot, authMode).ok) {
       return {
         moved: { sales: 0, auditLogs: 0, dayCloses: 0, voidRecords: 0, returnRecords: 0, shifts: 0 },
       };
@@ -4605,6 +4642,12 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
       p.launcherTileLayout === undefined
         ? (base.launcherTileLayout ?? {})
         : normalizeLauncherTileLayout(p.launcherTileLayout),
+    homeHeroPreviewBgColor:
+      p.homeHeroPreviewBgColor === undefined
+        ? (base.homeHeroPreviewBgColor ?? null)
+        : p.homeHeroPreviewBgColor === null
+          ? null
+          : normalizeShelfHex(p.homeHeroPreviewBgColor),
     officeHubTileOrder: Array.isArray(p.officeHubTileOrder)
       ? (p.officeHubTileOrder as unknown[]).map((x) => String(x).trim()).filter(Boolean).slice(0, 10)
       : base.officeHubTileOrder ?? [],
@@ -5084,7 +5127,13 @@ function schedulePostBootstrapTasks(): void {
 async function runPostBootstrapTasks(): Promise<void> {
   if (!usePosStore.getState()._hydrated) return;
   void restoreDraftSaleFromDisk();
-  runWhenIdle(() => usePosStore.getState().runDataArchive(), 4000);
+  runWhenIdle(() => {
+    const state = usePosStore.getState();
+    const actor = state.sessionActor;
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    if (!checkStorePermissionEffective(actor, "settings.shop", snapshot, authMode).ok) return;
+    state.runDataArchive();
+  }, 4000);
 
   if (!readStaffSession() && usePosStore.getState().preferences.activeStaffId) {
     usePosStore.getState().switchStaffAccount(null, { force: true });

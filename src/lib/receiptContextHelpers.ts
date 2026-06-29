@@ -3,6 +3,7 @@ import type { SessionActor } from "./sessionActor";
 import { buildReceiptNumberForSale, type ReceiptLabels } from "./receiptPrint";
 import { brandingFromSale } from "./receiptBranding";
 import { t } from "./i18n";
+import { buildSoldByNameByUserId, resolveSoldByUserId } from "./soldByLabels";
 import type { SaleReceiptContext } from "./receiptDocuments";
 import type { SubscriptionPlanCode } from "./subscriptionEntitlements";
 
@@ -32,15 +33,10 @@ export function soldByLabelForSale(
   lang: Language,
   sale: Sale,
   staffAccounts: ShopPreferences["staffAccounts"],
+  shopDisplayName?: string | null,
 ): string {
-  const id = sale.soldByUserId ?? "";
-  if (!id) return t(lang, "role_owner");
-  if (id.startsWith("staff:")) {
-    const staffId = id.slice("staff:".length);
-    const name = staffAccounts?.find((s) => s.id === staffId)?.name;
-    return name ?? t(lang, "role_cashier");
-  }
-  return t(lang, "role_owner");
+  const nameByUserId = buildSoldByNameByUserId({ staffAccounts, shopDisplayName });
+  return resolveSoldByUserId(lang, sale.soldByUserId, nameByUserId, shopDisplayName);
 }
 
 export function buildSaleReceiptContext(params: {
@@ -61,8 +57,9 @@ export function buildSaleReceiptContext(params: {
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
   const cashier =
     sale.soldByUserId && sale.soldByUserId === actor.userId
-      ? actor.displayName?.trim() || soldByLabelForSale(lang, sale, preferences.staffAccounts)
-      : soldByLabelForSale(lang, sale, preferences.staffAccounts);
+      ? actor.displayName?.trim() ||
+        soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName)
+      : soldByLabelForSale(lang, sale, preferences.staffAccounts, preferences.shopDisplayName);
 
   const resolvedCustomerName = sale.receiptCustomerName ?? customerName ?? null;
   const resolvedCustomerPhone = sale.receiptCustomerPhone ?? customerPhone ?? null;

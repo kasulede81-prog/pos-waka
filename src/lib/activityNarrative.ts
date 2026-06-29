@@ -1,6 +1,7 @@
 import type { AuditLogEntry, Language } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import type { ProductFieldChange } from "./catalogAudit";
+import { humanizePayloadSummary } from "./auditFriendlyText";
 import { t, tTemplate } from "./i18n";
 
 export function actorDisplayLabel(actorUserId: string, lang: Language): string {
@@ -237,8 +238,41 @@ export function describeAuditLine(
       const total = typeof pl.totalCostUgx === "number" ? pl.totalCostUgx : 0;
       return tTemplate(lang, "narrativePurchaseVoided", { supplier: supplier || "—", amount: total.toLocaleString() });
     }
+    case "auth_forbidden":
+      return humanizePayloadSummary(lang, e);
+    case "sensitive_action_auth_denied":
+      return t(lang, "narrativeSensitiveAuthDenied");
+    case "sensitive_action_auth_granted":
+      return t(lang, "narrativeSensitiveAuthGranted");
+    case "sale_refund": {
+      const amount = typeof pl.refundAmountUgx === "number" ? pl.refundAmountUgx : typeof pl.amountUgx === "number" ? pl.amountUgx : 0;
+      return tTemplate(lang, "narrativeSaleReturn", {
+        product: typeof pl.productName === "string" ? pl.productName : t(lang, "productUnnamed"),
+        amount: amount.toLocaleString(),
+      });
+    }
+    case "archive_purge":
+      return t(lang, "narrativeArchivePurge");
+    case "archive_purge_blocked":
+      return t(lang, "narrativeArchivePurgeBlocked");
+    case "sync_unknown_operation":
+      return t(lang, "narrativeSyncUnknown");
+    case "device_limit_hit":
+      return t(lang, "narrativeDeviceLimitHit");
+    case "device_login_blocked":
+      return t(lang, "narrativeDeviceLoginBlocked");
+    case "inventory_count_started":
+      return t(lang, "narrativeInventoryCountStarted");
+    case "inventory_count_submitted":
+      return t(lang, "narrativeInventoryCountSubmitted");
+    case "inventory_count_approved":
+      return t(lang, "narrativeInventoryCountApproved");
+    case "inventory_count_applied":
+      return t(lang, "narrativeInventoryCountApplied");
+    case "inventory_count_cancelled":
+      return t(lang, "narrativeInventoryCountCancelled");
     default:
-      return e.payloadSummary;
+      return humanizePayloadSummary(lang, e);
   }
 }
 

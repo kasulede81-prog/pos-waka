@@ -107,6 +107,13 @@ describe("usePosStore — setPreferences authorization", () => {
     expect(usePosStore.getState().auditLogs.some((a) => a.action === "auth_forbidden")).toBe(true);
   });
 
+  it("silent setPreferences skips auth_forbidden audit", () => {
+    const before = usePosStore.getState().auditLogs.length;
+    usePosStore.getState().setPreferences({ shopDisplayName: "Silent Hack" }, { silent: true });
+    expect(usePosStore.getState().preferences.shopDisplayName).not.toBe("Silent Hack");
+    expect(usePosStore.getState().auditLogs.length).toBe(before);
+  });
+
   it("cashier can mutate operational favorites", () => {
     usePosStore.getState().setPreferences({ favoriteProductIds: ["prod-a"] });
     expect(usePosStore.getState().preferences.favoriteProductIds).toEqual(["prod-a"]);

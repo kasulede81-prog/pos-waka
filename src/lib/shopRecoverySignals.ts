@@ -52,7 +52,7 @@ export async function applyShopRecoverySignalsForCurrentShop(): Promise<void> {
   const lastApplied = readAppliedPinClearAt(primary.shopId);
   if (lastApplied === clearedAt) return;
 
-  usePosStore.getState().setPreferences({ backOfficePin: null, posLocked: false });
+  usePosStore.getState().setPreferences({ backOfficePin: null, posLocked: false }, { silent: true });
   writeAppliedPinClearAt(primary.shopId, clearedAt);
 }
 

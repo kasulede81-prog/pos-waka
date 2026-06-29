@@ -6,7 +6,7 @@ import {
   distinctTrimmedCategories,
   shelfIconFor,
 } from "./productCategories";
-import { sortPosShelfCards, type PosShelfCard } from "./posShelfOrder";
+import { effectiveShelfOrderKeys, sortPosShelfCards, type PosShelfCard } from "./posShelfOrder";
 
 /** Virtual shelf for owner-picked one-tap products. */
 export const QUICK_SELL_SHELF_KEY = "__waka_quick_sell__";
@@ -25,6 +25,48 @@ const SHELF_SCALE_MIN = 25;
 const SHELF_SCALE_MAX = 100;
 
 const SHELF_COLORS: PosShelfColor[] = ["default", "red", "orange", "blue", "green", "purple"];
+
+/** Default bold shelf colours for new shops — 1st blue, 2nd pink (red), 3rd orange, then cycle. */
+export const DEFAULT_NEW_USER_SHELF_COLORS: PosShelfColor[] = ["blue", "red", "orange", "green", "purple"];
+
+export function defaultShelfColorForIndex(index: number): PosShelfColor {
+  return DEFAULT_NEW_USER_SHELF_COLORS[index % DEFAULT_NEW_USER_SHELF_COLORS.length] ?? "blue";
+}
+
+/** Guess shelf colour from category name; falls back to position in the shop's shelf list. */
+export function inferDefaultShelfColor(category: string, index: number): PosShelfColor {
+  const key = category.toLowerCase();
+  if (/drink|soda|juice|water|beer|soft/.test(key)) return "red";
+  if (/bakery|bread|cake|pastry/.test(key)) return "blue";
+  if (/soap|detergent|omo|wash|clean|laundry/.test(key)) return "orange";
+  if (/rice|grain|maize|flour|food|sugar|posho/.test(key)) return "green";
+  if (/snack|biscuit|chips/.test(key)) return "purple";
+  return defaultShelfColorForIndex(index);
+}
+
+/** Fill missing shelf colours for new categories without overwriting saved customisation. */
+export function fillDefaultShelfLayout(
+  layout: Record<string, PosShelfLayoutConfig>,
+  categories: string[],
+  orderKeys: string[] = [],
+): Record<string, PosShelfLayoutConfig> {
+  if (categories.length === 0) return layout;
+  const ordered = effectiveShelfOrderKeys(categories, orderKeys);
+  let changed = false;
+  const out: Record<string, PosShelfLayoutConfig> = { ...layout };
+  ordered.forEach((key, index) => {
+    const prev = out[key];
+    if (prev?.color) return;
+    const icon = prev?.icon ?? shelfIconFor(key) ?? undefined;
+    out[key] = {
+      ...prev,
+      color: inferDefaultShelfColor(key, index),
+      ...(icon ? { icon } : {}),
+    };
+    changed = true;
+  });
+  return changed ? out : layout;
+}
 const SHELF_SIZES: PosShelfSize[] = ["small", "medium", "large"];
 
 export const SHELF_ICON_OPTIONS = [
@@ -145,10 +187,12 @@ export function mergeShelfLayout(
   card: PosShelfCard,
   config?: PosShelfLayoutConfig,
   defaultScale = 35,
+  options?: { fallbackColor?: PosShelfColor },
 ): PosShelfDisplayCard {
   const featured = Boolean(config?.featured);
   const scale = shelfScaleFromConfig(config, featured, defaultScale);
-  const color = config?.color ?? (featured ? "orange" : "default");
+  const color =
+    config?.color ?? (featured ? "orange" : options?.fallbackColor ?? "default");
   return {
     ...card,
     label: config?.displayName?.trim() || card.label,
@@ -202,7 +246,16 @@ export function buildPosShelfDisplayCards(
     });
   }
 
-  const merged = baseCards.map((card) => mergeShelfLayout(card, layout[card.key], defaultScale));
+  const orderForColor = effectiveShelfOrderKeys(
+    baseCards.map((c) => c.key),
+    orderKeys,
+  );
+
+  const merged = baseCards.map((card) => {
+    const idx = orderForColor.indexOf(card.key);
+    const fallbackColor = idx >= 0 ? inferDefaultShelfColor(card.key, idx) : defaultShelfColorForIndex(0);
+    return mergeShelfLayout(card, layout[card.key], defaultScale, { fallbackColor });
+  });
   return sortShelvesForDisplay(merged, orderKeys);
 }
 

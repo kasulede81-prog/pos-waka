@@ -56,16 +56,9 @@ export function marketingThemeColorMeta(resolved: MarketingThemeResolved): strin
   return resolved === "dark" ? "#0B0F19" : "#FFFFFF";
 }
 
-/** Runs before React paint on marketing routes to avoid theme flash. */
-export function bootstrapMarketingThemeClass(): void {
-  if (typeof document === "undefined") return;
-  const path = window.location.pathname;
-  if (!isMarketingPublicPath(path)) return;
+import { bootstrapAppThemeClass } from "./appTheme";
 
-  const stored = readStoredMarketingTheme();
-  const resolved = resolveMarketingTheme(stored);
-  document.documentElement.classList.toggle("marketing-theme-dark", resolved === "dark");
-  document.documentElement.style.colorScheme = resolved;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", marketingThemeColorMeta(resolved));
+/** @deprecated Use bootstrapAppThemeClass from appTheme.ts */
+export function bootstrapMarketingThemeClass(): void {
+  bootstrapAppThemeClass();
 }

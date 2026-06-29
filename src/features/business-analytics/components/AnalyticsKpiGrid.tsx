@@ -1,6 +1,7 @@
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
+import { KPI_VALUE_CLASS } from "../../../lib/desktopLayout";
 import { MiniSparkline } from "../../../components/command-center/MiniSparkline";
 import type { AnalyticsKpiCard, AnalyticsKpiId } from "../types";
 
@@ -14,14 +15,15 @@ type Props = {
 
 export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect }: Props) {
   return (
-    <section>
+    <section className="min-w-0 max-w-full">
       <div className="mb-2 flex items-end justify-between gap-2 px-0.5">
         <div>
           <h2 className="text-sm font-black text-stone-950">{t(lang, "baSnapshotTitle")}</h2>
           {compareLabel ? <p className="text-[11px] font-semibold text-stone-500">{compareLabel}</p> : null}
         </div>
       </div>
-      <div className="-mx-0.5 grid grid-flow-col auto-cols-[minmax(140px,1fr)] gap-2 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:grid-flow-row sm:grid-cols-2 lg:grid-cols-3">
+      <div className="w-full min-w-0 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible">
+      <div className="-mx-0.5 grid w-max min-w-full grid-flow-col auto-cols-[minmax(140px,1fr)] gap-2 sm:w-full sm:grid-flow-row sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => {
           const active = activeId === card.id;
           return (
@@ -37,7 +39,7 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
               )}
             >
               <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{t(lang, card.labelKey)}</p>
-              <p className={clsx("truncate text-lg font-black tabular-nums sm:text-xl", card.valueClass ?? "text-stone-950")}>
+              <p className={clsx("truncate text-lg font-black sm:text-xl", KPI_VALUE_CLASS, card.valueClass ?? "text-stone-950")}>
                 {card.value}
               </p>
               <div className="mt-1 flex items-end justify-between gap-1">
@@ -53,6 +55,7 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
             </button>
           );
         })}
+      </div>
       </div>
     </section>
   );

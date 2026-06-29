@@ -13,6 +13,8 @@ describe("launcher tile defaults", () => {
       "inventory",
       "debts",
       "cash",
+      "cashPosition",
+      "commandCenter",
       "investigation",
       "salesHistory",
       "shop",

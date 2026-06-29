@@ -37,7 +37,8 @@ export function AnalyticsPageToolbar({
           className="min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-stone-50/50 pl-10 pr-3 text-sm font-semibold outline-none focus:border-waka-500"
         />
       </div>
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="w-full min-w-0 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch] sm:overflow-visible">
+        <div className="flex w-max min-w-full items-center gap-2 sm:w-full sm:flex-wrap">
         <button
           type="button"
           onClick={onOpenDateFilter}
@@ -71,6 +72,7 @@ export function AnalyticsPageToolbar({
           <Download className="h-4 w-4" aria-hidden />
           {t(lang, "baExport")}
         </button>
+        </div>
       </div>
     </div>
   );

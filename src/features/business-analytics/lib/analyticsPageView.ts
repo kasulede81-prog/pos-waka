@@ -1,5 +1,6 @@
 import type { CashExpense, Customer, Product, ReturnRecord, Sale, Supplier } from "../../../types";
 import type { DateFilterBounds, DateFilterValue } from "../../../lib/dateFilters";
+import { resolveSoldByUserId, type SoldByLabelContext } from "../../../lib/soldByLabels";
 import {
   addDaysToDateKey,
   enumerateDaysInBounds,
@@ -95,11 +96,16 @@ export function computePaymentMethodMix(sales: Sale[], bounds: DateFilterBounds)
     .filter((s) => s.amountUgx > 0);
 }
 
-export function computeTopCashiers(sales: Sale[], bounds: DateFilterBounds, staffNames?: Map<string, string>, limit = 5): LeaderboardRow[] {
+export function computeTopCashiers(
+  sales: Sale[],
+  bounds: DateFilterBounds,
+  ctx: SoldByLabelContext,
+  limit = 5,
+): LeaderboardRow[] {
   const map = new Map<string, { label: string; revenue: number; count: number }>();
   for (const s of revenueSalesInBounds(sales, bounds)) {
     const id = s.soldByUserId?.trim() || "unknown";
-    const label = staffNames?.get(id) ?? id;
+    const label = resolveSoldByUserId(ctx.lang, id === "unknown" ? null : id, ctx.nameByUserId, ctx.shopDisplayName);
     const cur = map.get(id) ?? { label, revenue: 0, count: 0 };
     cur.revenue += s.totalUgx;
     cur.count += 1;

@@ -35,7 +35,11 @@ import { StockFab } from "../components/stock/StockFab";
 import { InventoryStatGrid } from "../components/stock/InventoryStatGrid";
 import { StockProductDetailSheet } from "../components/stock/StockProductDetailSheet";
 import { StockProductActionSheet } from "../components/stock/StockProductActionSheet";
-import { productToWizardPrefill, type BuiltWizardProduct } from "../lib/simpleProductWizard";
+import {
+  productToWizardPrefill,
+  resolveWizardEditCostPatch,
+  type BuiltWizardProduct,
+} from "../lib/simpleProductWizard";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
@@ -417,7 +421,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           buyingUnit: built.buyingUnit ?? null,
           conversionRate: built.conversionRate ?? null,
           sellingPricePerUnitUgx: built.priceUgx,
-          costPricePerUnitUgx: built.costPricePerUnitUgx ?? undefined,
+          costPricePerUnitUgx: resolveWizardEditCostPatch(built, editingProduct),
           buyingPackCostUgx: built.buyingPackCostUgx ?? null,
           stockOnHand: built.stockQty,
           sellingMode: built.sellingMode,

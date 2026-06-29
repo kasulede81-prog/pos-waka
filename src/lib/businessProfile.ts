@@ -196,11 +196,14 @@ export async function loadRegistrationProfileFromAuth(): Promise<RegistrationPro
 
 export function applyRegistrationProfileToLocalStore(profile: RegistrationProfileSnapshot): void {
   const store = usePosStore.getState();
-  store.setPreferences({
-    shopDisplayName: profile.shopDisplayName || store.preferences.shopDisplayName,
-    shopPhoneE164: profile.phoneE164 ?? store.preferences.shopPhoneE164,
-    shopCurrency: "UGX",
-  });
+  store.setPreferences(
+    {
+      shopDisplayName: profile.shopDisplayName || store.preferences.shopDisplayName,
+      shopPhoneE164: profile.phoneE164 ?? store.preferences.shopPhoneE164,
+      shopCurrency: "UGX",
+    },
+    { silent: true },
+  );
 }
 
 async function getPrimaryShopForUser(userId: string) {
@@ -251,11 +254,14 @@ export async function hydrateLocalShopProfileFromCloud(): Promise<void> {
     "kiosk_duka") as BusinessType;
   const currency = "UGX";
 
-  store.setPreferences({
-    shopDisplayName: shopName,
-    shopPhoneE164: s.phone_e164 ? String(s.phone_e164) : store.preferences.shopPhoneE164,
-    shopCurrency: currency,
-  });
+  store.setPreferences(
+    {
+      shopDisplayName: shopName,
+      shopPhoneE164: s.phone_e164 ? String(s.phone_e164) : store.preferences.shopPhoneE164,
+      shopCurrency: currency,
+    },
+    { silent: true },
+  );
 
   // Only skip the wizard when cloud onboarding is actually complete.
   if (onboarding?.complete) {

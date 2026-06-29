@@ -97,7 +97,7 @@ import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
-import { BusinessBuilderProvider } from "./context/BusinessBuilderContext";
+import { SettingsAppearancePage } from "./pages/SettingsAppearancePage";
 import { useUiLanguage } from "./hooks/useUiLanguage";
 
 const OwnerDashboardPage = lazy(() =>
@@ -805,6 +805,14 @@ function AppRoutes() {
               }
             />
             <Route
+              path="settings/appearance"
+              element={
+                <RoleProtectedRoute permission="settings.view">
+                  <SettingsAppearancePage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
               path="settings/notifications"
               element={
                 <RoleProtectedRoute permission="settings.view">
@@ -915,9 +923,7 @@ function App() {
   const Router = isElectronDesktop() ? HashRouter : BrowserRouter;
   return (
     <Router>
-      <BusinessBuilderProvider>
-        <AppRoutes />
-      </BusinessBuilderProvider>
+      <AppRoutes />
     </Router>
   );
 }

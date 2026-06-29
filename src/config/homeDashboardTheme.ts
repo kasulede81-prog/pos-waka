@@ -114,6 +114,24 @@ const THEME: Record<string, HomeDashboardTheme> = {
     lottieId: "agent",
     artClass: "home-art-agent",
   },
+  cashPosition: {
+    layout: "scene",
+    gradient: "from-emerald-500 via-teal-600 to-teal-900",
+    glow: "rgba(52,211,153,0.28)",
+    shadow: "shadow-[0_12px_36px_rgba(13,148,136,0.32)]",
+    subtitleKey: "desktopHomeTileCashPositionSub",
+    lottieId: "cashPosition",
+    artClass: "home-art-cashPosition",
+  },
+  commandCenter: {
+    layout: "scene",
+    gradient: "from-indigo-500 via-blue-600 to-violet-900",
+    glow: "rgba(99,102,241,0.28)",
+    shadow: "shadow-[0_12px_36px_rgba(79,70,229,0.32)]",
+    subtitleKey: "desktopHomeTileCommandCenterSub",
+    lottieId: "commandCenter",
+    artClass: "home-art-commandCenter",
+  },
 };
 
 export function homeDashboardTheme(tileId: string): HomeDashboardTheme {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { AuditLogEntry, Product } from "../types";
 import { describeAuditLine } from "./activityNarrative";
-import { formatAuditRowSummary } from "./auditCenterDetails";
+import { auditActionLabel, formatAuditRowSummary } from "./auditCenterDetails";
+import { shouldHideFromInvestigationCenter } from "../features/investigation-center/lib/activityPresentation";
 
 const product: Product = {
   id: "p-cola",
@@ -74,5 +75,81 @@ describe("investigation narratives", () => {
     const line = formatAuditRowSummary("en", e);
     expect(line).toContain("Fuel");
     expect(line).toContain("50,000");
+  });
+
+  it("auth forbidden uses plain language not developer codes", () => {
+    const e = entry({
+      action: "auth_forbidden",
+      payloadSummary: "Denied setPreferences",
+      payload: { action: "setPreferences", permission: "settings.shop" },
+    });
+    const title = auditActionLabel("en", e.action);
+    const line = formatAuditRowSummary("en", e);
+    expect(title).toBe("Access denied");
+    expect(line).toContain("change shop settings");
+    expect(line).not.toContain("auth_forbidden");
+    expect(line).not.toContain("setPreferences");
+  });
+
+  it("auth forbidden archive attempt is readable", () => {
+    const e = entry({
+      action: "auth_forbidden",
+      payloadSummary: "Denied runDataArchive",
+      payload: { action: "runDataArchive", permission: "settings.shop" },
+    });
+    const line = formatAuditRowSummary("en", e);
+    expect(line).toContain("archive old records");
+  });
+
+  it("hides background archive denials from investigation center", () => {
+    const e = entry({
+      action: "auth_forbidden",
+      payload: { action: "runDataArchive", permission: "settings.shop" },
+    });
+    expect(shouldHideFromInvestigationCenter(e)).toBe(true);
+    expect(
+      shouldHideFromInvestigationCenter(
+        entry({ action: "auth_forbidden", payload: { action: "setPreferences", permission: "settings.shop" } }),
+      ),
+    ).toBe(false);
+  });
+
+  it("hides background setPreferences denials from investigation center", () => {
+    expect(
+      shouldHideFromInvestigationCenter(
+        entry({
+          action: "auth_forbidden",
+          payload: {
+            action: "setPreferences",
+            permission: "settings.shop",
+            keys: ["shopDisplayName", "shopPhoneE164", "shopCurrency"],
+          },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      shouldHideFromInvestigationCenter(
+        entry({
+          action: "auth_forbidden",
+          payload: {
+            action: "setPreferences",
+            permission: "settings.shop",
+            keys: ["ownerRisksReviewedAt"],
+          },
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      shouldHideFromInvestigationCenter(
+        entry({
+          action: "auth_forbidden",
+          payload: {
+            action: "setPreferences",
+            permission: "settings.shop",
+            keys: ["backOfficePin"],
+          },
+        }),
+      ),
+    ).toBe(false);
   });
 });

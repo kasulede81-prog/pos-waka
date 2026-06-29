@@ -10,6 +10,7 @@ import "@fontsource/roboto/900.css";
 import "./index.css";
 import { AppRootErrorBoundary } from "./components/AppRootErrorBoundary";
 import App from "./App";
+import { AppProviders } from "./providers/AppProviders";
 import { isElectronDesktop } from "./lib/electronDesktop";
 import { initCapacitorShell } from "./lib/capacitorInit";
 import { initCrashReporting, installGlobalErrorHandlers } from "./lib/crashReporting";
@@ -18,9 +19,9 @@ import { recoverStuckStartupState, recordStartupStep } from "./lib/startupDiagno
 import { reportPwaIssue } from "./lib/monitoring";
 import { installChunkLoadRecovery } from "./lib/siteDataRecovery";
 import { warmupLocalDb } from "./offline/localDb";
-import { bootstrapMarketingThemeClass } from "./lib/marketingTheme";
+import { bootstrapAppThemeClass } from "./lib/appTheme";
 
-bootstrapMarketingThemeClass();
+bootstrapAppThemeClass();
 
 initCrashReporting();
 installGlobalErrorHandlers();
@@ -51,7 +52,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppRootErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <App />
+        <AppProviders>
+          <App />
+        </AppProviders>
       </QueryClientProvider>
     </AppRootErrorBoundary>
   </StrictMode>,

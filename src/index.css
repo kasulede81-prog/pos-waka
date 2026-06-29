@@ -35,32 +35,52 @@ body,
 }
 
 /** Logged-in app shell: one scroll surface (main), no document scrollbar or white tail. */
-html:has(.app-shell-root),
-body:has(.app-shell-root) {
+html:has(.app-shell-root):not(:has(.marketing-scroll-root)),
+body:has(.app-shell-root):not(:has(.marketing-scroll-root)) {
   overflow: hidden;
   height: 100dvh;
   max-height: 100dvh;
 }
 
-body:has(.app-shell-root) #root {
+body:has(.app-shell-root):not(:has(.marketing-scroll-root)) #root {
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
 }
 
 /** Auth / public pages: lock document height; scroll inside .auth-scroll-pane (reliable on Android Chrome). */
-html:has(.auth-scroll-root),
-body:has(.auth-scroll-root) {
+html:has(.auth-scroll-root):not(:has(.marketing-scroll-root)),
+body:has(.auth-scroll-root):not(:has(.marketing-scroll-root)) {
   overflow: hidden;
   height: 100dvh;
   max-height: 100dvh;
   touch-action: pan-y;
 }
 
-body:has(.auth-scroll-root) #root {
+body:has(.auth-scroll-root):not(:has(.marketing-scroll-root)) #root {
   height: 100dvh;
   max-height: 100dvh;
   overflow: hidden;
+}
+
+/** Marketing / legal long-form pages: document scroll (not inner-pane like auth or POS shell). */
+html:has(.marketing-scroll-root),
+body:has(.marketing-scroll-root) {
+  overflow-x: hidden;
+  overflow-y: auto;
+  height: auto;
+  min-height: 100%;
+  min-height: 100dvh;
+  max-height: none;
+  touch-action: pan-y;
+}
+
+body:has(.marketing-scroll-root) #root {
+  height: auto;
+  min-height: 100dvh;
+  max-height: none;
+  overflow-x: hidden;
+  overflow-y: visible;
 }
 
 .auth-scroll-root {
@@ -80,8 +100,8 @@ body {
   font-optical-sizing: auto;
   -webkit-tap-highlight-color: transparent;
   text-rendering: optimizeLegibility;
-  background-color: #fafaf9;
-  color: #1c1917;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
   overscroll-behavior-y: none;
   overflow-x: hidden;
   touch-action: manipulation;
@@ -176,6 +196,11 @@ body {
   .pb-bottom-nav {
     padding-bottom: var(--waka-safe-bottom);
   }
+  /** Dashboard pages — allow sideways scroll on narrow screens when tables/grids overflow. */
+  .scroll-main-chrome:not(.scroll-main-chrome--pos) {
+    overscroll-behavior-x: contain;
+  }
+
   /** Applied to AppShell <main> — keeps scroll-end / focus-scroll clear of fixed chrome */
   .scroll-main-chrome {
     scroll-padding-top: max(0.75rem, var(--waka-safe-top));
@@ -341,6 +366,140 @@ body {
   .waka-data-table tbody tr {
     @apply border-b border-stone-100 last:border-b-0;
   }
+}
+
+.dark {
+  --background: 24 10% 7%;
+  --foreground: 30 10% 95%;
+  --card: 24 10% 11%;
+  --card-foreground: 30 10% 95%;
+  --muted: 24 8% 16%;
+  --muted-foreground: 30 8% 62%;
+  --border: 24 8% 20%;
+  --input: 24 8% 20%;
+  --ring: 21 84% 55%;
+  color-scheme: dark;
+}
+
+.dark body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.dark ::selection {
+  background-color: hsl(21 70% 28%);
+  color: hsl(30 20% 96%);
+}
+
+.dark .auth-scroll-root {
+  background: linear-gradient(to bottom, hsl(24 12% 9%), hsl(var(--background)), hsl(var(--background))) !important;
+}
+
+.dark .app-shell--launcher {
+  background: linear-gradient(
+    to bottom,
+    hsl(21 70% 32%),
+    hsl(var(--background)),
+    hsl(var(--background))
+  ) !important;
+}
+
+/** Remap common light utilities app-wide when `.dark` is on `<html>`. */
+.dark .bg-white {
+  background-color: hsl(var(--card));
+}
+
+.dark .bg-white\/95,
+.dark .bg-white\/90 {
+  background-color: hsl(var(--card) / 0.95);
+}
+
+.dark .from-orange-50\/90,
+.dark .via-white,
+.dark .to-white {
+  --tw-gradient-from: hsl(var(--background)) var(--tw-gradient-from-position);
+  --tw-gradient-to: hsl(var(--card)) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.dark .bg-stone-50,
+.dark .bg-slate-50 {
+  background-color: hsl(var(--background));
+}
+
+.dark .bg-stone-100,
+.dark .bg-slate-100 {
+  background-color: hsl(var(--muted));
+}
+
+.dark .hover\:bg-stone-50:hover,
+.dark .hover\:bg-stone-100:hover {
+  background-color: hsl(var(--muted));
+}
+
+.dark .text-stone-950,
+.dark .text-stone-900,
+.dark .text-slate-900,
+.dark .text-slate-950 {
+  color: hsl(var(--foreground));
+}
+
+.dark .text-stone-800,
+.dark .text-stone-700,
+.dark .text-slate-800,
+.dark .text-slate-700 {
+  color: hsl(var(--card-foreground));
+}
+
+.dark .text-stone-600,
+.dark .text-stone-500,
+.dark .text-stone-400,
+.dark .text-slate-600,
+.dark .text-slate-500 {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .border-stone-200,
+.dark .border-stone-100,
+.dark .border-slate-200,
+.dark .border-slate-100 {
+  border-color: hsl(var(--border));
+}
+
+.dark .ring-stone-200,
+.dark .ring-stone-900\/5 {
+  --tw-ring-color: hsl(var(--border));
+}
+
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.dark select,
+.dark textarea {
+  background-color: hsl(var(--card));
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: hsl(var(--muted-foreground));
+}
+
+.dark .shadow-sm,
+.dark .shadow,
+.dark .shadow-lg {
+  --tw-shadow-color: rgb(0 0 0 / 0.35);
+}
+
+.dark .waka-data-table-shell {
+  @apply ring-stone-700;
+}
+
+.dark .waka-data-table--sticky-head thead th {
+  @apply bg-stone-900 text-stone-300 shadow-[inset_0_-1px_0_theme(colors.stone.700)];
+}
+
+.dark .waka-data-table tbody tr {
+  @apply border-stone-800;
 }
 
 /** Marketing site theme tokens — scoped via `.marketing-theme-dark` on `<html>`. */
@@ -849,6 +1008,63 @@ html[data-home-anim-paused] .builder-spotlight-active {
   .builder-handshake,
   .builder-customer-walk {
     animation: none !important;
+  }
+}
+
+/* Simple Add Product Wizard — step & success micro-interactions */
+@keyframes wizard-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes wizard-success-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes wizard-check-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.wizard-step-enter {
+  animation: wizard-step-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.wizard-success-enter {
+  animation: wizard-success-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.wizard-check-pop {
+  animation: wizard-check-pop 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wizard-step-enter,
+  .wizard-success-enter,
+  .wizard-check-pop {
+    animation: none;
   }
 }
 

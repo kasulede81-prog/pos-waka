@@ -43,6 +43,7 @@ import { SalesHistorySearchBar } from "../components/receipts/SalesHistorySearch
 import { SalesHistoryAnalyticsPanel } from "../components/receipts/SalesHistoryAnalyticsPanel";
 import { SalesHistorySkeletonList } from "../components/receipts/SalesHistorySkeletonList";
 import { buildReceiptNumberForSale } from "../lib/receiptPrint";
+import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
 
 function countItemsSold(sales: Sale[]): number {
   let count = 0;
@@ -131,24 +132,24 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const shopLabel = preferences.shopDisplayName?.trim() || undefined;
   const customers = usePosStore((s) => s.customers);
   const staffAccounts = preferences.staffAccounts ?? [];
+  const shifts = preferences.shifts ?? [];
+  const auditLogs = usePosStore((s) => s.auditLogs);
 
-  const staffNameById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const s of staffAccounts) {
-      map.set(s.id, s.name);
-    }
-    return map;
-  }, [staffAccounts]);
+  const soldByNameByUserId = useMemo(
+    () =>
+      buildSoldByNameByUserId({
+        staffAccounts,
+        shifts,
+        auditLogs,
+        ownerUserId: actor.userId.startsWith("staff:") ? null : actor.userId,
+        ownerDisplayName: actor.displayName,
+        shopDisplayName: preferences.shopDisplayName,
+      }),
+    [staffAccounts, shifts, auditLogs, actor.userId, actor.displayName, preferences.shopDisplayName],
+  );
 
-  const soldByLabel = (sale: Sale): string => {
-    const id = sale.soldByUserId ?? "";
-    if (!id) return t(lang, "role_owner");
-    if (id.startsWith("staff:")) {
-      const staffId = id.slice("staff:".length);
-      return staffNameById.get(staffId) ?? t(lang, "role_cashier");
-    }
-    return t(lang, "role_owner");
-  };
+  const soldByLabel = (sale: Sale): string =>
+    resolveSoldByUserId(lang, sale.soldByUserId, soldByNameByUserId, preferences.shopDisplayName);
 
   const customerNameFor = (sale: Sale): string => {
     if (sale.receiptCustomerName?.trim()) return sale.receiptCustomerName.trim();

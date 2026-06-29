@@ -25,11 +25,10 @@ export type CommandCenterRecommendation = {
   tone: "orange" | "teal" | "blue" | "rose" | "amber";
 };
 
+import { formatUgx } from "./formatUgx";
+
 export function formatShortUgx(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `UGX ${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `UGX ${Math.round(n / 1_000)}K`;
-  return `UGX ${n.toLocaleString()}`;
+  return formatUgx(n);
 }
 
 export function computeBusinessHealthScore(

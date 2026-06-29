@@ -159,6 +159,30 @@ export type SimpleWizardInput = {
   buyPackPriceUgx: string;
 };
 
+function productHadPackTracking(product: Product): boolean {
+  const packLabel = (product.buyingUnit ?? "").trim().split("·")[0]?.trim();
+  const rate = product.conversionRate != null && product.conversionRate > 1 ? product.conversionRate : 1;
+  return Boolean(packLabel && rate > 1);
+}
+
+/** Default unit cost when a pack product is saved without pack pricing (matches quickAddProduct). */
+export function defaultWizardUnitCostUgx(sellPriceUgx: number): number {
+  return Math.min(sellPriceUgx, Math.max(0, Math.floor(sellPriceUgx * 0.72)));
+}
+
+/**
+ * When editing, pack removal leaves no wizard cost — replace stale pack-derived cost.
+ * Returns undefined when the edit patch should not touch costPricePerUnitUgx.
+ */
+export function resolveWizardEditCostPatch(built: BuiltWizardProduct, previous: Product): number | undefined {
+  if (built.costPricePerUnitUgx !== undefined) return built.costPricePerUnitUgx;
+  const removesPack = built.buyingUnit == null && built.conversionRate == null;
+  if (productHadPackTracking(previous) && removesPack) {
+    return defaultWizardUnitCostUgx(built.priceUgx);
+  }
+  return undefined;
+}
+
 export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Language): BuiltWizardProduct | null {
   const name = input.name.trim();
   if (!name) return null;
@@ -203,7 +227,7 @@ export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Lan
     stockQty,
     category: input.shelf.trim() || "General",
     sellingMode: guess.sellingMode === "weighted" && sellingMode === "unit" ? guess.sellingMode : sellingMode,
-    baseUnit: guess.baseUnit && !input.hasPack ? guess.baseUnit : baseUnit,
+    baseUnit,
     buyingUnit,
     conversionRate,
     costPricePerUnitUgx: costPerUnit,

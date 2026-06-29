@@ -47,6 +47,7 @@ import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { usePosLayoutMode } from "../../hooks/usePosLayoutMode";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
 import { resolveModuleExit } from "../../lib/moduleExit";
+import { AppThemeToggle } from "../ui/AppThemeToggle";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -387,6 +388,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               </div>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1.5">
+              <AppThemeToggle lang={lang} inverted={isLauncherHome} />
               <div ref={userMenuRef} className="relative">
                 <button
                   type="button"
@@ -460,6 +462,17 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       }}
                     >
                       {t(lang, "userMenuProfile")}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-stone-50"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        navigate("/settings/appearance", { preventScrollReset: true });
+                      }}
+                    >
+                      {t(lang, "settingsHubAppearance")}
                     </button>
                     {authMode === "supabase" && !staffSession && actor.role === "owner" ? (
                       <button
@@ -569,13 +582,16 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           ) : null}
           <section className={clsx("flex min-h-0 min-w-0 max-w-full flex-1 flex-col", independentModule ? "pb-0" : "md:pb-0")}>
             <div
-              className={`scroll-main-chrome min-h-0 flex-1 overflow-x-hidden overscroll-y-contain [-webkit-overflow-scrolling:touch] ${
+              className={clsx(
+                "scroll-main-chrome min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]",
                 fullDesktopSell
                   ? "overflow-hidden"
-                  : "overflow-y-auto"
-              } ${
-                location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : ""
-              }`}
+                  : "overflow-y-auto",
+                location.pathname === "/pos" || location.pathname.startsWith("/pos/")
+                  ? "overflow-x-hidden"
+                  : "overflow-x-auto",
+                location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : "",
+              )}
             >
               <BackOfficeRouteGuard lang={lang}>
                 <RouteErrorBoundary scope="page">

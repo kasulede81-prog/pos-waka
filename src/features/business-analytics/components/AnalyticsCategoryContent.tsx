@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
+import clsx from "clsx";
 import type { Language, Product, Purchase, Supplier } from "../../../types";
 import type { ShopReportBundle } from "../../../hooks/useShopReporting";
 import type { InventoryInsights } from "../../../lib/localReporting";
 import type { PaymentMixSlice, LeaderboardRow } from "../types";
 import type { AnalyticsCategory } from "../types";
 import { t } from "../../../lib/i18n";
+import { KPI_VALUE_CLASS } from "../../../lib/desktopLayout";
 import { formatShortUgx } from "../../../lib/commandCenterPageView";
 import { AnalyticsBarChart, AnalyticsDonutChart, AnalyticsTrendChart } from "./AnalyticsCharts";
 import { AnalyticsLeaderboard, AnalyticsEmptyState } from "./AnalyticsLeaderboard";
@@ -41,9 +43,9 @@ export type AnalyticsSectionProps = {
 
 function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <article className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
+    <article className="min-w-0 rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
       <p className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</p>
-      <p className="mt-1 text-xl font-black tabular-nums text-stone-950">{value}</p>
+      <p className={clsx("mt-1 text-xl font-black text-stone-950", KPI_VALUE_CLASS)}>{value}</p>
       {hint ? <p className="mt-1 text-[11px] font-semibold text-stone-500">{hint}</p> : null}
     </article>
   );

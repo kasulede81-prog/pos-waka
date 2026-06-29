@@ -79,6 +79,7 @@ const SHOP_PREFERENCE_KEYS = new Set<keyof ShopPreferences>([
   "posShelfDefaultScale",
   "launcherTileOrder",
   "launcherTileLayout",
+  "homeHeroPreviewBgColor",
   "officeHubTileOrder",
   "officeHubTileLayout",
   "pharmacyModeEnabled",

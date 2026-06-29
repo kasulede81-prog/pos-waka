@@ -35,7 +35,7 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "inventory-purchasing", path: "/stock", titleKey: "ipPageTitle", subtitleKey: "ipPageSub", sectionKey: "officeSectionDaily", keywords: ["inventory", "products", "items", "medicine", "warehouse", "purchase", "buy", "stock in", "vendor", "supplier", "orders", "restock"] },
   { id: "shelf-arrange", path: "/settings/shelves", titleKey: "officeCardShelfArrange", subtitleKey: "officeCardShelfArrangeSub", sectionKey: "settingsHubGroupApp", perm: "shelves.customize", keywords: ["shelf", "arrange", "order", "sell", "category", "drag", "customize"] },
   { id: "customers", path: "/customers", titleKey: "customers", subtitleKey: "officeCardCustomersSub", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["customer", "patient", "account", "debtor"] },
-  { id: "debts", path: "/debts", titleKey: "debts", subtitleKey: "debtsHelp", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["debt", "credit", "owe", "loan"] },
+  { id: "debts", path: "/debts", titleKey: "debts", subtitleKey: "debtsHelp", sectionKey: "officeSectionDaily", perm: "customers.view", keywords: ["debt", "credit", "owe", "loan", "people", "customer", "debtor"] },
   { id: "cash-expenses", path: "/cash-expenses", titleKey: "officeCardCashExpenses", subtitleKey: "officeCardCashExpensesSub", sectionKey: "officeSectionDaily", keywords: ["expense", "petty cash", "drawer"] },
   { id: "cash-drawer", path: "/office/cash-drawer", titleKey: "cashManagementTitle", subtitleKey: "cashManagementSub", sectionKey: "officeSectionDaily", perm: "day.close", keywords: ["cash", "drawer", "till", "float", "variance", "shift"] },
   { id: "day-open", path: "/office/day-open", titleKey: "dayOpenTitle", subtitleKey: "dayOpenSub", sectionKey: "officeSectionDaily", perm: "day.open_drawer", keywords: ["open", "float", "drawer", "day"] },
@@ -95,7 +95,10 @@ function activeModes(preferences: ShopPreferences): Set<string> {
 
 function entryVisible(def: BackOfficeSearchEntryDef, ctx: BuildCtx): boolean {
   const modes = activeModes(ctx.preferences);
+  const retailOnly =
+    modes.has("retail") && !modes.has("pharmacy") && !modes.has("hospitality") && !modes.has("wholesale");
   if (def.modes?.length && !def.modes.some((m) => modes.has(m))) return false;
+  if (def.id === "customers" && retailOnly) return false;
   if (def.id === "debts" && (modes.has("pharmacy") || modes.has("hospitality") || modes.has("wholesale"))) return false;
   if (def.perm && !hasEffectivePermission(ctx.role, def.perm, ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode)) return false;
   if (def.requiresBackup && !canUseBackupRestore(ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode)) return false;

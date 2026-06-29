@@ -65,6 +65,7 @@ export function DesktopHomeTiles({ lang }: Props) {
     () => ({
       inventory: lowStockCount > 0 ? lowStockCount : undefined,
       investigation: riskCount > 0 ? riskCount : undefined,
+      commandCenter: riskCount > 0 ? riskCount : undefined,
     }),
     [lowStockCount, riskCount],
   );

@@ -24,6 +24,7 @@ import { resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilter
 import { formatDateFilterViewingLabel } from "../lib/dateFilterLabels";
 import { printHtmlDocument } from "../lib/documentPrint";
 import { shareText } from "../lib/reportExport";
+import { InvestigationDateFilter } from "../features/investigation-center/components/InvestigationDateFilter";
 import { InvestigationKpiGrid } from "../features/investigation-center/components/InvestigationKpiGrid";
 import { InvestigationCategoryChips } from "../features/investigation-center/components/InvestigationCategoryChips";
 import { InvestigationSearchBar } from "../features/investigation-center/components/InvestigationSearchBar";
@@ -44,6 +45,7 @@ import {
   buildExcelCompatibleCsv,
   computeInvestigationKpis,
   matchesCategory,
+  shouldHideFromInvestigationCenter,
 } from "../features/investigation-center/lib/activityPresentation";
 import type { InvestigationKpiId } from "../features/investigation-center/types";
 
@@ -52,8 +54,11 @@ const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue {
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  if (from && to && from === to) return { kind: "day", dateKey: from };
-  return { kind: "preset", preset: "this_month" };
+  if (from && to) {
+    if (from === to) return { kind: "day", dateKey: from };
+    return { kind: "range", fromKey: from, toKey: to };
+  }
+  return { kind: "preset", preset: "today" };
 }
 
 export function AuditCenterPage({ lang }: { lang: Language }) {
@@ -69,9 +74,16 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
 
   const [quickFilter, setQuickFilter] = useState(() => initialAuditDateFilter(searchParams));
-  const monthBounds = useMemo(() => resolveDateFilterBounds({ kind: "preset", preset: "this_month" }), []);
-  const [dateFrom, setDateFrom] = useState(() => searchParams.get("from") ?? monthBounds.fromKey);
-  const [dateTo, setDateTo] = useState(() => searchParams.get("to") ?? monthBounds.toKey);
+  const [dateFrom, setDateFrom] = useState(() => {
+    const from = searchParams.get("from");
+    if (from) return from;
+    return resolveDateFilterBounds(initialAuditDateFilter(searchParams)).fromKey;
+  });
+  const [dateTo, setDateTo] = useState(() => {
+    const to = searchParams.get("to");
+    if (to) return to;
+    return resolveDateFilterBounds(initialAuditDateFilter(searchParams)).toKey;
+  });
   const [actorUserId, setActorUserId] = useState(() => searchParams.get("staff") ?? "all");
   const [action, setAction] = useState<AuditAction | "all">(
     () => (searchParams.get("action") as AuditAction | null) ?? "all",
@@ -138,7 +150,8 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
 
   const filtered = useMemo(() => {
     const todayKey = dateKeyKampala(new Date());
-    let rows = baseFiltered.filter((entry) => matchesCategory(entry, category));
+    let rows = baseFiltered.filter((entry) => !shouldHideFromInvestigationCenter(entry));
+    rows = rows.filter((entry) => matchesCategory(entry, category));
     rows = applyKpiFilter(rows, activeKpi, todayKey);
     return rows;
   }, [baseFiltered, category, activeKpi]);
@@ -198,6 +211,20 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
       staff: next.actorUserId,
       action: next.action,
       q: debouncedSearchText,
+    });
+  };
+
+  const applyDateFilter = (quickDate: DateFilterValue) => {
+    const bounds = resolveDateFilterBounds(quickDate);
+    applyFilters({
+      dateFrom: bounds.fromKey,
+      dateTo: bounds.toKey,
+      quickDate,
+      actorUserId,
+      action,
+      productId,
+      customerId,
+      supplierId,
     });
   };
 
@@ -266,6 +293,8 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
         subtitle={t(lang, "icPageSub")}
         backLabel={t(lang, "officeBackToHub")}
       />
+
+      <InvestigationDateFilter lang={lang} filter={quickFilter} onFilterChange={applyDateFilter} />
 
       <InvestigationKpiGrid
         lang={lang}

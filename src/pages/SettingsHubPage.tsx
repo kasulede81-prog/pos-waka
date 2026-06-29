@@ -1,6 +1,6 @@
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -207,6 +207,12 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             Icon={LayoutGrid}
           />
         ) : null}
+        <OfficeNavCard
+          to="/settings/appearance"
+          title={t(lang, "settingsHubAppearance")}
+          subtitle={t(lang, "settingsHubAppearanceSub")}
+          Icon={Palette}
+        />
         <OfficeNavCard
           to="/settings/notifications"
           title={t(lang, "settingsHubNotifications")}

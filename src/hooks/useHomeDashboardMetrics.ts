@@ -113,6 +113,19 @@ export function useHomeDashboardMetrics(
         value: formatShortUgx(drawer.expectedDrawerCashUgx),
         intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
       };
+      stats.cashPosition = {
+        labelKey: "desktopHomeLiveExpectedCash",
+        value: formatShortUgx(drawer.expectedDrawerCashUgx),
+        intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
+      };
+    }
+
+    if (hasEffectivePermission(role, "owner.dashboard", snapshot, authMode)) {
+      stats.commandCenter = {
+        labelKey: "desktopHomeLiveTodaySales",
+        value: formatShortUgx(today.totalRevenueUgx),
+        intensity: revenueIntensity(today.totalRevenueUgx),
+      };
     }
 
     if (homeMetrics.showRecentSalesList) {

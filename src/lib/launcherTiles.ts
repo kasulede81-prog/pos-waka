@@ -11,6 +11,8 @@ import {
   Briefcase,
   Receipt,
   TrendingUp,
+  LayoutDashboard,
+  Wallet,
 } from "lucide-react";
 import type { LauncherTileColor, LauncherTileConfig, Permission } from "../types";
 import { POS_RECEIPTS_ROUTE, POS_SELL_ROUTE, POS_SHOP_ROUTE } from "./posNavigation";
@@ -84,6 +86,24 @@ export const LAUNCHER_TILE_CATALOG: LauncherTileDef[] = [
     hideable: true,
   },
   {
+    id: "cashPosition",
+    labelKey: "desktopHomeTileCashPosition",
+    to: "/office/cash-position",
+    Icon: Wallet,
+    perm: "day.close",
+    group: "management",
+    hideable: true,
+  },
+  {
+    id: "commandCenter",
+    labelKey: "desktopHomeTileCommandCenter",
+    to: "/owner",
+    Icon: LayoutDashboard,
+    perm: "owner.dashboard",
+    group: "management",
+    hideable: true,
+  },
+  {
     id: "salesHistory",
     labelKey: "receipts",
     to: POS_RECEIPTS_ROUTE,
@@ -134,6 +154,8 @@ export const DEFAULT_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [
   "inventory",
   "debts",
   "cash",
+  "cashPosition",
+  "commandCenter",
   "investigation",
   "salesHistory",
   "shop",
@@ -147,6 +169,8 @@ export const DEFAULT_LAUNCHER_TILE_LAYOUT: Record<string, LauncherTileConfig> = 
   inventory: { color: "purple", customColor: "#db2777" },
   debts: { color: "purple" },
   cash: { color: "blue" },
+  cashPosition: { color: "green", customColor: "#10b981", scale: 45 },
+  commandCenter: { color: "blue", customColor: "#4f46e5", scale: 48 },
   investigation: { color: "red" },
   salesHistory: { color: "green" },
   shop: { color: "orange" },

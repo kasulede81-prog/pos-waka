@@ -1055,6 +1055,8 @@ export type ShopPreferences = {
   launcherTileOrder?: string[];
   /** Main menu tile overrides — hide, pin, accent color. */
   launcherTileLayout?: Record<string, LauncherTileConfig>;
+  /** Home hero live preview surround color (hex). Default light green when unset. */
+  homeHeroPreviewBgColor?: string | null;
   /** Back office hub section tile order. */
   officeHubTileOrder?: string[];
   /** Back office hub section colors and visibility. */

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import clsx from "clsx";
 import type { Language } from "../../types";
@@ -12,7 +13,6 @@ import {
 } from "../../config/company";
 import { SOLUTION_NAV_LINKS } from "../../config/solutionPages";
 import { WakaBrandWordmark } from "../brand/WakaLogo";
-import { MarketingThemeProvider } from "./MarketingThemeProvider";
 import { MarketingThemeToggle } from "./MarketingThemeToggle";
 import {
   mktBtnPrimary,
@@ -64,11 +64,9 @@ const FOOTER = {
 
 export function MarketingLayout({ lang, setLang, isAuthenticated, children }: Props) {
   return (
-    <MarketingThemeProvider>
-      <MarketingLayoutInner lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
-        {children}
-      </MarketingLayoutInner>
-    </MarketingThemeProvider>
+    <MarketingLayoutInner lang={lang} setLang={setLang} isAuthenticated={isAuthenticated}>
+      {children}
+    </MarketingLayoutInner>
   );
 }
 
@@ -76,8 +74,23 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
   const location = useLocation();
   const onHome = location.pathname === "/home";
 
+  /** Release document scroll for marketing — overrides stale POS/auth shell locks. */
+  useEffect(() => {
+    document.body.style.overflow = "";
+    document.documentElement.style.overflow = "";
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!location.hash) return;
+    const id = decodeURIComponent(location.hash.slice(1));
+    const scrollToHash = () => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToHash();
+    const timer = window.setTimeout(scrollToHash, 150);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname, location.hash]);
+
   return (
-    <div className={clsx("marketing-site min-h-dvh", mktPage)}>
+    <div className={clsx("marketing-site marketing-scroll-root min-h-dvh", mktPage)}>
       <header className={mktNav}>
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
           <Link to="/home" className="shrink-0">

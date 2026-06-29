@@ -105,6 +105,27 @@ const WARNING_ACTIONS: ReadonlySet<AuditAction> = new Set([
 
 const FAILED_SYNC_ACTIONS: ReadonlySet<AuditAction> = new Set(["sync_unknown_operation"]);
 
+/** setPreferences keys from automatic background sync — not actionable security incidents. */
+const BACKGROUND_SET_PREFERENCES_KEYS = new Set([
+  "ownerRisksReviewedAt",
+  "ownerAlertAcknowledgements",
+  "shopDisplayName",
+  "shopPhoneE164",
+  "shopCurrency",
+]);
+
+/** Background permission checks are not security incidents — hide from Investigation Center. */
+export function shouldHideFromInvestigationCenter(entry: AuditLogEntry): boolean {
+  if (entry.action !== "auth_forbidden") return false;
+  const payload = entry.payload as Record<string, unknown> | undefined;
+  const action = payload?.action;
+  if (action === "runDataArchive") return true;
+  if (action !== "setPreferences") return false;
+  const keys = payload?.keys;
+  if (!Array.isArray(keys) || keys.length === 0) return false;
+  return keys.every((key) => typeof key === "string" && BACKGROUND_SET_PREFERENCES_KEYS.has(key));
+}
+
 const CATEGORY_SETS: Partial<Record<InvestigationCategory, ReadonlySet<AuditAction>>> = {
   sales: SALES,
   inventory: INVENTORY,
@@ -219,6 +240,7 @@ export function computeInvestigationKpis(
 
   for (const idx of index.sortedIndices) {
     const e = index.entries[idx]!;
+    if (shouldHideFromInvestigationCenter(e)) continue;
     const dk = index.dateKeys[idx]!;
     if (dk < dateFrom || dk > dateTo) continue;
     if (dk === todayKey) activitiesToday += 1;

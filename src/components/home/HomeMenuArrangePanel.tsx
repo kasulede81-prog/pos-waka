@@ -11,7 +11,7 @@ import {
   resolveHomeMenuTiles,
   updateLauncherTileLayout,
 } from "../../lib/launcherTiles";
-import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
+import { PRESET_SHELF_HEX, resolveShelfHex, HOME_HERO_PREVIEW_BG_PRESETS, resolveHomeHeroPreviewBgColor } from "../../lib/shelfColor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
@@ -34,6 +34,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
   const { snapshot, authMode } = useSubscription();
   const savedOrderRaw = usePosStore((s) => s.preferences.launcherTileOrder);
   const layoutRaw = usePosStore((s) => s.preferences.launcherTileLayout);
+  const previewBgStored = usePosStore((s) => s.preferences.homeHeroPreviewBgColor);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const savedOrder = savedOrderRaw ?? EMPTY_ORDER;
   const layout = layoutRaw ?? EMPTY_LAYOUT;
@@ -96,10 +97,41 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
   );
 
   const selectedDef = selectedId ? LAUNCHER_TILE_CATALOG.find((t) => t.id === selectedId) : null;
+  const previewBgHex = resolveHomeHeroPreviewBgColor(previewBgStored);
 
   const content = (
     <div className="space-y-4">
       <p className="text-sm font-medium text-stone-600">{t(lang, "homeMenuArrangeSub")}</p>
+
+      <section className="space-y-3 rounded-2xl border-2 border-stone-200 bg-white p-4">
+        <div>
+          <p className="text-sm font-black text-stone-950">{t(lang, "homeMenuPreviewBgTitle")}</p>
+          <p className="mt-0.5 text-xs font-medium text-stone-500">{t(lang, "homeMenuPreviewBgSub")}</p>
+        </div>
+        <div>
+          <p className="text-xs font-bold text-stone-600">{t(lang, "homeMenuColorLabel")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {HOME_HERO_PREVIEW_BG_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                onClick={() => setPreferences({ homeHeroPreviewBgColor: preset.hex })}
+                className={clsx(
+                  "h-9 min-w-[3rem] rounded-xl border-2 px-2 text-xs font-black capitalize",
+                  previewBgHex === preset.hex ? "border-waka-600 ring-2 ring-waka-200" : "border-stone-200",
+                )}
+                style={{ backgroundColor: preset.hex }}
+                aria-label={preset.id}
+              />
+            ))}
+          </div>
+          <ShelfColorWheel
+            className="mt-3"
+            value={previewBgHex}
+            onChange={(hex) => setPreferences({ homeHeroPreviewBgColor: hex ?? null })}
+          />
+        </div>
+      </section>
 
       {hero ? (
         <section className="space-y-2">

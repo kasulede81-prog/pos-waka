@@ -30,6 +30,8 @@ export function HomeTileArt({ tileId, intensity = "normal", className }: Props) 
       {tileId === "profit" && <ProfitArt uid={uid} intensity={intensity} />}
       {tileId === "inventory" && <InventoryArt intensity={intensity} />}
       {tileId === "cash" && <CashArt intensity={intensity} />}
+      {tileId === "cashPosition" && <CashPositionArt intensity={intensity} />}
+      {tileId === "commandCenter" && <CommandCenterArt uid={uid} />}
       {tileId === "salesHistory" && <SalesHistoryArt />}
       {tileId === "debts" && <DebtsArt intensity={intensity} />}
       {tileId === "investigation" && <InvestigationArt />}
@@ -153,6 +155,47 @@ function CashArt({ intensity }: { intensity: HomeTileIntensity }) {
         <rect className="home-art-cash-bill home-art-bill-3" x="72" y="32" width="20" height="28" rx="2" fill="#60a5fa" />
         {full ? <rect className="home-art-cash-bill" x="60" y="28" width="18" height="32" rx="2" fill="#4ade80" opacity="0.8" /> : null}
       </g>
+    </g>
+  );
+}
+
+function CashPositionArt({ intensity }: { intensity: HomeTileIntensity }) {
+  const busy = intensity === "high" || intensity === "alert";
+  return (
+    <g className="home-art-cashPosition" transform="translate(22, 24)">
+      <rect x="0" y="12" width="116" height="72" rx="10" fill="#064e3b" opacity="0.35" />
+      <rect x="8" y="20" width="100" height="56" rx="8" fill="#10b981" opacity="0.95" />
+      <circle cx="58" cy="48" r="18" fill="#ecfdf5" opacity="0.95" />
+      <text x="58" y="54" textAnchor="middle" fontSize="16" fontWeight="900" fill="#047857">
+        UGX
+      </text>
+      {busy ? (
+        <>
+          <circle cx="98" cy="24" r="8" fill="#fbbf24" />
+          <path d="M94 24 L96 26 L102 20" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+        </>
+      ) : null}
+    </g>
+  );
+}
+
+function CommandCenterArt({ uid }: { uid: string }) {
+  return (
+    <g className="home-art-commandCenter" transform="translate(18, 18)">
+      <rect x="0" y="0" width="124" height="84" rx="10" fill="#312e81" opacity="0.45" />
+      <rect x="8" y="8" width="52" height="32" rx="6" fill="#6366f1" opacity="0.95" />
+      <rect x="64" y="8" width="52" height="32" rx="6" fill="#818cf8" opacity="0.9" />
+      <rect x="8" y="44" width="108" height="32" rx="6" fill="#4338ca" opacity="0.95" />
+      <circle cx="34" cy="24" r="6" fill="#fff" opacity="0.85" />
+      <rect x="48" y="18" width="8" height="12" rx="2" fill="#fff" opacity="0.7" />
+      <path
+        className="home-art-cmd-line"
+        d="M18 58 L38 48 L58 54 L78 42 L98 50"
+        fill="none"
+        stroke={`url(#home-gold-${uid})`}
+        strokeWidth="3"
+        strokeLinecap="round"
+      />
     </g>
   );
 }

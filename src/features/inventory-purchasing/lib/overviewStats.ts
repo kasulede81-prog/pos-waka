@@ -125,11 +125,10 @@ function pNameFromPurchases(purchases: Purchase[], supplierId: string): string {
   return purchases.find((p) => p.supplierId === supplierId)?.supplierName ?? "—";
 }
 
+import { formatUgx } from "../../../lib/formatUgx";
+
 export function formatShortUgx(n: number): string {
-  const abs = Math.abs(n);
-  if (abs >= 1_000_000) return `UGX ${(n / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `UGX ${Math.round(n / 1_000)}K`;
-  return `UGX ${n.toLocaleString()}`;
+  return formatUgx(n);
 }
 
 export function purchaseStatusKind(purchase: Purchase): "paid" | "partial" | "unpaid" | "voided" {

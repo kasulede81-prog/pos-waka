@@ -17,10 +17,10 @@ export type CustomerDebtMeta = {
 const OVERDUE_DAYS = 14;
 const DUE_SOON_DAYS = 7;
 
+import { formatUgx } from "./formatUgx";
+
 export function formatShortUgx(n: number): string {
-  if (n >= 1_000_000) return `UGX ${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 10_000) return `UGX ${Math.round(n / 1000)}K`;
-  return `UGX ${n.toLocaleString()}`;
+  return formatUgx(n);
 }
 
 export function customerInitials(name: string): string {

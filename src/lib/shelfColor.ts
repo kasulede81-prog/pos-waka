@@ -9,6 +9,22 @@ export const PRESET_SHELF_HEX: Record<PosShelfColor, string> = {
   purple: "#7c3aed",
 };
 
+/** Light surround behind the live shop preview on the home hero. */
+export const DEFAULT_HOME_HERO_PREVIEW_BG = "#ecfdf5";
+
+export const HOME_HERO_PREVIEW_BG_PRESETS = [
+  { id: "green", hex: DEFAULT_HOME_HERO_PREVIEW_BG },
+  { id: "blue", hex: "#eff6ff" },
+  { id: "orange", hex: "#fff7ed" },
+  { id: "purple", hex: "#f5f3ff" },
+  { id: "red", hex: "#fef2f2" },
+  { id: "white", hex: "#ffffff" },
+] as const;
+
+export function resolveHomeHeroPreviewBgColor(custom: string | null | undefined): string {
+  return normalizeShelfHex(custom) ?? DEFAULT_HOME_HERO_PREVIEW_BG;
+}
+
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
 export function normalizeShelfHex(value: unknown): string | null {

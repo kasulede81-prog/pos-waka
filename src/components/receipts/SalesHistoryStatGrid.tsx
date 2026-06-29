@@ -2,6 +2,7 @@ import clsx from "clsx";
 import { HandCoins, Package, TrendingUp, Wallet } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import { formatUgx } from "../../lib/formatUgx";
 
 type Props = {
   lang: Language;
@@ -13,12 +14,6 @@ type Props = {
   totalDebtUgx: number;
   showShopDebt?: boolean;
 };
-
-function formatShortUgx(n: number): string {
-  if (n >= 1_000_000) return `UGX ${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  if (n >= 10_000) return `UGX ${Math.round(n / 1000)}K`;
-  return `UGX ${n.toLocaleString()}`;
-}
 
 function StatCard({
   icon: Icon,
@@ -68,11 +63,11 @@ export function SalesHistoryStatGrid({
 }: Props) {
   return (
     <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
-      <StatCard icon={Wallet} label={salesLabel} value={formatShortUgx(salesUgx)} accent="orange" />
+      <StatCard icon={Wallet} label={salesLabel} value={formatUgx(salesUgx)} accent="orange" />
       <StatCard
         icon={TrendingUp}
         label={t(lang, "salesHistoryProfits")}
-        value={showProfit && profitUgx != null ? formatShortUgx(profitUgx) : "—"}
+        value={showProfit && profitUgx != null ? formatUgx(profitUgx) : "—"}
         accent="teal"
       />
       <StatCard icon={Package} label={t(lang, "salesHistoryItemsSold")} value={String(itemsSold)} accent="stone" />
@@ -80,7 +75,7 @@ export function SalesHistoryStatGrid({
         <StatCard
           icon={HandCoins}
           label={t(lang, "salesHistoryTotalDebts")}
-          value={formatShortUgx(totalDebtUgx)}
+          value={formatUgx(totalDebtUgx)}
           accent="rose"
         />
       ) : (

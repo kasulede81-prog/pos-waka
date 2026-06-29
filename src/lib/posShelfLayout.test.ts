@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildPosShelfDisplayCards,
+  defaultShelfColorForIndex,
+  fillDefaultShelfLayout,
+  inferDefaultShelfColor,
   mergeShelfLayout,
   shelfGridSpanClass,
   shelfGridSpanFromScale,
@@ -93,6 +96,38 @@ describe("posShelfLayout", () => {
     const next = updateShelfLayoutEntry({}, "Drinks", { color: "red", badge: null });
     expect(next.Drinks?.color).toBe("red");
     expect(next.Drinks?.badge).toBeNull();
+  });
+
+  it("cycles default new-user shelf colours", () => {
+    expect(defaultShelfColorForIndex(0)).toBe("blue");
+    expect(defaultShelfColorForIndex(1)).toBe("red");
+    expect(defaultShelfColorForIndex(2)).toBe("orange");
+  });
+
+  it("infers colours from common category names", () => {
+    expect(inferDefaultShelfColor("bakery", 0)).toBe("blue");
+    expect(inferDefaultShelfColor("Drinks", 1)).toBe("red");
+    expect(inferDefaultShelfColor("OMO", 2)).toBe("orange");
+  });
+
+  it("fills default layout without overwriting saved colours", () => {
+    const layout = fillDefaultShelfLayout({}, ["bakery", "Drinks", "OMO"], []);
+    expect(layout.bakery?.color).toBe("blue");
+    expect(layout.Drinks?.color).toBe("red");
+    expect(layout.OMO?.color).toBe("orange");
+
+    const kept = fillDefaultShelfLayout({ Drinks: { color: "purple" } }, ["Drinks"], []);
+    expect(kept.Drinks?.color).toBe("purple");
+  });
+
+  it("uses fallback colour on display when layout entry has no colour", () => {
+    const merged = mergeShelfLayout(
+      { key: "bakery", label: "bakery", count: 1, icon: "🍞" },
+      {},
+      35,
+      { fallbackColor: "blue" },
+    );
+    expect(merged.color).toBe("blue");
   });
 });
 

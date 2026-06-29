@@ -1,6 +1,6 @@
 import type { AuditLogEntry, Language } from "../types";
 import { describeAuditLine } from "./activityNarrative";
-import { t } from "./i18n";
+import { auditActionLabel, humanizePayloadSummary } from "./auditFriendlyText";
 
 export type AuditDetailRow = {
   before: string | null;
@@ -73,7 +73,9 @@ export function extractAuditDetails(entry: AuditLogEntry): AuditDetailRow {
     str(pl.productName) ??
     str(pl.supplierName) ??
     str(pl.customerName) ??
-    entry.payloadSummary;
+    (entry.action === "auth_forbidden"
+      ? humanizePayloadSummary(lang, entry)
+      : entry.payloadSummary);
 
   return {
     before,
@@ -87,11 +89,7 @@ export function extractAuditDetails(entry: AuditLogEntry): AuditDetailRow {
   };
 }
 
-export function auditActionLabel(lang: Language, action: string): string {
-  const key = `auditAction_${action}` as Parameters<typeof t>[1];
-  const label = t(lang, key);
-  return label === key ? action : label;
-}
+export { auditActionLabel } from "./auditFriendlyText";
 
 export function formatAuditRowSummary(
   lang: Language,

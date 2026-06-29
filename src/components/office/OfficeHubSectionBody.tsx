@@ -108,22 +108,13 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
           />
         ) : null}
         {access.can("customers.view") && highlightCustomers ? (
-          <>
-            <OfficeNavCard
-              to="/customers"
-              title={t(lang, "customers")}
-              subtitle={t(lang, "officeCardCustomersSub")}
-              Icon={Users}
-              highlight
-            />
-            <OfficeNavCard
-              to="/debts"
-              title={t(lang, "debts")}
-              subtitle={t(lang, "debtsHelp")}
-              Icon={Banknote}
-              highlight
-            />
-          </>
+          <OfficeNavCard
+            to="/debts"
+            title={t(lang, "debts")}
+            subtitle={t(lang, "debtsHelp")}
+            Icon={Banknote}
+            highlight
+          />
         ) : null}
         {access.can("customers.view") && highlightPharmacyPatients ? (
           <OfficeNavCard
