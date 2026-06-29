@@ -231,7 +231,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       if (soldByLabel(sale).toLowerCase().includes(q)) return true;
       return sale.lines.some((line) => line.name.toLowerCase().includes(q));
     });
-  }, [partitioned.completed, partitioned.pending, searchQuery, sales, customers, staffNameById, lang]);
+  }, [partitioned.completed, partitioned.pending, searchQuery, sales, customers, soldByNameByUserId, lang]);
 
   const selectedDay = selectedDayKeyForFilter(filter);
   const isSingleDay = selectedDay != null;

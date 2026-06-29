@@ -23,7 +23,7 @@ export type AuditExportRow = {
 
 export function auditEntriesToExportRows(lang: Language, entries: AuditLogEntry[]): AuditExportRow[] {
   return entries.map((e) => {
-    const d = extractAuditDetails(e);
+    const d = extractAuditDetails(e, lang);
     return {
       timestamp: e.at,
       staff: e.actorName?.trim() || actorDisplayLabel(e.actorUserId, lang),

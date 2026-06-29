@@ -307,7 +307,7 @@ export function buildActivityDetailText(
     customerById?: Map<string, { name: string }>;
   },
 ): string {
-  const detail = extractAuditDetails(entry);
+  const detail = extractAuditDetails(entry, lang);
   const staff = entry.actorName?.trim() || actorDisplayLabel(entry.actorUserId, lang);
   const when = new Date(entry.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
   const summary = formatAuditRowSummary(lang, entry, ctx);
@@ -355,7 +355,7 @@ export function buildEventTimelineSteps(lang: Language, action: AuditAction): st
 
 export function buildAuditJsonExport(lang: Language, entries: AuditLogEntry[]): string {
   const rows = entries.map((e) => {
-    const d = extractAuditDetails(e);
+    const d = extractAuditDetails(e, lang);
     return {
       id: e.id,
       at: e.at,

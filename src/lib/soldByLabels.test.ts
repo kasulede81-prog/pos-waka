@@ -15,10 +15,12 @@ describe("soldByLabels", () => {
     const ownerId = "f20ae9a3-8b5a-4f66-bf71-12c728a89c0c";
     const audit: AuditLogEntry = {
       id: "1",
+      at: "2026-06-11T10:00:00.000Z",
       action: "sale_completed",
       actorUserId: ownerId,
       actorName: "Super Admin",
-      createdAt: "2026-06-11T10:00:00.000Z",
+      role: "owner",
+      payloadSummary: "Sale completed",
       payload: { soldByUserId: ownerId, totalUgx: 2000 },
     };
     const map = buildSoldByNameByUserId({ auditLogs: [audit] });
@@ -43,10 +45,12 @@ describe("soldByLabels", () => {
       auditLogs: [
         {
           id: "1",
+          at: sale.createdAt,
           action: "sale_completed",
           actorUserId: ownerId,
           actorName: "Super Admin",
-          createdAt: sale.createdAt,
+          role: "owner",
+          payloadSummary: "Sale completed",
           payload: { soldByUserId: ownerId },
         },
       ],

@@ -1,6 +1,6 @@
 import type { AuditLogEntry, Language } from "../types";
 import { describeAuditLine } from "./activityNarrative";
-import { auditActionLabel, humanizePayloadSummary } from "./auditFriendlyText";
+import { humanizePayloadSummary } from "./auditFriendlyText";
 
 export type AuditDetailRow = {
   before: string | null;
@@ -20,7 +20,7 @@ function str(v: unknown): string | null {
   return null;
 }
 
-export function extractAuditDetails(entry: AuditLogEntry): AuditDetailRow {
+export function extractAuditDetails(entry: AuditLogEntry, lang: Language = "en"): AuditDetailRow {
   const pl = entry.payload;
   const reason = str(pl.reason) ?? str(pl.note) ?? str(pl.voidReason) ?? null;
   let before: string | null = null;

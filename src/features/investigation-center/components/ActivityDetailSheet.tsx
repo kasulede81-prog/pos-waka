@@ -64,7 +64,7 @@ export function ActivityDetailSheet({
 
   if (!entry) return null;
 
-  const detail = extractAuditDetails(entry);
+  const detail = extractAuditDetails(entry, lang);
   const staff = entry.actorName?.trim() || actorDisplayLabel(entry.actorUserId, lang);
   const when = new Date(entry.at);
   const summary = formatAuditRowSummary(lang, entry, { productById, customerById });
