@@ -46,7 +46,7 @@ export function ReceiptsDayGroup({
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform group-open:rotate-180 ${chevronClass}`} aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="truncate text-base font-black text-stone-950">{dayHeading}</p>
-          <p className={`mt-0.5 text-sm font-medium ${tone === "pending" ? "text-amber-900" : "text-slate-500"}`}>
+          <p className={`mt-0.5 text-sm font-medium ${tone === "pending" ? "text-amber-900" : "text-stone-500"}`}>
             {tTemplate(lang, "receiptsDayGroupMeta", {
               count: String(saleCount),
               amount: dayAmountLabel,

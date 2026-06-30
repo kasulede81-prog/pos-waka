@@ -42,10 +42,10 @@ export function SystemStatusCenter({ health }: { health: SystemHealthSnapshot })
   ];
 
   return (
-    <section className="rounded-2xl border border-stone-200/90 bg-gradient-to-br from-stone-900 via-stone-800 to-orange-950 p-4 text-white shadow-lg">
+    <section className="rounded-2xl border border-stone-200/90 bg-gradient-to-br from-stone-900 via-stone-800 to-waka-950 p-4 text-white shadow-lg">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-widest text-orange-200/90">Mission control</p>
+          <p className="text-[10px] font-black uppercase tracking-widest text-waka-200/90">Mission control</p>
           <h2 className="mt-1 text-lg font-black">System status</h2>
         </div>
         <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5">
@@ -84,7 +84,7 @@ export function ActivityFeedPanel({ events, previewMode }: { events: OpsFeedEven
               onClick={() => setFilter(f)}
               className={clsx(
                 "rounded-full px-2.5 py-1 text-[10px] font-black uppercase",
-                filter === f ? "bg-orange-600 text-white" : "bg-stone-100 text-stone-600",
+                filter === f ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-600",
               )}
             >
               {f}
@@ -112,7 +112,7 @@ export function ActivityFeedPanel({ events, previewMode }: { events: OpsFeedEven
               {e.shopId ? (
                 <Link
                   to={internalAdminShopHref(e.shopId, previewMode)}
-                  className="mt-1 inline-block text-[11px] font-black text-orange-600"
+                  className="mt-1 inline-block text-[11px] font-black text-waka-600"
                 >
                   Open shop →
                 </Link>
@@ -226,7 +226,7 @@ export function GlobalSearchBar({
               <button
                 key={`${r.type}-${r.id}`}
                 type="button"
-                className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-orange-50"
+                className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-waka-50"
                 onClick={() => {
                   setOpen(false);
                   setQ("");
@@ -259,7 +259,7 @@ export function AppVersionPanel({ versions }: { versions: { version: string; cou
               <span>{v.pct}%</span>
             </div>
             <div className="mt-1 h-2 overflow-hidden rounded-full bg-stone-100">
-              <div className="h-full rounded-full bg-orange-500 transition-all" style={{ width: `${v.pct}%` }} />
+              <div className="h-full rounded-full bg-waka-500 transition-all" style={{ width: `${v.pct}%` }} />
             </div>
           </li>
         ))}
@@ -286,7 +286,7 @@ export function PlatformAnalyticsPanel({
           {signups7.map((b) => (
             <div key={b.label} className="flex flex-1 flex-col items-center gap-1">
               <div
-                className="w-full max-w-[2rem] rounded-t-lg bg-orange-500"
+                className="w-full max-w-[2rem] rounded-t-lg bg-waka-500"
                 style={{ height: `${Math.max(8, (b.count / maxSignup) * 100)}%` }}
               />
               <span className="text-[9px] font-bold text-stone-400">{b.label}</span>
@@ -329,7 +329,7 @@ export function DeviceFleetCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="font-black text-stone-900">{device.label ?? "Device"}</p>
-          <button type="button" onClick={onOpenShop} className="text-xs font-bold text-orange-600">
+          <button type="button" onClick={onOpenShop} className="text-xs font-bold text-waka-600">
             {device.shop_name} →
           </button>
         </div>
@@ -426,7 +426,7 @@ export function AnnouncementSheet({
         <button
           type="button"
           onClick={submit}
-          className="min-h-[48px] w-full rounded-2xl bg-orange-600 text-sm font-black text-white"
+          className="min-h-[48px] w-full rounded-2xl bg-waka-600 text-sm font-black text-white"
         >
           Broadcast (saved locally)
         </button>
@@ -454,7 +454,7 @@ export function MassActionBar({
 }) {
   if (count === 0) return null;
   return (
-    <div className="sticky bottom-2 z-20 flex items-center justify-between gap-2 rounded-2xl border border-orange-200 bg-orange-600 px-4 py-3 text-white shadow-lg">
+    <div className="sticky bottom-2 z-20 flex items-center justify-between gap-2 rounded-2xl border border-waka-200 bg-waka-600 px-4 py-3 text-white shadow-lg">
       <span className="text-sm font-black">{count} selected</span>
       <div className="flex gap-2">
         <button type="button" onClick={() => onAction("extend_trial")} className="rounded-xl bg-white/20 px-3 py-2 text-xs font-black">
@@ -473,10 +473,10 @@ export function MassActionBar({
 
 export function ShopTimelinePanel({ events }: { events: OpsFeedEvent[] }) {
   return (
-    <ul className="space-y-0 border-l-2 border-orange-200 pl-4">
+    <ul className="space-y-0 border-l-2 border-waka-200 pl-4">
       {events.map((e) => (
         <li key={e.id} className="relative pb-4">
-          <span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
+          <span className="absolute -left-[1.35rem] top-1 h-2.5 w-2.5 rounded-full bg-waka-500 ring-2 ring-white" />
           <p className="text-[10px] font-bold text-stone-500">{e.timeLabel}</p>
           <p className="text-sm font-semibold text-stone-900">{e.message}</p>
         </li>

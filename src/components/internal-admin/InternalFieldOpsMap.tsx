@@ -313,7 +313,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
                 <Marker key={`c-${props.cluster_id}`} longitude={lng} latitude={lat}>
                   <button
                     type="button"
-                    className="flex cursor-pointer items-center justify-center rounded-full border-2 border-orange-200/90 bg-gradient-to-br from-orange-500 to-amber-600 font-mono font-black text-white shadow-lg outline-none ring-2 ring-black/20 transition hover:scale-105 hover:from-orange-400 hover:to-amber-500"
+                    className="flex cursor-pointer items-center justify-center rounded-full border-2 border-waka-200/90 bg-gradient-to-br from-waka-500 to-amber-600 font-mono font-black text-white shadow-lg outline-none ring-2 ring-black/20 transition hover:scale-105 hover:from-waka-400 hover:to-amber-500"
                     style={{ width: size, height: size, fontSize: size > 44 ? 14 : 12 }}
                     title={t(lang, "internalMapClusterTap")}
                     onClick={(e) => {
@@ -345,7 +345,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
               <Marker key={p.shop_id} longitude={lng} latitude={lat} anchor="bottom">
                 <button
                   type="button"
-                  className="relative z-[12] flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-white/90 bg-orange-500 shadow-md outline-none transition hover:scale-110 hover:bg-orange-400"
+                  className="relative z-[12] flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 border-white/90 bg-waka-500 shadow-md outline-none transition hover:scale-110 hover:bg-waka-400"
                   title={p.shop_name}
                   aria-label={p.shop_name}
                   onClick={(e) => {
@@ -354,7 +354,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
                     setPopup({ lng, lat, pin });
                   }}
                 >
-                  <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-white/90 bg-orange-500" />
+                  <span className="absolute -bottom-1 left-1/2 h-2 w-2 -translate-x-1/2 rotate-45 border-b-2 border-r-2 border-white/90 bg-waka-500" />
                 </button>
               </Marker>
             );
@@ -399,7 +399,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
                   </div>
                   <div className="flex justify-between gap-2">
                     <dt className="text-stone-500">{t(lang, "internalMapPlanLabel")}</dt>
-                    <dd className="text-right uppercase text-orange-800">{popup.pin.plan_code ?? "—"}</dd>
+                    <dd className="text-right uppercase text-waka-800">{popup.pin.plan_code ?? "—"}</dd>
                   </div>
                   <div className="flex justify-between gap-2">
                     <dt className="text-stone-500">{t(lang, "internalMapLastActive")}</dt>
@@ -424,7 +424,7 @@ export function InternalFieldOpsMap({ lang, pins, accessToken }: Props) {
                     )}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex rounded-lg border-2 border-orange-500 bg-orange-50 px-3 py-2 text-xs font-black text-orange-900 hover:bg-orange-100"
+                    className="inline-flex rounded-lg border-2 border-waka-500 bg-waka-50 px-3 py-2 text-xs font-black text-waka-900 hover:bg-waka-100"
                     onClick={(e) => e.stopPropagation()}
                   >
                     {t(lang, "internalVisitDirections")}

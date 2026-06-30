@@ -86,7 +86,7 @@ export function ResetPasswordPage({ lang, setLang, mode, updatePassword, signOut
           <p className="mt-2 text-center text-sm text-stone-600">{t(lang, "resetPasswordSignInHint")}</p>
           <Link
             to="/login"
-            className="mt-6 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-black text-white"
+            className="mt-6 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
           >
             {t(lang, "backToLogin")}
           </Link>
@@ -121,7 +121,7 @@ export function ResetPasswordPage({ lang, setLang, mode, updatePassword, signOut
           </p>
           <Link
             to="/forgot-password"
-            className="mt-6 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-orange-600 px-4 text-sm font-black text-white"
+            className="mt-6 flex min-h-[48px] w-full items-center justify-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
           >
             {t(lang, "sendResetLink")}
           </Link>
@@ -174,7 +174,7 @@ export function ResetPasswordPage({ lang, setLang, mode, updatePassword, signOut
           <button
             type="submit"
             disabled={busy}
-            className="w-full min-h-[48px] rounded-xl bg-orange-600 px-4 py-3 font-black text-white disabled:opacity-50"
+            className="w-full min-h-[48px] rounded-xl bg-waka-600 px-4 py-3 font-black text-white disabled:opacity-50"
           >
             {busy ? "…" : t(lang, "savePassword")}
           </button>

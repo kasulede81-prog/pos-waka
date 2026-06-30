@@ -32,7 +32,7 @@ export function StockMovementsPanel({ lang, movements, pharmacyMode, wholesaleMo
 
   if (!recent.length) {
     return (
-      <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-semibold text-slate-500">
+      <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-10 text-center text-sm font-semibold text-stone-500">
         {t(lang, "noStockMovementsYet")}
       </p>
     );
@@ -41,9 +41,9 @@ export function StockMovementsPanel({ lang, movements, pharmacyMode, wholesaleMo
   return (
     <ul className="space-y-2">
       {recent.map((mv) => (
-        <li key={mv.id} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <p className="text-base font-black text-slate-900">{friendlyMovement(lang, mv, pharmacyMode, wholesaleMode)}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">
+        <li key={mv.id} className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+          <p className="text-base font-black text-stone-900">{friendlyMovement(lang, mv, pharmacyMode, wholesaleMode)}</p>
+          <p className="mt-1 text-xs font-semibold text-stone-500">
             {new Date(mv.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
           </p>
         </li>

@@ -1,5 +1,6 @@
 import { useEffect, useState, type RefObject } from "react";
 import { catalogColumnCount } from "../lib/posProductGridColumns";
+import type { DisplayScaleLevel } from "../lib/displayScale/scaleTokens";
 
 export type CatalogContainerMetrics = {
   containerWidth: number;
@@ -7,7 +8,10 @@ export type CatalogContainerMetrics = {
 };
 
 /** Tracks catalog container width via ResizeObserver (not viewport width). */
-export function useCatalogContainerWidth(catalogRef: RefObject<HTMLElement | null>): CatalogContainerMetrics {
+export function useCatalogContainerWidth(
+  catalogRef: RefObject<HTMLElement | null>,
+  displayScale: DisplayScaleLevel = "normal",
+): CatalogContainerMetrics {
   const [metrics, setMetrics] = useState<CatalogContainerMetrics>({ containerWidth: 0, columnCount: 3 });
 
   useEffect(() => {
@@ -16,14 +20,17 @@ export function useCatalogContainerWidth(catalogRef: RefObject<HTMLElement | nul
 
     const measure = () => {
       const width = el.getBoundingClientRect().width;
-      setMetrics({ containerWidth: width, columnCount: catalogColumnCount(width) });
+      setMetrics({
+        containerWidth: width,
+        columnCount: catalogColumnCount(width, { displayScale }),
+      });
     };
 
     measure();
     const observer = new ResizeObserver(() => measure());
     observer.observe(el);
     return () => observer.disconnect();
-  }, [catalogRef]);
+  }, [catalogRef, displayScale]);
 
   return metrics;
 }

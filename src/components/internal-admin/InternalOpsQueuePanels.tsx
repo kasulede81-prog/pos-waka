@@ -116,7 +116,7 @@ export function InternalOpsQueuePanels({
                 <div className="min-w-0 text-sm">
                   <p className="font-black text-stone-900">
                     {t(lang, "internalTrialPlanLabel")}:{" "}
-                    <span className="uppercase text-orange-800">{req.requested_plan}</span>
+                    <span className="uppercase text-waka-800">{req.requested_plan}</span>
                   </p>
                   <p className="font-mono text-xs text-stone-500">
                     org {req.organization_id.slice(0, 8)}… · {new Date(req.created_at).toLocaleString("en-GB")}
@@ -125,7 +125,7 @@ export function InternalOpsQueuePanels({
                     <Link
                       to={internalAdminShopHref(req.shop_id, previewMode)}
                       onClick={closePanel}
-                      className="text-xs font-black uppercase text-orange-800 underline"
+                      className="text-xs font-black uppercase text-waka-800 underline"
                     >
                       {t(lang, "internalMapOpenShop")}
                     </Link>
@@ -240,7 +240,7 @@ export function InternalOpsQueuePanels({
                           void loadAll();
                         }
                       }}
-                      className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-black text-white disabled:opacity-40"
+                      className="rounded-lg bg-waka-600 px-3 py-1.5 text-xs font-black text-white disabled:opacity-40"
                     >
                       {annualSendBusy === tk.id ? "…" : t(lang, "internalAnnualSendOffer")}
                     </button>
@@ -343,7 +343,7 @@ export function InternalOpsQueuePanels({
                       <Link
                         to={internalAdminShopHref(tk.shop_id, previewMode)}
                         onClick={closePanel}
-                        className="rounded-md bg-orange-100 px-2 py-0.5 text-[10px] font-black uppercase text-orange-950"
+                        className="rounded-md bg-waka-100 px-2 py-0.5 text-[10px] font-black uppercase text-waka-950"
                       >
                         Shop
                       </Link>
@@ -419,7 +419,7 @@ export function InternalOpsQueuePanels({
                         href={googleMapsDirectionsUrl(lat!, lng!)}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-black text-white"
+                        className="rounded-lg bg-waka-600 px-3 py-1.5 text-xs font-black text-white"
                       >
                         {t(lang, "internalVisitDirections")}
                       </a>

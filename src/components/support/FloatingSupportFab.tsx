@@ -27,7 +27,7 @@ export function FloatingSupportFab({ lang }: Props) {
   return (
     <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] right-[max(0.75rem,env(safe-area-inset-right,0px))] z-[35] lg:bottom-8 lg:right-6">
       {open ? (
-        <div className="pointer-events-auto mb-3 w-[min(100vw-2rem,20rem)] rounded-3xl border border-orange-100 bg-white p-4 shadow-xl">
+        <div className="pointer-events-auto mb-3 w-[min(100vw-2rem,20rem)] rounded-3xl border border-waka-100 bg-white p-4 shadow-xl">
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-black text-stone-900">{t(lang, "supportFabTitle")}</p>
             <button
@@ -59,7 +59,7 @@ export function FloatingSupportFab({ lang }: Props) {
           </a>
           <Link
             to="/support"
-            className="mt-2 flex min-h-[44px] items-center justify-center rounded-2xl bg-orange-50 px-4 py-2 text-sm font-bold text-orange-950"
+            className="mt-2 flex min-h-[44px] items-center justify-center rounded-2xl bg-waka-50 px-4 py-2 text-sm font-bold text-waka-950"
             onClick={() => setOpen(false)}
           >
             {t(lang, "supportFabFullHelp")}
@@ -69,7 +69,7 @@ export function FloatingSupportFab({ lang }: Props) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-white shadow-lg shadow-orange-500/30 ring-2 ring-white/80 active:scale-95 lg:h-16 lg:w-16"
+        className="pointer-events-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-waka-400 to-waka-600 text-white shadow-lg shadow-waka-500/30 ring-2 ring-white/80 active:scale-95 lg:h-16 lg:w-16"
         aria-expanded={open}
         aria-label={t(lang, "supportFabAria")}
       >

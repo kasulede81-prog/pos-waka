@@ -150,7 +150,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
           {isInternalAdminPreviewEnabled() ? (
             <Link
               to={internalAdminPreviewHref("/internal/waka")}
-              className="ml-4 inline-flex min-h-[36px] items-center text-xs font-bold text-orange-700 underline"
+              className="ml-4 inline-flex min-h-[36px] items-center text-xs font-bold text-waka-700 underline"
             >
               {t(lang, "internalAdminPreviewOfficeLink")}
             </Link>

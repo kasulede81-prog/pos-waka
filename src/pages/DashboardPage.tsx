@@ -325,7 +325,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
           </article>
         ) : null}
         {homeMetrics.showShopWideDebt ? (
-          <article className="min-w-0 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 p-4 text-amber-950 shadow-waka-sm">
+          <article className="min-w-0 rounded-3xl bg-gradient-to-br from-amber-400 to-waka-500 p-4 text-amber-950 shadow-waka-sm">
             <p className="text-xs font-black uppercase tracking-wide text-amber-950/90">
               {wholesaleHome ? t(lang, "wholesaleDashReceivables") : t(lang, "cardDebtToday")}
             </p>

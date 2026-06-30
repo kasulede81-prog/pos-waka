@@ -37,14 +37,14 @@ export function KpiPulseCard({
     <>
       <span className="text-[10px] font-bold uppercase tracking-wide text-stone-500">{label}</span>
       <motion.span
-        className={clsx("mt-1 font-mono text-xl font-black", accent ? "text-orange-700" : "text-stone-900")}
+        className={clsx("mt-1 font-mono text-xl font-black", accent ? "text-waka-700" : "text-stone-900")}
         animate={{ opacity: [0.85, 1, 0.85] }}
         transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
       >
         {value}
       </motion.span>
       {onOpen ? (
-        <span className="mt-2 inline-flex min-h-[44px] items-center gap-0.5 text-[11px] font-bold text-orange-600">
+        <span className="mt-2 inline-flex min-h-[44px] items-center gap-0.5 text-[11px] font-bold text-waka-600">
           View <ChevronRight className="h-3.5 w-3.5" />
         </span>
       ) : null}
@@ -177,7 +177,7 @@ export function AdminHeroV2({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl bg-gradient-to-br from-orange-500 via-orange-600 to-orange-700 p-4 text-white shadow-lg shadow-orange-500/20"
+      className="rounded-2xl bg-gradient-to-br from-waka-500 via-waka-600 to-waka-700 p-4 text-white shadow-lg shadow-waka-500/20"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -255,7 +255,7 @@ export function ShopCard({
     <motion.div
       className={clsx(
         "w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition",
-        selected ? "border-orange-400 ring-2 ring-orange-200" : "border-stone-200/90 hover:border-orange-300/60",
+        selected ? "border-waka-400 ring-2 ring-waka-200" : "border-stone-200/90 hover:border-waka-300/60",
       )}
       whileTap={{ scale: 0.99 }}
     >
@@ -300,14 +300,14 @@ export function ShopCard({
       </div>
       <button type="button" onClick={onOpen} className="w-full text-left">
       <p className="mt-2 text-xs font-semibold text-stone-600">
-        <span className="text-stone-400">📍</span> {district || "—"} · <span className="uppercase text-orange-800">{planCode}</span>
+        <span className="text-stone-400">📍</span> {district || "—"} · <span className="uppercase text-waka-800">{planCode}</span>
       </p>
       <p className="mt-1 text-xs text-stone-500">
         {productCount != null ? `${productCount} products` : null}
         {productCount != null && salesHint ? " · " : null}
         {salesHint ?? null}
       </p>
-      <p className="mt-3 text-right text-xs font-black uppercase text-orange-600">Open →</p>
+      <p className="mt-3 text-right text-xs font-black uppercase text-waka-600">Open →</p>
       </button>
     </motion.div>
   );
@@ -362,7 +362,7 @@ export function SupportTicketCard({
             </button>
           ) : null}
           {onResolve ? (
-            <button type="button" onClick={onResolve} className="min-h-[44px] rounded-xl bg-orange-600 px-3 text-xs font-black text-white">
+            <button type="button" onClick={onResolve} className="min-h-[44px] rounded-xl bg-waka-600 px-3 text-xs font-black text-white">
               Resolve
             </button>
           ) : null}
@@ -408,9 +408,9 @@ export function PlanCardV2({
           <dt className="text-[10px] font-bold uppercase text-stone-500">Trials</dt>
           <dd className="font-mono font-black">{trialCount}</dd>
         </div>
-        <div className="rounded-xl bg-orange-50 px-2.5 py-2">
-          <dt className="text-[10px] font-bold uppercase text-orange-700">Expiring</dt>
-          <dd className="font-mono font-black text-orange-800">{expiringCount}</dd>
+        <div className="rounded-xl bg-waka-50 px-2.5 py-2">
+          <dt className="text-[10px] font-bold uppercase text-waka-700">Expiring</dt>
+          <dd className="font-mono font-black text-waka-800">{expiringCount}</dd>
         </div>
         <div className="rounded-xl bg-stone-50 px-2.5 py-2">
           <dt className="text-[10px] font-bold uppercase text-stone-500">Est. MRR</dt>

@@ -6,7 +6,7 @@ export const mktHeading = "text-mkt-text";
 
 export const mktSubtext = "text-mkt-text-secondary";
 
-export const mktEyebrow = "text-orange-600 dark:text-orange-400";
+export const mktEyebrow = "text-waka- dark:text-waka-";
 
 export const mktCard =
   "rounded-2xl border border-mkt-border bg-mkt-card shadow-mkt transition-[background-color,border-color,box-shadow] duration-500 ease-out";
@@ -20,13 +20,13 @@ export const mktNav =
   "sticky top-0 z-50 border-b border-mkt-border/80 bg-mkt-nav/90 backdrop-blur-xl transition-[background-color,border-color] duration-500";
 
 export const mktNavLink =
-  "rounded-full px-3 py-2 text-sm font-bold text-mkt-text-secondary transition hover:bg-mkt-bg-secondary hover:text-orange-600 dark:hover:text-orange-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-bg";
+  "rounded-full px-3 py-2 text-sm font-bold text-mkt-text-secondary transition hover:bg-mkt-bg-secondary hover:text-waka- dark:hover:text-waka- focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka- focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-bg";
 
 export const mktBtnPrimary =
-  "inline-flex items-center justify-center rounded-2xl bg-orange-600 font-black text-white shadow-lg shadow-orange-600/20 transition hover:bg-orange-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-bg";
+  "inline-flex items-center justify-center rounded-2xl bg-waka- font-black text-white shadow-lg shadow-orange-600/20 transition hover:bg-waka- focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka- focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-bg";
 
 export const mktBtnSecondary =
-  "inline-flex items-center justify-center rounded-2xl border-2 border-mkt-border bg-mkt-card font-black text-mkt-text transition hover:border-orange-300 hover:bg-mkt-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-bg";
+  "inline-flex items-center justify-center rounded-2xl border-2 border-mkt-border bg-mkt-card font-black text-mkt-text transition hover:border-waka- hover:bg-mkt-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka- focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-bg";
 
 export const mktChip =
   "inline-flex items-center gap-2 rounded-full border border-mkt-border bg-mkt-card px-3 py-1.5 text-sm font-bold text-mkt-text shadow-mkt transition-[background-color,border-color,box-shadow] duration-500";
@@ -44,6 +44,6 @@ export const mktDeviceFrame =
   "rounded-2xl border border-mkt-border bg-mkt-card p-2 shadow-mkt-lg transition-[background-color,border-color,box-shadow] duration-500";
 
 export const mktPopularPlan =
-  "border-orange-400 bg-gradient-to-b from-orange-50 to-white ring-2 ring-orange-200 dark:from-orange-950/40 dark:to-mkt-card dark:ring-orange-500/30";
+  "border-waka- bg-gradient-to-b from-waka- to-white ring-2 ring-waka- dark:from-waka-/40 dark:to-mkt-card dark:ring-waka-/30";
 
-export const mktChartBar = "rounded-sm bg-orange-200 dark:bg-orange-500/40 transition-colors duration-500";
+export const mktChartBar = "rounded-sm bg-waka- dark:bg-waka-/40 transition-colors duration-500";

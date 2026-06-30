@@ -25,7 +25,7 @@ export function DebtCustomerCard({ lang, customer, creditIndex, canDebt, onOpenD
       ? { label: t(lang, "debtsStatusOverdue"), className: "bg-rose-100 text-rose-800" }
       : meta.isDueSoon
         ? { label: t(lang, "debtsStatusDueSoon"), className: "bg-amber-100 text-amber-900" }
-        : { label: t(lang, "debtBalanceShort"), className: "bg-orange-100 text-orange-900" };
+        : { label: t(lang, "debtBalanceShort"), className: "bg-waka-100 text-waka-900" };
 
   return (
     <article className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm transition-all active:scale-[0.99] motion-reduce:active:scale-100">

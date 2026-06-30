@@ -51,7 +51,7 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
             <button
               type="button"
               onClick={onClose}
-              className="min-h-[52px] rounded-2xl border-2 border-slate-200 py-3 text-base font-bold text-slate-700"
+              className="min-h-[52px] rounded-2xl border-2 border-stone-200 py-3 text-base font-bold text-stone-700"
             >
               {t(lang, "cancel")}
             </button>
@@ -66,19 +66,19 @@ export function DiscountLineModal({ lang, open, line, onClose, onApply }: Props)
           </div>
         }
       >
-        <p className="line-clamp-3 text-2xl font-black text-slate-900">{line.name}</p>
-        <p className="mt-1 text-base font-semibold text-slate-600">
+        <p className="line-clamp-3 text-2xl font-black text-stone-900">{line.name}</p>
+        <p className="mt-1 text-base font-semibold text-stone-600">
           {t(lang, "discountOriginal")}:{" "}
-          <span className="font-black text-slate-900">UGX {list.toLocaleString()}</span>
+          <span className="font-black text-stone-900">UGX {list.toLocaleString()}</span>
         </p>
 
         <label className="mt-5 block">
-          <span className="text-sm font-bold text-slate-700">{t(lang, "discountNewPrice")}</span>
+          <span className="text-sm font-bold text-stone-700">{t(lang, "discountNewPrice")}</span>
           <MoneyInput
             value={newPriceInput}
             onChange={(e) => setNewPriceInput(e.target.value.replace(/\D/g, "").slice(0, 10))}
             autoFocus
-            className="mt-2 min-h-[60px] w-full rounded-2xl border-2 border-slate-200 px-4 text-center text-3xl font-black text-slate-900 outline-none ring-waka-300 focus:border-waka-400 focus:ring-2"
+            className="mt-2 min-h-[60px] w-full rounded-2xl border-2 border-stone-200 px-4 text-center text-3xl font-black text-stone-900 outline-none ring-waka-300 focus:border-waka-400 focus:ring-2"
           />
         </label>
 

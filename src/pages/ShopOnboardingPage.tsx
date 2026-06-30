@@ -43,7 +43,7 @@ type Props = { lang: Language; setLang: (lg: Language) => void; onSignOut: () =>
 type Step = "welcome" | "business" | "hospitality_style" | "selling" | "location" | "products";
 
 const fieldClass =
-  "mt-1.5 w-full min-h-[48px] rounded-2xl border border-stone-200 px-4 py-3 text-base outline-none ring-orange-200 focus:border-orange-400 focus:ring-2";
+  "mt-1.5 w-full min-h-[48px] rounded-2xl border border-stone-200 px-4 py-3 text-base outline-none ring-waka-200 focus:border-waka-400 focus:ring-2";
 
 function funnelStepFor(step: Step): BuilderFunnelStep {
   if (step === "welcome" || step === "business" || step === "hospitality_style") return "business";
@@ -397,7 +397,7 @@ export function ShopOnboardingPage({ lang, setLang, onSignOut }: Props) {
               </p>
             ) : null}
             <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "registerShopNameLabel")}</p>
-            <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-bold text-waka-900">{shopName}</p>
+            <p className="rounded-2xl bg-waka-50 px-4 py-3 text-sm font-bold text-waka-900">{shopName}</p>
             <BuilderPrimaryButton type="button" onClick={() => setStep("business")}>
               {t(lang, "onboardLetsGo")}
             </BuilderPrimaryButton>

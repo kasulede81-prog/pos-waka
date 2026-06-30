@@ -59,9 +59,9 @@ export function ShiftCloseModal({ lang, open, shift, onClose, onConfirm }: Props
         </div>
       }
     >
-      <p className="text-sm text-slate-600">{t(lang, "shiftCloseHint")}</p>
+      <p className="text-sm text-stone-600">{t(lang, "shiftCloseHint")}</p>
 
-      <ul className="mt-4 space-y-2 rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-700">
+      <ul className="mt-4 space-y-2 rounded-2xl bg-stone-50 p-4 text-sm font-semibold text-stone-700">
         {parts.openingFloat > 0 ? (
           <li className="flex justify-between text-sky-800">
             <span>{t(lang, "shiftCloseOpeningFloat")}</span>
@@ -96,13 +96,13 @@ export function ShiftCloseModal({ lang, open, shift, onClose, onConfirm }: Props
             <span>+ UGX {parts.debtPayments.toLocaleString()}</span>
           </li>
         ) : null}
-        <li className="flex justify-between border-t border-slate-200 pt-2 text-base font-black text-slate-900">
+        <li className="flex justify-between border-t border-stone-200 pt-2 text-base font-black text-stone-900">
           <span>{t(lang, "shiftCloseExpected")}</span>
           <span>UGX {expected.toLocaleString()}</span>
         </li>
       </ul>
 
-      <label className="mt-4 block text-sm font-bold text-slate-800">
+      <label className="mt-4 block text-sm font-bold text-stone-800">
         {t(lang, "shiftCloseCounted")}
         <input
           value={counted}
@@ -113,7 +113,7 @@ export function ShiftCloseModal({ lang, open, shift, onClose, onConfirm }: Props
       </label>
 
       {v2 ? (
-        <label className="mt-4 block text-sm font-bold text-slate-800">
+        <label className="mt-4 block text-sm font-bold text-stone-800">
           {t(lang, "shiftCloseHandoff")}
           <input
             value={handoff}

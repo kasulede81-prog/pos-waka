@@ -45,8 +45,8 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
 
   if (!hospitality) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
-        <p className="text-sm font-medium text-slate-600">{t(lang, "hospitalityNotEnabled")}</p>
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
+        <p className="text-sm font-medium text-stone-600">{t(lang, "hospitalityNotEnabled")}</p>
       </div>
     );
   }
@@ -61,24 +61,24 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
 
       {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
 
-      <label className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4">
+      <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4">
         <input
           type="checkbox"
           checked={manualKitchenFire}
           onChange={(e) => setHospitalityManualKitchenFire(e.target.checked)}
           className="h-5 w-5"
         />
-        <span className="text-sm font-bold text-slate-800">{t(lang, "floorManualKitchenFire")}</span>
+        <span className="text-sm font-bold text-stone-800">{t(lang, "floorManualKitchenFire")}</span>
       </label>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-stone-200 bg-white p-4">
         <h2 className="text-lg font-black text-stone-950">{t(lang, "floorEditorAreas")}</h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <input
             value={newAreaName}
             onChange={(e) => setNewAreaName(e.target.value)}
             placeholder={t(lang, "floorEditorAreaPh")}
-            className="min-h-11 flex-1 rounded-xl border border-slate-200 px-3 text-sm"
+            className="min-h-11 flex-1 rounded-xl border border-stone-200 px-3 text-sm"
           />
           <button
             type="button"
@@ -94,11 +94,11 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </div>
         <ul className="mt-4 space-y-2">
           {areas.map((area) => (
-            <li key={area.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3">
+            <li key={area.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-stone-50 p-3">
               <input
                 defaultValue={area.name}
                 onBlur={(e) => renameDiningArea(area.id, e.target.value)}
-                className="min-h-10 flex-1 rounded-lg border border-slate-200 px-3 text-sm font-bold"
+                className="min-h-10 flex-1 rounded-lg border border-stone-200 px-3 text-sm font-bold"
               />
               <button
                 type="button"
@@ -116,13 +116,13 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </ul>
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-stone-200 bg-white p-4">
         <h2 className="text-lg font-black text-stone-950">{t(lang, "floorEditorTables")}</h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <select
             value={newTableAreaId}
             onChange={(e) => setNewTableAreaId(e.target.value)}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-bold"
+            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm font-bold"
           >
             {areas.map((a) => (
               <option key={a.id} value={a.id}>
@@ -134,7 +134,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
             value={newTableLabel}
             onChange={(e) => setNewTableLabel(e.target.value)}
             placeholder={t(lang, "floorEditorTablePh")}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm"
+            className="min-h-11 rounded-xl border border-stone-200 px-3 text-sm"
           />
           <button
             type="button"
@@ -155,11 +155,11 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
               <h3 className="text-sm font-black text-waka-900">{area.name}</h3>
               <ul className="mt-2 space-y-2">
                 {areaTables.map((tbl) => (
-                  <li key={tbl.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 p-2">
+                  <li key={tbl.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-stone-100 p-2">
                     <input
                       defaultValue={tbl.label}
                       onBlur={(e) => updateDiningTable(tbl.id, { label: e.target.value })}
-                      className="min-h-10 w-28 rounded-lg border border-slate-200 px-2 text-sm font-bold"
+                      className="min-h-10 w-28 rounded-lg border border-stone-200 px-2 text-sm font-bold"
                     />
                     <input
                       type="number"
@@ -167,7 +167,7 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
                       onBlur={(e) =>
                         updateDiningTable(tbl.id, { capacity: Math.max(1, Number(e.target.value) || 4) })
                       }
-                      className="min-h-10 w-16 rounded-lg border border-slate-200 px-2 text-sm"
+                      className="min-h-10 w-16 rounded-lg border border-stone-200 px-2 text-sm"
                       aria-label={t(lang, "openTableGuests")}
                     />
                     <button
@@ -189,13 +189,13 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         })}
       </div>
 
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-stone-200 bg-white p-4">
         <h2 className="text-lg font-black text-stone-950">{t(lang, "floorSetupStations")}</h2>
         <ul className="mt-3 space-y-2">
           {stations.map((st) => (
-            <li key={st.id} className="flex justify-between text-sm font-medium text-slate-700">
+            <li key={st.id} className="flex justify-between text-sm font-medium text-stone-700">
               <span>{st.name}</span>
-              <span className="font-bold capitalize text-slate-500">{st.stationType}</span>
+              <span className="font-bold capitalize text-stone-500">{st.stationType}</span>
             </li>
           ))}
         </ul>

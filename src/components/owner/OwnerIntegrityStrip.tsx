@@ -23,8 +23,8 @@ function statusLabel(lang: Language, status: IntegritySignal["status"]): string 
 export function OwnerIntegrityStrip({ lang, signals }: Props) {
   return (
     <section className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
-      <h2 className="text-base font-black text-slate-950">{t(lang, "ownerIntegrityTitle")}</h2>
-      <p className="mt-0.5 text-xs font-semibold text-slate-500">{t(lang, "ownerIntegritySub")}</p>
+      <h2 className="text-base font-black text-stone-950">{t(lang, "ownerIntegrityTitle")}</h2>
+      <p className="mt-0.5 text-xs font-semibold text-stone-500">{t(lang, "ownerIntegritySub")}</p>
       <ul className="mt-3 grid gap-2 sm:grid-cols-2">
         {signals.map((sig) => (
           <li key={sig.id}>

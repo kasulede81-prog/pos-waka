@@ -1,9 +1,9 @@
 import { useMemo } from "react";
 import { usePosStore } from "../store/usePosStore";
-import { useDeferredReportingSales } from "./useDeferredReportingSales";
+import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
 import { useDrawerCashForDay } from "./useDrawerCashForDay";
-import { dateKeyKampala, monthKeyKampala } from "../lib/datesUg";
+import { useKampalaCalendarTick } from "./useKampalaCalendarTick";
 import {
   filterReturnsForHomeScope,
   filterSalesForHomeScope,
@@ -16,12 +16,13 @@ import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import type { Language, UserRole } from "../types";
 import { useSubscription } from "../context/SubscriptionContext";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 
 export type HomeTileIntensity = "calm" | "normal" | "high" | "alert";
 
 export type HomeTileLiveStat = {
-  labelKey: string;
+  /** Resolved label (may include the current month name). */
+  label: string;
   value: string;
   trend?: string;
   intensity: HomeTileIntensity;
@@ -46,7 +47,7 @@ export function useHomeDashboardMetrics(
   actorUserId: string,
   lowStockCount: number,
 ): Record<string, HomeTileLiveStat | undefined> {
-  const sales = useDeferredReportingSales(false);
+  const sales = useReportingSales(false);
   const returns = useReportingReturnRecords(false);
   const products = usePosStore((s) => s.products);
   const customers = usePosStore((s) => s.customers);
@@ -54,8 +55,7 @@ export function useHomeDashboardMetrics(
   const { snapshot, authMode } = useSubscription();
   const homeMetrics = resolveVisibleHomeMetrics(role);
   const profitVisibility = resolveProfitVisibility({ role, snapshot, authMode });
-  const todayKey = dateKeyKampala(new Date());
-  const monthKey = monthKeyKampala(new Date());
+  const { todayKey, monthKey, monthLabel } = useKampalaCalendarTick(lang);
   const drawer = useDrawerCashForDay(todayKey);
 
   const scope: HomeMetricScope = homeMetrics.scope;
@@ -81,7 +81,7 @@ export function useHomeDashboardMetrics(
 
     if (homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue) {
       stats.sell = {
-        labelKey: "desktopHomeLiveTodaySales",
+        label: t(lang, "desktopHomeLiveTodaySales"),
         value: t(lang, "desktopHomeLiveTxnCount").replace("{count}", String(today.transactionCount)),
         intensity: today.transactionCount >= 40 ? "high" : today.transactionCount >= 10 ? "normal" : "calm",
       };
@@ -89,7 +89,7 @@ export function useHomeDashboardMetrics(
 
     if (canProfit) {
       stats.profit = {
-        labelKey: "desktopHomeLiveThisMonth",
+        label: tTemplate(lang, "desktopHomeLiveMonthProfit", { month: monthLabel }),
         value: formatShortUgx(month.estimatedProfitUgx),
         trend:
           month.revenueGrowthPct !== null
@@ -101,7 +101,7 @@ export function useHomeDashboardMetrics(
 
     if (homeMetrics.showInventoryMetrics) {
       stats.inventory = {
-        labelKey: "desktopHomeLiveLowStock",
+        label: t(lang, "desktopHomeLiveLowStock"),
         value: t(lang, "desktopHomeLiveItemsCount").replace("{count}", String(lowStockCount)),
         intensity: lowStockCount >= 5 ? "alert" : lowStockCount > 0 ? "normal" : "calm",
       };
@@ -109,12 +109,12 @@ export function useHomeDashboardMetrics(
 
     if (canCash) {
       stats.cash = {
-        labelKey: "desktopHomeLiveDrawer",
+        label: t(lang, "desktopHomeLiveDrawer"),
         value: formatShortUgx(drawer.expectedDrawerCashUgx),
         intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
       };
       stats.cashPosition = {
-        labelKey: "desktopHomeLiveExpectedCash",
+        label: t(lang, "desktopHomeLiveExpectedCash"),
         value: formatShortUgx(drawer.expectedDrawerCashUgx),
         intensity: drawer.expectedDrawerCashUgx >= 500_000 ? "high" : "normal",
       };
@@ -122,7 +122,7 @@ export function useHomeDashboardMetrics(
 
     if (hasEffectivePermission(role, "owner.dashboard", snapshot, authMode)) {
       stats.commandCenter = {
-        labelKey: "desktopHomeLiveTodaySales",
+        label: t(lang, "desktopHomeLiveTodaySales"),
         value: formatShortUgx(today.totalRevenueUgx),
         intensity: revenueIntensity(today.totalRevenueUgx),
       };
@@ -130,7 +130,7 @@ export function useHomeDashboardMetrics(
 
     if (homeMetrics.showRecentSalesList) {
       stats.salesHistory = {
-        labelKey: "desktopHomeLiveTodaySales",
+        label: t(lang, "desktopHomeLiveTodaySales"),
         value: t(lang, "desktopHomeLiveTxnCount").replace("{count}", String(today.transactionCount)),
         intensity: today.transactionCount >= 20 ? "high" : "normal",
       };
@@ -138,7 +138,7 @@ export function useHomeDashboardMetrics(
 
     if (canDebt) {
       stats.debts = {
-        labelKey: "desktopHomeLiveTotalDue",
+        label: t(lang, "desktopHomeLiveTotalDue"),
         value: formatShortUgx(totalDebtUgx),
         intensity: totalDebtUgx >= 1_000_000 ? "alert" : totalDebtUgx > 0 ? "normal" : "calm",
       };
@@ -146,7 +146,7 @@ export function useHomeDashboardMetrics(
 
     if (canReports) {
       stats.reports = {
-        labelKey: "desktopHomeLiveTotalSales",
+        label: tTemplate(lang, "desktopHomeLiveMonthSales", { month: monthLabel }),
         value: formatShortUgx(month.totalRevenueUgx),
         trend:
           month.revenueGrowthPct !== null
@@ -166,6 +166,7 @@ export function useHomeDashboardMetrics(
     cashExpenses,
     todayKey,
     monthKey,
+    monthLabel,
     drawer.expectedDrawerCashUgx,
     lowStockCount,
     homeMetrics,

@@ -42,10 +42,11 @@ import { PosShiftSummaryCollapsible } from "../components/pos/PosShiftSummaryCol
 import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
 import { PosDesktopCatalogCheckoutDock } from "../components/pos/PosDesktopCatalogCheckoutDock";
 import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHeader";
-import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShelfSection";
+import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
 import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
 import { PosDesktopStatusBar } from "../components/pos/PosDesktopStatusBar";
 import { PosSellProductCard } from "../components/pos/PosSellProductCard";
+import { PosSellCatalogShelfSection } from "../components/pos/PosSellCatalogShelfSection";
 import { PosExitConfirmModal } from "../components/pos/PosExitConfirmModal";
 import { registerPosExitHandler } from "../lib/posExitGuard";
 import { lineDiscountUgx } from "../lib/saleAdjustments";
@@ -92,6 +93,8 @@ import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
+import { useDisplayScale } from "../context/DisplayScaleProvider";
+import { DISPLAY_SCALE_META } from "../lib/displayScale/scaleTokens";
 import {
   detectBarcodeCapabilities,
   startBarcodeSession,
@@ -153,7 +156,7 @@ const Numpad = memo(function Numpad({
             key={k}
             type="button"
             onClick={() => onDigit(k)}
-            className="min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200 active:brightness-95 motion-reduce:active:brightness-100"
+            className="min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200 active:brightness-95 motion-reduce:active:brightness-100"
           >
             {k}
           </button>
@@ -169,7 +172,7 @@ const Numpad = memo(function Numpad({
               else if (k === "⌫") onDigit("back");
               else onDigit(k);
             }}
-            className="min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200 active:brightness-95"
+            className="min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200 active:brightness-95"
           >
             {k}
           </button>
@@ -361,6 +364,9 @@ export function PosPage({ lang }: { lang: Language }) {
   const checkoutPanelRef = useRef<HTMLDivElement>(null);
   const posLayoutMode = usePosLayoutMode();
   const posViewportWidth = usePosViewportWidth();
+  const { level: displayScaleLevel, featureEnabled: displayScaleOn, stepUp: displayScaleUp, stepDown: displayScaleDown } =
+    useDisplayScale();
+  const displayScaleMultiplier = DISPLAY_SCALE_META[displayScaleLevel].multiplier;
   const isFullDesktopPos = posLayoutMode === "full";
   const mountDesktopCheckoutSidebar = shouldMountDesktopCheckoutSidebar(
     posLayoutMode,
@@ -370,8 +376,10 @@ export function PosPage({ lang }: { lang: Language }) {
   );
   const useDesktopCatalogCheckoutDock = isFullDesktopPos && mountDesktopCheckoutSidebar;
   const posSplitColumns =
-    mountDesktopCheckoutSidebar && isFullDesktopPos ? posSplitGridTemplateColumns(posViewportWidth) : null;
-  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef);
+    mountDesktopCheckoutSidebar && isFullDesktopPos
+      ? posSplitGridTemplateColumns(posViewportWidth, displayScaleMultiplier)
+      : null;
+  const { columnCount: productGridCols } = useCatalogContainerWidth(catalogRef, displayScaleLevel);
   const activeShift = useMemo(
     () => (preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId) ?? null,
     [preferences.shifts, actor.userId],
@@ -386,6 +394,32 @@ export function PosPage({ lang }: { lang: Language }) {
   useEffect(() => {
     if (paymentMethod === "credit" && !canIssueDebt) setPaymentMethod("cash");
   }, [paymentMethod, canIssueDebt]);
+
+  useEffect(() => {
+    if (!displayScaleOn) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        displayScaleUp();
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        displayScaleDown();
+      }
+    };
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      if (e.deltaY < 0) displayScaleUp();
+      else displayScaleDown();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("wheel", onWheel);
+    };
+  }, [displayScaleOn, displayScaleUp, displayScaleDown]);
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutAmountField>("cash");
@@ -1412,7 +1446,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const catalogSellMode = mobileSellFocus || isFullDesktopPos;
 
   const showCatalogShelfGrid =
-    catalogSellMode && products.length > 0 && sellSearchContext.q.length === 0;
+    catalogSellMode && shelfCards.length > 0 && sellSearchContext.q.length === 0;
   const showCatalogProductsBelow =
     showCatalogShelfGrid && sellCategoryKey !== CATEGORY_FILTER_ALL;
   /** Mobile + full desktop: open shelf products full-screen instead of below the grid. */
@@ -1451,6 +1485,20 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const renderCatalogProductGrid = () => {
     if (filteredProducts.length === 0) {
+      if (sellCategoryKey !== CATEGORY_FILTER_ALL) {
+        return (
+          <EmptyShelfPanel
+            lang={lang}
+            shelfLabel={selectedShelfLabel}
+            canAdd={hasPermission(actor.role, "products.add")}
+            onAddProduct={() =>
+              navigate(
+                `/stock?tab=shelves&shelf=${encodeURIComponent(sellCategoryKey)}&add=1`,
+              )
+            }
+          />
+        );
+      }
       return (
         <p className="rounded-xl bg-amber-50 px-3 py-4 text-center text-sm font-bold text-amber-950">
           {t(lang, "posSellNoMatch")}
@@ -1661,7 +1709,7 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {lockedProductCount > 0 ? (
-        <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-950">
+        <div className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-sm font-bold text-waka-950">
           {t(lang, "freePlanLockedProductsNotice")
             .replace("{{locked}}", String(lockedProductCount))
             .replace("{{limit}}", String(productLimit ?? 7))}
@@ -1714,7 +1762,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     : t(lang, "posSellSearchPlaceholder")
               }
               className={clsx(
-                "w-full rounded-2xl border border-stone-200 bg-white pl-9 pr-10 font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
+                "pos-ds-input w-full rounded-2xl border border-stone-200 bg-white pl-9 pr-10 font-semibold text-stone-900 outline-none ring-waka-200 placeholder:text-stone-400 transition-shadow focus:border-waka-400 focus:ring-2 focus:ring-waka-200/80",
                 mobileSellFocus
                   ? "h-12 text-base shadow-sm"
                   : isFullDesktopPos
@@ -1837,10 +1885,10 @@ export function PosPage({ lang }: { lang: Language }) {
           onSaleCustomerPhone={setSaleCustomerPhone}
           onFinishSale={finishSale}
         />
-      ) : products.length === 0 ? (
-        <section className="rounded-3xl border-2 border-dashed border-slate-200 bg-slate-50 p-8 text-center">
-          <p className="text-2xl font-black text-slate-900">{t(lang, "posEmptyTitle")}</p>
-          <p className="mt-2 text-lg text-slate-600">{t(lang, "posEmptySub")}</p>
+      ) : products.length === 0 && shelfCards.length === 0 ? (
+        <section className="rounded-3xl border-2 border-dashed border-stone-200 bg-stone-50 p-8 text-center">
+          <p className="text-2xl font-black text-stone-900">{t(lang, "posEmptyTitle")}</p>
+          <p className="mt-2 text-lg text-stone-600">{t(lang, "posEmptySub")}</p>
           {hasPermission(actor.role, "products.add") ? (
             <Link
               to="/stock"
@@ -1870,7 +1918,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <ArrowLeft className="h-5 w-5" aria-hidden />
                 {t(lang, "posBackToShelves")}
               </button>
-              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900">
+              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-stone-900">
                 {shelfIconFor(selectedShelfLabel) ? (
                   <span className="mr-1" aria-hidden>
                     {shelfIconFor(selectedShelfLabel)}
@@ -1963,7 +2011,7 @@ export function PosPage({ lang }: { lang: Language }) {
           </div>
 
           {quickSellProducts.length > 0 ? (
-            <div className="rounded-2xl border border-waka-200 bg-gradient-to-br from-waka-50 to-orange-50/80 p-2.5">
+            <div className="rounded-2xl border border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/80 p-2.5">
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-lg" aria-hidden>
                   {quickSellShelf?.icon ?? "⚡"}
@@ -2014,7 +2062,7 @@ export function PosPage({ lang }: { lang: Language }) {
                 <ArrowLeft className="h-5 w-5" aria-hidden />
                 {t(lang, "posBackToShelves")}
               </button>
-              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900">
+              <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-stone-900">
                 {sellSearchContext.q ? t(lang, "posSearchResults") : selectedShelfLabel}
               </p>
             </div>
@@ -2036,7 +2084,7 @@ export function PosPage({ lang }: { lang: Language }) {
               <ArrowLeft className="h-5 w-5" aria-hidden />
               {t(lang, "posBackToShelves")}
             </button>
-            <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-slate-900">
+            <p className="min-w-0 flex-1 truncate text-right text-sm font-black text-stone-900">
               {sellCategoryKey !== CATEGORY_FILTER_ALL && shelfIconFor(selectedShelfLabel) ? (
                 <span className="mr-1" aria-hidden>
                   {shelfIconFor(selectedShelfLabel)}
@@ -2089,7 +2137,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     "relative flex min-h-[132px] flex-col justify-between rounded-[1.35rem] border p-3 pt-10 text-left shadow-sm",
                     locked
                       ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-                      : "border-slate-200 bg-white active:border-waka-400",
+                      : "border-stone-200 bg-white active:border-waka-400",
                   )}
                   style={{ contentVisibility: "auto" }}
                 >
@@ -2110,12 +2158,12 @@ export function PosPage({ lang }: { lang: Language }) {
                     {favoriteIdSet.has(p.id) ? "★" : "☆"}
                   </button>
                   <button type="button" onClick={() => openProduct(p)} className="text-left">
-                    <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-slate-950">{p.name}</p>
+                    <p className="line-clamp-2 pr-7 text-base font-black leading-tight text-stone-950">{p.name}</p>
                     <p className="mt-0.5 truncate text-[11px] font-bold text-stone-500">
                       {shelfIconFor(p.category ?? "") ? <span className="mr-1" aria-hidden>{shelfIconFor(p.category ?? "")}</span> : null}
                       {(p.category ?? "").trim() ? p.category.trim() : t(lang, "posNoShelf")}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-xs font-bold leading-snug text-slate-600">
+                    <p className="mt-0.5 line-clamp-2 text-xs font-bold leading-snug text-stone-600">
                       {t(lang, "stockLabel")}: {formatStockLabel(p)}
                     </p>
                     {p.stockOnHand <= p.minimumStockAlert ? (
@@ -2224,20 +2272,20 @@ export function PosPage({ lang }: { lang: Language }) {
           aria-modal
           aria-labelledby="pos-add-sheet-title"
         >
-          <header className="flex shrink-0 items-start gap-3 border-b border-slate-100 px-3 py-3">
+          <header className="flex shrink-0 items-start gap-3 border-b border-stone-100 px-3 py-3">
             <button
               type="button"
               onClick={() => setSheetOpen(false)}
-              className="min-h-[48px] shrink-0 rounded-2xl border-2 border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 active:bg-slate-50"
+              className="min-h-[48px] shrink-0 rounded-2xl border-2 border-stone-200 px-4 py-2 text-sm font-bold text-stone-700 active:bg-stone-50"
             >
               {t(lang, "cancel")}
             </button>
             <div className="min-w-0 flex-1 py-0.5 text-center">
-              <p id="pos-add-sheet-title" className="text-lg font-black leading-snug text-slate-900">
+              <p id="pos-add-sheet-title" className="text-lg font-black leading-snug text-stone-900">
                 {selected.name}
               </p>
-              <p className="text-sm font-semibold leading-snug text-slate-500">{formatProductPriceLabel(selected)}</p>
-              <p className="text-xs font-bold leading-snug text-slate-600">
+              <p className="text-sm font-semibold leading-snug text-stone-500">{formatProductPriceLabel(selected)}</p>
+              <p className="text-xs font-bold leading-snug text-stone-600">
                 {pharmacyPackActive ? formatPharmacyStockPrimary(selected) : formatStockLabel(selected)}
               </p>
             </div>
@@ -2268,7 +2316,7 @@ export function PosPage({ lang }: { lang: Language }) {
                         "min-h-[52px] rounded-2xl border-2 text-sm font-black capitalize",
                         pharmacySellUnit === unit
                           ? "border-waka-500 bg-waka-600 text-white"
-                          : "border-slate-200 bg-white text-slate-800",
+                          : "border-stone-200 bg-white text-stone-800",
                       )}
                     >
                       {label}
@@ -2279,7 +2327,7 @@ export function PosPage({ lang }: { lang: Language }) {
             ) : null}
             {(sellPresets.length > 0 || moneyPresets.length > 0 || qtyPresets.length > 0) && (
               <div className="space-y-3">
-                <p className="text-center text-sm font-bold uppercase tracking-wide text-slate-500">
+                <p className="text-center text-sm font-bold uppercase tracking-wide text-stone-500">
                   {t(lang, "posWholesaleUnits")}
                 </p>
                 <div className="grid grid-cols-2 gap-2">
@@ -2301,7 +2349,7 @@ export function PosPage({ lang }: { lang: Language }) {
             {quickSell && !showAdvanced ? (
               <button
                 type="button"
-                className="mt-6 min-h-[52px] w-full rounded-2xl border-2 border-dashed border-slate-300 py-4 text-lg font-bold text-slate-600 active:bg-slate-50"
+                className="mt-6 min-h-[52px] w-full rounded-2xl border-2 border-dashed border-stone-300 py-4 text-lg font-bold text-stone-600 active:bg-stone-50"
                 onClick={() => setShowAdvanced(true)}
               >
                 {t(lang, "otherAmount")}
@@ -2317,7 +2365,7 @@ export function PosPage({ lang }: { lang: Language }) {
                     }}
                     className={clsx(
                       "min-h-[52px] rounded-2xl py-4 text-lg font-black",
-                      inputMode === "money" ? "bg-waka-600 text-white" : "bg-slate-100 text-slate-700",
+                      inputMode === "money" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
                     )}
                   >
                     {t(lang, "moneyTab")}
@@ -2330,16 +2378,16 @@ export function PosPage({ lang }: { lang: Language }) {
                     }}
                     className={clsx(
                       "min-h-[52px] rounded-2xl py-4 text-lg font-black",
-                      inputMode === "quantity" ? "bg-waka-600 text-white" : "bg-slate-100 text-slate-700",
+                      inputMode === "quantity" ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-700",
                     )}
                   >
                     {t(lang, "qtyTab")}
                   </button>
                 </div>
 
-                <div className="mt-4 min-h-[76px] rounded-2xl bg-slate-100 px-4 py-4 text-right text-5xl font-black tracking-tight text-slate-900">
+                <div className="mt-4 min-h-[76px] rounded-2xl bg-stone-100 px-4 py-4 text-right text-5xl font-black tracking-tight text-stone-900">
                   {display || "0"}
-                  <span className="ml-2 text-xl font-bold text-slate-500">
+                  <span className="ml-2 text-xl font-bold text-stone-500">
                     {inputMode === "money"
                       ? "UGX"
                       : pharmacyPackActive
@@ -2359,12 +2407,12 @@ export function PosPage({ lang }: { lang: Language }) {
               </>
             )}
             </div>
-            <div className="shrink-0 border-t border-slate-100 bg-white p-4">
+            <div className="shrink-0 border-t border-stone-100 bg-white p-4">
               {quickSell && !showAdvanced ? null : (
                 <button
                   type="button"
                   onClick={applyDraftInput}
-                  className="min-h-[56px] w-full rounded-2xl bg-slate-900 py-4 text-lg font-black text-white active:bg-slate-800"
+                  className="min-h-[56px] w-full rounded-2xl bg-stone-900 py-4 text-lg font-black text-white active:bg-stone-800"
                 >
                   {t(lang, "addToSale")}
                 </button>
@@ -2397,25 +2445,25 @@ export function PosPage({ lang }: { lang: Language }) {
           aria-modal
           aria-labelledby="pos-receipt-title"
         >
-          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-            <h2 id="pos-receipt-title" className="text-xl font-black text-slate-900">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
+            <h2 id="pos-receipt-title" className="text-xl font-black text-stone-900">
               {t(lang, "receiptTitle")}
             </h2>
             <button
               type="button"
               onClick={() => setReceiptSaleId(null)}
-              className="min-h-[44px] rounded-xl border-2 border-slate-200 px-4 py-2 text-sm font-bold text-slate-700 active:bg-slate-50"
+              className="min-h-[44px] rounded-xl border-2 border-stone-200 px-4 py-2 text-sm font-bold text-stone-700 active:bg-stone-50"
             >
               {t(lang, "receiptClose")}
             </button>
           </header>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
             <div
-              className="mx-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              className="mx-auto w-full max-w-md rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
               dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
             />
           </div>
-          <footer className="shrink-0 space-y-2 border-t border-slate-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+          <footer className="shrink-0 space-y-2 border-t border-stone-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
             {receiptSale ? (
               <DocumentActionsBar
                 lang={lang}
@@ -2624,7 +2672,7 @@ export function PosPage({ lang }: { lang: Language }) {
             <p className="mt-3 text-base font-medium text-stone-700">{checkoutBlockMessage}</p>
             <button
               type="button"
-              className="mt-6 min-h-[52px] w-full rounded-2xl bg-slate-900 py-3 text-lg font-black text-white"
+              className="mt-6 min-h-[52px] w-full rounded-2xl bg-stone-900 py-3 text-lg font-black text-white"
               onClick={() => setCheckoutBlockModalOpen(false)}
             >
               {t(lang, "cancel")}
@@ -2634,7 +2682,7 @@ export function PosPage({ lang }: { lang: Language }) {
       ) : null}
 
       {toast && (
-        <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
+        <div className="pointer-events-none fixed bottom-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] left-1/2 z-[100] max-w-sm -translate-x-1/2 rounded-2xl bg-stone-900 px-5 py-4 text-center text-base font-semibold text-white shadow-xl">
           {toast}
         </div>
       )}
@@ -2645,8 +2693,8 @@ export function PosPage({ lang }: { lang: Language }) {
             <p className="text-4xl" aria-hidden>
               🎉
             </p>
-            <p className="mt-4 text-3xl font-black text-slate-900">{t(lang, "firstSaleTitle")}</p>
-            <p className="mt-3 text-lg text-slate-700">{t(lang, "firstSaleBody")}</p>
+            <p className="mt-4 text-3xl font-black text-stone-900">{t(lang, "firstSaleTitle")}</p>
+            <p className="mt-3 text-lg text-stone-700">{t(lang, "firstSaleBody")}</p>
             <div className="mt-8 flex flex-col gap-3">
               <Link
                 to="/"
@@ -2659,7 +2707,7 @@ export function PosPage({ lang }: { lang: Language }) {
               </Link>
               <button
                 type="button"
-                className="min-h-[52px] w-full rounded-2xl border-2 border-slate-300 py-4 text-lg font-bold text-slate-800 active:bg-slate-50"
+                className="min-h-[52px] w-full rounded-2xl border-2 border-stone-300 py-4 text-lg font-bold text-stone-800 active:bg-stone-50"
                 onClick={() => {
                   dismissFirstSale();
                 }}

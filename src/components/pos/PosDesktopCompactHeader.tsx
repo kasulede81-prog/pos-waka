@@ -16,6 +16,7 @@ import { useUiLanguage } from "../../hooks/useUiLanguage";
 import { languageToggleLabel, nextLanguage } from "../../lib/language";
 import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { POS_HOME_ROUTE } from "../../lib/posNavigation";
+import { DisplayScaleControl } from "./DisplayScaleControl";
 
 type Props = {
   lang: Language;
@@ -137,6 +138,8 @@ export function PosDesktopCompactHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
+        <DisplayScaleControl lang={lang} />
+
         <span
           className={clsx(
             "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-black",

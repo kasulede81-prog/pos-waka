@@ -19,7 +19,7 @@ const QtyNumpad = memo(function QtyNumpad({
             key={k}
             type="button"
             onClick={() => onDigit(k)}
-            className="min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200"
+            className="min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200"
           >
             {k}
           </button>
@@ -34,7 +34,7 @@ const QtyNumpad = memo(function QtyNumpad({
               if (k === "⌫") onDigit("back");
               else onDigit(k);
             }}
-            className="min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200"
+            className="min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200"
           >
             {k}
           </button>
@@ -121,15 +121,15 @@ export function QuantityEditModal({
       onClick={onClose}
     >
       <div
-        className="mx-auto w-full max-w-md rounded-t-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl sm:rounded-3xl"
+        className="pos-ds-dialog mx-auto w-full max-w-md rounded-t-[1.75rem] border border-stone-200 bg-white p-4 shadow-xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
         aria-labelledby="qty-edit-title"
       >
-        <p id="qty-edit-title" className="truncate text-center text-lg font-black text-slate-900">
+        <p id="qty-edit-title" className="pos-ds-dialog-title truncate text-center text-lg font-black text-stone-900">
           {productName}
         </p>
-        <p className="mt-1 text-center text-sm font-semibold text-slate-500">{qtyLabel}</p>
-        <p className="mt-4 text-center text-xs font-black uppercase tracking-wide text-slate-500">
+        <p className="mt-1 text-center text-sm font-semibold text-stone-500">{qtyLabel}</p>
+        <p className="mt-4 text-center text-xs font-black uppercase tracking-wide text-stone-500">
           {t(lang, "posQtyEditLabel")}
         </p>
         <div className="mt-2 flex min-h-[64px] items-center justify-center rounded-2xl border-2 border-waka-300 bg-waka-50 px-4">
@@ -142,14 +142,14 @@ export function QuantityEditModal({
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[52px] rounded-2xl border-2 border-slate-200 bg-white text-base font-black text-slate-700 active:bg-slate-50"
+            className="pos-ds-dialog-btn min-h-[52px] rounded-2xl border-2 border-stone-200 bg-white text-base font-black text-stone-700 active:bg-stone-50"
           >
             {t(lang, "cancel")}
           </button>
           <button
             type="button"
             onClick={handleConfirm}
-            className="min-h-[52px] rounded-2xl bg-waka-600 text-base font-black text-white active:bg-waka-700"
+            className="pos-ds-dialog-btn min-h-[52px] rounded-2xl bg-waka-600 text-base font-black text-white active:bg-waka-700"
           >
             {t(lang, "posQtyUpdate")}
           </button>

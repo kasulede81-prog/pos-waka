@@ -34,8 +34,8 @@ export function OwnerCloudProtectionCard({ lang, cloud }: Props) {
     <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm sm:p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "cloudProtectionTitle")}</h2>
-          <p className="text-[11px] font-semibold text-slate-500">{t(lang, "cloudProtectionSub")}</p>
+          <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "cloudProtectionTitle")}</h2>
+          <p className="text-[11px] font-semibold text-stone-500">{t(lang, "cloudProtectionSub")}</p>
         </div>
         <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${badgeClass}`}>
           {t(lang, cloud.badgeKey)}

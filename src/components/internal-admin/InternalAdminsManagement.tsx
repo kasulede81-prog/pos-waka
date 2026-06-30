@@ -39,7 +39,7 @@ function normalizeRoleForUi(role: string): RoleCode {
 function Chip({ children, tone }: { children: React.ReactNode; tone: "orange" | "slate" | "emerald" | "rose" }) {
   const cls =
     tone === "orange"
-      ? "bg-orange-50 text-orange-950 ring-orange-200/80"
+      ? "bg-waka-50 text-waka-950 ring-waka-200/80"
       : tone === "emerald"
         ? "bg-emerald-50 text-emerald-900 ring-emerald-200/80"
         : tone === "rose"
@@ -242,11 +242,11 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
         </p>
       ) : null}
       {!lovableUi ? (
-      <header className="rounded-3xl border border-orange-100 bg-gradient-to-br from-white via-orange-50/40 to-white p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
+      <header className="rounded-3xl border border-waka-100 bg-gradient-to-br from-white via-waka-50/40 to-white p-6 shadow-[0_20px_60px_rgb(251_146_60/0.10)]">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-orange-900 ring-1 ring-orange-200/60">
-              <Shield className="h-4 w-4 text-orange-600" />
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-bold text-waka-900 ring-1 ring-waka-200/60">
+              <Shield className="h-4 w-4 text-waka-600" />
               {t(lang, "internalAdminsHeaderTitle")}
             </div>
             <h1 className="mt-3 text-2xl font-black text-stone-900">{t(lang, "internalAdminsHeaderH1")}</h1>
@@ -278,7 +278,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                 <input
                   value={createEmail}
                   onChange={(e) => setCreateEmail(e.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   placeholder="email@example.com"
                   autoComplete="email"
                 />
@@ -288,7 +288,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                 <input
                   value={createFullName}
                   onChange={(e) => setCreateFullName(e.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   placeholder="Kasule Denis"
                 />
               </label>
@@ -298,7 +298,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                 <select
                   value={createRole}
                   onChange={(e) => setCreateRole(e.target.value as RoleCode)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                 >
                   {ROLE_OPTIONS.map((o) => (
                     <option key={o.code} value={o.code}>
@@ -323,7 +323,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                           onClick={() => toggleDistrict(d.id as string, setCreateDistrictIds, createDistrictIds)}
                           className={clsx(
                             "m-1 inline-flex min-h-[36px] items-center rounded-xl border px-3 py-1 text-xs font-black",
-                            on ? "border-orange-300 bg-orange-50 text-orange-900" : "border-stone-200 bg-white text-stone-700",
+                            on ? "border-waka-300 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700",
                           )}
                         >
                           {d.name}
@@ -363,7 +363,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                  className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   placeholder={t(lang, "internalAdminsSearchPlaceholder")}
                 />
               </div>
@@ -373,7 +373,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                   <select
                     value={roleFilter}
                     onChange={(e) => setRoleFilter(e.target.value as RoleCode | "all")}
-                    className="mt-1 min-w-[160px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                    className="mt-1 min-w-[160px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   >
                     <option value="all">{t(lang, "internalAdminsFilterAll")}</option>
                     {ROLE_OPTIONS.map((o) => (
@@ -388,7 +388,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                   <select
                     value={activeFilter}
                     onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
-                    className="mt-1 min-w-[160px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                    className="mt-1 min-w-[160px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
                   >
                     <option value="all">{t(lang, "internalAdminsFilterAll")}</option>
                     <option value="active">{t(lang, "internalAdminsActiveOnly")}</option>
@@ -503,7 +503,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
               <select
                 value={editRole}
                 onChange={(e) => setEditRole(e.target.value as RoleCode)}
-                className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
               >
                 {ROLE_OPTIONS.map((o) => (
                   <option key={o.code} value={o.code}>
@@ -518,7 +518,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
               <input
                 value={editFullName}
                 onChange={(e) => setEditFullName(e.target.value)}
-                className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+                className="mt-1 w-full rounded-2xl border border-stone-200 bg-white px-3 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
               />
             </label>
 
@@ -554,7 +554,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
                       onClick={() => toggleDistrict(d.id as string, setEditDistrictIds, editDistrictIds)}
                       className={clsx(
                         "m-1 inline-flex min-h-[36px] items-center rounded-xl border px-3 py-1 text-xs font-black",
-                        on ? "border-orange-300 bg-orange-50 text-orange-900" : "border-stone-200 bg-white text-stone-700",
+                        on ? "border-waka-300 bg-waka-50 text-waka-900" : "border-stone-200 bg-white text-stone-700",
                       )}
                     >
                       {d.name}

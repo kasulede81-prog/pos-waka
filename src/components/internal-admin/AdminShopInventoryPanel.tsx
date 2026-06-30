@@ -30,9 +30,9 @@ export function AdminShopInventoryPanel({
           <dt className="font-bold text-stone-500">In cloud (products table)</dt>
           <dd className="font-mono text-lg font-black text-stone-900">{productCountTable}</dd>
         </div>
-        <div className="rounded-xl bg-orange-50 px-3 py-2">
-          <dt className="font-bold text-orange-800">In cloud backup</dt>
-          <dd className="font-mono text-lg font-black text-orange-950">{productCountSnapshot}</dd>
+        <div className="rounded-xl bg-waka-50 px-3 py-2">
+          <dt className="font-bold text-waka-800">In cloud backup</dt>
+          <dd className="font-mono text-lg font-black text-waka-950">{productCountSnapshot}</dd>
         </div>
       </dl>
 

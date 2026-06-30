@@ -41,10 +41,10 @@ export function DraftCartLineRow({
     const btnSize = sidebarCompact ? "h-9 w-9" : "h-11 w-11";
     const iconSize = sidebarCompact ? "h-4 w-4" : "h-5 w-5";
     return (
-      <li className={clsx("flex items-center gap-2 border-b border-slate-100 last:border-0", sidebarCompact ? "py-1.5" : "py-2.5")}>
+      <li className={clsx("flex items-center gap-2 border-b border-stone-100 last:border-0", sidebarCompact ? "py-1.5" : "py-2.5")}>
         <div className="min-w-0 flex-1">
-          <p className={clsx("truncate font-bold leading-tight text-slate-900", sidebarCompact ? "text-sm" : "text-base")}>{line.name}</p>
-          <p className={clsx("truncate font-semibold text-slate-600", sidebarCompact ? "text-xs" : "text-sm")}>
+          <p className={clsx("truncate font-bold leading-tight text-stone-900", sidebarCompact ? "text-sm" : "text-base")}>{line.name}</p>
+          <p className={clsx("truncate font-semibold text-stone-600", sidebarCompact ? "text-xs" : "text-sm")}>
             {qtyLabel}
             {unitHint ? ` · ${unitHint}` : ""}
             {" · "}
@@ -56,7 +56,7 @@ export function DraftCartLineRow({
             type="button"
             onClick={onDecrement}
             aria-label={t(lang, "posQtyDecrease")}
-            className={clsx("flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-900 active:bg-slate-100", btnSize)}
+            className={clsx("flex items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-900 active:bg-stone-100", btnSize)}
           >
             <Minus className={clsx("stroke-[3]", iconSize)} aria-hidden />
           </button>
@@ -85,11 +85,11 @@ export function DraftCartLineRow({
 
   if (compact) {
     return (
-      <li className="rounded-xl border border-slate-100 bg-slate-50/80 p-2">
+      <li className="rounded-xl border border-stone-100 bg-stone-50/80 p-2">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-bold leading-snug text-slate-900">{line.name}</p>
-            {unitHint ? <p className="truncate text-[11px] font-semibold text-slate-500">{unitHint}</p> : null}
+            <p className="truncate text-sm font-bold leading-snug text-stone-900">{line.name}</p>
+            {unitHint ? <p className="truncate text-[11px] font-semibold text-stone-500">{unitHint}</p> : null}
             {lineDiscountUgx(line) > 0 ? (
               <p className="text-[11px] font-bold text-amber-800">
                 − UGX {lineDiscountUgx(line).toLocaleString()}
@@ -104,7 +104,7 @@ export function DraftCartLineRow({
             type="button"
             onClick={onDecrement}
             aria-label={t(lang, "posQtyDecrease")}
-            className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-900 active:bg-slate-100"
+            className="flex h-11 min-h-[44px] w-11 min-w-[44px] items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-900 active:bg-stone-100"
           >
             <Minus className="h-5 w-5 stroke-[3]" aria-hidden />
           </button>
@@ -147,11 +147,11 @@ export function DraftCartLineRow({
   }
 
   return (
-    <li className="rounded-xl border border-slate-100 bg-slate-50/80 p-3">
+    <li className="rounded-xl border border-stone-100 bg-stone-50/80 p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <p className="font-bold text-slate-900">{line.name}</p>
-          {unitHint ? <p className="text-xs font-semibold text-slate-500">{unitHint}</p> : null}
+          <p className="font-bold text-stone-900">{line.name}</p>
+          {unitHint ? <p className="text-xs font-semibold text-stone-500">{unitHint}</p> : null}
           {lineDiscountUgx(line) > 0 ? (
             <p className="text-xs font-bold text-amber-800">
               − UGX {lineDiscountUgx(line).toLocaleString()} {t(lang, "discountBtn").toLowerCase()}
@@ -166,7 +166,7 @@ export function DraftCartLineRow({
           type="button"
           onClick={onDecrement}
           aria-label={t(lang, "posQtyDecrease")}
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 border-slate-200 bg-white text-slate-900 shadow-sm active:bg-slate-100"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-2 border-stone-200 bg-white text-stone-900 shadow-sm active:bg-stone-100"
         >
           <Minus className="h-7 w-7 stroke-[3]" aria-hidden />
         </button>

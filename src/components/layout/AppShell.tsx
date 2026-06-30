@@ -40,6 +40,7 @@ import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../
 import { PinInput } from "../ui/PinInput";
 import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { ShiftCloseModal } from "../pos/ShiftCloseModal";
+import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
@@ -358,7 +359,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             isLauncherHome
               ? "border-waka-700/30 bg-waka-600/95 text-white supports-[backdrop-filter]:bg-waka-600/90"
               : onSellScreen && !isDesktopLayout
-                ? "border-stone-200/80 bg-gradient-to-b from-orange-50/90 via-white to-white supports-[backdrop-filter]:from-orange-50/80"
+                ? "border-stone-200/80 bg-gradient-to-b from-waka-50/90 via-white to-white supports-[backdrop-filter]:from-waka-50/80"
                 : "border-stone-200/90 bg-white/95 supports-[backdrop-filter]:bg-white/90",
           )}
         >
@@ -388,6 +389,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               </div>
             </div>
             <div className="flex shrink-0 items-center justify-end gap-1.5">
+              {onSellScreen ? (
+                <DisplayScaleControl lang={lang} inverted={isLauncherHome} compact={!isDesktopLayout} />
+              ) : null}
               <AppThemeToggle lang={lang} inverted={isLauncherHome} />
               <div ref={userMenuRef} className="relative">
                 <button
@@ -609,7 +613,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               <p className="text-2xl font-black text-stone-900">{t(lang, "lockPosTitle")}</p>
               <p className="mt-1 text-sm text-stone-600">{t(lang, "lockPosSub")}</p>
               {canSwitchUser && (preferences.staffAccounts ?? []).length > 0 ? (
-                <label className="mt-4 block text-sm font-bold text-slate-700">
+                <label className="mt-4 block text-sm font-bold text-stone-700">
                   {t(lang, "switchUser")}
                   <select
                     value={lockStaffId}
@@ -617,7 +621,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                       setLockStaffId(e.target.value);
                       setLockError(null);
                     }}
-                    className="mt-1 w-full rounded-2xl border-2 border-slate-200 px-4 py-3"
+                    className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3"
                   >
                     <option value="">{t(lang, "staffPickAccount")}</option>
                     <option value="__owner__">{t(lang, "role_owner")}</option>
@@ -631,7 +635,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                   </select>
                 </label>
               ) : null}
-              <p className="mt-2 text-xs font-medium text-slate-500">{t(lang, "lockScreenStaffHint")}</p>
+              <p className="mt-2 text-xs font-medium text-stone-500">{t(lang, "lockScreenStaffHint")}</p>
               <PinInput
                 value={lockSecret}
                 onChange={(e) => {
@@ -640,7 +644,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 }}
                 maxLength={32}
                 placeholder={t(lang, "unlockPinPlaceholder")}
-                className="mt-3 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-lg font-black tracking-[0.15em]"
+                className="mt-3 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-center text-lg font-black tracking-[0.15em]"
               />
               {lockError ? <p className="mt-2 text-sm font-bold text-rose-700">{lockError}</p> : null}
               {!isBackOfficePinConfigured(preferences.backOfficePin) &&

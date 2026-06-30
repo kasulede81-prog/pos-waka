@@ -328,11 +328,11 @@ export function CashExpensesPage({ lang }: Props) {
           }
         >
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+            <span className="text-sm font-bold text-stone-800">{t(lang, "auditReasonLabel")}</span>
             <textarea
               value={voidReason}
               onChange={(e) => setVoidReason(e.target.value)}
-              className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+              className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
               placeholder={t(lang, "auditReasonPlaceholder")}
             />
           </label>

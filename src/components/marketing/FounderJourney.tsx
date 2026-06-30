@@ -45,21 +45,21 @@ export function FounderJourney({ condensed = false, showVision = false }: Props)
       <div className="grid gap-4 sm:grid-cols-2">
         {blocks.map((block) => (
           <article key={block.title} className="rounded-2xl border border-stone-100 bg-white p-5 shadow-sm">
-            <h3 className="text-sm font-black text-orange-800">{block.title}</h3>
+            <h3 className="text-sm font-black text-waka-">{block.title}</h3>
             <p className="mt-2 text-sm font-medium leading-relaxed text-stone-700">{block.body}</p>
           </article>
         ))}
       </div>
       {showVision ? (
-        <blockquote className="rounded-2xl border border-orange-100 bg-orange-50/80 p-5">
-          <p className="text-xs font-black uppercase tracking-wide text-orange-800">Vision</p>
+        <blockquote className="rounded-2xl border border-waka- bg-waka-/80 p-5">
+          <p className="text-xs font-black uppercase tracking-wide text-waka-">Vision</p>
           <p className="mt-2 text-sm font-medium leading-relaxed text-stone-800">{FOUNDER_VISION}</p>
         </blockquote>
       ) : null}
       {condensed ? (
         <p className="text-sm font-medium text-stone-600">
           Read the full story on the{" "}
-          <Link to="/founder" className="font-bold text-orange-800 underline">
+          <Link to="/founder" className="font-bold text-waka- underline">
             founder profile
           </Link>
           .

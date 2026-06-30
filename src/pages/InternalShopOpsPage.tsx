@@ -433,7 +433,7 @@ export function InternalShopOpsPage({ lang }: Props) {
         <>
           {shopIntel ? (
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-black text-orange-900">
+              <span className="rounded-full bg-waka-100 px-3 py-1 text-xs font-black text-waka-900">
                 Health {shopIntel.health.score}%
               </span>
               {shopIntel.fraud.map((f) => (
@@ -460,7 +460,7 @@ export function InternalShopOpsPage({ lang }: Props) {
             })()}
             <h1 className="mt-0.5 text-xl font-black text-stone-900">{detail.shop.name}</h1>
             {formatWakaShopNumber(detail.shop.shop_number) ? (
-              <p className="mt-1 font-mono text-sm font-black text-orange-700">
+              <p className="mt-1 font-mono text-sm font-black text-waka-700">
                 Shop no. {formatWakaShopNumber(detail.shop.shop_number)}
               </p>
             ) : null}
@@ -470,7 +470,7 @@ export function InternalShopOpsPage({ lang }: Props) {
             </p>
             <Link
               to={internalAdminShopRescueHref(detail.shop.id, previewMode)}
-              className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-orange-600 px-4 text-xs font-black text-white"
+              className="mt-3 inline-flex min-h-[44px] items-center rounded-xl bg-waka-600 px-4 text-xs font-black text-white"
             >
               Open Rescue Console →
             </Link>
@@ -484,7 +484,7 @@ export function InternalShopOpsPage({ lang }: Props) {
               >
                 {formatLastActive(detail.shop.last_seen_at)}
               </span>
-              <span className="rounded-full bg-orange-50 px-2.5 py-0.5 text-[10px] font-black text-orange-900">
+              <span className="rounded-full bg-waka-50 px-2.5 py-0.5 text-[10px] font-black text-waka-900">
                 {detail.plan_code ?? detail.subscription?.plan_code ?? "free"}
               </span>
               <span className="rounded-full bg-violet-50 px-2.5 py-0.5 text-[10px] font-black text-violet-900">
@@ -510,7 +510,7 @@ export function InternalShopOpsPage({ lang }: Props) {
                 href={googleMapsDirectionsUrl(detail.shop.latitude!, detail.shop.longitude!)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-2 inline-flex min-h-[40px] items-center rounded-xl bg-orange-600 px-3 py-2 text-xs font-black text-white hover:bg-orange-700"
+                className="mt-2 inline-flex min-h-[40px] items-center rounded-xl bg-waka-600 px-3 py-2 text-xs font-black text-white hover:bg-waka-700"
               >
                 {t(lang, "internalVisitDirections")}
               </a>
@@ -603,7 +603,7 @@ export function InternalShopOpsPage({ lang }: Props) {
                 type="button"
                 disabled={busy}
                 onClick={() => setActionSheet(true)}
-                className="min-h-[48px] w-full rounded-2xl bg-orange-600 text-sm font-black text-white shadow-md disabled:opacity-40"
+                className="min-h-[48px] w-full rounded-2xl bg-waka-600 text-sm font-black text-white shadow-md disabled:opacity-40"
               >
                 {t(lang, "internalShopActionsSelect")}
               </button>
@@ -663,7 +663,7 @@ export function InternalShopOpsPage({ lang }: Props) {
                   value={planControlCode}
                   onChange={(e) => setPlanControlCode(e.target.value as AdminPlanCode)}
                   disabled={!canSubs || busy}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200 disabled:opacity-50"
+                  className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200 disabled:opacity-50"
                 >
                   <option value="free">{t(lang, "planFreeName")}</option>
                   <option value="starter">{t(lang, "planStarterName")}</option>
@@ -680,7 +680,7 @@ export function InternalShopOpsPage({ lang }: Props) {
                   value={planControlDays}
                   onChange={(e) => setPlanControlDays(Math.max(1, Number(e.target.value) || 30))}
                   disabled={!canSubs || busy || planControlCode === "free" || planControlCode === "waka_plus"}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200 disabled:opacity-50"
+                  className="mt-1 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200 disabled:opacity-50"
                 />
               </label>
             </div>
@@ -690,7 +690,7 @@ export function InternalShopOpsPage({ lang }: Props) {
             <button
               type="button"
               disabled={busy || !canSubs}
-              className="mt-3 min-h-[44px] w-full rounded-xl bg-orange-600 text-sm font-black text-white disabled:opacity-40"
+              className="mt-3 min-h-[44px] w-full rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-40"
               onClick={() => void setAdminPlan(planControlCode)}
             >
               {t(lang, "internalShopProfileApplyPlan")}
@@ -809,7 +809,7 @@ export function InternalShopOpsPage({ lang }: Props) {
                               {online ? t(lang, "internalShopProfileDeviceOnline") : t(lang, "internalShopProfileDeviceOffline")}
                             </span>
                             {d.trusted ? (
-                              <span className="rounded-md bg-orange-100 px-1.5 py-0.5 text-orange-900">{t(lang, "internalShopProfileDeviceTrusted")}</span>
+                              <span className="rounded-md bg-waka-100 px-1.5 py-0.5 text-waka-900">{t(lang, "internalShopProfileDeviceTrusted")}</span>
                             ) : null}
                           </div>
                         </div>
@@ -826,7 +826,7 @@ export function InternalShopOpsPage({ lang }: Props) {
                             <button
                               type="button"
                               disabled={busy}
-                              className="rounded-lg bg-orange-100 px-2 py-1 text-[10px] font-black text-orange-950 disabled:opacity-40"
+                              className="rounded-lg bg-waka-100 px-2 py-1 text-[10px] font-black text-waka-950 disabled:opacity-40"
                               onClick={() => void run(() => adminShopDeviceSetTrusted(d.id, !d.trusted))}
                             >
                               {d.trusted ? t(lang, "internalShopProfileDeviceUntrust") : t(lang, "internalShopProfileDeviceTrust")}

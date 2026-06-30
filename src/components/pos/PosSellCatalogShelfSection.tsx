@@ -37,7 +37,12 @@ export function PosSellCatalogShelfSection({
             lang={lang}
             mode="sell"
             sellFocus
-            countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
+            emptyShelf={shelf.count === 0}
+            countLabel={
+              shelf.count === 0
+                ? t(lang, "shelfEmptyRestockLabel")
+                : t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))
+            }
             onClick={() => onShelfTap(shelf.key)}
           />
         ))}

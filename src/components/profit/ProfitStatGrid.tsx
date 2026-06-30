@@ -31,7 +31,7 @@ function StatCard({
     <div
       className={clsx(
         "flex min-h-[76px] flex-col justify-between rounded-2xl border p-2.5 shadow-sm",
-        highlight ? "border-waka-300 bg-gradient-to-br from-waka-50 to-orange-50/80" : "border-stone-200/90 bg-white",
+        highlight ? "border-waka-300 bg-gradient-to-br from-waka-50 to-waka-50/80" : "border-stone-200/90 bg-white",
       )}
     >
       <div className="flex items-center gap-1.5">

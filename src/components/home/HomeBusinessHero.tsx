@@ -70,7 +70,7 @@ export function HomeBusinessHero({ lang, sellStat, onSell, className }: Props) {
           {sellStat ? (
             <div className="rounded-2xl border border-white/25 bg-white/15 px-4 py-3 shadow-sm backdrop-blur-sm">
               <p className="text-[10px] font-bold uppercase tracking-wider text-waka-100/90">
-                {t(lang, sellStat.labelKey)}
+                {sellStat.label}
               </p>
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2">
                 <span className="text-lg font-black tabular-nums text-white sm:text-xl">{sellStat.value}</span>

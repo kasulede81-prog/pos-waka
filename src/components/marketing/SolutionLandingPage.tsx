@@ -22,19 +22,19 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
 
       <article className="space-y-10">
         <header className="space-y-4">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">{content.eyebrow}</p>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-">{content.eyebrow}</p>
           <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">{content.h1}</h1>
           <p className="max-w-3xl text-lg font-medium leading-relaxed text-stone-600">{content.intro}</p>
           <div className="flex flex-wrap gap-3 pt-2">
             <Link
               to="/demo"
-              className="inline-flex min-h-[48px] items-center rounded-2xl bg-orange-600 px-6 py-3 text-sm font-black text-white shadow-md hover:bg-orange-700"
+              className="inline-flex min-h-[48px] items-center rounded-2xl bg-waka- px-6 py-3 text-sm font-black text-white shadow-md hover:bg-waka-"
             >
               {t(lang, "marketingCtaDemo")}
             </Link>
             <Link
               to="/register"
-              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-200 bg-white px-6 py-3 text-sm font-black text-stone-900 hover:border-orange-200"
+              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-200 bg-white px-6 py-3 text-sm font-black text-stone-900 hover:border-waka-"
             >
               {t(lang, "marketingCtaSignup")}
             </Link>
@@ -54,7 +54,7 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
           </section>
         ))}
 
-        <section className="rounded-3xl border border-orange-100 bg-gradient-to-br from-orange-50/80 to-white p-6 sm:p-8">
+        <section className="rounded-3xl border border-waka- bg-gradient-to-br from-waka-/80 to-white p-6 sm:p-8">
           <h2 className="text-2xl font-black text-stone-950">Waka POS features for {content.eyebrow.toLowerCase()}</h2>
           <p className="mt-2 text-sm font-medium text-stone-600">
             Real tools from the Waka POS app — not a generic feature list.
@@ -89,26 +89,26 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
           <div className="mt-5 flex flex-wrap gap-3">
             <Link
               to="/demo"
-              className="inline-flex min-h-[48px] items-center rounded-2xl bg-orange-600 px-6 py-3 text-sm font-black text-white hover:bg-orange-500"
+              className="inline-flex min-h-[48px] items-center rounded-2xl bg-waka- px-6 py-3 text-sm font-black text-white hover:bg-waka-"
             >
               {t(lang, "marketingCtaDemo")}
             </Link>
             <Link
               to="/register"
-              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-600 px-6 py-3 text-sm font-black text-white hover:border-orange-400"
+              className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-stone-600 px-6 py-3 text-sm font-black text-white hover:border-waka-"
             >
               {t(lang, "marketingCtaSignup")}
             </Link>
             <Link
               to="/contact"
-              className="inline-flex min-h-[48px] items-center rounded-2xl px-6 py-3 text-sm font-black text-orange-300 underline-offset-4 hover:underline"
+              className="inline-flex min-h-[48px] items-center rounded-2xl px-6 py-3 text-sm font-black text-waka- underline-offset-4 hover:underline"
             >
               Talk to support
             </Link>
           </div>
         </section>
 
-        <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-waka-sm">
+        <section className="rounded-3xl border border-waka- bg-white p-6 shadow-waka-sm">
           <h2 className="text-lg font-black text-stone-950">More Waka POS solutions in Uganda</h2>
           <p className="mt-2 text-sm font-medium text-stone-600">
             Explore how Waka POS fits other business types across Uganda.
@@ -116,7 +116,7 @@ export function SolutionLandingPage({ lang, setLang, isAuthenticated, content }:
           <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-2">
             {related.map((link) => (
               <li key={link.slug}>
-                <Link to={link.path} className="text-sm font-black text-orange-800 underline-offset-4 hover:underline">
+                <Link to={link.path} className="text-sm font-black text-waka- underline-offset-4 hover:underline">
                   {link.label}
                 </Link>
               </li>

@@ -48,9 +48,9 @@ export const TABLE_STATUS_COLORS: Record<
     labelKey: "tableStatusReserved",
   },
   disabled: {
-    bg: "bg-slate-100",
-    border: "border-slate-300",
-    text: "text-slate-500",
+    bg: "bg-stone-100",
+    border: "border-stone-300",
+    text: "text-stone-500",
     labelKey: "tableStatusDisabled",
   },
 };

@@ -48,10 +48,10 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
           <BackupSettingsCard lang={lang} compact actionsEnabled />
         </section>
       ) : canBackupRole ? (
-        <section className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-4">
-          <p className="text-sm font-semibold text-orange-950">{t(lang, "backupUpgradeRequired")}</p>
-          <p className="mt-2 text-xs font-medium text-orange-900">{t(lang, "planStarterName")}</p>
-          <Link to="/upgrade" className="mt-3 inline-flex min-h-[44px] items-center rounded-2xl bg-orange-600 px-4 py-2 text-sm font-black text-white">
+        <section className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-4">
+          <p className="text-sm font-semibold text-waka-950">{t(lang, "backupUpgradeRequired")}</p>
+          <p className="mt-2 text-xs font-medium text-waka-900">{t(lang, "planStarterName")}</p>
+          <Link to="/upgrade" className="mt-3 inline-flex min-h-[44px] items-center rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white">
             {t(lang, "backupUpgradeCta")} →
           </Link>
         </section>

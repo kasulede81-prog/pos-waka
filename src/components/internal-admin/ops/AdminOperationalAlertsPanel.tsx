@@ -21,7 +21,7 @@ export function AdminOperationalAlertsPanel({ previewMode = false }: Props) {
   }, []);
 
   return (
-    <section className="rounded-2xl border border-orange-200 bg-orange-50/40 p-4">
+    <section className="rounded-2xl border border-waka-200 bg-waka-50/40 p-4">
       <h2 className="text-sm font-black text-stone-900">Operational alerts</h2>
       <p className="mt-0.5 text-xs text-stone-600">Pilot cohort · auto-refreshes every 60s</p>
       <ul className="mt-3 max-h-64 space-y-2 overflow-y-auto">
@@ -38,7 +38,7 @@ export function AdminOperationalAlertsPanel({ previewMode = false }: Props) {
               {a.shop_id ? (
                 <Link
                   to={internalAdminShopHref(a.shop_id, previewMode)}
-                  className="mt-1 inline-block font-black text-orange-700 underline"
+                  className="mt-1 inline-block font-black text-waka-700 underline"
                 >
                   {a.shop_name ?? "Open shop"}
                 </Link>

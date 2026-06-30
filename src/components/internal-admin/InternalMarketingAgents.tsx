@@ -307,7 +307,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             setCreateMsg(null);
             setCreateOpen(true);
           }}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-orange-600 px-4 py-2 text-sm font-black text-white"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white"
         >
           <Plus className="h-4 w-4" aria-hidden />
           {t(lang, "internalAgentsGrant")}
@@ -393,7 +393,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                         key={role}
                         className={clsx(
                           "inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold",
-                          checked ? "border-orange-400 bg-orange-50 text-orange-950" : "border-stone-200 bg-white",
+                          checked ? "border-waka-400 bg-waka-50 text-waka-950" : "border-stone-200 bg-white",
                         )}
                       >
                         <input
@@ -424,7 +424,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
               <button
                 type="button"
                 onClick={() => void openDetail(a.id)}
-                className="mt-1 text-sm font-black text-orange-700 underline"
+                className="mt-1 text-sm font-black text-waka-700 underline"
               >
                 {t(lang, "internalAgentsViewReferrals")}
               </button>
@@ -487,8 +487,8 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                       className={clsx(
                         "w-full rounded-lg border px-3 py-2 text-left text-xs",
                         grantShopId === c.shopId
-                          ? "border-orange-400 bg-orange-50"
-                          : "border-stone-200 bg-white hover:border-orange-300",
+                          ? "border-waka-400 bg-waka-50"
+                          : "border-stone-200 bg-white hover:border-waka-300",
                       )}
                     >
                       <p className="font-black text-stone-900">{c.shopName}</p>
@@ -517,7 +517,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   key={role}
                   className={clsx(
                     "inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold",
-                    checked ? "border-orange-400 bg-orange-50" : "border-stone-200 bg-white",
+                    checked ? "border-waka-400 bg-waka-50" : "border-stone-200 bg-white",
                   )}
                 >
                   <input
@@ -537,7 +537,7 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             type="button"
             disabled={createBusy || !grantShopId.trim()}
             onClick={() => void submitGrant()}
-            className="w-full rounded-2xl bg-orange-600 py-3 text-sm font-black text-white disabled:opacity-60"
+            className="w-full rounded-2xl bg-waka-600 py-3 text-sm font-black text-white disabled:opacity-60"
           >
             {createBusy ? "…" : t(lang, "internalAgentsGrantSubmit")}
           </button>

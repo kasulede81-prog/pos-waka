@@ -48,7 +48,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
             <h2 className="text-xl font-black text-stone-950">{t(lang, "splitBillTitle")}</h2>
             <p className="text-lg font-black text-waka-700">{formatUgx(totalUgx)}</p>
           </div>
-          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-slate-500" onClick={onClose}>
+          <button type="button" className="min-h-[44px] px-2 text-sm font-bold text-stone-500" onClick={onClose}>
             {t(lang, "cancel")}
           </button>
         </div>
@@ -70,7 +70,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
             onClick={() => setMode("equal")}
             className={clsx(
               "min-h-11 rounded-xl border text-sm font-black",
-              mode === "equal" ? "border-waka-500 bg-waka-50" : "border-slate-200",
+              mode === "equal" ? "border-waka-500 bg-waka-50" : "border-stone-200",
             )}
           >
             {t(lang, "splitBillEqual")}
@@ -80,7 +80,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
             onClick={() => setMode("custom")}
             className={clsx(
               "min-h-11 rounded-xl border text-sm font-black",
-              mode === "custom" ? "border-waka-500 bg-waka-50" : "border-slate-200",
+              mode === "custom" ? "border-waka-500 bg-waka-50" : "border-stone-200",
             )}
           >
             {t(lang, "splitBillCustom")}
@@ -89,7 +89,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
 
         {mode === "equal" ? (
           <>
-            <p className="mb-2 text-sm font-bold text-slate-600">{t(lang, "splitBillPeople")}</p>
+            <p className="mb-2 text-sm font-bold text-stone-600">{t(lang, "splitBillPeople")}</p>
             <div className="mb-4 flex flex-wrap gap-2">
               {[2, 3, 4, 5, 6].map((n) => (
                 <button
@@ -98,7 +98,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                   onClick={() => setPeople(n)}
                   className={clsx(
                     "min-h-10 min-w-10 rounded-xl font-black",
-                    people === n ? "bg-waka-600 text-white" : "bg-slate-100",
+                    people === n ? "bg-waka-600 text-white" : "bg-stone-100",
                   )}
                 >
                   {n}
@@ -107,7 +107,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
             </div>
             <ul className="mb-4 space-y-2">
               {equalSplits.map((s) => (
-                <li key={s.label} className="flex justify-between text-sm font-bold text-slate-800">
+                <li key={s.label} className="flex justify-between text-sm font-bold text-stone-800">
                   <span>
                     {t(lang, "splitBillPerson")} {s.label}
                   </span>
@@ -127,7 +127,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                     next[idx] = { ...row, label: e.target.value };
                     setRows(next);
                   }}
-                  className="min-h-[44px] rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold"
+                  className="min-h-[44px] rounded-xl border border-stone-200 px-3 py-2 text-sm font-bold"
                 />
                 <input
                   value={row.amountUgx ? String(row.amountUgx) : ""}
@@ -138,7 +138,7 @@ export function SplitBillSheet({ lang, open, totalUgx, onClose, onApply }: Props
                   }}
                   inputMode="numeric"
                   placeholder="UGX"
-                  className="min-h-[44px] rounded-xl border border-slate-200 px-3 py-2 text-sm font-black"
+                  className="min-h-[44px] rounded-xl border border-stone-200 px-3 py-2 text-sm font-black"
                 />
               </div>
             ))}

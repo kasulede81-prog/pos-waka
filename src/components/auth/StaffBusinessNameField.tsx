@@ -93,7 +93,7 @@ export function StaffBusinessNameField({
             <li key={s.id} role="option">
               <button
                 type="button"
-                className="w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-orange-50 active:bg-orange-100"
+                className="w-full px-3 py-2.5 text-left text-sm font-semibold text-stone-800 hover:bg-waka-50 active:bg-waka-100"
                 onMouseDown={(e) => {
                   e.preventDefault();
                   onChange(s.label);

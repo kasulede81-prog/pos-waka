@@ -103,7 +103,7 @@ export function SalesHistorySummaryStrip({
           <div className={compact ? "min-w-0 flex-1" : undefined}>
             <p
               className={clsx(
-                "font-bold leading-tight text-slate-600",
+                "font-bold leading-tight text-stone-600",
                 compact ? "truncate text-[9px] sm:text-[10px]" : "text-[10px] sm:text-xs",
               )}
             >

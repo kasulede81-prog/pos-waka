@@ -24,21 +24,21 @@ export function SettingsNotificationsPage({ lang }: { lang: Language }) {
       />
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <label className="flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-slate-900">
+        <label className="flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-stone-900">
           <input
             type="checkbox"
             checked={preferences.hapticsOn !== false}
             onChange={(e) => setPreferences({ hapticsOn: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-slate-400 accent-waka-600"
+            className="h-6 w-6 rounded border-2 border-stone-400 accent-waka-600"
           />
           {t(lang, "hapticsSetting")}
         </label>
-        <label className="mt-4 flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-slate-900">
+        <label className="mt-4 flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-stone-900">
           <input
             type="checkbox"
             checked={preferences.saleSoundOn !== false}
             onChange={(e) => setPreferences({ saleSoundOn: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-slate-400 accent-waka-600"
+            className="h-6 w-6 rounded border-2 border-stone-400 accent-waka-600"
           />
           {t(lang, "saleSoundSetting")}
         </label>

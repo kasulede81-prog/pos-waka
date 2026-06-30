@@ -9,6 +9,14 @@ export default {
         sans: ["DM Sans", "Inter", "system-ui", "Segoe UI", "Roboto", "sans-serif"],
         admin: ["Roboto", "DM Sans", "Inter", "system-ui", "Segoe UI", "sans-serif"],
       },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+        xl: "calc(var(--radius) + 4px)",
+        "2xl": "calc(var(--radius) + 8px)",
+        "3xl": "calc(var(--radius) + 12px)",
+      },
       colors: {
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",
@@ -33,6 +41,12 @@ export default {
         "mkt-text-secondary": "rgb(var(--mkt-text-secondary) / <alpha-value>)",
         "mkt-nav": "rgb(var(--mkt-nav) / <alpha-value>)",
         "mkt-footer": "rgb(var(--mkt-footer) / <alpha-value>)",
+        brand: {
+          orange: "#f97316",
+          "orange-dark": "#ea580c",
+          cream: "#fffaf5",
+          "cream-wash": "#faf7f4",
+        },
         waka: {
           50: "#fff7ed",
           100: "#ffedd5",

@@ -68,7 +68,7 @@ export function ForgotPasswordPage({ lang, setLang, isAuthenticated, requestPass
             {error ? <p className="text-sm font-medium text-red-600">{error}</p> : null}
             <button
               disabled={busy}
-              className="w-full min-h-[48px] rounded-xl bg-orange-600 px-4 py-3 font-black text-white disabled:opacity-50"
+              className="w-full min-h-[48px] rounded-xl bg-waka-600 px-4 py-3 font-black text-white disabled:opacity-50"
             >
               {busy ? "…" : t(lang, "sendResetLink")}
             </button>

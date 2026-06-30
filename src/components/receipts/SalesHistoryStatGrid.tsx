@@ -28,7 +28,7 @@ function StatCard({
 }) {
   const iconBg =
     accent === "orange"
-      ? "bg-orange-100 text-orange-700"
+      ? "bg-waka-100 text-waka-700"
       : accent === "teal"
         ? "bg-teal-100 text-teal-700"
         : accent === "rose"

@@ -46,7 +46,7 @@ export function InternalAdminOutlet() {
   if (state === "loading") {
     return (
       <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-600" aria-hidden />
+        <Loader2 className="h-8 w-8 animate-spin text-waka-600" aria-hidden />
         <p className="mt-3 text-sm font-semibold text-stone-600">Checking access…</p>
       </div>
     );

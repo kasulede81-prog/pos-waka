@@ -24,6 +24,9 @@ export type DateFilterBounds = {
 
 export const DEFAULT_DATE_FILTER: DateFilterValue = { kind: "preset", preset: "today" };
 
+/** Insights pages default to the live calendar month (resets on the 1st in Kampala). */
+export const MONTH_TO_DATE_FILTER: DateFilterValue = { kind: "preset", preset: "this_month" };
+
 /** @deprecated Use DateFilterValue — kept for monthly report hooks and migrations. */
 export type ReportRange = "today" | "week" | "month";
 

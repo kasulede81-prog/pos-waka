@@ -40,6 +40,8 @@ export type AdminSectionId =
   | "business_types"
   | "growth_campaign"
   | "ai_settings"
+  | "releases"
+  | "display_scale"
   | "shop";
 
 type TabDef = {
@@ -55,7 +57,10 @@ const TABS: TabDef[] = [
   { id: "devices", path: "/internal/waka/devices", label: "Devices" },
   { id: "support", path: "/internal/waka/support", label: "Support" },
   { id: "pilot", path: "/internal/waka/pilot", label: "Pilot" },
+  { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
+  { id: "display_scale", path: "/internal/waka/display-scale", label: "Display" },
   { id: "billing", path: "/internal/waka/billing", label: "Billing" },
+  { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing" },
   { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
   { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
   { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI Center", superOnly: true },
@@ -87,7 +92,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   if (loading) {
     return createPortal(
       <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-waka-600" />
         <p className="mt-3 text-sm font-semibold text-stone-600">Loading admin…</p>
       </div>,
       document.body,
@@ -99,7 +104,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   }
 
   const row = adminRow!;
-  const navActive = active === "pricing_campaigns" ? "billing" : active;
+  const navActive = active;
   const roleLabel = (row.role ?? "admin").replace(/_/g, " ");
   const showNav = active !== "shop";
   const showBack = active === "shop";
@@ -108,7 +113,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
 
   return createPortal(
     <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
-      <header className="shrink-0 bg-gradient-to-r from-orange-600 to-orange-500 text-white shadow-md">
+      <header className="shrink-0 bg-gradient-to-r from-waka-600 to-waka-500 text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:px-4">
           {showBack ? (
             <button
@@ -144,9 +149,9 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {showNav ? (
-          <nav className="shrink-0 border-b border-stone-200 bg-white px-2 py-2 lg:hidden">
+          <nav className="shrink-0 border-b border-stone-200 bg-white px-2 py-2 md:hidden">
             <div className="flex gap-1 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
               {visibleTabs.map((tab) => {
                 const href = tabTo(tab.path);
@@ -160,7 +165,7 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
                     }}
                     className={clsx(
                       "shrink-0 rounded-xl px-3 py-2.5 text-xs font-black transition min-h-[44px]",
-                      isActive ? "bg-orange-600 text-white shadow-sm" : "bg-stone-100 text-stone-700",
+                      isActive ? "bg-waka-600 text-white shadow-sm" : "bg-stone-100 text-stone-700",
                     )}
                   >
                     {tab.label}
@@ -172,8 +177,8 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
         ) : null}
 
         {showNav ? (
-          <aside className="hidden min-h-0 w-52 shrink-0 border-r border-stone-200 bg-white lg:block">
-            <nav className="flex flex-col gap-0.5 p-3">
+          <aside className="hidden min-h-0 w-52 shrink-0 overflow-y-auto overscroll-y-contain border-r border-stone-200 bg-white md:block xl:w-56">
+            <nav className="flex flex-col gap-0.5 p-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
               {visibleTabs.map((tab) => {
                 const href = tabTo(tab.path);
                 const isActive = navActive === tab.id;
@@ -185,8 +190,8 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
                       if (href !== currentPath) navigate(href);
                     }}
                     className={clsx(
-                      "rounded-xl px-3 py-2.5 text-left text-sm font-bold transition min-h-[44px]",
-                      isActive ? "bg-orange-50 text-orange-800 ring-1 ring-orange-200" : "text-stone-600 hover:bg-stone-50",
+                      "rounded-xl px-3 py-2 text-left text-sm font-bold transition min-h-[40px]",
+                      isActive ? "bg-waka-50 text-waka-800 ring-1 ring-waka-200" : "text-stone-600 hover:bg-stone-50",
                     )}
                   >
                     {tab.label}

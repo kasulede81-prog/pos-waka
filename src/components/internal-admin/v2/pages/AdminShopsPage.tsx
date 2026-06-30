@@ -112,7 +112,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder="Search name, owner, district…"
-        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-orange-200"
+        className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold outline-none focus:ring-2 focus:ring-waka-200"
       />
 
       <div className="flex flex-wrap gap-2">
@@ -122,7 +122,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
             type="button"
             onClick={() => setStatus(s)}
             className={`min-h-[44px] rounded-full px-3 text-xs font-black uppercase ${
-              status === s ? "bg-orange-600 text-white" : "bg-white text-stone-600 ring-1 ring-stone-200"
+              status === s ? "bg-waka-600 text-white" : "bg-white text-stone-600 ring-1 ring-stone-200"
             }`}
           >
             {s}
@@ -142,7 +142,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           <button
             type="button"
             onClick={() => setPlan("")}
-            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${!plan ? "bg-orange-100 text-orange-800" : "bg-stone-100"}`}
+            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${!plan ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
           >
             All plans
           </button>
@@ -151,7 +151,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
               key={p}
               type="button"
               onClick={() => setPlan(p)}
-              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${plan === p ? "bg-orange-100 text-orange-800" : "bg-stone-100"}`}
+              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold uppercase ${plan === p ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
             >
               {p}
             </button>
@@ -164,7 +164,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
           <button
             type="button"
             onClick={() => setDistrict("")}
-            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${!district ? "bg-orange-100 text-orange-800" : "bg-stone-100"}`}
+            className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${!district ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
           >
             All districts
           </button>
@@ -173,7 +173,7 @@ export function AdminShopsPage({ adminRow, previewMode }: Props) {
               key={d}
               type="button"
               onClick={() => setDistrict(d)}
-              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${district === d ? "bg-orange-100 text-orange-800" : "bg-stone-100"}`}
+              className={`shrink-0 rounded-full px-3 py-2 text-xs font-bold ${district === d ? "bg-waka-100 text-waka-800" : "bg-stone-100"}`}
             >
               {d}
             </button>

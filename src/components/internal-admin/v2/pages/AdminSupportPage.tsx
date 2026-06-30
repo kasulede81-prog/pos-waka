@@ -74,7 +74,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
             type="button"
             onClick={() => setFilter(f)}
             className={`min-h-[44px] rounded-full px-4 text-xs font-black uppercase ${
-              filter === f ? "bg-orange-600 text-white" : "bg-white ring-1 ring-stone-200"
+              filter === f ? "bg-waka-600 text-white" : "bg-white ring-1 ring-stone-200"
             }`}
           >
             {f}

@@ -39,7 +39,7 @@ export function MarketingTrustedSection() {
           <Reveal key={item.title} delay={i * 0.05}>
             <HoverLift>
               <article className={clsx(mktCard, "h-full p-5")}>
-                <p className="text-sm font-black text-orange-700 dark:text-orange-400">{item.title}</p>
+                <p className="text-sm font-black text-waka- dark:text-waka-">{item.title}</p>
                 <p className={clsx("mt-2 text-sm font-medium leading-relaxed", mktSubtext)}>{item.body}</p>
               </article>
             </HoverLift>
@@ -67,13 +67,13 @@ export function MarketingBusinessTypesSection() {
               to={`/solutions/${biz.slug}`}
               className={clsx(
                 mktCard,
-                "group flex min-h-[108px] flex-col justify-between p-4 transition hover:border-orange-300 hover:shadow-md dark:hover:border-orange-500/40",
+                "group flex min-h-[108px] flex-col justify-between p-4 transition hover:border-waka- hover:shadow-md dark:hover:border-waka-/40",
               )}
             >
               <span className="text-2xl" aria-hidden>
                 {biz.icon}
               </span>
-              <span className="text-sm font-black text-mkt-text group-hover:text-orange-800 dark:group-hover:text-orange-400">
+              <span className="text-sm font-black text-mkt-text group-hover:text-waka- dark:group-hover:text-waka-">
                 {biz.label}
               </span>
             </Link>
@@ -114,7 +114,7 @@ export function MarketingFeaturesSection() {
 export function MarketingShowcaseSection() {
   const panels = [
     { title: "Owner Dashboard", tone: "from-stone-900 to-stone-800", chips: ["Sales", "Profit", "Low stock", "Debts"] },
-    { title: "Sell Screen", tone: "from-orange-600 to-orange-500", chips: ["Fast checkout", "Barcode", "Categories", "Offline"] },
+    { title: "Sell Screen", tone: "from-waka- to-waka-", chips: ["Fast checkout", "Barcode", "Categories", "Offline"] },
     { title: "Reports", tone: "from-emerald-700 to-teal-700", chips: ["Daily close", "Trends", "Top products", "Export"] },
     { title: "Inventory", tone: "from-sky-700 to-indigo-700", chips: ["Stock list", "Purchases", "Suppliers", "Counts"] },
   ];
@@ -169,11 +169,11 @@ export function MarketingHardwareSection() {
               <article className={clsx(mktCardLg, "flex h-full flex-col p-6")}>
                 <p className={mktEyebrow}>{pkg.badge}</p>
                 <h3 className={clsx("mt-2 text-xl font-black", mktHeading)}>{pkg.name}</h3>
-                <p className="mt-3 text-3xl font-black text-orange-700 dark:text-orange-400">{pkg.priceLabel}</p>
+                <p className="mt-3 text-3xl font-black text-waka- dark:text-waka-">{pkg.priceLabel}</p>
                 <ul className="mt-6 flex-1 space-y-2">
                   {pkg.includes.map((item) => (
                     <li key={item} className="flex gap-2 text-sm font-semibold text-mkt-text">
-                      <span className="text-orange-600 dark:text-orange-400">✓</span>
+                      <span className="text-waka- dark:text-waka-">✓</span>
                       {item}
                     </li>
                   ))}
@@ -182,7 +182,7 @@ export function MarketingHardwareSection() {
                   to="/contact"
                   className={clsx(
                     mktBtnSecondary,
-                    "mt-6 min-h-[48px] border-orange-200 bg-orange-50 text-sm text-orange-900 hover:bg-orange-100 dark:border-orange-500/30 dark:bg-orange-950/30 dark:text-orange-200 dark:hover:bg-orange-950/50",
+                    "mt-6 min-h-[48px] border-waka- bg-waka- text-sm text-waka- hover:bg-waka- dark:border-waka-/30 dark:bg-waka-/30 dark:text-waka- dark:hover:bg-waka-/50",
                   )}
                 >
                   Contact sales
@@ -215,7 +215,7 @@ export function MarketingPricingSection() {
             onClick={() => setYearly(false)}
             className={clsx(
               "rounded-full px-4 py-2 transition duration-300",
-              !yearly ? "bg-mkt-card text-orange-700 shadow-sm dark:text-orange-400" : mktSubtext,
+              !yearly ? "bg-mkt-card text-waka- shadow-sm dark:text-waka-" : mktSubtext,
             )}
           >
             Monthly
@@ -225,7 +225,7 @@ export function MarketingPricingSection() {
             onClick={() => setYearly(true)}
             className={clsx(
               "rounded-full px-4 py-2 transition duration-300",
-              yearly ? "bg-mkt-card text-orange-700 shadow-sm dark:text-orange-400" : mktSubtext,
+              yearly ? "bg-mkt-card text-waka- shadow-sm dark:text-waka-" : mktSubtext,
             )}
           >
             Yearly · Save 20%
@@ -243,12 +243,12 @@ export function MarketingPricingSection() {
               )}
             >
               {plan.popular ? (
-                <span className="mb-2 inline-flex w-fit rounded-full bg-orange-600 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
+                <span className="mb-2 inline-flex w-fit rounded-full bg-waka- px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">
                   Most Popular
                 </span>
               ) : null}
               <h3 className={clsx("text-xl font-black", mktHeading)}>{plan.name}</h3>
-              <p className="mt-2 text-3xl font-black text-orange-700 dark:text-orange-400">
+              <p className="mt-2 text-3xl font-black text-waka- dark:text-waka-">
                 {plan.code === "free"
                   ? formatMarketingUgx(0)
                   : yearly
@@ -273,7 +273,7 @@ export function MarketingPricingSection() {
                 to={plan.code === "free" ? "/register" : "/contact"}
                 className={clsx(
                   "mt-6 inline-flex min-h-[44px] items-center justify-center rounded-2xl text-sm font-black transition duration-300",
-                  plan.popular ? clsx(mktBtnPrimary, "hover:bg-orange-700") : mktBtnSecondary,
+                  plan.popular ? clsx(mktBtnPrimary, "hover:bg-waka-") : mktBtnSecondary,
                 )}
               >
                 {plan.code === "free" ? "Start free" : "Get started"}
@@ -283,7 +283,7 @@ export function MarketingPricingSection() {
         ))}
       </div>
       <p className={clsx("mt-6 text-center text-sm font-medium", mktSubtext)}>
-        <Link to="/pricing" className="font-black text-orange-700 underline-offset-2 hover:underline dark:text-orange-400">
+        <Link to="/pricing" className="font-black text-waka- underline-offset-2 hover:underline dark:text-waka-">
           View full plan comparison →
         </Link>
       </p>
@@ -302,7 +302,7 @@ export function MarketingComparisonSection() {
         <div className="grid grid-cols-3 bg-mkt-bg-secondary text-xs font-black uppercase tracking-wide text-mkt-text-secondary sm:text-sm">
           <div className="p-4">Topic</div>
           <div className="border-l border-mkt-border p-4">Traditional</div>
-          <div className="border-l border-mkt-border p-4 text-orange-700 dark:text-orange-400">With Waka POS</div>
+          <div className="border-l border-mkt-border p-4 text-waka- dark:text-waka-">With Waka POS</div>
         </div>
         {MARKETING_COMPARISON_ROWS.map((row) => (
           <div key={row.topic} className="grid grid-cols-3 border-t border-mkt-border text-sm">
@@ -385,14 +385,14 @@ export function MarketingFaqSection() {
 
 export function MarketingFinalCtaSection() {
   return (
-    <section className="overflow-hidden rounded-[2rem] bg-gradient-to-br from-orange-600 to-orange-500 px-6 py-12 text-white shadow-xl ring-1 ring-orange-400/30 sm:px-10 sm:py-14">
+    <section className="overflow-hidden rounded-[2rem] bg-gradient-to-br from-waka- to-waka- px-6 py-12 text-white shadow-xl ring-1 ring-waka-/30 sm:px-10 sm:py-14">
       <Reveal>
         <h2 className="text-3xl font-black leading-tight sm:text-4xl">Ready to grow your business?</h2>
-        <p className="mt-3 max-w-xl text-base font-medium text-orange-50">
+        <p className="mt-3 max-w-xl text-base font-medium text-waka-">
           Join Ugandan shops using Waka POS for sales, stock, debts, and daily reports — online or offline.
         </p>
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link to="/register" className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-orange-700 transition hover:bg-orange-50">
+          <Link to="/register" className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-waka- transition hover:bg-waka-">
             Start Free
           </Link>
           <Link to="/contact" className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-white/80 px-6 py-3 text-sm font-black text-white transition hover:bg-white/10">

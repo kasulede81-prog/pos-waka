@@ -85,10 +85,10 @@ export function UpgradePage({ lang }: { lang: Language }) {
 
   return (
     <div className="space-y-6 pb-10">
-      <div className="rounded-[2rem] bg-gradient-to-br from-waka-600 to-orange-500 px-5 py-7 text-white shadow-sm sm:px-7">
-        <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-100">{t(lang, "wakaSlogan")}</p>
+      <div className="rounded-[2rem] bg-gradient-to-br from-waka-600 to-waka-500 px-5 py-7 text-white shadow-sm sm:px-7">
+        <p className="text-xs font-black uppercase tracking-[0.28em] text-waka-100">{t(lang, "wakaSlogan")}</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">{t(lang, "upgradeTitle")}</h1>
-        <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-orange-50">{t(lang, "upgradeSub")}</p>
+        <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-waka-50">{t(lang, "upgradeSub")}</p>
       </div>
 
       {authMode === "local" ? (
@@ -100,8 +100,8 @@ export function UpgradePage({ lang }: { lang: Language }) {
       {!loading && authMode === "supabase" ? (
         <section className="rounded-3xl border border-waka-100 bg-white p-5 shadow-sm">
           <p className="text-xs font-black uppercase tracking-wide text-waka-800">{t(lang, "upgradeCurrentLabel")}</p>
-          <p className="mt-1 text-2xl font-black text-slate-900">{t(lang, planLabelKey(current))}</p>
-          <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "upgradeNoTrial")}</p>
+          <p className="mt-1 text-2xl font-black text-stone-900">{t(lang, planLabelKey(current))}</p>
+          <p className="mt-2 text-sm font-semibold text-stone-600">{t(lang, "upgradeNoTrial")}</p>
           {renewalCountdown ? (
             <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
               {renewalCountdown.plan === "waka_plus"
@@ -113,21 +113,21 @@ export function UpgradePage({ lang }: { lang: Language }) {
                   : t(lang, "officePremiumRenewalBusiness").replace("{{d}}", String(renewalCountdown.days))}
             </p>
           ) : null}
-          <p className="mt-3 text-sm leading-relaxed text-slate-700">{t(lang, "upgradeTrustLine")}</p>
+          <p className="mt-3 text-sm leading-relaxed text-stone-700">{t(lang, "upgradeTrustLine")}</p>
         </section>
       ) : null}
 
       {authMode === "supabase" && billingOffers.length > 0 ? (
-        <section className="rounded-3xl border-2 border-orange-300 bg-orange-50/90 p-5 shadow-sm">
-          <p className="text-sm font-black text-orange-950">{t(lang, "officeBillingOfferTitle")}</p>
+        <section className="rounded-3xl border-2 border-waka-300 bg-waka-50/90 p-5 shadow-sm">
+          <p className="text-sm font-black text-waka-950">{t(lang, "officeBillingOfferTitle")}</p>
           {billingOffers.map((o) => (
-            <p key={o.id} className="mt-2 text-lg font-black text-orange-900">
+            <p key={o.id} className="mt-2 text-lg font-black text-waka-900">
               UGX {Number(o.amount_ugx).toLocaleString("en-UG")}{" "}
-              <span className="text-xs font-semibold uppercase text-orange-800">({o.status})</span>
+              <span className="text-xs font-semibold uppercase text-waka-800">({o.status})</span>
             </p>
           ))}
-          <p className="mt-2 text-sm font-semibold text-orange-950">{t(lang, "officeBillingOfferBody")}</p>
-          <Link to="/office" className="mt-4 inline-flex min-h-[44px] items-center rounded-2xl bg-orange-600 px-4 py-2 text-sm font-black text-white">
+          <p className="mt-2 text-sm font-semibold text-waka-950">{t(lang, "officeBillingOfferBody")}</p>
+          <Link to="/office" className="mt-4 inline-flex min-h-[44px] items-center rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white">
             {t(lang, "officeHubNav")} →
           </Link>
         </section>
@@ -148,7 +148,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
       ) : null}
 
       <section className="space-y-4">
-        <p className="text-lg font-black text-slate-900">{t(lang, "upgradePickTitle")}</p>
+        <p className="text-lg font-black text-stone-900">{t(lang, "upgradePickTitle")}</p>
         <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {PLAN_ORDER.map((plan) => {
             const isCurrent = plan === current;
@@ -158,12 +158,12 @@ export function UpgradePage({ lang }: { lang: Language }) {
               <li
                 key={plan}
                 className={`flex flex-col rounded-[1.75rem] border p-5 shadow-sm ${
-                  isCurrent ? "border-waka-500 bg-waka-50/80" : "border-slate-200 bg-white"
+                  isCurrent ? "border-waka-500 bg-waka-50/80" : "border-stone-200 bg-white"
                 }`}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
-                    <p className="text-xl font-black text-slate-900">{t(lang, planLabelKey(plan))}</p>
+                    <p className="text-xl font-black text-stone-900">{t(lang, planLabelKey(plan))}</p>
                     {isPaid && !pricingLoading ? (
                       <div className="mt-1">
                         <PlanPriceDisplay price={pricingForPlan(pricing, plan)} interval="month" size="sm" />
@@ -171,7 +171,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
                     ) : (
                       <p className="mt-1 text-2xl font-black text-waka-700">{t(lang, planPriceKey(plan))}</p>
                     )}
-                    <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, planTextKey(plan, "blurb"))}</p>
+                    <p className="mt-2 text-sm font-semibold text-stone-600">{t(lang, planTextKey(plan, "blurb"))}</p>
                   </div>
                   {isCurrent ? (
                     <span className="rounded-full bg-waka-600 px-3 py-1 text-xs font-black text-white">
@@ -179,7 +179,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
                     </span>
                   ) : null}
                 </div>
-                <ul className="mt-4 space-y-2 text-sm font-semibold text-slate-700">
+                <ul className="mt-4 space-y-2 text-sm font-semibold text-stone-700">
                   {t(lang, planTextKey(plan, "features"))
                     .split("|")
                     .map((line) => (
@@ -224,14 +224,14 @@ export function UpgradePage({ lang }: { lang: Language }) {
         </ul>
       </section>
 
-      <section className="rounded-3xl border-2 border-orange-200 bg-orange-50/90 p-5 shadow-sm">
-        <h2 className="text-lg font-black text-orange-950">{t(lang, "upgradeYearlyTitle")}</h2>
-        <p className="mt-2 text-sm font-semibold text-orange-900">{t(lang, "upgradeYearlySub")}</p>
+      <section className="rounded-3xl border-2 border-waka-200 bg-waka-50/90 p-5 shadow-sm">
+        <h2 className="text-lg font-black text-waka-950">{t(lang, "upgradeYearlyTitle")}</h2>
+        <p className="mt-2 text-sm font-semibold text-waka-900">{t(lang, "upgradeYearlySub")}</p>
         <ul className="mt-4 grid gap-3 sm:grid-cols-3">
           {PAID_ANNUAL.map(({ plan }) => {
             const price = isPaidPlan(plan) ? pricingForPlan(pricing, plan) : null;
             return (
-            <li key={plan} className="rounded-2xl border border-orange-200 bg-white px-4 py-3">
+            <li key={plan} className="rounded-2xl border border-waka-200 bg-white px-4 py-3">
               <p className="text-sm font-black text-stone-900">{t(lang, planLabelKey(plan))}</p>
               {price && !pricingLoading ? (
                 <div className="mt-1">
@@ -249,17 +249,17 @@ export function UpgradePage({ lang }: { lang: Language }) {
         </ul>
         <Link
           to="/pilot-support"
-          className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white"
+          className="mt-4 inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-waka-600 px-5 py-3 text-sm font-black text-white"
         >
           {t(lang, "upgradePaySoon")} →
         </Link>
       </section>
 
-      <p className="rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-950">{t(lang, "upgradePaymentPrep")}</p>
+      <p className="rounded-2xl bg-waka-50 px-4 py-3 text-sm font-semibold text-waka-950">{t(lang, "upgradePaymentPrep")}</p>
 
       <Link
         to="/pilot-support"
-        className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-orange-200 bg-orange-50 px-4 py-3 text-base font-black text-orange-950 shadow-sm"
+        className="inline-flex min-h-[48px] items-center rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 py-3 text-base font-black text-waka-950 shadow-sm"
       >
         {t(lang, "supportNav")} →
       </Link>

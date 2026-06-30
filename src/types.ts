@@ -1013,6 +1013,10 @@ export type ShopPreferences = {
   /** Flag day-close variance when abs(diff) exceeds max(pct of expected, fixed UGX). */
   cashVarianceThresholdPct?: number;
   cashVarianceThresholdUgxFixed?: number;
+  /** Maximum recommended cash kept in the drawer before banking (UGX). */
+  cashSafeLimitUgx?: number | null;
+  /** Manager notes keyed by Kampala date (YYYY-MM-DD). */
+  cashPositionDayNotes?: Record<string, string>;
   /** Kampala date key (YYYY-MM-DD) of last automatic daily backup written */
   lastAutoBackupDateKey?: string;
   /** When the owner last opened Investigation / risks (ISO). Hides launcher badges until new events. */

@@ -13,7 +13,7 @@ export function OwnerInventoryRiskSection({ lang, inventory }: Props) {
   return (
     <HistoryListCard isEmpty={false}>
       <div className="border-b border-stone-100 px-3 py-2.5 sm:px-4 sm:py-3">
-        <h2 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "ownerInventoryRiskTitle")}</h2>
+        <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerInventoryRiskTitle")}</h2>
       </div>
       <div className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
         <div className="rounded-xl bg-stone-50 px-2.5 py-2">

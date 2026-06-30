@@ -214,6 +214,28 @@ export function sortShelvesForDisplay(cards: PosShelfDisplayCard[], orderKeys: s
   return [...featured, ...rest];
 }
 
+/** Shelf keys from products plus saved order/layout so empty shelves stay visible. */
+export function collectShelfCategoryKeys(
+  products: Product[],
+  orderKeys: string[],
+  layout: Record<string, PosShelfLayoutConfig>,
+): string[] {
+  const fromProducts = distinctTrimmedCategories(products);
+  const extras = [...orderKeys, ...Object.keys(layout)].filter(
+    (k) => k && k !== QUICK_SELL_SHELF_KEY && k !== UNCATEGORIZED_SENTINEL,
+  );
+  return [...new Set([...fromProducts, ...extras])];
+}
+
+export function shelfHasUncategorizedSlot(
+  products: Product[],
+  orderKeys: string[],
+  layout: Record<string, PosShelfLayoutConfig>,
+): boolean {
+  if (products.some((p) => !(p.category ?? "").trim())) return true;
+  return orderKeys.includes(UNCATEGORIZED_SENTINEL) || UNCATEGORIZED_SENTINEL in layout;
+}
+
 export function buildPosShelfDisplayCards(
   products: Product[],
   noShelfLabel: string,
@@ -221,8 +243,8 @@ export function buildPosShelfDisplayCards(
   orderKeys: string[],
   defaultScale = 35,
 ): PosShelfDisplayCard[] {
-  const categoryOptions = distinctTrimmedCategories(products);
-  const hasUncategorized = products.some((p) => !(p.category ?? "").trim());
+  const categoryOptions = collectShelfCategoryKeys(products, orderKeys, layout);
+  const hasUncategorized = shelfHasUncategorizedSlot(products, orderKeys, layout);
   const categoryCounts = new Map<string, number>();
   let uncategorizedCount = 0;
   for (const p of products) {
@@ -358,7 +380,7 @@ export function shelfIconCircleClass(color: PosShelfColor): string {
     case "red":
       return "bg-rose-100 text-rose-700";
     case "orange":
-      return "bg-orange-100 text-orange-700";
+      return "bg-waka-100 text-waka-700";
     case "blue":
       return "bg-sky-100 text-sky-700";
     case "green":

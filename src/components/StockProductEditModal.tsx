@@ -199,11 +199,11 @@ export function StockProductEditModal({
       aria-modal
       aria-labelledby="stock-edit-title"
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
-        <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-slate-700" onClick={onClose}>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-200 px-4 py-3">
+        <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-stone-700" onClick={onClose}>
           {t(lang, "cancel")}
         </button>
-        <h2 id="stock-edit-title" className="text-center text-lg font-black text-slate-900">
+        <h2 id="stock-edit-title" className="text-center text-lg font-black text-stone-900">
           {t(lang, "stockEditProductTitle")}
         </h2>
         <span className="w-16" aria-hidden />
@@ -211,26 +211,26 @@ export function StockProductEditModal({
 
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <p className="rounded-2xl bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700">
+          <p className="rounded-2xl bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
             {formatProductPriceLabel(product)} · {t(lang, "stockLabel")}: {formatStockLabel(product)}
           </p>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddName")}</span>
+            <span className="text-sm font-bold text-stone-800">{t(lang, "quickAddName")}</span>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
+              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg font-semibold outline-none ring-waka-200 focus:ring"
               required
             />
           </label>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "howYouSell")}</span>
+            <span className="text-sm font-bold text-stone-800">{t(lang, "howYouSell")}</span>
             <select
               value={sellingMode}
               onChange={(e) => setSellingMode(e.target.value as SellingMode)}
-              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900"
+              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-bold text-stone-900"
             >
               {SELLING_MODES.map((m) => (
                 <option key={m} value={m}>
@@ -241,8 +241,8 @@ export function StockProductEditModal({
           </label>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "howYouSellUnit")}</span>
-            <p className="mt-0.5 text-xs text-slate-500">{t(lang, "stockSellUnitSelectHint")}</p>
+            <span className="text-sm font-bold text-stone-800">{t(lang, "howYouSellUnit")}</span>
+            <p className="mt-0.5 text-xs text-stone-500">{t(lang, "stockSellUnitSelectHint")}</p>
             <select
               value={unitPreset === "custom" ? "custom" : unitPreset}
               onChange={(e) => {
@@ -254,7 +254,7 @@ export function StockProductEditModal({
                   setUnitCustom("");
                 }
               }}
-              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-base font-bold text-slate-900"
+              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-bold text-stone-900"
             >
               {businessUnitOptions.map((u) => (
                 <option key={u} value={u}>
@@ -266,35 +266,35 @@ export function StockProductEditModal({
           </label>
           {unitPreset === "custom" ? (
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "unitCustomPlaceholder")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "unitCustomPlaceholder")}</span>
               <input
                 value={unitCustom}
                 onChange={(e) => setUnitCustom(e.target.value)}
                 placeholder={t(lang, "unitCustomPlaceholder")}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg"
               />
             </label>
           ) : null}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "quickAddPrice")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "quickAddPrice")}</span>
               <input
                 value={price}
                 onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 inputMode="numeric"
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring"
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring"
                 required
               />
             </label>
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "costPricePerUnit")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "costPricePerUnit")}</span>
               <input
                 value={costManual}
                 onChange={(e) => setCostManual(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 inputMode="numeric"
                 disabled={showPackTrack}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring disabled:bg-slate-100 disabled:text-slate-500"
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring disabled:bg-stone-100 disabled:text-stone-500"
               />
             </label>
           </div>
@@ -321,34 +321,34 @@ export function StockProductEditModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "stockNowLabel")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "stockNowLabel")}</span>
               <input
                 value={stock}
                 onChange={(e) => setStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 14))}
                 inputMode="decimal"
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring"
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring"
                 required
               />
             </label>
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "warnWhenLow")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "warnWhenLow")}</span>
               <input
                 value={minAlert}
                 onChange={(e) => setMinAlert(e.target.value.replace(/\D/g, "").slice(0, 8))}
                 inputMode="numeric"
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring"
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-xl font-black outline-none ring-waka-200 focus:ring"
               />
             </label>
           </div>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "posCategoryLabel")}</span>
+            <span className="text-sm font-bold text-stone-800">{t(lang, "posCategoryLabel")}</span>
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               list={categorySuggestions && categorySuggestions.length > 0 ? categoryListId : undefined}
               placeholder={t(lang, "categoryNewPlaceholder")}
-              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg"
             />
             {categorySuggestions && categorySuggestions.length > 0 ? (
               <datalist id={categoryListId}>
@@ -360,84 +360,84 @@ export function StockProductEditModal({
           </label>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{t(lang, "productSkuOptional")}</span>
+            <span className="text-sm font-bold text-stone-800">{t(lang, "productSkuOptional")}</span>
             <input
               value={sku}
               onChange={(e) => setSku(e.target.value)}
-              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+              className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg"
             />
           </label>
 
           {pharmacyMode ? (
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
               <input
                 type="date"
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}
-                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-lg"
+                className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-lg"
               />
-              <p className="mt-1 text-xs font-medium text-slate-500">{t(lang, "pharmacyExpiryDateHint")}</p>
+              <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "pharmacyExpiryDateHint")}</p>
             </label>
           ) : null}
 
-          <details className="rounded-2xl border-2 border-slate-200 bg-slate-50/80 px-4 open:pb-4 open:pt-2">
-            <summary className="cursor-pointer py-3 text-base font-black text-slate-900">
+          <details className="rounded-2xl border-2 border-stone-200 bg-stone-50/80 px-4 open:pb-4 open:pt-2">
+            <summary className="cursor-pointer py-3 text-base font-black text-stone-900">
               {t(lang, "trackBuyingProfit")} <span className="text-xs font-bold text-waka-700">{t(lang, "optional")}</span>
             </summary>
-            <p className="text-xs text-slate-500">{t(lang, "trackBuyingProfitHint")}</p>
+            <p className="text-xs text-stone-500">{t(lang, "trackBuyingProfitHint")}</p>
             <div className="mt-3 space-y-3">
-              <label className="block text-sm font-bold text-slate-800">
+              <label className="block text-sm font-bold text-stone-800">
                 {t(lang, "howYouBuyPack")}
                 <input
                   value={boughtAs}
                   onChange={(e) => setBoughtAs(e.target.value)}
                   placeholder={t(lang, "howYouBuyPackPh")}
-                  className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-slate-200 bg-white px-3 py-2 text-base"
+                  className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-white px-3 py-2 text-base"
                 />
               </label>
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block text-sm font-bold text-slate-800">
+                <label className="block text-sm font-bold text-stone-800">
                   {t(lang, "buyingPackPriceLabel")}
                   <input
                     value={buyPackPrice}
                     onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
                     inputMode="numeric"
-                    className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-bold"
+                    className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-bold"
                   />
                 </label>
-                <label className="block text-sm font-bold text-slate-800">
+                <label className="block text-sm font-bold text-stone-800">
                   {t(lang, "howManyInsideLabel")}
                   <input
                     value={piecesInside}
                     onChange={(e) => setPiecesInside(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
                     inputMode="decimal"
-                    className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-bold"
+                    className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-bold"
                   />
                 </label>
               </div>
-              <label className="block text-sm font-bold text-slate-800">
+              <label className="block text-sm font-bold text-stone-800">
                 {t(lang, "supplierOptionalLabel")}
                 <input
                   value={supplierName}
                   onChange={(e) => setSupplierName(e.target.value)}
                   placeholder={t(lang, "supplierOptionalPh")}
-                  className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-slate-200 bg-white px-3 py-2 text-base"
+                  className="mt-1 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 bg-white px-3 py-2 text-base"
                 />
               </label>
             </div>
           </details>
 
           {canPresets ? (
-            <div className="space-y-3 rounded-2xl border-2 border-dashed border-slate-300 p-4">
-              <p className="text-sm font-black text-slate-800">{t(lang, "saveTapPrices")}</p>
-              <label className="block text-sm font-bold text-slate-700">{t(lang, "tapPricesNote")}</label>
+            <div className="space-y-3 rounded-2xl border-2 border-dashed border-stone-300 p-4">
+              <p className="text-sm font-black text-stone-800">{t(lang, "saveTapPrices")}</p>
+              <label className="block text-sm font-bold text-stone-700">{t(lang, "tapPricesNote")}</label>
               <input
                 value={moneyPresets}
                 onChange={(e) => setMoneyPresets(e.target.value)}
                 className="w-full rounded-xl border-2 px-3 py-2 text-lg"
               />
-              <label className="block text-sm font-bold text-slate-700">{t(lang, "tapQtyNote")}</label>
+              <label className="block text-sm font-bold text-stone-700">{t(lang, "tapQtyNote")}</label>
               <input
                 value={qtyPresets}
                 onChange={(e) => setQtyPresets(e.target.value)}
@@ -447,23 +447,23 @@ export function StockProductEditModal({
           ) : null}
 
           {canPurchaseHistory ? (
-            <details className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2">
-              <summary className="cursor-pointer text-sm font-black text-slate-800">{t(lang, "stockHistoryInEditor")}</summary>
+            <details className="rounded-2xl border border-stone-200 bg-stone-50/80 px-3 py-2">
+              <summary className="cursor-pointer text-sm font-black text-stone-800">{t(lang, "stockHistoryInEditor")}</summary>
               <div className="mt-2 space-y-3 text-xs">
                 <div>
-                  <p className="font-bold text-slate-600">{t(lang, "productPurchaseHistory")}</p>
-                  <ul className="mt-1 space-y-1 text-slate-700">
+                  <p className="font-bold text-stone-600">{t(lang, "productPurchaseHistory")}</p>
+                  <ul className="mt-1 space-y-1 text-stone-700">
                     {purchaseLines.map((row, i) => (
                       <li key={i}>
                         {new Date(row.at).toLocaleDateString()} · {row.supplier} · {row.qty} pack @ UGX {row.cost.toLocaleString()}
                       </li>
                     ))}
-                    {purchaseLines.length === 0 ? <li className="text-slate-500">{t(lang, "noPurchaseLinesYet")}</li> : null}
+                    {purchaseLines.length === 0 ? <li className="text-stone-500">{t(lang, "noPurchaseLinesYet")}</li> : null}
                   </ul>
                 </div>
                 <div>
-                  <p className="font-bold text-slate-600">{t(lang, "stockMovementTitle")}</p>
-                  <ul className="mt-1 space-y-1 text-slate-700">
+                  <p className="font-bold text-stone-600">{t(lang, "stockMovementTitle")}</p>
+                  <ul className="mt-1 space-y-1 text-stone-700">
                     {movements.map((mv) => (
                       <li key={mv.id}>
                         {new Date(mv.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} ·{" "}
@@ -471,7 +471,7 @@ export function StockProductEditModal({
                         {mv.deltaBaseUnits})
                       </li>
                     ))}
-                    {movements.length === 0 ? <li className="text-slate-500">{t(lang, "noStockMovementsYet")}</li> : null}
+                    {movements.length === 0 ? <li className="text-stone-500">{t(lang, "noStockMovementsYet")}</li> : null}
                   </ul>
                 </div>
               </div>
@@ -479,7 +479,7 @@ export function StockProductEditModal({
           ) : null}
         </div>
 
-        <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-3">
+        <div className="shrink-0 border-t border-stone-200 bg-white px-4 py-3">
           <button
             type="submit"
             className="w-full min-h-[52px] rounded-2xl bg-waka-600 py-3 text-lg font-black text-white shadow-md active:bg-waka-700"

@@ -67,16 +67,16 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
   };
 
   const inputClass =
-    "mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-lg font-bold outline-none focus:border-waka-500";
+    "mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-bold outline-none focus:border-waka-500";
 
   return (
     <AppModalOverlay className="z-[65] flex items-end justify-center bg-black/50 p-3 sm:items-center" role="dialog" aria-modal>
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-xl">
-        <h2 className="text-xl font-black text-slate-900">{t(lang, "posRecordExpenseTitle")}</h2>
-        <p className="mt-1 text-sm font-medium text-slate-600">{t(lang, "posRecordExpenseSub")}</p>
+        <h2 className="text-xl font-black text-stone-900">{t(lang, "posRecordExpenseTitle")}</h2>
+        <p className="mt-1 text-sm font-medium text-stone-600">{t(lang, "posRecordExpenseSub")}</p>
 
         <form onSubmit={onSubmit} className="mt-5 space-y-4">
-          <label className="block text-sm font-bold text-slate-800">
+          <label className="block text-sm font-bold text-stone-800">
             {t(lang, "cashExpenseAmount")} *
             <input
               inputMode="numeric"
@@ -86,7 +86,7 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
               required
             />
           </label>
-          <label className="block text-sm font-bold text-slate-800">
+          <label className="block text-sm font-bold text-stone-800">
             {t(lang, "cashExpenseCategory")} *
             <select value={categoryKey} onChange={(e) => setCategoryKey(e.target.value)} className={inputClass}>
               {CASH_EXPENSE_CATEGORY_KEYS.map((k) => (
@@ -98,17 +98,17 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
             </select>
           </label>
           {categoryKey === "custom" ? (
-            <label className="block text-sm font-bold text-slate-800">
+            <label className="block text-sm font-bold text-stone-800">
               {t(lang, "cashExpenseCustomName")}
               <input value={customCategory} onChange={(e) => setCustomCategory(e.target.value)} className={inputClass} required />
             </label>
           ) : null}
-          <label className="block text-sm font-bold text-slate-800">
+          <label className="block text-sm font-bold text-stone-800">
             {t(lang, "cashExpenseDescription")}
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+              className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
             />
           </label>
           {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
@@ -124,13 +124,13 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
         </form>
 
         {myTodayExpenses.length > 0 ? (
-          <section className="mt-6 border-t border-slate-100 pt-4">
-            <h3 className="text-xs font-black uppercase tracking-wide text-slate-500">{t(lang, "posMyExpensesToday")}</h3>
+          <section className="mt-6 border-t border-stone-100 pt-4">
+            <h3 className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "posMyExpensesToday")}</h3>
             <ul className="mt-2 space-y-2">
               {myTodayExpenses.slice(0, 8).map((e) => (
-                <li key={e.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                  <span className="font-semibold text-slate-800">{e.category}</span>
-                  <span className="font-black text-slate-900">
+                <li key={e.id} className="flex items-center justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
+                  <span className="font-semibold text-stone-800">{e.category}</span>
+                  <span className="font-black text-stone-900">
                     UGX {e.amountUgx.toLocaleString()}
                     {e.approvalStatus === "pending" ? ` · ${t(lang, "expenseStatusPending")}` : ""}
                   </span>

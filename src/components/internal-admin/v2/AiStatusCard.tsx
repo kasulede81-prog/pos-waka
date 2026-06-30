@@ -49,7 +49,7 @@ export function AiStatusCard({ report, loading, onRefresh }: Props) {
 
       {loading && !report ? (
         <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-stone-600">
-          <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+          <Loader2 className="h-4 w-4 animate-spin text-waka-600" />
           Running health check…
         </div>
       ) : null}

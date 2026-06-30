@@ -26,8 +26,8 @@ export function OwnerCashControlSection({ lang, cash }: Props) {
     <section className="rounded-2xl border border-stone-200/90 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h2 className="text-base font-black text-slate-950">{t(lang, "ownerCashTitle")}</h2>
-          <p className="text-xs font-semibold text-slate-500">{t(lang, "ownerCashSub")}</p>
+          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerCashTitle")}</h2>
+          <p className="text-xs font-semibold text-stone-500">{t(lang, "ownerCashSub")}</p>
         </div>
         {cash.hasUnresolvedVariance ? (
           <span className="rounded-full bg-rose-100 px-2.5 py-0.5 text-[10px] font-black uppercase text-rose-800">

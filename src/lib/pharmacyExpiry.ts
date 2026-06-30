@@ -113,7 +113,7 @@ export function expiryStatusPresentation(status: ExpiryVisualStatus): {
     case "d90":
       return { badgeClass: "bg-yellow-100 text-yellow-950 ring-1 ring-yellow-300", labelKey: "pharmacyExpiry90" };
     case "d60":
-      return { badgeClass: "bg-orange-100 text-orange-950 ring-1 ring-orange-300", labelKey: "pharmacyExpiry60" };
+      return { badgeClass: "bg-waka-100 text-waka-950 ring-1 ring-waka-300", labelKey: "pharmacyExpiry60" };
     case "d30":
       return { badgeClass: "bg-red-100 text-red-950 ring-1 ring-red-300", labelKey: "pharmacyExpiry30" };
     case "expired":
@@ -146,10 +146,10 @@ export function expiryTilePresentation(bucket: "d90" | "d60" | "d30" | "expired"
       };
     case "d60":
       return {
-        borderClass: "border-orange-300",
-        bgClass: "bg-orange-50",
-        labelClass: "text-orange-900",
-        valueClass: "text-orange-950",
+        borderClass: "border-waka-300",
+        bgClass: "bg-waka-50",
+        labelClass: "text-waka-900",
+        valueClass: "text-waka-950",
       };
     case "d30":
       return {

@@ -11,8 +11,8 @@ export function ActivationGateOutlet() {
 
   if (loading && !bypass) {
     return (
-      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 bg-gradient-to-b from-orange-50 to-stone-50 px-4">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-orange-200 border-t-orange-600" aria-hidden />
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 bg-gradient-to-b from-waka-50 to-stone-50 px-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-waka-200 border-t-orange-600" aria-hidden />
         <p className="text-sm font-semibold text-stone-700">Checking activation…</p>
       </div>
     );

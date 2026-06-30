@@ -664,7 +664,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                 </tr>
               ) : (
                 shopOpenings.map((row) => (
-                  <tr key={row.id} className="border-b border-stone-50 hover:bg-orange-50/30">
+                  <tr key={row.id} className="border-b border-stone-50 hover:bg-waka-50/30">
                     <td className="max-w-[10rem] truncate px-3 py-2 font-bold text-stone-900">{row.name}</td>
                     <td className="max-w-[8rem] truncate px-3 py-2 text-xs text-stone-600">
                       {[row.district, row.city].filter(Boolean).join(" · ") || "—"}
@@ -730,12 +730,12 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
                 </tr>
               ) : (
                 filteredDistricts.map((row) => (
-                  <tr key={row.districtId ?? row.label} className="border-b border-stone-50 hover:bg-orange-50/30">
+                  <tr key={row.districtId ?? row.label} className="border-b border-stone-50 hover:bg-waka-50/30">
                     <td className="px-4 py-3 font-bold text-stone-900">{row.label}</td>
                     <td className="px-4 py-3 text-right font-mono text-stone-800">{row.totalShops}</td>
                     <td className="px-4 py-3 text-right font-mono text-emerald-800">{row.activeToday}</td>
                     <td className="px-4 py-3 text-right font-mono text-stone-800">{row.paidShops}</td>
-                    <td className="px-4 py-3 text-right font-mono text-orange-900">{row.fieldAgentsAssigned}</td>
+                    <td className="px-4 py-3 text-right font-mono text-waka-900">{row.fieldAgentsAssigned}</td>
                   </tr>
                 ))
               )}
@@ -747,10 +747,10 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
             {(stats?.shopsByDistrict ?? []).slice(0, 12).map((d) => (
               <span
                 key={d.label}
-                className="inline-flex items-center gap-2 rounded-full border border-orange-100 bg-orange-50 px-3 py-1 text-xs font-bold text-stone-800"
+                className="inline-flex items-center gap-2 rounded-full border border-waka-100 bg-waka-50 px-3 py-1 text-xs font-bold text-stone-800"
               >
                 {d.label}
-                <span className="font-mono text-orange-800">{d.count}</span>
+                <span className="font-mono text-waka-800">{d.count}</span>
               </span>
             ))}
           </div>
@@ -825,7 +825,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
               <p className="text-xs font-black uppercase tracking-wide text-stone-500">{t(lang, "internalChartSignups")}</p>
               <MiniSparkline values={signupSpark.length ? signupSpark : [0, 0, 0, 0, 0]} stroke="#ea580c" />
             </div>
-            <SparkBars buckets={signups7} accentClass="bg-gradient-to-t from-orange-500 to-orange-300" />
+            <SparkBars buckets={signups7} accentClass="bg-gradient-to-t from-waka-500 to-waka-300" />
           </div>
           <div>
             <div className="flex items-center justify-between gap-2">
@@ -844,7 +844,7 @@ export function InternalOpsDashboard({ lang, email, adminRow, previewMode, lovab
           <div className="flex flex-wrap gap-2">
             {(bizTypes.length ? bizTypes : [{ type: "—", count: 0 }]).map((b) => (
               <span key={b.type} className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold capitalize text-stone-800">
-                {b.type.replace(/_/g, " ")} <span className="font-mono font-black text-orange-700">{b.count}</span>
+                {b.type.replace(/_/g, " ")} <span className="font-mono font-black text-waka-700">{b.count}</span>
               </span>
             ))}
           </div>

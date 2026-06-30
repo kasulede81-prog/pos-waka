@@ -150,9 +150,9 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
 
       <article className="space-y-10">
         <header className="space-y-4">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">Pricing</p>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">Pricing</p>
           <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">Waka POS Pricing</h1>
-          <p className="text-2xl font-black text-orange-800">Complete Business Control for Every Shop</p>
+          <p className="text-2xl font-black text-waka-800">Complete Business Control for Every Shop</p>
           <p className="max-w-3xl text-base font-medium leading-relaxed text-stone-600">
             Sales · Inventory · Staff · Cash Control · Suppliers · Debt Tracking · Reports · Cloud Sync · Business
             Intelligence
@@ -173,17 +173,17 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
             <section
               key={plan.name}
               className={`rounded-3xl border p-6 shadow-waka-sm sm:p-8 ${
-                plan.popular ? "border-orange-400 bg-gradient-to-br from-orange-50 to-white" : "border-stone-100 bg-white"
+                plan.popular ? "border-waka-400 bg-gradient-to-br from-waka-50 to-white" : "border-stone-100 bg-white"
               }`}
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-2xl font-black text-stone-950">
                     {plan.name}
-                    {plan.popular ? <span className="ml-2 text-base text-orange-600">★ Most Popular</span> : null}
+                    {plan.popular ? <span className="ml-2 text-base text-waka-600">★ Most Popular</span> : null}
                   </h2>
                   {plan.code === "free" ? (
-                    <p className="mt-2 text-3xl font-black text-orange-700">{formatUgx(0)}</p>
+                    <p className="mt-2 text-3xl font-black text-waka-700">{formatUgx(0)}</p>
                   ) : paidPrice && !loading ? (
                     <div className="mt-2">
                       <PlanPriceDisplay price={paidPrice} interval="month" />
@@ -192,7 +192,7 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                       </div>
                     </div>
                   ) : (
-                    <p className="mt-2 text-3xl font-black text-orange-700">—</p>
+                    <p className="mt-2 text-3xl font-black text-waka-700">—</p>
                   )}
                   <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-stone-700">{plan.blurb}</p>
                 </div>
@@ -204,7 +204,7 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
                   <ul className="mt-3 space-y-2">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex gap-2 text-sm font-semibold text-stone-700">
-                        <span className="text-orange-600">✓</span>
+                        <span className="text-waka-600">✓</span>
                         <span>{feature}</span>
                       </li>
                     ))}
@@ -232,22 +232,22 @@ export function PricingPage({ lang, setLang, isAuthenticated }: Props) {
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {WHY_CHOOSE.map((item) => (
               <li key={item} className="flex gap-2 text-sm font-semibold text-stone-700">
-                <span className="text-orange-600">✓</span>
+                <span className="text-waka-600">✓</span>
                 <span>{item}</span>
               </li>
             ))}
           </ul>
         </section>
 
-        <section className="rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-600 to-orange-500 p-8 text-white shadow-waka-sm">
+        <section className="rounded-3xl border border-waka-200 bg-gradient-to-br from-waka-600 to-waka-500 p-8 text-white shadow-waka-sm">
           <h2 className="text-3xl font-black leading-tight">Run your entire business from one app.</h2>
-          <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-orange-50">
+          <p className="mt-4 max-w-2xl text-base font-medium leading-relaxed text-waka-50">
             Manage sales, inventory, cash, staff, suppliers, debts, reports, audits, and cloud backups with Waka POS.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
               to="/register"
-              className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-orange-700"
+              className="inline-flex min-h-[48px] items-center rounded-2xl bg-white px-6 py-3 text-sm font-black text-waka-700"
             >
               Create free account
             </Link>

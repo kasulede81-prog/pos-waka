@@ -21,6 +21,8 @@ import { AdminBusinessTypesPage } from "../components/internal-admin/v2/pages/Ad
 import { AdminGrowthCampaignPage } from "../components/internal-admin/v2/pages/AdminGrowthCampaignPage";
 import { AdminPricingCampaignsPage } from "../components/internal-admin/v2/pages/AdminPricingCampaignsPage";
 import { AdminAiSettingsPage } from "../components/internal-admin/v2/pages/AdminAiSettingsPage";
+import { AdminReleaseManagementPage } from "../components/internal-admin/v2/pages/AdminReleaseManagementPage";
+import { AdminPosDisplayScalePage } from "../components/internal-admin/v2/pages/AdminPosDisplayScalePage";
 
 type Props = {
   lang: Language;
@@ -42,6 +44,8 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/business-types") return "business_types";
   if (pathname === "/internal/waka/growth-campaign") return "growth_campaign";
   if (pathname === "/internal/waka/ai-settings") return "ai_settings";
+  if (pathname === "/internal/waka/releases") return "releases";
+  if (pathname === "/internal/waka/display-scale") return "display_scale";
   return "overview";
 }
 
@@ -109,6 +113,10 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     body = <AdminGrowthCampaignPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "ai_settings") {
     body = <AdminAiSettingsPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "releases") {
+    body = <AdminReleaseManagementPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "display_scale") {
+    body = <AdminPosDisplayScalePage adminRow={shellAdmin} previewMode={previewMode} />;
   } else {
     body = (
       <AdminOverviewPage lang={lang} email={email} adminRow={shellAdmin} previewMode={previewMode} />

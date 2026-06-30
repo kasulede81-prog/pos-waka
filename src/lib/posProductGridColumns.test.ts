@@ -45,4 +45,15 @@ describe("catalogColumnCount", () => {
     expect(catalogColumnCount(1900)).toBe(12);
     expect(catalogColumnCount(3200)).toBe(12);
   });
+
+  it("adds columns for compact and removes for extra large at 980px", () => {
+    expect(catalogColumnCount(980)).toBe(8);
+    expect(catalogColumnCount(980, { displayScale: "compact" })).toBe(10);
+    expect(catalogColumnCount(980, { displayScale: "extra_large" })).toBe(5);
+  });
+
+  it("clamps grid columns between 3 and max", () => {
+    expect(catalogColumnCount(520, { displayScale: "extra_large" })).toBe(3);
+    expect(catalogColumnCount(4000, { displayScale: "compact" })).toBe(POS_GRID_MAX_COLUMNS);
+  });
 });

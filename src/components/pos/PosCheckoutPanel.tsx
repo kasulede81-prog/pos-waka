@@ -29,10 +29,10 @@ const Numpad = memo(function Numpad({
       ? [".", "0", "⌫"]
       : ["0", "⌫", "C"];
   const keyClass = enterprise
-    ? "min-h-[36px] rounded-lg bg-slate-100 py-1 text-base font-semibold text-slate-900 active:bg-slate-200"
+    ? "min-h-[36px] rounded-lg bg-stone-100 py-1 text-base font-semibold text-stone-900 active:bg-stone-200"
     : compact
-      ? "min-h-[44px] rounded-xl bg-slate-100 py-1.5 text-lg font-semibold text-slate-900 active:bg-slate-200"
-      : "min-h-[56px] rounded-2xl bg-slate-100 py-3 text-2xl font-semibold text-slate-900 active:bg-slate-200 active:brightness-95 motion-reduce:active:brightness-100";
+      ? "min-h-[44px] rounded-xl bg-stone-100 py-1.5 text-lg font-semibold text-stone-900 active:bg-stone-200"
+      : "min-h-[56px] rounded-2xl bg-stone-100 py-3 text-2xl font-semibold text-stone-900 active:bg-stone-200 active:brightness-95 motion-reduce:active:brightness-100";
 
   return (
     <div className={enterprise ? "space-y-1" : compact ? "space-y-1.5" : "space-y-2"}>
@@ -99,8 +99,8 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   sidebar?: boolean;
 }) {
   const keyClass = sidebar
-    ? "min-h-[44px] rounded-lg bg-slate-100 py-1 text-xl font-bold text-slate-900 active:bg-slate-200"
-    : "min-h-[52px] rounded-xl bg-slate-100 py-1.5 text-2xl font-bold text-slate-900 active:bg-slate-200";
+    ? "min-h-[44px] rounded-lg bg-stone-100 py-1 text-xl font-bold text-stone-900 active:bg-stone-200"
+    : "min-h-[52px] rounded-xl bg-stone-100 py-1.5 text-2xl font-bold text-stone-900 active:bg-stone-200";
 
   return (
     <div className={clsx("grid gap-2", sidebar ? "grid-cols-[1fr_4.25rem]" : "grid-cols-[1fr_5rem]")}>
@@ -230,7 +230,7 @@ function PaymentBlock({
       {!dockMode ? (
         <p
           className={clsx(
-            "font-black text-slate-900",
+            "font-black text-stone-900",
             enterprise
               ? "flex items-baseline justify-between gap-2 text-base"
               : compact
@@ -300,12 +300,12 @@ function PaymentBlock({
           <p
             className={
               sidebarCompact
-                ? "text-[10px] font-semibold text-slate-800"
+                ? "text-[10px] font-semibold text-stone-800"
                 : dockMode
-                  ? "text-sm font-semibold text-slate-800"
+                  ? "text-sm font-semibold text-stone-800"
                   : compact
-                    ? "text-xs font-semibold text-slate-800"
-                    : "text-base font-semibold text-slate-800"
+                    ? "text-xs font-semibold text-stone-800"
+                    : "text-base font-semibold text-stone-800"
             }
           >
             {paymentMethod === "cash" ? t(lang, "paymentCashReceivedLabel") : t(lang, "paymentCashLabel")}
@@ -318,8 +318,8 @@ function PaymentBlock({
               sidebarCompact && "mt-1 min-h-[36px] rounded-lg px-2 py-1 text-base",
               dockMode && !sidebarCompact && "mt-1.5 min-h-[48px] rounded-xl px-3 py-2 text-xl",
               checkoutAmountField === "cash"
-                ? "border-waka-500 bg-waka-50 text-slate-900"
-                : "border-slate-200 bg-white text-slate-900",
+                ? "border-waka-500 bg-waka-50 text-stone-900"
+                : "border-stone-200 bg-white text-stone-900",
             )}
           >
             UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -329,7 +329,7 @@ function PaymentBlock({
 
       {paymentMethod === "credit" && !dockMode ? (
         <div className={compact ? "mt-2" : "mt-4"}>
-          <p className={compact ? "text-xs font-semibold text-slate-800" : "text-base font-semibold text-slate-800"}>
+          <p className={compact ? "text-xs font-semibold text-stone-800" : "text-base font-semibold text-stone-800"}>
             {t(lang, "paymentMobileMoneyLabel")}
           </p>
           <button
@@ -338,8 +338,8 @@ function PaymentBlock({
             className={clsx(
               amountBtnClass,
               checkoutAmountField === "mobile"
-                ? "border-waka-500 bg-waka-50 text-slate-900"
-                : "border-slate-200 bg-white text-slate-900",
+                ? "border-waka-500 bg-waka-50 text-stone-900"
+                : "border-stone-200 bg-white text-stone-900",
             )}
           >
             UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -351,30 +351,30 @@ function PaymentBlock({
         <>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div>
-              <p className="text-[11px] font-semibold leading-tight text-slate-800">{t(lang, "paymentCashLabel")}</p>
+              <p className="text-[11px] font-semibold leading-tight text-stone-800">{t(lang, "paymentCashLabel")}</p>
               <button
                 type="button"
                 onClick={() => onCheckoutAmountField("cash")}
                 className={clsx(
                   "mt-1 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-2 py-1.5 text-base font-black",
                   checkoutAmountField === "cash"
-                    ? "border-waka-500 bg-waka-50 text-slate-900"
-                    : "border-slate-200 bg-white text-slate-900",
+                    ? "border-waka-500 bg-waka-50 text-stone-900"
+                    : "border-stone-200 bg-white text-stone-900",
                 )}
               >
                 UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
               </button>
             </div>
             <div>
-              <p className="text-[11px] font-semibold leading-tight text-slate-800">{t(lang, "paymentMobileMoneyLabel")}</p>
+              <p className="text-[11px] font-semibold leading-tight text-stone-800">{t(lang, "paymentMobileMoneyLabel")}</p>
               <button
                 type="button"
                 onClick={() => onCheckoutAmountField("mobile")}
                 className={clsx(
                   "mt-1 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-2 py-1.5 text-base font-black",
                   checkoutAmountField === "mobile"
-                    ? "border-waka-500 bg-waka-50 text-slate-900"
-                    : "border-slate-200 bg-white text-slate-900",
+                    ? "border-waka-500 bg-waka-50 text-stone-900"
+                    : "border-stone-200 bg-white text-stone-900",
                 )}
               >
                 UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -384,8 +384,8 @@ function PaymentBlock({
           <p className="mt-1.5 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
-          <details className="group mt-1.5 rounded-xl border border-slate-200 bg-white">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-bold text-slate-800 [&::-webkit-details-marker]:hidden">
+          <details className="group mt-1.5 rounded-xl border border-stone-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-bold text-stone-800 [&::-webkit-details-marker]:hidden">
               <span>{t(lang, "paymentCreditCustomerDetails")}</span>
               <span className="flex min-w-0 items-center gap-1 text-xs font-semibold text-amber-900">
                 <span className="truncate">
@@ -394,34 +394,34 @@ function PaymentBlock({
                 <ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" aria-hidden />
               </span>
             </summary>
-            <div className="space-y-2 border-t border-slate-100 px-3 py-2">
-              <label className="block text-xs font-semibold text-slate-800">
+            <div className="space-y-2 border-t border-stone-100 px-3 py-2">
+              <label className="block text-xs font-semibold text-stone-800">
                 {t(lang, "paymentDebtNameLabel")}
                 <input
                   value={saleCustomerName}
                   onChange={(e) => onSaleCustomerName(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
                   placeholder={t(lang, "paymentDebtNamePlaceholder")}
                 />
               </label>
-              <label className="block text-xs font-semibold text-slate-800">
+              <label className="block text-xs font-semibold text-stone-800">
                 {t(lang, "paymentDebtPhoneLabel")}
                 <input
                   value={saleCustomerPhone}
                   onChange={(e) => onSaleCustomerPhone(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-semibold"
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
                   placeholder={t(lang, "personPhonePh")}
                   inputMode="tel"
                 />
               </label>
               {customers.length > 0 ? (
-                <label className="block text-xs font-semibold text-slate-800">
+                <label className="block text-xs font-semibold text-stone-800">
                   {t(lang, "paymentPickExistingDebt")}
                   <select
                     ref={customerSelectRef}
                     value={saleCustomerId}
                     onChange={(e) => onSaleCustomerId(e.target.value)}
-                    className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-sm font-medium"
+                    className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-medium"
                   >
                     <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
                     {customers.map((c) => (
@@ -478,25 +478,25 @@ function PaymentBlock({
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
           <div className={clsx("grid gap-2", compact ? "mt-2" : "mt-4 sm:grid-cols-2 sm:gap-3")}>
-            <label className={clsx("block font-semibold text-slate-800", compact ? "text-xs" : "text-base")}>
+            <label className={clsx("block font-semibold text-stone-800", compact ? "text-xs" : "text-base")}>
               {t(lang, "paymentDebtNameLabel")}
               <input
                 value={saleCustomerName}
                 onChange={(e) => onSaleCustomerName(e.target.value)}
                 className={clsx(
-                  "mt-1 w-full rounded-xl border-2 border-slate-200 bg-white font-semibold",
+                  "mt-1 w-full rounded-xl border-2 border-stone-200 bg-white font-semibold",
                   compact ? "min-h-[44px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-3 text-lg",
                 )}
                 placeholder={t(lang, "paymentDebtNamePlaceholder")}
               />
             </label>
-            <label className={clsx("block font-semibold text-slate-800", compact ? "text-xs" : "text-base")}>
+            <label className={clsx("block font-semibold text-stone-800", compact ? "text-xs" : "text-base")}>
               {t(lang, "paymentDebtPhoneLabel")}
               <input
                 value={saleCustomerPhone}
                 onChange={(e) => onSaleCustomerPhone(e.target.value)}
                 className={clsx(
-                  "mt-1 w-full rounded-xl border-2 border-slate-200 bg-white font-semibold",
+                  "mt-1 w-full rounded-xl border-2 border-stone-200 bg-white font-semibold",
                   compact ? "min-h-[44px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-3 text-lg",
                 )}
                 placeholder={t(lang, "personPhonePh")}
@@ -505,14 +505,14 @@ function PaymentBlock({
             </label>
           </div>
           {customers.length > 0 ? (
-            <label className={clsx("block font-semibold text-slate-800", compact ? "mt-2 text-xs" : "mt-4 text-base")}>
+            <label className={clsx("block font-semibold text-stone-800", compact ? "mt-2 text-xs" : "mt-4 text-base")}>
               {t(lang, "paymentPickExistingDebt")}
               <select
                 ref={customerSelectRef}
                 value={saleCustomerId}
                 onChange={(e) => onSaleCustomerId(e.target.value)}
                 className={clsx(
-                  "mt-1 w-full rounded-xl border-2 border-slate-200 bg-white font-medium",
+                  "mt-1 w-full rounded-xl border-2 border-stone-200 bg-white font-medium",
                   compact ? "min-h-[44px] px-3 py-2 text-sm" : "mt-2 min-h-[52px] rounded-2xl px-4 py-4 text-lg",
                 )}
               >
@@ -572,30 +572,30 @@ export function CreditCatalogDockPanel({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <p className="text-sm font-semibold text-slate-800">{t(lang, "paymentCashLabel")}</p>
+          <p className="text-sm font-semibold text-stone-800">{t(lang, "paymentCashLabel")}</p>
           <button
             type="button"
             onClick={() => onCheckoutAmountField("cash")}
             className={clsx(
               "mt-1.5 flex min-h-[52px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-xl font-black",
               checkoutAmountField === "cash"
-                ? "border-waka-500 bg-waka-50 text-slate-900"
-                : "border-slate-200 bg-white text-slate-900",
+                ? "border-waka-500 bg-waka-50 text-stone-900"
+                : "border-stone-200 bg-white text-stone-900",
             )}
           >
             UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
           </button>
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-800">{t(lang, "paymentMobileMoneyLabel")}</p>
+          <p className="text-sm font-semibold text-stone-800">{t(lang, "paymentMobileMoneyLabel")}</p>
           <button
             type="button"
             onClick={() => onCheckoutAmountField("mobile")}
             className={clsx(
               "mt-1.5 flex min-h-[52px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-xl font-black",
               checkoutAmountField === "mobile"
-                ? "border-waka-500 bg-waka-50 text-slate-900"
-                : "border-slate-200 bg-white text-slate-900",
+                ? "border-waka-500 bg-waka-50 text-stone-900"
+                : "border-stone-200 bg-white text-stone-900",
             )}
           >
             UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -610,36 +610,36 @@ export function CreditCatalogDockPanel({
           {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
         </p>
       ) : null}
-      <div className="rounded-xl border border-slate-200 bg-stone-50 p-4">
-        <p className="text-sm font-black text-slate-900">{t(lang, "paymentCreditCustomerDetails")}</p>
+      <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
+        <p className="text-sm font-black text-stone-900">{t(lang, "paymentCreditCustomerDetails")}</p>
         <div className="mt-3 space-y-3">
-          <label className="block text-sm font-semibold text-slate-800">
+          <label className="block text-sm font-semibold text-stone-800">
             {t(lang, "paymentDebtNameLabel")}
             <input
               value={saleCustomerName}
               onChange={(e) => onSaleCustomerName(e.target.value)}
-              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-semibold"
+              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-semibold"
               placeholder={t(lang, "paymentDebtNamePlaceholder")}
             />
           </label>
-          <label className="block text-sm font-semibold text-slate-800">
+          <label className="block text-sm font-semibold text-stone-800">
             {t(lang, "paymentDebtPhoneLabel")}
             <input
               value={saleCustomerPhone}
               onChange={(e) => onSaleCustomerPhone(e.target.value)}
-              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-semibold"
+              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-semibold"
               placeholder={t(lang, "personPhonePh")}
               inputMode="tel"
             />
           </label>
           {customers.length > 0 ? (
-            <label className="block text-sm font-semibold text-slate-800">
+            <label className="block text-sm font-semibold text-stone-800">
               {t(lang, "paymentPickExistingDebt")}
               <select
                 ref={customerSelectRef}
                 value={saleCustomerId}
                 onChange={(e) => onSaleCustomerId(e.target.value)}
-                className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-medium"
+                className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-medium"
               >
                 <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
                 {customers.map((c) => (
@@ -885,7 +885,7 @@ export function PosCheckoutPanel({
     <div
       ref={checkoutPanelRef}
       className={clsx(
-        "flex min-h-0 flex-col",
+        "pos-ds-checkout flex min-h-0 flex-col",
         isSidebar
           ? "h-full max-h-[calc(100dvh-5.25rem)] rounded-xl border border-waka-200 bg-waka-50/90 shadow-waka-sm"
           : "h-full bg-waka-50",
@@ -903,7 +903,7 @@ export function PosCheckoutPanel({
           onClick={onClearDraft}
           disabled={emptyCart}
           className={clsx(
-            "shrink-0 rounded-full border border-slate-200 bg-white font-semibold text-slate-600 shadow-sm active:bg-slate-50 disabled:opacity-40",
+            "shrink-0 rounded-full border border-stone-200 bg-white font-semibold text-stone-600 shadow-sm active:bg-stone-50 disabled:opacity-40",
             catalogDock && isSidebar ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
           )}
         >
@@ -959,7 +959,7 @@ export function PosCheckoutPanel({
 
       {emptyCart ? (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          <p className="py-8 text-center text-sm font-semibold text-slate-500">{t(lang, "posCartEmptyHint")}</p>
+          <p className="py-8 text-center text-sm font-semibold text-stone-500">{t(lang, "posCartEmptyHint")}</p>
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -1040,7 +1040,7 @@ export function PosCheckoutPanel({
                     type="button"
                     onClick={onFinishSale}
                     disabled={emptyCart}
-                    className="min-h-[40px] flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-black text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
+                    className="pos-ds-checkout-btn min-h-[40px] flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-black text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
                   >
                     {saveSaleLabel}
                   </button>
@@ -1073,7 +1073,7 @@ export function PosCheckoutPanel({
                     type="button"
                     onClick={onFinishSale}
                     disabled={emptyCart}
-                    className="min-h-[48px] flex-1 rounded-xl bg-emerald-600 py-3 text-base font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
+                    className="pos-ds-checkout-btn min-h-[48px] flex-1 rounded-xl bg-emerald-600 py-3 text-base font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
                   >
                     {saveSaleLabel}
                   </button>
@@ -1094,7 +1094,7 @@ export function PosCheckoutPanel({
                 type="button"
                 onClick={onFinishSale}
                 disabled={emptyCart}
-                className="w-full rounded-xl bg-emerald-600 py-3.5 text-lg font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
+                className="pos-ds-checkout-btn w-full rounded-xl bg-emerald-600 py-3.5 text-lg font-black text-white shadow-lg active:bg-emerald-700 disabled:opacity-40"
               >
                 {saveSaleLabel}
               </button>

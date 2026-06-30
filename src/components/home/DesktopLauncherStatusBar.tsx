@@ -78,7 +78,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
 
   if (hasPermission(actor.role, "stock.view") && lowStockCount > 0) {
     chips.push(
-      <Link key="stock" to="/stock" className={`${chip} border-orange-500/40 bg-orange-950/70 text-orange-100`}>
+      <Link key="stock" to="/stock" className={`${chip} border-waka-500/40 bg-waka-950/70 text-waka-100`}>
         <span aria-hidden>📦</span>
         {tTemplate(lang, "desktopHomeStatusLowStock", { count: String(lowStockCount) })}
       </Link>,

@@ -85,14 +85,18 @@ export function StockShelfGrid({
       <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
         {shelves.map((shelf) => {
           const icon = shelfIconFor(shelf.label) ?? "📦";
+          const empty = shelf.count === 0;
           return (
             <button
               key={shelf.key}
               type="button"
               onClick={() => onSelectShelf(shelf.key)}
               className={clsx(
-                "flex min-h-[88px] flex-col items-center justify-center rounded-xl border border-stone-200/90 bg-white p-2.5 text-center shadow-sm",
-                "transition-all active:scale-[0.97] active:border-waka-300 active:shadow-md motion-reduce:active:scale-100",
+                "flex min-h-[88px] flex-col items-center justify-center rounded-xl border p-2.5 text-center shadow-sm",
+                "transition-all active:scale-[0.97] motion-reduce:active:scale-100",
+                empty
+                  ? "border-rose-200/90 bg-rose-50/30 active:border-rose-300 active:shadow-md"
+                  : "border-stone-200/90 bg-white active:border-waka-300 active:shadow-md",
               )}
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-stone-100 text-lg leading-none">
@@ -101,8 +105,15 @@ export function StockShelfGrid({
               <span className="mt-1.5 line-clamp-2 w-full text-xs font-black leading-tight text-stone-950">
                 {shelf.label}
               </span>
-              <span className="mt-0.5 text-[10px] font-semibold text-stone-500">
-                {tTemplate(lang, "stockShelfProductCount", { count: String(shelf.count) })}
+              <span
+                className={clsx(
+                  "mt-0.5 text-[10px] font-semibold",
+                  empty ? "font-black text-rose-700" : "text-stone-500",
+                )}
+              >
+                {empty
+                  ? t(lang, "shelfEmptyRestockLabel")
+                  : tTemplate(lang, "stockShelfProductCount", { count: String(shelf.count) })}
               </span>
             </button>
           );

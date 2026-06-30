@@ -66,7 +66,7 @@ export function InventoryCountSessionsPage({ lang }: Props) {
       ) : null}
 
       {sorted.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-semibold text-slate-500">
+        <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-12 text-center text-sm font-semibold text-stone-500">
           {t(lang, "inventoryCountEmpty")}
         </p>
       ) : (
@@ -77,22 +77,22 @@ export function InventoryCountSessionsPage({ lang }: Props) {
               <li key={s.id}>
                 <Link
                   to={`/stock/count/${s.id}`}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition-colors hover:bg-slate-50"
+                  className="flex items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-4 shadow-sm transition-colors hover:bg-stone-50"
                 >
                   <div className="flex min-w-0 items-center gap-3">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700">
                       <ClipboardList className="h-5 w-5" aria-hidden />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-base font-black text-slate-950">
+                      <p className="truncate text-base font-black text-stone-950">
                         {tTemplate(lang, "inventoryCountSessionNumber", { n: String(s.sessionNumber) })}
                       </p>
-                      <p className="text-xs font-semibold text-slate-500">
+                      <p className="text-xs font-semibold text-stone-500">
                         {statusLabel(lang, s.status)} · {counted}/{s.lines.length}
                       </p>
                     </div>
                   </div>
-                  <span className="shrink-0 text-xs font-bold text-slate-400">
+                  <span className="shrink-0 text-xs font-bold text-stone-400">
                     {s.snapshotCreatedAt ? new Date(s.snapshotCreatedAt).toLocaleDateString() : "—"}
                   </span>
                 </Link>

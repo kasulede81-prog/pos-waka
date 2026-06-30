@@ -20,7 +20,7 @@ export function AdminHero({
   refreshing?: boolean;
 }) {
   return (
-    <div className="rounded-2xl bg-gradient-to-br from-orange-500 to-orange-700 p-3.5 text-white shadow-md sm:p-5">
+    <div className="rounded-2xl bg-gradient-to-br from-waka-500 to-waka-700 p-3.5 text-white shadow-md sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] font-bold uppercase opacity-80 sm:text-xs">{dateLabel}</div>
@@ -59,9 +59,9 @@ export function AdminShortcut({
   return (
     <a
       href={href}
-      className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3 shadow-sm transition hover:border-orange-400"
+      className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-3 shadow-sm transition hover:border-waka-400"
     >
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-orange-100 text-orange-700">
+      <span className="grid h-10 w-10 place-items-center rounded-xl bg-waka-100 text-waka-700">
         <Icon className="h-5 w-5" aria-hidden />
       </span>
       <div>
@@ -156,7 +156,7 @@ export function AdminSectionSelect({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="min-h-[48px] w-full appearance-none rounded-xl border border-stone-200 bg-white py-2.5 pl-3 pr-10 text-sm font-bold text-stone-900 outline-none ring-orange-200 focus:border-orange-400 focus:ring-2"
+          className="min-h-[48px] w-full appearance-none rounded-xl border border-stone-200 bg-white py-2.5 pl-3 pr-10 text-sm font-bold text-stone-900 outline-none ring-waka-200 focus:border-waka-400 focus:ring-2"
         >
           {[...grouped.entries()].map(([group, items]) =>
             group ? (
@@ -236,7 +236,7 @@ export function AdminActionPicker({
           onRun(picked);
           setPicked("");
         }}
-        className="mt-3 min-h-[48px] w-full rounded-xl bg-orange-600 text-sm font-black text-white disabled:opacity-40 active:bg-orange-700"
+        className="mt-3 min-h-[48px] w-full rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-40 active:bg-waka-700"
       >
         {busy ? "…" : runLabel}
       </button>
@@ -313,8 +313,8 @@ export function OpsPanelNavButton({
       className={clsx(
         "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-black uppercase tracking-wide transition",
         active
-          ? "border-orange-600 bg-orange-600 text-white shadow-sm"
-          : "border-stone-200 bg-white text-stone-700 hover:border-orange-300 hover:bg-orange-50",
+          ? "border-waka-600 bg-waka-600 text-white shadow-sm"
+          : "border-stone-200 bg-white text-stone-700 hover:border-waka-300 hover:bg-waka-50",
       )}
     >
       <Icon className="h-3.5 w-3.5" strokeWidth={2.5} />

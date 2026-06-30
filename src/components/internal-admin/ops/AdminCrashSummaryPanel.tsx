@@ -47,7 +47,7 @@ export function AdminCrashSummaryPanel({ previewMode = false }: Props) {
           <ul className="mt-1 space-y-1 text-xs">
             {summary.by_shop.map((s) => (
               <li key={s.shop_id} className="flex justify-between gap-2 rounded-lg bg-stone-50 px-2 py-1">
-                <Link to={internalAdminShopHref(s.shop_id, previewMode)} className="truncate font-semibold text-orange-700 underline">
+                <Link to={internalAdminShopHref(s.shop_id, previewMode)} className="truncate font-semibold text-waka-700 underline">
                   {s.shop_name}
                 </Link>
                 <span className="shrink-0 font-black">{s.count}</span>

@@ -100,7 +100,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-4 text-sm font-semibold text-stone-600">
-        <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+        <Loader2 className="h-4 w-4 animate-spin text-waka-600" />
         Loading AI settings…
       </div>
     );
@@ -183,7 +183,7 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
           type="button"
           disabled={saving || previewMode}
           onClick={() => void save()}
-          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-orange-600 text-sm font-black text-white disabled:opacity-50"
+          className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Save shop AI settings

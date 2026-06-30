@@ -277,7 +277,7 @@ export function StockProductEditModal({
   };
 
   const inputClass =
-    "mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-lg font-bold outline-none ring-waka-300 focus:ring";
+    "mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-bold outline-none ring-waka-300 focus:ring";
 
   return (
     <AppModalOverlay
@@ -286,11 +286,11 @@ export function StockProductEditModal({
       aria-modal
       aria-labelledby="stock-edit-title"
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-slate-600" onClick={onClose}>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
+        <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-stone-600" onClick={onClose}>
           {t(lang, "cancel")}
         </button>
-        <h2 id="stock-edit-title" className="text-center text-lg font-black text-slate-900">
+        <h2 id="stock-edit-title" className="text-center text-lg font-black text-stone-900">
           {pt("stockEditProduct")}
         </h2>
         <span className="w-16" aria-hidden />
@@ -299,12 +299,12 @@ export function StockProductEditModal({
       <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5">
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{pt("stockEditName")}</span>
+            <span className="text-sm font-bold text-stone-800">{pt("stockEditName")}</span>
             <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
           </label>
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">{pt("stockEditShelf")}</span>
+            <span className="text-sm font-bold text-stone-800">{pt("stockEditShelf")}</span>
             <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -329,7 +329,7 @@ export function StockProductEditModal({
           {pharmacyMode ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-bold text-slate-800">{pt("strength")}</span>
+                <span className="text-sm font-bold text-stone-800">{pt("strength")}</span>
                 <input
                   value={medicineStrength}
                   onChange={(e) => setMedicineStrength(e.target.value)}
@@ -338,7 +338,7 @@ export function StockProductEditModal({
                 />
               </label>
               <label className="block">
-                <span className="text-sm font-bold text-slate-800">{pt("form")}</span>
+                <span className="text-sm font-bold text-stone-800">{pt("form")}</span>
                 <select
                   value={medicineForm || ""}
                   onChange={(e) => setMedicineForm(e.target.value)}
@@ -353,14 +353,14 @@ export function StockProductEditModal({
                 </select>
               </label>
               <label className="block sm:col-span-2">
-                <span className="text-sm font-bold text-slate-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
+                <span className="text-sm font-bold text-stone-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
                 <input
                   type="date"
                   value={expiryDate}
                   onChange={(e) => setExpiryDate(e.target.value)}
                   className={inputClass}
                 />
-                <p className="mt-1 text-xs font-medium text-slate-500">{t(lang, "pharmacyExpiryDateHint")}</p>
+                <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "pharmacyExpiryDateHint")}</p>
               </label>
             </div>
           ) : null}
@@ -374,10 +374,10 @@ export function StockProductEditModal({
                 hideTabletPrice
                 showEnableToggle={!isPharmacyPackagingActive(product)}
                 inputClass={inputClass}
-                labelClass="block text-sm font-bold text-slate-700"
+                labelClass="block text-sm font-bold text-stone-700"
               />
               <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
-                <label className="block text-sm font-bold text-slate-800">
+                <label className="block text-sm font-bold text-stone-800">
                   {t(lang, "pharmacyPackStockOnHand")}
                   <input
                     value={pieceOnlyStock || String(product.stockOnHand)}
@@ -390,7 +390,7 @@ export function StockProductEditModal({
                   <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-waka-900">
                     <p>{t(lang, "pharmacyPackStockPrimary")}: {formatPharmacyStockPrimary({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) })}</p>
                     {formatPharmacyStockEquivalent({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) }) ? (
-                      <p className="mt-1 whitespace-pre-line text-xs font-bold text-slate-600">
+                      <p className="mt-1 whitespace-pre-line text-xs font-bold text-stone-600">
                         {t(lang, "pharmacyPackStockEquivalent")}:{"\n"}
                         {formatPharmacyStockEquivalent({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) })}
                       </p>
@@ -402,7 +402,7 @@ export function StockProductEditModal({
           ) : (
             <>
               <div>
-                <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditSellUnitLabel")}</span>
+                <span className="text-sm font-bold text-stone-800">{t(lang, "stockEditSellUnitLabel")}</span>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   {SELL_UNITS.map((u) => (
                     <button
@@ -411,7 +411,7 @@ export function StockProductEditModal({
                       onClick={() => setSellUnit(u)}
                       className={clsx(
                         "min-h-[48px] rounded-2xl border-2 text-sm font-black",
-                        sellUnit === u ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-900",
+                        sellUnit === u ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-900",
                       )}
                     >
                       {t(lang, SELL_UNIT_OPTIONS.find((o) => o.id === u)!.labelKey as "sellUnit_piece")}
@@ -428,7 +428,7 @@ export function StockProductEditModal({
                 ) : null}
               </div>
 
-              <div className="rounded-2xl border-2 border-slate-100 bg-slate-50/80 p-4">
+              <div className="rounded-2xl border-2 border-stone-100 bg-stone-50/80 p-4">
                 <label className="flex cursor-pointer items-center gap-3">
                   <input
                     type="checkbox"
@@ -436,11 +436,11 @@ export function StockProductEditModal({
                     onChange={(e) => setHasPack(e.target.checked)}
                     className="h-5 w-5 accent-waka-600"
                   />
-                  <span className="text-sm font-black text-slate-900">{t(lang, "simpleAddPackToggle")}</span>
+                  <span className="text-sm font-black text-stone-900">{t(lang, "simpleAddPackToggle")}</span>
                 </label>
                 {hasPack ? (
                   <div className="mt-3 space-y-3">
-                    <p className="text-xs font-semibold text-slate-600">{t(lang, "simpleAddPackTypeLabel")}</p>
+                    <p className="text-xs font-semibold text-stone-600">{t(lang, "simpleAddPackTypeLabel")}</p>
                     <div className="grid grid-cols-2 gap-2">
                       {PACK_TYPE_OPTIONS.map((opt) => (
                         <button
@@ -449,7 +449,7 @@ export function StockProductEditModal({
                           onClick={() => setPackKind(opt.id)}
                           className={clsx(
                             "min-h-[44px] rounded-xl border-2 text-xs font-black",
-                            packKind === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white",
+                            packKind === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white",
                           )}
                         >
                           {t(lang, opt.labelKey as "packKind_crate")}
@@ -464,7 +464,7 @@ export function StockProductEditModal({
                         className={inputClass}
                       />
                     ) : null}
-                    <label className="block text-sm font-bold text-slate-800">
+                    <label className="block text-sm font-bold text-stone-800">
                       {tTemplate(lang, "simpleAddStep5Title", { unit: unitLabel, pack: packLabel })}
                       <input
                         value={piecesPerPack}
@@ -479,10 +479,10 @@ export function StockProductEditModal({
               </div>
 
               <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
-                <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditStockLabel")}</span>
+                <span className="text-sm font-bold text-stone-800">{t(lang, "stockEditStockLabel")}</span>
                 {hasPack && piecesN > 1 ? (
                   <div className="mt-2 space-y-3">
-                    <label className="block text-sm font-semibold text-slate-700">
+                    <label className="block text-sm font-semibold text-stone-700">
                       {tTemplate(lang, "simpleAddStep6TitlePack", { pack: packLabel })}
                       <input
                         value={packCount}
@@ -491,7 +491,7 @@ export function StockProductEditModal({
                         className={inputClass}
                       />
                     </label>
-                    <label className="block text-sm font-semibold text-slate-700">
+                    <label className="block text-sm font-semibold text-stone-700">
                       {tTemplate(lang, "stockEditLooseLabel", { unit: unitLabel })}
                       <input
                         value={looseCount}
@@ -548,7 +548,7 @@ export function StockProductEditModal({
             </div>
           ) : (
             <label className="block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "stockEditPriceLabel")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "stockEditPriceLabel")}</span>
               <input
                 value={price}
                 onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
@@ -557,7 +557,7 @@ export function StockProductEditModal({
                 className={`${inputClass} text-2xl font-black`}
                 required
               />
-              <span className="mt-1 block text-xs font-semibold text-slate-500">UGX</span>
+              <span className="mt-1 block text-xs font-semibold text-stone-500">UGX</span>
             </label>
           )}
 
@@ -573,7 +573,7 @@ export function StockProductEditModal({
           ) : null}
 
           <label className="block">
-            <span className="text-sm font-bold text-slate-800">
+            <span className="text-sm font-bold text-stone-800">
               {packagingEdit && packagingState.enabled
                 ? t(lang, "pharmacyPackLowStockLabel")
                 : tTemplate(lang, "stockEditLowStockLabel", { unit: unitLabel })}
@@ -605,11 +605,11 @@ export function StockProductEditModal({
             </div>
           </label>
 
-          <details className="rounded-2xl border border-slate-200 bg-slate-50/50 px-4 open:pb-4">
-            <summary className="cursor-pointer py-3 text-sm font-black text-slate-700">{t(lang, "stockEditAdvanced")}</summary>
+          <details className="rounded-2xl border border-stone-200 bg-stone-50/50 px-4 open:pb-4">
+            <summary className="cursor-pointer py-3 text-sm font-black text-stone-700">{t(lang, "stockEditAdvanced")}</summary>
             <div className="space-y-3 pt-1">
               {hasPack ? (
-                <label className="block text-sm font-bold text-slate-800">
+                <label className="block text-sm font-bold text-stone-800">
                   {tTemplate(lang, "simpleAddStep8Title", { pack: packLabel })}
                   <input
                     value={buyPackPrice}
@@ -619,17 +619,17 @@ export function StockProductEditModal({
                   />
                 </label>
               ) : null}
-              <label className="block text-sm font-bold text-slate-800">
+              <label className="block text-sm font-bold text-stone-800">
                 {t(lang, "productSkuOptional")}
                 <input value={sku} onChange={(e) => setSku(e.target.value)} className={inputClass} />
               </label>
               {canPresets ? (
                 <>
-                  <label className="block text-sm font-bold text-slate-700">
+                  <label className="block text-sm font-bold text-stone-700">
                     {t(lang, "tapPricesNote")}
                     <input value={moneyPresets} onChange={(e) => setMoneyPresets(e.target.value)} className={inputClass} />
                   </label>
-                  <label className="block text-sm font-bold text-slate-700">
+                  <label className="block text-sm font-bold text-stone-700">
                     {t(lang, "tapQtyNote")}
                     <input value={qtyPresets} onChange={(e) => setQtyPresets(e.target.value)} className={inputClass} />
                   </label>
@@ -639,7 +639,7 @@ export function StockProductEditModal({
           </details>
         </div>
 
-        <div className="shrink-0 border-t border-slate-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        <div className="shrink-0 border-t border-stone-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {product &&
           (Math.floor(Number(price.replace(/\D/g, "")) || 0) !== product.sellingPricePerUnitUgx ||
             Math.abs(
@@ -648,11 +648,11 @@ export function StockProductEditModal({
                 : totalStock) - product.stockOnHand,
             ) > 1e-6) ? (
             <label className="mb-3 block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "auditReasonLabel")}</span>
               <textarea
                 value={auditReason}
                 onChange={(e) => setAuditReason(e.target.value)}
-                className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+                className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
                 placeholder={t(lang, "auditReasonPlaceholder")}
               />
             </label>

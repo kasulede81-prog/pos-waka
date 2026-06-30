@@ -27,7 +27,7 @@ export function BuilderField(props: InputProps | SelectProps) {
     "mt-1.5 w-full min-h-[48px] rounded-2xl border px-4 py-3 pr-12 text-base outline-none transition-all",
     complete
       ? "border-emerald-300 bg-emerald-50/50 ring-emerald-200 focus:border-emerald-400 focus:ring-2"
-      : "border-stone-200 bg-white ring-orange-200 focus:border-orange-400 focus:ring-2",
+      : "border-stone-200 bg-white ring-waka-200 focus:border-waka-400 focus:ring-2",
     className,
   );
 
@@ -66,7 +66,7 @@ export function BuilderPrimaryButton({
     <button
       type="button"
       className={clsx(
-        "min-h-[52px] w-full touch-manipulation rounded-[28px] bg-gradient-to-r from-orange-500 to-orange-600 px-4 py-3.5 text-lg font-black text-white shadow-[0_12px_32px_-8px_rgba(234,88,12,0.55)] transition active:scale-[0.99] disabled:opacity-50",
+        "min-h-[52px] w-full touch-manipulation rounded-[28px] bg-gradient-to-r from-waka-500 to-waka-600 px-4 py-3.5 text-lg font-black text-white shadow-[0_12px_32px_-8px_rgba(234,88,12,0.55)] transition active:scale-[0.99] disabled:opacity-50",
         className,
       )}
       {...rest}
@@ -88,7 +88,7 @@ export function BuilderCard({
       className={clsx(
         "min-h-[80px] w-full rounded-[24px] border-2 px-4 py-3 text-left transition active:scale-[0.99]",
         selected
-          ? "border-orange-500 bg-orange-50 shadow-md"
+          ? "border-waka-500 bg-waka-50 shadow-md"
           : "border-stone-200 bg-white hover:border-stone-300",
         className,
       )}

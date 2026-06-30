@@ -177,7 +177,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
     <ShiftSellGateway lang={lang}>
     <div className="space-y-4 pb-36">
       <div className="flex items-center gap-3">
-        <Link to="/floor" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-200 bg-white">
+        <Link to="/floor" className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-stone-200 bg-white">
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="min-w-0 flex-1">
@@ -197,14 +197,14 @@ export function TableOrderPage({ lang }: { lang: Language }) {
               <button
                 type="button"
                 onClick={() => setTableAction("transfer")}
-                className="min-h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+                className="min-h-10 rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-700"
               >
                 {t(lang, "tableTransferBtn")}
               </button>
               <button
                 type="button"
                 onClick={() => setTableAction("merge")}
-                className="min-h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+                className="min-h-10 rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-700"
               >
                 {t(lang, "tableMergeBtn")}
               </button>
@@ -214,7 +214,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => setSplitOpen(true)}
-              className="min-h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+              className="min-h-10 rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-700"
             >
               {t(lang, "splitBillBtn")}
             </button>
@@ -228,7 +228,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
           onClick={() => setCategoryFilter(CATEGORY_FILTER_ALL)}
           className={clsx(
             "shrink-0 rounded-full px-3 py-2 text-sm font-bold",
-            categoryFilter === CATEGORY_FILTER_ALL ? "bg-waka-600 text-white" : "bg-slate-100",
+            categoryFilter === CATEGORY_FILTER_ALL ? "bg-waka-600 text-white" : "bg-stone-100",
           )}
         >
           {t(lang, "posCategoryAll")}
@@ -240,7 +240,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             onClick={() => setCategoryFilter(cat)}
             className={clsx(
               "shrink-0 rounded-full px-3 py-2 text-sm font-bold",
-              categoryFilter === cat ? "bg-waka-600 text-white" : "bg-slate-100",
+              categoryFilter === cat ? "bg-waka-600 text-white" : "bg-stone-100",
             )}
           >
             {shelfIconFor(cat)} {cat}
@@ -252,7 +252,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         placeholder={t(lang, "posSellSearchPlaceholder")}
-        className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base"
+        className="w-full rounded-xl border border-stone-200 px-4 py-3 text-base"
       />
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -261,7 +261,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
             key={product.id}
             type="button"
             onClick={() => addProduct(product)}
-            className="flex min-h-[88px] flex-col items-start justify-between rounded-2xl border border-slate-200 bg-white p-3 text-left active:bg-waka-50"
+            className="flex min-h-[88px] flex-col items-start justify-between rounded-2xl border border-stone-200 bg-white p-3 text-left active:bg-waka-50"
           >
             <span className="line-clamp-2 text-sm font-black text-stone-950">{product.name}</span>
             <span className="text-sm font-bold text-waka-700">{formatProductPriceLabel(product)}</span>
@@ -269,10 +269,10 @@ export function TableOrderPage({ lang }: { lang: Language }) {
         ))}
       </div>
 
-      <div className="fixed inset-x-0 bottom-16 z-40 border-t border-slate-200 bg-white/95 p-4 backdrop-blur sm:bottom-0 sm:pb-4">
+      <div className="fixed inset-x-0 bottom-16 z-40 border-t border-stone-200 bg-white/95 p-4 backdrop-blur sm:bottom-0 sm:pb-4">
         <div className="mx-auto max-w-3xl space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-slate-600">{t(lang, "tableRunningBill")}</span>
+            <span className="text-sm font-bold text-stone-600">{t(lang, "tableRunningBill")}</span>
             <span className="text-xl font-black text-stone-950">{formatUgx(checkout.payableUgx)}</span>
           </div>
           {draftLineDiscountTotal > 0 ? (

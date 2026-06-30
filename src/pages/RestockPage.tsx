@@ -139,7 +139,7 @@ export function RestockPage({
   };
 
   const inputClass =
-    "mt-1 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 text-base font-bold text-slate-900 outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200";
+    "mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 text-base font-bold text-stone-900 outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200";
 
   return (
     <div className={embedded ? "pb-8" : "pb-28"}>
@@ -160,14 +160,14 @@ export function RestockPage({
 
       <form onSubmit={submit} className="space-y-6">
         <section className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-wider text-slate-500">{t(lang, "restockWhereBought")}</h2>
+          <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "restockWhereBought")}</h2>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => setBuySource("town")}
               className={clsx(
                 "min-h-[48px] rounded-2xl border-2 px-3 text-sm font-black transition",
-                walkIn ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-800",
+                walkIn ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-800",
               )}
             >
               {t(lang, "restockSourceTown")}
@@ -177,7 +177,7 @@ export function RestockPage({
               onClick={() => setBuySource("supplier")}
               className={clsx(
                 "min-h-[48px] rounded-2xl border-2 px-3 text-sm font-black transition",
-                !walkIn ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-800",
+                !walkIn ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-800",
               )}
             >
               {t(lang, "restockSourceSupplier")}
@@ -210,15 +210,15 @@ export function RestockPage({
           )}
 
           {!walkIn && suppliers.length === 0 ? (
-            <p className="text-sm font-semibold text-slate-600">{t(lang, "restockNoSuppliersShort")}</p>
+            <p className="text-sm font-semibold text-stone-600">{t(lang, "restockNoSuppliersShort")}</p>
           ) : null}
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-wider text-slate-500">{t(lang, "restockProductsTitle")}</h2>
+          <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "restockProductsTitle")}</h2>
 
           {lines.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-6 text-center text-sm font-semibold text-slate-500">
+            <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 px-4 py-6 text-center text-sm font-semibold text-stone-500">
               {t(lang, "restockEmptyProducts")}
             </p>
           ) : (
@@ -251,16 +251,16 @@ export function RestockPage({
         </section>
 
         {lines.length > 0 ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
             <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-bold text-slate-600">{t(lang, "restockTotalBuy")}</span>
-              <span className="text-xl font-black text-slate-900">UGX {totals.toLocaleString()}</span>
+              <span className="text-sm font-bold text-stone-600">{t(lang, "restockTotalBuy")}</span>
+              <span className="text-xl font-black text-stone-900">UGX {totals.toLocaleString()}</span>
             </div>
 
             {!walkIn ? (
               <>
                 <label className="mt-4 block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-slate-500">{t(lang, "restockPaidToday")}</span>
+                  <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "restockPaidToday")}</span>
                   <input
                     value={paidStr}
                     onChange={(e) => setPaidStr(e.target.value.replace(/\D/g, "").slice(0, 12))}
@@ -280,7 +280,7 @@ export function RestockPage({
         ) : null}
 
         <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-slate-500">{t(lang, "restockNoteOptional")}</span>
+          <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "restockNoteOptional")}</span>
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -289,7 +289,7 @@ export function RestockPage({
           />
         </label>
 
-        <div className={embedded ? "mt-4" : "fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 border-t border-slate-200/90 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"}>
+        <div className={embedded ? "mt-4" : "fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 border-t border-stone-200/90 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"}>
           <button
             type="submit"
             disabled={!lines.length}

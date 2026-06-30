@@ -12,7 +12,7 @@ type Props = {
 };
 
 const toneClass: Record<CommandCenterRecommendation["tone"], string> = {
-  orange: "from-orange-50 to-waka-50 border-waka-100",
+  orange: "from-waka-50 to-waka-50 border-waka-100",
   teal: "from-teal-50 to-emerald-50 border-teal-100",
   blue: "from-sky-50 to-indigo-50 border-sky-100",
   rose: "from-rose-50 to-pink-50 border-rose-100",

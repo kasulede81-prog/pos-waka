@@ -17,17 +17,17 @@ type Props = {
 
 export function AuthLayout({ lang, setLang, children, brandHref = "/login" }: Props) {
   return (
-    <div className="auth-scroll-root relative flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-[#faf7f4] transition-colors duration-300 dark:bg-stone-950">
+    <div className="auth-scroll-root relative flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-brand-cream-wash transition-colors duration-300 dark:bg-stone-950">
       <div
-        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-orange-300/30 blur-3xl dark:bg-orange-600/15"
+        className="pointer-events-none absolute -left-24 -top-24 h-72 w-72 rounded-full bg-waka-300/30 blur-3xl dark:bg-waka-600/15"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute -right-20 top-1/4 h-56 w-56 rounded-full bg-orange-200/40 blur-3xl dark:bg-orange-500/10"
+        className="pointer-events-none absolute -right-20 top-1/4 h-56 w-56 rounded-full bg-waka-200/40 blur-3xl dark:bg-waka-500/10"
         aria-hidden
       />
       <div
-        className="pointer-events-none absolute bottom-0 left-1/4 h-48 w-48 rounded-full bg-amber-100/50 blur-3xl dark:bg-orange-900/10"
+        className="pointer-events-none absolute bottom-0 left-1/4 h-48 w-48 rounded-full bg-waka-100/50 blur-3xl dark:bg-waka-900/10"
         aria-hidden
       />
 
@@ -85,7 +85,7 @@ function FooterLink({ to, icon: Icon, label }: { to: string; icon: typeof FileTe
   return (
     <Link
       to={to}
-      className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 transition hover:text-orange-600 dark:hover:text-orange-400"
+      className="inline-flex items-center gap-1 rounded-lg px-1.5 py-1 transition hover:text-waka-600 dark:hover:text-waka-400"
     >
       <Icon className="h-3.5 w-3.5" aria-hidden />
       {label}

@@ -25,7 +25,7 @@ type Props = {
 };
 
 const inputCls =
-  "mt-1 min-h-[44px] w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900 outline-none focus:border-orange-500";
+  "mt-1 min-h-[44px] w-full rounded-xl border border-stone-300 bg-white px-3 text-sm font-semibold text-stone-900 outline-none focus:border-waka-500";
 const labelCls = "block text-[11px] font-black uppercase tracking-wide text-stone-500";
 
 function FeatureToggle({
@@ -178,7 +178,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-orange-600" />
+        <Loader2 className="h-6 w-6 animate-spin text-waka-600" />
       </div>
     );
   }
@@ -197,7 +197,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
     <div className="space-y-4">
       <div>
         <h1 className="flex items-center gap-2 text-lg font-black text-stone-900">
-          <Sparkles className="h-5 w-5 text-orange-600" />
+          <Sparkles className="h-5 w-5 text-waka-600" />
           AI Control Center
         </h1>
         <p className="text-xs font-semibold text-stone-500">
@@ -393,7 +393,7 @@ export function AdminAiSettingsPage({ adminRow, previewMode = false }: Props) {
         type="button"
         disabled={saving || previewMode}
         onClick={() => void save()}
-        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-orange-600 text-sm font-black text-white hover:bg-orange-700 disabled:opacity-60"
+        className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 text-sm font-black text-white hover:bg-waka-700 disabled:opacity-60"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
         Save AI Control Center

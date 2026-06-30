@@ -257,7 +257,7 @@ export function MarketingAgentPage({ lang }: { lang: Language }) {
 
       <article className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
         <div className="mb-3 flex items-center gap-2">
-          <MapPin className="h-5 w-5 text-orange-600" aria-hidden />
+          <MapPin className="h-5 w-5 text-waka-600" aria-hidden />
           <h2 className="text-lg font-black text-stone-900">Shop map view</h2>
         </div>
         {mapPins.length > 0 ? (

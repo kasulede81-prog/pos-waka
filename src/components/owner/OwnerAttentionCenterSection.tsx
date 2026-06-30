@@ -124,8 +124,8 @@ export function OwnerAttentionCenterSection({
     >
       <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
         <div className="min-w-0">
-          <h2 className="text-base font-black text-slate-950">{t(lang, "ownerAttentionTitle")}</h2>
-          <p className="text-xs font-semibold text-slate-500">
+          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerAttentionTitle")}</h2>
+          <p className="text-xs font-semibold text-stone-500">
             {tTemplate(lang, "ownerAttentionPeriod", { label: periodLabel })}
           </p>
         </div>

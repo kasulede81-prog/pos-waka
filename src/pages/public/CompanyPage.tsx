@@ -34,7 +34,7 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
 
       <article className="space-y-6">
         <header className="space-y-3">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">Legal</p>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">Legal</p>
           <h1 className="text-4xl font-black text-stone-950">Company information</h1>
           <p className="text-base font-medium text-stone-600">
             Public brand: {WAKA_BRAND_NAME} · {WAKA_SLOGAN}. Legal registration below.
@@ -47,13 +47,13 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
         <InfoBlock title="Country of registration">{WAKA_COMPANY_COUNTRY}</InfoBlock>
         <InfoBlock title="Main product">{WAKA_MAIN_PRODUCT}</InfoBlock>
         <InfoBlock title="Website">
-          <a href={WAKA_SITE_URL} className="text-orange-800 underline">
+          <a href={WAKA_SITE_URL} className="text-waka-800 underline">
             {WAKA_SITE_URL}
           </a>
         </InfoBlock>
         <InfoBlock title="Founder">
           {FOUNDER_NAME} —{" "}
-          <Link to="/founder" className="text-orange-800 underline">
+          <Link to="/founder" className="text-waka-800 underline">
             Founder profile
           </Link>
         </InfoBlock>
@@ -63,7 +63,7 @@ export function CompanyPage({ lang, setLang, isAuthenticated }: Props) {
         <InfoBlock title="Contact email">{WAKA_SUPPORT_EMAILS.join(" · ")}</InfoBlock>
         <InfoBlock title="Industry">Business software / POS systems</InfoBlock>
 
-        <nav className="flex flex-wrap gap-3 rounded-3xl border border-stone-100 bg-white p-5 text-sm font-black text-orange-800">
+        <nav className="flex flex-wrap gap-3 rounded-3xl border border-stone-100 bg-white p-5 text-sm font-black text-waka-800">
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/acceptable-use">Acceptable use</Link>

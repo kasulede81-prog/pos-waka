@@ -158,7 +158,7 @@ export function LivingDashboardCard({
           {liveStat ? (
             <div className="mt-1 rounded-2xl bg-black/15 px-3 py-2 backdrop-blur-sm">
               <p className="text-[10px] font-bold uppercase tracking-wider text-white/65 sm:text-[11px]">
-                {t(lang, liveStat.labelKey)}
+                {liveStat.label}
               </p>
               <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 gap-y-0">
                 <span className="text-sm font-black tabular-nums sm:text-base">{liveStat.value}</span>

@@ -15,7 +15,7 @@ export type HomeDashboardTheme = {
 const THEME: Record<string, HomeDashboardTheme> = {
   sell: {
     layout: "heroPrimary",
-    gradient: "from-orange-500 via-orange-600 to-orange-700",
+    gradient: "from-waka-500 via-waka-600 to-waka-700",
     glow: "rgba(251,146,60,0.35)",
     shadow: "shadow-[0_16px_48px_rgba(234,88,12,0.38)]",
     subtitleKey: "desktopHomeTileSellSub",
@@ -79,7 +79,7 @@ const THEME: Record<string, HomeDashboardTheme> = {
   },
   shop: {
     layout: "scene",
-    gradient: "from-amber-600 via-orange-700 to-amber-900",
+    gradient: "from-amber-600 via-waka-700 to-amber-900",
     glow: "rgba(251,191,36,0.25)",
     shadow: "shadow-[0_12px_36px_rgba(180,83,9,0.3)]",
     subtitleKey: "desktopHomeTileShopSub",
@@ -88,7 +88,7 @@ const THEME: Record<string, HomeDashboardTheme> = {
   },
   settings: {
     layout: "scene",
-    gradient: "from-orange-400 via-orange-600 to-orange-900",
+    gradient: "from-waka-400 via-waka-600 to-waka-900",
     glow: "rgba(251,146,60,0.25)",
     shadow: "shadow-[0_12px_36px_rgba(234,88,12,0.28)]",
     subtitleKey: "desktopHomeTileSettingsSub",
@@ -107,7 +107,7 @@ const THEME: Record<string, HomeDashboardTheme> = {
   },
   agent: {
     layout: "scene",
-    gradient: "from-amber-500 via-orange-600 to-orange-800",
+    gradient: "from-amber-500 via-waka-600 to-waka-800",
     glow: "rgba(251,191,36,0.28)",
     shadow: "shadow-[0_12px_36px_rgba(234,88,12,0.3)]",
     subtitleKey: "desktopHomeTileAgentSub",

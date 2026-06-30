@@ -44,7 +44,7 @@ function StatCard({
     <div
       className={clsx(
         "flex min-h-[88px] flex-col justify-between rounded-2xl border p-3 shadow-sm",
-        highlight ? "border-waka-200 bg-gradient-to-br from-waka-50 to-orange-50/60" : "border-stone-200/90 bg-white",
+        highlight ? "border-waka-200 bg-gradient-to-br from-waka-50 to-waka-50/60" : "border-stone-200/90 bg-white",
         warn && !highlight && "border-rose-100 bg-rose-50/40",
       )}
     >

@@ -57,6 +57,10 @@ export function canFieldOps(role: string): boolean {
   );
 }
 
+export function canManageAppReleases(role: string): boolean {
+  return role === "super_admin" || role === "operations_admin";
+}
+
 export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
   const role = normalizeAdminRole(adminRow?.role);
   return {
@@ -69,6 +73,7 @@ export function adminPermissions(adminRow: WakaInternalAdminRow | null) {
     canShopSupport: canShopSupport(role),
     canShopSubs: canShopSubs(role),
     canFieldOps: canFieldOps(role),
+    canManageAppReleases: canManageAppReleases(role),
     canEditShopProfile: canEditShopProfile(role),
     canPermanentlyDeleteShopAccount: canPermanentlyDeleteShopAccount(role),
     districtCount: adminRow?.assigned_district_ids?.length ?? 0,

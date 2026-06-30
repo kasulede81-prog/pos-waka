@@ -171,7 +171,7 @@ export function AuthCallbackPage() {
   if (state === "success") return <Navigate to={destination} replace />;
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-orange-50 via-white to-stone-50 px-4 py-10">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-waka-50 via-white to-stone-50 px-4 py-10">
       <WakaPosLogo size="lg" className="mx-auto" />
       <p className="mt-4 text-lg font-black text-stone-900">Waka POS</p>
       <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{WAKA_LEGAL_COMPANY_NAME}</p>
@@ -179,7 +179,7 @@ export function AuthCallbackPage() {
       {state === "loading" ? (
         <div className="mt-8 flex flex-col items-center gap-3 text-center">
           <span
-            className="h-10 w-10 animate-spin rounded-full border-[3px] border-orange-200 border-t-orange-600"
+            className="h-10 w-10 animate-spin rounded-full border-[3px] border-waka-200 border-t-orange-600"
             aria-hidden
           />
           <p className="text-sm font-semibold text-stone-700">Finishing sign-in…</p>
@@ -195,7 +195,7 @@ export function AuthCallbackPage() {
             type="button"
             disabled={signingOut}
             onClick={handleBackToLogin}
-            className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-orange-600 px-5 text-sm font-black text-white disabled:opacity-70"
+            className="mt-4 inline-flex min-h-[44px] w-full items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white disabled:opacity-70"
           >
             {signingOut ? "Signing out…" : "Back to sign in"}
           </button>

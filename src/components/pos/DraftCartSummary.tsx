@@ -62,11 +62,11 @@ export function DraftCartSummary({ lang, stats, compact, dock, sidebarCompact, p
       <div className="grid grid-cols-3 gap-2 text-center">
         <div>
           <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posCartProductsShort")}</p>
-          <p className="text-2xl font-black tabular-nums text-slate-900">{stats.productCount}</p>
+          <p className="text-2xl font-black tabular-nums text-stone-900">{stats.productCount}</p>
         </div>
         <div>
           <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{t(lang, "posCartUnitsShort")}</p>
-          <p className="text-2xl font-black tabular-nums text-slate-900">{unitShown}</p>
+          <p className="text-2xl font-black tabular-nums text-stone-900">{unitShown}</p>
         </div>
         <div>
           <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">{totalLabel}</p>
@@ -74,7 +74,7 @@ export function DraftCartSummary({ lang, stats, compact, dock, sidebarCompact, p
         </div>
       </div>
       {showPayable ? (
-        <p className="mt-2 text-center text-xs font-semibold text-slate-500">
+        <p className="mt-2 text-center text-xs font-semibold text-stone-500">
           {t(lang, "cartDiscountOriginal")}: UGX {stats.totalUgx.toLocaleString()}
         </p>
       ) : null}

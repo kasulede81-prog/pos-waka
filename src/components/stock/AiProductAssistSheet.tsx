@@ -108,19 +108,19 @@ export function AiProductAssistSheet({
         className="flex max-h-[94vh] w-full max-w-lg flex-col rounded-t-[1.75rem] bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 border-b border-slate-100 px-5 pb-4 pt-5">
+        <div className="shrink-0 border-b border-stone-100 px-5 pb-4 pt-5">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-100 text-violet-700">
               <Sparkles className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-lg font-black text-slate-900">{t(lang, "aiProductAssistTitle")}</p>
-              <p className="mt-1 text-sm font-semibold text-slate-600">{t(lang, "aiProductAssistSubtitle")}</p>
+              <p className="text-lg font-black text-stone-900">{t(lang, "aiProductAssistTitle")}</p>
+              <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "aiProductAssistSubtitle")}</p>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="shrink-0 rounded-xl px-2 py-1 text-sm font-bold text-slate-500"
+              className="shrink-0 rounded-xl px-2 py-1 text-sm font-bold text-stone-500"
             >
               {t(lang, "cancel")}
             </button>
@@ -129,7 +129,7 @@ export function AiProductAssistSheet({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <label className="block">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            <span className="text-xs font-bold uppercase tracking-wide text-stone-500">
               {t(lang, "simpleAddStep1Title")}
             </span>
             <input
@@ -138,7 +138,7 @@ export function AiProductAssistSheet({
               placeholder={t(lang, "aiProductAssistNamePh")}
               autoFocus
               disabled={loading}
-              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-slate-200 px-4 text-xl font-bold outline-none ring-violet-300 focus:ring disabled:opacity-60"
+              className="mt-2 min-h-[56px] w-full rounded-2xl border-2 border-stone-200 px-4 text-xl font-bold outline-none ring-violet-300 focus:ring disabled:opacity-60"
             />
           </label>
 
@@ -160,7 +160,7 @@ export function AiProductAssistSheet({
               {fromCache ? (
                 <p className="text-xs font-semibold text-violet-700">{t(lang, "aiProductAssistFromCache")}</p>
               ) : null}
-              <label className="block text-sm font-bold text-slate-700">
+              <label className="block text-sm font-bold text-stone-700">
                 {t(lang, "stockEditNameLabel")}
                 <input
                   value={preview.name}
@@ -168,7 +168,7 @@ export function AiProductAssistSheet({
                   className="mt-1 min-h-[48px] w-full rounded-xl border-2 border-white bg-white px-3 text-base font-bold"
                 />
               </label>
-              <label className="block text-sm font-bold text-slate-700">
+              <label className="block text-sm font-bold text-stone-700">
                 {t(lang, "aiProductAssistCategory")}
                 <input
                   value={preview.category}
@@ -178,19 +178,19 @@ export function AiProductAssistSheet({
               </label>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="rounded-xl bg-white px-3 py-2">
-                  <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "aiProductAssistUnit")}</p>
-                  <p className="mt-1 font-black text-slate-900">{preview.unit}</p>
+                  <p className="text-xs font-bold uppercase text-stone-500">{t(lang, "aiProductAssistUnit")}</p>
+                  <p className="mt-1 font-black text-stone-900">{preview.unit}</p>
                 </div>
                 <div className="rounded-xl bg-white px-3 py-2">
-                  <p className="text-xs font-bold uppercase text-slate-500">{t(lang, "aiProductAssistPack")}</p>
-                  <p className="mt-1 font-black text-slate-900">{preview.packLabel || "—"}</p>
+                  <p className="text-xs font-bold uppercase text-stone-500">{t(lang, "aiProductAssistPack")}</p>
+                  <p className="mt-1 font-black text-stone-900">{preview.packLabel || "—"}</p>
                 </div>
               </div>
             </div>
           ) : null}
         </div>
 
-        <div className="shrink-0 space-y-2 border-t border-slate-100 p-5">
+        <div className="shrink-0 space-y-2 border-t border-stone-100 p-5">
           {preview ? (
             <button
               type="button"
@@ -213,7 +213,7 @@ export function AiProductAssistSheet({
             type="button"
             disabled={loading}
             onClick={handleManual}
-            className="min-h-[48px] w-full rounded-2xl border-2 border-slate-200 text-base font-black text-slate-800 disabled:opacity-50"
+            className="min-h-[48px] w-full rounded-2xl border-2 border-stone-200 text-base font-black text-stone-800 disabled:opacity-50"
           >
             {t(lang, "aiProductAssistContinueManual")}
           </button>

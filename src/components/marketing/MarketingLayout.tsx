@@ -116,7 +116,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
                   className={clsx(
                     "rounded-full px-2.5 py-1 uppercase transition duration-300",
                     lang === code
-                      ? "bg-mkt-card text-orange-700 shadow-sm dark:text-orange-400"
+                      ? "bg-mkt-card text-waka- shadow-sm dark:text-waka-"
                       : "text-mkt-text-secondary hover:text-mkt-text",
                   )}
                 >
@@ -129,7 +129,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
               <>
                 <Link
                   to="/login"
-                  className="hidden rounded-full px-3 py-2 text-sm font-bold text-mkt-text-secondary transition duration-300 hover:bg-mkt-bg-secondary hover:text-orange-600 dark:hover:text-orange-400 sm:inline-flex"
+                  className="hidden rounded-full px-3 py-2 text-sm font-bold text-mkt-text-secondary transition duration-300 hover:bg-mkt-bg-secondary hover:text-waka- dark:hover:text-waka- sm:inline-flex"
                 >
                   {t(lang, "marketingCtaLogin")}
                 </Link>
@@ -162,11 +162,11 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
               Offline-first point of sale for Ugandan shops, supermarkets, pharmacies, and restaurants.
             </p>
             <p className="mt-4 text-sm font-semibold text-mkt-text">
-              <a href={`tel:+${WAKA_SUPPORT_WHATSAPP_WA_ME}`} className="transition hover:text-orange-600 dark:hover:text-orange-400">
+              <a href={`tel:+${WAKA_SUPPORT_WHATSAPP_WA_ME}`} className="transition hover:text-waka- dark:hover:text-waka-">
                 +256 792 521 711
               </a>
               <br />
-              <a href={`mailto:${WAKA_SUPPORT_EMAIL}`} className="transition hover:text-orange-600 dark:hover:text-orange-400">
+              <a href={`mailto:${WAKA_SUPPORT_EMAIL}`} className="transition hover:text-waka- dark:hover:text-waka-">
                 {WAKA_SUPPORT_EMAIL}
               </a>
             </p>
@@ -174,7 +174,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
               href={wakaSupportWhatsAppUrl()}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-4 inline-flex text-sm font-black text-orange-600 transition hover:text-orange-500 dark:text-orange-400 dark:hover:text-orange-300"
+              className="mt-4 inline-flex text-sm font-black text-waka- transition hover:text-waka- dark:text-waka- dark:hover:text-waka-"
             >
               WhatsApp support →
             </a>
@@ -192,7 +192,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
           <p className="text-xs text-mkt-text-secondary">© {new Date().getFullYear()} {WAKA_LEGAL_COMPANY_NAME}</p>
           <nav className="flex flex-wrap gap-4 text-xs font-bold text-mkt-text-secondary">
             {FOOTER.legal.map((l) => (
-              <Link key={l.to} to={l.to} className="transition hover:text-orange-600 dark:hover:text-orange-400">
+              <Link key={l.to} to={l.to} className="transition hover:text-waka- dark:hover:text-waka-">
                 {l.label}
               </Link>
             ))}
@@ -220,7 +220,7 @@ function FooterCol({
           <li key={`${title}-${l.to}`}>
             <Link
               to={l.to}
-              className="text-sm font-semibold text-mkt-text transition hover:text-orange-600 dark:hover:text-orange-400"
+              className="text-sm font-semibold text-mkt-text transition hover:text-waka- dark:hover:text-waka-"
             >
               {l.label}
             </Link>

@@ -34,7 +34,7 @@ export function AnalyticsKpiGrid({ lang, cards, activeId, compareLabel, onSelect
               className={clsx(
                 "flex min-h-[108px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm transition-all active:scale-[0.98]",
                 active
-                  ? "border-waka-400 bg-gradient-to-br from-waka-50 to-orange-50/70 ring-2 ring-waka-200"
+                  ? "border-waka-400 bg-gradient-to-br from-waka-50 to-waka-50/70 ring-2 ring-waka-200"
                   : "border-stone-200/90 bg-white/90 backdrop-blur-sm hover:border-stone-300",
               )}
             >

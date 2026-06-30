@@ -179,10 +179,10 @@ export function ActivityDetailSheet({
           </ol>
         </div>
 
-        <div className="rounded-2xl border border-stone-200 bg-slate-50/80">
+        <div className="rounded-2xl border border-stone-200 bg-stone-50/80">
           <button
             type="button"
-            className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-slate-600"
+            className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-black uppercase tracking-wide text-stone-600"
             onClick={() => setShowTechnical((v) => !v)}
             aria-expanded={showTechnical}
           >
@@ -190,7 +190,7 @@ export function ActivityDetailSheet({
             <span aria-hidden>{showTechnical ? "−" : "+"}</span>
           </button>
           {showTechnical ? (
-            <pre className="max-h-64 overflow-auto border-t border-slate-200 px-3 py-2 text-xs font-mono text-slate-800">
+            <pre className="max-h-64 overflow-auto border-t border-stone-200 px-3 py-2 text-xs font-mono text-stone-800">
               {detail.payloadJson}
             </pre>
           ) : null}

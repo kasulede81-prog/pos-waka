@@ -56,9 +56,9 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
           </a>
           <a
             href={wakaSupportMailtoUrl()}
-            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl border-2 border-orange-200 bg-orange-50 px-4 py-4 text-center text-lg font-black text-orange-950 shadow-sm active:scale-[0.99]"
+            className="flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl border-2 border-waka-200 bg-waka-50 px-4 py-4 text-center text-lg font-black text-waka-950 shadow-sm active:scale-[0.99]"
           >
-            <Mail className="h-7 w-7 text-orange-700" strokeWidth={2.25} aria-hidden />
+            <Mail className="h-7 w-7 text-waka-700" strokeWidth={2.25} aria-hidden />
             {t(lang, "supportEmailCta")}
           </a>
         </div>
@@ -68,7 +68,7 @@ export function SupportPage({ lang, setLang, isAuthenticated }: Props) {
         <p className="mt-6 rounded-2xl bg-stone-50 px-4 py-3 text-sm font-medium text-stone-700">{t(lang, "supportHoursNote")}</p>
 
         <div className="mt-8">
-          <p className="text-sm font-black uppercase tracking-wide text-orange-800/90">{t(lang, "supportTopicsTitle")}</p>
+          <p className="text-sm font-black uppercase tracking-wide text-waka-800/90">{t(lang, "supportTopicsTitle")}</p>
           <ul className="mt-3 space-y-2">
             {TOPIC_KEYS.map((key) => (
               <li

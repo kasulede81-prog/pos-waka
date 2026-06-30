@@ -28,6 +28,8 @@ type Props = {
   dragging?: boolean;
   dragOver?: boolean;
   selected?: boolean;
+  /** Sell catalog: shelf has zero products — show restock warning styling. */
+  emptyShelf?: boolean;
   onClick?: () => void;
   onDragPointerDown?: (e: PointerEvent) => void;
 };
@@ -100,11 +102,13 @@ export function PosShelfTile({
   dragging = false,
   dragOver = false,
   selected = false,
+  emptyShelf = false,
   onClick,
   onDragPointerDown,
 }: Props) {
   const isArrange = mode === "arrange";
   const badge = badgeLabel(lang, shelf);
+  const showEmptyWarning = emptyShelf && !isArrange && mode === "sell";
   const typo = shelfTypographyFromScale(sellFocus && !isArrange && !sellCatalogGrid ? Math.max(shelf.scale, 58) : shelf.scale);
   const customStyle = sellCatalogGrid ? undefined : shelfTileSurfaceStyle(shelf);
   const isBold = !sellCatalogGrid && (Boolean(customStyle) || shelf.color !== "default");
@@ -134,7 +138,7 @@ export function PosShelfTile({
         className={clsx(
           "mt-1.5 line-clamp-2 w-full text-center font-black leading-tight",
           sellCatalogGridDesktop ? "text-xs" : "text-[10px]",
-          selected ? "text-orange-600" : "text-stone-950",
+          selected ? "text-waka-600" : "text-stone-950",
         )}
       >
         {shelf.label}
@@ -143,7 +147,11 @@ export function PosShelfTile({
         className={clsx(
           "mt-0.5 line-clamp-1 w-full text-center font-semibold",
           sellCatalogGridDesktop ? "text-[10px]" : "text-[9px]",
-          selected ? "text-orange-500/90" : "text-stone-500",
+          showEmptyWarning
+            ? "font-black text-rose-700"
+            : selected
+              ? "text-waka-500/90"
+              : "text-stone-500",
         )}
       >
         {countLabel}
@@ -164,6 +172,15 @@ export function PosShelfTile({
           )}
         >
           {badge}
+        </span>
+      ) : showEmptyWarning ? (
+        <span
+          className={clsx(
+            "absolute right-2 top-2 max-w-[46%] truncate rounded-full bg-rose-100 px-1.5 py-0.5 font-black uppercase tracking-wide text-rose-800",
+            layoutSize === "large" ? "text-[10px] sm:text-xs" : "text-[9px]",
+          )}
+        >
+          {t(lang, "lowStockTitleFriendly")}
         </span>
       ) : null}
       <ShelfTileBody shelf={shelf} countLabel={countLabel} isArrange={isArrange} typo={typo} />
@@ -188,8 +205,10 @@ export function PosShelfTile({
           "flex flex-col items-center justify-center rounded-xl border shadow-sm transition-[border-color,box-shadow,transform] duration-150",
           heightClass,
           selected
-            ? "border-orange-500 bg-white text-stone-950 shadow-md ring-1 ring-orange-500/30"
-            : "border-stone-200/90 bg-white text-stone-950 active:scale-[0.97] active:border-orange-300 active:shadow-md motion-reduce:active:scale-100",
+            ? "border-waka-500 bg-white text-stone-950 shadow-md ring-1 ring-waka-500/30"
+            : showEmptyWarning
+              ? "border-rose-200/90 bg-rose-50/30 text-stone-950 active:border-rose-300"
+              : "border-stone-200/90 bg-white text-stone-950 active:scale-[0.97] active:border-waka-300 active:shadow-md motion-reduce:active:scale-100",
         )
       : clsx(
           "rounded-2xl border shadow-sm",

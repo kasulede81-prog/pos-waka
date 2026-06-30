@@ -2,7 +2,7 @@ import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import { t } from "./i18n";
 import { createPdfLayout, ensurePdfSpace, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
-import { downloadPdfBlob } from "./documentPrint";
+import { downloadPdfBlob, sharePdfBlob } from "./documentPrint";
 import { printDocumentNativeFallback } from "./nativePrintFallback";
 import { downloadTextFile } from "./monthlyBusinessReport";
 import type { CashPositionReconciliation, CashPositionReport } from "./cashPosition";
@@ -280,6 +280,45 @@ export async function printCashPositionReport(
     title: "Cash position",
     shareDialogTitle: "Print or share cash position",
   });
+}
+
+export async function shareCashPositionPdf(
+  lang: Language,
+  report: CashPositionReport,
+  reconciliation?: CashPositionReconciliation | null,
+): Promise<boolean> {
+  const blob = buildCashPositionPdfBlob(lang, report, reconciliation);
+  const stem = sanitizePdfStem(`cash-position-${report.dayKey}`);
+  return sharePdfBlob(`${stem}.pdf`, blob);
+}
+
+export function cashPositionReportPlainText(
+  lang: Language,
+  report: CashPositionReport,
+  reconciliation?: CashPositionReconciliation | null,
+): string {
+  return cashPositionToPlainText(lang, report, reconciliation);
+}
+
+export function openCashPositionEmail(
+  lang: Language,
+  report: CashPositionReport,
+  reconciliation?: CashPositionReconciliation | null,
+): boolean {
+  const subject = encodeURIComponent(`${report.shopName} — ${t(lang, "cashPositionTitle")} (${report.dayKey})`);
+  const body = encodeURIComponent(cashPositionToPlainText(lang, report, reconciliation));
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  return true;
+}
+
+export function openCashPositionWhatsApp(
+  lang: Language,
+  report: CashPositionReport,
+  reconciliation?: CashPositionReconciliation | null,
+): boolean {
+  const text = cashPositionToPlainText(lang, report, reconciliation).slice(0, 3500);
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener,noreferrer");
+  return true;
 }
 
 export async function downloadCashPositionCsv(

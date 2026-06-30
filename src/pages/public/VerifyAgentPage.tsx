@@ -61,7 +61,7 @@ export function VerifyAgentPage({ lang }: Props) {
   const inactive = result != null && !result.isActive;
 
   return (
-    <div className="min-h-dvh bg-gradient-to-b from-orange-50 via-stone-50 to-white text-stone-900">
+    <div className="min-h-dvh bg-gradient-to-b from-waka-50 via-stone-50 to-white text-stone-900">
       <header className="border-b border-stone-200/80 bg-white/90 px-4 py-4 backdrop-blur">
         <div className="mx-auto flex max-w-md items-center gap-3">
           <WakaSymbolIcon size="xs" className="h-10 w-10 shrink-0" />

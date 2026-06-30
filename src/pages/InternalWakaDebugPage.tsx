@@ -91,7 +91,7 @@ export function InternalWakaDebugPage({ lang, adminRow }: Props) {
     <div className="space-y-6 pb-16">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-wide text-orange-700">{t(lang, "internalDebugBadge")}</p>
+          <p className="text-xs font-black uppercase tracking-wide text-waka-700">{t(lang, "internalDebugBadge")}</p>
           <h1 className="text-2xl font-black text-stone-900">{t(lang, "internalDebugTitle")}</h1>
           <p className="mt-1 text-sm font-semibold text-stone-600">
             {adminRow.email ?? "—"} · {adminRow.role}

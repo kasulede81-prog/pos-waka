@@ -39,8 +39,8 @@ export function OwnerLiveOperationsSection({ lang, live }: Props) {
     <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm sm:p-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "ownerLiveOpsTitle")}</h2>
-          <p className="text-[11px] font-semibold text-slate-500">{t(lang, "ownerLiveOpsSub")}</p>
+          <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerLiveOpsTitle")}</h2>
+          <p className="text-[11px] font-semibold text-stone-500">{t(lang, "ownerLiveOpsSub")}</p>
         </div>
         <Link
           to="/settings/devices"

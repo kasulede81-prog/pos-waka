@@ -337,8 +337,8 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
     <>
       <SeoHead title={content.title} description={content.intro} path={SEO_PATH[kind]} structuredData="legal" />
       <main className="space-y-5">
-        <section className="rounded-3xl border border-orange-100 bg-white p-6 shadow-waka-sm">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">{WAKA_COMPANY_TAGLINE}</p>
+        <section className="rounded-3xl border border-waka-100 bg-white p-6 shadow-waka-sm">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">{WAKA_COMPANY_TAGLINE}</p>
           <h1 className="mt-2 text-3xl font-black leading-tight text-stone-950">{content.title}</h1>
           <p className="mt-3 text-base font-medium leading-relaxed text-stone-600">{content.intro}</p>
         </section>
@@ -360,7 +360,7 @@ export function LegalPolicyPage({ kind, lang, setLang, isAuthenticated }: Props)
 
         <WakaSupportCard />
 
-        <div className="flex flex-wrap justify-center gap-3 rounded-3xl border border-stone-100 bg-white p-4 text-sm font-black text-orange-800">
+        <div className="flex flex-wrap justify-center gap-3 rounded-3xl border border-stone-100 bg-white p-4 text-sm font-black text-waka-800">
           <Link to="/terms">Terms</Link>
           <Link to="/privacy">Privacy</Link>
           <Link to="/acceptable-use">Acceptable Use</Link>

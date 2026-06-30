@@ -32,14 +32,14 @@ export function PageHeader({
         <h1
           className={
             compact
-              ? "text-xl font-black tracking-tight text-stone-950 sm:text-2xl"
-              : "text-2xl font-black tracking-tight text-stone-950 sm:text-3xl"
+              ? "text-xl font-black tracking-tight text-foreground sm:text-2xl"
+              : "text-2xl font-black tracking-tight text-foreground sm:text-3xl"
           }
         >
           {title}
         </h1>
         {subtitle ? (
-          <p className={clsx("mt-0.5 font-medium text-stone-500", compact ? "text-xs" : "mt-1 text-sm")}>{subtitle}</p>
+          <p className={clsx("mt-0.5 font-medium text-muted-foreground", compact ? "text-xs" : "mt-1 text-sm")}>{subtitle}</p>
         ) : null}
       </div>
       {children}

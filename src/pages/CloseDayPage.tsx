@@ -110,7 +110,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
     return (
       <div className="space-y-4 pb-8">
         <PageHeader lang={lang} title={t(lang, "closeDay")} backLabel={t(lang, "officeBackToHub")} />
-        <p className="text-lg text-slate-700">{t(lang, "noPermission")}</p>
+        <p className="text-lg text-stone-700">{t(lang, "noPermission")}</p>
       </div>
     );
   }
@@ -129,17 +129,17 @@ export function CloseDayPage({ lang }: { lang: Language }) {
         {t(lang, "closeDayTrustNote")}
       </p>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-waka-sm">
+      <section className="rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm">
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl bg-stone-50 px-3 py-3 col-span-2">
-            <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "totalSales")}</p>
-            <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.total.toLocaleString()}</p>
-            <p className="mt-1 text-xs font-medium text-slate-600">{t(lang, "closeDayTotalSalesHint")}</p>
+            <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "totalSales")}</p>
+            <p className="mt-1 text-xl font-black text-stone-950">UGX {summary.total.toLocaleString()}</p>
+            <p className="mt-1 text-xs font-medium text-stone-600">{t(lang, "closeDayTotalSalesHint")}</p>
           </div>
           <div>
             <div className="rounded-2xl bg-stone-50 px-3 py-3">
-              <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "closeSimpleCashSalesToday")}</p>
-              <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.cash.toLocaleString()}</p>
+              <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "closeSimpleCashSalesToday")}</p>
+              <p className="mt-1 text-xl font-black text-stone-950">UGX {summary.cash.toLocaleString()}</p>
             </div>
           </div>
           <div className="rounded-2xl bg-amber-50 px-3 py-3">
@@ -185,8 +185,8 @@ export function CloseDayPage({ lang }: { lang: Language }) {
             </div>
           ) : null}
           <div className="rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 col-span-2">
-            <p className="text-[11px] font-black uppercase text-slate-500">{t(lang, "closeDayExpectedTitle")}</p>
-            <p className="mt-1 text-xl font-black text-slate-950">UGX {summary.expectedCash.toLocaleString()}</p>
+            <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "closeDayExpectedTitle")}</p>
+            <p className="mt-1 text-xl font-black text-stone-950">UGX {summary.expectedCash.toLocaleString()}</p>
           </div>
         </div>
         <div className="mt-4 rounded-2xl border border-waka-100 bg-waka-50/80 px-3 py-3 text-sm text-stone-800">
@@ -282,7 +282,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       </form>
 
       {doneMsg && (
-        <div className="space-y-3 rounded-2xl bg-slate-900 px-4 py-4 text-white">
+        <div className="space-y-3 rounded-2xl bg-stone-900 px-4 py-4 text-white">
           <p className="text-center text-lg font-bold">{t(lang, "closeSaved")}</p>
           {last && last.dateKey === todayKey ? (
             <DocumentActionsBar
@@ -301,7 +301,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
       )}
 
       {last && last.dateKey === todayKey ? (
-        <section className="rounded-3xl border-2 border-slate-200 bg-slate-50 p-5">
+        <section className="rounded-3xl border-2 border-stone-200 bg-stone-50 p-5">
           <div className="mb-4">
             <DocumentActionsBar
               lang={lang}
@@ -314,10 +314,10 @@ export function CloseDayPage({ lang }: { lang: Language }) {
               }
             />
           </div>
-          <p className="text-lg font-black text-slate-900">{t(lang, "closeLastDiff")}</p>
-          <p className="mt-2 text-3xl font-black text-slate-800">
+          <p className="text-lg font-black text-stone-900">{t(lang, "closeLastDiff")}</p>
+          <p className="mt-2 text-3xl font-black text-stone-800">
             UGX {last.differenceUgx.toLocaleString()}
-            <span className="ml-2 text-lg font-semibold text-slate-600">
+            <span className="ml-2 text-lg font-semibold text-stone-600">
               {last.differenceUgx === 0 ? t(lang, "closeMatch") : last.differenceUgx > 0 ? t(lang, "closeExtra") : t(lang, "closeShort")}
             </span>
           </p>
@@ -331,7 +331,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       {hasPermission(actor.role, "owner.cash_history") ? (
         <section className="space-y-4">
-          <h2 className="text-xl font-black text-slate-900">{t(lang, "closeHistoryTitle")}</h2>
+          <h2 className="text-xl font-black text-stone-900">{t(lang, "closeHistoryTitle")}</h2>
           <HistoryHeroCard
             lang={lang}
             filter={historyFilter}
@@ -356,7 +356,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
           />
           <HistoryListCard
             isEmpty={filteredDayCloses.length === 0}
-            empty={<p className="text-sm font-semibold text-slate-600">{t(lang, "closeHistoryTitle")}</p>}
+            empty={<p className="text-sm font-semibold text-stone-600">{t(lang, "closeHistoryTitle")}</p>}
           >
             <ul>
             {filteredDayCloses.slice(0, 20).map((d) => {
@@ -365,8 +365,8 @@ export function CloseDayPage({ lang }: { lang: Language }) {
                 <li key={d.id} className="border-b border-stone-100 last:border-b-0">
                   <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4">
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-slate-950">{d.dateKey}</p>
-                      <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                      <p className="text-sm font-black text-stone-950">{d.dateKey}</p>
+                      <p className="mt-0.5 text-xs font-semibold text-stone-500">
                         {t(lang, "ownerExpectedVsCounted")}: UGX {d.expectedCashUgx.toLocaleString()} / UGX{" "}
                         {d.countedCashUgx.toLocaleString()}
                       </p>
@@ -377,10 +377,10 @@ export function CloseDayPage({ lang }: { lang: Language }) {
                           !
                         </span>
                       ) : null}
-                      <p className="text-sm font-black text-slate-900">
+                      <p className="text-sm font-black text-stone-900">
                         UGX {d.differenceUgx.toLocaleString()}
                       </p>
-                      <p className="text-[11px] font-semibold text-slate-500">
+                      <p className="text-[11px] font-semibold text-stone-500">
                         {t(lang, "closeHistoryProfit")}: UGX {d.profitEstimateUgx.toLocaleString()}
                       </p>
                     </div>

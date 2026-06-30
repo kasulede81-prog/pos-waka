@@ -133,14 +133,14 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
         className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-black text-slate-900">
+        <h2 className="text-xl font-black text-stone-900">
           {tTemplate(lang, "stockRestockProductTitle", { name: product.name })}
         </h2>
-        <p className="mt-1 text-sm text-slate-600">{t(lang, "stockRestockProductHint")}</p>
+        <p className="mt-1 text-sm text-stone-600">{t(lang, "stockRestockProductHint")}</p>
 
         {pharmacyPack && unitOptions.length > 0 ? (
           <>
-            <p className="mt-4 text-sm font-bold text-slate-700">{t(lang, "pharmacyRestockByUnit")}</p>
+            <p className="mt-4 text-sm font-bold text-stone-700">{t(lang, "pharmacyRestockByUnit")}</p>
             <div className="mt-2 grid grid-cols-3 gap-2">
               {unitOptions.map((opt) => (
                 <button
@@ -149,7 +149,7 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
                   onClick={() => setRestockUnit(opt.id)}
                   className={clsx(
                     "min-h-[48px] rounded-2xl border-2 text-sm font-black capitalize",
-                    restockUnit === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-900",
+                    restockUnit === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-900",
                   )}
                 >
                   {opt.label}
@@ -159,36 +159,36 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
           </>
         ) : null}
 
-        <label className="mt-4 block text-sm font-bold text-slate-800">
+        <label className="mt-4 block text-sm font-bold text-stone-800">
           {tTemplate(lang, pharmacyPack ? "pharmacyRestockQty" : "stockRestockPackQty", { unit: packName, pack: packName })}
           <input
             value={packQty}
             onChange={(e) => setPackQty(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
             inputMode="decimal"
-            className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-2xl font-black"
+            className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
           />
         </label>
 
         {pharmacyPack ? (
-          <label className="mt-4 block text-sm font-bold text-slate-800">
+          <label className="mt-4 block text-sm font-bold text-stone-800">
             {t(lang, "pharmacyPackTotalPaid")}
             <input
               value={invoiceTotal}
               onChange={(e) => setInvoiceTotal(e.target.value.replace(/\D/g, "").slice(0, 12))}
               inputMode="numeric"
               placeholder="36000"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-2xl font-black"
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
             />
           </label>
         ) : (
-          <label className="mt-4 block text-sm font-bold text-slate-800">
+          <label className="mt-4 block text-sm font-bold text-stone-800">
             {tTemplate(lang, "stockRestockPackPrice", { pack: packName })}
             <input
               value={packPrice}
               onChange={(e) => setPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
               inputMode="numeric"
               placeholder="36000"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-2xl font-black"
+              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
             />
           </label>
         )}
@@ -215,12 +215,12 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
           </p>
         ) : null}
 
-        <label className="mt-4 block text-sm font-bold text-slate-800">
+        <label className="mt-4 block text-sm font-bold text-stone-800">
           {t(lang, "restockSupplier")}
           <select
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-slate-200 bg-white px-3 text-base font-bold"
+            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white px-3 text-base font-bold"
           >
             <option value={WALK_IN_SUPPLIER_ID}>{t(lang, "restockTownBuy")}</option>
             {suppliers.map((s) => (

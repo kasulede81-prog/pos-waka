@@ -24,7 +24,7 @@ export function CommandCenterExecutiveFooter({
   const stars = starCountFromScore(score);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-stone-200/60 bg-gradient-to-br from-white/90 via-stone-50/80 to-orange-50/40 p-4 shadow-sm backdrop-blur-md sm:p-5">
+    <section className="overflow-hidden rounded-3xl border border-stone-200/60 bg-gradient-to-br from-white/90 via-stone-50/80 to-waka-50/40 p-4 shadow-sm backdrop-blur-md sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-black uppercase tracking-widest text-stone-500">{t(lang, "cmdCenterExecutiveTitle")}</p>

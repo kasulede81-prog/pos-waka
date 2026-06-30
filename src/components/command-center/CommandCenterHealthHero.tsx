@@ -52,7 +52,7 @@ function HealthRing({ score }: { score: number }) {
 
 export function CommandCenterHealthHero({ lang, score, domains }: Props) {
   return (
-    <section className="overflow-hidden rounded-3xl border border-stone-200/90 bg-gradient-to-br from-white via-white to-orange-50/40 p-4 shadow-sm sm:p-5">
+    <section className="overflow-hidden rounded-3xl border border-stone-200/90 bg-gradient-to-br from-white via-white to-waka-50/40 p-4 shadow-sm sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <HealthRing score={score} />
         <div className="min-w-0 flex-1">

@@ -63,7 +63,7 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
   if (loading) {
     return createPortal(
       <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] flex-col items-center justify-center bg-stone-100 font-admin">
-        <Loader2 className="h-8 w-8 animate-spin text-orange-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-waka-600" />
         <p className="mt-3 text-sm font-semibold text-stone-600">Loading admin…</p>
       </div>,
       document.body,
@@ -101,7 +101,7 @@ export function WakaAdminShell({ lang, adminRow, loading, active, previewMode = 
 
   return createPortal(
     <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
-      <header className="shrink-0 bg-orange-600 text-white shadow-md">
+      <header className="shrink-0 bg-waka-600 text-white shadow-md">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3">
           {showBack ? (
             <button

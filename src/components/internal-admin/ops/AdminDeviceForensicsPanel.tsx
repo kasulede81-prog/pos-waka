@@ -38,7 +38,7 @@ export function AdminDeviceForensicsPanel({ previewMode = false }: Props) {
           type="button"
           disabled={busy}
           onClick={runSearch}
-          className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-orange-600 px-4 text-xs font-black text-white disabled:opacity-50"
+          className="inline-flex min-h-[44px] items-center gap-1 rounded-xl bg-waka-600 px-4 text-xs font-black text-white disabled:opacity-50"
         >
           <Search className="h-4 w-4" aria-hidden />
           Search
@@ -64,7 +64,7 @@ export function AdminDeviceForensicsPanel({ previewMode = false }: Props) {
             <p className="text-xs text-stone-600">Pending: {d.pending_outbound ?? 0}</p>
             <Link
               to={internalAdminShopHref(d.shop_id, previewMode)}
-              className="mt-2 inline-block text-xs font-black text-orange-700 underline"
+              className="mt-2 inline-block text-xs font-black text-waka-700 underline"
             >
               Open shop →
             </Link>

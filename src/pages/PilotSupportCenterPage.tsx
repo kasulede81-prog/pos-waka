@@ -243,7 +243,7 @@ export function PilotSupportCenterPage({ lang }: Props) {
         <button
           type="button"
           onClick={() => void reportViaEmail()}
-          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border-2 border-orange-200 bg-orange-50 text-sm font-black text-orange-950"
+          className="inline-flex h-12 items-center justify-center gap-2 rounded-2xl border-2 border-waka-200 bg-waka-50 text-sm font-black text-waka-950"
         >
           <Mail className="h-5 w-5" aria-hidden />
           {t(lang, "pilotSupportReportEmail")}

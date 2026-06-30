@@ -17,7 +17,7 @@ export function dashboardKpiGridClass(extraLgCols?: "2" | "3"): string {
 
 /** Internal admin pulse KPI cards. */
 export function adminKpiGridClass(): string {
-  return "grid grid-cols-2 gap-2 min-[520px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-6";
+  return "grid grid-cols-2 gap-2 min-[520px]:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6";
 }
 
 /** Wide back-office / admin content column — balanced on ultrawide without overstretching. */

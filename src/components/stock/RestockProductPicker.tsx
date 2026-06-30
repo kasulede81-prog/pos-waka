@@ -43,11 +43,11 @@ export function RestockProductPicker({ lang, open, query, onQueryChange, product
       aria-modal
       aria-labelledby="restock-picker-title"
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <button type="button" className="min-h-[44px] rounded-xl px-3 py-2 text-sm font-bold text-slate-600 active:bg-slate-100" onClick={onClose}>
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
+        <button type="button" className="min-h-[44px] rounded-xl px-3 py-2 text-sm font-bold text-stone-600 active:bg-stone-100" onClick={onClose}>
           {t(lang, "cancel")}
         </button>
-        <h2 id="restock-picker-title" className="text-center text-lg font-black text-slate-900">
+        <h2 id="restock-picker-title" className="text-center text-lg font-black text-stone-900">
           {t(lang, "restockPickProduct")}
         </h2>
         <span className="w-[4.5rem]" aria-hidden />
@@ -58,14 +58,14 @@ export function RestockProductPicker({ lang, open, query, onQueryChange, product
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder={t(lang, "restockSearchProducts")}
-          className="min-h-[48px] w-full rounded-xl border-2 border-slate-200 px-4 text-base font-semibold outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200"
+          className="min-h-[48px] w-full rounded-xl border-2 border-stone-200 px-4 text-base font-semibold outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200"
           autoFocus
         />
       </div>
 
       <ul className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 pb-4 [-webkit-overflow-scrolling:touch]">
         {products.length === 0 ? (
-          <li className="py-12 text-center text-sm font-semibold text-slate-500">{t(lang, "restockNoProductsMatch")}</li>
+          <li className="py-12 text-center text-sm font-semibold text-stone-500">{t(lang, "restockNoProductsMatch")}</li>
         ) : (
           products.map((p) => {
             const pack = packLabelFromProduct(p);
@@ -75,10 +75,10 @@ export function RestockProductPicker({ lang, open, query, onQueryChange, product
                 <button
                   type="button"
                   onClick={() => onPick(p.id)}
-                  className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-left active:bg-waka-50"
+                  className="w-full rounded-2xl border border-stone-100 bg-stone-50 px-4 py-3.5 text-left active:bg-waka-50"
                 >
-                  <span className="text-base font-black text-slate-900">{p.name}</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-slate-500">
+                  <span className="text-base font-black text-stone-900">{p.name}</span>
+                  <span className="mt-0.5 block text-xs font-semibold text-stone-500">
                     {[p.category, hint].filter(Boolean).join(" · ")}
                   </span>
                 </button>

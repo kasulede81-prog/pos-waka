@@ -107,7 +107,7 @@ export function PharmacyPackagingFields({
             onChange={(e) => onChange({ enabled: e.target.checked })}
             className="mt-1 h-5 w-5 accent-teal-600"
           />
-          <span className="text-sm font-semibold text-slate-800">{t(lang, "pharmacyPackEnableCheckbox")}</span>
+          <span className="text-sm font-semibold text-stone-800">{t(lang, "pharmacyPackEnableCheckbox")}</span>
         </label>
       ) : null}
 
@@ -128,7 +128,7 @@ export function PharmacyPackagingFields({
             </select>
           </label>
 
-          <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
             <input
               type="checkbox"
               checked={state.level1Enabled}
@@ -159,7 +159,7 @@ export function PharmacyPackagingFields({
             </div>
           ) : null}
 
-          <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+          <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
             <input
               type="checkbox"
               checked={state.level2Enabled}
@@ -211,7 +211,7 @@ export function PharmacyPackagingFields({
                   inputMode="numeric"
                   className={clsx(inputClass, "mt-1")}
                 />
-                <label className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-600">
+                <label className="mt-2 flex items-center gap-2 text-xs font-bold text-stone-600">
                   <input
                     type="checkbox"
                     checked={state.sellStrip}
@@ -230,7 +230,7 @@ export function PharmacyPackagingFields({
                   inputMode="numeric"
                   className={clsx(inputClass, "mt-1")}
                 />
-                <label className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-600">
+                <label className="mt-2 flex items-center gap-2 text-xs font-bold text-stone-600">
                   <input
                     type="checkbox"
                     checked={state.sellBox}

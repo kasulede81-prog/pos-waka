@@ -20,7 +20,13 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
   },
-    plugins: {
+  plugins: {
+    SystemBars: {
+      insetsHandling: "css",
+      style: "DARK",
+      hidden: false,
+      animation: "NONE",
+    },
     Keyboard: {
       resize: "body",
       resizeOnFullScreen: true,

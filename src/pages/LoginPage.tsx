@@ -84,7 +84,7 @@ export function LoginPage({
     return (
       <AuthLayout lang={lang} setLang={setLang}>
         <div className="flex flex-col items-center gap-3 py-12">
-          <div className="h-14 w-14 rounded-full bg-orange-100 waka-skeleton-bar dark:bg-orange-950/40" />
+          <div className="h-14 w-14 rounded-full bg-waka-100 waka-skeleton-bar dark:bg-waka-950/40" />
           <p className="text-center text-sm font-medium text-stone-600">{t(lang, "loadingAuth")}</p>
         </div>
       </AuthLayout>
@@ -94,7 +94,7 @@ export function LoginPage({
   return (
     <AuthLayout lang={lang} setLang={setLang}>
       <div className="rounded-[1.75rem] border border-stone-200/70 bg-white p-6 shadow-[0_8px_40px_rgba(28,25,23,0.07)] sm:p-8 dark:border-stone-800 dark:bg-stone-900 dark:shadow-none">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-orange-50 ring-1 ring-orange-100 dark:bg-orange-950/40 dark:ring-orange-900/50">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-waka-50 ring-1 ring-waka-100 dark:bg-waka-950/40 dark:ring-waka-900/50">
           <WakaSymbolIcon size="md" className="!h-9 !w-9" />
         </div>
 
@@ -205,7 +205,7 @@ export function LoginPage({
           <button
             disabled={busy}
             type="submit"
-            className="flex min-h-[52px] w-full items-center justify-between rounded-xl bg-waka-600 px-5 py-3.5 text-base font-black text-white shadow-md shadow-orange-600/20 transition active:scale-[0.99] disabled:opacity-50 motion-reduce:active:scale-100"
+            className="flex min-h-[52px] w-full items-center justify-between rounded-xl bg-waka-600 px-5 py-3.5 text-base font-black text-white shadow-md shadow-waka-600/20 transition active:scale-[0.99] disabled:opacity-50 motion-reduce:active:scale-100"
           >
             <span>{busy ? "…" : t(lang, "signIn")}</span>
             <ArrowRight className="h-5 w-5" aria-hidden />
@@ -236,9 +236,9 @@ export function LoginPage({
           </p>
         ) : null}
 
-        <div className="mt-6 rounded-2xl bg-orange-50/90 px-4 py-3.5 ring-1 ring-orange-100 dark:bg-orange-950/30 dark:ring-orange-900/40">
+        <div className="mt-6 rounded-2xl bg-waka-50/90 px-4 py-3.5 ring-1 ring-waka-100 dark:bg-waka-950/30 dark:ring-waka-900/40">
           <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-orange-100 text-waka-600 dark:bg-orange-900/50 dark:text-waka-400">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-waka-100 text-waka-600 dark:bg-waka-900/50 dark:text-waka-400">
               <Headphones className="h-4 w-4" aria-hidden />
             </span>
             <div className="min-w-0 flex-1">

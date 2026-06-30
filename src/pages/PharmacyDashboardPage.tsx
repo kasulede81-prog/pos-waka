@@ -144,12 +144,12 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
           <p className="text-xs font-black uppercase text-stone-700">{t(lang, "pharmacyDashInventoryValue")}</p>
           <p className="mt-1 text-2xl font-black text-stone-950">UGX {stats.inventoryValueUgx.toLocaleString()}</p>
         </div>
-        <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-          <p className="text-xs font-black uppercase text-orange-800">{t(lang, "pharmacyDashExpiringStockValue")}</p>
-          <p className="mt-1 text-2xl font-black text-orange-950">
+        <div className="rounded-2xl border border-waka-200 bg-waka-50 p-4">
+          <p className="text-xs font-black uppercase text-waka-800">{t(lang, "pharmacyDashExpiringStockValue")}</p>
+          <p className="mt-1 text-2xl font-black text-waka-950">
             UGX {stats.expiringStockValueUgx.toLocaleString()}
           </p>
-          <p className="text-xs font-semibold text-orange-800">{t(lang, "pharmacyDashInventoryAtRisk")}</p>
+          <p className="text-xs font-semibold text-waka-800">{t(lang, "pharmacyDashInventoryAtRisk")}</p>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
           <p className="text-xs font-black uppercase text-rose-800">{t(lang, "pharmacyDashLowStock")}</p>
@@ -187,7 +187,7 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
                   <span className="truncate font-bold text-stone-900">{formatMedicineFullLabel(p)}</span>
                   <span className="flex shrink-0 items-center gap-2">
                     <ExpiryStatusBadge lang={lang} product={p} compact />
-                    <span className="font-black text-orange-700">{p.expiryDate}</span>
+                    <span className="font-black text-waka-700">{p.expiryDate}</span>
                   </span>
                 </li>
               ))}

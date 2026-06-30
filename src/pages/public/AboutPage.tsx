@@ -124,7 +124,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
 
       <article className="space-y-8">
         <header className="space-y-4">
-          <p className="text-xs font-black uppercase tracking-[0.22em] text-orange-700">About us</p>
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-waka-700">About us</p>
           <h1 className="text-4xl font-black leading-tight text-stone-950 sm:text-5xl">
             Built in Uganda. Built for African Business.
           </h1>
@@ -191,7 +191,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
           <div className="mt-6 grid gap-6 sm:grid-cols-2">
             <div>
               <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Email</h3>
-              <ul className="mt-2 space-y-1 text-sm font-semibold text-orange-800">
+              <ul className="mt-2 space-y-1 text-sm font-semibold text-waka-800">
                 {WAKA_SUPPORT_EMAILS.map((email) => (
                   <li key={email}>
                     <a href={`mailto:${email}`} className="hover:underline">
@@ -203,7 +203,7 @@ export function AboutPage({ lang, setLang, isAuthenticated }: Props) {
             </div>
             <div>
               <h3 className="text-[11px] font-black uppercase tracking-wide text-stone-500">Website</h3>
-              <p className="mt-2 text-sm font-semibold text-orange-800">
+              <p className="mt-2 text-sm font-semibold text-waka-800">
                 <a href={WAKA_POS_URL} className="hover:underline">
                   pos.waka.ug
                 </a>
@@ -236,7 +236,7 @@ function ContentSection({ title, children }: { title: string; children: ReactNod
 
 function FeatureCard({ block }: { block: FeatureBlock }) {
   return (
-    <article className="rounded-2xl border border-orange-100 bg-orange-50/40 p-5 sm:p-6">
+    <article className="rounded-2xl border border-waka-100 bg-waka-50/40 p-5 sm:p-6">
       <h3 className="text-lg font-black text-stone-950">{block.title}</h3>
       {block.intro?.map((paragraph) => (
         <p key={paragraph} className="mt-2 text-sm font-medium leading-relaxed text-stone-700">

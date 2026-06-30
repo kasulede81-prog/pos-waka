@@ -38,7 +38,7 @@ const TONE_CLASS: Record<InvestigationKpiCard["iconTone"], string> = {
   yellow: "bg-amber-50 text-amber-700 ring-amber-100",
   purple: "bg-violet-50 text-violet-700 ring-violet-100",
   red: "bg-rose-50 text-rose-700 ring-rose-100",
-  slate: "bg-slate-50 text-slate-700 ring-slate-100",
+  slate: "bg-stone-50 text-stone-700 ring-stone-100",
 };
 
 export function InvestigationKpiGrid({ lang, cards, activeKpi, periodLabel, onSelect }: Props) {

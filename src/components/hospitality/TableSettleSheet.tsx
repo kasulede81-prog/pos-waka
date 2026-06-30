@@ -55,7 +55,7 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
             <h2 className="text-xl font-black text-stone-950">{t(lang, "tableSettleTitle")}</h2>
             <p className="mt-1 text-2xl font-black text-waka-700">{formatUgx(totalUgx)}</p>
             {splitBreakdown?.length ? (
-              <ul className="mt-2 space-y-1 text-xs font-bold text-slate-600">
+              <ul className="mt-2 space-y-1 text-xs font-bold text-stone-600">
                 {splitBreakdown.map((s) => (
                   <li key={s.label}>
                     {s.label}: {formatUgx(s.amountUgx)}
@@ -66,7 +66,7 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
           </div>
           <button
             type="button"
-            className="min-h-[44px] shrink-0 px-2 text-sm font-bold text-slate-500"
+            className="min-h-[44px] shrink-0 px-2 text-sm font-bold text-stone-500"
             onClick={onClose}
             disabled={busy}
           >
@@ -99,7 +99,7 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
             onClick={() => setMethod(m)}
             className={clsx(
               "min-h-11 rounded-xl border text-xs font-black sm:text-sm",
-              method === m ? "border-waka-500 bg-waka-50 text-waka-950" : "border-slate-200 bg-white text-slate-700",
+              method === m ? "border-waka-500 bg-waka-50 text-waka-950" : "border-stone-200 bg-white text-stone-700",
             )}
           >
             {m === "cash"
@@ -113,12 +113,12 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
 
       {(method === "cash" || method === "mixed") && (
         <label className="mt-4 block">
-          <span className="text-sm font-bold text-slate-700">{t(lang, "paymentCashLabel")}</span>
+          <span className="text-sm font-bold text-stone-700">{t(lang, "paymentCashLabel")}</span>
           <input
             value={cashInput}
             onChange={(e) => setCashInput(e.target.value.replace(/[^\d]/g, ""))}
             inputMode="numeric"
-            className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-200 px-4 py-3 text-xl font-black"
+            className="mt-1 min-h-[48px] w-full rounded-xl border border-stone-200 px-4 py-3 text-xl font-black"
             placeholder="0"
           />
         </label>
@@ -126,12 +126,12 @@ export function TableSettleSheet({ lang, open, totalUgx, busy = false, splitBrea
 
       {method === "mixed" && (
         <label className="mt-3 block">
-          <span className="text-sm font-bold text-slate-700">{t(lang, "paymentMobileMoneyLabel")}</span>
+          <span className="text-sm font-bold text-stone-700">{t(lang, "paymentMobileMoneyLabel")}</span>
           <input
             value={momoInput}
             onChange={(e) => setMomoInput(e.target.value.replace(/[^\d]/g, ""))}
             inputMode="numeric"
-            className="mt-1 min-h-[48px] w-full rounded-xl border border-slate-200 px-4 py-3 text-xl font-black"
+            className="mt-1 min-h-[48px] w-full rounded-xl border border-stone-200 px-4 py-3 text-xl font-black"
             placeholder="0"
           />
         </label>

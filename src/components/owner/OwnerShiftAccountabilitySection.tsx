@@ -30,11 +30,11 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
   return (
     <HistoryListCard
       isEmpty={rows.length === 0}
-      empty={<p className="text-sm font-semibold text-slate-500">{t(lang, "ownerShiftEmpty")}</p>}
+      empty={<p className="text-sm font-semibold text-stone-500">{t(lang, "ownerShiftEmpty")}</p>}
     >
       <div className="border-b border-stone-100 px-3 py-2.5 sm:px-4 sm:py-3">
-        <h2 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "ownerShiftTitle")}</h2>
-        <p className="text-[11px] font-semibold text-slate-500">{periodLabel}</p>
+        <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerShiftTitle")}</h2>
+        <p className="text-[11px] font-semibold text-stone-500">{periodLabel}</p>
       </div>
 
       {offenders.length > 0 ? (
@@ -57,7 +57,7 @@ export function OwnerShiftAccountabilitySection({ lang, rows, periodLabel }: Pro
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <p className="font-black text-slate-950">{row.label}</p>
+                  <p className="font-black text-stone-950">{row.label}</p>
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-black ${riskClass(row.riskTier)}`}>
                     {riskBadge(lang, row.riskTier, row.riskScore)}
                   </span>

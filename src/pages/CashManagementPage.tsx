@@ -191,7 +191,7 @@ export function CashManagementPage({ lang }: Props) {
 
       {(snapshot.shortageShiftCount > 0 || snapshot.topShortages.length > 0) && canShifts ? (
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-black text-slate-950">{t(lang, "cashManagementShortages")}</h2>
+          <h2 className="text-base font-black text-stone-950">{t(lang, "cashManagementShortages")}</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.topShortages.map((row) => (
               <li key={row.userId} className="flex justify-between rounded-xl bg-stone-50 px-3 py-2 text-sm">
@@ -207,7 +207,7 @@ export function CashManagementPage({ lang }: Props) {
 
       {snapshot.floatVerificationFeed.length > 0 ? (
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-black text-slate-950">{t(lang, "ownerCashFloatFeed")}</h2>
+          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerCashFloatFeed")}</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.floatVerificationFeed.map((row) => (
               <li key={row.shiftId} className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs">
@@ -226,7 +226,7 @@ export function CashManagementPage({ lang }: Props) {
 
       {snapshot.adjustmentFeed.length > 0 ? (
         <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-          <h2 className="text-base font-black text-slate-950">{t(lang, "ownerCashAdjustmentFeed")}</h2>
+          <h2 className="text-base font-black text-stone-950">{t(lang, "ownerCashAdjustmentFeed")}</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.adjustmentFeed.map((row) => (
               <li key={row.id} className="flex justify-between rounded-xl bg-stone-50 px-3 py-2 text-xs">
@@ -247,7 +247,7 @@ export function CashManagementPage({ lang }: Props) {
             onClick={() => setShowVarianceHistory((v) => !v)}
             className="flex w-full items-center justify-between text-left"
           >
-            <h2 className="text-base font-black text-slate-950">{t(lang, "cashManagementVarianceHistory")}</h2>
+            <h2 className="text-base font-black text-stone-950">{t(lang, "cashManagementVarianceHistory")}</h2>
             <span className="text-sm font-bold text-stone-500">{showVarianceHistory ? "−" : "+"}</span>
           </button>
           {showVarianceHistory ? (

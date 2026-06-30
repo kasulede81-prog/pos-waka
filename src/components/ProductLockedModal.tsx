@@ -23,8 +23,8 @@ export function ProductLockedModal({ lang, open, onClose }: Props) {
         className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="text-2xl font-black text-slate-900">{t(lang, "productLockedTitle")}</p>
-        <p className="mt-2 text-base font-semibold leading-relaxed text-slate-600">{t(lang, "productLockedBody")}</p>
+        <p className="text-2xl font-black text-stone-900">{t(lang, "productLockedTitle")}</p>
+        <p className="mt-2 text-base font-semibold leading-relaxed text-stone-600">{t(lang, "productLockedBody")}</p>
         <div className="mt-5 grid gap-2">
           <Link
             to="/upgrade"

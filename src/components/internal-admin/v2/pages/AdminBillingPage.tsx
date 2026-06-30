@@ -69,7 +69,7 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
       <div className="grid gap-2">
         <Link
           to="/internal/waka/billing/pricing-campaigns"
-          className="min-h-[44px] rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-left text-sm font-black text-orange-950"
+          className="min-h-[44px] rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-left text-sm font-black text-waka-950"
         >
           Pricing campaigns →
         </Link>

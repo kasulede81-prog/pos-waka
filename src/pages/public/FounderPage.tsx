@@ -37,9 +37,9 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
       <article className="space-y-10">
         <header className="flex flex-col items-center text-center">
           <FounderAvatar large className="mx-auto" />
-          <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-orange-700">Founder profile</p>
+          <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-waka-700">Founder profile</p>
           <h1 className="mt-2 text-4xl font-black text-stone-950">{FOUNDER_NAME}</h1>
-          <p className="mt-2 text-lg font-bold text-orange-800">
+          <p className="mt-2 text-lg font-bold text-waka-800">
             {FOUNDER_ROLE}, {WAKA_BRAND_NAME}
           </p>
           <p className="mt-1 text-xs font-medium text-stone-500">Legal entity: {WAKA_LEGAL_COMPANY_NAME}</p>
@@ -57,7 +57,7 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-orange-100 bg-orange-50 p-6 sm:p-8">
+        <section className="rounded-3xl border border-waka-100 bg-waka-50 p-6 sm:p-8">
           <h2 className="text-lg font-black text-stone-950">Vision</h2>
           <p className="mt-4 text-base font-medium leading-relaxed text-stone-800">{FOUNDER_VISION}</p>
           <p className="mt-4 text-sm font-medium leading-relaxed text-stone-700">{FOUNDER_QUOTE_SECOND}</p>
@@ -83,7 +83,7 @@ export function FounderPage({ lang, setLang, isAuthenticated }: Props) {
 
         <p className="text-center text-xs font-medium text-stone-500">
           {WAKA_PRODUCT_DESCRIPTION}{" "}
-          <Link to="/about" className="font-bold text-orange-800 underline">
+          <Link to="/about" className="font-bold text-waka-800 underline">
             About Waka POS
           </Link>
         </p>

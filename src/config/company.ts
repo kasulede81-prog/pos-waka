@@ -138,3 +138,12 @@ export function wakaSupportMailtoUrl(subject = "Waka POS enquiry", body = ""): s
   if (body) params.set("body", body);
   return `mailto:${WAKA_SUPPORT_EMAILS.join(",")}?${params.toString()}`;
 }
+
+/** Visual identity — re-export for legal/marketing; canonical tokens in `src/lib/brandTokens.ts` */
+export {
+  WAKA_BRAND_ORANGE,
+  WAKA_BRAND_ORANGE_DARK,
+  WAKA_BRAND_CREAM,
+  WAKA_BRAND_CREAM_WASH,
+  WAKA_BRAND_FONT_STACK,
+} from "../lib/brandTokens";

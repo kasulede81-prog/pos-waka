@@ -3,12 +3,13 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
-import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
+import { useReportingSales } from "../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../hooks/useReportingReturnRecords";
 import { useShopReportBundle } from "../hooks/useShopReporting";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { dateKeyKampala } from "../lib/datesUg";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { MONTH_TO_DATE_FILTER } from "../lib/dateFilters";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { formatDateFilterViewingLabel, isSingleDayFilter, selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -72,7 +73,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
     archiveNotice,
     archivedSalesCount,
     needsArchive,
-  } = useReportingDateFilter();
+  } = useReportingDateFilter(MONTH_TO_DATE_FILTER);
   const [compareEnabled, setCompareEnabled] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [dateOpen, setDateOpen] = useState(false);
@@ -80,7 +81,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const [activeKpi, setActiveKpi] = useState<AnalyticsKpiId | null>(null);
   const [reportHint, setReportHint] = useState<string | null>(null);
 
-  const sales = useDeferredReportingSales(includeArchived);
+  const sales = useReportingSales(includeArchived);
   const returnRecords = useReportingReturnRecords(includeArchived);
   const report = useShopReportBundle(filter, includeArchived);
   const { category, setCategory } = useBusinessAnalyticsCategory();
@@ -301,7 +302,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
         <DateFilterArchiveNotice lang={lang} archivedCount={archivedSalesCount} onEnableArchived={() => setIncludeArchived(true)} />
       ) : null}
       {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-        <p className="text-xs font-semibold text-slate-600">{t(lang, "dateFilterArchiveIncluded")}</p>
+        <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
       ) : null}
 
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />

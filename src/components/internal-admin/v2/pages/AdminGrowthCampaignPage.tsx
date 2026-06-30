@@ -88,7 +88,7 @@ const GRANT_MODE_LABELS: Record<GrowthGrantMode, string> = {
 };
 
 const inputCls =
-  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-semibold text-stone-900 outline-none focus:border-orange-500";
+  "w-full rounded-xl border border-stone-300 bg-white px-3 py-2.5 text-sm font-semibold text-stone-900 outline-none focus:border-waka-500";
 const labelCls = "mb-1 block text-[11px] font-black uppercase tracking-wide text-stone-500";
 
 export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
@@ -239,7 +239,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
-        <Loader2 className="h-6 w-6 animate-spin text-orange-600" />
+        <Loader2 className="h-6 w-6 animate-spin text-waka-600" />
       </div>
     );
   }
@@ -263,7 +263,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       </div>
 
       {notice ? (
-        <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-900">
+        <div className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3 text-sm font-bold text-waka-900">
           {notice}
         </div>
       ) : null}
@@ -272,12 +272,12 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-sm font-black text-stone-800">
-            <Megaphone className="h-4 w-4 text-orange-600" /> Campaigns
+            <Megaphone className="h-4 w-4 text-waka-600" /> Campaigns
           </h2>
           <button
             type="button"
             onClick={() => setDraft(EMPTY_DRAFT)}
-            className="flex min-h-[40px] items-center gap-1 rounded-xl bg-orange-600 px-3 text-xs font-black text-white hover:bg-orange-700"
+            className="flex min-h-[40px] items-center gap-1 rounded-xl bg-waka-600 px-3 text-xs font-black text-white hover:bg-waka-700"
           >
             <Plus className="h-4 w-4" /> New campaign
           </button>
@@ -295,7 +295,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
                     onClick={() => selectCampaign(c)}
                     className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 text-left text-sm font-bold ${
                       draft.id === c.id
-                        ? "border-orange-400 bg-orange-50 text-orange-900"
+                        ? "border-waka-400 bg-waka-50 text-waka-900"
                         : "border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100"
                     }`}
                   >
@@ -422,7 +422,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
           type="button"
           disabled={saving || previewMode}
           onClick={() => void handleSaveCampaign()}
-          className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white hover:bg-orange-700 disabled:opacity-60"
+          className="mt-4 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white hover:bg-waka-700 disabled:opacity-60"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           Save campaign
@@ -432,7 +432,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
       {/* Referral codes */}
       <section className="rounded-2xl border border-stone-200 bg-white p-4">
         <h2 className="mb-3 flex items-center gap-2 text-sm font-black text-stone-800">
-          <Ticket className="h-4 w-4 text-orange-600" /> Referral codes
+          <Ticket className="h-4 w-4 text-waka-600" /> Referral codes
         </h2>
 
         {codes.length === 0 ? (
@@ -550,7 +550,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
               type="button"
               disabled={savingCode || previewMode}
               onClick={() => void handleSaveCode()}
-              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-orange-600 px-4 text-sm font-black text-white hover:bg-orange-700 disabled:opacity-60"
+              className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-waka-600 px-4 text-sm font-black text-white hover:bg-waka-700 disabled:opacity-60"
             >
               {savingCode ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {codeDraft.id ? "Update code" : "Add code"}
@@ -609,7 +609,7 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
 
         {metricsLoading ? (
           <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-orange-600" />
+            <Loader2 className="h-5 w-5 animate-spin text-waka-600" />
           </div>
         ) : metrics ? (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

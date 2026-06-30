@@ -46,14 +46,14 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
         <button
           type="button"
           onClick={() => cleanupTickets()}
-          className="min-h-10 rounded-xl border border-slate-200 px-3 text-xs font-black text-slate-700"
+          className="min-h-10 rounded-xl border border-stone-200 px-3 text-xs font-black text-stone-700"
         >
           {t(lang, "kitchenCleanup")}
         </button>
       </div>
 
       {tickets.length === 0 ? (
-        <p className="rounded-2xl border border-slate-200 bg-white px-4 py-10 text-center text-sm font-bold text-slate-500">
+        <p className="rounded-2xl border border-stone-200 bg-white px-4 py-10 text-center text-sm font-bold text-stone-500">
           {t(lang, "kitchenDisplayEmpty")}
         </p>
       ) : (

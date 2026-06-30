@@ -118,7 +118,7 @@ export function InternalActivationOpsPage({ lang, lovableUi = false, previewMode
           <div
             className={clsx(
               "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-              lovableUi ? "bg-orange-100 text-orange-700" : "bg-primary/10 text-primary",
+              lovableUi ? "bg-waka-100 text-waka-700" : "bg-primary/10 text-primary",
             )}
           >
             <WalletCards className="h-4 w-4" />

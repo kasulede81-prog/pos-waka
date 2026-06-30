@@ -25,16 +25,16 @@ export function RefundReturnSummaryCard({
       </p>
       <dl className="mt-2 space-y-1.5">
         <div className="flex justify-between gap-2">
-          <dt className="font-semibold text-slate-700">{t(lang, "refundBreakdownCustomerPaid")}</dt>
-          <dd className="font-black text-slate-900">UGX {customerPaidUgx.toLocaleString()}</dd>
+          <dt className="font-semibold text-stone-700">{t(lang, "refundBreakdownCustomerPaid")}</dt>
+          <dd className="font-black text-stone-900">UGX {customerPaidUgx.toLocaleString()}</dd>
         </div>
         <div className="flex justify-between gap-2">
-          <dt className="font-semibold text-slate-700">{t(lang, "returnSummaryRefunding")}</dt>
+          <dt className="font-semibold text-stone-700">{t(lang, "returnSummaryRefunding")}</dt>
           <dd className="font-black text-amber-950">UGX {refundingUgx.toLocaleString()}</dd>
         </div>
         <div className="flex justify-between gap-2 border-t border-emerald-100 pt-1.5">
-          <dt className="font-semibold text-slate-700">{t(lang, "returnSummaryRemainingAfter")}</dt>
-          <dd className="font-bold text-slate-800">UGX {Math.max(0, remainingAfterUgx).toLocaleString()}</dd>
+          <dt className="font-semibold text-stone-700">{t(lang, "returnSummaryRemainingAfter")}</dt>
+          <dd className="font-bold text-stone-800">UGX {Math.max(0, remainingAfterUgx).toLocaleString()}</dd>
         </div>
       </dl>
       {customRefund ? (

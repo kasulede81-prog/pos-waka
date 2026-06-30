@@ -8,6 +8,8 @@ import { formatStockLabel } from "../../lib/sellingEngine";
 import { shelfIconFor } from "../../lib/productCategories";
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../lib/pharmacy";
+import { DISPLAY_SCALE_META } from "../../lib/displayScale/scaleTokens";
+import { useDisplayScale } from "../../context/DisplayScaleProvider";
 import { PosSellProductCard } from "./PosSellProductCard";
 import { PosDesktopProductCard } from "./PosDesktopProductCard";
 
@@ -45,15 +47,18 @@ function VirtualizedProductGridInner({
   onToggleFavorite,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const { level: displayScaleLevel, featureEnabled: displayScaleOn } = useDisplayScale();
+  const scaleMultiplier = displayScaleOn ? DISPLAY_SCALE_META[displayScaleLevel].multiplier : 1;
   const cols = Math.max(2, columnCount);
   const rowCount = Math.ceil(products.length / cols);
   const sellMobile = variant === "sellMobile";
   const sellDesktop = variant === "sellDesktop";
-  const rowEstimate = sellMobile
+  const baseRowEstimate = sellMobile
     ? ROW_ESTIMATE_SELL_MOBILE
     : sellDesktop
       ? ROW_ESTIMATE_SELL_DESKTOP
       : ROW_ESTIMATE_DEFAULT;
+  const rowEstimate = Math.round(baseRowEstimate * scaleMultiplier);
 
   const rowVirtualizer = useVirtualizer({
     count: rowCount,
@@ -130,7 +135,7 @@ function VirtualizedProductGridInner({
                       "relative flex min-h-[132px] flex-col justify-between rounded-2xl border p-3 text-left shadow-sm motion-reduce:transition-none",
                       locked
                         ? "border-stone-200/80 bg-stone-50/90 opacity-55"
-                        : "border-slate-200 bg-white shadow-md active:scale-[0.98] active:border-waka-500 active:shadow-sm",
+                        : "border-stone-200 bg-white shadow-md active:scale-[0.98] active:border-waka-500 active:shadow-sm",
                     )}
                     style={{ contentVisibility: "auto" }}
                   >
@@ -140,7 +145,7 @@ function VirtualizedProductGridInner({
                       </span>
                     ) : null}
                     <span>
-                      <span className="line-clamp-2 text-base font-black leading-tight text-slate-950">
+                      <span className="line-clamp-2 text-base font-black leading-tight text-stone-950">
                         {formatMedicineListPrimary(p)}
                       </span>
                       {detail ? (
@@ -154,7 +159,7 @@ function VirtualizedProductGridInner({
                         ) : null}
                         {(p.category ?? "").trim() || noShelfLabel}
                       </span>
-                      <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-slate-600">
+                      <span className="mt-0.5 block line-clamp-2 text-xs font-bold leading-snug text-stone-600">
                         {stockLabel}: {formatStockLabel(p)}
                       </span>
                     </span>

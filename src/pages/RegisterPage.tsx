@@ -347,7 +347,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
             <p className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
               {t(lang, "supabaseMissing")}
             </p>
-            <p className="text-sm text-slate-600">{t(lang, "supabaseRegisterHint")}</p>
+            <p className="text-sm text-stone-600">{t(lang, "supabaseRegisterHint")}</p>
           </div>
         ) : (
           <form onSubmit={submit} className="mt-6 space-y-4">
@@ -426,7 +426,7 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
                   ? `${t(lang, "registerDistrictsLoadFailed")} ${districtsError}`
                   : t(lang, "registerDistrictsLoading")}
                 {" "}
-                <button type="button" className="font-bold text-orange-700 underline" onClick={() => void loadDistricts()}>
+                <button type="button" className="font-bold text-waka-700 underline" onClick={() => void loadDistricts()}>
                   {t(lang, "registerDistrictsRetry")}
                 </button>
               </p>
@@ -496,8 +496,8 @@ export function RegisterPage({ lang, setLang, isAuthenticated, signUpQuick, onGo
           </form>
         )}
 
-        <p className="mt-6 text-center text-sm text-slate-600">
-          <Link to="/login" className="font-bold text-orange-700 underline underline-offset-2">
+        <p className="mt-6 text-center text-sm text-stone-600">
+          <Link to="/login" className="font-bold text-waka-700 underline underline-offset-2">
             {t(lang, "backToLogin")}
           </Link>
         </p>

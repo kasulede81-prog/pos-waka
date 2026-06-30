@@ -37,7 +37,7 @@ export function SettingsPharmacyPage({ lang }: { lang: Language }) {
           {(["warn", "block"] as PharmacyExpiredSaleBehavior[]).map((value) => (
             <label
               key={value}
-              className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-slate-900"
+              className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-stone-900"
             >
               <input
                 type="radio"

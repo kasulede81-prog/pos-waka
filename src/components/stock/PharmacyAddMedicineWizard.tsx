@@ -277,8 +277,8 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
   if (!open) return null;
 
   const inputClass =
-    "min-h-[52px] w-full rounded-2xl border-2 border-slate-200 px-4 text-lg font-bold outline-none ring-waka-300 focus:ring";
-  const labelClass = "block text-sm font-bold text-slate-700";
+    "min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-bold outline-none ring-waka-300 focus:ring";
+  const labelClass = "block text-sm font-bold text-stone-700";
 
   const outerLabel = level2Enabled
     ? level2Unit
@@ -293,20 +293,20 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
       aria-modal
       aria-labelledby="pharmacy-add-medicine-title"
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-slate-100 px-4 py-3">
+      <header className="flex shrink-0 items-center gap-2 border-b border-stone-100 px-4 py-3">
         {stepIndex > 0 ? (
-          <button type="button" onClick={back} className="rounded-xl p-2 text-slate-600" aria-label={t(lang, "back")}>
+          <button type="button" onClick={back} className="rounded-xl p-2 text-stone-600" aria-label={t(lang, "back")}>
             <ChevronLeft className="h-6 w-6" />
           </button>
         ) : (
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-bold text-slate-600">
+          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-bold text-stone-600">
             {t(lang, "cancel")}
           </button>
         )}
-        <h2 id="pharmacy-add-medicine-title" className="flex-1 text-center text-lg font-black text-slate-900">
+        <h2 id="pharmacy-add-medicine-title" className="flex-1 text-center text-lg font-black text-stone-900">
           {t(lang, "pharmacyPage_addMedicine")}
         </h2>
-        <span className="w-12 text-right text-xs font-bold text-slate-500">
+        <span className="w-12 text-right text-xs font-bold text-stone-500">
           {stepIndex + 1}/{STEPS.length}
         </span>
       </header>
@@ -320,7 +320,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
         {step === "details" ? (
           <div className="space-y-4">
-            <h3 className="text-xl font-black text-slate-900">{t(lang, "pharmacyPackStepDetailsTitle")}</h3>
+            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepDetailsTitle")}</h3>
             <label className={labelClass}>
               {t(lang, "pharmacyPage_medicineName")} *
               <input
@@ -344,7 +344,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                     }}
                     className={clsx(
                       "min-h-[44px] rounded-2xl border-2 px-2 text-sm font-black",
-                      categoryPick === c ? "border-waka-500 bg-waka-600 text-white" : "border-slate-200 bg-white text-slate-900",
+                      categoryPick === c ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-900",
                     )}
                   >
                     {shelfIconFor(c) ? <span className="mr-1">{shelfIconFor(c)}</span> : null}
@@ -391,16 +391,16 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
         {step === "stockCost" ? (
           <div className="space-y-4">
-            <h3 className="text-xl font-black text-slate-900">{t(lang, "pharmacyPackStepStockTitle")}</h3>
+            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepStockTitle")}</h3>
 
-            <label className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <label className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
               <input
                 type="checkbox"
                 checked={packagingEnabled}
                 onChange={(e) => setPackagingEnabled(e.target.checked)}
                 className="mt-1 h-5 w-5"
               />
-              <span className="text-sm font-semibold text-slate-800">{t(lang, "pharmacyPackEnableCheckbox")}</span>
+              <span className="text-sm font-semibold text-stone-800">{t(lang, "pharmacyPackEnableCheckbox")}</span>
             </label>
 
             {!packagingEnabled ? (
@@ -437,7 +437,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   </select>
                 </label>
 
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
                   <input type="checkbox" checked={level1Enabled} onChange={(e) => setLevel1Enabled(e.target.checked)} />
                   {t(lang, "pharmacyPackLevel1Optional")}
                 </label>
@@ -460,7 +460,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   </div>
                 ) : null}
 
-                <label className="flex items-center gap-2 text-sm font-bold text-slate-800">
+                <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
                   <input type="checkbox" checked={level2Enabled} onChange={(e) => setLevel2Enabled(e.target.checked)} />
                   {t(lang, "pharmacyPackLevel2Optional")}
                 </label>
@@ -540,7 +540,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
         {step === "selling" ? (
           <div className="space-y-4">
-            <h3 className="text-xl font-black text-slate-900">{t(lang, "pharmacyPackStepSellTitle")}</h3>
+            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepSellTitle")}</h3>
             <label className={labelClass}>
               {tTemplate(lang, "pharmacyPackTabletPrice", { unit: packagingEnabled ? baseUnit : "tablet" })}
               <input
@@ -581,7 +581,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
         ) : null}
       </div>
 
-      <footer className="shrink-0 border-t border-slate-100 p-4">
+      <footer className="shrink-0 border-t border-stone-100 p-4">
         <button
           type="button"
           disabled={disabled || stepBlocked()}

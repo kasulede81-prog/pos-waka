@@ -312,7 +312,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
         ) : null}
         {msg ? (
           <div className="mt-2 space-y-1 rounded-xl bg-stone-50 px-3 py-2">
-            <p className="text-sm font-semibold text-slate-800">{msg}</p>
+            <p className="text-sm font-semibold text-stone-800">{msg}</p>
             {msg === t(lang, "backupExportOk") || msg === t(lang, "backupManualOk") ? (
               <p className="text-xs font-medium text-stone-600">{t(lang, "backupExportOkHint")}</p>
             ) : null}
@@ -320,9 +320,9 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
         ) : null}
 
         {!actionsEnabled ? (
-          <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3">
-            <p className="text-sm font-semibold text-orange-950">{t(lang, "backupUpgradeRequired")}</p>
-            <Link to="/upgrade" className="mt-2 inline-block text-sm font-black text-orange-800 underline">
+          <div className="mt-3 rounded-2xl border border-waka-200 bg-waka-50 px-4 py-3">
+            <p className="text-sm font-semibold text-waka-950">{t(lang, "backupUpgradeRequired")}</p>
+            <Link to="/upgrade" className="mt-2 inline-block text-sm font-black text-waka-800 underline">
               {t(lang, "backupUpgradeCta")} →
             </Link>
           </div>
@@ -350,22 +350,22 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
           >
             {t(lang, "backupDownloadCopy")}
           </button>
-          <label className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-sm font-black text-slate-800 disabled:opacity-50">
+          <label className="inline-flex min-h-[48px] cursor-pointer items-center justify-center rounded-2xl border-2 border-stone-300 bg-white px-4 py-3 text-sm font-black text-stone-800 disabled:opacity-50">
             <input type="file" accept="application/json,.json" className="sr-only" disabled={busy} onChange={onPickFile} />
             {t(lang, "backupRestoreFile")}
           </label>
         </div>
 
         <div className={compact ? "mt-4" : "mt-6"}>
-          <p className="text-sm font-bold text-slate-800">{t(lang, "backupListTitle")}</p>
+          <p className="text-sm font-bold text-stone-800">{t(lang, "backupListTitle")}</p>
           <p className="mt-0.5 text-xs font-medium text-stone-500">{t(lang, "backupListHint")}</p>
           <ul className="mt-2 max-h-56 space-y-2 overflow-y-auto rounded-2xl border border-white/60 bg-white/80 p-3">
             {meta.length === 0 ? (
-              <li className="text-sm text-slate-500">{t(lang, "backupListEmpty")}</li>
+              <li className="text-sm text-stone-500">{t(lang, "backupListEmpty")}</li>
             ) : (
               meta.map((m) => (
-                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                  <span className="font-semibold text-slate-800">
+                <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-stone-50 px-3 py-2 text-sm">
+                  <span className="font-semibold text-stone-800">
                     {m.kind === "daily_auto" ? t(lang, "backupKindDaily") : t(lang, "backupKindManual")} ·{" "}
                     {new Date(m.createdAt).toLocaleString()}
                   </span>
@@ -373,7 +373,7 @@ export function BackupSettingsCard({ lang, compact, actionsEnabled = true }: Pro
                     type="button"
                     disabled={busy}
                     onClick={() => void restoreFromId(m.id)}
-                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+                    className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
                   >
                     {t(lang, "backupRestore")}
                   </button>

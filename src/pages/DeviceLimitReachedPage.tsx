@@ -119,7 +119,7 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
   const activeDevices = (ctx?.devices ?? []).filter((d) => d.status === "active");
 
   return (
-    <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-orange-50 to-stone-50 dark:from-stone-950 dark:to-stone-900">
+    <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-waka-50 to-stone-50 dark:from-stone-950 dark:to-stone-900">
       <div className="auth-scroll-pane min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch]">
         <div className="mx-auto w-full max-w-lg space-y-6 px-4 py-8">
           <div className="text-center">

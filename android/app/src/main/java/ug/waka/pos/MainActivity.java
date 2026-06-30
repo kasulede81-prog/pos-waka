@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     SplashScreen.installSplashScreen(this);
     registerPlugin(WakaMlkitOcrPlugin.class);
+    registerPlugin(WakaAppUpdatePlugin.class);
     super.onCreate(savedInstanceState);
     // Edge-to-edge: WebView uses CSS safe-area (viewport-fit=cover in index.html).
     WindowCompat.setDecorFitsSystemWindows(getWindow(), false);

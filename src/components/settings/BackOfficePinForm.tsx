@@ -21,7 +21,7 @@ export function BackOfficePinForm({ lang }: Props) {
         <p className="text-sm font-semibold text-stone-600">{t(lang, "settingsBackOfficePinNone")}</p>
       )}
       {boPinFeedback ? <p className="mt-2 text-sm font-bold text-waka-900">{boPinFeedback}</p> : null}
-      <label className="mt-4 block text-sm font-bold text-slate-800">{t(lang, "settingsBackOfficePinNew")}</label>
+      <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "settingsBackOfficePinNew")}</label>
       <PinInput
         autoComplete="off"
         maxLength={6}
@@ -30,9 +30,9 @@ export function BackOfficePinForm({ lang }: Props) {
           setBoPinFeedback(null);
           setBoPinNew(e.target.value.replace(/\D/g, "").slice(0, 6));
         }}
-        className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
+        className="mt-2 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
       />
-      <label className="mt-3 block text-sm font-bold text-slate-800">{t(lang, "settingsBackOfficePinConfirm")}</label>
+      <label className="mt-3 block text-sm font-bold text-stone-800">{t(lang, "settingsBackOfficePinConfirm")}</label>
       <PinInput
         autoComplete="off"
         maxLength={6}
@@ -41,7 +41,7 @@ export function BackOfficePinForm({ lang }: Props) {
           setBoPinFeedback(null);
           setBoPinConfirm(e.target.value.replace(/\D/g, "").slice(0, 6));
         }}
-        className="mt-2 w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
+        className="mt-2 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-center text-xl font-black tracking-[0.25em]"
       />
       <div className="mt-4 grid grid-cols-2 gap-2">
         <button
@@ -69,7 +69,7 @@ export function BackOfficePinForm({ lang }: Props) {
         </button>
         <button
           type="button"
-          className="min-h-[48px] rounded-2xl border-2 border-slate-200 py-3 text-sm font-bold text-slate-800"
+          className="min-h-[48px] rounded-2xl border-2 border-stone-200 py-3 text-sm font-bold text-stone-800"
           onClick={() => {
             setBoPinNew("");
             setBoPinConfirm("");

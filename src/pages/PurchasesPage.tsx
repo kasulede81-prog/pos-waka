@@ -208,7 +208,7 @@ export function PurchasesPage({ lang }: { lang: Language }) {
           type="button"
           disabled={exportBusy || rows.length === 0}
           onClick={() => void runPrint()}
-          className="min-h-[44px] rounded-2xl bg-slate-900 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
+          className="min-h-[44px] rounded-2xl bg-stone-900 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
         >
           {receiptPrintActionLabel(lang)}
         </button>

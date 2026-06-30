@@ -71,7 +71,7 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
         {presetEmail ? (
           <p className="mt-2 text-sm font-semibold text-stone-800">{presetEmail}</p>
         ) : null}
-        <p className="mt-3 rounded-2xl bg-orange-50 px-3 py-2 text-sm text-stone-700">{t(lang, "verifyOpenEmailHint")}</p>
+        <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm text-stone-700">{t(lang, "verifyOpenEmailHint")}</p>
 
         {!hasSupabaseConfig && (
           <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
@@ -103,7 +103,7 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
 
         <p className="mt-6 text-center text-sm text-stone-600">
           {t(lang, "verifyAfterConfirm")}{" "}
-          <Link to="/login" className="font-bold text-orange-700 underline underline-offset-2">
+          <Link to="/login" className="font-bold text-waka-700 underline underline-offset-2">
             {t(lang, "signIn")}
           </Link>
         </p>
@@ -111,7 +111,7 @@ export function VerifyEmailPage({ lang, setLang, isAuthenticated, resendVerifica
         <p className="mt-4 text-center">
           <Link
             to="/support"
-            className="inline-flex min-h-[44px] items-center justify-center text-sm font-bold text-orange-800 underline underline-offset-2"
+            className="inline-flex min-h-[44px] items-center justify-center text-sm font-bold text-waka-800 underline underline-offset-2"
           >
             {t(lang, "supportLoginFooter")}
           </Link>

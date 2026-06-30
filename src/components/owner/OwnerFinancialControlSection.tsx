@@ -21,8 +21,8 @@ export function OwnerFinancialControlSection({ lang, financial, periodLabel }: P
 
   return (
     <section className="rounded-2xl border border-stone-200/90 bg-white p-3 shadow-sm sm:p-4">
-      <h2 className="text-sm font-black text-slate-950 sm:text-base">{t(lang, "ownerFinancialTitle")}</h2>
-      <p className="text-[11px] font-semibold text-slate-500">{periodLabel}</p>
+      <h2 className="text-sm font-black text-stone-950 sm:text-base">{t(lang, "ownerFinancialTitle")}</h2>
+      <p className="text-[11px] font-semibold text-stone-500">{periodLabel}</p>
 
       <dl className="mt-3 grid grid-cols-1 gap-2 min-[480px]:grid-cols-2 sm:grid-cols-4">
         <div className="min-w-0 rounded-xl bg-stone-50 px-2.5 py-2">

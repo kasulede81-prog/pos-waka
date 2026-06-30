@@ -63,7 +63,7 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
         <div className="rounded-[28px] bg-white p-6 shadow-lg">
           <p className="text-base font-medium leading-relaxed text-stone-700">{t(lang, "activationStaffBypass")}</p>
           <Link
-            className="mt-8 inline-flex min-h-[52px] w-full items-center justify-center rounded-[28px] bg-gradient-to-r from-orange-500 to-orange-600 text-base font-semibold text-white"
+            className="mt-8 inline-flex min-h-[52px] w-full items-center justify-center rounded-[28px] bg-gradient-to-r from-waka-500 to-waka-600 text-base font-semibold text-white"
             to="/"
           >
             {t(lang, "activationContinueApp")}
@@ -83,7 +83,7 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
           ) : null}
           <Link
             to="/"
-            className="flex min-h-[52px] w-full items-center justify-center rounded-[28px] bg-gradient-to-r from-orange-500 to-orange-600 text-base font-black text-white shadow-lg"
+            className="flex min-h-[52px] w-full items-center justify-center rounded-[28px] bg-gradient-to-r from-waka-500 to-waka-600 text-base font-black text-white shadow-lg"
           >
             {t(lang, "activationContinueApp")}
           </Link>
@@ -95,7 +95,7 @@ export function BusinessActivationPage({ lang, setLang }: Props) {
   return (
     <BusinessBuilderShell lang={lang} setLang={setLang} funnelStep="open" unlocks={unlocks}>
       <div className="rounded-[28px] border border-white/80 bg-white/95 p-6 shadow-lg backdrop-blur-sm sm:rounded-[32px]">
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-orange-600">
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-waka-600">
           {t(lang, "activationHeroKicker")}
         </p>
         <h1 className="mt-3 text-2xl font-black leading-tight text-stone-900 sm:text-3xl">

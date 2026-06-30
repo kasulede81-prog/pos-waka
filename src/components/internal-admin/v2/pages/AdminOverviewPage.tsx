@@ -66,21 +66,24 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
 
       <GlobalSearchBar shops={data.shopOpenings} tickets={data.tickets} previewMode={previewMode} />
 
-      <SystemStatusCenter health={data.systemHealth} />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <SystemStatusCenter health={data.systemHealth} />
+        <ActivityFeedPanel events={data.activityFeed} previewMode={previewMode} />
+      </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 sm:max-w-xl xl:max-w-none">
         <button
           type="button"
           onClick={() => setAnnounceOpen(true)}
           className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-sm font-black text-stone-800 shadow-sm"
         >
-          <Megaphone className="h-4 w-4 text-orange-600" />
+          <Megaphone className="h-4 w-4 text-waka-600" />
           Broadcast
         </button>
         <button
           type="button"
           onClick={() => go("/internal/waka/analytics")}
-          className="min-h-[44px] flex-1 rounded-2xl bg-orange-600 text-sm font-black text-white shadow-sm"
+          className="min-h-[44px] flex-1 rounded-2xl bg-waka-600 text-sm font-black text-white shadow-sm"
         >
           Analytics
         </button>
@@ -103,8 +106,6 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-800">{deleteMsg}</p>
       ) : null}
 
-      <ActivityFeedPanel events={data.activityFeed} previewMode={previewMode} />
-
       <section>
         <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Quick pulse</h2>
         <div className={adminKpiGridClass()}>
@@ -119,18 +120,18 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
 
       <section className="space-y-2">
         <h2 className="text-xs font-black uppercase tracking-wide text-stone-500">Work queues</h2>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           <button type="button" onClick={() => setActiveSheet("trials")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Trials <span className="font-mono text-orange-600">{data.pendingTrials.length}</span>
+            Trials <span className="font-mono text-waka-600">{data.pendingTrials.length}</span>
           </button>
           <button type="button" onClick={() => setActiveSheet("annual")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Annual <span className="font-mono text-orange-600">{data.pendingAnnualTickets.length}</span>
+            Annual <span className="font-mono text-waka-600">{data.pendingAnnualTickets.length}</span>
           </button>
           <button type="button" onClick={() => go("/internal/waka/support")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
             Support inbox
           </button>
           <button type="button" onClick={() => setActiveSheet("visits")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Field visits <span className="font-mono text-orange-600">{data.visits.length}</span>
+            Field visits <span className="font-mono text-waka-600">{data.visits.length}</span>
           </button>
         </div>
       </section>
@@ -179,7 +180,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         <button
           type="button"
           onClick={() => go("/internal/waka/shops")}
-          className="mt-4 min-h-[44px] w-full rounded-2xl bg-orange-600 text-sm font-black text-white"
+          className="mt-4 min-h-[44px] w-full rounded-2xl bg-waka-600 text-sm font-black text-white"
         >
           Browse shops
         </button>

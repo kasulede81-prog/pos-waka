@@ -62,13 +62,13 @@ export function DemoExperiencePage({ lang, isAuthenticated = false }: Props) {
   );
 
   return wrap(
-    <div className="relative min-h-dvh bg-gradient-to-b from-orange-50/80 to-stone-50 pb-nav-safe">
-      <div className={clsx("sticky top-0 z-[60] border-b border-orange-200 bg-orange-600 px-4 py-3 text-white shadow-md")}>
+    <div className="relative min-h-dvh bg-gradient-to-b from-waka-50/80 to-stone-50 pb-nav-safe">
+      <div className={clsx("sticky top-0 z-[60] border-b border-waka-200 bg-waka-600 px-4 py-3 text-white shadow-md")}>
         <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-2">
           <p className="max-w-[min(100%,20rem)] text-xs font-black uppercase tracking-wide">{t(lang, "activationDemoBanner")}</p>
           <Link
             to={exitTo}
-            className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-orange-950 shadow-sm"
+            className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-xs font-black text-waka-950 shadow-sm"
           >
             {exitLabel}
           </Link>

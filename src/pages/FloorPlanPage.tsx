@@ -71,8 +71,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
 
   if (!hospitality) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
-        <p className="text-sm font-medium text-slate-600">{t(lang, "hospitalityNotEnabled")}</p>
+      <div className="rounded-2xl border border-stone-200 bg-white p-6 text-center">
+        <p className="text-sm font-medium text-stone-600">{t(lang, "hospitalityNotEnabled")}</p>
       </div>
     );
   }
@@ -152,7 +152,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               <button
                 type="button"
                 onClick={() => navigate("/kitchen?station=kitchen")}
-                className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800"
+                className="flex min-h-11 items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-800"
               >
                 <ChefHat className="h-4 w-4" />
                 {t(lang, "floorKitchenLink")}
@@ -160,7 +160,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               <button
                 type="button"
                 onClick={() => navigate("/kitchen?station=bar")}
-                className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800"
+                className="min-h-11 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-800"
               >
                 {t(lang, "floorBarLink")}
               </button>
@@ -170,7 +170,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => navigate("/pending-sales")}
-              className="flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800"
+              className="flex min-h-11 items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 text-sm font-bold text-stone-800"
             >
               <ClipboardList className="h-4 w-4" />
               {t(lang, "pendingSalesLink")}
@@ -182,7 +182,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={() => navigate("/pos")}
-            className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800"
+            className="min-h-11 rounded-xl border border-stone-200 bg-white px-4 text-sm font-bold text-stone-800"
           >
             {t(lang, "floorTakeaway")}
           </button>
@@ -190,7 +190,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             <button
               type="button"
               onClick={() => navigate("/settings/floor")}
-              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-700"
+              className="flex min-h-11 min-w-11 items-center justify-center rounded-xl border border-stone-200 bg-white text-stone-700"
               aria-label={t(lang, "floorSetupTitle")}
             >
               <Settings className="h-5 w-5" />
@@ -208,7 +208,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               onClick={() => setAreaId(area.id)}
               className={clsx(
                 "shrink-0 rounded-full px-4 py-2 text-sm font-bold",
-                activeAreaId === area.id ? "bg-waka-600 text-white" : "bg-slate-100 text-slate-800",
+                activeAreaId === area.id ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-800",
               )}
             >
               {area.name}
@@ -216,7 +216,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
           ))}
         </div>
       ) : areas[0] ? (
-        <p className="text-sm font-bold text-slate-600">{areas[0].name}</p>
+        <p className="text-sm font-bold text-stone-600">{areas[0].name}</p>
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -319,7 +319,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         )}
       </section>
 
-      <div className="flex flex-wrap gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-xs font-semibold text-slate-600">
+      <div className="flex flex-wrap gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4 text-xs font-semibold text-stone-600">
         {(Object.keys(TABLE_STATUS_COLORS) as Array<keyof typeof TABLE_STATUS_COLORS>).map((key) => (
           <span key={key} className="flex items-center gap-2">
             <span className={clsx("h-3 w-3 rounded-full border-2", TABLE_STATUS_COLORS[key].border, TABLE_STATUS_COLORS[key].bg)} />
@@ -336,12 +336,12 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                 <h2 className="text-xl font-black text-stone-950">{t(lang, "openTableTitle")}</h2>
                 <p className="text-sm font-medium text-stone-500">{openSheetTable.label}</p>
               </div>
-              <button type="button" className="text-sm font-bold text-slate-500" onClick={() => setOpenSheetTableId(null)}>
+              <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setOpenSheetTableId(null)}>
                 {t(lang, "cancel")}
               </button>
             </div>
 
-            <p className="mb-2 text-sm font-bold text-slate-700">{t(lang, "openTableGuests")}</p>
+            <p className="mb-2 text-sm font-bold text-stone-700">{t(lang, "openTableGuests")}</p>
             <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
               {GUEST_COUNTS.map((n) => (
                 <button
@@ -350,7 +350,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                   onClick={() => setGuestCount(n)}
                   className={clsx(
                     "min-h-12 rounded-xl text-base font-black",
-                    guestCount === n ? "bg-waka-600 text-white" : "bg-slate-100 text-slate-900",
+                    guestCount === n ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-900",
                   )}
                 >
                   {n === 6 ? "6+" : n}
@@ -359,20 +359,20 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             </div>
 
             <label className="mb-3 block">
-              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "openTableCustomerName")}</span>
+              <span className="mb-1 block text-sm font-bold text-stone-700">{t(lang, "openTableCustomerName")}</span>
               <input
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                className="w-full rounded-xl border border-stone-200 px-3 py-3 text-base"
                 placeholder={t(lang, "openTableCustomerNamePh")}
               />
             </label>
             <label className="mb-5 block">
-              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "openTablePhone")}</span>
+              <span className="mb-1 block text-sm font-bold text-stone-700">{t(lang, "openTablePhone")}</span>
               <input
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                className="w-full rounded-xl border border-stone-200 px-3 py-3 text-base"
                 placeholder="+256..."
               />
             </label>
@@ -397,23 +397,23 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                 <h2 className="text-xl font-black text-stone-950">{t(lang, "floorNewTabTitle")}</h2>
                 <p className="text-sm font-medium text-stone-500">{t(lang, "floorNamedTabsSub")}</p>
               </div>
-              <button type="button" className="text-sm font-bold text-slate-500" onClick={() => setNewTabOpen(false)}>
+              <button type="button" className="text-sm font-bold text-stone-500" onClick={() => setNewTabOpen(false)}>
                 {t(lang, "cancel")}
               </button>
             </div>
 
             <label className="mb-4 block">
-              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "floorTabLabel")}</span>
+              <span className="mb-1 block text-sm font-bold text-stone-700">{t(lang, "floorTabLabel")}</span>
               <input
                 value={tabLabel}
                 onChange={(e) => setTabLabel(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                className="w-full rounded-xl border border-stone-200 px-3 py-3 text-base"
                 placeholder={t(lang, "floorTabLabelPh")}
                 autoFocus
               />
             </label>
 
-            <p className="mb-2 text-sm font-bold text-slate-700">{t(lang, "openTableGuests")}</p>
+            <p className="mb-2 text-sm font-bold text-stone-700">{t(lang, "openTableGuests")}</p>
             <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
               {GUEST_COUNTS.map((n) => (
                 <button
@@ -422,7 +422,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                   onClick={() => setGuestCount(n)}
                   className={clsx(
                     "min-h-12 rounded-xl text-base font-black",
-                    guestCount === n ? "bg-violet-600 text-white" : "bg-slate-100 text-slate-900",
+                    guestCount === n ? "bg-violet-600 text-white" : "bg-stone-100 text-stone-900",
                   )}
                 >
                   {n === 6 ? "6+" : n}
@@ -431,20 +431,20 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
             </div>
 
             <label className="mb-3 block">
-              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "openTableCustomerName")}</span>
+              <span className="mb-1 block text-sm font-bold text-stone-700">{t(lang, "openTableCustomerName")}</span>
               <input
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                className="w-full rounded-xl border border-stone-200 px-3 py-3 text-base"
                 placeholder={t(lang, "openTableCustomerNamePh")}
               />
             </label>
             <label className="mb-5 block">
-              <span className="mb-1 block text-sm font-bold text-slate-700">{t(lang, "openTablePhone")}</span>
+              <span className="mb-1 block text-sm font-bold text-stone-700">{t(lang, "openTablePhone")}</span>
               <input
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 px-3 py-3 text-base"
+                className="w-full rounded-xl border border-stone-200 px-3 py-3 text-base"
                 placeholder="+256..."
               />
             </label>

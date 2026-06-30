@@ -16,7 +16,7 @@ export function DocumentActionsBar({ lang, onPrint, onDownloadPdf, onSharePdf, c
     : "min-h-[48px] rounded-2xl px-4 py-3 text-sm font-black";
   return (
     <div className={`grid gap-2 ${compact ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3"}`}>
-      <button type="button" className={`${btn} bg-slate-900 text-white`} onClick={onPrint}>
+      <button type="button" className={`${btn} bg-stone-900 text-white`} onClick={onPrint}>
         {receiptPrintActionLabel(lang)}
       </button>
       <button type="button" className={`${btn} bg-waka-600 text-white`} onClick={onDownloadPdf}>

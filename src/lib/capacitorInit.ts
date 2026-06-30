@@ -1,11 +1,10 @@
-import { Capacitor } from "@capacitor/core";
-import { StatusBar, Style } from "@capacitor/status-bar";
+import { Capacitor, SystemBars, SystemBarsStyle } from "@capacitor/core";
 import { initDeviceOnlineTracking } from "./deviceOnline";
 import { prepareNativeSplash, scheduleSplashMaxDuration, scheduleSplashSafetyTimeout } from "./nativeSplash";
 import { registerNativeAuthDeepLinkHandler } from "./nativeAuthDeepLink";
 
 /**
- * Native shell polish: status bar matches Waka header (dark on light is inverted — we use dark bar + light icons).
+ * Native shell polish: edge-to-edge system bars (Capacitor 8 SystemBars — no deprecated Window color APIs).
  */
 export async function initCapacitorShell(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
@@ -15,9 +14,8 @@ export async function initCapacitorShell(): Promise<void> {
   scheduleSplashSafetyTimeout();
   await initDeviceOnlineTracking();
   try {
-    await StatusBar.setOverlaysWebView({ overlay: true });
-    await StatusBar.setStyle({ style: Style.Light });
-    await StatusBar.setBackgroundColor({ color: "#00000000" });
+    // Light icons on dark header areas (replaces legacy StatusBar Style.Light).
+    await SystemBars.setStyle({ style: SystemBarsStyle.Dark });
   } catch {
     /* older WebView or missing plugin */
   }

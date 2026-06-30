@@ -39,7 +39,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
           <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hospitalitySettingsKitchenDefaultBar")}</p>
         ) : null}
         <div className="mt-4 space-y-3">
-          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-slate-900">
+          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-stone-900">
             <input
               type="radio"
               name="hospitalityKitchen"
@@ -49,7 +49,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
             />
             {t(lang, "hospitalitySettingsKitchenOn")}
           </label>
-          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-slate-900">
+          <label className="flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3 py-2 text-base font-bold text-stone-900">
             <input
               type="radio"
               name="hospitalityKitchen"

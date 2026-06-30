@@ -43,21 +43,21 @@ export function OfficePremiumSection({ lang }: { lang: Language }) {
   const isFreeOnly = effectivePlan === "free";
 
   return (
-    <section className="flex items-center justify-between gap-3 rounded-2xl border border-orange-200/80 bg-orange-50/90 px-3.5 py-2.5">
+    <section className="flex items-center justify-between gap-3 rounded-2xl border border-waka-200/80 bg-waka-50/90 px-3.5 py-2.5">
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-waka-500 text-white">
           <Sparkles className="h-4 w-4" aria-hidden />
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-black text-orange-950">{planLabel}</p>
-          <p className="truncate text-xs font-semibold text-orange-800/90">
+          <p className="truncate text-sm font-black text-waka-950">{planLabel}</p>
+          <p className="truncate text-xs font-semibold text-waka-800/90">
             {renewalLine ?? (isFreeOnly ? t(lang, "officePremiumFreeModeHint") : t(lang, "officePremiumNoTrial"))}
           </p>
         </div>
       </div>
       <Link
         to="/upgrade"
-        className="shrink-0 rounded-xl bg-orange-600 px-3 py-2 text-xs font-black text-white active:bg-orange-700"
+        className="shrink-0 rounded-xl bg-waka-600 px-3 py-2 text-xs font-black text-white active:bg-waka-700"
       >
         {t(lang, "officePremiumUpgrade")}
       </Link>

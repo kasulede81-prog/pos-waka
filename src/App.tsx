@@ -96,6 +96,7 @@ import { EmailVerificationGateOutlet } from "./components/EmailVerificationGateO
 import { DeviceLimitReachedPage } from "./pages/DeviceLimitReachedPage";
 import { StabilityDiagnosticsOverlay } from "./components/dev/StabilityDiagnosticsOverlay";
 import { StartupBootstrapGate } from "./components/startup/StartupBootstrapGate";
+import { DisplayScaleProvider } from "./context/DisplayScaleProvider";
 import { installNetworkDiagnosticsProbe, isDiagnosticsEnabled } from "./lib/stabilityDiagnostics";
 import { SettingsAppearancePage } from "./pages/SettingsAppearancePage";
 import { useUiLanguage } from "./hooks/useUiLanguage";
@@ -129,7 +130,7 @@ const OpenShiftsPage = lazy(() => import("./pages/OpenShiftsPage").then((m) => (
 
 function LazyWait() {
   return (
-    <div className="flex min-h-[40vh] items-center justify-center text-sm font-medium text-slate-600">Loading…</div>
+    <div className="flex min-h-[40vh] items-center justify-center text-sm font-medium text-stone-600">Loading…</div>
   );
 }
 
@@ -312,6 +313,14 @@ function AppRoutes() {
                   />
                   <Route
                     path="internal/waka/ai-settings"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
+                  <Route
+                    path="internal/waka/releases"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
+                  <Route
+                    path="internal/waka/display-scale"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />
@@ -923,7 +932,9 @@ function App() {
   const Router = isElectronDesktop() ? HashRouter : BrowserRouter;
   return (
     <Router>
-      <AppRoutes />
+      <DisplayScaleProvider>
+        <AppRoutes />
+      </DisplayScaleProvider>
     </Router>
   );
 }

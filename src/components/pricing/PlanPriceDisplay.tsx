@@ -26,7 +26,7 @@ export function PlanPriceDisplay({ price, interval = "month", size = "lg" }: Pro
   if (!showStrike) {
     return (
       <div>
-        <p className={`${mainCls} text-orange-700`}>{formatUgx(final)}</p>
+        <p className={`${mainCls} text-waka-700`}>{formatUgx(final)}</p>
         {interval === "year" && price.annualDiscountPercent > 0 ? (
           <p className="mt-1 text-sm font-bold text-emerald-700">Save {price.annualDiscountPercent}%</p>
         ) : null}
@@ -37,7 +37,7 @@ export function PlanPriceDisplay({ price, interval = "month", size = "lg" }: Pro
   return (
     <div className="space-y-1">
       <p className={`text-sm font-bold text-stone-500 line-through`}>{formatUgx(original)}</p>
-      <p className={`${mainCls} text-orange-700`}>
+      <p className={`${mainCls} text-waka-700`}>
         {formatUgx(final)} <span className="text-base font-bold text-stone-600">{suffix}</span>
       </p>
       {interval === "month" && savings > 0 ? (

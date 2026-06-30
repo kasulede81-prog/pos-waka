@@ -31,7 +31,7 @@ export function PosDesktopCategoryChips({ lang, shelves, selectedKey, onSelect, 
 
   const chipClass = (active: boolean) =>
     clsx(
-      "inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-xs font-black transition-colors",
+      "pos-ds-category-chip inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-full border px-3 py-1 text-xs font-black transition-colors",
       active
         ? "border-waka-500 bg-waka-600 text-white shadow-sm"
         : "border-stone-200 bg-white text-stone-800 active:bg-stone-50",

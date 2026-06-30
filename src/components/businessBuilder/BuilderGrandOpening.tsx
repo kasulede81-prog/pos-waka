@@ -61,7 +61,7 @@ export function BuilderGrandOpening({ lang, onComplete }: Props) {
       ) : null}
 
       <div className="w-full max-w-md space-y-6 text-center">
-        <p className="text-xs font-black uppercase tracking-[0.25em] text-orange-300">
+        <p className="text-xs font-black uppercase tracking-[0.25em] text-waka-300">
           {t(lang, "builderGrandOpeningKicker")}
         </p>
         <h1 className="text-3xl font-black text-white sm:text-4xl">{t(lang, "builderGrandOpeningTitle")}</h1>

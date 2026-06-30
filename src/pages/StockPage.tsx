@@ -32,6 +32,7 @@ import { SimpleProductRestockModal } from "../components/stock/SimpleProductRest
 import { StockPinnedSearch } from "../components/stock/StockPinnedSearch";
 import { StockShelfGrid } from "../components/stock/StockShelfGrid";
 import { StockFab } from "../components/stock/StockFab";
+import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
 import { InventoryStatGrid } from "../components/stock/InventoryStatGrid";
 import { StockProductDetailSheet } from "../components/stock/StockProductDetailSheet";
 import { StockProductActionSheet } from "../components/stock/StockProductActionSheet";
@@ -56,6 +57,11 @@ import {
   productMatchesCategoryFilter,
   productMatchesSellSearch,
 } from "../lib/productCategories";
+import {
+  QUICK_SELL_SHELF_KEY,
+  collectShelfCategoryKeys,
+  shelfHasUncategorizedSlot,
+} from "../lib/posShelfLayout";
 import { defaultMenuCategoriesForBusinessType, isHospitalityMode } from "../lib/hospitality";
 import { defaultPharmacyCategoriesForBusinessType, isPharmacyMode } from "../lib/pharmacy";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
@@ -177,7 +183,27 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     if (tab === "shelves" || tab === "products" || tab === "low" || tab === "movements" || tab === "overview") {
       setStockTab(tab);
     }
-  }, [searchParams, workspaceEmbed]);
+    const shelf = searchParams.get("shelf");
+    if (shelf) {
+      setStockTab("shelves");
+      setSelectedShelf(shelf);
+      if (searchParams.get("add") === "1" && canAdd && !freeProductLimitReached) {
+        const shelfName = shelf === UNCATEGORIZED_SENTINEL ? "" : shelf;
+        setWizardPrefill({
+          name: "",
+          shelf: shelfName,
+          sellUnit: "piece",
+          sellUnitCustom: "",
+          hasPack: false,
+          packKind: "crate",
+          packCustom: "",
+          piecesPerPack: "",
+        });
+        setWizardInitialStep("name");
+        setBulkOpen(true);
+      }
+    }
+  }, [searchParams, workspaceEmbed, canAdd, freeProductLimitReached]);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -188,23 +214,40 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const defaultGroupByCategory = products.length > 12 && products.length <= 250;
   const groupByCategory = stockGroupByCategoryOverride ?? defaultGroupByCategory;
 
+  const savedShelfKeys = useMemo(() => {
+    const order = preferences.posPinnedShelfKeys ?? [];
+    const layout = Object.keys(preferences.posShelfLayout ?? {});
+    return [...new Set([...order, ...layout])].filter(
+      (k) => k && k !== QUICK_SELL_SHELF_KEY,
+    );
+  }, [preferences.posPinnedShelfKeys, preferences.posShelfLayout]);
+
   const stockCategoryPicklist = useMemo(() => {
     const fromProducts = distinctTrimmedCategories(products);
+    const fromSaved = savedShelfKeys.filter((k) => k !== UNCATEGORIZED_SENTINEL);
     if (isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
       const presets = defaultMenuCategoriesForBusinessType(preferences.businessType);
-      return [...new Set([...fromProducts, ...presets])].sort((a, b) =>
+      return [...new Set([...fromProducts, ...fromSaved, ...presets])].sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: "base" }),
       );
     }
     if (pharmacyMode) {
       const presets = defaultPharmacyCategoriesForBusinessType(preferences.businessType);
-      return [...new Set([...fromProducts, ...presets])].sort((a, b) =>
+      return [...new Set([...fromProducts, ...fromSaved, ...presets])].sort((a, b) =>
         a.localeCompare(b, undefined, { sensitivity: "base" }),
       );
     }
-    return fromProducts;
-  }, [products, preferences.businessType, preferences.hospitalityModeEnabled, pharmacyMode]);
-  const stockHasUncategorized = useMemo(() => products.some((p) => !normalizedCategoryKey(p)), [products]);
+    return collectShelfCategoryKeys(products, savedShelfKeys, preferences.posShelfLayout ?? {});
+  }, [products, preferences.businessType, preferences.hospitalityModeEnabled, preferences.posShelfLayout, pharmacyMode, savedShelfKeys]);
+  const stockHasUncategorized = useMemo(
+    () =>
+      shelfHasUncategorizedSlot(
+        products,
+        preferences.posPinnedShelfKeys ?? [],
+        preferences.posShelfLayout ?? {},
+      ),
+    [products, preferences.posPinnedShelfKeys, preferences.posShelfLayout],
+  );
 
   const listableProducts = useMemo(() => {
     let list = [...products];
@@ -337,6 +380,23 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     if (freeProductLimitReached) return;
     setWizardPrefill(undefined);
     setWizardInitialStep(undefined);
+    setBulkOpen(true);
+  };
+
+  const openAddProductForShelf = (shelfKey: string) => {
+    if (freeProductLimitReached) return;
+    const shelfName = shelfKey === UNCATEGORIZED_SENTINEL ? "" : shelfKey;
+    setWizardPrefill({
+      name: "",
+      shelf: shelfName,
+      sellUnit: "piece",
+      sellUnitCustom: "",
+      hasPack: false,
+      packKind: "crate",
+      packCustom: "",
+      piecesPerPack: "",
+    });
+    setWizardInitialStep("name");
     setBulkOpen(true);
   };
 
@@ -652,13 +712,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       ) : null}
 
       {freeProductLimitReached ? (
-        <section className="rounded-3xl border-2 border-orange-200 bg-orange-50 p-5 shadow-sm">
-          <p className="text-lg font-black text-orange-950">{pt("freeLimitProductsTitle")}</p>
-          <p className="mt-1 text-sm font-semibold text-orange-950/80">
+        <section className="rounded-3xl border-2 border-waka-200 bg-waka-50 p-5 shadow-sm">
+          <p className="text-lg font-black text-waka-950">{pt("freeLimitProductsTitle")}</p>
+          <p className="mt-1 text-sm font-semibold text-waka-950/80">
             {tTemplate(lang, "freeLimitProductsBody", { count: String(productLimit ?? 7) })}
           </p>
           {lockedProductCount > 0 ? (
-            <p className="mt-2 text-sm font-bold text-orange-950">
+            <p className="mt-2 text-sm font-bold text-waka-950">
               {t(lang, "freePlanLockedProductsNotice")
                 .replace("{{locked}}", String(lockedProductCount))
                 .replace("{{limit}}", String(productLimit ?? 7))}
@@ -670,7 +730,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             </Link>
             <Link
               to="/support"
-              className="rounded-2xl border-2 border-orange-300 bg-white px-4 py-3 text-center text-sm font-black text-orange-950"
+              className="rounded-2xl border-2 border-waka-300 bg-white px-4 py-3 text-center text-sm font-black text-waka-950"
             >
               {t(lang, "freeLimitSupport")}
             </Link>
@@ -680,8 +740,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
       {unlockedProducts.length === 0 ? (
         <section className="rounded-3xl border-2 border-dashed border-waka-200 bg-gradient-to-b from-waka-50/80 to-white px-6 py-10 text-center">
-          <p className="text-xl font-black text-slate-900">{modeTerm("stockEmptyTitle")}</p>
-          <p className="mx-auto mt-2 max-w-sm text-base text-slate-600">{modeTerm("stockEmptySub")}</p>
+          <p className="text-xl font-black text-stone-900">{modeTerm("stockEmptyTitle")}</p>
+          <p className="mx-auto mt-2 max-w-sm text-base text-stone-600">{modeTerm("stockEmptySub")}</p>
           {canAdd ? (
             <div className="mx-auto mt-6 flex w-full max-w-xs flex-col gap-2">
               <button
@@ -813,7 +873,22 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                 ) : undefined
               }
             >
-              {selectedShelf ? renderProductCards(productsInSelectedShelf) : null}
+              {selectedShelf ? (
+                productsInSelectedShelf.length === 0 ? (
+                  <EmptyShelfPanel
+                    lang={lang}
+                    shelfLabel={
+                      selectedShelf === UNCATEGORIZED_SENTINEL
+                        ? t(lang, "uncategorized")
+                        : selectedShelf
+                    }
+                    canAdd={canAdd && !freeProductLimitReached}
+                    onAddProduct={() => openAddProductForShelf(selectedShelf)}
+                  />
+                ) : (
+                  renderProductCards(productsInSelectedShelf)
+                )
+              ) : null}
             </StockShelfGrid>
           ) : null}
 
@@ -852,7 +927,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             onClick={(e) => e.stopPropagation()}
           >
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-6 pb-2">
-            <p className="text-center text-xl font-black text-slate-900">
+            <p className="text-center text-xl font-black text-stone-900">
               {industryPlaceholderMode
                 ? uiPlaceholder(
                     lang,
@@ -863,7 +938,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                   )
                 : t(lang, "stockQuickAddTitle")}
             </p>
-            <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "stockQuickAddSub")}</p>
+            <p className="mt-1 text-center text-sm text-stone-500">{t(lang, "stockQuickAddSub")}</p>
             {guessPreview ? (
               <p className="mt-3 rounded-2xl bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
                 {t(lang, "smartGuessHint")}: {t(lang, `mode_${guessPreview.sellingMode}`)} · {guessPreview.baseUnit}
@@ -899,7 +974,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             </div>
             </div>
 
-            <div className="shrink-0 border-t border-slate-100 bg-white px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
+            <div className="shrink-0 border-t border-stone-100 bg-white px-6 pt-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
             <div className="grid grid-cols-2 gap-3">
               <button type="button" className="min-h-[52px] rounded-2xl border-2 py-3 text-lg font-bold" onClick={() => setQuickOpen(false)}>
                 {t(lang, "cancel")}
@@ -932,12 +1007,12 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-[2rem] bg-white p-6 shadow-2xl sm:rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-center text-2xl font-black text-slate-900">{t(lang, "starterPackTitle")}</p>
-            <p className="mt-1 text-center text-sm text-slate-500">{t(lang, "starterPackSub")}</p>
+            <p className="text-center text-2xl font-black text-stone-900">{t(lang, "starterPackTitle")}</p>
+            <p className="mt-1 text-center text-sm text-stone-500">{t(lang, "starterPackSub")}</p>
             <ul className="mt-4 space-y-3">
               {starterRows.map((row, i) => (
-                <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-slate-100 p-3">
-                  <label className="flex items-center gap-3 font-bold text-slate-900">
+                <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-stone-100 p-3">
+                  <label className="flex items-center gap-3 font-bold text-stone-900">
                     <input
                       type="checkbox"
                       checked={row.enabled}
@@ -949,7 +1024,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                     <span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>
                   </label>
                   <div className="mt-2 grid grid-cols-2 gap-2 pl-9">
-                    <label className="text-xs font-bold text-slate-600">
+                    <label className="text-xs font-bold text-stone-600">
                       {t(lang, "quickAddPrice")}
                       <input
                         value={row.priceStr}
@@ -962,7 +1037,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
                         className="mt-1 w-full rounded-xl border-2 px-2 py-2 text-lg font-black"
                       />
                     </label>
-                    <label className="text-xs font-bold text-slate-600">
+                    <label className="text-xs font-bold text-stone-600">
                       {t(lang, "quickAddStock")}
                       <input
                         value={row.stockStr}
@@ -1066,18 +1141,18 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       {removeId ? (
         <AppModalOverlay className="z-[60] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal>
           <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
-            <p className="text-lg font-black text-slate-900">
+            <p className="text-lg font-black text-stone-900">
               {onlyProductInStock ? t(lang, "removeLastProductConfirmTitle") : t(lang, "removeProductConfirm")}
             </p>
             {onlyProductInStock ? (
-              <p className="mt-2 text-sm font-semibold text-slate-600">{t(lang, "removeLastProductConfirmBody")}</p>
+              <p className="mt-2 text-sm font-semibold text-stone-600">{t(lang, "removeLastProductConfirmBody")}</p>
             ) : null}
             <label className="mt-4 block">
-              <span className="text-sm font-bold text-slate-800">{t(lang, "auditReasonLabel")}</span>
+              <span className="text-sm font-bold text-stone-800">{t(lang, "auditReasonLabel")}</span>
               <textarea
                 value={removeReason}
                 onChange={(e) => setRemoveReason(e.target.value)}
-                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-slate-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
+                className="mt-2 min-h-[80px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
                 placeholder={t(lang, "auditReasonPlaceholder")}
               />
             </label>

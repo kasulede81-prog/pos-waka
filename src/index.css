@@ -7,7 +7,7 @@
   --foreground: 20 15% 12%;
   --card: 30 20% 99%;
   --card-foreground: 20 15% 12%;
-  --primary: 21 84% 55%;
+  --primary: 25 95% 53%;
   --primary-foreground: 0 0% 100%;
   --secondary: 150 30% 38%;
   --secondary-foreground: 0 0% 100%;
@@ -15,10 +15,15 @@
   --muted-foreground: 20 8% 48%;
   --border: 30 12% 87%;
   --input: 30 12% 87%;
-  --ring: 21 84% 55%;
+  --ring: 25 95% 53%;
   --destructive: 0 74% 52%;
   --destructive-foreground: 0 0% 100%;
   --radius: 0.875rem;
+  /* Waka brand primitives — resources/brand/README.md */
+  --waka-brand-orange: 249 115 22;
+  --waka-brand-orange-dark: 234 88 12;
+  --waka-brand-cream: 255 250 245;
+  --waka-brand-cream-wash: 250 247 244;
 }
 
 html {
@@ -123,8 +128,8 @@ body {
    * Fixed mobile chrome heights — keep in sync with AppShell nav + MobileScrollTail.
    */
   :root {
-    --waka-safe-bottom: env(safe-area-inset-bottom, 0px);
-    --waka-safe-top: env(safe-area-inset-top, 0px);
+    --waka-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --waka-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --waka-bottom-nav-h: 0px;
     --waka-module-exit-h: 4.5rem;
     --waka-pos-checkout-strip-h: 3.25rem;
@@ -366,6 +371,132 @@ body {
   .waka-data-table tbody tr {
     @apply border-b border-stone-100 last:border-b-0;
   }
+
+  /** Waka design system — reusable surfaces & controls */
+  .waka-page {
+    @apply bg-background text-foreground;
+  }
+
+  .waka-surface {
+    @apply rounded-2xl border border-border bg-card shadow-waka-sm;
+  }
+
+  .waka-surface-muted {
+    @apply rounded-2xl border border-border bg-muted/40;
+  }
+
+  .waka-btn-primary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-4 py-2.5 text-sm font-black text-white shadow-waka-sm transition-waka active:bg-waka-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .waka-btn-secondary {
+    @apply inline-flex min-h-[44px] items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-bold text-foreground shadow-sm transition-waka active:bg-muted;
+  }
+
+  .waka-input {
+    @apply min-h-[48px] w-full rounded-xl border border-input bg-card px-4 text-base text-foreground shadow-sm outline-none transition-waka placeholder:text-muted-foreground focus:border-waka-400 focus:ring-2 focus:ring-waka-200;
+  }
+
+  .waka-chip {
+    @apply inline-flex items-center rounded-full border border-border bg-card px-3 py-1 text-xs font-bold text-foreground shadow-sm;
+  }
+
+  .waka-chip-active {
+    @apply border-waka-500 bg-waka-50 text-waka-900 ring-1 ring-waka-200;
+  }
+
+  .waka-link {
+    @apply font-bold text-waka-700 underline decoration-waka-300 underline-offset-2 hover:text-waka-800;
+  }
+
+  /** POS Display Scale — token-driven density (not browser zoom). */
+  html.pos-display-scale-active {
+    transition:
+      --ds-font-xs 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      --ds-gap-2 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      --ds-product-card-min-h 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  html.pos-display-scale-active .pos-ds-product-card {
+    min-height: var(--ds-product-card-min-h);
+    border-radius: var(--ds-radius-lg);
+    transition:
+      min-height 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      padding 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-avatar {
+    height: var(--ds-product-avatar);
+    border-radius: var(--ds-radius-md);
+  }
+
+  html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-name {
+    font-size: var(--ds-font-sm);
+    line-height: 1.2;
+  }
+
+  html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-price {
+    font-size: var(--ds-font-base);
+  }
+
+  html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-stock {
+    font-size: var(--ds-font-2xs);
+  }
+
+  html.pos-display-scale-active .pos-ds-product-card .pos-ds-product-cta {
+    min-height: var(--ds-btn-min-h);
+    font-size: var(--ds-font-xs);
+    border-radius: var(--ds-radius-md);
+  }
+
+  html.pos-display-scale-active .pos-ds-category-chip {
+    min-height: var(--ds-chip-min-h);
+    font-size: var(--ds-font-xs);
+    padding-inline: var(--ds-gap-3);
+    border-radius: 9999px;
+  }
+
+  html.pos-display-scale-active .pos-ds-checkout {
+    font-size: var(--ds-font-base);
+  }
+
+  html.pos-display-scale-active .pos-ds-checkout .pos-ds-checkout-btn {
+    min-height: var(--ds-touch-min);
+    font-size: var(--ds-font-sm);
+    border-radius: var(--ds-radius-lg);
+  }
+
+  html.pos-display-scale-active .pos-ds-input {
+    min-height: var(--ds-input-min-h);
+    font-size: var(--ds-font-base);
+    border-radius: var(--ds-radius-lg);
+  }
+
+  html.pos-display-scale-active .pos-ds-dialog {
+    border-radius: var(--ds-radius-xl);
+    font-size: var(--ds-font-base);
+    transition: font-size 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  html.pos-display-scale-active .pos-ds-dialog .pos-ds-dialog-title {
+    font-size: var(--ds-font-lg);
+  }
+
+  html.pos-display-scale-active .pos-ds-dialog .pos-ds-dialog-btn {
+    min-height: var(--ds-touch-min);
+    font-size: var(--ds-font-sm);
+    border-radius: var(--ds-radius-lg);
+  }
+
+  html.pos-display-scale-active .pos-ds-icon-sm {
+    width: var(--ds-icon-sm);
+    height: var(--ds-icon-sm);
+  }
+
+  html.pos-display-scale-active .pos-ds-icon-md {
+    width: var(--ds-icon-md);
+    height: var(--ds-icon-md);
+  }
 }
 
 .dark {
@@ -377,7 +508,7 @@ body {
   --muted-foreground: 30 8% 62%;
   --border: 24 8% 20%;
   --input: 24 8% 20%;
-  --ring: 21 84% 55%;
+  --ring: 25 95% 53%;
   color-scheme: dark;
 }
 
@@ -414,7 +545,7 @@ body {
   background-color: hsl(var(--card) / 0.95);
 }
 
-.dark .from-orange-50\/90,
+.dark .from-waka-50\/90,
 .dark .via-white,
 .dark .to-white {
   --tw-gradient-from: hsl(var(--background)) var(--tw-gradient-from-position);
@@ -423,12 +554,12 @@ body {
 }
 
 .dark .bg-stone-50,
-.dark .bg-slate-50 {
+.dark .bg-stone-50 {
   background-color: hsl(var(--background));
 }
 
 .dark .bg-stone-100,
-.dark .bg-slate-100 {
+.dark .bg-stone-100 {
   background-color: hsl(var(--muted));
 }
 
@@ -439,30 +570,30 @@ body {
 
 .dark .text-stone-950,
 .dark .text-stone-900,
-.dark .text-slate-900,
-.dark .text-slate-950 {
+.dark .text-stone-900,
+.dark .text-stone-950 {
   color: hsl(var(--foreground));
 }
 
 .dark .text-stone-800,
 .dark .text-stone-700,
-.dark .text-slate-800,
-.dark .text-slate-700 {
+.dark .text-stone-800,
+.dark .text-stone-700 {
   color: hsl(var(--card-foreground));
 }
 
 .dark .text-stone-600,
 .dark .text-stone-500,
 .dark .text-stone-400,
-.dark .text-slate-600,
-.dark .text-slate-500 {
+.dark .text-stone-600,
+.dark .text-stone-500 {
   color: hsl(var(--muted-foreground));
 }
 
 .dark .border-stone-200,
 .dark .border-stone-100,
-.dark .border-slate-200,
-.dark .border-slate-100 {
+.dark .border-stone-200,
+.dark .border-stone-100 {
   border-color: hsl(var(--border));
 }
 

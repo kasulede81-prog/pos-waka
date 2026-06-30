@@ -68,6 +68,18 @@ describe("posShelfLayout", () => {
     expect(cards.find((c) => c.key === "Beer")?.count).toBe(2);
   });
 
+  it("keeps empty shelves from saved order and layout", () => {
+    const cards = buildPosShelfDisplayCards(
+      [product("Beer")],
+      "No shelf",
+      { Snacks: { displayName: "Snacks", icon: "🍪", color: "purple" } },
+      ["Beer", "Snacks", "Drinks"],
+    );
+    expect(cards.find((c) => c.key === "Snacks")?.count).toBe(0);
+    expect(cards.find((c) => c.key === "Drinks")?.count).toBe(0);
+    expect(cards.find((c) => c.key === "Beer")?.count).toBe(1);
+  });
+
   it("maps grid span classes by size", () => {
     expect(shelfGridSpanClass("large")).toContain("col-span-2");
     expect(shelfGridSpanClass("medium")).toContain("col-span-2");

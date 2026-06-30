@@ -14,6 +14,7 @@ import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { computeProfitGroupedByCategory } from "../lib/homeProfit";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
+import { MONTH_TO_DATE_FILTER } from "../lib/dateFilters";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistoryDateFilterChips";
 import { ProfitStatGrid } from "../components/profit/ProfitStatGrid";
@@ -53,7 +54,7 @@ export function ProfitPage({ lang, embedded }: Props) {
     archiveNotice,
     archivedSalesCount,
     needsArchive,
-  } = useReportingDateFilter();
+  } = useReportingDateFilter(MONTH_TO_DATE_FILTER);
   const rawSales = useReportingSales(includeArchived);
   const sales = useDeferredValue(rawSales);
   const salesRefreshing = rawSales !== sales;

@@ -164,10 +164,10 @@ Play Store icon: `resources/brand/icon-1024-cream.png` (1024×1024).
 
 ## What is already configured
 
-- **Capacitor 8** (`@capacitor/core`, `cli`, `android`, splash, status bar, app, camera, network, …)
+- **Capacitor 8** (`@capacitor/core`, `cli`, `android`, splash, SystemBars, app, camera, network, …)
 - **Splash screen** — Android 12+ splash API + `@capacitor/splash-screen` (hidden after shop data loads in `PosDataProvider`)
 - **Adaptive icons** — `mipmap-anydpi-v26` + legacy `drawable/app_icon`
-- **Edge-to-edge** — `MainActivity` + CSS `safe-area` / `viewport-fit=cover`
+- **Edge-to-edge** — `MainActivity`, Capacitor **SystemBars** (`insetsHandling: css`), CSS `safe-area` / `viewport-fit=cover` (no legacy `@capacitor/status-bar` color APIs)
 - **Android back button** — `useAndroidBackButton` in `AppShell`
 - **HTTPS-only** network security config (no cleartext in production)
 - **Permissions** — `INTERNET`, `CAMERA` (barcode scan / take-photo OCR). Gallery picks use the **Android Photo Picker** — no `READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, or legacy storage permissions.

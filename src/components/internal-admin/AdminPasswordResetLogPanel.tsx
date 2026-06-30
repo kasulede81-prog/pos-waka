@@ -87,7 +87,7 @@ export function AdminPasswordResetLogPanel({ previewMode }: Props) {
               {row.target_shop_id ? (
                 <a
                   href={internalAdminShopHref(row.target_shop_id, previewMode)}
-                  className="mt-1 inline-block font-bold text-orange-700 underline-offset-2 hover:underline"
+                  className="mt-1 inline-block font-bold text-waka-700 underline-offset-2 hover:underline"
                 >
                   Open shop
                 </a>

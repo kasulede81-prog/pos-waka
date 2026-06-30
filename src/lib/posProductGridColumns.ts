@@ -17,20 +17,30 @@ export const POS_CATALOG_COL_BREAKPOINT_1200 = POS_CATALOG_COL_BREAKPOINT_1400;
 /** @deprecated Use POS_CATALOG_COL_BREAKPOINT_980 */
 export const POS_CATALOG_COL_BREAKPOINT_1000 = POS_CATALOG_COL_BREAKPOINT_980;
 
+import type { DisplayScaleLevel } from "./displayScale/scaleTokens";
+import { catalogColumnDeltaForScale } from "./displayScale/scaleTokens";
+
+export type CatalogColumnOptions = {
+  displayScale?: DisplayScaleLevel;
+};
+
 /**
  * Product grid columns from measured catalog container width (not viewport).
  * Tuned for enterprise desktop POS: 1366 → 8, 1600 → 9, 1920 → 10, 2560 → 12.
  */
-export function catalogColumnCount(catalogWidthPx: number): number {
+export function catalogColumnCount(catalogWidthPx: number, options?: CatalogColumnOptions): number {
   const w = Math.max(0, catalogWidthPx);
-  if (w >= POS_CATALOG_COL_BREAKPOINT_1900) return POS_GRID_MAX_COLUMNS;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_1400) return 10;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_1160) return 9;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_980) return 8;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_820) return 6;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_640) return 5;
-  if (w >= POS_CATALOG_COL_BREAKPOINT_520) return 4;
-  return 3;
+  let cols = 3;
+  if (w >= POS_CATALOG_COL_BREAKPOINT_1900) cols = POS_GRID_MAX_COLUMNS;
+  else if (w >= POS_CATALOG_COL_BREAKPOINT_1400) cols = 10;
+  else if (w >= POS_CATALOG_COL_BREAKPOINT_1160) cols = 9;
+  else if (w >= POS_CATALOG_COL_BREAKPOINT_980) cols = 8;
+  else if (w >= POS_CATALOG_COL_BREAKPOINT_820) cols = 6;
+  else if (w >= POS_CATALOG_COL_BREAKPOINT_640) cols = 5;
+  else if (w >= POS_CATALOG_COL_BREAKPOINT_520) cols = 4;
+
+  const delta = options?.displayScale ? catalogColumnDeltaForScale(options.displayScale) : 0;
+  return Math.min(POS_GRID_MAX_COLUMNS, Math.max(3, cols + delta));
 }
 
 /** @deprecated Use catalogColumnCount with measured container width. */

@@ -94,7 +94,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-4">
-        <Loader2 className="h-5 w-5 animate-spin text-orange-600" />
+        <Loader2 className="h-5 w-5 animate-spin text-waka-600" />
       </div>
     );
   }
@@ -107,7 +107,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
       </p>
 
       {message ? (
-        <p className="rounded-xl bg-orange-50 px-3 py-2 text-xs font-bold text-orange-900">{message}</p>
+        <p className="rounded-xl bg-waka-50 px-3 py-2 text-xs font-bold text-waka-900">{message}</p>
       ) : null}
 
       {grants.length > 0 ? (
@@ -175,7 +175,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
               value={plan}
               onChange={(e) => setPlan(e.target.value as PromotionalPlanCode)}
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200"
+              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
             >
               {PROMOTIONAL_PLAN_CODES.map((p) => (
                 <option key={p} value={p}>
@@ -190,7 +190,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
               value={days}
               onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 30))}
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200"
+              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
               placeholder="Days"
             />
             <input
@@ -200,7 +200,7 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
               value={extendDays}
               onChange={(e) => setExtendDays(Math.max(1, Number(e.target.value) || 30))}
               disabled={busy}
-              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-orange-200"
+              className="min-h-[44px] rounded-xl border border-stone-200 bg-white px-3 text-sm font-black text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
               placeholder="Extend days"
               title="Days used by the Extend button"
             />
@@ -209,14 +209,14 @@ export function PromotionalAccessPanel({ shopId, canManage, previewMode = false 
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={busy}
-            className="mt-2 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none focus:ring-2 focus:ring-orange-200"
+            className="mt-2 min-h-[44px] w-full rounded-xl border border-stone-200 bg-white px-3 text-sm font-semibold text-stone-900 outline-none focus:ring-2 focus:ring-waka-200"
             placeholder="Reason (e.g. launch promo, support goodwill)"
           />
           <button
             type="button"
             disabled={busy}
             onClick={() => void handleGrant()}
-            className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-orange-600 text-sm font-black text-white disabled:opacity-40"
+            className="mt-2 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-40"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Grant Promotional Access

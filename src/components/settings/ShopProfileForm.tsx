@@ -267,7 +267,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   return (
     <div className="space-y-3">
       {showOnboardGate ? (
-        <p className="rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-bold text-orange-950">
+        <p className="rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-sm font-bold text-waka-950">
           {t(lang, "onboardingUrlGateTitle")}
         </p>
       ) : null}
@@ -446,7 +446,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
           type="button"
           disabled={profileBusy}
           onClick={() => void saveBusinessProfileClick()}
-          className="min-h-[48px] w-full rounded-xl bg-orange-600 py-3 text-base font-black text-white disabled:opacity-50"
+          className="min-h-[48px] w-full rounded-xl bg-waka-600 py-3 text-base font-black text-white disabled:opacity-50"
         >
           {profileBusy ? "…" : t(lang, "saveBusinessProfile")}
         </button>
