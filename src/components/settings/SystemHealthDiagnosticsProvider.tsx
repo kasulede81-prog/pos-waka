@@ -111,7 +111,7 @@ export function SystemHealthSummaryStrip({ lang }: { lang: Language }) {
           <dd className="font-black text-stone-900">{customers.toLocaleString()}</dd>
         </div>
         <div className="rounded-xl bg-stone-50 px-3 py-2">
-          <dt className="text-xs font-bold uppercase text-stone-500">{t(lang, "systemHealthSummaryQueue")}</dt>
+          <dt className="text-xs font-bold uppercase text-stone-500">{t(lang, "systemHealthSummaryPending")}</dt>
           <dd className="font-black text-stone-900">
             {queue ? queue.queuedCount.toLocaleString() : loadingShared ? "…" : "—"}
           </dd>

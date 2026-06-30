@@ -7,17 +7,20 @@ type Props = {
   className?: string;
 };
 
-/** Single link to drawer configuration — replaces scattered settings on cash pages. */
-export function ManageDrawerSettingsLink({ lang, className }: Props) {
+/** Link to variance / tolerance settings — not the open-drawer flow. */
+export function CashDrawerToleranceLink({ lang, className }: Props) {
   return (
     <Link
       to="/settings/cash-drawer"
       className={
         className ??
-        "inline-flex min-h-[44px] items-center justify-center rounded-2xl border-2 border-stone-200 bg-white px-4 text-sm font-black text-stone-900"
+        "inline-flex min-h-[40px] items-center text-xs font-bold text-stone-500 underline decoration-stone-300"
       }
     >
-      {t(lang, "cashManageDrawerSettings")} →
+      {t(lang, "cashManageDrawerSettings")}
     </Link>
   );
 }
+
+/** @deprecated Use CashDrawerToleranceLink */
+export const ManageDrawerSettingsLink = CashDrawerToleranceLink;

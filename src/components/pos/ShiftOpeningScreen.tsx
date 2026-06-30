@@ -121,7 +121,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               type="button"
               onClick={submitDayOpen}
               disabled={!dayOpenAmount.replace(/\D/g, "")}
-              className="min-h-[52px] w-full rounded-2xl bg-waka-600 font-black text-white disabled:opacity-50"
+              className="min-h-[56px] w-full rounded-2xl bg-waka-600 text-lg font-black text-white shadow-md disabled:opacity-50"
             >
               {t(lang, "dayOpenRecordBtn")}
             </button>
@@ -158,13 +158,6 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
                 {(t as (l: Language, k: string) => string)(lang, errorKey)}
               </p>
             ) : null}
-            <button
-              type="button"
-              onClick={() => navigate("/office/day-open")}
-              className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-stone-200 text-sm font-bold text-stone-800"
-            >
-              {t(lang, "dayOpenGoBtn")} — {t(lang, "cashManageDrawerSettings")}
-            </button>
           </>
         ) : (
           <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">

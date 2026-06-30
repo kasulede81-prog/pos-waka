@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { StartupDiagnosticsPanel } from "./StartupDiagnosticsPanel";
 
 type Props = {
   lang: Language;
@@ -10,7 +9,6 @@ type Props = {
 
 /** Minimal escape hatch during in-progress recovery — no retry to avoid interrupting active pull. */
 export function RecoveryInProgressEscapeFooter({ lang, onSignOut }: Props) {
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const run = (fn: () => void | Promise<void>) => {
@@ -28,16 +26,7 @@ export function RecoveryInProgressEscapeFooter({ lang, onSignOut }: Props) {
         <button type="button" disabled={busy} className="text-stone-600 underline-offset-2 hover:underline" onClick={() => run(onSignOut)}>
           {t(lang, "startupSwitchAccount")}
         </button>
-        <button
-          type="button"
-          disabled={busy}
-          className="text-violet-800 underline-offset-2 hover:underline"
-          onClick={() => setShowDiagnostics((v) => !v)}
-        >
-          {showDiagnostics ? t(lang, "startupHideDiagnostics") : t(lang, "startupViewDiagnostics")}
-        </button>
       </div>
-      {showDiagnostics ? <StartupDiagnosticsPanel lang={lang} /> : null}
     </div>
   );
 }

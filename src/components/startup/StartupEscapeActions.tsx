@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { StartupDiagnosticsPanel } from "./StartupDiagnosticsPanel";
 
 type Props = {
   lang: Language;
@@ -24,7 +23,6 @@ export function StartupEscapeActions({
   title,
   subtitle,
 }: Props) {
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const run = (fn: () => void | Promise<void>) => {
@@ -76,17 +74,6 @@ export function StartupEscapeActions({
           {t(lang, "startupSwitchAccount")}
         </button>
       </div>
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => setShowDiagnostics((v) => !v)}
-        className="min-h-[44px] w-full rounded-xl border-2 border-violet-200 bg-violet-50 text-sm font-black text-violet-900 disabled:opacity-60"
-      >
-        {showDiagnostics ? t(lang, "startupHideDiagnostics") : t(lang, "startupViewDiagnostics")}
-      </button>
-
-      {showDiagnostics ? <StartupDiagnosticsPanel lang={lang} /> : null}
     </div>
   );
 }

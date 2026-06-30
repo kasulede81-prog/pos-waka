@@ -28,6 +28,7 @@ import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription"
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
+import { SYNC_PULL_MIN_INTERVAL_MS } from "../lib/syncTiming";
 import { isNativeApp } from "../lib/nativeApp";
 import { writeSyncHealthMeta, readSyncHealthMeta } from "../lib/syncMeta";
 import { setCachedShopId } from "../lib/shopSyncContext";
@@ -83,7 +84,6 @@ import { pullShiftsFromRpc, pushShiftToCloud } from "../lib/shiftCloudSync";
 import {
   pullStockMovementsFull,
   pullStockMovementsIncremental,
-  pushStockMovementToCloud,
 } from "../lib/stockMovementCloudSync";
 import { mergeStockMovementsFromCloudPull } from "../lib/stockMovementRecovery";
 import { mergeDayClosesFromCloudPull } from "../lib/dayCloseRecovery";
@@ -3256,15 +3256,18 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   const ctx = await resolveShopCtx();
   if (!ctx) return { ok: 0, fail: 0 };
 
+  const { mapPool } = await import("../lib/asyncPool");
+  const { SYNC_SALE_PUSH_CONCURRENCY } = await import("../lib/syncTiming");
+
   let ok = 0;
   let fail = 0;
   const { sales } = usePosStore.getState();
-
-  for (const s of sales) {
-    if (!s.pendingSync) continue;
-    if (await pushSaleRowToCloud(s, ctx)) ok += 1;
-    else fail += 1;
-  }
+  const pendingSales = sales.filter((s) => s.pendingSync);
+  const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) =>
+    pushSaleRowToCloud(s, ctx),
+  );
+  ok += saleResults.ok;
+  fail += saleResults.fail;
 
   for (const adj of usePosStore.getState().cashDrawerAdjustments) {
     if (!adj.pendingSync) continue;
@@ -3299,15 +3302,10 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
     else fail += 1;
   }
 
-  for (const movement of usePosStore.getState().stockMovements) {
-    if (await pushStockMovementToCloud(movement, ctx)) ok += 1;
-    else fail += 1;
-  }
-
   return { ok, fail };
 }
 
-const PULL_MIN_INTERVAL_MS = 5 * 60_000;
+const PULL_MIN_INTERVAL_MS = SYNC_PULL_MIN_INTERVAL_MS;
 
 function shouldPullFromCloud(): boolean {
   const last = readSyncHealthMeta().lastPullAt;

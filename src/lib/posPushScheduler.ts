@@ -8,7 +8,11 @@ import { hasSupabaseConfig, supabase } from "./supabase";
 import { shouldPausePosBackgroundPush } from "./backgroundWorkPolicy";
 import { readSyncHealthMeta, writeSyncHealthMeta } from "./syncMeta";
 import { countUnsyncedSales } from "../offline/cloudSync";
-import { isNativeApp } from "./nativeApp";
+import {
+  MIN_POS_PUSH_GAP_MS,
+  POS_PUSH_INTERVAL_MS,
+  POST_SALE_PUSH_DEBOUNCE_MS,
+} from "./syncTiming";
 
 export type PosPushSkipReason =
   | "offline"
@@ -38,9 +42,8 @@ export type PosPushUploadResult = {
   queueFailed: number;
 };
 
-const POST_SALE_DEBOUNCE_MS = isNativeApp() ? 1_200 : 800;
-export const POS_PUSH_INTERVAL_MS = isNativeApp() ? 25_000 : 20_000;
-const MIN_POS_PUSH_GAP_MS = isNativeApp() ? 12_000 : 6_000;
+const POST_SALE_DEBOUNCE_MS = POST_SALE_PUSH_DEBOUNCE_MS;
+export { POS_PUSH_INTERVAL_MS };
 
 let postSaleTimer: ReturnType<typeof setTimeout> | null = null;
 let pushInFlight = false;

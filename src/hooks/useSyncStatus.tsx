@@ -5,11 +5,20 @@ import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 import { deriveQueueHealth } from "../lib/autoSync";
 import { getDeviceOnline } from "../lib/deviceOnline";
-import { isNativeApp } from "../lib/nativeApp";
-import { nativeSyncResumeDelayMs, nativeVisibilitySyncDelayMs, runWhenIdle } from "../lib/uiYield";
+import { runWhenIdle } from "../lib/uiYield";
 import { readSyncQueue } from "../offline/localDb";
 import { pushShopPendingToCloud, syncShopWithCloud, countUnsyncedSales } from "../offline/cloudSync";
 import { POS_PUSH_INTERVAL_MS, runPosPushOnlyUpload } from "../lib/posPushScheduler";
+import {
+  SYNC_AUTO_DRAIN_MS,
+  SYNC_MIN_FULL_INTERVAL_MS,
+  SYNC_MIN_PUSH_INTERVAL_MS,
+  SYNC_QUEUE_POLL_MS,
+  SYNC_RECONNECT_DELAY_MS,
+  syncAppResumeDelayMs,
+  syncStartupIdleMs,
+  syncVisibilityDelayMs,
+} from "../lib/syncTiming";
 import { useOfflineStatus } from "./useOfflineStatus";
 import { readSyncHealthMeta, writeSyncHealthMeta, type SyncHealthMeta } from "../lib/syncMeta";
 import { appendPilotEvent } from "../lib/pilotEventLog";
@@ -42,12 +51,12 @@ export type SyncStatusApi = {
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
 
-const QUEUE_POLL_MS = isNativeApp() ? 60_000 : 25_000;
-const AUTO_DRAIN_MS = isNativeApp() ? 60_000 : 35_000;
+const QUEUE_POLL_MS = SYNC_QUEUE_POLL_MS;
+const AUTO_DRAIN_MS = SYNC_AUTO_DRAIN_MS;
 const FLUSH_TIMEOUT_MS = 55_000;
-const MIN_PUSH_INTERVAL_MS = isNativeApp() ? 15_000 : 6_000;
-const MIN_FULL_SYNC_INTERVAL_MS = isNativeApp() ? 300_000 : 90_000;
-const RECONNECT_FLUSH_DELAY_MS = isNativeApp() ? 400 : 150;
+const MIN_PUSH_INTERVAL_MS = SYNC_MIN_PUSH_INTERVAL_MS;
+const MIN_FULL_SYNC_INTERVAL_MS = SYNC_MIN_FULL_INTERVAL_MS;
+const RECONNECT_FLUSH_DELAY_MS = SYNC_RECONNECT_DELAY_MS;
 
 function emptyBreakdown(): PendingBreakdown {
   return { sales: 0, stock: 0, returns: 0, expenses: 0, other: 0 };
@@ -237,7 +246,7 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
           void (pullPaused
             ? runPosPushFlush({ showSpinner: false, force: true })
             : runFlush({ pull: true, showSpinner: false, forcePending: true })),
-        isNativeApp() ? 1200 : 800,
+        syncStartupIdleMs(),
       );
     }
   }, [pullPaused, refreshQueue, runFlush, runPosPushFlush]);
@@ -302,9 +311,9 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
                   showSpinner: false,
                   forcePending: true,
                 })),
-          nativeVisibilitySyncDelayMs(),
+          syncVisibilityDelayMs(),
         );
-      }, nativeVisibilitySyncDelayMs());
+      }, syncVisibilityDelayMs());
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
@@ -324,9 +333,9 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
               void (pullPaused
                 ? runPosPushFlush({ showSpinner: false, force: true })
                 : runFlush({ pull: true, showSpinner: false, forcePending: true })),
-            nativeSyncResumeDelayMs(),
+            syncAppResumeDelayMs(),
           );
-        }, nativeSyncResumeDelayMs());
+        }, syncAppResumeDelayMs());
       }
     });
     return () => {

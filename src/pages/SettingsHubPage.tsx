@@ -46,7 +46,6 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
   const canOwnerFinanceDiagnostics =
     canSeeFinanceDiagnostics(actor.role) &&
     hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode);
-  const canSubscriptionDiagnostics = canSeeFinanceDiagnostics(actor.role);
   const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
   const canReceipt = hasPermission(actor.role, "settings.receipt");
   const canDevices = hasPermission(actor.role, "settings.devices");
@@ -224,14 +223,6 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             to="/settings/health"
             title={t(lang, "settingsHubSystemHealth")}
             subtitle={t(lang, "settingsHubSystemHealthSub")}
-            Icon={Activity}
-          />
-        ) : null}
-        {canSubscriptionDiagnostics ? (
-          <OfficeNavCard
-            to="/settings/subscription-diagnostics"
-            title={t(lang, "subscriptionDiagTitle")}
-            subtitle={t(lang, "subscriptionDiagSub")}
             Icon={Activity}
           />
         ) : null}

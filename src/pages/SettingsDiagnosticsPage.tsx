@@ -7,10 +7,8 @@ import { buildAndroidDiagnosticsReport, formatAndroidDiagnosticsReport } from ".
 import { saveExportedFile } from "../lib/fileDownload";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { readSyncHealthMeta } from "../lib/syncMeta";
-import { StartupDiagnosticsPanel } from "../components/startup/StartupDiagnosticsPanel";
-import { SyncHealthDashboard } from "../components/SyncHealthDashboard";
-import { CloudTrustCenter } from "../components/settings/CloudTrustCenter";
 import { SelfDeleteHealthPanel } from "../components/settings/SelfDeleteHealthPanel";
+import { SyncHealthCard } from "../components/SyncHealthCard";
 import type { User } from "@supabase/supabase-js";
 
 function yesNo(lang: Language, ok: boolean): string {
@@ -64,12 +62,8 @@ export function SettingsDiagnosticsPage({ lang, user }: { lang: Language; user: 
       </div>
 
       <section className="rounded-3xl border border-stone-200 bg-white p-5 shadow-waka-sm">
-        <StartupDiagnosticsPanel lang={lang} />
+        <SyncHealthCard lang={lang} variant="simple" />
       </section>
-
-      <SyncHealthDashboard lang={lang} lazy />
-
-      <CloudTrustCenter lang={lang} />
 
       <SelfDeleteHealthPanel lang={lang} user={user} />
 

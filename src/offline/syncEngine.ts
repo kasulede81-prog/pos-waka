@@ -47,17 +47,23 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
   skippedBackoff: number;
 }> {
   const queue = (await readSyncQueue()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  let failed = 0;
+  const ready: SyncOperation[] = [];
   let skippedBackoff = 0;
-  const total = queue.length;
-  let done = 0;
   for (const op of queue) {
     if (!shouldRetrySyncOp(op)) {
       skippedBackoff += 1;
-      done += 1;
-      onProgress?.(done, total);
       continue;
     }
+    ready.push(op);
+  }
+
+  const total = queue.length;
+  let failed = 0;
+  let done = skippedBackoff;
+  const { mapPool } = await import("../lib/asyncPool");
+  const { SYNC_QUEUE_FLUSH_CONCURRENCY } = await import("../lib/syncTiming");
+
+  await mapPool(ready, SYNC_QUEUE_FLUSH_CONCURRENCY, async (op) => {
     try {
       const ok = await processOne(op);
       if (ok) {
@@ -78,10 +84,13 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
           reportSyncIssue("sync_queue_corrupt", { kind: op.kind });
         }
       }
+      return false;
     }
     done += 1;
     onProgress?.(done, total);
-  }
+    return true;
+  });
+
   const remaining = (await readSyncQueue()).length;
   return { failed, remaining, skippedBackoff };
 }

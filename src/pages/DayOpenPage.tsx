@@ -8,7 +8,6 @@ import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { KeyboardSafePage } from "../components/layout/KeyboardSafePage";
 import { dateKeyKampala } from "../lib/datesUg";
-import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
 import {
   activeDayDrawerOpenForDate,
   canRequestOwnerDayOpenCorrection,
@@ -98,12 +97,21 @@ export function DayOpenPage({ lang }: { lang: Language }) {
     <KeyboardSafePage className="space-y-5 pb-16">
       <PageHeader lang={lang} title={t(lang, "dayOpenTitle")} subtitle={t(lang, "dayOpenSub")} backFallback="/office/cash-drawer" />
 
-      <ManageDrawerSettingsLink lang={lang} />
-
       {!v2 ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-          Formula v1 — legacy opening float. Enable formula v2 in drawer settings when ready.
+          Formula v1 — legacy opening float. Enable formula v2 in{" "}
+          <Link to="/settings/cash-drawer" className="font-black text-waka-800 underline">
+            {t(lang, "cashManageDrawerSettings")}
+          </Link>{" "}
+          when ready.
         </p>
+      ) : null}
+
+      {!active && mutable ? (
+        <section className="rounded-3xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 to-white p-5">
+          <p className="text-sm font-black text-amber-950">{t(lang, "dayOpenHubAlertTitle")}</p>
+          <p className="mt-1 text-xs font-semibold text-amber-900/80">{t(lang, "dayOpenHubAlertSub")}</p>
+        </section>
       ) : null}
 
       {active ? (
@@ -150,7 +158,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
           <button
             type="button"
             onClick={submitOpen}
-            className="mt-4 min-h-[52px] w-full rounded-2xl bg-waka-600 font-black text-white"
+            className="mt-4 min-h-[56px] w-full rounded-2xl bg-waka-600 text-lg font-black text-white shadow-md"
           >
             {active ? t(lang, "dayOpenSupersedeBtn") : t(lang, "dayOpenRecordBtn")}
           </button>
@@ -234,7 +242,7 @@ export function DayOpenPage({ lang }: { lang: Language }) {
         <p className="text-center text-xs font-semibold text-stone-500">
           {t(lang, "dayOpenEnableCorrectionInSettings")}{" "}
           <Link to="/settings/cash-drawer" className="font-black text-waka-700 underline">
-            {t(lang, "cashManageDrawerSettings")}
+            {t(lang, "settingsHubTitle")}
           </Link>
         </p>
       ) : null}

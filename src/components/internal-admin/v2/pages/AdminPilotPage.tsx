@@ -14,6 +14,7 @@ import { AdminDiagnosticsImportPanel } from "../../ops/AdminDiagnosticsImportPan
 import { AdminOperationalAlertsPanel } from "../../ops/AdminOperationalAlertsPanel";
 import { AdminCrashSummaryPanel } from "../../ops/AdminCrashSummaryPanel";
 import { AdminMigrationStatusPanel } from "../../ops/AdminMigrationStatusPanel";
+import { DeveloperSystemHealthPanel } from "../../../settings/DeveloperSystemHealthPanel";
 import { adminPermissions } from "../adminRoles";
 
 type Props = {
@@ -133,6 +134,16 @@ export function AdminPilotPage({ adminRow, previewMode }: Props) {
         <AdminCrashSummaryPanel previewMode={previewMode} />
         <AdminMigrationStatusPanel />
       </div>
+
+      <section className="rounded-2xl border border-stone-200 bg-white p-4">
+        <h2 className="text-sm font-black text-stone-900">Shop device diagnostics</h2>
+        <p className="mt-0.5 text-xs text-stone-500">
+          Engineering panels (migrations, sync queue, recovery) — not shown to shop owners.
+        </p>
+        <div className="mt-4">
+          <DeveloperSystemHealthPanel lang="en" />
+        </div>
+      </section>
 
       <AdminDiagnosticsImportPanel previewMode={previewMode} />
 

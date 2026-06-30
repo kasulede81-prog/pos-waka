@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   Clock,
   Scale,
-  Settings,
   Sun,
   Wallet,
 } from "lucide-react";
@@ -17,8 +16,9 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
-import { ManageDrawerSettingsLink } from "../components/cash/ManageDrawerSettingsLink";
+import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
 import { buildCashManagementSnapshot, canAccessCashManagement } from "../lib/cashManagementSnapshot";
+import { isFormulaV2 } from "../lib/dayDrawerOpen";
 import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
 import { getCachedComputation } from "../lib/computationResultCache";
 import { timedComputation } from "../lib/performanceMetrics";
@@ -74,6 +74,7 @@ export function CashManagementPage({ lang }: Props) {
   const canClose = hasPermission(actor.role, "day.close");
   const canShifts = actor.role === "owner" || actor.role === "manager";
   const canHistory = hasPermission(actor.role, "owner.cash_history");
+  const needsDayOpen = isFormulaV2(preferences) && !snapshot.drawerOpen && canOpen;
 
   return (
     <div className="page-content-pad space-y-5 pb-24">
@@ -84,6 +85,8 @@ export function CashManagementPage({ lang }: Props) {
         backLabel={t(lang, "officeBackToHub")}
         backFallback="/office"
       />
+
+      {needsDayOpen ? <DayDrawerOpenAlert lang={lang} /> : null}
 
       <section
         className={`rounded-3xl border-2 p-5 ${
@@ -142,13 +145,12 @@ export function CashManagementPage({ lang }: Props) {
       </section>
 
       <ul className="grid gap-3 sm:grid-cols-2">
-        {canOpen ? (
+        {canOpen && !needsDayOpen ? (
           <OfficeNavCard
             to="/office/day-open"
             title={t(lang, "officeCardDayOpen")}
             subtitle={t(lang, "officeCardDayOpenSub")}
             Icon={Sun}
-            highlight
           />
         ) : null}
         {canClose ? (
@@ -177,19 +179,11 @@ export function CashManagementPage({ lang }: Props) {
             Icon={Clock}
           />
         ) : null}
-        {hasPermission(actor.role, "settings.shop") ? (
-          <OfficeNavCard
-            to="/settings/cash-drawer"
-            title={t(lang, "cashManageDrawerSettings")}
-            subtitle={t(lang, "cashManageDrawerSettingsSub")}
-            Icon={Settings}
-          />
-        ) : null}
         {hasPermission(actor.role, "settings.view") ? (
           <OfficeNavCard
             to="/settings/health"
-            title={t(lang, "cashManagementDrawerDiagnostics")}
-            subtitle={t(lang, "cashManagementDrawerDiagnosticsSub")}
+            title={t(lang, "cashManagementSyncStatus")}
+            subtitle={t(lang, "cashManagementSyncStatusSub")}
             Icon={Banknote}
           />
         ) : null}
@@ -271,11 +265,6 @@ export function CashManagementPage({ lang }: Props) {
         </section>
       ) : null}
 
-      {hasPermission(actor.role, "settings.shop") ? (
-        <div className="pt-2">
-          <ManageDrawerSettingsLink lang={lang} className="inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl border-2 border-stone-200 bg-white px-4 text-sm font-black text-stone-900" />
-        </div>
-      ) : null}
     </div>
   );
 }
