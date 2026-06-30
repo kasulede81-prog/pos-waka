@@ -757,6 +757,14 @@ export function SimpleAddProductWizard({
                     unitLabel={unitLabel}
                   />
                 ) : null}
+                {!hasPack && packPriceN > 0 && sellPriceN > 0 ? (
+                  <CostValidationPreview
+                    lang={lang}
+                    unitCostUgx={packPriceN}
+                    sellPriceUgx={sellPriceN}
+                    unitLabel={unitLabel}
+                  />
+                ) : null}
                 {isLastStep && needsAuditReason ? (
                   <label className="block space-y-2">
                     <span className="text-sm font-bold text-foreground">{t(lang, "auditReasonLabel")}</span>

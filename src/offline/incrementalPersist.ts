@@ -82,6 +82,13 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
   await persistArrayDelta("purchase", prev.purchases, next.purchases, (p) => p.createdAt, stats);
   await persistArrayDelta("supplierPayment", prev.supplierPayments, next.supplierPayments, (p) => p.createdAt, stats);
   await persistArrayDelta("stockMovement", prev.stockMovements, next.stockMovements, (m) => m.at, stats);
+  await persistArrayDelta(
+    "archivedStockMovement",
+    prev.archivedStockMovements ?? [],
+    next.archivedStockMovements ?? [],
+    (m) => m.at,
+    stats,
+  );
   await persistArrayDelta("voidRecord", prev.voidRecords, next.voidRecords, (v) => v.createdAt, stats);
   await persistArrayDelta("returnRecord", prev.returnRecords, next.returnRecords, (r) => r.createdAt, stats);
   await persistArrayDelta("cashExpense", prev.cashExpenses, next.cashExpenses, (e) => e.createdAt, stats);
@@ -172,6 +179,7 @@ export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLas
     purchases: state.purchases,
     supplierPayments: state.supplierPayments,
     stockMovements: state.stockMovements,
+    archivedStockMovements: state.archivedStockMovements ?? [],
     voidRecords: state.voidRecords,
     returnRecords: state.returnRecords,
     cashExpenses: state.cashExpenses,

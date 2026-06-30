@@ -34,6 +34,7 @@ export function snapshotFromPartial(p: Partial<PersistedSnapshot>): PersistedSna
     purchases: p.purchases ?? [],
     supplierPayments: p.supplierPayments ?? [],
     stockMovements: p.stockMovements ?? [],
+    archivedStockMovements: p.archivedStockMovements ?? [],
     voidRecords: p.voidRecords ?? [],
     returnRecords: p.returnRecords ?? [],
     archivedSales: p.archivedSales ?? [],

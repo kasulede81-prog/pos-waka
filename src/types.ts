@@ -270,6 +270,10 @@ export type ReturnRecord = {
   productName: string;
   quantity: number;
   refundAmountUgx: number;
+  /** COGS reversed from original sale line snapshot */
+  cogsUgx?: number;
+  /** Unit cost per base unit from original sale line */
+  unitCostUgx?: number;
   reason: ReturnReason;
   note?: string;
   actorUserId: string;
@@ -568,6 +572,7 @@ export type SupplierPayment = {
 };
 
 export type StockMovementKind =
+  | "opening_stock"
   | "purchase_in"
   | "sale_out"
   | "adjust_damage"
@@ -654,8 +659,20 @@ export type SaleLine = {
   originalLineTotalUgx?: number;
   /** UGX taken off this line for the customer */
   discountUgx?: number;
-  /** Simple estimate: line total minus buying cost x quantity */
+  /** Gross profit after all discounts (Revenue − COGS) — snapshotted at sale completion */
   estimatedProfitUgx: number;
+  /** COGS snapshotted at sale completion (quantity × unit cost, pack slots when applicable) */
+  cogsUgx?: number;
+  /** Cart-level discount allocated to this line */
+  cartDiscountUgx?: number;
+  /** Net revenue after line + cart discounts */
+  netRevenueUgx?: number;
+  /** Same as estimatedProfitUgx when snapshotted — explicit alias for reporting */
+  grossProfitUgx?: number;
+  /** Base unit label at time of sale */
+  baseUnit?: string;
+  /** Financial snapshot completeness — cloud / legacy hydration */
+  financialDataStatus?: "complete" | "repaired" | "legacy" | "needs_repair";
   /** When inputMode is money, what the customer handed */
   moneyAmountUgx?: number | null;
   /** Pharmacy POS: unit the cashier sold (display only; `quantity` is base units). */
@@ -692,6 +709,10 @@ export type Sale = {
   /** Running total voided from this sale after completion */
   voidedTotalUgx?: number;
   estimatedProfitUgx: number;
+  /** True when cloud/legacy lines lack repairable financial snapshots */
+  financialRepairRequired?: boolean;
+  /** True when sale lines originate from legacy migration without cost data */
+  legacyFinancialData?: boolean;
   createdAt: string;
   pendingSync: boolean;
   lastSyncError?: string | null;

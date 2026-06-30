@@ -54,10 +54,12 @@ export function evaluateDebtIntegrityStatus(
 export function evaluateInventoryIntegrityStatus(input: {
   products: Product[];
   stockMovements: StockMovement[];
+  archivedStockMovements?: StockMovement[];
 }): ReadinessCheck {
   const { ok, mismatches } = verifyInventoryIntegrity({
     products: input.products,
     movements: input.stockMovements,
+    archivedMovements: input.archivedStockMovements,
   });
   if (ok) {
     return { id: "inventory_integrity", label: "Inventory", status: "pass", detail: "Stock matches movements" };

@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats } from "../../lib/draftCart";
@@ -8,11 +9,13 @@ type Props = {
   compact?: boolean;
   /** Single-line stats bar for mobile checkout dock. */
   dock?: boolean;
+  /** Desktop sidebar — tighter summary bar. */
+  sidebarCompact?: boolean;
   payableUgx?: number;
   cartDiscountUgx?: number;
 };
 
-export function DraftCartSummary({ lang, stats, compact, dock, payableUgx, cartDiscountUgx = 0 }: Props) {
+export function DraftCartSummary({ lang, stats, compact, dock, sidebarCompact, payableUgx, cartDiscountUgx = 0 }: Props) {
   const unitShown =
     Number.isInteger(stats.unitCount) ? String(stats.unitCount) : stats.unitCount.toFixed(2).replace(/\.?0+$/, "");
   const showPayable = payableUgx != null && cartDiscountUgx > 0;
@@ -21,7 +24,12 @@ export function DraftCartSummary({ lang, stats, compact, dock, payableUgx, cartD
 
   if (dock) {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-waka-200 bg-waka-50/90 px-3 py-2 text-sm font-bold text-stone-700">
+      <div
+        className={clsx(
+          "flex items-center justify-between gap-2 rounded-lg border border-waka-200 bg-waka-50/90 font-bold text-stone-700",
+          sidebarCompact ? "px-2 py-1 text-xs" : "px-3 py-2 text-sm",
+        )}
+      >
         <span>
           {stats.productCount} {t(lang, "posCartProductsShort").toLowerCase()} · {unitShown}{" "}
           {t(lang, "posCartUnitsShort").toLowerCase()}

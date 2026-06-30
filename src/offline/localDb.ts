@@ -61,6 +61,7 @@ export type PersistedSnapshot = {
   purchases?: Purchase[];
   supplierPayments?: SupplierPayment[];
   stockMovements?: StockMovement[];
+  archivedStockMovements?: StockMovement[];
   voidRecords?: VoidRecord[];
   returnRecords?: ReturnRecord[];
   cashExpenses?: CashExpense[];

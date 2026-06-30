@@ -5,17 +5,15 @@ import {
   lowStockThresholdBaseUnits,
 } from "./pharmacyPackaging";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
-import { formatFriendlyQuantity } from "./saleQuantityLabel";
+import { formatQuantityWithFractions } from "./formatQuantityWithFractions";
 import {
   applyPackSlotCostsToSaleLine,
   costPerBaseFromBuyingUnitCostPrecise,
   costPerBaseUnitUgxFromProduct,
-  lineCostForProductQuantity,
-  lineProfitUgx,
-  normalizeUnitCostUgx,
   resolvePackCostUnitsDepleted,
   weightedCostAfterStockInPrecise,
 } from "./costPrecision";
+import { resolveSaleLineFinancials } from "./saleFinancialEngine";
 
 const MONEY_ROUND = 4;
 
@@ -151,7 +149,7 @@ export function getPosSellPresets(product: Product): PosSellPreset[] {
       presets.push({
         mode: "quantity",
         value: qty,
-        label: formatFriendlyQuantity(qty, unit, "receipt"),
+        label: formatQuantityWithFractions(qty, unit),
         priceLabel: `${Math.round(qty * price).toLocaleString()} UGX`,
       });
     }
@@ -163,8 +161,8 @@ export function getPosSellPresets(product: Product): PosSellPreset[] {
         value: money,
         label:
           qty != null && qty > 0
-            ? formatFriendlyQuantity(qty, unit, "receipt")
-            : formatFriendlyQuantity(moneyQty, unit, "receipt"),
+            ? formatQuantityWithFractions(qty, unit)
+            : formatQuantityWithFractions(moneyQty, unit),
         priceLabel: `${money.toLocaleString()} UGX`,
       });
     }
@@ -273,14 +271,8 @@ export function buildSaleLine(
 }
 
 /** Simple line profit: sale amount minus pack-aware COGS for the quantity sold. */
-export function estimatedProfitForLine(product: Product, line: SaleLine): number {
-  if (Number.isFinite(line.estimatedProfitUgx)) return Math.round(line.estimatedProfitUgx);
-  const unitCost =
-    Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
-      ? normalizeUnitCostUgx(line.unitCostUgx)
-      : costPerBaseUnitUgx(product);
-  const cost = lineCostForProductQuantity(product, line.quantity, unitCost);
-  return lineProfitUgx(line.lineTotalUgx, cost);
+export function estimatedProfitForLine(_product: Product, line: SaleLine): number {
+  return resolveSaleLineFinancials(line).grossProfitUgx;
 }
 
 export function lowStockThreshold(product: Product): number {

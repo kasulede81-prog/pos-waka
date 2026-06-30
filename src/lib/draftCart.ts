@@ -9,7 +9,8 @@ import {
 } from "./sellingEngine";
 import { resolvePackCostUnitsDepleted } from "./costPrecision";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
-import { formatFriendlyQuantity } from "./saleQuantityLabel";
+import { formatQuantityWithFractions } from "./formatQuantityWithFractions";
+import { formatSaleLineQuantity, resolveSaleLineQuantity } from "./saleQuantityLabel";
 
 /** Aggregates for wholesale / large-order checkout UI. */
 export type DraftCartStats = {
@@ -63,13 +64,7 @@ export function draftPayableTotal(lines: SaleLine[], cartDiscountUgx = 0): numbe
 }
 
 /** Scale aggregate line profit when a cart-level discount reduces net revenue. */
-export function estimatedProfitAfterCartDiscount(lines: SaleLine[], cartDiscountUgx = 0): number {
-  const lineSubtotalUgx = lines.reduce((a, l) => a + l.lineTotalUgx, 0);
-  const rawProfit = lines.reduce((a, l) => a + l.estimatedProfitUgx, 0);
-  if (cartDiscountUgx <= 0 || lineSubtotalUgx <= 0) return rawProfit;
-  const netRatio = Math.max(0, lineSubtotalUgx - cartDiscountUgx) / lineSubtotalUgx;
-  return Math.round(rawProfit * netRatio);
-}
+export { estimatedProfitAfterCartDiscount } from "./saleFinancialEngine";
 
 /** Restore whole-cart discount from a held/pending sale so checkout totals match the held bill. */
 export function cartDiscountFromPendingSale(sale: Sale): number {
@@ -83,7 +78,7 @@ export function formatDraftLineQty(product: Product, line: SaleLine): string {
   if (isPharmacyPackagingActive(product)) {
     return formatPharmacySaleQtyLabel(product, line, "short");
   }
-  const qty = line.quantity;
+  const qty = resolveSaleLineQuantity(line);
   const unit = product.baseUnit || "ea";
   const rate = baseUnitsPerBuyingUnit(product);
   const pack = packLabelFromProduct(product);
@@ -96,11 +91,10 @@ export function formatDraftLineQty(product: Product, line: SaleLine): string {
       return `${fullPacks} ${packLabel}`;
     }
     const packPart = fullPacks > 0 ? `${fullPacks} ${fullPacks === 1 ? pack : `${pack}s`} + ` : "";
-    const pieceShown = Number.isInteger(remainder) ? String(remainder) : remainder.toFixed(2).replace(/\.?0+$/, "");
-    return `${packPart}${pieceShown} ${unit}`;
+    return `${packPart}${formatQuantityWithFractions(remainder, unit)}`;
   }
 
-  return formatFriendlyQuantity(qty, unit, "short");
+  return formatSaleLineQuantity(line, product, "short");
 }
 
 /** Rebuild a quantity line; scales an existing line discount proportionally. */
@@ -110,6 +104,7 @@ export function rebuildDraftLineQuantity(
   prior?: SaleLine,
   packSlotStart?: number,
 ): SaleLine | null {
+  if (prior?.inputMode === "money") return null;
   const slotStart = packSlotStart ?? resolvePackCostUnitsDepleted(product);
   const built = buildSaleLine(product, "quantity", quantity, { packSlotStart: slotStart });
   if (!built.line) return null;
@@ -138,6 +133,36 @@ export function rebuildDraftLineQuantity(
   };
 }
 
+/** Money-mode lines must never be merged via quantity rebuild. */
+export function shouldMergeDraftSaleLines(existing: SaleLine | undefined, incoming: SaleLine): boolean {
+  if (!existing) return false;
+  if (existing.inputMode === "money" || incoming.inputMode === "money") return false;
+  return true;
+}
+
+/** Option B: merge two money lines by summing amounts and recalculating once. */
+export function mergeMoneyDraftSaleLine(
+  existing: SaleLine,
+  incoming: SaleLine,
+  product: Product,
+): SaleLine {
+  const totalMoney = Math.floor(
+    Math.max(0, Number(existing.moneyAmountUgx ?? existing.lineTotalUgx) || 0) +
+      Math.max(0, Number(incoming.moneyAmountUgx ?? incoming.lineTotalUgx) || 0),
+  );
+  const built = buildSaleLine(product, "money", totalMoney, {
+    packSlotStart: resolvePackCostUnitsDepleted(product),
+  });
+  if (!built.line) return { ...ensureSaleLineId(incoming), stockVersionAtAdd: existing.stockVersionAtAdd ?? product.version ?? 1 };
+  const now = new Date().toISOString();
+  return {
+    ...built.line,
+    id: existing.id ?? built.line.id,
+    updatedAt: now,
+    stockVersionAtAdd: existing.stockVersionAtAdd ?? product.version ?? 1,
+  };
+}
+
 /** Combine duplicate product adds into one cart line (additive quantity). */
 export function mergeDraftSaleLine(
   existing: SaleLine | undefined,
@@ -145,6 +170,12 @@ export function mergeDraftSaleLine(
   product: Product,
 ): SaleLine {
   if (!existing) {
+    return { ...ensureSaleLineId(incoming), stockVersionAtAdd: product.version ?? 1 };
+  }
+  if (existing.inputMode === "money" && incoming.inputMode === "money") {
+    return mergeMoneyDraftSaleLine(existing, incoming, product);
+  }
+  if (existing.inputMode === "money" || incoming.inputMode === "money") {
     return { ...ensureSaleLineId(incoming), stockVersionAtAdd: product.version ?? 1 };
   }
   const totalQty = existing.quantity + incoming.quantity;

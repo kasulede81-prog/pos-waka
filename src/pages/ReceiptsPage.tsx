@@ -121,6 +121,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const showProfit = canProfit;
   const showShopSummaries = canShopWideFinancials;
   const products = usePosStore((s) => s.products);
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
   const [showCancelled, setShowCancelled] = useState(false);
@@ -337,6 +338,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       sale={sale}
       allSales={sales}
       returnRecords={allReturns}
+      productById={productById}
       customerName={customerNameFor(sale)}
       cashierLabel={soldByLabel(sale)}
       canVoid={canVoid && isCompletedSale(sale)}

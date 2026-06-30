@@ -1,10 +1,9 @@
 import { Link } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowRight, Download, Play, WifiOff, Cloud, HeadphonesIcon } from "lucide-react";
+import { ArrowRight, Download, WifiOff, Cloud, HeadphonesIcon } from "lucide-react";
 import { FloatCard, Reveal } from "./MarketingMotion";
 import {
   mktBtnPrimary,
-  mktBtnSecondary,
   mktChartBar,
   mktChip,
   mktDeviceFrame,
@@ -55,10 +54,6 @@ export function MarketingHeroSection({ isAuthenticated }: Props) {
             >
               Start Free — UGX 0
               <ArrowRight className="h-5 w-5" aria-hidden />
-            </Link>
-            <Link to="/demo" className={clsx(mktBtnSecondary, "min-h-[52px] gap-2 px-6 py-3 text-base")}>
-              <Play className="h-4 w-4 text-orange-600 dark:text-orange-400" aria-hidden />
-              Watch Demo
             </Link>
             <a
               href="https://play.google.com/store/apps/details?id=ug.waka.pos"

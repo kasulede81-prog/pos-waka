@@ -13,7 +13,9 @@ import { sumCashExpensesInMonth } from "./cashReconciliation";
 import type { CashExpense } from "../types";
 import { getCompletedFinancials, getCompletedFinancialsFromScoped, isRevenueSale } from "./financialMetrics";
 import { computeTodayProfitBreakdown } from "./homeProfit";
+import { inventoryValueAtCostUgx } from "./costPrecision";
 import { isLowStock } from "./sellingEngine";
+import { resolveReturnFinancials, resolveSaleLineFinancialsWithSale, findSaleLineForReturn } from "./saleFinancialEngine";
 import { createReportFinancialCache, cachedCompletedFinancials, type ReportFinancialCache } from "./reportFinancialCache";
 
 export type ProductRank = {
@@ -99,59 +101,68 @@ function returnsForFilter(returns: ReturnRecord[], filter: DateFilterValue): Ret
   return returnsInBounds(returns, bounds);
 }
 
+function accumulateLineRank(
+  map: Map<string, ProductRank>,
+  line: import("../types").SaleLine,
+  sale: import("../types").Sale,
+): void {
+  const fin = resolveSaleLineFinancialsWithSale(line, sale);
+  const cur = map.get(line.productId) ?? {
+    productId: line.productId,
+    name: line.name,
+    quantity: 0,
+    revenueUgx: 0,
+    profitUgx: 0,
+  };
+  map.set(line.productId, {
+    productId: line.productId,
+    name: line.name,
+    quantity: cur.quantity + line.quantity,
+    revenueUgx: cur.revenueUgx + fin.revenueUgx,
+    profitUgx: cur.profitUgx + fin.grossProfitUgx,
+  });
+}
+
+function accumulateReturnRank(
+  map: Map<string, ProductRank>,
+  ret: ReturnRecord,
+  sales: Sale[],
+): void {
+  const cur = map.get(ret.productId) ?? {
+    productId: ret.productId,
+    name: ret.productName,
+    quantity: 0,
+    revenueUgx: 0,
+    profitUgx: 0,
+  };
+  const linkedSale = sales.find((s) => s.id === ret.saleId);
+  const saleLine = findSaleLineForReturn(linkedSale, ret.productId);
+  const retFin = resolveReturnFinancials(ret, saleLine);
+  map.set(ret.productId, {
+    productId: ret.productId,
+    name: ret.productName || cur.name,
+    quantity: cur.quantity - Math.max(0, ret.quantity),
+    revenueUgx: cur.revenueUgx - Math.max(0, ret.refundAmountUgx),
+    profitUgx: cur.profitUgx - retFin.grossProfitUgx,
+  });
+}
+
 function rankProductsBoth(
   sales: Sale[],
   returns: ReturnRecord[],
-  products: Product[],
+  _products: Product[],
   topLimit: number,
   slowLimit: number,
 ): { top: ProductRank[]; slow: ProductRank[] } {
-  const productById = new Map(products.map((p) => [p.id, p]));
   const map = new Map<string, ProductRank>();
   for (const sale of sales) {
     for (const line of sale.lines) {
       if (line.voided) continue;
-      const cur = map.get(line.productId) ?? {
-        productId: line.productId,
-        name: line.name,
-        quantity: 0,
-        revenueUgx: 0,
-        profitUgx: 0,
-      };
-      const unitCost =
-        Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
-          ? line.unitCostUgx
-          : (productById.get(line.productId)?.costPricePerUnitUgx ?? 0);
-      const lineProfit = Number.isFinite(line.estimatedProfitUgx)
-        ? line.estimatedProfitUgx
-        : Math.round(line.lineTotalUgx - line.quantity * unitCost);
-      map.set(line.productId, {
-        productId: line.productId,
-        name: line.name,
-        quantity: cur.quantity + line.quantity,
-        revenueUgx: cur.revenueUgx + line.lineTotalUgx,
-        profitUgx: cur.profitUgx + lineProfit,
-      });
+      accumulateLineRank(map, line, sale);
     }
   }
   for (const ret of returns) {
-    const cur = map.get(ret.productId) ?? {
-      productId: ret.productId,
-      name: ret.productName,
-      quantity: 0,
-      revenueUgx: 0,
-      profitUgx: 0,
-    };
-    const product = productById.get(ret.productId);
-    const returnCost = Math.round(Math.max(0, ret.quantity) * Math.max(0, product?.costPricePerUnitUgx ?? 0));
-    const returnProfit = Math.max(0, ret.refundAmountUgx) - returnCost;
-    map.set(ret.productId, {
-      productId: ret.productId,
-      name: ret.productName || cur.name,
-      quantity: cur.quantity - Math.max(0, ret.quantity),
-      revenueUgx: cur.revenueUgx - Math.max(0, ret.refundAmountUgx),
-      profitUgx: cur.profitUgx - returnProfit,
-    });
+    accumulateReturnRank(map, ret, sales);
   }
   const rows = [...map.values()].filter((r) => r.revenueUgx > 0);
   const top = [...rows].sort((a, b) => b.revenueUgx - a.revenueUgx).slice(0, topLimit);
@@ -162,56 +173,19 @@ function rankProductsBoth(
 function rankProducts(
   sales: Sale[],
   returns: ReturnRecord[],
-  products: Product[],
+  _products: Product[],
   order: "top" | "slow",
   limit: number,
 ): ProductRank[] {
-  const productById = new Map(products.map((p) => [p.id, p]));
   const map = new Map<string, ProductRank>();
   for (const sale of sales) {
     for (const line of sale.lines) {
       if (line.voided) continue;
-      const cur = map.get(line.productId) ?? {
-        productId: line.productId,
-        name: line.name,
-        quantity: 0,
-        revenueUgx: 0,
-        profitUgx: 0,
-      };
-      const unitCost =
-        Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
-          ? line.unitCostUgx
-          : (productById.get(line.productId)?.costPricePerUnitUgx ?? 0);
-      const lineProfit = Number.isFinite(line.estimatedProfitUgx)
-        ? line.estimatedProfitUgx
-        : Math.round(line.lineTotalUgx - line.quantity * unitCost);
-      map.set(line.productId, {
-        productId: line.productId,
-        name: line.name,
-        quantity: cur.quantity + line.quantity,
-        revenueUgx: cur.revenueUgx + line.lineTotalUgx,
-        profitUgx: cur.profitUgx + lineProfit,
-      });
+      accumulateLineRank(map, line, sale);
     }
   }
   for (const ret of returns) {
-    const cur = map.get(ret.productId) ?? {
-      productId: ret.productId,
-      name: ret.productName,
-      quantity: 0,
-      revenueUgx: 0,
-      profitUgx: 0,
-    };
-    const product = productById.get(ret.productId);
-    const returnCost = Math.round(Math.max(0, ret.quantity) * Math.max(0, product?.costPricePerUnitUgx ?? 0));
-    const returnProfit = Math.max(0, ret.refundAmountUgx) - returnCost;
-    map.set(ret.productId, {
-      productId: ret.productId,
-      name: ret.productName || cur.name,
-      quantity: cur.quantity - Math.max(0, ret.quantity),
-      revenueUgx: cur.revenueUgx - Math.max(0, ret.refundAmountUgx),
-      profitUgx: cur.profitUgx - returnProfit,
-    });
+    accumulateReturnRank(map, ret, sales);
   }
   const rows = [...map.values()].filter((r) => r.revenueUgx > 0);
   rows.sort((a, b) => (order === "slow" ? a.revenueUgx - b.revenueUgx : b.revenueUgx - a.revenueUgx));
@@ -355,10 +329,7 @@ export function localGetTopProducts(
 }
 
 export function localGetInventoryInsights(products: Product[]): InventoryInsights {
-  const stockValueAtCostUgx = products.reduce(
-    (a, p) => a + Math.max(0, p.stockOnHand) * Math.max(0, p.costPricePerUnitUgx),
-    0,
-  );
+  const stockValueAtCostUgx = inventoryValueAtCostUgx(products);
   const lowStock = products
     .filter((p) => p.stockOnHand > 0 && isLowStock(p))
     .sort((a, b) => a.stockOnHand - b.stockOnHand)

@@ -89,6 +89,8 @@ export function productToWizardPrefill(product: Product, _lang: Language): Wizar
   let buyPackPrice = "";
   if (hasPack && rate > 0 && product.costPricePerUnitUgx >= 0) {
     buyPackPrice = String(Math.floor(product.costPricePerUnitUgx * rate));
+  } else if (!hasPack && product.costPricePerUnitUgx > 0) {
+    buyPackPrice = String(Math.floor(product.costPricePerUnitUgx));
   }
   return {
     name: product.name,
@@ -207,7 +209,9 @@ export function buildProductFromSimpleWizard(input: SimpleWizardInput, lang: Lan
   const costPerUnit =
     input.hasPack && buyPackPrice > 0 && piecesPerPack > 0
       ? unitCostFromPackTotal(buyPackPrice, piecesPerPack)
-      : undefined;
+      : !input.hasPack && buyPackPrice > 0
+        ? buyPackPrice
+        : undefined;
 
   const buyingUnit = input.hasPack && piecesPerPack > 1 ? packLabel : undefined;
   const conversionRate = input.hasPack && piecesPerPack > 1 ? piecesPerPack : undefined;

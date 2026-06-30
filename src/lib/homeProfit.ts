@@ -1,7 +1,11 @@
 import type { Product, ReturnRecord, Sale, UserRole } from "../types";
 import { computeCanonicalRevenueUgx } from "./canonicalRevenue";
-import { costPerBaseUnitUgx, estimatedProfitForLine } from "./sellingEngine";
-import { lineCostForProductQuantity, lineCostFromSaleLine, lineProfitUgx } from "./costPrecision";
+import {
+  findSaleLineForReturn,
+  resolveReturnFinancials,
+  resolveSaleLineFinancialsWithSale,
+  sumSaleLinesFinancials,
+} from "./saleFinancialEngine";
 
 /** @deprecated Use resolveProfitVisibility().canProfit — role-only gate without subscription tier. */
 export function canSeeOfficeProfit(role: UserRole, authMode: "supabase" | "local"): boolean {
@@ -47,7 +51,7 @@ export type TodayProfitBreakdown = {
 /** Profit per line = sale amount − (buying cost per unit × quantity sold). */
 export function computeTodayProfitBreakdown(
   todaySales: Sale[],
-  productById: Map<string, Product>,
+  _productById: Map<string, Product>,
   returnRecords: ReturnRecord[] = [],
 ): TodayProfitBreakdown {
   let salesUgx = 0;
@@ -56,21 +60,17 @@ export function computeTodayProfitBreakdown(
   let linesMissingCost = 0;
 
   for (const sale of todaySales) {
-    for (const line of sale.lines) {
-      if (line.voided) continue;
-      const product = productById.get(line.productId);
-      const unitCost =
-        Number.isFinite(line.unitCostUgx) && line.unitCostUgx >= 0
-          ? line.unitCostUgx
-          : product
-            ? costPerBaseUnitUgx(product)
-            : 0;
-      if (unitCost <= 0) linesMissingCost += 1;
-      const lineCost = lineCostFromSaleLine(line);
-      costUgx += lineCost;
-      profitUgx += product
-        ? estimatedProfitForLine(product, line)
-        : Math.round(line.lineTotalUgx - lineCost);
+    const active = sale.lines.filter((l) => !l.voided);
+    const lineSubtotalUgx = active.reduce((a, l) => a + l.lineTotalUgx, 0);
+    const heldTotal = Math.max(0, Math.floor(sale.totalUgx ?? 0));
+    const cartDiscountUgx = Math.max(0, Math.min(lineSubtotalUgx, lineSubtotalUgx - heldTotal));
+    const saleContext = { cartDiscountUgx, lineSubtotalUgx };
+    const part = sumSaleLinesFinancials(active, saleContext);
+    costUgx += part.cogsUgx;
+    profitUgx += part.grossProfitUgx;
+    for (const line of active) {
+      const fin = resolveSaleLineFinancialsWithSale(line, sale);
+      if (fin.unitCostUgx <= 0) linesMissingCost += 1;
     }
   }
 
@@ -78,15 +78,13 @@ export function computeTodayProfitBreakdown(
     const refundUgx = Math.max(0, Math.floor(rec.refundAmountUgx));
     const qty = Math.max(0, rec.quantity);
     if (refundUgx <= 0 || qty <= 0) continue;
-    const product = productById.get(rec.productId);
-    const returnUnitCost = product ? costPerBaseUnitUgx(product) : 0;
-    if (returnUnitCost <= 0) linesMissingCost += 1;
-    const returnCost = product
-      ? lineCostForProductQuantity(product, qty, returnUnitCost)
-      : Math.round(qty * returnUnitCost);
+    const linkedSale = todaySales.find((s) => s.id === rec.saleId);
+    const saleLine = findSaleLineForReturn(linkedSale, rec.productId);
+    const retFin = resolveReturnFinancials(rec, saleLine);
+    if (retFin.unitCostUgx <= 0) linesMissingCost += 1;
     salesUgx -= refundUgx;
-    costUgx -= returnCost;
-    profitUgx -= lineProfitUgx(refundUgx, returnCost);
+    costUgx -= retFin.cogsUgx;
+    profitUgx -= retFin.grossProfitUgx;
   }
 
   salesUgx = computeCanonicalRevenueUgx(todaySales, returnRecords);
@@ -116,12 +114,8 @@ export function computeProfitGroupedByCategory(
   for (const sale of sales) {
     for (const line of sale.lines) {
       if (line.voided) continue;
-      const product = productById.get(line.productId);
-      const lineCost = lineCostFromSaleLine(line);
-      const lineProfit = product
-        ? estimatedProfitForLine(product, line)
-        : Math.round(line.lineTotalUgx - lineCost);
-      const catRaw = product?.category?.trim() ?? "";
+      const fin = resolveSaleLineFinancialsWithSale(line, sale);
+      const catRaw = productById.get(line.productId)?.category?.trim() ?? "";
       const categoryKey = catRaw.length > 0 ? catRaw : uncategorizedLabel();
 
       let catMap = byCategory.get(categoryKey);
@@ -142,9 +136,9 @@ export function computeProfitGroupedByCategory(
         ...cur,
         name: line.name || cur.name,
         qty: cur.qty + line.quantity,
-        salesUgx: cur.salesUgx + line.lineTotalUgx,
-        costUgx: cur.costUgx + lineCost,
-        profitUgx: cur.profitUgx + lineProfit,
+        salesUgx: cur.salesUgx + fin.revenueUgx,
+        costUgx: cur.costUgx + fin.cogsUgx,
+        profitUgx: cur.profitUgx + fin.grossProfitUgx,
       });
     }
   }
@@ -154,11 +148,10 @@ export function computeProfitGroupedByCategory(
     const qty = Math.max(0, rec.quantity);
     const refundUgx = Math.max(0, Math.floor(rec.refundAmountUgx));
     if (qty <= 0 || refundUgx <= 0) continue;
-    const returnUnitCost = product ? costPerBaseUnitUgx(product) : 0;
-    const returnCost = product
-      ? lineCostForProductQuantity(product, qty, returnUnitCost)
-      : Math.round(qty * returnUnitCost);
-    const returnProfitImpact = lineProfitUgx(refundUgx, returnCost);
+    const linkedSale = sales.find((s) => s.id === rec.saleId);
+    const saleLine = findSaleLineForReturn(linkedSale, rec.productId);
+    const retFin = resolveReturnFinancials(rec, saleLine);
+    const returnProfitImpact = retFin.grossProfitUgx;
     const catRaw = product?.category?.trim() ?? "";
     const categoryKey = catRaw.length > 0 ? catRaw : uncategorizedLabel();
     let catMap = byCategory.get(categoryKey);
@@ -180,7 +173,7 @@ export function computeProfitGroupedByCategory(
       name: rec.productName || cur.name,
       qty: cur.qty - qty,
       salesUgx: cur.salesUgx - refundUgx,
-      costUgx: cur.costUgx - returnCost,
+      costUgx: cur.costUgx - retFin.cogsUgx,
       profitUgx: cur.profitUgx - returnProfitImpact,
     });
   }

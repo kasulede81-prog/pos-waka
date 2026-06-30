@@ -153,17 +153,29 @@ export function lineProfitUgx(revenueUgx: number, costUgx: number): number {
   return Math.round(revenueUgx - costUgx);
 }
 
-/** COGS from a finalized sale line (uses snapshotted profit/cost, not live pack slot counter). */
+/** COGS from a finalized sale line (uses snapshotted cogs/profit, not live pack slot counter). */
 export function lineCostFromSaleLine(line: {
   quantity: number;
   lineTotalUgx: number;
   unitCostUgx?: number;
   estimatedProfitUgx?: number;
+  cogsUgx?: number;
+  netRevenueUgx?: number;
+  grossProfitUgx?: number;
 }): number {
   const qty = Math.max(0, Number(line.quantity) || 0);
   if (qty <= 0) return 0;
-  if (Number.isFinite(line.estimatedProfitUgx)) {
-    return line.lineTotalUgx - Math.round(Number(line.estimatedProfitUgx));
+  if (Number.isFinite(line.cogsUgx) && line.cogsUgx! >= 0) {
+    return Math.round(line.cogsUgx!);
+  }
+  const revenue = Number.isFinite(line.netRevenueUgx) ? line.netRevenueUgx! : line.lineTotalUgx;
+  const profit = Number.isFinite(line.grossProfitUgx)
+    ? Math.round(line.grossProfitUgx!)
+    : Number.isFinite(line.estimatedProfitUgx)
+      ? Math.round(Number(line.estimatedProfitUgx))
+      : null;
+  if (profit != null) {
+    return Math.round(revenue - profit);
   }
   return lineCostUgx(normalizeUnitCostUgx(line.unitCostUgx), qty);
 }

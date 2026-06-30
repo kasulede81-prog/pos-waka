@@ -12,6 +12,8 @@ type Props = {
   compact?: boolean;
   /** Ultra-compact row for mobile checkout dock (fits with numpad on screen). */
   dock?: boolean;
+  /** Desktop sidebar — tighter rows so the cart list scroll area is taller. */
+  sidebarCompact?: boolean;
   onIncrement: () => void;
   onDecrement: () => void;
   onQtyTap: () => void;
@@ -25,6 +27,7 @@ export function DraftCartLineRow({
   product,
   compact = false,
   dock = false,
+  sidebarCompact = false,
   onIncrement,
   onDecrement,
   onQtyTap,
@@ -35,11 +38,13 @@ export function DraftCartLineRow({
   const unitHint = product ? formatDraftLineUnitPrice(product, line) : null;
 
   if (dock) {
+    const btnSize = sidebarCompact ? "h-9 w-9" : "h-11 w-11";
+    const iconSize = sidebarCompact ? "h-4 w-4" : "h-5 w-5";
     return (
-      <li className="flex items-center gap-2 border-b border-slate-100 py-2.5 last:border-0">
+      <li className={clsx("flex items-center gap-2 border-b border-slate-100 last:border-0", sidebarCompact ? "py-1.5" : "py-2.5")}>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-base font-bold leading-tight text-slate-900">{line.name}</p>
-          <p className="truncate text-sm font-semibold text-slate-600">
+          <p className={clsx("truncate font-bold leading-tight text-slate-900", sidebarCompact ? "text-sm" : "text-base")}>{line.name}</p>
+          <p className={clsx("truncate font-semibold text-slate-600", sidebarCompact ? "text-xs" : "text-sm")}>
             {qtyLabel}
             {unitHint ? ` · ${unitHint}` : ""}
             {" · "}
@@ -51,14 +56,17 @@ export function DraftCartLineRow({
             type="button"
             onClick={onDecrement}
             aria-label={t(lang, "posQtyDecrease")}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-900 active:bg-slate-100"
+            className={clsx("flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-900 active:bg-slate-100", btnSize)}
           >
-            <Minus className="h-5 w-5 stroke-[3]" aria-hidden />
+            <Minus className={clsx("stroke-[3]", iconSize)} aria-hidden />
           </button>
           <button
             type="button"
             onClick={onQtyTap}
-            className="flex h-11 min-w-[3rem] items-center justify-center rounded-xl border border-waka-300 bg-waka-50 px-1.5 text-base font-black tabular-nums text-waka-950 active:bg-waka-100"
+            className={clsx(
+              "flex items-center justify-center rounded-lg border border-waka-300 bg-waka-50 font-black tabular-nums text-waka-950 active:bg-waka-100",
+              sidebarCompact ? "h-9 min-w-[2.5rem] px-1 text-sm" : "h-11 min-w-[3rem] px-1.5 text-base",
+            )}
           >
             {qtyLabel}
           </button>
@@ -66,9 +74,9 @@ export function DraftCartLineRow({
             type="button"
             onClick={onIncrement}
             aria-label={t(lang, "posQtyIncrease")}
-            className="flex h-11 w-11 items-center justify-center rounded-xl border border-waka-400 bg-waka-600 text-white active:brightness-95"
+            className={clsx("flex items-center justify-center rounded-lg border border-waka-400 bg-waka-600 text-white active:brightness-95", btnSize)}
           >
-            <Plus className="h-5 w-5 stroke-[3]" aria-hidden />
+            <Plus className={clsx("stroke-[3]", iconSize)} aria-hidden />
           </button>
         </div>
       </li>

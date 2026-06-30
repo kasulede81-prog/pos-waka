@@ -1,8 +1,13 @@
 import type { PosLayoutMode } from "./posLayoutMode";
 
-/** Full desktop — persistent checkout sidebar (catalog + checkout columns). */
-export function shouldMountDesktopCheckoutSidebar(layoutMode: PosLayoutMode, hasProducts: boolean): boolean {
-  return layoutMode === "full" && hasProducts;
+/** Full desktop — checkout sidebar only when a sale is active (not empty cart). */
+export function shouldMountDesktopCheckoutSidebar(
+  layoutMode: PosLayoutMode,
+  hasProducts: boolean,
+  draftLineCount: number,
+  saleCheckoutMinimized: boolean,
+): boolean {
+  return layoutMode === "full" && hasProducts && draftLineCount > 0 && !saleCheckoutMinimized;
 }
 
 /** Compact desktop — slide-over checkout from the right. */
@@ -24,11 +29,11 @@ export function shouldMountMobileCheckoutOverlay(
 }
 
 export function shouldShowMinimizedCheckoutFab(
-  layoutMode: PosLayoutMode,
+  _layoutMode: PosLayoutMode,
   draftLineCount: number,
   saleCheckoutMinimized: boolean,
 ): boolean {
-  return layoutMode !== "full" && draftLineCount > 0 && saleCheckoutMinimized;
+  return draftLineCount > 0 && saleCheckoutMinimized;
 }
 
 export function checkoutPanelsAreExclusive(

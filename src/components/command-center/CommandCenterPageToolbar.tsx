@@ -1,5 +1,4 @@
-import { Link } from "react-router-dom";
-import { Search, Sparkles } from "lucide-react";
+import { Search } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -69,13 +68,6 @@ export function CommandCenterPageToolbar({
           >
             <Search className="h-4 w-4" />
           </button>
-          <Link
-            to="/office"
-            className="inline-flex h-9 items-center gap-1 rounded-xl border border-sky-200 bg-sky-50 px-2.5 text-[11px] font-black text-sky-800"
-          >
-            <Sparkles className="h-3.5 w-3.5" aria-hidden />
-            AI
-          </Link>
         </div>
       </div>
 

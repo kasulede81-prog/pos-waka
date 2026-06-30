@@ -3,7 +3,7 @@ import clsx from "clsx";
 import { ChevronDown } from "lucide-react";
 import type { Language, Product, ReturnReason, ReturnRecord, Sale, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { formatPharmacySaleQtyLabel } from "../../lib/pharmacyPackaging";
+import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
 import { canPerformUnlinkedReturn } from "../../lib/returnPolicy";
 import {
   remainingRefundableAmount,
@@ -92,8 +92,8 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
       ? product.pharmacyPackaging.baseUnit || product.baseUnit
       : product?.baseUnit ?? null;
   const soldAsHint =
-    saleLine && product?.pharmacyPackaging?.enabled && saleLine.saleUnitType
-      ? formatPharmacySaleQtyLabel(product, saleLine, "short")
+    saleLine && product
+      ? formatSaleLineQuantity(saleLine, product, "short")
       : null;
 
   if (!open) return null;
@@ -125,6 +125,7 @@ export function ReturnProductModal({ lang, open, sale, products, returnRecords =
           returnQty: qtyN,
           returnRecords,
           finalRefundUgx: finalRefundUgx,
+          product: product ?? undefined,
         })
       : null;
 

@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { FileDown, FileText, MoreHorizontal, Printer, RotateCcw, Trash2 } from "lucide-react";
 import clsx from "clsx";
-import type { Language, ReturnRecord, Sale, SaleLine } from "../../types";
+import type { Language, Product, ReturnRecord, Sale, SaleLine } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { buildReceiptNumberForSale } from "../../lib/receiptPrint";
 import { receiptPrintActionLabel } from "../../lib/printActionLabels";
 import { isCompletedSale, isPendingSale, saleStatusOf } from "../../lib/saleStatus";
 import { customerPaidUgxForSaleLine } from "../../lib/refundBreakdown";
 import { computeSaleDiscountBreakdown } from "../../lib/discountBreakdown";
+import { formatSaleLineQuantity } from "../../lib/saleQuantityLabel";
 import { SaleDiscountSummary } from "../returns/SaleDiscountSummary";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { dateKeyKampala } from "../../lib/datesUg";
@@ -52,6 +53,7 @@ type SaleActionSheetProps = {
   lang: Language;
   sale: Sale;
   saleReturns: ReturnRecord[];
+  productById: Map<string, Product>;
   cashierLabel: string;
   customerName: string;
   discountBreakdown: ReturnType<typeof computeSaleDiscountBreakdown> | null;
@@ -69,6 +71,7 @@ function SaleActionSheet({
   lang,
   sale,
   saleReturns,
+  productById,
   cashierLabel,
   customerName,
   discountBreakdown,
@@ -132,10 +135,15 @@ function SaleActionSheet({
           <ul className="mt-1.5 space-y-1">
             {sale.lines.map((line, lineIndex) => {
               const paid = customerPaidUgxForSaleLine(sale, line, saleReturns);
+              const product = productById.get(line.productId);
+              const qtyLabel = formatSaleLineQuantity(line, product, "short");
               return (
                 <li key={`${sale.id}-${lineIndex}`} className="flex justify-between gap-2 text-xs">
-                  <span className={clsx("font-semibold", line.voided && "text-rose-700 line-through")}>
-                    {line.name}
+                  <span className={clsx("min-w-0 font-semibold", line.voided && "text-rose-700 line-through")}>
+                    <span className="block truncate">{line.name}</span>
+                    {!line.voided ? (
+                      <span className="block text-[10px] font-medium text-stone-500">{qtyLabel}</span>
+                    ) : null}
                   </span>
                   {!line.voided ? (
                     <span className="shrink-0 font-bold tabular-nums text-stone-700">
@@ -204,6 +212,7 @@ type Props = {
   sale: Sale;
   allSales: Sale[];
   returnRecords: ReturnRecord[];
+  productById: Map<string, Product>;
   customerName: string;
   cashierLabel: string;
   canVoid: boolean;
@@ -218,6 +227,7 @@ export function SalesHistoryRow({
   sale,
   allSales,
   returnRecords,
+  productById,
   customerName,
   cashierLabel,
   canVoid,
@@ -283,6 +293,7 @@ export function SalesHistoryRow({
         lang={lang}
         sale={sale}
         saleReturns={saleReturns}
+        productById={productById}
         cashierLabel={cashierLabel}
         customerName={customerName}
         discountBreakdown={discountBreakdown}

@@ -11,3 +11,24 @@ export function mergedDraftQuantity(existing: SaleLine | undefined, addedQuantit
   if (!existing) return addedQuantity;
   return Math.round((existing.quantity + addedQuantity) * 10000) / 10000;
 }
+
+/** Total base-unit quantity for a product across draft lines, optionally including a new add. */
+export function totalDraftQuantityForProduct(
+  lines: SaleLine[],
+  productId: string,
+  mergeTarget?: SaleLine,
+  incoming?: SaleLine,
+): number {
+  let total = 0;
+  for (const line of lines) {
+    if (line.productId !== productId) continue;
+    if (mergeTarget && line === mergeTarget) continue;
+    total += line.quantity;
+  }
+  if (mergeTarget && incoming) {
+    total += mergeTarget.quantity + incoming.quantity;
+  } else if (incoming) {
+    total += incoming.quantity;
+  }
+  return Math.round(total * 10000) / 10000;
+}

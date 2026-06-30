@@ -282,7 +282,11 @@ export function buildCloudTrustCertificationReport(input: {
 
   const failures: string[] = [];
   const s = usePosStore.getState();
-  const inventory = verifyInventoryIntegrity({ products: s.products, movements: s.stockMovements });
+  const inventory = verifyInventoryIntegrity({
+    products: s.products,
+    movements: s.stockMovements,
+    archivedMovements: s.archivedStockMovements,
+  });
   const inventoryIntegrityStatus = classifyInventoryIntegrityStatus(inventory.mismatches);
   if (inventoryIntegrityStatus === "critical") {
     failures.push("inventory_integrity_mismatch");

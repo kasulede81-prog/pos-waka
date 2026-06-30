@@ -49,6 +49,7 @@ export type BuildIntegritySnapshotInput = {
   debtPayments: DebtPayment[];
   products: Product[];
   stockMovements: StockMovement[];
+  archivedStockMovements?: StockMovement[];
   dayDrawerOpens: DayDrawerOpen[];
   shifts: ShiftRecord[];
   syncPendingCount: number;
@@ -64,12 +65,14 @@ export function buildOwnerDashboardIntegritySnapshot(
   const inventoryIntegrity = verifyInventoryIntegrity({
     products: input.products,
     movements: input.stockMovements,
+    archivedMovements: input.archivedStockMovements,
   });
 
   const debtCheck = evaluateDebtIntegrityStatus(input.customers, input.sales, input.debtPayments);
   const inventoryCheck = evaluateInventoryIntegrityStatus({
     products: input.products,
     stockMovements: input.stockMovements,
+    archivedStockMovements: input.archivedStockMovements,
   });
 
   const primaryDayKey = input.bounds.toKey;

@@ -1,7 +1,8 @@
 import { jsPDF } from "jspdf";
-import type { Sale } from "../types";
+import type { Product, Sale } from "../types";
 import { saveExportedFile } from "./fileDownload";
 import { sanitizePdfStem } from "./pdfLayout";
+import { formatSaleLineQuantity } from "./saleQuantityLabel";
 
 const UG_LOCALE = "en-UG";
 
@@ -13,6 +14,7 @@ export function buildSalesListPdfBlob(opts: {
   sales: Sale[];
   title: string;
   subtitle?: string;
+  productById?: Map<string, Product>;
 }): Blob {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -72,8 +74,9 @@ export function buildSalesListPdfBlob(opts: {
 
     doc.setFontSize(9);
     for (const line of sale.lines) {
-      const mode = line.inputMode === "money" ? "money" : "qty";
-      const lump = `· ${line.name} (${mode}) — UGX ${line.lineTotalUgx.toLocaleString(UG_LOCALE)}`;
+      const product = opts.productById?.get(line.productId);
+      const qtyLabel = formatSaleLineQuantity(line, product, "short");
+      const lump = `· ${line.name} — ${qtyLabel} — UGX ${line.lineTotalUgx.toLocaleString(UG_LOCALE)}`;
       for (const w of doc.splitTextToSize(lump, maxW)) {
         ensureSpace(12);
         doc.text(w, margin, y);

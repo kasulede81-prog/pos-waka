@@ -3,7 +3,7 @@ import { defaultReceiptDisplayOptions, receiptFooterLinesForPrint } from "./rece
 import { dateKeyKampala } from "./datesUg";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { formatPharmacySaleQtyLabel, isPharmacyPackagingActive } from "./pharmacyPackaging";
-import { buildReceiptLineQuantityDisplay } from "./saleQuantityLabel";
+import { buildReceiptLineQuantityDisplay, formatReceiptLineCalculation } from "./saleQuantityLabel";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { customerPaidUgxForSaleLine } from "./refundBreakdown";
 import { detectPrinterCapabilities, testPrint, type PrinterPaperWidth } from "../services/hardware/printerAdapter";
@@ -62,7 +62,9 @@ export function receiptLineDetailLabel(line: ReceiptDisplayLine): string {
   if (line.showCustomerPaid && line.customerPaidUgx !== line.listPriceUgx) {
     return `List UGX ${line.listPriceUgx.toLocaleString()} · Paid UGX ${line.customerPaidUgx.toLocaleString()}`;
   }
-  if (/UGX\s*[\d,]+/i.test(line.quantityLabel)) return line.quantityLabel;
+  if (line.showCalculation) {
+    return formatReceiptLineCalculation(line.quantityLabel, line.unitPriceUgx, line.lineTotalUgx);
+  }
   return `${line.quantityLabel} — UGX ${line.lineTotalUgx.toLocaleString()}`;
 }
 
@@ -346,7 +348,7 @@ export function buildSaleReceiptText(params: {
   for (const ln of display.lines) {
     if (ln.showCalculation) {
       lines.push(ln.name);
-      lines.push(`${ln.quantityLabel} x ${ln.unitPriceUgx.toLocaleString()} UGX = ${ln.lineTotalUgx.toLocaleString()} UGX`);
+      lines.push(formatReceiptLineCalculation(ln.quantityLabel, ln.unitPriceUgx, ln.lineTotalUgx));
     } else {
       const title = ln.name?.trim();
       if (title) lines.push(title);
@@ -408,7 +410,7 @@ export function buildSaleReceiptHtml(display: ReceiptDisplayData): string {
         <div class="line">
           ${
             ln.showCalculation
-              ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta">${esc(ln.quantityLabel)} x ${fmt(ln.unitPriceUgx)} = <strong>${fmt(ln.lineTotalUgx)}</strong></div>`
+              ? `<div class="line-name">${esc(ln.name)}</div><div class="line-meta">${esc(formatReceiptLineCalculation(ln.quantityLabel, ln.unitPriceUgx, ln.lineTotalUgx))}</div>`
               : ln.name?.trim()
                 ? `<div class="line-name">${esc(ln.name)}</div>${
                     ln.showCustomerPaid

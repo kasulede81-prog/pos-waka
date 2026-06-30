@@ -225,6 +225,7 @@ describe("inventoryCount — store mutations audit", () => {
     products: Product[];
     inventoryCountSessions: InventoryCountSession[];
     stockMovements: StockMovement[];
+    archivedStockMovements: StockMovement[];
     sessionActor: { userId: string; displayName: string; role: "owner" };
   };
 
@@ -234,6 +235,7 @@ describe("inventoryCount — store mutations audit", () => {
       products: [product(100)],
       inventoryCountSessions: [],
       stockMovements: [],
+      archivedStockMovements: [],
       sessionActor: { userId: "owner", displayName: "Owner", role: "owner" },
     };
   });
@@ -249,10 +251,10 @@ describe("inventoryCount — store mutations audit", () => {
         auditActions.push(action);
       },
       queueRemote: () => {},
-      mergeStockMovements: (existing, incoming) => {
-        const byId = new Map(existing.map((m) => [m.id, m]));
+      movementMergePatch: (s, incoming) => {
+        const byId = new Map(s.stockMovements.map((m) => [m.id, m]));
         for (const m of incoming) byId.set(m.id, m);
-        return [...byId.values()];
+        return { stockMovements: [...byId.values()], archivedStockMovements: s.archivedStockMovements ?? [] };
       },
     });
 

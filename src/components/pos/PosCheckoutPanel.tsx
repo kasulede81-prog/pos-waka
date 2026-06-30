@@ -81,7 +81,7 @@ const Numpad = memo(function Numpad({
 });
 
 /** Italian-style numpad with clear + confirm on the right — mobile checkout & desktop sidebar. */
-const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
+export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   onDigit,
   onClear,
   onSave,
@@ -184,6 +184,9 @@ type PaymentBlockProps = {
   onSaleCustomerId: (id: string) => void;
   onSaleCustomerName: (name: string) => void;
   onSaleCustomerPhone: (phone: string) => void;
+  hideCreditDockPanel?: boolean;
+  /** Desktop sidebar with external catalog dock — tighter payment strip. */
+  sidebarCompact?: boolean;
 };
 
 function PaymentBlock({
@@ -213,6 +216,8 @@ function PaymentBlock({
   onSaleCustomerId,
   onSaleCustomerName,
   onSaleCustomerPhone,
+  hideCreditDockPanel = false,
+  sidebarCompact = false,
 }: PaymentBlockProps) {
   const amountBtnClass = enterprise
     ? "mt-1 flex min-h-[40px] w-full items-center justify-end rounded-lg border-2 px-3 py-1.5 text-lg font-black"
@@ -241,10 +246,21 @@ function PaymentBlock({
       ) : null}
 
       <div className={dockMode ? "mt-0" : compact ? "mt-2" : "mt-4"}>
-        <p className="text-xs font-black uppercase tracking-wide text-stone-600 sm:text-sm">
+        <p
+          className={clsx(
+            "font-black uppercase tracking-wide text-stone-600",
+            sidebarCompact ? "text-[10px]" : "text-xs sm:text-sm",
+          )}
+        >
           {t(lang, "paymentMethodLabel")}
         </p>
-        <div className={clsx("mt-2 grid gap-2", dockMode || compact ? "grid-cols-4 max-[359px]:grid-cols-2" : "grid-cols-2 gap-2 mt-2")}>
+        <div
+          className={clsx(
+            "grid gap-1.5",
+            dockMode || compact ? "grid-cols-4 max-[359px]:grid-cols-2" : "mt-2 grid-cols-2 gap-2",
+            !sidebarCompact && (dockMode || compact) && "mt-2 gap-2",
+          )}
+        >
           {checkoutMethods.map((method) => (
             <button
               key={method}
@@ -254,12 +270,14 @@ function PaymentBlock({
                 if (method === "cash" || method === "credit") onCheckoutAmountField("cash");
               }}
               className={clsx(
-                "rounded-xl border font-black leading-snug",
-                dockMode
-                  ? "min-h-[44px] px-1 text-sm"
-                  : compact
-                    ? "min-h-[44px] px-1.5 text-xs sm:text-sm"
-                    : "min-h-[48px] rounded-2xl text-sm",
+                "rounded-lg border font-black leading-snug",
+                sidebarCompact
+                  ? "min-h-[34px] px-0.5 text-[11px]"
+                  : dockMode
+                    ? "min-h-[44px] rounded-xl px-1 text-sm"
+                    : compact
+                      ? "min-h-[44px] px-1.5 text-xs sm:text-sm"
+                      : "min-h-[48px] rounded-2xl text-sm",
                 paymentMethod === method
                   ? "border-waka-400 bg-waka-100 text-waka-950"
                   : "border-stone-200 bg-white text-stone-700",
@@ -271,15 +289,23 @@ function PaymentBlock({
         </div>
       </div>
 
+      {paymentMethod === "credit" && dockMode && hideCreditDockPanel ? (
+        <p className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-900">
+          {t(lang, "posDesktopCreditPanelHint")}
+        </p>
+      ) : null}
+
       {paymentMethod === "cash" || (paymentMethod === "credit" && !dockMode) ? (
-        <div className={dockMode ? "mt-2" : compact ? "mt-2" : "mt-4"}>
+        <div className={sidebarCompact ? "mt-1.5" : dockMode ? "mt-2" : compact ? "mt-2" : "mt-4"}>
           <p
             className={
-              dockMode
-                ? "text-sm font-semibold text-slate-800"
-                : compact
-                  ? "text-xs font-semibold text-slate-800"
-                  : "text-base font-semibold text-slate-800"
+              sidebarCompact
+                ? "text-[10px] font-semibold text-slate-800"
+                : dockMode
+                  ? "text-sm font-semibold text-slate-800"
+                  : compact
+                    ? "text-xs font-semibold text-slate-800"
+                    : "text-base font-semibold text-slate-800"
             }
           >
             {paymentMethod === "cash" ? t(lang, "paymentCashReceivedLabel") : t(lang, "paymentCashLabel")}
@@ -289,7 +315,8 @@ function PaymentBlock({
             onClick={() => onCheckoutAmountField("cash")}
             className={clsx(
               amountBtnClass,
-              dockMode && "mt-1.5 min-h-[48px] rounded-xl px-3 py-2 text-xl",
+              sidebarCompact && "mt-1 min-h-[36px] rounded-lg px-2 py-1 text-base",
+              dockMode && !sidebarCompact && "mt-1.5 min-h-[48px] rounded-xl px-3 py-2 text-xl",
               checkoutAmountField === "cash"
                 ? "border-waka-500 bg-waka-50 text-slate-900"
                 : "border-slate-200 bg-white text-slate-900",
@@ -320,7 +347,7 @@ function PaymentBlock({
         </div>
       ) : null}
 
-      {paymentMethod === "credit" && dockMode ? (
+      {paymentMethod === "credit" && dockMode && !hideCreditDockPanel ? (
         <>
           <div className="mt-2 grid grid-cols-2 gap-2">
             <div>
@@ -429,11 +456,16 @@ function PaymentBlock({
         <p
           className={clsx(
             "font-black text-emerald-900",
-            dockMode
-              ? "mt-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-sm"
-              : compact
-                ? "mt-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm"
-                : "mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base",
+            sidebarCompact
+              ? "mt-1 rounded px-2 py-0.5 text-[10px] font-bold"
+              : dockMode
+                ? "mt-1.5 rounded-md bg-emerald-50 px-2.5 py-1.5 text-sm"
+                : compact
+                  ? "mt-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-sm"
+                  : "mt-3 rounded-xl bg-emerald-50 px-4 py-3 text-base",
+            !sidebarCompact && dockMode && "bg-emerald-50",
+            !sidebarCompact && compact && "bg-emerald-50",
+            !sidebarCompact && !dockMode && !compact && "bg-emerald-50",
           )}
         >
           {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
@@ -502,6 +534,131 @@ function PaymentBlock({
   );
 }
 
+/** Pay-later fields for the desktop catalog column — expanded layout. */
+export function CreditCatalogDockPanel({
+  lang,
+  cashInput,
+  mobileMoneyInput,
+  checkoutAmountField,
+  changeDue,
+  computedDebt,
+  saleCustomerId,
+  saleCustomerName,
+  saleCustomerPhone,
+  customers,
+  customerSelectRef,
+  onCheckoutAmountField,
+  onSaleCustomerId,
+  onSaleCustomerName,
+  onSaleCustomerPhone,
+}: {
+  lang: Language;
+  cashInput: string;
+  mobileMoneyInput: string;
+  checkoutAmountField: CheckoutAmountField;
+  changeDue: number;
+  computedDebt: number;
+  saleCustomerId: string;
+  saleCustomerName: string;
+  saleCustomerPhone: string;
+  customers: { id: string; name: string; debtBalanceUgx: number }[];
+  customerSelectRef?: RefObject<HTMLSelectElement | null>;
+  onCheckoutAmountField: (field: CheckoutAmountField) => void;
+  onSaleCustomerId: (id: string) => void;
+  onSaleCustomerName: (name: string) => void;
+  onSaleCustomerPhone: (phone: string) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{t(lang, "paymentCashLabel")}</p>
+          <button
+            type="button"
+            onClick={() => onCheckoutAmountField("cash")}
+            className={clsx(
+              "mt-1.5 flex min-h-[52px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-xl font-black",
+              checkoutAmountField === "cash"
+                ? "border-waka-500 bg-waka-50 text-slate-900"
+                : "border-slate-200 bg-white text-slate-900",
+            )}
+          >
+            UGX {(cashInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+          </button>
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-slate-800">{t(lang, "paymentMobileMoneyLabel")}</p>
+          <button
+            type="button"
+            onClick={() => onCheckoutAmountField("mobile")}
+            className={clsx(
+              "mt-1.5 flex min-h-[52px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-xl font-black",
+              checkoutAmountField === "mobile"
+                ? "border-waka-500 bg-waka-50 text-slate-900"
+                : "border-slate-200 bg-white text-slate-900",
+            )}
+          >
+            UGX {(mobileMoneyInput || "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+          </button>
+        </div>
+      </div>
+      <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-bold text-amber-900">
+        {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
+      </p>
+      {changeDue > 0 ? (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">
+          {t(lang, "paymentChangeDueLabel")}: UGX {changeDue.toLocaleString()}
+        </p>
+      ) : null}
+      <div className="rounded-xl border border-slate-200 bg-stone-50 p-4">
+        <p className="text-sm font-black text-slate-900">{t(lang, "paymentCreditCustomerDetails")}</p>
+        <div className="mt-3 space-y-3">
+          <label className="block text-sm font-semibold text-slate-800">
+            {t(lang, "paymentDebtNameLabel")}
+            <input
+              value={saleCustomerName}
+              onChange={(e) => onSaleCustomerName(e.target.value)}
+              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-semibold"
+              placeholder={t(lang, "paymentDebtNamePlaceholder")}
+            />
+          </label>
+          <label className="block text-sm font-semibold text-slate-800">
+            {t(lang, "paymentDebtPhoneLabel")}
+            <input
+              value={saleCustomerPhone}
+              onChange={(e) => onSaleCustomerPhone(e.target.value)}
+              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-semibold"
+              placeholder={t(lang, "personPhonePh")}
+              inputMode="tel"
+            />
+          </label>
+          {customers.length > 0 ? (
+            <label className="block text-sm font-semibold text-slate-800">
+              {t(lang, "paymentPickExistingDebt")}
+              <select
+                ref={customerSelectRef}
+                value={saleCustomerId}
+                onChange={(e) => onSaleCustomerId(e.target.value)}
+                className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-slate-200 bg-white px-3 py-2 text-base font-medium"
+              >
+                <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.debtBalanceUgx > 0
+                      ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}`
+                      : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export type PosCheckoutPanelProps = {
   lang: Language;
   variant: "overlay" | "sidebar";
@@ -550,6 +707,10 @@ export type PosCheckoutPanelProps = {
   onFinishSale: () => void;
   /** Desktop sidebar — focus catalog to add more products. */
   onAddItems?: () => void;
+  /** Full desktop — numpad + pay-later render in the catalog column. */
+  catalogDock?: boolean;
+  catalogNumpadOpen?: boolean;
+  onCatalogNumpadOpenChange?: (open: boolean) => void;
 };
 
 function CartDockBody({
@@ -559,6 +720,7 @@ function CartDockBody({
   draftPayable,
   checkoutTotals,
   productById,
+  sidebarCompact = false,
   onIncrement,
   onDecrement,
   onQtyTap,
@@ -572,6 +734,7 @@ function CartDockBody({
   draftPayable: number;
   checkoutTotals: DraftCheckoutTotals;
   productById: Map<string, Product>;
+  sidebarCompact?: boolean;
   onIncrement: (line: SaleLine) => void;
   onDecrement: (line: SaleLine) => void;
   onQtyTap: (line: SaleLine) => void;
@@ -581,7 +744,7 @@ function CartDockBody({
 }): ReactNode {
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <div className="min-w-0 flex-1">
           <DraftCartSummary
             lang={lang}
@@ -589,17 +752,21 @@ function CartDockBody({
             payableUgx={draftPayable}
             cartDiscountUgx={checkoutTotals.cartDiscountUgx}
             dock
+            sidebarCompact={sidebarCompact}
           />
         </div>
         <button
           type="button"
           onClick={onOpenCartDiscount}
-          className="shrink-0 rounded-lg border border-waka-300 bg-white px-2.5 py-1.5 text-xs font-black text-waka-900 active:bg-waka-50"
+          className={clsx(
+            "shrink-0 rounded-lg border border-waka-300 bg-white font-black text-waka-900 active:bg-waka-50",
+            sidebarCompact ? "px-2 py-1 text-[10px]" : "px-2.5 py-1.5 text-xs",
+          )}
         >
           {t(lang, "cartDiscountBtn")}
         </button>
       </div>
-      <ul className="mt-1.5 rounded-lg border border-waka-200 bg-white px-2 py-0.5 shadow-sm">
+      <ul className={clsx("rounded-lg border border-waka-200 bg-white shadow-sm", sidebarCompact ? "mt-1 px-1.5 py-0" : "mt-1.5 px-2 py-0.5")}>
         {draftLines.map((line) => (
           <DraftCartLineRow
             key={line.productId}
@@ -607,6 +774,7 @@ function CartDockBody({
             line={line}
             product={productById.get(line.productId)}
             dock
+            sidebarCompact={sidebarCompact}
             onIncrement={() => onIncrement(line)}
             onDecrement={() => onDecrement(line)}
             onQtyTap={() => onQtyTap(line)}
@@ -666,11 +834,16 @@ export function PosCheckoutPanel({
   onSavePending,
   onFinishSale,
   onAddItems,
+  catalogDock = false,
+  catalogNumpadOpen: catalogNumpadOpenProp,
+  onCatalogNumpadOpenChange,
 }: PosCheckoutPanelProps) {
   const isSidebar = variant === "sidebar";
   const isCompact = !isSidebar;
   const emptyCart = draftLines.length === 0;
-  const [sidebarNumpadOpen, setSidebarNumpadOpen] = useState(false);
+  const [sidebarNumpadOpenLocal, setSidebarNumpadOpenLocal] = useState(false);
+  const sidebarNumpadOpen = catalogDock ? (catalogNumpadOpenProp ?? false) : sidebarNumpadOpenLocal;
+  const setSidebarNumpadOpen = catalogDock && onCatalogNumpadOpenChange ? onCatalogNumpadOpenChange : setSidebarNumpadOpenLocal;
   const needsAmountKeypad = paymentMethod === "cash" || paymentMethod === "credit";
 
   useEffect(() => {
@@ -682,6 +855,8 @@ export function PosCheckoutPanel({
     compact: true,
     dockMode: true,
     hideNumpad: true,
+    hideCreditDockPanel: catalogDock && isSidebar,
+    sidebarCompact: catalogDock && isSidebar,
     enterprise: false,
     draftPayable,
     checkoutTotals,
@@ -718,8 +893,8 @@ export function PosCheckoutPanel({
     >
       <header
         className={clsx(
-          "flex shrink-0 items-center gap-2 border-b border-waka-200 bg-waka-50",
-          isCompact ? "px-3 py-2.5" : "px-3 py-3",
+          "flex shrink-0 items-center gap-1.5 border-b border-waka-200 bg-waka-50",
+          isCompact ? "px-3 py-2.5" : catalogDock ? "px-2 py-2" : "px-3 py-3",
           isSidebar && "rounded-t-[1.35rem]",
         )}
       >
@@ -729,7 +904,7 @@ export function PosCheckoutPanel({
           disabled={emptyCart}
           className={clsx(
             "shrink-0 rounded-full border border-slate-200 bg-white font-semibold text-slate-600 shadow-sm active:bg-slate-50 disabled:opacity-40",
-            isCompact ? "px-3 py-2 text-sm" : "px-3 py-2 text-sm",
+            catalogDock && isSidebar ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
           )}
         >
           {clearSaleLabel}
@@ -738,7 +913,7 @@ export function PosCheckoutPanel({
           id="pos-checkout-title"
           className={clsx(
             "min-w-0 flex-1 truncate text-center font-black text-waka-950",
-            isCompact ? "text-lg" : "text-lg",
+            catalogDock && isSidebar ? "text-base" : "text-lg",
           )}
         >
           {saleTitle}
@@ -758,12 +933,15 @@ export function PosCheckoutPanel({
           <button
             type="button"
             onClick={onAddItems}
-            className="shrink-0 rounded-full border border-waka-300 bg-white px-3 py-2 text-sm font-bold text-waka-900 shadow-sm active:bg-waka-50"
+            className={clsx(
+              "shrink-0 rounded-full border border-waka-300 bg-white font-bold text-waka-900 shadow-sm active:bg-waka-50",
+              catalogDock ? "px-2.5 py-1 text-xs" : "px-3 py-2 text-sm",
+            )}
           >
             {t(lang, "posAddMoreItems")}
           </button>
         ) : (
-          <span className={clsx("shrink-0", isCompact ? "w-12" : "w-[4.5rem]")} aria-hidden />
+          <span className={clsx("shrink-0", catalogDock && isSidebar ? "w-10" : isCompact ? "w-12" : "w-[4.5rem]")} aria-hidden />
         )}
       </header>
 
@@ -787,12 +965,17 @@ export function PosCheckoutPanel({
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div
             className={clsx(
-              "shrink-0 overflow-y-auto overscroll-y-contain border-b border-waka-200 [-webkit-overflow-scrolling:touch]",
-              isSidebar
-                ? sidebarNumpadOpen
-                  ? "max-h-[min(28%,10rem)] px-2.5 py-2"
-                  : "max-h-[min(42%,15rem)] px-2.5 py-2"
-                : "max-h-[min(36dvh,14rem)] px-3 py-2",
+              "overflow-y-auto overscroll-y-contain border-b border-waka-200 [-webkit-overflow-scrolling:touch]",
+              catalogDock && isSidebar
+                ? "min-h-0 flex-1 shrink px-2 py-1.5"
+                : clsx(
+                    "shrink-0",
+                    isSidebar
+                      ? sidebarNumpadOpen
+                        ? "max-h-[min(28%,10rem)] px-2.5 py-2"
+                        : "max-h-[min(42%,15rem)] px-2.5 py-2"
+                      : "max-h-[min(36dvh,14rem)] px-3 py-2",
+                  ),
             )}
           >
             <CartDockBody
@@ -802,6 +985,7 @@ export function PosCheckoutPanel({
               draftPayable={draftPayable}
               checkoutTotals={checkoutTotals}
               productById={productById}
+              sidebarCompact={catalogDock && isSidebar}
               onIncrement={onIncrement}
               onDecrement={onDecrement}
               onQtyTap={onQtyTap}
@@ -812,8 +996,9 @@ export function PosCheckoutPanel({
           </div>
           <div
             className={clsx(
-              "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
-              isSidebar ? "px-2.5 py-2" : "px-3 py-2",
+              catalogDock && isSidebar ? "shrink-0 px-2 py-1.5" : "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
+              !catalogDock && isSidebar && "px-2.5 py-2",
+              !isSidebar && "px-3 py-2",
             )}
           >
             <PaymentBlock {...paymentProps} />
@@ -821,7 +1006,7 @@ export function PosCheckoutPanel({
           <div
             className={clsx(
               "shrink-0 border-t border-waka-200 bg-white shadow-[0_-4px_12px_rgba(0,0,0,0.06)]",
-              isSidebar ? "px-2.5 py-2" : "px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]",
+              catalogDock && isSidebar ? "px-2 py-1.5" : isSidebar ? "px-2.5 py-2" : "px-3 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom,0px))]",
             )}
           >
             {canSavePending && paymentMethod !== "credit" ? (
@@ -829,15 +1014,38 @@ export function PosCheckoutPanel({
                 type="button"
                 onClick={onSavePending}
                 className={clsx(
-                  "mb-2 w-full rounded-xl border border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
-                  isSidebar ? "py-1.5 text-xs" : "py-2 text-sm",
+                  "w-full rounded-lg border border-amber-300 bg-amber-50 font-black text-amber-950 active:bg-amber-100",
+                  catalogDock && isSidebar ? "mb-1 py-1 text-[10px]" : isSidebar ? "mb-2 py-1.5 text-xs" : "mb-2 py-2 text-sm",
                 )}
               >
                 {savePendingLabel}
               </button>
             ) : null}
             {isSidebar ? (
-              sidebarNumpadOpen && needsAmountKeypad ? (
+              catalogDock ? (
+                <div className="flex gap-1.5">
+                  {needsAmountKeypad ? (
+                    <button
+                      type="button"
+                      onClick={() => setSidebarNumpadOpen(true)}
+                      aria-label={t(lang, "posKeypadShow")}
+                      title={t(lang, "posKeypadShow")}
+                      className="flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-lg bg-emerald-600 text-[10px] font-black leading-none text-white shadow-sm active:bg-emerald-700"
+                    >
+                      ABC
+                    </button>
+                  ) : null}
+                  <button
+                    ref={saveButtonRef}
+                    type="button"
+                    onClick={onFinishSale}
+                    disabled={emptyCart}
+                    className="min-h-[40px] flex-1 rounded-lg bg-emerald-600 py-2 text-sm font-black text-white shadow-md active:bg-emerald-700 disabled:opacity-40"
+                  >
+                    {saveSaleLabel}
+                  </button>
+                </div>
+              ) : sidebarNumpadOpen && needsAmountKeypad ? (
                 <CheckoutNumpadDock
                   sidebar
                   onDigit={onAppendCheckoutDigit}
@@ -891,7 +1099,7 @@ export function PosCheckoutPanel({
                 {saveSaleLabel}
               </button>
             )}
-            {isSidebar && sidebarNumpadOpen && needsAmountKeypad ? (
+            {isSidebar && sidebarNumpadOpen && needsAmountKeypad && !catalogDock ? (
               <button
                 type="button"
                 onClick={() => setSidebarNumpadOpen(false)}

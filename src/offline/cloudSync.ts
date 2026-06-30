@@ -19,7 +19,9 @@ import type {
   SupplierPayment,
 } from "../types";
 import { isPendingSale, saleStatusOf } from "../lib/saleStatus";
+import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydration";
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
+import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
@@ -227,30 +229,7 @@ function rowToCustomer(row: Record<string, unknown>): Customer | null {
 }
 
 function rowToSaleLine(row: Record<string, unknown>): SaleLine {
-  const inputMode = row.line_input_mode === "money" ? "money" : "quantity";
-  const quantity = Number(row.quantity ?? 0);
-  const unitPriceUgx = Math.max(0, Math.floor(Number(row.unit_price_ugx ?? 0)));
-  const lineTotalUgx = Math.max(0, Math.floor(Number(row.line_total_ugx ?? 0)));
-  const lineDiscountRaw = Math.max(0, Math.floor(Number(row.line_discount_ugx ?? 0)));
-  const meta = (row.metadata ?? {}) as Record<string, unknown>;
-  const line: SaleLine = {
-    id: row.id != null ? String(row.id) : undefined,
-    updatedAt: meta.updatedAt != null ? String(meta.updatedAt) : undefined,
-    productId: String(row.product_id ?? ""),
-    name: String(meta.name ?? "Item"),
-    inputMode,
-    quantity,
-    unitPriceUgx,
-    unitCostUgx: normalizeUnitCostUgx(Number(meta.unitCostUgx ?? 0)),
-    lineTotalUgx,
-    estimatedProfitUgx: Math.max(0, Math.floor(Number(meta.estimatedProfitUgx ?? lineTotalUgx))),
-    moneyAmountUgx: row.money_amount_ugx != null ? Math.floor(Number(row.money_amount_ugx)) : null,
-  };
-  if (lineDiscountRaw > 0) {
-    line.discountUgx = lineDiscountRaw;
-    line.originalLineTotalUgx = lineTotalUgx + lineDiscountRaw;
-  }
-  return ensureSaleLineId(line);
+  return decodeSaleLineFromCloud(row as CloudSaleLineRow);
 }
 
 function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null {
@@ -671,6 +650,11 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       metadata: {
         name: line.name,
         unitCostUgx: line.unitCostUgx,
+        cogsUgx: line.cogsUgx,
+        cartDiscountUgx: line.cartDiscountUgx,
+        netRevenueUgx: line.netRevenueUgx,
+        grossProfitUgx: line.grossProfitUgx,
+        baseUnit: line.baseUnit,
         estimatedProfitUgx: line.estimatedProfitUgx,
         lineIndex: idx,
       },
@@ -724,6 +708,11 @@ function buildPendingSalePushPayload(
       metadata: {
         name: line.name,
         unitCostUgx: line.unitCostUgx,
+        cogsUgx: line.cogsUgx,
+        cartDiscountUgx: line.cartDiscountUgx,
+        netRevenueUgx: line.netRevenueUgx,
+        grossProfitUgx: line.grossProfitUgx,
+        baseUnit: line.baseUnit,
         estimatedProfitUgx: line.estimatedProfitUgx,
         updatedAt: line.updatedAt ?? now,
         lineIndex: idx,
@@ -994,6 +983,8 @@ async function pushReturnToCloud(returnRow: ReturnRecord, ctx: ShopCtx): Promise
       productName: returnRow.productName,
       actorName: returnRow.actorName ?? null,
       shiftId: returnRow.shiftId ?? null,
+      cogsUgx: returnRow.cogsUgx ?? null,
+      unitCostUgx: returnRow.unitCostUgx ?? null,
       wakaClient: true,
     },
   };
@@ -1667,7 +1658,7 @@ function parseSaleRows(rawRows: Record<string, unknown>[]): { sales: Sale[]; voi
     const items = (raw.sale_line_items as Record<string, unknown>[] | null) ?? [];
     const lines = items.map((ln) => rowToSaleLine(ln));
     const sale = rowToSale(raw, lines);
-    if (sale) sales.push(sale);
+    if (sale) sales.push(hydrateSaleFinancialsFromCloud(sale));
   }
   return { sales, voidedIds };
 }
@@ -1732,12 +1723,13 @@ async function pullSalesFull(ctx: ShopCtx): Promise<{
 async function pullSalesIncremental(
   ctx: ShopCtx,
   since: string,
-): Promise<{ sales: Sale[]; voidedIds: string[]; bytes: number; checkpointAt: string }> {
+): Promise<{ sales: Sale[]; voidedIds: string[]; bytes: number; checkpointAt: string; truncated: boolean }> {
   const sales: Sale[] = [];
   const voidedIds: string[] = [];
   let bytes = 0;
   let cursor = since;
   let checkpointAt = since;
+  let truncated = false;
   for (let page = 0; page < INCREMENTAL_MAX_PAGES; page++) {
     const { data: saleRows, error: sErr } = await supabase!
       .from("sales")
@@ -1755,11 +1747,18 @@ async function pullSalesIncremental(
     sales.push(...parsed.sales);
     voidedIds.push(...parsed.voidedIds);
     if (batch.length < INCREMENTAL_SALES_LIMIT) break;
+    if (page === INCREMENTAL_MAX_PAGES - 1) {
+      truncated = true;
+      lastSalesPullTruncated = true;
+    }
     cursor = checkpointAt;
     const { yieldUiTick } = await import("../lib/uiYield");
     await yieldUiTick();
   }
-  return { sales, voidedIds, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString() };
+  if (!truncated) {
+    lastSalesPullTruncated = false;
+  }
+  return { sales, voidedIds, bytes, checkpointAt: checkpointAt > since ? checkpointAt : new Date().toISOString(), truncated };
 }
 
 async function pullProductsFull(ctx: ShopCtx): Promise<{ products: Product[]; deletedIds: string[]; bytes: number }> {
@@ -2600,6 +2599,10 @@ export async function pullShopDataFromCloud(opts?: {
       sales = s.sales;
       voidedSaleIds = s.voidedIds;
       payloadBytes += s.bytes;
+      if (s.truncated) {
+        salesTruncated = true;
+        lastSalesPullTruncated = true;
+      }
     }
 
     const ex = await pullEntitySafe("cash_expenses", entityErrors, () => pullExpensesIncremental(ctx, sinceExpenses));
@@ -2753,7 +2756,13 @@ export async function pullShopDataFromCloud(opts?: {
     .then(() => undefined);
 
   const pulledAt = new Date().toISOString();
-  writeSyncHealthMeta({ lastSuccessAt: pulledAt, lastPullAt: pulledAt, lastIssueCode: "none", lastIssueAt: null });
+  const hasPartialIssue = salesTruncated || Object.keys(entityErrors).length > 0;
+  writeSyncHealthMeta({
+    lastSuccessAt: pulledAt,
+    lastPullAt: pulledAt,
+    lastIssueCode: hasPartialIssue ? "partial" : "none",
+    lastIssueAt: hasPartialIssue ? pulledAt : null,
+  });
 
   const stats: CloudPullStats = {
     mode,
@@ -3379,6 +3388,8 @@ async function syncShopWithCloudInner(opts?: {
   const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
   if (getDeviceOnline() && !pullBlocked) {
     await pullHospitalityStateFromCloud(opts?.forceFull === true);
+    const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
+    await pullAndMergeStaffDuringCloudSync();
   }
   const { push, queueFailed } = await pushShopPendingToCloudInner();
   if (getDeviceOnline() && push.fail === 0) {

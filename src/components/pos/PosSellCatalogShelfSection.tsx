@@ -8,20 +8,16 @@ import { PosShelfTile } from "./PosShelfTile";
 type Props = {
   lang: Language;
   shelves: PosShelfDisplayCard[];
-  selectedKey: string;
   onShelfTap: (key: string) => void;
   desktop?: boolean;
-  children?: React.ReactNode;
 };
 
-/** Mobile-style shelf catalog grid (icon, name, count) — used on mobile sell and enterprise desktop. */
+/** Mobile-style shelf catalog grid — used on mobile sell and full desktop sell. */
 export function PosSellCatalogShelfSection({
   lang,
   shelves,
-  selectedKey,
   onShelfTap,
   desktop = false,
-  children,
 }: Props) {
   return (
     <section className={clsx("space-y-2", desktop && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
@@ -33,20 +29,19 @@ export function PosSellCatalogShelfSection({
           {shelves.length}
         </p>
       </div>
-      <div className={shelfMasonryGridClass(!desktop)}>
+      <div className={shelfMasonryGridClass(true)}>
         {shelves.map((shelf) => (
           <PosShelfTile
             key={shelf.key}
             shelf={shelf}
             lang={lang}
             mode="sell"
-            selected={selectedKey === shelf.key}
+            sellFocus
             countLabel={t(lang, "posShelfProductCount").replace("{{count}}", String(shelf.count))}
             onClick={() => onShelfTap(shelf.key)}
           />
         ))}
       </div>
-      {children}
     </section>
   );
 }

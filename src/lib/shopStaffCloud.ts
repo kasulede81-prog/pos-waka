@@ -121,12 +121,15 @@ export async function syncStaffAccountsWithCloud(
   localStaff: StaffAccount[],
 ): Promise<StaffAccount[] | null> {
   if (!user || !isSupabaseEmailVerified(user)) return null;
-  const pulled = await pullShopStaffFromCloud();
+  const { mergeStaffAccountsForCloudSync } = await import("./staffRecovery");
+  let pulled = await pullShopStaffFromCloud();
   if (!pulled) return null;
   if (pulled.length === 0 && localStaff.length > 0) {
     const ctx = await resolveShopCtx();
     if (ctx) await importLocalStaffToCloud(ctx.shopId, localStaff);
-    return pullShopStaffFromCloud();
+    pulled = await pullShopStaffFromCloud();
+    if (!pulled) return null;
   }
-  return pulled.length > 0 ? pulled : null;
+  if (pulled.length === 0 && localStaff.length === 0) return null;
+  return mergeStaffAccountsForCloudSync(localStaff, pulled);
 }

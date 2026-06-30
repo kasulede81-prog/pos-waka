@@ -8,11 +8,13 @@ import {
 } from "./posCheckoutMount";
 
 describe("posCheckoutMount", () => {
-  it("mounts desktop sidebar only on full desktop with products", () => {
-    expect(shouldMountDesktopCheckoutSidebar("full", true)).toBe(true);
-    expect(shouldMountDesktopCheckoutSidebar("compact", true)).toBe(false);
-    expect(shouldMountDesktopCheckoutSidebar("mobile", true)).toBe(false);
-    expect(shouldMountDesktopCheckoutSidebar("full", false)).toBe(false);
+  it("mounts desktop sidebar only on full desktop with an active sale", () => {
+    expect(shouldMountDesktopCheckoutSidebar("full", true, 2, false)).toBe(true);
+    expect(shouldMountDesktopCheckoutSidebar("full", true, 0, false)).toBe(false);
+    expect(shouldMountDesktopCheckoutSidebar("full", true, 2, true)).toBe(false);
+    expect(shouldMountDesktopCheckoutSidebar("compact", true, 2, false)).toBe(false);
+    expect(shouldMountDesktopCheckoutSidebar("mobile", true, 2, false)).toBe(false);
+    expect(shouldMountDesktopCheckoutSidebar("full", false, 2, false)).toBe(false);
   });
 
   it("mounts compact slideover on compact desktop with open checkout", () => {
@@ -29,10 +31,12 @@ describe("posCheckoutMount", () => {
     expect(shouldMountMobileCheckoutOverlay("mobile", 2, true)).toBe(false);
   });
 
-  it("shows minimized fab on mobile and compact, not full desktop", () => {
+  it("shows minimized fab when checkout is minimized with items", () => {
     expect(shouldShowMinimizedCheckoutFab("mobile", 2, true)).toBe(true);
     expect(shouldShowMinimizedCheckoutFab("compact", 2, true)).toBe(true);
-    expect(shouldShowMinimizedCheckoutFab("full", 2, true)).toBe(false);
+    expect(shouldShowMinimizedCheckoutFab("full", 2, true)).toBe(true);
+    expect(shouldShowMinimizedCheckoutFab("full", 2, false)).toBe(false);
+    expect(shouldShowMinimizedCheckoutFab("compact", 0, true)).toBe(false);
   });
 
   it("never mounts more than one checkout panel", () => {

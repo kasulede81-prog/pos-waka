@@ -139,7 +139,14 @@ import {
   getActiveShiftForActor,
   requireActiveShift,
 } from "../lib/shiftEnforcement";
-import { cartDiscountFromPendingSale, estimatedProfitAfterCartDiscount, mergeDraftSaleLine, rebuildDraftLineQuantity } from "../lib/draftCart";
+import { cartDiscountFromPendingSale, mergeDraftSaleLine, rebuildDraftLineQuantity, shouldMergeDraftSaleLines } from "../lib/draftCart";
+import {
+  applyCartDiscountSnapshot,
+  ensureMoneySaleQuantity,
+  findSaleLineForReturn,
+  resolveReturnCogsFromSaleLine,
+  saleEstimatedProfitUgx,
+} from "../lib/saleFinancialEngine";
 import { deletedLineIdsFromDraft, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
@@ -157,7 +164,7 @@ import { getDrawerCashForDayInput } from "../lib/cashReconciliation";
 import { normalizeCashDrawerAdjustment } from "../lib/cashDrawerLedger";
 import { cashReduceFromRefund } from "../lib/cashDrawerSales";
 import { resolveDebtorForSale } from "../lib/customerDebtActivity";
-import { draftQuantityExceedsStock, mergedDraftQuantity } from "../lib/draftStockCheck";
+import { draftQuantityExceedsStock, totalDraftQuantityForProduct } from "../lib/draftStockCheck";
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
 import { canSafelyHealCustomerDebt } from "../lib/debtSyncState";
 import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
@@ -182,7 +189,9 @@ import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAud
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
 import { canRecordCashExpenses, resolveNewExpenseApprovalStatus } from "../lib/cashExpenses";
 import { logPilotEventFromAudit, appendPilotEvent } from "../lib/pilotEventLog";
-import { saleStockMovementsFromSale } from "../lib/inventoryIntegrity";
+import { saleStockMovementsFromSale, openingStockMovementFromProduct } from "../lib/inventoryIntegrity";
+import { mergeStockMovementsWithArchive } from "../lib/stockMovementLedger";
+import { repairLegacySaleFinancials } from "../lib/legacyFinancialRepair";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { detectSaleStockConflict, logInventoryConflict } from "../lib/inventoryConflictLog";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
@@ -196,7 +205,33 @@ import {
 } from "../lib/staffOfflineAuth";
 
 const MAX_AUDIT_LOGS = 5000;
-const MAX_STOCK_MOVEMENTS = 4000;
+
+function mergeStockMovements(
+  existing: StockMovement[],
+  incoming: StockMovement[],
+  archived: StockMovement[] = [],
+): { stockMovements: StockMovement[]; archivedStockMovements: StockMovement[] } {
+  const merged = mergeStockMovementsWithArchive(existing, incoming, archived);
+  return {
+    stockMovements: merged.stockMovements.map(normalizeStockMovement),
+    archivedStockMovements: merged.archivedStockMovements.map(normalizeStockMovement),
+  };
+}
+
+function applyMovementMerge(
+  existing: StockMovement[],
+  incoming: StockMovement[],
+  archived: StockMovement[] = [],
+): { stockMovements: StockMovement[]; archivedStockMovements: StockMovement[] } {
+  return mergeStockMovements(existing, incoming, archived);
+}
+
+function movementMergePatch(
+  state: { stockMovements: StockMovement[]; archivedStockMovements?: StockMovement[] },
+  incoming: StockMovement[],
+): { stockMovements: StockMovement[]; archivedStockMovements: StockMovement[] } {
+  return applyMovementMerge(state.stockMovements, incoming, state.archivedStockMovements ?? []);
+}
 
 function queueHospitalityChange(input: { sessionIds?: string[]; ticketIds?: string[]; layout?: boolean }) {
   void import("../offline/hospitalityCloudSync").then(({ syncHospitalityAfterFloorChange }) =>
@@ -209,13 +244,6 @@ function mergeAuditLogs(existing: AuditLogEntry[], incoming: AuditLogEntry[]): A
   for (const e of existing) byId.set(e.id, e);
   for (const e of incoming) byId.set(e.id, e);
   return [...byId.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_AUDIT_LOGS);
-}
-
-function mergeStockMovements(existing: StockMovement[], incoming: StockMovement[]): StockMovement[] {
-  const byId = new Map<string, StockMovement>();
-  for (const e of existing) byId.set(e.id, e);
-  for (const e of incoming) byId.set(e.id, e);
-  return [...byId.values()].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, MAX_STOCK_MOVEMENTS);
 }
 
 function broadcastInventoryStock(products: Product[], type: InventorySyncEventType): void {
@@ -338,6 +366,8 @@ export type PosState = {
   purchases: Purchase[];
   supplierPayments: SupplierPayment[];
   stockMovements: StockMovement[];
+  /** Archived stock movements — preserved when active window exceeds cap */
+  archivedStockMovements: StockMovement[];
   voidRecords: VoidRecord[];
   returnRecords: ReturnRecord[];
   cashExpenses: CashExpense[];
@@ -373,6 +403,7 @@ export type PosState = {
       purchases?: Purchase[];
       supplierPayments?: SupplierPayment[];
       stockMovements?: StockMovement[];
+      archivedStockMovements?: StockMovement[];
       voidRecords?: VoidRecord[];
       returnRecords?: ReturnRecord[];
       cashExpenses?: CashExpense[];
@@ -895,9 +926,15 @@ function normalizeSaleLine(line: SaleLine): SaleLine {
   const unitCostUgx = normalizeUnitCostUgx(line.unitCostUgx);
   const lineTotalUgx = Math.max(0, Math.floor(Number(line.lineTotalUgx) || 0));
   const quantity = Math.max(0, Number(line.quantity) || 0);
-  const estimatedProfitUgx = Number.isFinite(line.estimatedProfitUgx)
-    ? Math.round(line.estimatedProfitUgx)
-    : lineProfitUgx(lineTotalUgx, lineCostUgx(unitCostUgx, quantity));
+  const estimatedProfitUgx =
+    line.financialDataStatus === "legacy" || line.financialDataStatus === "needs_repair"
+      ? 0
+      : Number.isFinite(line.estimatedProfitUgx)
+        ? Math.round(line.estimatedProfitUgx)
+        : lineProfitUgx(
+            Math.max(0, Math.floor(Number(line.netRevenueUgx ?? line.lineTotalUgx) || 0)),
+            lineCostUgx(unitCostUgx, quantity),
+          );
   return {
     ...line,
     quantity,
@@ -906,6 +943,11 @@ function normalizeSaleLine(line: SaleLine): SaleLine {
     lineTotalUgx,
     originalLineTotalUgx: Math.max(0, Math.floor(Number(line.originalLineTotalUgx ?? lineTotalUgx) || 0)),
     discountUgx: Math.max(0, Math.floor(Number(line.discountUgx) || 0)),
+    cogsUgx: Number.isFinite(line.cogsUgx) ? Math.round(line.cogsUgx!) : line.cogsUgx,
+    cartDiscountUgx: Number.isFinite(line.cartDiscountUgx) ? Math.round(line.cartDiscountUgx!) : line.cartDiscountUgx,
+    netRevenueUgx: Number.isFinite(line.netRevenueUgx) ? Math.round(line.netRevenueUgx!) : line.netRevenueUgx,
+    grossProfitUgx: Number.isFinite(line.grossProfitUgx) ? Math.round(line.grossProfitUgx!) : line.grossProfitUgx,
+    baseUnit: line.baseUnit?.trim() || undefined,
     estimatedProfitUgx,
     moneyAmountUgx: line.moneyAmountUgx ?? null,
     saleUnitType:
@@ -923,7 +965,7 @@ function normalizeSale(s: Sale): Sale {
   const estimatedProfitUgx = Number.isFinite(s.estimatedProfitUgx)
     ? Math.round(s.estimatedProfitUgx)
     : lines.reduce((sum, line) => sum + line.estimatedProfitUgx, 0);
-  return {
+  return repairLegacySaleFinancials({
     ...s,
     status: s.status ?? "completed",
     lines,
@@ -934,7 +976,7 @@ function normalizeSale(s: Sale): Sale {
     waiterName: s.waiterName ?? null,
     referenceLabel: s.referenceLabel ?? null,
     tableSessionId: s.tableSessionId ?? null,
-  };
+  });
 }
 
 function normalizeSupplier(s: Supplier): Supplier {
@@ -1031,6 +1073,7 @@ export const usePosStore = create<PosState>((set, get) => {
   purchases: [],
   supplierPayments: [],
   stockMovements: [],
+  archivedStockMovements: [],
   voidRecords: [],
   returnRecords: [],
   cashExpenses: [],
@@ -1061,9 +1104,17 @@ export const usePosStore = create<PosState>((set, get) => {
       suppliers: (data.suppliers ?? []).map(normalizeSupplier),
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
-      stockMovements: mergeStockMovements(data.stockMovements ?? [], opts?.replaceAudit ? [] : get().stockMovements).map(
-        normalizeStockMovement,
-      ),
+      ...(() => {
+        const merged = mergeStockMovements(
+          opts?.replaceAudit ? [] : get().stockMovements,
+          data.stockMovements ?? [],
+          opts?.replaceAudit ? [] : get().archivedStockMovements ?? [],
+        );
+        return {
+          stockMovements: merged.stockMovements,
+          archivedStockMovements: merged.archivedStockMovements,
+        };
+      })(),
       voidRecords: data.voidRecords ?? [],
       returnRecords: data.returnRecords ?? [],
       cashExpenses: (data.cashExpenses ?? []).map(normalizeCashExpense),
@@ -1122,7 +1173,17 @@ export const usePosStore = create<PosState>((set, get) => {
       suppliers: (data.suppliers ?? []).map(normalizeSupplier),
       purchases: (data.purchases ?? []).map(normalizePurchase),
       supplierPayments: (data.supplierPayments ?? []).map(normalizeSupplierPayment),
-      stockMovements: mergeStockMovements(data.stockMovements ?? [], s.stockMovements).map(normalizeStockMovement),
+      ...(() => {
+        const merged = mergeStockMovements(
+          data.stockMovements ?? [],
+          s.stockMovements,
+          s.archivedStockMovements ?? [],
+        );
+        return {
+          stockMovements: merged.stockMovements,
+          archivedStockMovements: merged.archivedStockMovements,
+        };
+      })(),
       voidRecords: data.voidRecords ?? s.voidRecords,
       returnRecords: data.returnRecords ?? s.returnRecords,
       cashExpenses: data.cashExpenses ? data.cashExpenses.map(normalizeCashExpense) : s.cashExpenses,
@@ -1646,18 +1707,35 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!built.line || built.error) {
       return { ok: false, errorKey: built.error ?? "invalid" };
     }
-    const existing = get().draftLines.find((l) => l.productId === built.line!.productId);
-    const nextQty = mergedDraftQuantity(existing, built.line!.quantity);
+    const existing =
+      built.line!.inputMode === "quantity"
+        ? get().draftLines.find(
+            (l) => l.productId === built.line!.productId && shouldMergeDraftSaleLines(l, built.line!),
+          )
+        : undefined;
+    const nextQty = totalDraftQuantityForProduct(
+      get().draftLines,
+      built.line!.productId,
+      existing,
+      built.line!,
+    );
     if (draftQuantityExceedsStock(d.product, nextQty)) {
       return { ok: false, errorKey: "noStock" };
     }
     set((state) => {
-      const merged = mergeDraftSaleLine(existing, built.line!, d.product);
+      if (existing && shouldMergeDraftSaleLines(existing, built.line!)) {
+        const merged = mergeDraftSaleLine(existing, built.line!, d.product);
+        return {
+          draftLines: [
+            ...state.draftLines.filter((l) => l !== existing),
+            merged,
+          ],
+          draftInput: null,
+        };
+      }
+      const line = { ...ensureSaleLineId(built.line!), stockVersionAtAdd: d.product.version ?? 1 };
       return {
-        draftLines: [
-          ...state.draftLines.filter((l) => l.productId !== built.line!.productId),
-          merged,
-        ],
+        draftLines: [...state.draftLines, line],
         draftInput: null,
       };
     });
@@ -2422,41 +2500,46 @@ export const usePosStore = create<PosState>((set, get) => {
     if (!stockCheck.ok) return { ok: false, errorKey: stockCheck.errorKey };
 
     const products = [...state.products];
-    const saleLines: SaleLine[] = [];
+    const preCartLines: SaleLine[] = [];
     const finalizeAt = new Date().toISOString();
     for (const line of state.draftLines) {
       const idx = products.findIndex((p) => p.id === line.productId);
       if (idx === -1) return { ok: false, errorKey: "missingProduct" };
       const p = products[idx]!;
+      const moneyLine = ensureMoneySaleQuantity(line, p);
       const conflict = detectSaleStockConflict({
         productId: p.id,
         productName: p.name,
         stockOnHand: p.stockOnHand,
-        quantity: line.quantity,
+        quantity: moneyLine.quantity,
         minimumStockAlert: p.minimumStockAlert,
       });
       if (conflict) logInventoryConflict(conflict);
-      const next = p.stockOnHand - line.quantity;
+      const next = p.stockOnHand - moneyLine.quantity;
       if (next < -0.0001) return { ok: false, errorKey: "noStock" };
       const slotStart = resolvePackCostUnitsDepleted(p);
-      const slotCosts = applyPackSlotCostsToSaleLine(p, line, slotStart);
-      saleLines.push(
+      const slotCosts = applyPackSlotCostsToSaleLine(p, moneyLine, slotStart);
+      const cogsUgx = lineCostUgx(slotCosts.unitCostUgx, moneyLine.quantity);
+      preCartLines.push(
         normalizeSaleLine({
-          ...line,
+          ...moneyLine,
           unitCostUgx: slotCosts.unitCostUgx,
-          estimatedProfitUgx: slotCosts.estimatedProfitUgx,
+          cogsUgx,
+          baseUnit: p.baseUnit?.trim() || undefined,
+          estimatedProfitUgx: lineProfitUgx(moneyLine.lineTotalUgx, cogsUgx),
         }),
       );
       products[idx] = {
         ...p,
         stockOnHand: Math.max(0, next),
-        packCostUnitsDepleted: advancePackCostUnitsDepleted(p.packCostUnitsDepleted, line.quantity),
+        packCostUnitsDepleted: advancePackCostUnitsDepleted(p.packCostUnitsDepleted, moneyLine.quantity),
         updatedAt: finalizeAt,
         version: p.version + 1,
       };
     }
 
-    const estimatedProfitUgx = estimatedProfitAfterCartDiscount(saleLines, cartDiscount);
+    const saleLines = applyCartDiscountSnapshot(preCartLines, cartDiscount);
+    const estimatedProfitUgx = saleEstimatedProfitUgx(saleLines);
 
     const actorId = state.sessionActor?.userId ?? null;
     const actor = state.sessionActor;
@@ -2593,7 +2676,7 @@ export const usePosStore = create<PosState>((set, get) => {
       draftCartDiscountUgx: 0,
       activePendingSaleId: null,
       customers,
-      stockMovements: mergeStockMovements(saleMovements, state.stockMovements),
+      ...movementMergePatch(state, saleMovements),
       preferences: nextPreferences,
       auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
     });
@@ -2722,7 +2805,7 @@ export const usePosStore = create<PosState>((set, get) => {
       products,
       customers,
       voidRecords: [voidRec, ...state.voidRecords],
-      stockMovements: mergeStockMovements([movement], state.stockMovements),
+      ...movementMergePatch(state, [movement]),
     });
 
     if (openShift) {
@@ -2797,6 +2880,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const openShift = (state.preferences.shifts ?? []).find((sh) => !sh.endAt && sh.actorUserId === actor.userId);
     const at = new Date().toISOString();
 
+    const linkedSale = saleId ? state.sales.find((s) => s.id === saleId) : undefined;
+    const saleLine = findSaleLineForReturn(linkedSale, productId);
+    const returnCogsUgx = saleLine
+      ? resolveReturnCogsFromSaleLine(saleLine, qty)
+      : Math.round(qty * normalizeUnitCostUgx(product.costPricePerUnitUgx));
+    const returnUnitCostUgx = saleLine
+      ? normalizeUnitCostUgx(saleLine.unitCostUgx)
+      : normalizeUnitCostUgx(product.costPricePerUnitUgx);
+
     const returnRec: ReturnRecord = {
       id: crypto.randomUUID(),
       saleId: saleId ?? null,
@@ -2804,6 +2896,8 @@ export const usePosStore = create<PosState>((set, get) => {
       productName: product.name,
       quantity: qty,
       refundAmountUgx: refund,
+      cogsUgx: returnCogsUgx,
+      unitCostUgx: returnUnitCostUgx,
       reason,
       note: note?.trim() || undefined,
       actorUserId: actor.userId,
@@ -2875,9 +2969,7 @@ export const usePosStore = create<PosState>((set, get) => {
       sales,
       customers,
       returnRecords: [returnRec, ...state.returnRecords],
-      stockMovements: movement
-        ? mergeStockMovements([movement], state.stockMovements)
-        : state.stockMovements,
+      ...(movement ? movementMergePatch(state, [movement]) : {}),
     });
 
     if (openShift) {
@@ -3166,10 +3258,17 @@ export const usePosStore = create<PosState>((set, get) => {
       quickPresetsMoneyUgx: p.quickPresetsMoneyUgx ?? qp.quickPresetsMoneyUgx,
       quickPresetsQty: p.quickPresetsQty ?? qp.quickPresetsQty,
     };
+    const normalized = normalizeProduct(row);
+    const shopKey = inventoryMovementNamespace();
+    const openingMovement = openingStockMovementFromProduct(shopKey, normalized, now);
     set((s) => {
-      const products = [normalizeProduct(row), ...s.products];
+      const products = [normalized, ...s.products];
       const preferences = preferencesWithDefaultShelfLayout(s.preferences, products);
-      return { products, preferences };
+      return {
+        products,
+        preferences,
+        ...(openingMovement ? movementMergePatch(s, [openingMovement]) : {}),
+      };
     });
     void queueRemote("product", { id: row.id, isNew: true });
     pushAudit("product_add", row.name, {
@@ -3333,7 +3432,7 @@ export const usePosStore = create<PosState>((set, get) => {
       return {
         products,
         preferences,
-        stockMovements: movement ? mergeStockMovements([movement], s.stockMovements) : s.stockMovements,
+        ...(movement ? movementMergePatch(s, [movement]) : {}),
       };
     });
 
@@ -3404,7 +3503,7 @@ export const usePosStore = create<PosState>((set, get) => {
             }
           : p,
       ),
-      stockMovements: mergeStockMovements([movement], s.stockMovements),
+      ...movementMergePatch(s, [movement]),
     }));
     void queueRemote("pending_stock_updates", {
       productId,
@@ -3476,7 +3575,7 @@ export const usePosStore = create<PosState>((set, get) => {
             }
           : row,
       ),
-      stockMovements: mergeStockMovements([movement], s.stockMovements),
+      ...movementMergePatch(s, [movement]),
     }));
 
     void queueRemote("pending_stock_updates", {
@@ -3789,7 +3888,7 @@ export const usePosStore = create<PosState>((set, get) => {
       products,
       purchases,
       suppliers,
-      stockMovements: mergeStockMovements(reversalMovements, state.stockMovements),
+      ...movementMergePatch(state, reversalMovements),
     });
 
     void queueRemote("pending_purchases", { purchaseId, void: true });
@@ -3945,7 +4044,7 @@ export const usePosStore = create<PosState>((set, get) => {
       products,
       purchases: [purchase, ...state.purchases],
       suppliers: suppliers.map(normalizeSupplier),
-      stockMovements: mergeStockMovements(movements, state.stockMovements),
+      ...movementMergePatch(state, movements),
     });
 
     void queueRemote("pending_purchases", { purchaseId: purchase.id });
@@ -4455,7 +4554,7 @@ export const usePosStore = create<PosState>((set, get) => {
     set,
     pushAudit,
     queueRemote,
-    mergeStockMovements,
+    movementMergePatch,
   }),
 
   ...(() => {
@@ -4485,6 +4584,7 @@ function persistRelevantUnchanged(a: PosState, b: PosState): boolean {
     a.purchases === b.purchases &&
     a.supplierPayments === b.supplierPayments &&
     a.stockMovements === b.stockMovements &&
+    a.archivedStockMovements === b.archivedStockMovements &&
     a.voidRecords === b.voidRecords &&
     a.returnRecords === b.returnRecords &&
     a.cashExpenses === b.cashExpenses &&

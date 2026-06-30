@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { FileDown } from "lucide-react";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
@@ -20,7 +20,6 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { CommandCenterPageToolbar } from "../components/command-center/CommandCenterPageToolbar";
 import { CommandCenterHealthHero } from "../components/command-center/CommandCenterHealthHero";
 import { CommandCenterKpiGrid } from "../components/command-center/CommandCenterKpiGrid";
-import { CommandCenterAiCoach } from "../components/command-center/CommandCenterAiCoach";
 import { CommandCenterAttentionSection } from "../components/command-center/CommandCenterAttentionSection";
 import { CommandCenterCloudCard } from "../components/command-center/CommandCenterCloudCard";
 import { CommandCenterLiveOpsTiles } from "../components/command-center/CommandCenterLiveOpsTiles";
@@ -33,7 +32,6 @@ import { CommandCenterRecommendations } from "../components/command-center/Comma
 import { CommandCenterQuickActions } from "../components/command-center/CommandCenterQuickActions";
 import { CommandCenterExecutiveFooter } from "../components/command-center/CommandCenterExecutiveFooter";
 import {
-  buildCoachInsights,
   buildCommandCenterExportText,
   buildExecutiveSummary,
   buildKpiCards,
@@ -91,7 +89,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const recommendationsRef = useRef<HTMLDivElement>(null);
 
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [filter, lang]);
   const syncStats = useMemo(() => computeSyncSalesStats(sales), [sales]);
@@ -197,19 +194,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     [commandCenter.financial, heroExpectedCash, customerCount, revenueSparkline],
   );
 
-  const coachInsights = useMemo(
-    () =>
-      buildCoachInsights({
-        pctRevenue: commandCenter.financial.trendVsPriorDay?.pctRevenue ?? null,
-        inventoryIssues:
-          commandCenter.inventory.negativeStock.length + commandCenter.inventory.countVarianceCount,
-        cashUnresolved: commandCenter.cash.hasUnresolvedVariance,
-        lowStockCount: commandCenter.inventory.lowStockCount,
-        topLowStockName: commandCenter.inventory.fastMovers[0]?.name ?? null,
-      }),
-    [commandCenter],
-  );
-
   const recommendations = useMemo(
     () =>
       buildSmartRecommendations({
@@ -260,10 +244,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     },
     [acknowledgeOwnerAlert],
   );
-
-  const scrollToRecommendations = useCallback(() => {
-    recommendationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
 
   const exportDashboard = useCallback(() => {
     const text = buildCommandCenterExportText({
@@ -327,14 +307,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <CommandCenterKpiGrid lang={lang} cards={kpiCards} periodLabel={periodLabel} />
 
-      <CommandCenterAiCoach
-        lang={lang}
-        insightKeys={coachInsights}
-        pctRevenue={commandCenter.financial.trendVsPriorDay?.pctRevenue ?? null}
-        topProductName={commandCenter.inventory.fastMovers[0]?.name ?? null}
-        onViewRecommendations={scrollToRecommendations}
-      />
-
       <div className="grid gap-4 lg:grid-cols-2">
         <CommandCenterAttentionSection
           lang={lang}
@@ -372,13 +344,11 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
 
       <CommandCenterIntegrityPanel lang={lang} signals={commandCenter.integritySignals} />
 
-      <div ref={recommendationsRef}>
-        <CommandCenterRecommendations
-          lang={lang}
-          recommendations={recommendations}
-          sectionId={RECOMMENDATIONS_SECTION_ID}
-        />
-      </div>
+      <CommandCenterRecommendations
+        lang={lang}
+        recommendations={recommendations}
+        sectionId={RECOMMENDATIONS_SECTION_ID}
+      />
 
       <CommandCenterQuickActions lang={lang} />
 

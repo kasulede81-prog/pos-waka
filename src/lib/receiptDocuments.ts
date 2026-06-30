@@ -13,6 +13,7 @@ import { createPdfLayout, pdfGap, pdfLine, sanitizePdfStem } from "./pdfLayout";
 import { downloadPdfBlob, printHtmlDocumentWithDesktop, sharePdfBlob } from "./documentPrint";
 import { isNativePrintPlatform, sharePlainReceiptForPrint } from "./nativeReceiptPrint";
 import { dateKeyKampala } from "./datesUg";
+import { formatReceiptLineCalculation } from "./saleQuantityLabel";
 
 export type SaleReceiptContext = {
   shopName: string;
@@ -79,7 +80,7 @@ function renderDisplayToPdf(doc: jsPDF, display: ReceiptDisplayData, title: stri
   for (const ln of display.lines) {
     if (ln.showCalculation) {
       pdfLine(layout, doc, ln.name, { bold: true });
-      pdfLine(layout, doc, `${ln.quantityLabel} x UGX ${ln.unitPriceUgx.toLocaleString()} = UGX ${ln.lineTotalUgx.toLocaleString()}`, {
+      pdfLine(layout, doc, formatReceiptLineCalculation(ln.quantityLabel, ln.unitPriceUgx, ln.lineTotalUgx), {
         size: 9,
       });
     } else {

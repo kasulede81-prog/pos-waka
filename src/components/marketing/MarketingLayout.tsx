@@ -124,6 +124,7 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
                 </button>
               ))}
             </div>
+            <MarketingThemeToggle variant="labeled" className="sm:hidden" />
             {!isAuthenticated ? (
               <>
                 <Link
@@ -147,7 +148,6 @@ function MarketingLayoutInner({ lang, setLang, isAuthenticated, children }: Prop
                 {t(lang, "activationContinueApp")}
               </Link>
             )}
-            <MarketingThemeToggle className="sm:hidden" />
           </div>
         </div>
       </header>

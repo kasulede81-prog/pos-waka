@@ -28,7 +28,10 @@ type Deps = {
     payload: Record<string, unknown>,
   ) => void;
   queueRemote: (kind: import("../types").SyncOperationKind, payload: unknown) => void;
-  mergeStockMovements: (existing: StockMovement[], incoming: StockMovement[]) => StockMovement[];
+  movementMergePatch: (
+    state: Pick<PosState, "stockMovements" | "archivedStockMovements">,
+    incoming: StockMovement[],
+  ) => Pick<PosState, "stockMovements" | "archivedStockMovements">;
 };
 
 function actorOrFail(get: StoreGet): { userId: string; displayName: string; role: import("../types").UserRole } | null {
@@ -52,7 +55,7 @@ function patchSession(set: StoreSet, sessionId: string, patch: Partial<Inventory
 }
 
 export function createInventoryCountStoreActions(deps: Deps) {
-  const { get, set, pushAudit, queueRemote, mergeStockMovements } = deps;
+  const { get, set, pushAudit, queueRemote, movementMergePatch } = deps;
 
   return {
     createInventoryCountSession: (notes?: string) => {
@@ -260,7 +263,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
 
       set((s) => ({
         products,
-        stockMovements: mergeStockMovements(movements, s.stockMovements),
+        ...movementMergePatch(s, movements),
         inventoryCountSessions: s.inventoryCountSessions.map((row) => (row.id === sessionId ? appliedSession : row)),
       }));
 

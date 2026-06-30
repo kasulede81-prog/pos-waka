@@ -1,4 +1,5 @@
 import type { Customer, Product, Sale, SaleLine } from "../types";
+import { flagLegacyFinancialLine } from "../lib/legacyFinancialRepair";
 import { getActiveAccountKey } from "./accountScope";
 
 const LEGACY_KEY = "waka-pos-store-v1";
@@ -64,8 +65,7 @@ function mapProduct(i: LegacyItem): Product {
 
 function mapLine(l: LegacyLine): SaleLine {
   const unitCostUgx = 0;
-  const estimatedProfitUgx = l.lineTotal - l.qty * unitCostUgx;
-  return {
+  return flagLegacyFinancialLine({
     productId: l.itemId,
     name: l.name,
     inputMode: "quantity",
@@ -73,9 +73,9 @@ function mapLine(l: LegacyLine): SaleLine {
     unitPriceUgx: l.unitPrice,
     unitCostUgx,
     lineTotalUgx: l.lineTotal,
-    estimatedProfitUgx,
+    estimatedProfitUgx: 0,
     moneyAmountUgx: null,
-  };
+  });
 }
 
 function mapSale(s: LegacySale): Sale {
@@ -89,7 +89,8 @@ function mapSale(s: LegacySale): Sale {
     totalUgx: total,
     cashPaidUgx: total,
     debtUgx: 0,
-    estimatedProfitUgx: lines.reduce((acc, line) => acc + line.estimatedProfitUgx, 0),
+    estimatedProfitUgx: 0,
+    legacyFinancialData: true,
     createdAt: s.createdAt,
     pendingSync: false,
     lastSyncError: null,

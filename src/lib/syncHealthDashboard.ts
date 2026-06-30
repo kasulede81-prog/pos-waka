@@ -60,6 +60,7 @@ export async function buildSyncHealthDashboardSnapshot(): Promise<SyncHealthDash
   const integrity = verifyInventoryIntegrity({
     products: state.products,
     movements: state.stockMovements,
+    archivedMovements: state.archivedStockMovements,
   });
   const inventoryIntegrityStatus = classifyInventoryIntegrityStatus(integrity.mismatches);
   const recovery = getCloudRecoverySession();

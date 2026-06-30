@@ -90,6 +90,37 @@ describe("inventoryIntegrity — stable movement ids", () => {
     expect(moves[0]!.id).toBe(stableInventoryMovementId(SHOP_KEY, "sale", SALE_A, PRODUCT_ID));
     expect(moves[0]!.deltaBaseUnits).toBe(-3);
   });
+
+  it("aggregates duplicate product lines into one movement", () => {
+    const moves = saleStockMovementsFromSale(SHOP_KEY, {
+      id: SALE_A,
+      createdAt: "2026-05-31T10:00:00.000Z",
+      lines: [
+        {
+          productId: PRODUCT_ID,
+          name: "Coke",
+          quantity: 2,
+          unitPriceUgx: 1000,
+          unitCostUgx: 100,
+          estimatedProfitUgx: 1800,
+          inputMode: "quantity",
+          lineTotalUgx: 2000,
+        },
+        {
+          productId: PRODUCT_ID,
+          name: "Coke",
+          quantity: 3,
+          unitPriceUgx: 1000,
+          unitCostUgx: 100,
+          estimatedProfitUgx: 2700,
+          inputMode: "quantity",
+          lineTotalUgx: 3000,
+        },
+      ],
+    });
+    expect(moves).toHaveLength(1);
+    expect(moves[0]!.deltaBaseUnits).toBe(-5);
+  });
 });
 
 describe("inventoryIntegrity — cloud pull merge", () => {

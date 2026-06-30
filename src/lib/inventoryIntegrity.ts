@@ -226,20 +226,21 @@ export function saleStockDeltasFromLines(
   lines: { productId: string; quantity: number; voided?: boolean }[],
   createdAt: string,
 ): StockDelta[] {
-  const out: StockDelta[] = [];
+  const byProduct = new Map<string, number>();
   for (const line of lines) {
     if (line.voided) continue;
     const qty = Math.max(0, Number(line.quantity) || 0);
     if (qty <= 0) continue;
-    out.push({
-      productId: line.productId,
-      delta: -qty,
-      at: createdAt,
-      kind: "sale_out",
-      refId: saleId,
-    });
+    const cur = byProduct.get(line.productId) ?? 0;
+    byProduct.set(line.productId, Math.round((cur + qty) * 10000) / 10000);
   }
-  return out;
+  return [...byProduct.entries()].map(([productId, quantity]) => ({
+    productId,
+    delta: -quantity,
+    at: createdAt,
+    kind: "sale_out" as const,
+    refId: saleId,
+  }));
 }
 
 export function voidStockDelta(
@@ -297,25 +298,58 @@ export function purchaseStockDeltasFromLines(
   }));
 }
 
-/** Idempotent sale movement rows for local ledger (stable ids). */
+/** Idempotent sale movement rows for local ledger (stable ids, aggregated per product). */
 export function saleStockMovementsFromSale(
   shopKey: string,
   sale: Pick<Sale, "id" | "createdAt" | "lines">,
 ): StockMovement[] {
   const at = sale.createdAt;
-  return sale.lines
-    .filter((l) => !l.voided && l.quantity > 0)
-    .map((line) => ({
-      id: stableInventoryMovementId(shopKey, "sale", sale.id, line.productId),
-      at,
-      productId: line.productId,
-      productName: line.name,
-      deltaBaseUnits: -line.quantity,
-      kind: "sale_out" as const,
-      summary: `Sale −${line.quantity}`,
-      refId: sale.id,
-      supplierId: null,
-    }));
+  const byProduct = new Map<string, { quantity: number; name: string }>();
+
+  for (const line of sale.lines) {
+    if (line.voided) continue;
+    const qty = Math.max(0, Number(line.quantity) || 0);
+    if (qty <= 0) continue;
+    const cur = byProduct.get(line.productId) ?? { quantity: 0, name: line.name };
+    byProduct.set(line.productId, {
+      quantity: Math.round((cur.quantity + qty) * 10000) / 10000,
+      name: cur.name || line.name,
+    });
+  }
+
+  return [...byProduct.entries()].map(([productId, { quantity, name }]) => ({
+    id: stableInventoryMovementId(shopKey, "sale", sale.id, productId),
+    at,
+    productId,
+    productName: name,
+    deltaBaseUnits: -quantity,
+    kind: "sale_out" as const,
+    summary: `Sale −${quantity}`,
+    refId: sale.id,
+    supplierId: null,
+  }));
+}
+
+/** Opening stock movement when a product is created with initial quantity. */
+export function openingStockMovementFromProduct(
+  shopKey: string,
+  product: Pick<Product, "id" | "name" | "stockOnHand" | "updatedAt">,
+  at?: string,
+): StockMovement | null {
+  const stock = Math.max(0, Number(product.stockOnHand) || 0);
+  if (stock <= 0) return null;
+  const movementAt = at ?? product.updatedAt ?? new Date().toISOString();
+  return {
+    id: stableInventoryMovementId(shopKey, "opening", product.id, product.id),
+    at: movementAt,
+    productId: product.id,
+    productName: product.name,
+    deltaBaseUnits: stock,
+    kind: "opening_stock",
+    summary: `Opening stock +${stock}`,
+    refId: product.id,
+    supplierId: null,
+  };
 }
 
 /** Simulate two devices selling the same SKU against a shared movement ledger. */
@@ -392,12 +426,16 @@ export function movementsToDeltas(movements: StockMovement[]): StockDelta[] {
 export function verifyInventoryIntegrity(input: {
   products: Product[];
   movements: StockMovement[];
+  archivedMovements?: StockMovement[];
   openingStockByProduct?: Record<string, number>;
 }): { ok: boolean; mismatches: InventoryIntegrityMismatch[] } {
+  const allMovements = input.archivedMovements?.length
+    ? [...input.archivedMovements, ...input.movements]
+    : input.movements;
   const opening = input.openingStockByProduct ?? {};
   const deltasByProduct = new Map<string, number>();
 
-  for (const m of input.movements) {
+  for (const m of allMovements) {
     const prev = deltasByProduct.get(m.productId) ?? 0;
     deltasByProduct.set(m.productId, prev + m.deltaBaseUnits);
   }

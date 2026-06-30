@@ -3,6 +3,7 @@ import type { Product } from "../types";
 import {
   buildProductFromSimpleWizard,
   defaultWizardUnitCostUgx,
+  profitPerSellUnitUgx,
   resolveWizardEditCostPatch,
   type SimpleWizardInput,
 } from "./simpleProductWizard";
@@ -84,6 +85,23 @@ describe("buildProductFromSimpleWizard no-pack unit selection", () => {
       lang,
     );
     expect(built!.stockQty).toBe(25);
+    expect(built!.costPricePerUnitUgx).toBe(36000);
+  });
+
+  it("saves per-unit buy price when sold individually (no pack)", () => {
+    const built = buildProductFromSimpleWizard(
+      baseInput({
+        sellUnit: "kg",
+        hasPack: false,
+        stockCount: "40",
+        sellPriceUgx: "1000",
+        buyPackPriceUgx: "700",
+      }),
+      lang,
+    );
+    expect(built!.costPricePerUnitUgx).toBe(700);
+    expect(built!.stockQty).toBe(40);
+    expect(profitPerSellUnitUgx(built!.priceUgx, built!.costPricePerUnitUgx)).toBe(300);
   });
 
   it("keeps pack product behaviour unchanged", () => {

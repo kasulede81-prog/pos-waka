@@ -2,9 +2,11 @@
  * Read-only refund transparency — uses returnLimits outputs; does not alter formulas.
  */
 
-import type { ReturnRecord, Sale, SaleLine } from "../types";
+import type { Product, ReturnRecord, Sale, SaleLine } from "../types";
 import { computeSaleDiscountBreakdown } from "./discountBreakdown";
 import { activeLines, lineDiscountUgx, listPriceForLine } from "./saleAdjustments";
+import { formatQuantityWithFractions } from "./formatQuantityWithFractions";
+import { formatSaleLineQuantity, resolveSaleLineQuantity } from "./saleQuantityLabel";
 import {
   activeSaleLine,
   originalLinePaidUgx,
@@ -20,6 +22,9 @@ export type LineRefundBreakdown = {
   productName: string;
   quantitySold: number;
   quantityReturning: number;
+  /** Human-readable qty labels when product context is available */
+  quantitySoldLabel?: string;
+  quantityReturningLabel?: string;
   listPriceUgx: number;
   lineDiscountUgx: number;
   cartDiscountAllocationUgx: number;
@@ -147,6 +152,7 @@ export function buildLineRefundBreakdown(input: {
   returnQty: number;
   returnRecords: ReturnRecord[];
   finalRefundUgx?: number;
+  product?: Product;
 }): LineRefundBreakdown | null {
   const line = activeSaleLine(input.sale, input.productId);
   if (!line) return null;
@@ -184,8 +190,12 @@ export function buildLineRefundBreakdown(input: {
   return {
     productId: input.productId,
     productName: line.name,
-    quantitySold: line.quantity,
+    quantitySold: resolveSaleLineQuantity(line),
     quantityReturning: effectiveQty,
+    quantitySoldLabel: input.product ? formatSaleLineQuantity(line, input.product) : undefined,
+    quantityReturningLabel: input.product
+      ? formatQuantityWithFractions(effectiveQty, input.product.baseUnit || "item")
+      : undefined,
     listPriceUgx: listForQty,
     lineDiscountUgx: lineDiscForQty,
     cartDiscountAllocationUgx: cartDiscountAllocationUgx,

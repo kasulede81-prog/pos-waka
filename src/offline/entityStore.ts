@@ -42,6 +42,7 @@ export type EntityBucket =
   | "purchase"
   | "supplierPayment"
   | "stockMovement"
+  | "archivedStockMovement"
   | "voidRecord"
   | "returnRecord"
   | "cashExpense"
@@ -307,6 +308,10 @@ export async function migrateSnapshotToEntities(snap: PersistedSnapshot): Promis
     (snap.supplierPayments ?? []).map((p) => ({ id: p.id, data: p, sortKey: p.createdAt })),
   );
   await putEntitiesBatch("stockMovement", (snap.stockMovements ?? []).map((m) => ({ id: m.id, data: m, sortKey: m.at })));
+  await putEntitiesBatch(
+    "archivedStockMovement",
+    (snap.archivedStockMovements ?? []).map((m) => ({ id: m.id, data: m, sortKey: m.at })),
+  );
   await putEntitiesBatch("voidRecord", (snap.voidRecords ?? []).map((v) => ({ id: v.id, data: v, sortKey: v.createdAt })));
   await putEntitiesBatch("returnRecord", (snap.returnRecords ?? []).map((r) => ({ id: r.id, data: r, sortKey: r.createdAt })));
   await putEntitiesBatch(
@@ -371,6 +376,7 @@ export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot 
     purchases: await getEntitiesByBucket<Purchase>("purchase"),
     supplierPayments: await getEntitiesByBucket<SupplierPayment>("supplierPayment"),
     stockMovements: await getEntitiesByBucket<StockMovement>("stockMovement"),
+    archivedStockMovements: await getEntitiesByBucket<StockMovement>("archivedStockMovement"),
     voidRecords: await getEntitiesByBucket<VoidRecord>("voidRecord"),
     returnRecords: await getEntitiesByBucket<ReturnRecord>("returnRecord"),
     cashExpenses: await getEntitiesByBucket<CashExpense>("cashExpense"),
@@ -401,6 +407,7 @@ const ALL_ENTITY_BUCKETS: EntityBucket[] = [
   "purchase",
   "supplierPayment",
   "stockMovement",
+  "archivedStockMovement",
   "voidRecord",
   "returnRecord",
   "cashExpense",

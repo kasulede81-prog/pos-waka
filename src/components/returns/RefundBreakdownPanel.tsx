@@ -56,8 +56,8 @@ export function RefundBreakdownPanel({ lang, breakdown, compact = false, details
           <p className="font-black text-slate-900">{breakdown.productName}</p>
           <p className="mt-0.5 text-xs font-semibold text-slate-600">
             {tTemplate(lang, "refundBreakdownQtyReturning", {
-              sold: String(breakdown.quantitySold),
-              returning: String(breakdown.quantityReturning),
+              sold: breakdown.quantitySoldLabel ?? String(breakdown.quantitySold),
+              returning: breakdown.quantityReturningLabel ?? String(breakdown.quantityReturning),
             })}
           </p>
         </>
