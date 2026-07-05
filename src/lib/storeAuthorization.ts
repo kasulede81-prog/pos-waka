@@ -60,6 +60,7 @@ export const STORE_ACTION_PERMISSIONS = {
   voidPurchase: "purchases.void",
   addCustomer: "customers.view",
   recordDayClose: "day.close",
+  reopenBusinessDay: "day.close",
   backupRestore: "settings.shop",
   backupExport: "settings.shop",
   permanentlyDeleteArchived: "settings.shop",

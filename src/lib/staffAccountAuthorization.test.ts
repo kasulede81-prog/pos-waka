@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, vi } from "vitest";
 import { usePosStore } from "../store/usePosStore";
 import type { SessionActor } from "./sessionActor";
 import {
@@ -6,6 +6,15 @@ import {
   assertStaffAccountMutationAllowed,
   StaffAccountAuthorizationError,
 } from "./staffAccountAuthorization";
+import { setStoreSubscriptionContext } from "./storeSubscriptionContext";
+
+vi.mock("./primaryDevice", () => ({
+  isCurrentDevicePrimaryForStaffManagement: vi.fn(async () => true),
+}));
+
+vi.mock("./staffSyncQueue", () => ({
+  createStaffInCloudFirst: vi.fn(async (row: { id: string }) => ({ ok: true as const, id: row.id })),
+}));
 
 function actor(role: SessionActor["role"]): SessionActor {
   return { userId: "user-1", role, displayName: "Test" };
@@ -46,6 +55,7 @@ describe("usePosStore — staff account CRUD authorization", () => {
   };
 
   beforeEach(() => {
+    setStoreSubscriptionContext({ snapshot: { kind: "local_full" }, authMode: "local" });
     usePosStore.setState({
       _hydrated: true,
       sessionActor: actor("cashier"),
@@ -89,5 +99,20 @@ describe("usePosStore — staff account CRUD authorization", () => {
     });
     expect(r.ok).toBe(true);
     expect((usePosStore.getState().preferences.staffAccounts ?? []).length).toBeGreaterThan(1);
+  });
+
+  it("owner addStaffAccount persists locally after cloud-first create", async () => {
+    setStoreSubscriptionContext({ snapshot: { kind: "local_full" }, authMode: "supabase" });
+    usePosStore.setState({ sessionActor: actor("owner"), preferences: { ...usePosStore.getState().preferences, staffAccounts: [] } });
+    const r = await usePosStore.getState().addStaffAccount({
+      name: "Cloud Bob",
+      role: "cashier",
+      pin: "1234",
+    });
+    expect(r.ok).toBe(true);
+    const saved = usePosStore.getState().preferences.staffAccounts ?? [];
+    expect(saved).toHaveLength(1);
+    expect(saved[0]?.name).toBe("Cloud Bob");
+    expect(saved[0]?.pendingCloudSync).toBe(false);
   });
 });

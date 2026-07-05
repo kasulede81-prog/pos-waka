@@ -71,6 +71,7 @@ import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./co
 import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
 import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
+import { XReportPage } from "./pages/XReportPage";
 import { CashPositionPage } from "./pages/CashPositionPage";
 import { DayOpenPage } from "./pages/DayOpenPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -597,6 +598,14 @@ function AppRoutes() {
                   <SensitiveActionGate lang={lang} kind="access_reports">
                     <ReportsPage lang={lang} />
                   </SensitiveActionGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="office/x-report"
+              element={
+                <RoleProtectedRoute permission="reports.view">
+                  <XReportPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

@@ -87,6 +87,15 @@ export type AuditAction =
   | "debt_payment"
   | "debt_reconcile"
   | "day_close"
+  | "day_close_blocked"
+  | "day_close_preflight_failed"
+  | "day_close_reopened"
+  | "day_close_emergency"
+  | "manager_override"
+  | "variance_override"
+  | "sync_override"
+  | "hospitality_block"
+  | "shift_block"
   | "back_office_unlock"
   | "back_office_unlock_success"
   | "back_office_unlock_failed"
@@ -808,6 +817,24 @@ export type DayCloseSummary = {
   openingFloatUgx?: number | null;
   pendingSync?: boolean;
   updatedAt?: string;
+  /** Emergency close (power outage, etc.) — requires owner PIN + audit. */
+  isEmergency?: boolean;
+  closedByUserId?: string | null;
+  closedByLabel?: string | null;
+  emergencyReason?: string | null;
+};
+
+/** Permanent record when owner reopens a closed business day. */
+export type DayReopenRecord = {
+  id: string;
+  dateKey: string;
+  closeId: string;
+  reason: string;
+  reopenedByUserId: string;
+  reopenedByLabel: string;
+  reopenedAt: string;
+  deviceId: string;
+  pendingSync?: boolean;
 };
 
 export const CASH_DRAWER_ADJUSTMENT_TYPES = [
@@ -1144,6 +1171,8 @@ export type ShopPreferences = {
   lastArchiveRunAt?: string | null;
   /** Restaurant/bar floor layout — persisted locally for offline-first service */
   hospitalityFloor?: HospitalityFloorState;
+  /** Owner reopen history — immutable audit trail for unlocked business days */
+  dayReopenHistory?: DayReopenRecord[];
   /** Kill switch — when false, fall back to retail Sell even for hospitality business types */
   hospitalityModeEnabled?: boolean;
   /** Resume table order after refresh */

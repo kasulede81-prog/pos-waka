@@ -1,58 +1,70 @@
-import { getDeviceOnline } from "./deviceOnline";
-import { readSyncHealthMeta } from "./syncMeta";
+/**
+ * @deprecated Import from dayCloseEnforcement — thin store adapter retained for tests.
+ */
+
 import { usePosStore } from "../store/usePosStore";
+import { dateKeyKampala } from "./datesUg";
+import { getDrawerCashForDayInput } from "./cashReconciliation";
+import { resolveCashDrawerFormulaVersion } from "./dayDrawerOpen";
+import {
+  runDayClosePreflight as runEnforcementPreflight,
+  type DayClosePreflightResult as EnforcementResult,
+} from "./dayCloseEnforcement";
 
 export type DayClosePreflightResult = {
   ok: boolean;
   warnings: string[];
   errorKey?: string;
+  snapshot?: EnforcementResult["snapshot"];
+  blockReasons?: string[];
 };
 
-const STALE_RECONCILIATION_MS = 15 * 60_000;
-
-/** Verify cloud state and pending cash sync before day close. */
-export async function runDayClosePreflight(): Promise<DayClosePreflightResult> {
-  const warnings: string[] = [];
+/** Verify cloud state and operational gates before day close. */
+export async function runDayClosePreflight(opts?: {
+  dateKey?: string;
+  countedCashUgx?: number | null;
+}): Promise<DayClosePreflightResult> {
   const state = usePosStore.getState();
+  const dateKey = opts?.dateKey ?? dateKeyKampala(new Date());
+  const drawer = getDrawerCashForDayInput({
+    sales: state.sales,
+    returns: state.returnRecords,
+    products: state.products,
+    debtPayments: state.debtPayments,
+    cashExpenses: state.cashExpenses,
+    supplierPayments: state.supplierPayments,
+    cashDrawerAdjustments: state.cashDrawerAdjustments,
+    shifts: state.preferences.shifts ?? [],
+    dayDrawerOpens: state.dayDrawerOpens,
+    formulaVersion: resolveCashDrawerFormulaVersion(state.preferences),
+    day: dateKey,
+  });
 
-  const pendingCash =
-    state.dayCloses.filter((d) => d.pendingSync).length +
-    state.cashExpenses.filter((e) => e.pendingSync && !e.deletedAt).length +
-    state.cashDrawerAdjustments.filter((a) => a.pendingSync).length +
-    state.dayDrawerOpens.filter((d) => d.pendingSync).length;
+  const result = await runEnforcementPreflight({
+    state: {
+      draftLines: state.draftLines,
+      activePendingSaleId: state.activePendingSaleId,
+      sales: state.sales,
+      preferences: state.preferences,
+      dayCloses: state.dayCloses,
+      dayDrawerOpens: state.dayDrawerOpens,
+      products: state.products,
+      returnRecords: state.returnRecords,
+      cashDrawerAdjustments: state.cashDrawerAdjustments,
+      cashExpenses: state.cashExpenses,
+      inventoryCountSessions: state.inventoryCountSessions,
+    },
+    dateKey,
+    expectedCashUgx: drawer.expectedDrawerCashUgx,
+    countedCashUgx: opts?.countedCashUgx ?? null,
+    variancePreferences: state.preferences,
+  });
 
-  if (pendingCash > 0) {
-    warnings.push(`pending_cash_sync:${pendingCash}`);
-  }
-
-  const health = readSyncHealthMeta();
-  if (health.lastPullAt) {
-    const age = Date.now() - new Date(health.lastPullAt).getTime();
-    if (age > STALE_RECONCILIATION_MS) {
-      warnings.push("cloud_reconciliation_stale");
-    }
-  } else if (getDeviceOnline()) {
-    warnings.push("cloud_reconciliation_never_pulled");
-  }
-
-  if (health.queueHealth !== "healthy") {
-    warnings.push(`sync_queue_${health.queueHealth}`);
-  }
-
-  if (getDeviceOnline()) {
-    try {
-      const { syncShopWithCloud } = await import("../offline/cloudSync");
-      const result = await syncShopWithCloud({ pull: true });
-      if (result.queueFailed > 0 || result.push.fail > 0) {
-        warnings.push("cloud_preflight_push_incomplete");
-      }
-      if (!result.pulled && health.lastPullAt == null) {
-        warnings.push("cloud_preflight_pull_skipped");
-      }
-    } catch {
-      warnings.push("cloud_preflight_failed");
-    }
-  }
-
-  return { ok: true, warnings };
+  return {
+    ok: result.ok,
+    warnings: result.warnings,
+    errorKey: result.errorKey,
+    snapshot: result.snapshot,
+    blockReasons: result.blockReasons,
+  };
 }

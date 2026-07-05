@@ -17,6 +17,8 @@ import {
   verifyOwnerDayOpenCorrection,
 } from "../lib/dayDrawerOpen";
 import { hasPermission } from "../lib/permissions";
+import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
+import { assertBusinessDateNotLocked } from "../lib/businessDateLock";
 import { resolveFloatVerifyOverride } from "../lib/managerFloatVerify";
 import { shiftExpectedCash, type ShiftCashContext } from "../lib/saleAdjustments";
 import type { PosState } from "./usePosStore";
@@ -107,6 +109,18 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
     const dateKey = input.dateKey?.trim() || dateKeyKampala(new Date());
     const amount = Math.floor(input.openingFloatUgx);
     if (amount <= 0) return { ok: false as const, errorKey: "invalidMoney" };
+
+    const seq = assertSequentialBusinessDay({
+      targetDateKey: dateKey,
+      dayCloses: state.dayCloses,
+      sales: state.sales,
+      shifts: state.preferences.shifts ?? [],
+      dayDrawerOpens: state.dayDrawerOpens,
+    });
+    if (!seq.ok) return { ok: false as const, errorKey: seq.errorKey };
+
+    const dayLock = assertBusinessDateNotLocked(state.dayCloses, dateKey);
+    if (!dayLock.ok) return { ok: false as const, errorKey: dayLock.errorKey };
 
     const existing = activeDayDrawerOpenForDate(state.dayDrawerOpens, dateKey);
     if (existing) return { ok: false as const, errorKey: "dayDrawerAlreadyOpen" };

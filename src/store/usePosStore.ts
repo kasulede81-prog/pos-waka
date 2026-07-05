@@ -168,6 +168,16 @@ import { draftQuantityExceedsStock, totalDraftQuantityForProduct } from "../lib/
 import { verifyCustomerDebtIntegrity } from "../lib/customerDebtIntegrity";
 import { canSafelyHealCustomerDebt } from "../lib/debtSyncState";
 import { activeDayCloseForDate, canRecordDayClose } from "../lib/dayCloseIdempotency";
+import { assertBusinessDateNotLocked } from "../lib/businessDateLock";
+import {
+  assertDayClosePreflightPassed,
+  runDayClosePreflight as runDayCloseEnforcementPreflight,
+} from "../lib/dayCloseEnforcement";
+import {
+  dayCloseVarianceIsFlagged,
+  resolveDayCloseApproval,
+} from "../lib/dayCloseApprovals";
+import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
 import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
@@ -686,7 +696,18 @@ export type PosState = {
     countedCashUgx: number;
     override?: boolean;
     overrideReason?: string;
+    emergency?: boolean;
+    emergencyReason?: string;
+    managerPin?: string;
+    syncOverride?: boolean;
+    sequentialOverride?: boolean;
+    varianceOverride?: boolean;
   }) => Promise<{ ok: boolean; errorKey?: string; warnings?: string[] }>;
+  reopenBusinessDay: (opts: {
+    dateKey: string;
+    reason: string;
+    ownerPin: string;
+  }) => { ok: boolean; errorKey?: string };
   repairCustomerDebtIntegrity: () => {
     ok: boolean;
     healedCount: number;
@@ -1057,6 +1078,18 @@ export const usePosStore = create<PosState>((set, get) => {
     void queueRemote("audit_log", { entry });
   };
 
+  const denyIfBusinessDateLocked = (dateKey: string, actionLabel: string) => {
+    const lock = assertBusinessDateNotLocked(get().dayCloses, dateKey);
+    if (!lock.ok) {
+      pushAudit("day_close_blocked", `Blocked ${actionLabel} — ${dateKey} closed`, {
+        dateKey,
+        action: actionLabel,
+      });
+      return lock;
+    }
+    return null;
+  };
+
   const denyUnlessEffectivePermission = (permission: Permission, actionLabel: string) => {
     const actor = get().sessionActor;
     const { snapshot, authMode } = getStoreSubscriptionContext();
@@ -1407,6 +1440,13 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       return { ok: false, errorKey: cloudResult.errorKey, queued: cloudResult.queued };
     }
+
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        staffAccounts: [{ ...row, pendingCloudSync: false }, ...(s.preferences.staffAccounts ?? [])],
+      },
+    }));
 
     const confirmed = (get().preferences.staffAccounts ?? []).find((a) => a.id === row.id);
     void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
@@ -2596,6 +2636,9 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("pos.sell", "finalizeDraftSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "finalizeDraftSale");
+    if (dateLock) return dateLock;
+
     const state = get();
     const shiftGuard = requireActiveShift(state);
     if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
@@ -2894,13 +2937,18 @@ export const usePosStore = create<PosState>((set, get) => {
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
     const state = get();
+    const saleIdx = state.sales.findIndex((s) => s.id === saleId);
+    if (saleIdx === -1) return { ok: false, errorKey: "missingProduct" };
+    const saleForLock = state.sales[saleIdx]!;
+    const saleDayKey = dateKeyKampala(saleForLock.createdAt);
+    const dateLock = denyIfBusinessDateLocked(saleDayKey, "voidSaleLine");
+    if (dateLock) return dateLock;
+
     const shiftGuard = requireActiveShift(state);
     if (!shiftGuard.ok) return { ok: false, errorKey: shiftGuard.errorKey };
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    const saleIdx = state.sales.findIndex((s) => s.id === saleId);
-    if (saleIdx === -1) return { ok: false, errorKey: "missingProduct" };
-    const sale = state.sales[saleIdx]!;
+    const sale = saleForLock;
     const line = sale.lines[lineIndex];
     if (!line || line.voided) return { ok: false, errorKey: "invalid" };
 
@@ -3023,6 +3071,9 @@ export const usePosStore = create<PosState>((set, get) => {
   returnProduct: ({ saleId, productId, quantity, refundAmountUgx, reason, note }) => {
     const denied = denyUnlessEffectivePermission("sale_void", "returnProduct");
     if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "returnProduct");
+    if (dateLock) return dateLock;
 
     const state = get();
     const shiftGuard = requireActiveShift(state);
@@ -4357,6 +4408,9 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   addCashExpense: (input) => {
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addCashExpense");
+    if (dateLock) return dateLock;
+
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
@@ -4415,6 +4469,9 @@ export const usePosStore = create<PosState>((set, get) => {
   addCashDrawerAdjustment: (input) => {
     const denied = denyUnlessEffectivePermission("day.close", "addCashDrawerAdjustment");
     if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const dateLock = denyIfBusinessDateLocked(dateKeyKampala(new Date()), "addCashDrawerAdjustment");
+    if (dateLock) return dateLock;
 
     const state = get();
     const actor = state.sessionActor;
@@ -4555,7 +4612,18 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  recordDayClose: async ({ dateKey, countedCashUgx, override, overrideReason }) => {
+  recordDayClose: async ({
+    dateKey,
+    countedCashUgx,
+    override,
+    overrideReason,
+    emergency,
+    emergencyReason,
+    managerPin,
+    syncOverride,
+    sequentialOverride,
+    varianceOverride,
+  }) => {
     const denied = denyUnlessEffectivePermission("day.close", "recordDayClose");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
@@ -4564,19 +4632,8 @@ export const usePosStore = create<PosState>((set, get) => {
       return { ok: false, errorKey: "closeDaySalesNotLoaded" };
     }
 
-    const { runDayClosePreflight } = await import("../lib/dayClosePreflight");
-    const preflight = await runDayClosePreflight();
-    const preflightWarnings = preflight.warnings;
-
     const state = get();
-    const gate = canRecordDayClose(state.dayCloses, dateKey, override);
-    if (!gate.ok) return { ok: false, errorKey: gate.errorKey };
-
-    const existing = activeDayCloseForDate(state.dayCloses, dateKey);
-    if (existing && override) {
-      const reason = (overrideReason ?? "").trim();
-      if (reason.length < 3) return { ok: false, errorKey: "dayCloseOverrideReasonRequired" };
-    }
+    const counted = Math.max(0, Math.floor(countedCashUgx));
     const drawer = getDrawerCashForDayInput({
       sales: state.sales,
       returns: state.returnRecords,
@@ -4590,16 +4647,170 @@ export const usePosStore = create<PosState>((set, get) => {
       formulaVersion: resolveCashDrawerFormulaVersion(state.preferences),
       day: dateKey,
     });
-    const fin = getCompletedFinancials(state.sales, state.returnRecords, state.products, { day: dateKey });
     const expectedCashUgx = drawer.expectedDrawerCashUgx;
+    const diff = counted - expectedCashUgx;
+
+    const preflight = await runDayCloseEnforcementPreflight({
+      state: {
+        draftLines: state.draftLines,
+        activePendingSaleId: state.activePendingSaleId,
+        sales: state.sales,
+        preferences: state.preferences,
+        dayCloses: state.dayCloses,
+        dayDrawerOpens: state.dayDrawerOpens,
+        products: state.products,
+        returnRecords: state.returnRecords,
+        cashDrawerAdjustments: state.cashDrawerAdjustments,
+        cashExpenses: state.cashExpenses,
+        inventoryCountSessions: state.inventoryCountSessions,
+      },
+      dateKey,
+      expectedCashUgx,
+      countedCashUgx: counted,
+      variancePreferences: state.preferences,
+    });
+    const preflightWarnings = preflight.warnings;
+
+    const preflightGate = assertDayClosePreflightPassed(preflight, {
+      emergency,
+      syncOverride,
+      sequentialOverride,
+    });
+    if (!preflightGate.ok) {
+      pushAudit("day_close_preflight_failed", `Day close blocked ${dateKey}`, {
+        dateKey,
+        errorKey: preflightGate.errorKey,
+        blockReasons: preflight.blockReasons,
+        openShifts: preflight.snapshot.openShifts,
+        hospitalitySessions: preflight.snapshot.hospitalitySessions,
+      });
+      if (preflightGate.errorKey === "dayCloseBlockedOpenShifts") {
+        pushAudit("shift_block", "Day close blocked — open shifts", { dateKey });
+      }
+      if (preflightGate.errorKey === "dayCloseBlockedHospitality") {
+        pushAudit("hospitality_block", "Day close blocked — open hospitality", { dateKey });
+      }
+      return { ok: false, errorKey: preflightGate.errorKey };
+    }
+
+    const seqGate = assertSequentialBusinessDay({
+      targetDateKey: dateKey,
+      dayCloses: state.dayCloses,
+      sales: state.sales,
+      shifts: state.preferences.shifts ?? [],
+      dayDrawerOpens: state.dayDrawerOpens,
+    });
+    if (!seqGate.ok && !sequentialOverride && !emergency) {
+      pushAudit("day_close_blocked", `Sequential day block ${dateKey}`, {
+        dateKey,
+        unclosedDays: seqGate.unclosedDays,
+      });
+      return { ok: false, errorKey: seqGate.errorKey };
+    }
+
+    const actor = state.sessionActor;
+    const actorLabel = actor?.displayName?.trim() || actor?.role || "Owner";
+    const actorRole = actor?.role ?? "cashier";
+    const actorUserId = actor?.userId ?? "unknown";
+
+    const varianceFlagged = dayCloseVarianceIsFlagged(expectedCashUgx, diff, state.preferences);
+    if (varianceFlagged && !varianceOverride && !emergency) {
+      return { ok: false, errorKey: "dayCloseVarianceApprovalRequired" };
+    }
+    if (varianceFlagged && (varianceOverride || emergency)) {
+      const pin = managerPin?.trim() ?? "";
+      const approval = resolveDayCloseApproval("variance", pin, state.preferences, actorRole, actorUserId, actorLabel);
+      if (!approval.ok) return { ok: false, errorKey: approval.errorKey };
+      pushAudit("variance_override", `Variance override ${dateKey} UGX ${diff.toLocaleString()}`, {
+        dateKey,
+        expectedCashUgx,
+        countedCashUgx: counted,
+        differenceUgx: diff,
+        managerUserId: approval.auth.actorUserId,
+        managerLabel: approval.auth.actorLabel,
+        reason: overrideReason ?? emergencyReason ?? "",
+      });
+      pushAudit("manager_override", `Manager approved variance on ${dateKey}`, {
+        kind: "variance",
+        dateKey,
+        differenceUgx: diff,
+        approverUserId: approval.auth.actorUserId,
+        approverLabel: approval.auth.actorLabel,
+      });
+    }
+
+    const needsSyncOverride = preflight.snapshot.requiresSyncOverride;
+    if (needsSyncOverride && (syncOverride || emergency)) {
+      const pin = managerPin?.trim() ?? "";
+      const approval = resolveDayCloseApproval(
+        emergency ? "emergency_close" : "sync_override",
+        pin,
+        state.preferences,
+        actorRole,
+        actorUserId,
+        actorLabel,
+      );
+      if (!approval.ok) return { ok: false, errorKey: approval.errorKey };
+      pushAudit("sync_override", `Sync override for day close ${dateKey}`, {
+        dateKey,
+        pendingSyncTotal: preflight.snapshot.pendingSync.total,
+        managerUserId: approval.auth.actorUserId,
+        reason: overrideReason ?? emergencyReason ?? "",
+      });
+      pushAudit("manager_override", `Manager approved sync override on ${dateKey}`, {
+        kind: "sync_override",
+        dateKey,
+        approverUserId: approval.auth.actorUserId,
+      });
+    } else if (needsSyncOverride && !emergency) {
+      return { ok: false, errorKey: "dayCloseBlockedSync" };
+    }
+
+    if (emergency) {
+      const reason = (emergencyReason ?? "").trim();
+      if (reason.length < 3) return { ok: false, errorKey: "dayCloseEmergencyReasonRequired" };
+      const approval = resolveDayCloseApproval(
+        "emergency_close",
+        managerPin?.trim() ?? "",
+        state.preferences,
+        actorRole,
+        actorUserId,
+        actorLabel,
+      );
+      if (!approval.ok) return { ok: false, errorKey: approval.errorKey };
+    }
+
+    const gate = canRecordDayClose(state.dayCloses, dateKey, override);
+    if (!gate.ok) return { ok: false, errorKey: gate.errorKey };
+
+    const existing = activeDayCloseForDate(state.dayCloses, dateKey);
+    if (existing && override) {
+      const reason = (overrideReason ?? "").trim();
+      if (reason.length < 3) return { ok: false, errorKey: "dayCloseOverrideReasonRequired" };
+      const approval = resolveDayCloseApproval(
+        "reclose_override",
+        managerPin?.trim() ?? "",
+        state.preferences,
+        actorRole,
+        actorUserId,
+        actorLabel,
+      );
+      if (!approval.ok) return { ok: false, errorKey: approval.errorKey };
+      pushAudit("manager_override", `Manager approved re-close ${dateKey}`, {
+        kind: "reclose_override",
+        dateKey,
+        previousCloseId: existing.id,
+        approverUserId: approval.auth.actorUserId,
+        reason,
+      });
+    }
+
+    const fin = getCompletedFinancials(state.sales, state.returnRecords, state.products, { day: dateKey });
     const totalSalesUgx = fin.revenueUgx;
     const totalDebtUgx = fin.debtIssuedUgx;
     const profitEstimateUgx = fin.profitUgx;
-    const counted = Math.max(0, Math.floor(countedCashUgx));
-    const diff = counted - expectedCashUgx;
     const now = new Date().toISOString();
-    const actor = state.sessionActor;
-    const closedByLabel = actor?.displayName?.trim() || actor?.role || "Owner";
+    const closedByLabel = actorLabel;
     const closeId = crypto.randomUUID();
     const documentSnapshot = buildDayCloseSnapshot({
       closedByUserId: actor?.userId ?? null,
@@ -4615,7 +4826,11 @@ export const usePosStore = create<PosState>((set, get) => {
         profitEstimateUgx,
         createdAt: now,
         replacesCloseId: existing?.id ?? null,
-        overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
+        overrideReason: existing && override ? (overrideReason ?? "").trim() : emergency ? (emergencyReason ?? "").trim() : null,
+        isEmergency: emergency ?? false,
+        closedByUserId: actor?.userId ?? null,
+        closedByLabel,
+        emergencyReason: emergency ? (emergencyReason ?? "").trim() : null,
       },
       drawer: {
         cashFromSalesUgx: drawer.cashFromSalesUgx,
@@ -4642,11 +4857,15 @@ export const usePosStore = create<PosState>((set, get) => {
       profitEstimateUgx,
       createdAt: now,
       replacesCloseId: existing?.id ?? null,
-      overrideReason: existing && override ? (overrideReason ?? "").trim() : null,
+      overrideReason: existing && override ? (overrideReason ?? "").trim() : emergency ? (emergencyReason ?? "").trim() : null,
       openingFloatUgx: drawer.openingFloatUgx,
       documentSnapshot,
       pendingSync: true,
       updatedAt: now,
+      isEmergency: emergency ?? false,
+      closedByUserId: actor?.userId ?? null,
+      closedByLabel,
+      emergencyReason: emergency ? (emergencyReason ?? "").trim() : null,
     };
     set((s) => ({
       dayCloses: [
@@ -4666,22 +4885,101 @@ export const usePosStore = create<PosState>((set, get) => {
         dateKey,
       });
     }
-    pushAudit("day_close", `Close ${dateKey} counted UGX ${counted.toLocaleString()}`, {
-      dayCloseId: row.id,
-      dateKey,
-      expectedCashUgx: expectedCashUgx,
-      countedCashUgx: counted,
-      differenceUgx: diff,
-      totalSalesUgx,
-      totalDebtUgx,
-      profitEstimateUgx,
-      cashFromSalesUgx: drawer.cashFromSalesUgx,
-      debtCollectedUgx: drawer.debtCollectedUgx,
-      refundsUgx: drawer.refundsUgx,
-      expenseUgx: drawer.expenseUgx,
-      preflightWarnings,
-    });
+    if (emergency) {
+      pushAudit("day_close_emergency", `Emergency close ${dateKey}`, {
+        dayCloseId: row.id,
+        dateKey,
+        emergencyReason: row.emergencyReason,
+        expectedCashUgx,
+        countedCashUgx: counted,
+        differenceUgx: diff,
+        preflightWarnings,
+      });
+    } else {
+      pushAudit("day_close", `Close ${dateKey} counted UGX ${counted.toLocaleString()}`, {
+        dayCloseId: row.id,
+        dateKey,
+        expectedCashUgx,
+        countedCashUgx: counted,
+        differenceUgx: diff,
+        totalSalesUgx,
+        totalDebtUgx,
+        profitEstimateUgx,
+        cashFromSalesUgx: drawer.cashFromSalesUgx,
+        debtCollectedUgx: drawer.debtCollectedUgx,
+        refundsUgx: drawer.refundsUgx,
+        expenseUgx: drawer.expenseUgx,
+        preflightWarnings,
+      });
+    }
     return { ok: true, warnings: preflightWarnings.length > 0 ? preflightWarnings : undefined };
+  },
+
+  reopenBusinessDay: ({ dateKey, reason, ownerPin }) => {
+    const denied = denyUnlessEffectivePermission("day.close", "reopenBusinessDay");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+
+    const activeClose = activeDayCloseForDate(state.dayCloses, dateKey);
+    if (!activeClose) return { ok: false, errorKey: "dayCloseNotFound" };
+
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length < 3) return { ok: false, errorKey: "dayCloseOverrideReasonRequired" };
+
+    const approval = resolveDayCloseApproval(
+      "reopen_day",
+      ownerPin,
+      state.preferences,
+      actor.role,
+      actor.userId,
+      actor.displayName ?? actor.userId,
+    );
+    if (!approval.ok) return { ok: false, errorKey: approval.errorKey };
+
+    const now = new Date().toISOString();
+    const reopenId = crypto.randomUUID();
+    const reopenRecord: import("../types").DayReopenRecord = {
+      id: reopenId,
+      dateKey,
+      closeId: activeClose.id,
+      reason: trimmedReason,
+      reopenedByUserId: approval.auth.actorUserId,
+      reopenedByLabel: approval.auth.actorLabel,
+      reopenedAt: now,
+      deviceId: getOrCreateDeviceId(),
+      pendingSync: true,
+    };
+
+    set((s) => ({
+      dayCloses: s.dayCloses.map((d) =>
+        d.id === activeClose.id ? { ...d, supersededAt: now, pendingSync: true, updatedAt: now } : d,
+      ),
+      preferences: {
+        ...s.preferences,
+        dayReopenHistory: [reopenRecord, ...(s.preferences.dayReopenHistory ?? [])],
+      },
+    }));
+
+    void queueRemote("pending_day_closes", { closeId: activeClose.id });
+    pushAudit("day_close_reopened", `Reopened business day ${dateKey}`, {
+      dateKey,
+      closeId: activeClose.id,
+      reopenId,
+      reason: trimmedReason,
+      reopenedByUserId: approval.auth.actorUserId,
+      reopenedByLabel: approval.auth.actorLabel,
+      deviceId: reopenRecord.deviceId,
+    });
+    pushAudit("manager_override", `Owner reopened ${dateKey}`, {
+      kind: "reopen_day",
+      dateKey,
+      approverUserId: approval.auth.actorUserId,
+      reason: trimmedReason,
+    });
+    return { ok: true };
   },
 
   repairCustomerDebtIntegrity: () => {

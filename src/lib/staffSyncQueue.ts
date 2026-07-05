@@ -39,6 +39,29 @@ export async function processPendingStaffSync(payload: PendingStaffSyncPayload):
 
   const { refreshStaffCacheAfterPrimaryMutation } = await import("./staffCacheSync");
   await refreshStaffCacheAfterPrimaryMutation();
+
+  const { usePosStore } = await import("../store/usePosStore");
+  const staffId = payload.staff.id;
+  usePosStore.setState((s) => {
+    const accounts = s.preferences.staffAccounts ?? [];
+    const existing = accounts.find((a) => a.id === staffId);
+    if (!existing) {
+      return {
+        preferences: {
+          ...s.preferences,
+          staffAccounts: [{ ...payload.staff, pendingCloudSync: false }, ...accounts],
+        },
+      };
+    }
+    return {
+      preferences: {
+        ...s.preferences,
+        staffAccounts: accounts.map((a) =>
+          a.id === staffId ? { ...a, pendingCloudSync: false } : a,
+        ),
+      },
+    };
+  });
   return true;
 }
 
