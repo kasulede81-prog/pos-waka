@@ -9,6 +9,8 @@ import { canUseBackupRestore } from "../lib/subscriptionEntitlements";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { SyncHealthCard } from "../components/SyncHealthCard";
 import { BackupSettingsCard } from "../components/BackupSettingsCard";
+import { PrimaryDeviceGate } from "../components/device/ManagedByPrimaryDevice";
+import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 
 export function BackupSyncPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -17,6 +19,7 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
   const canBackupRole = hasPermission(actor.role, "settings.shop");
   const canBackupPlan = canUseBackupRestore(snapshot, authMode);
   const canBackup = canBackupRole && canBackupPlan;
+  const { isPrimary } = useDeviceAuthority();
 
   if (!canView) {
     return <Navigate to="/office" replace />;
@@ -42,11 +45,15 @@ export function BackupSyncPage({ lang }: { lang: Language }) {
         <SyncHealthCard lang={lang} variant="simple" />
       </section>
 
-      {canBackup ? (
+      {canBackup && isPrimary ? (
         <section className="space-y-3">
           <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "backupSyncPhoneTitle")}</h2>
-          <BackupSettingsCard lang={lang} compact actionsEnabled />
+          <PrimaryDeviceGate lang={lang}>
+            <BackupSettingsCard lang={lang} compact actionsEnabled />
+          </PrimaryDeviceGate>
         </section>
+      ) : canBackupRole && !isPrimary ? (
+        <PrimaryDeviceGate lang={lang}>{null}</PrimaryDeviceGate>
       ) : canBackupRole ? (
         <section className="rounded-2xl border border-waka-200 bg-waka-50 px-4 py-4">
           <p className="text-sm font-semibold text-waka-950">{t(lang, "backupUpgradeRequired")}</p>

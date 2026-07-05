@@ -6,7 +6,7 @@ import { appendPilotEvent } from "./pilotEventLog";
  * - Local/offline sign-in: **owner** (single-device shop).
  * - Supabase: **shop_members** row only — no metadata fallback, no default owner.
  */
-const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper", "supervisor", "waiter"];
+const ALL_ROLES: UserRole[] = ["owner", "manager", "cashier", "stock_keeper", "supervisor", "waiter", "kitchen", "bar"];
 
 /** Lowest-privilege role when Supabase membership cannot be resolved. */
 export const FAIL_CLOSED_ROLE: UserRole = "waiter";
@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 19;
+const PERM_MATRIX_VERSION = 20;
 
 const DRAWER_OPEN_PERMS: Permission[] = ["day.open_drawer", "day.verify_opening_float", "shift.start", "shift.close"];
 
@@ -209,6 +209,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "hospitality.floor",
     "hospitality.order",
     "hospitality.settle",
+    "pending_sales.manage",
+  ],
+  /** Kitchen display — KDS only. */
+  kitchen: ["hospitality.kitchen"],
+  /** Bar display — floor tabs and orders. */
+  bar: [
+    "hospitality.floor",
+    "hospitality.order",
     "pending_sales.manage",
   ],
 };

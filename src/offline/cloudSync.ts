@@ -1507,6 +1507,12 @@ export async function processCloudSyncOperation(op: SyncOperation): Promise<bool
       const { processHospitalitySyncOperation } = await import("./hospitalityCloudSync");
       return processHospitalitySyncOperation(payload);
     }
+    case "pending_staff": {
+      const { processPendingStaffSync } = await import("../lib/staffSyncQueue");
+      const staffPayload = payload as import("../lib/staffSyncQueue").PendingStaffSyncPayload;
+      if (!staffPayload?.staff?.id) return true;
+      return processPendingStaffSync(staffPayload);
+    }
     case "audit_log": {
       const raw = payload.entry as AuditLogEntry | undefined;
       if (!raw?.id || !raw.action) return true;
@@ -3388,6 +3394,11 @@ async function syncShopWithCloudInner(opts?: {
     await pullHospitalityStateFromCloud(opts?.forceFull === true);
     const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
     await pullAndMergeStaffDuringCloudSync();
+    void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
+      flushPendingStaffSecurityEvents();
+    });
+    const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
+    await fetchDeviceAuthorityContext();
   }
   const { push, queueFailed } = await pushShopPendingToCloudInner();
   if (getDeviceOnline() && push.fail === 0) {

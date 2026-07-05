@@ -57,8 +57,8 @@ describe("usePosStore — staff account CRUD authorization", () => {
     });
   });
 
-  it("cashier addStaffAccount is denied", () => {
-    const r = usePosStore.getState().addStaffAccount({
+  it("cashier addStaffAccount is denied", async () => {
+    const r = await usePosStore.getState().addStaffAccount({
       name: "Bob",
       role: "cashier",
       pin: "1234",
@@ -80,9 +80,9 @@ describe("usePosStore — staff account CRUD authorization", () => {
     expect(usePosStore.getState().auditLogs.some((a) => a.action === "auth_forbidden")).toBe(true);
   });
 
-  it("owner addStaffAccount succeeds on business plan", () => {
+  it("owner addStaffAccount succeeds on business plan", async () => {
     usePosStore.setState({ sessionActor: actor("owner") });
-    const r = usePosStore.getState().addStaffAccount({
+    const r = await usePosStore.getState().addStaffAccount({
       name: "Bob",
       role: "cashier",
       pin: "5678",

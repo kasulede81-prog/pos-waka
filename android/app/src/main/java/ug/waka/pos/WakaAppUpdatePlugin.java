@@ -1,5 +1,6 @@
 package ug.waka.pos;
 
+import android.app.Activity;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -39,9 +40,7 @@ public class WakaAppUpdatePlugin extends Plugin {
   public void checkForUpdate(PluginCall call) {
     appUpdateManager
       .getAppUpdateInfo()
-      .addOnSuccessListener(
-        info -> call.resolve(buildInfoObject(info))
-      )
+      .addOnSuccessListener(info -> call.resolve(buildInfoObject(info)))
       .addOnFailureListener(e -> call.reject("check_failed", e));
   }
 
@@ -56,21 +55,7 @@ public class WakaAppUpdatePlugin extends Plugin {
             call.reject("flexible_not_allowed");
             return;
           }
-          try {
-            boolean started =
-              appUpdateManager.startUpdateFlow(
-                info,
-                getActivity(),
-                AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE)
-                  .setAllowAssetPackDeletion(true)
-                  .build()
-              );
-            JSObject ret = new JSObject();
-            ret.put("started", started);
-            call.resolve(ret);
-          } catch (Exception e) {
-            call.reject("start_failed", e);
-          }
+          launchUpdateFlow(call, info, AppUpdateType.FLEXIBLE);
         }
       )
       .addOnFailureListener(e -> call.reject("start_failed", e));
@@ -86,21 +71,7 @@ public class WakaAppUpdatePlugin extends Plugin {
             call.reject("immediate_not_allowed");
             return;
           }
-          try {
-            boolean started =
-              appUpdateManager.startUpdateFlow(
-                info,
-                getActivity(),
-                AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE)
-                  .setAllowAssetPackDeletion(true)
-                  .build()
-              );
-            JSObject ret = new JSObject();
-            ret.put("started", started);
-            call.resolve(ret);
-          } catch (Exception e) {
-            call.reject("start_failed", e);
-          }
+          launchUpdateFlow(call, info, AppUpdateType.IMMEDIATE);
         }
       )
       .addOnFailureListener(e -> call.reject("start_failed", e));
@@ -133,6 +104,30 @@ public class WakaAppUpdatePlugin extends Plugin {
         }
       )
       .addOnFailureListener(e -> call.reject("status_failed", e));
+  }
+
+  /** Play Core 2.x — startUpdateFlow returns Task<Integer> (activity result code). */
+  private void launchUpdateFlow(PluginCall call, AppUpdateInfo info, int appUpdateType) {
+    Activity activity = getActivity();
+    if (activity == null) {
+      call.reject("no_activity");
+      return;
+    }
+    appUpdateManager
+      .startUpdateFlow(
+        info,
+        activity,
+        AppUpdateOptions.newBuilder(appUpdateType).setAllowAssetPackDeletion(true).build()
+      )
+      .addOnSuccessListener(
+        resultCode -> {
+          JSObject ret = new JSObject();
+          ret.put("started", resultCode == Activity.RESULT_OK);
+          ret.put("resultCode", resultCode);
+          call.resolve(ret);
+        }
+      )
+      .addOnFailureListener(e -> call.reject("start_failed", e));
   }
 
   private JSObject buildInfoObject(AppUpdateInfo info) {

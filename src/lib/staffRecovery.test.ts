@@ -1,12 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { StaffAccount } from "../types";
-import {
-  mergeStaffAccountsForCloudSync,
-  pickNewerStaffAccount,
-  STAFF_PENDING_PUSH_GRACE_MS,
-} from "./staffRecovery";
+import { mergeStaffAccountsForCloudSync, pickNewerStaffAccount } from "./staffRecovery";
 
-function staff(id: string, updatedAt: string): StaffAccount {
+function staff(id: string, updatedAt: string, extra?: Partial<StaffAccount>): StaffAccount {
   return {
     id,
     name: `Staff ${id}`,
@@ -14,6 +10,7 @@ function staff(id: string, updatedAt: string): StaffAccount {
     active: true,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt,
+    ...extra,
   };
 }
 
@@ -26,25 +23,11 @@ describe("mergeStaffAccountsForCloudSync", () => {
     expect(merged[0]?.name).toBe("Cloud A");
   });
 
-  it("drops local-only staff older than pending grace", () => {
-    const nowMs = Date.parse("2026-06-11T12:00:00.000Z");
-    const local = [staff("deleted", "2026-06-01T10:00:00.000Z")];
-    const merged = mergeStaffAccountsForCloudSync(local, [], {
-      nowMs,
-      pendingGraceMs: STAFF_PENDING_PUSH_GRACE_MS,
-    });
-    expect(merged).toHaveLength(0);
-  });
-
-  it("keeps recent local-only staff during pending push grace", () => {
-    const nowMs = Date.parse("2026-06-11T12:00:00.000Z");
-    const local = [staff("new", "2026-06-11T11:59:30.000Z")];
-    const merged = mergeStaffAccountsForCloudSync(local, [], {
-      nowMs,
-      pendingGraceMs: STAFF_PENDING_PUSH_GRACE_MS,
-    });
+  it("keeps local-only staff indefinitely (never auto-delete)", () => {
+    const local = [staff("local-only", "2026-01-01T10:00:00.000Z", { pendingCloudSync: true })];
+    const merged = mergeStaffAccountsForCloudSync(local, []);
     expect(merged).toHaveLength(1);
-    expect(merged[0]?.id).toBe("new");
+    expect(merged[0]?.id).toBe("local-only");
   });
 
   it("includes cloud staff missing locally", () => {
@@ -52,6 +35,13 @@ describe("mergeStaffAccountsForCloudSync", () => {
     const merged = mergeStaffAccountsForCloudSync([], cloud);
     expect(merged).toHaveLength(1);
     expect(merged[0]?.id).toBe("remote");
+  });
+
+  it("clears pendingCloudSync when cloud confirms staff", () => {
+    const local = [staff("a", "2026-06-01T10:00:00.000Z", { pendingCloudSync: true })];
+    const cloud = [staff("a", "2026-06-01T11:00:00.000Z")];
+    const merged = mergeStaffAccountsForCloudSync(local, cloud);
+    expect(merged[0]?.pendingCloudSync).toBe(false);
   });
 });
 

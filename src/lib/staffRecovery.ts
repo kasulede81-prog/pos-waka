@@ -2,56 +2,59 @@ import type { StaffAccount } from "../types";
 import {
   importLocalStaffToCloud,
   pullShopStaffFromCloud,
-  pushStaffToCloud,
 } from "./shopStaffCloud";
-
-/** Grace period for local-only staff not yet visible in cloud (push in flight / offline create). */
-export const STAFF_PENDING_PUSH_GRACE_MS = 120_000;
 
 function staffUpdatedAtMs(staff: StaffAccount): number {
   return Date.parse(staff.updatedAt || staff.createdAt) || 0;
 }
 
+/** Cloud wins on conflict; prefer newer updatedAt when both exist locally and in cloud. */
 export function pickNewerStaffAccount(local: StaffAccount, cloud: StaffAccount): StaffAccount {
   const localMs = staffUpdatedAtMs(local);
   const cloudMs = staffUpdatedAtMs(cloud);
-  if (localMs !== cloudMs) return localMs >= cloudMs ? local : cloud;
+  if (localMs !== cloudMs) return cloudMs >= localMs ? cloud : local;
   return cloud;
 }
 
-/** Merge cloud staff into local; cloud membership is authoritative except very recent local-only rows. */
+/**
+ * Additive staff merge — cloud is authoritative (primary device only).
+ * Local-only staff kept until explicit owner delete or cloud confirms removal.
+ */
 export function mergeStaffAccountsForCloudSync(
   local: StaffAccount[],
   cloud: StaffAccount[],
-  opts?: { nowMs?: number; pendingGraceMs?: number },
 ): StaffAccount[] {
-  const nowMs = opts?.nowMs ?? Date.now();
-  const pendingGraceMs = opts?.pendingGraceMs ?? STAFF_PENDING_PUSH_GRACE_MS;
   const cloudById = new Map(cloud.map((row) => [row.id, row]));
   const merged = new Map<string, StaffAccount>();
 
   for (const cloudRow of cloud) {
     const localRow = local.find((row) => row.id === cloudRow.id);
-    merged.set(cloudRow.id, localRow ? pickNewerStaffAccount(localRow, cloudRow) : cloudRow);
+    if (localRow) {
+      merged.set(cloudRow.id, {
+        ...pickNewerStaffAccount(localRow, cloudRow),
+        pendingCloudSync: false,
+      });
+    } else {
+      merged.set(cloudRow.id, { ...cloudRow, pendingCloudSync: false });
+    }
   }
 
   for (const localRow of local) {
     if (cloudById.has(localRow.id)) continue;
-    if (nowMs - staffUpdatedAtMs(localRow) <= pendingGraceMs) {
-      merged.set(localRow.id, localRow);
-    }
+    merged.set(localRow.id, localRow);
   }
 
   return [...merged.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }
 
 export function mergeStaffAccountsFromCloudPull(local: StaffAccount[], cloud: StaffAccount[]): StaffAccount[] {
-  return mergeStaffAccountsForCloudSync(local, cloud, { pendingGraceMs: Number.POSITIVE_INFINITY });
+  return mergeStaffAccountsForCloudSync(local, cloud);
 }
 
 function staffAccountsEqual(a: StaffAccount[], b: StaffAccount[]): boolean {
   if (a.length !== b.length) return false;
-  const sortKey = (row: StaffAccount) => `${row.id}:${row.updatedAt}:${row.active}:${row.name}`;
+  const sortKey = (row: StaffAccount) =>
+    `${row.id}:${row.updatedAt}:${row.active}:${row.name}:${row.pendingCloudSync ? 1 : 0}`;
   const left = [...a].map(sortKey).sort();
   const right = [...b].map(sortKey).sort();
   return left.every((value, index) => value === right[index]);
@@ -60,14 +63,22 @@ function staffAccountsEqual(a: StaffAccount[], b: StaffAccount[]): boolean {
 async function reconcileLocalOnlyStaffToCloud(cloud: StaffAccount[], merged: StaffAccount[]): Promise<void> {
   const cloudIds = new Set(cloud.map((row) => row.id));
   for (const row of merged) {
-    if (!cloudIds.has(row.id)) {
-      await pushStaffToCloud(row);
+    if (!cloudIds.has(row.id) && row.pendingCloudSync !== false) {
+      const { enqueuePendingStaffSync } = await import("./staffSyncQueue");
+      await enqueuePendingStaffSync({ action: "create", staff: row });
     }
   }
 }
 
-/** Pull staff during regular cloud sync and merge into preferences. */
+/** Pull staff during cloud sync — Phase 3 uses versioned cache on all devices. */
 export async function pullAndMergeStaffDuringCloudSync(): Promise<void> {
+  const { refreshStaffCacheBackground, isSecondaryStaffTerminal } = await import("./staffCacheSync");
+  const updated = await refreshStaffCacheBackground();
+  if (updated) return;
+
+  const secondary = await isSecondaryStaffTerminal();
+  if (secondary) return;
+
   let cloud = await pullShopStaffFromCloud();
   if (cloud === null) return;
 
@@ -93,16 +104,29 @@ export async function pullAndMergeStaffDuringCloudSync(): Promise<void> {
   }
 
   await reconcileLocalOnlyStaffToCloud(cloud, merged);
+  await refreshStaffCacheBackground({ force: true });
 }
 
 export async function pullAndMergeStaffAccountsForRecovery(): Promise<number> {
-  const pulled = await pullShopStaffFromCloud();
-  if (!pulled?.length) return 0;
-  const { usePosStore } = await import("../store/usePosStore");
-  const state = usePosStore.getState();
-  const merged = mergeStaffAccountsForCloudSync(state.preferences.staffAccounts ?? [], pulled);
-  usePosStore.setState({
-    preferences: { ...state.preferences, staffAccounts: merged },
-  });
-  return merged.length;
+  const { refreshStaffCacheBackground } = await import("./staffCacheSync");
+  await refreshStaffCacheBackground({ force: true });
+  const { readOfflineStaffCache } = await import("./offlineStaffCache");
+  const { resolveShopCtx } = await import("../offline/cloudSync");
+  const ctx = await resolveShopCtx();
+  if (!ctx) return 0;
+  const cache = await readOfflineStaffCache(ctx.shopId);
+  if (!cache?.staff.length) {
+    const pulled = await pullShopStaffFromCloud();
+    if (!pulled?.length) return 0;
+    const { usePosStore } = await import("../store/usePosStore");
+    const state = usePosStore.getState();
+    const merged = mergeStaffAccountsForCloudSync(state.preferences.staffAccounts ?? [], pulled);
+    usePosStore.setState({
+      preferences: { ...state.preferences, staffAccounts: merged },
+    });
+    return merged.length;
+  }
+  const { mirrorStaffCacheToPreferences } = await import("./staffCacheSync");
+  mirrorStaffCacheToPreferences(cache.staff);
+  return cache.staff.length;
 }

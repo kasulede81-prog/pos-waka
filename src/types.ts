@@ -1,7 +1,7 @@
 export type Language = "en" | "lg" | "sw";
 
 /** POS staff role — persisted in snapshot + Supabase `shop_members` / user metadata when configured. */
-export type UserRole = "owner" | "manager" | "cashier" | "stock_keeper" | "supervisor" | "waiter";
+export type UserRole = "owner" | "manager" | "cashier" | "stock_keeper" | "supervisor" | "waiter" | "kitchen" | "bar";
 
 /**
  * Fine-grained capabilities for UI and mutations.
@@ -130,6 +130,19 @@ export type AuditAction =
   | "product_restore"
   | "staff_login"
   | "staff_logout"
+  | "staff_login_failed"
+  | "staff_pin_reset"
+  | "staff_password_reset"
+  | "staff_account_created"
+  | "staff_account_deleted"
+  | "staff_suspended"
+  | "staff_reactivated"
+  | "staff_device_changed"
+  | "staff_account_unlocked"
+  | "staff_lockout_triggered"
+  | "staff_login_rejected_device"
+  | "staff_security_alert"
+  | "staff_security_event"
   | "inventory_count_started"
   | "inventory_count_submitted"
   | "inventory_count_approved"
@@ -890,9 +903,23 @@ export type StaffAccount = {
   pinHash?: string | null;
   passwordHash?: string | null;
   phone?: string | null;
+  email?: string | null;
   active: boolean;
   createdAt: string;
   updatedAt: string;
+  /** True until cloud confirms create/update (offline queue). */
+  pendingCloudSync?: boolean;
+  lastLoginAt?: string | null;
+  lastDeviceFingerprint?: string | null;
+  lastLoginPlatform?: string | null;
+  failedPinAttempts?: number;
+  lockedUntil?: string | null;
+  lastFailedLoginAt?: string | null;
+  firstFailedLoginAt?: string | null;
+  failuresInWindow?: number;
+  failureWindowStartedAt?: string | null;
+  pinChangedAt?: string | null;
+  passwordChangedAt?: string | null;
 };
 
 /** Receipt printer paper — 58mm / 80mm thermal, or A4 for office printers. */
@@ -1161,6 +1188,7 @@ export type SyncOperationKind =
   | "pending_day_closes"
   | "pending_purchases"
   | "pending_hospitality"
+  | "pending_staff"
   /** Legacy queue kinds kept for backward compatibility */
   | "sale"
   | "product"

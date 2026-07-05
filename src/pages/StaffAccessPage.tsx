@@ -14,6 +14,7 @@ import { syncStaffAccountsWithCloud } from "../lib/shopStaffCloud";
 import { supabase } from "../lib/supabase";
 import { StaffCreateWizard } from "../components/staff/StaffCreateWizard";
 import { StaffTeamList } from "../components/staff/StaffTeamList";
+import { PrimaryDeviceGate } from "../components/device/ManagedByPrimaryDevice";
 import type { StaffCreateRole } from "../lib/staffRoleCatalog";
 
 export function StaffAccessPage({ lang }: { lang: Language }) {
@@ -29,6 +30,9 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
   const updateStaffAccount = usePosStore((s) => s.updateStaffAccount);
   const removeStaffAccount = usePosStore((s) => s.removeStaffAccount);
   const resetStaffSecret = usePosStore((s) => s.resetStaffSecret);
+  const unlockStaffAccount = usePosStore((s) => s.unlockStaffAccount);
+  const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
+  const activeStaffId = usePosStore((s) => s.preferences.activeStaffId);
 
   const [creating, setCreating] = useState(false);
 
@@ -62,8 +66,9 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
   if (creating) {
     return (
-      <div className="pb-8">
-        <StaffCreateWizard
+      <PrimaryDeviceGate lang={lang}>
+        <div className="pb-8">
+          <StaffCreateWizard
           lang={lang}
           onCancel={() => setCreating(false)}
           onDone={() => setCreating(false)}
@@ -80,7 +85,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
             if (maxStaff > 0 && staff.length >= maxStaff) {
               return { ok: false, error: tTemplate(lang, "staffLimitPlan", { max: String(maxStaff) }) };
             }
-            const res = addStaffAccount({
+            const res = await addStaffAccount({
               name: input.name,
               role: input.role as StaffCreateRole,
               pin: input.pin,
@@ -102,12 +107,14 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
             return { ok: true };
           }}
         />
-      </div>
+        </div>
+      </PrimaryDeviceGate>
     );
   }
 
   return (
-    <div className="space-y-5 pb-8">
+    <PrimaryDeviceGate lang={lang}>
+      <div className="space-y-5 pb-8">
       <PageHeader lang={lang} title={t(lang, "staffAccessTitle")} subtitle={t(lang, "staffAccessSub")} backFallback="/settings" />
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -130,6 +137,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         lang={lang}
         staff={staff}
         maxStaff={maxStaff}
+        activeStaffId={activeStaffId}
         onAddStaff={() => setCreating(true)}
         onToggleActive={(id, active) => updateStaffAccount(id, { active })}
         onUpdateRole={(id, role) => updateStaffAccount(id, { role })}
@@ -142,6 +150,18 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
           const nextPass = window.prompt(t(lang, "staffPasswordResetPrompt")) ?? "";
           if (!nextPass) return;
           resetStaffSecret(id, { password: nextPass });
+        }}
+        onUnlock={(id) => {
+          void unlockStaffAccount(id);
+        }}
+        onForceLogout={(id) => {
+          switchStaffAccount(null, { force: true });
+          if (activeStaffId === id) {
+            void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
+              const row = staff.find((s) => s.id === id);
+              logStaffSecurityAudit("staff_logout", { staffId: id, staffName: row?.name, reason: "Owner force logout" });
+            });
+          }
         }}
         onDelete={(id) => {
           if (!window.confirm(t(lang, "staffDeleteConfirm"))) return;
@@ -181,6 +201,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
       <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
         {t(lang, "staffDeviceLocalTrust")}
       </p>
-    </div>
+      </div>
+    </PrimaryDeviceGate>
   );
 }

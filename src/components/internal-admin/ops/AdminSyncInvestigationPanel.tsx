@@ -59,7 +59,11 @@ export function AdminSyncInvestigationPanel({ detail, diagnosticsPending }: Prop
           <ul className="mt-1 space-y-1 text-xs text-stone-600">
             {detail.devices.map((d) => (
               <li key={d.id} className="rounded-lg bg-stone-50 px-2 py-1.5">
-                {d.label || d.device_fingerprint.slice(0, 12)} · {d.app_version ?? "—"} ·{" "}
+                {(d as { label?: string; device_authority?: string; approval_status?: string }).label ||
+                  d.device_fingerprint.slice(0, 12)}{" "}
+                ·{" "}
+                {(d as { device_authority?: string }).device_authority === "primary" ? "⭐ Primary" : "Secondary"} ·{" "}
+                {(d as { approval_status?: string }).approval_status ?? "approved"} · {d.app_version ?? "—"} ·{" "}
                 {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("en-GB") : "never"}
               </li>
             ))}

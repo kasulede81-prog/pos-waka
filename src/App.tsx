@@ -32,7 +32,9 @@ import { SettingsSystemHealthPage } from "./pages/SettingsSystemHealthPage";
 import { SettingsDiagnosticsPage } from "./pages/SettingsDiagnosticsPage";
 import { SettingsFinanceDiagnosticsPage } from "./pages/SettingsFinanceDiagnosticsPage";
 import { SettingsSubscriptionDiagnosticsPage } from "./pages/SettingsSubscriptionDiagnosticsPage";
-import { ConnectedDevicesPage } from "./pages/ConnectedDevicesPage";
+import { DeviceManagementPage } from "./pages/DeviceManagementPage";
+import { DevicePendingApprovalPage } from "./pages/DevicePendingApprovalPage";
+import { DeviceAuthorityBridge } from "./components/device/DeviceAuthorityBridge";
 import { SyncConflictCenterPage } from "./pages/SyncConflictCenterPage";
 import { SettingsPharmacyPage } from "./pages/SettingsPharmacyPage";
 import { SettingsHospitalityPage } from "./pages/SettingsHospitalityPage";
@@ -278,7 +280,9 @@ function AppRoutes() {
                     <SubscriptionProvider user={auth.user} authMode={auth.mode}>
                       <EmailVerificationGateOutlet authMode={auth.mode} user={auth.user}>
                         <DeviceActivationProvider authMode={auth.mode} user={auth.user}>
-                          <DeviceActivationGateOutlet />
+                          <DeviceAuthorityBridge authMode={auth.mode}>
+                            <DeviceActivationGateOutlet />
+                          </DeviceAuthorityBridge>
                         </DeviceActivationProvider>
                       </EmailVerificationGateOutlet>
                     </SubscriptionProvider>
@@ -288,6 +292,7 @@ function AppRoutes() {
                   path="device-limit"
                   element={<DeviceLimitReachedPage lang={lang} onSignOut={auth.signOut} />}
                 />
+                <Route path="device-pending" element={<DevicePendingApprovalPage lang={lang} />} />
                 <Route element={<InternalAdminOutlet />}>
                   <Route path="internal/waka" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
                   <Route path="internal/waka/shops" element={<InternalWakaAdminPage lang={lang} email={auth.email} />} />
@@ -836,7 +841,7 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="settings.devices">
                   <SettingsChangeGate lang={lang}>
-                    <ConnectedDevicesPage lang={lang} />
+                    <DeviceManagementPage lang={lang} />
                   </SettingsChangeGate>
                 </RoleProtectedRoute>
               }

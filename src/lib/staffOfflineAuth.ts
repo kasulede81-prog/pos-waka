@@ -1,12 +1,31 @@
-import type { ShopPreferences, UserRole } from "../types";
+import type { ShopPreferences, StaffAccount, UserRole } from "../types";
 import { getLocalDb } from "../offline/localDb";
 import { normalizeUserRole } from "./permissions";
-import { hashStaffSecret, normalizePin } from "./staffSecret";
+import { isStaffLoginLocked, migrateStaffSecretsAfterLogin, normalizePin, staffSecretMatchesAsync } from "./staffSecret";
 import type { StaffLoginRole } from "./staffLoginRoles";
+import { getDeviceOnline } from "./deviceOnline";
+import {
+  isStaffSuspendedForLogin,
+  listStaffCacheRecordsForAccount,
+  readOfflineStaffCache,
+} from "./offlineStaffCache";
+import { logStaffCacheEvent } from "./staffCacheDiagnostics";
 
 const REMEMBER_DEVICE_KEY = "waka.staff.remembered.v1";
 const PENDING_STAFF_KEY = "waka.staff.pending.v1";
 const STAFF_SESSION_KEY = "waka.staff.session.v1";
+
+export const STAFF_CACHE_MISSING_MESSAGE =
+  "No staff have been synchronized to this device yet. Connect to the internet once to download staff.";
+
+export class StaffCacheMissingError extends Error {
+  readonly code = "staff_cache_missing" as const;
+
+  constructor(message = STAFF_CACHE_MISSING_MESSAGE) {
+    super(message);
+    this.name = "StaffCacheMissingError";
+  }
+}
 
 export type PersistedStaffSession = {
   accountKey: string;
@@ -21,6 +40,7 @@ type SnapshotLike = { preferences?: Partial<ShopPreferences> };
 export type CachedShop = {
   accountKey: string;
   businessName: string;
+  shopId?: string;
 };
 
 export type StaffLoginInput = {
@@ -60,7 +80,10 @@ function keysEqual(a: string, b: string): boolean {
   return normalize(a) === normalize(b);
 }
 
-function identifierMatches(staff: { id: string; name: string; username?: string | null; phone?: string | null }, raw: string): boolean {
+function identifierMatches(
+  staff: { id: string; name: string; username?: string | null; phone?: string | null },
+  raw: string,
+): boolean {
   const probe = normalize(raw);
   if (!probe) return false;
   if (normalize(staff.id) === probe) return true;
@@ -70,22 +93,50 @@ function identifierMatches(staff: { id: string; name: string; username?: string 
   return false;
 }
 
-function secretMatches(staff: { pin?: string | null; password?: string | null; pinHash?: string | null; passwordHash?: string | null }, raw: string): boolean {
-  const probe = raw.trim();
-  if (!probe) return false;
-  const pin = normalizePin(staff.pin ?? "");
-  const password = (staff.password ?? "").trim();
-  const probePin = normalizePin(probe);
-  const probeHash = hashStaffSecret(probe);
-  const probePinHash = probePin ? hashStaffSecret(probePin) : "";
-  const pinHash = (staff.pinHash ?? "").trim();
-  const passwordHash = (staff.passwordHash ?? "").trim();
-  return (
-    (pin.length > 0 && pin === probePin) ||
-    (password.length > 0 && password === probe) ||
-    (pinHash.length > 0 && pinHash === probePinHash) ||
-    (passwordHash.length > 0 && passwordHash === probeHash)
-  );
+async function resolveStaffRowsForShop(
+  accountKey: string,
+  shopId?: string | null,
+): Promise<{ staffRows: StaffAccount[]; shopId: string | null; fromCache: boolean }> {
+  const readCacheStaff = (record: { shopId: string; staff: StaffAccount[] }) => ({
+    staffRows: record.staff,
+    shopId: record.shopId,
+    fromCache: true as const,
+  });
+
+  if (shopId) {
+    const record = await readOfflineStaffCache(shopId, accountKey);
+    if (record?.staff.length) return readCacheStaff(record);
+  }
+
+  const cacheRecords = await listStaffCacheRecordsForAccount(accountKey);
+  if (cacheRecords.length > 0 && cacheRecords[0]!.staff.length > 0) {
+    return readCacheStaff(cacheRecords[0]!);
+  }
+
+  const db = await getLocalDb();
+  const snap = (await db.get("kv", `${accountKey}::snapshot`)) as SnapshotLike | undefined;
+  const prefs = snap?.preferences;
+  const staffRows = prefs?.staffAccounts ?? [];
+  return { staffRows, shopId: shopId ?? null, fromCache: false };
+}
+
+async function findBlockedShopByBusinessName(businessName: string): Promise<CachedShop | null> {
+  const db = await getLocalDb();
+  const allKeys = await db.getAllKeys("kv");
+  const { isOrganizationBlocked, hasWipeMarker } = await import("./organizationDeletionState");
+
+  for (const key of allKeys) {
+    if (typeof key !== "string" || !key.endsWith("::snapshot")) continue;
+    const accountKey = key.slice(0, key.length - "::snapshot".length);
+    if (!accountKey) continue;
+    if (!isOrganizationBlocked(accountKey) && !hasWipeMarker(accountKey)) continue;
+    const snapshot = (await db.get("kv", key)) as SnapshotLike | undefined;
+    if (!snapshot?.preferences) continue;
+    const name = readSnapshotBusinessName(snapshot);
+    if (!name || !keysEqual(name, businessName)) continue;
+    return { accountKey, businessName: name };
+  }
+  return null;
 }
 
 export async function listCachedShopsForStaffLogin(): Promise<CachedShop[]> {
@@ -105,28 +156,32 @@ export async function listCachedShopsForStaffLogin(): Promise<CachedShop[]> {
     if (!snapshot?.preferences) continue;
     const businessName = readSnapshotBusinessName(snapshot);
     if (!businessName) continue;
-    if ((snapshot.preferences.staffAccounts?.length ?? 0) === 0) continue;
-    shops.set(accountKey, { accountKey, businessName });
+
+    const cacheRecords = await listStaffCacheRecordsForAccount(accountKey);
+    const cacheRecord = cacheRecords.find((r) => keysEqual(r.businessName ?? "", businessName)) ?? cacheRecords[0];
+    const hasStaff =
+      (cacheRecord?.staff.length ?? 0) > 0 || (snapshot.preferences.staffAccounts?.length ?? 0) > 0;
+    if (!hasStaff) continue;
+
+    shops.set(accountKey, {
+      accountKey,
+      businessName,
+      shopId: cacheRecord?.shopId,
+    });
   }
 
   return [...shops.values()].sort((a, b) => a.businessName.localeCompare(b.businessName));
 }
 
 async function findStaffShopByBusinessName(businessName: string): Promise<CachedShop | null> {
-  const db = await getLocalDb();
-  const allKeys = await db.getAllKeys("kv");
-  for (const key of allKeys) {
-    if (typeof key !== "string" || !key.endsWith("::snapshot")) continue;
-    const accountKey = key.slice(0, key.length - "::snapshot".length);
-    if (!accountKey) continue;
-    const snapshot = (await db.get("kv", key)) as SnapshotLike | undefined;
-    if (!snapshot?.preferences) continue;
-    const name = readSnapshotBusinessName(snapshot);
-    if (!name || !keysEqual(name, businessName)) continue;
-    if ((snapshot.preferences.staffAccounts?.length ?? 0) === 0) continue;
-    return { accountKey, businessName: name };
-  }
-  return null;
+  const shops = await listCachedShopsForStaffLogin();
+  return shops.find((shop) => keysEqual(shop.businessName, businessName)) ?? null;
+}
+
+export async function isStaffCacheMissingOffline(accountKey: string, shopId?: string | null): Promise<boolean> {
+  if (getDeviceOnline()) return false;
+  const { staffRows, fromCache } = await resolveStaffRowsForShop(accountKey, shopId);
+  return !fromCache && staffRows.length === 0;
 }
 
 export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<StaffAuthResult> {
@@ -143,30 +198,147 @@ export async function authenticateOfflineStaff(input: StaffLoginInput): Promise<
 
   const shop = await findStaffShopByBusinessName(businessName);
   if (!shop) {
+    const blocked = await findBlockedShopByBusinessName(businessName);
+    if (blocked) {
+      const { ORGANIZATION_DELETED_MESSAGE } = await import("./organizationDeletionState");
+      throw new Error(ORGANIZATION_DELETED_MESSAGE);
+    }
+    if (!getDeviceOnline()) {
+      logStaffCacheEvent("staff_cache_missing", { businessName, reason: "shop_not_found_offline" });
+      throw new StaffCacheMissingError();
+    }
     throw new Error("Business not found on this device. Owner must sign in once on this device first.");
   }
 
   const { isOrganizationBlocked, ORGANIZATION_DELETED_MESSAGE, hasWipeMarker } = await import(
-    "./organizationDeletionState",
+    "./organizationDeletionState"
   );
   if (isOrganizationBlocked(shop.accountKey) || hasWipeMarker(shop.accountKey)) {
     throw new Error(ORGANIZATION_DELETED_MESSAGE);
   }
 
-  const db = await getLocalDb();
-  const snap = (await db.get("kv", `${shop.accountKey}::snapshot`)) as SnapshotLike | undefined;
-  const prefs = snap?.preferences;
-  const staffRows = prefs?.staffAccounts ?? [];
-  const found = staffRows.find(
-    (s) =>
-      s.active &&
-      identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier) &&
-      secretMatches({ pin: s.pin, password: s.password, pinHash: s.pinHash, passwordHash: s.passwordHash }, secret),
+  const { staffRows, shopId, fromCache } = await resolveStaffRowsForShop(shop.accountKey, shop.shopId);
+
+  if (staffRows.length === 0 && !getDeviceOnline()) {
+    logStaffCacheEvent("staff_cache_missing", { accountKey: shop.accountKey, shopId: shopId ?? null });
+    throw new StaffCacheMissingError();
+  }
+
+  const candidate = staffRows.find((s) =>
+    identifierMatches({ id: s.id, name: s.name, username: s.username, phone: s.phone }, identifier),
   );
 
-  if (!found) {
+  if (!candidate) {
+    if (staffRows.length === 0 && !getDeviceOnline()) {
+      logStaffCacheEvent("staff_cache_missing", { accountKey: shop.accountKey, shopId: shopId ?? null });
+      throw new StaffCacheMissingError();
+    }
     throw new Error("Invalid staff credentials.");
   }
+
+  if (!candidate.active || isStaffSuspendedForLogin(candidate)) {
+    throw new Error("Invalid staff credentials.");
+  }
+
+  if (isStaffLoginLocked(candidate)) {
+    throw new Error("Too many failed attempts. Try again later.");
+  }
+
+  const effectiveShopId = shopId ?? shop.shopId ?? null;
+  if (effectiveShopId) {
+    const { assertStaffLoginDeviceApproved, recordStaffLoginAttemptLocal } = await import("./staffLoginSecurity");
+    const deviceCheck = await assertStaffLoginDeviceApproved(effectiveShopId);
+    if (!deviceCheck.ok) {
+      const { logStaffSecurityAudit } = await import("./staffSecurityAudit");
+      logStaffSecurityAudit("staff_login_rejected_device", {
+        staffId: candidate.id,
+        staffName: candidate.name,
+        shopId: effectiveShopId,
+        reason: deviceCheck.error,
+      });
+      throw new Error(deviceCheck.error);
+    }
+
+    const secretOk = await staffSecretMatchesAsync(
+      {
+        pin: candidate.pin,
+        password: candidate.password,
+        pinHash: candidate.pinHash,
+        passwordHash: candidate.passwordHash,
+      },
+      secret,
+    );
+
+    if (!secretOk) {
+      const attempt = await recordStaffLoginAttemptLocal({
+        accountKey: shop.accountKey,
+        shopId: effectiveShopId,
+        staff: candidate,
+        success: false,
+        online: getDeviceOnline(),
+      });
+      if (attempt.lockedUntil && Date.parse(attempt.lockedUntil) > Date.now()) {
+        throw new Error("Too many failed attempts. Try again later.");
+      }
+      throw new Error("Invalid staff credentials.");
+    }
+
+    const migration = await migrateStaffSecretsAfterLogin(
+      {
+        pinHash: candidate.pinHash,
+        passwordHash: candidate.passwordHash,
+      },
+      secret,
+    );
+
+    await recordStaffLoginAttemptLocal({
+      accountKey: shop.accountKey,
+      shopId: effectiveShopId,
+      staff: {
+        ...candidate,
+        pinHash: migration.pinHash ?? candidate.pinHash,
+        passwordHash: migration.passwordHash ?? candidate.passwordHash,
+      },
+      success: true,
+      online: getDeviceOnline(),
+    });
+
+    if (migration.migrated) {
+      const { pushStaffToCloud } = await import("./shopStaffCloud");
+      void pushStaffToCloud({
+        ...candidate,
+        pinHash: migration.pinHash ?? candidate.pinHash,
+        passwordHash: migration.passwordHash ?? candidate.passwordHash,
+        pinChangedAt: migration.pinHash ? new Date().toISOString() : candidate.pinChangedAt,
+        passwordChangedAt: migration.passwordHash ? new Date().toISOString() : candidate.passwordChangedAt,
+      });
+    }
+
+    void import("./staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
+      flushPendingStaffSecurityEvents();
+    });
+  } else {
+    const secretOk = await staffSecretMatchesAsync(
+      {
+        pin: candidate.pin,
+        password: candidate.password,
+        pinHash: candidate.pinHash,
+        passwordHash: candidate.passwordHash,
+      },
+      secret,
+    );
+    if (!secretOk) {
+      throw new Error("Invalid staff credentials.");
+    }
+  }
+
+  logStaffCacheEvent(getDeviceOnline() ? "staff_login_online" : "staff_login_offline", {
+    accountKey: shop.accountKey,
+    staffId: candidate.id,
+    fromCache,
+  });
+
+  const found = candidate;
 
   const role = normalizeUserRole(found.role) ?? found.role;
   const result: StaffAuthResult = {

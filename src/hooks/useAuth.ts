@@ -210,6 +210,9 @@ export function useAuth() {
               delayMs: isNativeApp() ? 3_000 : 1_500,
             });
           }
+          void import("../lib/staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
+            scheduleStaffCacheProvisioning();
+          });
           return;
         }
 
@@ -229,6 +232,9 @@ export function useAuth() {
             if (!needsRecovery) {
               await schedulePostWorkspaceCloudHydrate(uid);
             }
+            void import("../lib/staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
+              scheduleStaffCacheProvisioning();
+            });
             return;
           }
 
@@ -315,6 +321,9 @@ export function useAuth() {
             await finalizeOwnerOnboardingAfterCloudSave(next.user.id);
           }
           await schedulePostWorkspaceCloudHydrate(uid);
+          void import("../lib/staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
+            scheduleStaffCacheProvisioning();
+          });
         } catch (e) {
           console.error("[waka-auth] ensureWorkspaceForSession bootstrap failed", e);
           throw new Error("Could not finish creating your shop. Please try again.");

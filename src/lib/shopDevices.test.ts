@@ -2,40 +2,44 @@ import { describe, expect, it } from "vitest";
 import { buildDeviceUsageSummary, parsePlanDeviceLimit } from "./shopDevices";
 import type { ShopDeviceRow } from "./shopDevices";
 
-const devices: ShopDeviceRow[] = [
-  {
-    id: "1",
-    device_fingerprint: "a",
-    label: "A",
+function testDevice(
+  partial: Partial<ShopDeviceRow> & Pick<ShopDeviceRow, "id" | "device_fingerprint">,
+): ShopDeviceRow {
+  return {
+    label: null,
     platform: "android",
     app_version: null,
     last_seen_at: null,
+    last_sync_at: null,
+    last_login_at: null,
     status: "active",
     is_active: true,
     created_at: "",
-  },
-  {
-    id: "2",
-    device_fingerprint: "b",
-    label: "B",
-    platform: "web",
-    app_version: null,
-    last_seen_at: null,
-    status: "active",
-    is_active: true,
-    created_at: "",
-  },
-  {
+    device_authority: "secondary",
+    approval_status: "approved",
+    form_factor: "tablet",
+    device_type: null,
+    is_primary: false,
+    current_staff_client_id: null,
+    pending_uploads: 0,
+    pending_downloads: 0,
+    cloud_status: null,
+    recovery_status: null,
+    ...partial,
+  };
+}
+
+const devices: ShopDeviceRow[] = [
+  testDevice({ id: "1", device_fingerprint: "a", label: "A" }),
+  testDevice({ id: "2", device_fingerprint: "b", label: "B", platform: "web" }),
+  testDevice({
     id: "3",
     device_fingerprint: "c",
     label: "C",
     platform: "web",
-    app_version: null,
-    last_seen_at: null,
     status: "disconnected",
     is_active: false,
-    created_at: "",
-  },
+  }),
 ];
 
 describe("buildDeviceUsageSummary", () => {

@@ -181,9 +181,10 @@ import { authorizePreferencesPatch, requiredPermissionsForPreferencesPatch } fro
 import { appendAcknowledgement } from "../lib/ownerAlertAcknowledgement";
 import {
   assertStaffAccountMutationAllowed,
-  authorizeStaffAccountMutation,
+  authorizeStaffAccountMutationWithDevice,
   StaffAccountAuthorizationError,
 } from "../lib/staffAccountAuthorization";
+import { isPrimaryDeviceCachedSync } from "../lib/deviceAuthority";
 import { isCompletedSale } from "../lib/saleStatus";
 import { diffProductCatalog, formatCatalogAuditSummary } from "../lib/catalogAudit";
 import { auditReasonErrorKey, normalizeAuditReason, validateAuditReason } from "../lib/auditReasons";
@@ -197,7 +198,7 @@ import { detectSaleStockConflict, logInventoryConflict } from "../lib/inventoryC
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
 import { normalizeShopCurrency } from "../lib/shopCurrency";
 import { generateStaffUsername } from "../lib/staffAccountHelpers";
-import { hashStaffSecret, normalizePin } from "../lib/staffSecret";
+import { hashStaffSecretAsync, normalizePin } from "../lib/staffSecret";
 import {
   clearPendingStaffSelection,
   readPendingStaffSelection,
@@ -289,6 +290,14 @@ function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
       active: obj.active !== false,
       createdAt: typeof obj.createdAt === "string" ? obj.createdAt : new Date().toISOString(),
       updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : new Date().toISOString(),
+      email: typeof obj.email === "string" ? obj.email.trim().toLowerCase() || null : null,
+      pendingCloudSync: obj.pendingCloudSync === true,
+      lastLoginAt: typeof obj.lastLoginAt === "string" ? obj.lastLoginAt : null,
+      lastDeviceFingerprint:
+        typeof obj.lastDeviceFingerprint === "string" ? obj.lastDeviceFingerprint : null,
+      failedPinAttempts: typeof obj.failedPinAttempts === "number" ? obj.failedPinAttempts : 0,
+      lockedUntil: typeof obj.lockedUntil === "string" ? obj.lockedUntil : null,
+      lastFailedLoginAt: typeof obj.lastFailedLoginAt === "string" ? obj.lastFailedLoginAt : null,
     });
   }
   return out;
@@ -474,11 +483,13 @@ export type PosState = {
     pin?: string;
     password?: string;
     phone?: string;
+    email?: string;
     permissions?: Permission[];
-  }) => { ok: boolean; errorKey?: string; id?: string };
+  }) => Promise<{ ok: boolean; errorKey?: string; id?: string; queued?: boolean }>;
   updateStaffAccount: (id: string, patch: { name?: string; username?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
   removeStaffAccount: (id: string) => void;
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
+  unlockStaffAccount: (id: string) => Promise<{ ok: boolean; errorKey?: string }>;
   switchStaffAccount: (id: string | null, opts?: { force?: boolean }) => { ok: boolean; errorKey?: string };
   setPosLocked: (locked: boolean) => void;
   setPilotModeEnabled: (enabled: boolean) => void;
@@ -1308,8 +1319,11 @@ export const usePosStore = create<PosState>((set, get) => {
     });
   },
 
-  addStaffAccount: (input) => {
-    const staffDenied = authorizeStaffAccountMutation(get().sessionActor);
+  addStaffAccount: async (input) => {
+    const { snapshot, authMode } = getStoreSubscriptionContext();
+    const staffDenied = await authorizeStaffAccountMutationWithDevice(get().sessionActor, {
+      authMode,
+    });
     if (!staffDenied.ok) {
       pushAudit("auth_forbidden", "Denied addStaffAccount", {
         permission: "settings.shop",
@@ -1321,7 +1335,6 @@ export const usePosStore = create<PosState>((set, get) => {
     }
 
     const existing = get().preferences.staffAccounts ?? [];
-    const { snapshot, authMode } = getStoreSubscriptionContext();
     const tier = resolveStorePlanTier(snapshot, authMode);
     const staffCap = validateCanAddStaffAccount(existing.length, tier);
     if (!staffCap.ok) {
@@ -1348,6 +1361,9 @@ export const usePosStore = create<PosState>((set, get) => {
       return { ok: false, errorKey: "staffUsernameTaken" };
     }
 
+    const pinHash = pin ? await hashStaffSecretAsync(pin) : null;
+    const passwordHash = password ? await hashStaffSecretAsync(password) : null;
+
     const row: StaffAccount = {
       id: crypto.randomUUID(),
       name,
@@ -1356,21 +1372,47 @@ export const usePosStore = create<PosState>((set, get) => {
       permissions: input.permissions ?? permissionsForRole(role),
       pin: null,
       password: null,
-      pinHash: pin ? hashStaffSecret(pin) : null,
-      passwordHash: password ? hashStaffSecret(password) : null,
+      pinHash,
+      passwordHash,
       phone: (input.phone ?? "").trim() || null,
+      email: (input.email ?? "").trim().toLowerCase() || null,
       active: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      pendingCloudSync: authMode === "supabase",
     };
-    set((s) => ({
-      preferences: {
-        ...s.preferences,
-        staffAccounts: [row, ...(s.preferences.staffAccounts ?? [])],
-      },
-    }));
-    void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(row));
-    return { ok: true, id: row.id };
+
+    if (authMode === "local") {
+      set((s) => ({
+        preferences: {
+          ...s.preferences,
+          staffAccounts: [row, ...(s.preferences.staffAccounts ?? [])],
+        },
+      }));
+      return { ok: true, id: row.id };
+    }
+
+    const { createStaffInCloudFirst } = await import("../lib/staffSyncQueue");
+    const cloudResult = await createStaffInCloudFirst(row, {
+      isOnline: typeof navigator !== "undefined" ? navigator.onLine : true,
+    });
+    if (!cloudResult.ok) {
+      if (cloudResult.queued) {
+        set((s) => ({
+          preferences: {
+            ...s.preferences,
+            staffAccounts: [{ ...row, pendingCloudSync: true }, ...(s.preferences.staffAccounts ?? [])],
+          },
+        }));
+      }
+      return { ok: false, errorKey: cloudResult.errorKey, queued: cloudResult.queued };
+    }
+
+    const confirmed = (get().preferences.staffAccounts ?? []).find((a) => a.id === row.id);
+    void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
+      logStaffSecurityAudit("staff_account_created", { staffId: confirmed?.id ?? row.id, staffName: row.name, role: row.role });
+    });
+    return { ok: true, id: confirmed?.id ?? row.id };
   },
 
   updateStaffAccount: (id, patch) => {
@@ -1387,6 +1429,16 @@ export const usePosStore = create<PosState>((set, get) => {
         return;
       }
       throw e;
+    }
+    const { authMode } = getStoreSubscriptionContext();
+    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
+      pushAudit("auth_forbidden", "Denied updateStaffAccount (not primary device)", {
+        permission: "settings.shop",
+        action: "updateStaffAccount",
+        attemptedRole: get().sessionActor?.role ?? null,
+        errorKey: "notPrimaryDevice",
+      });
+      return;
     }
     set((s) => ({
       preferences: {
@@ -1412,6 +1464,14 @@ export const usePosStore = create<PosState>((set, get) => {
       },
     }));
     const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
+    if (updated && patch.active !== undefined) {
+      void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
+        logStaffSecurityAudit(patch.active ? "staff_reactivated" : "staff_suspended", {
+          staffId: updated.id,
+          staffName: updated.name,
+        });
+      });
+    }
     if (updated) {
       void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(updated));
     }
@@ -1432,6 +1492,17 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       throw e;
     }
+    const { authMode } = getStoreSubscriptionContext();
+    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
+      pushAudit("auth_forbidden", "Denied removeStaffAccount (not primary device)", {
+        permission: "settings.shop",
+        action: "removeStaffAccount",
+        attemptedRole: get().sessionActor?.role ?? null,
+        errorKey: "notPrimaryDevice",
+      });
+      return;
+    }
+    const removed = get().preferences.staffAccounts?.find((a) => a.id === id);
     set((s) => ({
       preferences: {
         ...s.preferences,
@@ -1439,6 +1510,11 @@ export const usePosStore = create<PosState>((set, get) => {
         activeStaffId: s.preferences.activeStaffId === id ? null : s.preferences.activeStaffId,
       },
     }));
+    if (removed) {
+      void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
+        logStaffSecurityAudit("staff_account_deleted", { staffId: removed.id, staffName: removed.name });
+      });
+    }
     void import("../offline/cloudSync").then(async ({ resolveShopCtx }) => {
       const { deleteCloudStaff } = await import("../lib/shopStaffCloud");
       const ctx = await resolveShopCtx();
@@ -1461,33 +1537,125 @@ export const usePosStore = create<PosState>((set, get) => {
       }
       throw e;
     }
+    const { authMode } = getStoreSubscriptionContext();
+    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
+      pushAudit("auth_forbidden", "Denied resetStaffSecret (not primary device)", {
+        permission: "settings.shop",
+        action: "resetStaffSecret",
+        attemptedRole: get().sessionActor?.role ?? null,
+        errorKey: "notPrimaryDevice",
+      });
+      return;
+    }
+    void (async () => {
+      const pinNorm = patch.pin === undefined ? undefined : normalizePin(patch.pin ?? "") || null;
+      const pinHash =
+        patch.pin === undefined
+          ? undefined
+          : pinNorm
+            ? await hashStaffSecretAsync(pinNorm)
+            : null;
+      const passwordHash =
+        patch.password === undefined
+          ? undefined
+          : patch.password?.trim()
+            ? await hashStaffSecretAsync(patch.password.trim())
+            : null;
+      const now = new Date().toISOString();
+      set((s) => ({
+        preferences: {
+          ...s.preferences,
+          staffAccounts: (s.preferences.staffAccounts ?? []).map((a) =>
+            a.id === id
+              ? {
+                  ...a,
+                  pin: patch.pin === undefined ? a.pin : null,
+                  password: patch.password === undefined ? a.password : null,
+                  pinHash: pinHash === undefined ? (a.pinHash ?? null) : pinHash,
+                  passwordHash: passwordHash === undefined ? (a.passwordHash ?? null) : passwordHash,
+                  pinChangedAt: pinHash !== undefined && pinHash ? now : a.pinChangedAt,
+                  passwordChangedAt: passwordHash !== undefined && passwordHash ? now : a.passwordChangedAt,
+                  updatedAt: now,
+                }
+              : a,
+          ),
+        },
+      }));
+      const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
+      if (updated) {
+        const { pushStaffToCloud } = await import("../lib/shopStaffCloud");
+        await pushStaffToCloud(updated);
+        void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
+          if (patch.pin !== undefined) {
+            logStaffSecurityAudit("staff_pin_reset", { staffId: updated.id, staffName: updated.name });
+          }
+          if (patch.password !== undefined) {
+            logStaffSecurityAudit("staff_password_reset", { staffId: updated.id, staffName: updated.name });
+          }
+        });
+      }
+    })();
+  },
+
+  unlockStaffAccount: async (id) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        return { ok: false, errorKey: e.errorKey };
+      }
+      throw e;
+    }
+    const { authMode } = getStoreSubscriptionContext();
+    if (authMode === "supabase" && !isPrimaryDeviceCachedSync()) {
+      return { ok: false, errorKey: "notPrimaryDevice" };
+    }
+    const staffRow = get().preferences.staffAccounts?.find((a) => a.id === id);
+    if (!staffRow) return { ok: false, errorKey: "staffCreateFail" };
+
+    const patch = {
+      failedPinAttempts: 0,
+      lockedUntil: null,
+      lastFailedLoginAt: null,
+      firstFailedLoginAt: null,
+      failuresInWindow: 0,
+      failureWindowStartedAt: null,
+      updatedAt: new Date().toISOString(),
+    };
     set((s) => ({
       preferences: {
         ...s.preferences,
-        staffAccounts: (s.preferences.staffAccounts ?? []).map((a) =>
-          a.id === id
-            ? {
-                ...a,
-                pin: patch.pin === undefined ? a.pin : null,
-                password: patch.password === undefined ? a.password : null,
-                pinHash:
-                  patch.pin === undefined
-                    ? (a.pinHash ?? null)
-                    : (normalizePin(patch.pin ?? "") ? hashStaffSecret(normalizePin(patch.pin ?? "")) : null),
-                passwordHash:
-                  patch.password === undefined
-                    ? (a.passwordHash ?? null)
-                    : (patch.password?.trim() ? hashStaffSecret(patch.password.trim()) : null),
-                updatedAt: new Date().toISOString(),
-              }
-            : a,
-        ),
+        staffAccounts: (s.preferences.staffAccounts ?? []).map((a) => (a.id === id ? { ...a, ...patch } : a)),
       },
     }));
+
+    const { resolveShopCtx } = await import("../offline/cloudSync");
+    const ctx = await resolveShopCtx();
+    if (ctx) {
+      const { unlockCloudStaffAccount } = await import("../lib/shopStaffCloud");
+      await unlockCloudStaffAccount(ctx.shopId, id);
+      const { unlockStaffAccountLocal } = await import("../lib/staffLoginSecurity");
+      const { getActiveAccountKey } = await import("../offline/accountScope");
+      const accountKey = getActiveAccountKey();
+      if (accountKey) {
+        await unlockStaffAccountLocal({
+          accountKey,
+          shopId: ctx.shopId,
+          staffId: id,
+          staffName: staffRow.name,
+        });
+      }
+    } else {
+      void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
+        logStaffSecurityAudit("staff_account_unlocked", { staffId: staffRow.id, staffName: staffRow.name });
+      });
+    }
+
     const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
     if (updated) {
       void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(updated));
     }
+    return { ok: true };
   },
 
   switchStaffAccount: (id, opts) => {

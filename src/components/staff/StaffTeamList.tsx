@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { Search, UserPlus } from "lucide-react";
+import { AlertTriangle, Search, Shield, UserPlus } from "lucide-react";
 import clsx from "clsx";
 import type { Language, StaffAccount, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { staffInitials } from "../../lib/staffRoleCatalog";
+import { isStaffLoginLocked } from "../../lib/staffSecret";
+import { getDeviceOnline } from "../../lib/deviceOnline";
 
 const ROLE_OPTIONS: UserRole[] = ["cashier", "manager", "stock_keeper"];
 
@@ -16,8 +18,26 @@ type Props = {
   onUpdateRole: (id: string, role: UserRole) => void;
   onResetPin: (id: string) => void;
   onResetPassword: (id: string) => void;
+  onUnlock: (id: string) => void;
+  onForceLogout: (id: string) => void;
   onDelete: (id: string) => void;
+  activeStaffId?: string | null;
 };
+
+function formatWhen(iso: string | null | undefined, lang: Language): string {
+  if (!iso) return t(lang, "staffSecurityNever");
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return t(lang, "staffSecurityNever");
+  return new Date(ms).toLocaleString();
+}
+
+function lastSecretChange(staff: StaffAccount): string | null {
+  const pin = staff.pinChangedAt ? Date.parse(staff.pinChangedAt) : 0;
+  const pass = staff.passwordChangedAt ? Date.parse(staff.passwordChangedAt) : 0;
+  if (!pin && !pass) return null;
+  if (pin >= pass) return staff.pinChangedAt ?? null;
+  return staff.passwordChangedAt ?? null;
+}
 
 export function StaffTeamList({
   lang,
@@ -28,10 +48,14 @@ export function StaffTeamList({
   onUpdateRole,
   onResetPin,
   onResetPassword,
+  onUnlock,
+  onForceLogout,
   onDelete,
+  activeStaffId,
 }: Props) {
   const [query, setQuery] = useState("");
   const [manageId, setManageId] = useState<string | null>(null);
+  const online = getDeviceOnline();
 
   const ordered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -73,6 +97,8 @@ export function StaffTeamList({
         <ul className="space-y-2">
           {ordered.map((s) => {
             const open = manageId === s.id;
+            const locked = isStaffLoginLocked(s);
+            const isActiveSession = activeStaffId === s.id;
             return (
               <li key={s.id} className="rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center gap-3">
@@ -83,14 +109,55 @@ export function StaffTeamList({
                     <p className="truncate text-base font-black text-stone-950">{s.name}</p>
                     <p className="text-sm font-semibold text-stone-500">{t(lang, `role_${s.role}`)}</p>
                   </div>
-                  <span
-                    className={clsx(
-                      "shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
-                      s.active ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800",
-                    )}
-                  >
-                    {s.active ? t(lang, "staffActive") : t(lang, "staffInactive")}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1">
+                    <span
+                      className={clsx(
+                        "rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
+                        s.active ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800",
+                      )}
+                    >
+                      {s.active ? t(lang, "staffActive") : t(lang, "staffInactive")}
+                    </span>
+                    {locked ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900">
+                        <AlertTriangle className="h-3 w-3" />
+                        {t(lang, "staffSecurityLocked")}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-3 grid gap-2 rounded-2xl bg-stone-50 px-3 py-3 text-xs font-medium text-stone-700 sm:grid-cols-2">
+                  <p>
+                    <span className="font-black text-stone-500">{t(lang, "staffSecurityLastLogin")}: </span>
+                    {formatWhen(s.lastLoginAt, lang)}
+                  </p>
+                  <p>
+                    <span className="font-black text-stone-500">{t(lang, "staffSecurityDevice")}: </span>
+                    {s.lastDeviceFingerprint ? `${s.lastDeviceFingerprint.slice(0, 8)}…` : t(lang, "staffSecurityNever")}
+                  </p>
+                  <p>
+                    <span className="font-black text-stone-500">{t(lang, "staffSecurityFailedAttempts")}: </span>
+                    {s.failedPinAttempts ?? 0}
+                  </p>
+                  <p>
+                    <span className="font-black text-stone-500">{t(lang, "staffSecurityPinChanged")}: </span>
+                    {formatWhen(lastSecretChange(s), lang)}
+                  </p>
+                  <p>
+                    <span className="font-black text-stone-500">{t(lang, "staffSecurityStatus")}: </span>
+                    {isActiveSession ? t(lang, "staffSecuritySignedIn") : t(lang, "staffSecuritySignedOut")}
+                  </p>
+                  <p>
+                    <span className="font-black text-stone-500">{t(lang, "staffSecurityConnectivity")}: </span>
+                    {online ? t(lang, "staffSecurityOnline") : t(lang, "staffSecurityOffline")}
+                  </p>
+                  {locked && s.lockedUntil ? (
+                    <p className="sm:col-span-2">
+                      <span className="font-black text-stone-500">{t(lang, "staffSecurityLockedUntil")}: </span>
+                      {formatWhen(s.lockedUntil, lang)}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -131,6 +198,25 @@ export function StaffTeamList({
                     <button type="button" className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-bold" onClick={() => onResetPassword(s.id)}>
                       {t(lang, "staffResetPassword")}
                     </button>
+                    {locked ? (
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900"
+                        onClick={() => onUnlock(s.id)}
+                      >
+                        <Shield className="h-4 w-4" />
+                        {t(lang, "staffSecurityUnlock")}
+                      </button>
+                    ) : null}
+                    {isActiveSession ? (
+                      <button
+                        type="button"
+                        className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-bold"
+                        onClick={() => onForceLogout(s.id)}
+                      >
+                        {t(lang, "staffSecurityForceLogout")}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="rounded-xl border-2 border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold text-rose-700"

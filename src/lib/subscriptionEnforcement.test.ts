@@ -282,8 +282,8 @@ describe("usePosStore subscription enforcement", () => {
     expect(r.errorKey).toBe("planProductLocked");
   });
 
-  it("denies addStaffAccount on free tier", () => {
-    const r = usePosStore.getState().addStaffAccount({ name: "Bob", role: "cashier", pin: "1234" });
+  it("denies addStaffAccount on free tier", async () => {
+    const r = await usePosStore.getState().addStaffAccount({ name: "Bob", role: "cashier", pin: "1234" });
     expect(r.ok).toBe(false);
     expect(r.errorKey).toBe("planStaffLimit");
   });

@@ -42,7 +42,7 @@ import { getActiveAccountKey } from "./accountScope";
  */
 
 const DB_NAME = "waka-pos-offline";
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 const LEGACY_SNAPSHOT_KEY = "snapshot";
 const LEGACY_LAST_GOOD_KEY = "last_good_snapshot";
@@ -116,6 +116,10 @@ type WakaDB = DBSchema & {
       byAccountBucket: [string, import("./entityStore").EntityBucket];
     };
   };
+  staffCache: {
+    key: string;
+    value: { shopId: string; payload: unknown };
+  };
 };
 
 let dbPromise: Promise<IDBPDatabase<WakaDB>> | null = null;
@@ -165,6 +169,9 @@ export function getLocalDb(): Promise<IDBPDatabase<WakaDB>> {
         }
         if (!recordsStore.indexNames.contains("byAccountBucket")) {
           recordsStore.createIndex("byAccountBucket", ["accountKey", "bucket"], { unique: false });
+        }
+        if (oldVersion < 5 && !database.objectStoreNames.contains("staffCache")) {
+          database.createObjectStore("staffCache");
         }
       },
     });
@@ -558,6 +565,19 @@ export async function wipeIndexedDbNamespace(accountKey: string): Promise<Accoun
         }
       }
       await txB.done;
+    }
+
+    if (db.objectStoreNames.contains("staffCache")) {
+      const cacheKeys = await db.getAllKeys("staffCache");
+      const prefix = `${accountKey}::`;
+      const txC = db.transaction("staffCache", "readwrite");
+      for (const rawKey of cacheKeys) {
+        const key = String(rawKey);
+        if (key.startsWith(prefix)) {
+          await txC.store.delete(key);
+        }
+      }
+      await txC.done;
     }
   } catch {
     /* idempotent — partial wipe is acceptable on error */

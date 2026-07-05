@@ -21,6 +21,7 @@ export type DeviceActivationBlock = {
   shopId: string;
   result: DeviceActivationResult;
   context: DeviceLimitContext | null;
+  kind: "limit" | "pending" | "revoked";
 };
 
 type DeviceActivationState = {
@@ -55,11 +56,13 @@ export function pathAllowedWhenDeviceBlocked(path: string): boolean {
   const p = path.split("?")[0] || "/";
   return (
     p === "/device-limit" ||
+    p === "/device-pending" ||
     p === "/upgrade" ||
     p === "/login" ||
     p === "/onboarding" ||
     p.startsWith("/auth/") ||
-    p === "/account"
+    p === "/account" ||
+    p === "/settings/devices"
   );
 }
 
@@ -97,12 +100,25 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
       if (result.activated) {
         setActivated(true);
         setBlock(null);
+        void import("../lib/staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
+          scheduleStaffCacheProvisioning();
+        });
+        return;
+      }
+      if (result.pending_approval || result.approval_status === "pending") {
+        setActivated(false);
+        setBlock({ shopId: sid, result, context: null, kind: "pending" });
+        return;
+      }
+      if (result.revoked) {
+        setActivated(false);
+        setBlock({ shopId: sid, result, context: null, kind: "revoked" });
         return;
       }
       if (result.limit_blocked) {
         const context = await withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null);
         setActivated(false);
-        setBlock({ shopId: sid, result, context });
+        setBlock({ shopId: sid, result, context, kind: "limit" });
         return;
       }
       setActivated(false);

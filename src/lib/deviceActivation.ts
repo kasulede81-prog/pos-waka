@@ -45,6 +45,10 @@ export type DeviceActivationResult = {
   activated: boolean;
   accepted?: boolean;
   limit_blocked?: boolean;
+  pending_approval?: boolean;
+  approval_status?: string;
+  device_authority?: string;
+  revoked?: boolean;
   existing_device?: boolean;
   reactivated?: boolean;
   status?: string;
@@ -63,6 +67,10 @@ function parseActivationResult(data: unknown): DeviceActivationResult {
     activated,
     accepted: r.accepted === true,
     limit_blocked: r.limit_blocked === true,
+    pending_approval: r.pending_approval === true,
+    approval_status: r.approval_status != null ? String(r.approval_status) : undefined,
+    device_authority: r.device_authority != null ? String(r.device_authority) : undefined,
+    revoked: r.revoked === true,
     existing_device: r.existing_device === true,
     reactivated: r.reactivated === true,
     status: r.status != null ? String(r.status) : undefined,
@@ -112,6 +120,11 @@ function applyActivationSideEffects(shopId: string, parsed: DeviceActivationResu
       deviceLimit: parsed.device_limit,
     });
   }
+  if (parsed.ok && parsed.activated && !parsed.pending_approval && parsed.approval_status !== "pending") {
+    void import("./staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {
+      scheduleStaffCacheProvisioning();
+    });
+  }
 }
 
 export async function ensureShopDeviceActivation(shopId: string): Promise<DeviceActivationResult> {
@@ -131,6 +144,8 @@ export async function registerShopDeviceOnLogin(shopId: string): Promise<DeviceA
   if (error) throw error;
   const parsed = parseActivationResult(data);
   applyActivationSideEffects(shopId, parsed);
+  const { fetchDeviceAuthorityContext } = await import("./deviceAuthority");
+  await fetchDeviceAuthorityContext(shopId);
   return parsed;
 }
 

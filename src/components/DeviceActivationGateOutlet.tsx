@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { pathAllowedWhenDeviceBlocked, useDeviceActivation } from "../context/DeviceActivationContext";
 
-/** Blocks app routes until this device is activated, except device-limit / upgrade paths. */
+/** Blocks app routes until this device is activated/approved, except allowed paths. */
 export function DeviceActivationGateOutlet() {
   const location = useLocation();
   const { loading, activated, block } = useDeviceActivation();
@@ -17,7 +17,7 @@ export function DeviceActivationGateOutlet() {
 
   if (activated) {
     const path = location.pathname.split("?")[0] || "/";
-    if (path === "/device-limit") {
+    if (path === "/device-limit" || path === "/device-pending") {
       return <Navigate to="/" replace />;
     }
     return <Outlet />;
@@ -28,8 +28,16 @@ export function DeviceActivationGateOutlet() {
     return <Outlet />;
   }
 
-  if (block) {
+  if (block?.kind === "pending") {
+    return <Navigate to="/device-pending" replace state={{ from: location.pathname }} />;
+  }
+
+  if (block?.kind === "limit") {
     return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
+  }
+
+  if (block?.kind === "revoked") {
+    return <Navigate to="/device-pending" replace state={{ from: location.pathname, revoked: true }} />;
   }
 
   return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
