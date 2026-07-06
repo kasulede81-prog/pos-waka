@@ -243,6 +243,17 @@ function mergeById<T extends { id: string }>(
   return [...map.values()];
 }
 
+/** Incremental pulls send empty arrays when nothing changed — keep local references. */
+function mergeCollection<T extends { id: string }>(
+  local: T[],
+  remote: T[],
+  pick: (a: T, b: T) => T,
+  getUpdatedAt: (row: T) => string | undefined | null,
+): T[] {
+  if (remote.length === 0) return local;
+  return mergeById(local, remote, pick, getUpdatedAt);
+}
+
 export function mergeRemoteHospitalityFloor(
   local: HospitalityFloorState,
   remote: {
@@ -255,33 +266,33 @@ export function mergeRemoteHospitalityFloor(
     waitlist?: WaitlistEntry[];
   },
 ): HospitalityFloorState {
-  const areas = mergeById(local.areas, remote.areas, (a, b) => ({ ...a, ...b }), () => null);
-  const tables = mergeById(local.tables, remote.tables, (a, b) => ({ ...a, ...b }), () => null);
-  const stations = mergeById(local.stations, remote.stations, (a, b) => ({ ...a, ...b }), () => null);
-  const sessions = mergeById(local.sessions, remote.sessions, (a, b) => ({ ...a, ...b }), (s) => s.updatedAt);
-  const kitchenTickets = mergeById(
+  const areas = mergeCollection(local.areas ?? [], remote.areas, (a, b) => ({ ...a, ...b }), () => null);
+  const tables = mergeCollection(local.tables ?? [], remote.tables, (a, b) => ({ ...a, ...b }), () => null);
+  const stations = mergeCollection(local.stations ?? [], remote.stations, (a, b) => ({ ...a, ...b }), () => null);
+  const sessions = mergeCollection(local.sessions ?? [], remote.sessions, (a, b) => ({ ...a, ...b }), (s) => s.updatedAt);
+  const kitchenTickets = mergeCollection(
     local.kitchenTickets ?? [],
     remote.tickets,
     mergeKitchenTicketMonotonic,
     (t) => t.updatedAt,
   );
-  const reservations = mergeById(
+  const reservations = mergeCollection(
     local.reservations ?? [],
     remote.reservations ?? [],
     (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
     (r) => r.updatedAt,
   );
-  const waitlist = mergeById(
+  const waitlist = mergeCollection(
     local.waitlist ?? [],
     remote.waitlist ?? [],
     (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
     (w) => w.updatedAt,
   );
   const sameCollections =
-    areas === local.areas &&
-    tables === local.tables &&
-    stations === local.stations &&
-    sessions === local.sessions &&
+    areas === (local.areas ?? []) &&
+    tables === (local.tables ?? []) &&
+    stations === (local.stations ?? []) &&
+    sessions === (local.sessions ?? []) &&
     kitchenTickets === (local.kitchenTickets ?? []) &&
     reservations === (local.reservations ?? []) &&
     waitlist === (local.waitlist ?? []);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Settings, Wrench } from "lucide-react";
@@ -11,6 +11,7 @@ import {
   TABLE_STATUS_COLORS,
   activeNamedTabs,
   activeSessionForTable,
+  ensureHospitalityFloor,
   isHospitalityMode,
   pendingSaleTotal,
   sessionDisplayLabel,
@@ -39,7 +40,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const scrollRef = useRef<HTMLDivElement>(null);
-  const ensureHospitalityFloor = usePosStore((s) => s.ensureHospitalityFloor);
+  const ensureFloorInStore = usePosStore((s) => s.ensureHospitalityFloor);
   const openTable = usePosStore((s) => s.openTable);
   const openNamedTab = usePosStore((s) => s.openNamedTab);
   const resumeTableSession = usePosStore((s) => s.resumeTableSession);
@@ -51,13 +52,13 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const suggestTablesForGuests = usePosStore((s) => s.suggestTablesForGuests);
   const startTableCleaning = usePosStore((s) => s.startTableCleaning);
   const finishTableCleaning = usePosStore((s) => s.finishTableCleaning);
-  const { businessType, hospitalityModeEnabled, floor, sales, floorDisplayPrefs } = usePosStore(
+  const { businessType, hospitalityModeEnabled, rawFloor, sales, floorDisplayPrefs } = usePosStore(
     useShallow((s) => {
       const ext = s.preferences.hospitalityFloorDisplay;
       return {
         businessType: s.preferences.businessType,
         hospitalityModeEnabled: s.preferences.hospitalityModeEnabled,
-        floor: s.preferences.hospitalityFloor,
+        rawFloor: s.preferences.hospitalityFloor,
         sales: s.sales,
         floorDisplayPrefs: {
           tableShape: ext?.tableShape ?? "classic",
@@ -66,6 +67,10 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         },
       };
     }),
+  );
+  const floor = useMemo(
+    () => (rawFloor ? ensureHospitalityFloor(rawFloor) : undefined),
+    [rawFloor],
   );
 
   const savedView = useMemo(() => loadFloorViewState(), []);
@@ -86,16 +91,18 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const [tableLookup, setTableLookup] = useState("");
   const [viewFilter, setViewFilter] = useState<"all" | "occupied" | "available" | "bill">("all");
 
-  const ensuredFloorRef = useRef(false);
-  useEffect(() => {
-    if (ensuredFloorRef.current) return;
-    ensuredFloorRef.current = true;
-    ensureHospitalityFloor();
-  }, [ensureHospitalityFloor]);
+  useLayoutEffect(() => {
+    if (!rawFloor) {
+      ensureFloorInStore();
+      return;
+    }
+    const normalized = ensureHospitalityFloor(rawFloor);
+    if (normalized !== rawFloor) ensureFloorInStore();
+  }, [ensureFloorInStore, rawFloor]);
 
   const hospitality = isHospitalityMode(businessType, hospitalityModeEnabled);
   useHospitalityFloorPoll(hospitality);
-  const areas = floor?.areas.filter((a) => a.isActive) ?? [];
+  const areas = floor?.areas?.filter((a) => a.isActive) ?? [];
   const activeAreaId = areaId ?? areas[0]?.id ?? null;
   const tables = useMemo(() => {
     if (!floor) return [];

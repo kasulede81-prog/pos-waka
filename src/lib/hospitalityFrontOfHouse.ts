@@ -75,7 +75,7 @@ export function isPrimaryFloorTable(table: DiningTable, floor: HospitalityFloorS
 }
 
 export function visibleFloorTables(floor: HospitalityFloorState, areaId?: string | null): DiningTable[] {
-  return floor.tables
+  return (floor.tables ?? [])
     .filter((t) => t.isActive && isPrimaryFloorTable(t, floor))
     .filter((t) => !areaId || t.areaId === areaId)
     .sort((a, b) => a.sortOrder - b.sortOrder);

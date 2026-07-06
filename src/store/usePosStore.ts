@@ -405,6 +405,24 @@ function preferencesWithDefaultShelfLayout(
   return { ...preferences, posShelfLayout: layout };
 }
 
+/** Repair hospitality floor + hardware prefs when loading from disk or cloud. */
+function normalizeHospitalityPreferences(preferences: ShopPreferences): ShopPreferences {
+  let next = ensureHardwarePrefsOnBootstrap(preferences);
+  if (next.hospitalityFloor) {
+    const floor = ensureHospitalityFloor(next.hospitalityFloor);
+    if (floor !== next.hospitalityFloor) {
+      next = { ...next, hospitalityFloor: floor };
+    }
+  } else if (isHospitalityBusinessType(next.businessType) && next.hospitalityModeEnabled !== false) {
+    next = {
+      ...next,
+      hospitalityModeEnabled: next.hospitalityModeEnabled ?? true,
+      hospitalityFloor: defaultHospitalityFloor(),
+    };
+  }
+  return next;
+}
+
 type DraftLineInput = {
   product: Product;
   inputMode: LineInputMode;
@@ -1368,7 +1386,9 @@ export const usePosStore = create<PosState>((set, get) => {
 
   hydrateEssentials: (data) => {
     const products = data.products.map(normalizeProduct);
-    const preferences = preferencesWithDefaultShelfLayout(data.preferences, products);
+    const preferences = normalizeHospitalityPreferences(
+      preferencesWithDefaultShelfLayout(data.preferences, products),
+    );
     set({
       products,
       customers: data.customers.map(normalizeCustomer),
@@ -5958,6 +5978,38 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         : p.ownerDayOpenCorrectionAfterSales === false
           ? false
           : (base.ownerDayOpenCorrectionAfterSales ?? false),
+    hospitalityFloor: p.hospitalityFloor !== undefined ? p.hospitalityFloor : base.hospitalityFloor,
+    hospitalityModeEnabled:
+      p.hospitalityModeEnabled !== undefined ? p.hospitalityModeEnabled : base.hospitalityModeEnabled,
+    hospitalityManualKitchenFire:
+      p.hospitalityManualKitchenFire !== undefined
+        ? p.hospitalityManualKitchenFire
+        : base.hospitalityManualKitchenFire,
+    hospitalityServiceChargePercent:
+      p.hospitalityServiceChargePercent !== undefined
+        ? p.hospitalityServiceChargePercent
+        : base.hospitalityServiceChargePercent,
+    hospitalityTaxPercent:
+      p.hospitalityTaxPercent !== undefined ? p.hospitalityTaxPercent : base.hospitalityTaxPercent,
+    hospitalityTaxMode: p.hospitalityTaxMode !== undefined ? p.hospitalityTaxMode : base.hospitalityTaxMode,
+    hospitalityTaxEnabled:
+      p.hospitalityTaxEnabled !== undefined ? p.hospitalityTaxEnabled : base.hospitalityTaxEnabled,
+    hospitalityMenuSections:
+      p.hospitalityMenuSections !== undefined ? p.hospitalityMenuSections : base.hospitalityMenuSections,
+    hospitalityIngredientStockPolicy:
+      p.hospitalityIngredientStockPolicy !== undefined
+        ? p.hospitalityIngredientStockPolicy
+        : base.hospitalityIngredientStockPolicy,
+    hospitalityIngredientPolicy:
+      p.hospitalityIngredientPolicy !== undefined
+        ? p.hospitalityIngredientPolicy
+        : base.hospitalityIngredientPolicy,
+    hospitalityKitchenEnabled:
+      p.hospitalityKitchenEnabled !== undefined ? p.hospitalityKitchenEnabled : base.hospitalityKitchenEnabled,
+    hospitalityHardware:
+      p.hospitalityHardware !== undefined ? p.hospitalityHardware : base.hospitalityHardware,
+    hospitalityFloorDisplay:
+      p.hospitalityFloorDisplay !== undefined ? p.hospitalityFloorDisplay : base.hospitalityFloorDisplay,
   };
 }
 
@@ -6374,7 +6426,7 @@ async function resolveLegacySnapshotIfEmpty(
 }
 
 function applyBootstrapPreferences(snap: Partial<PersistedSnapshot>): ShopPreferences {
-  const preferences = mergePreferencesFromPartial(snap);
+  const preferences = normalizeHospitalityPreferences(mergePreferencesFromPartial(snap));
   const pendingStaff = readPendingStaffSelection();
   const activeKey = getActiveAccountKey();
   if (pendingStaff && activeKey && pendingStaff.accountKey === activeKey) {

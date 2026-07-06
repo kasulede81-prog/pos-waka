@@ -471,8 +471,16 @@ function fillHospitalityFloorDefaults(floor: HospitalityFloorState): Hospitality
 
 /** Rebuild dining areas from table area ids when persisted layout lost its areas array. */
 function repairHospitalityFloorAreas(floor: HospitalityFloorState): HospitalityFloorState {
-  const areaIds = [...new Set(floor.tables.map((t) => t.areaId).filter(Boolean))];
-  if (!areaIds.length) return defaultHospitalityFloor();
+  const tables = floor.tables ?? [];
+  const areaIds = [...new Set(tables.map((t) => t.areaId).filter(Boolean))];
+  if (!areaIds.length) {
+    if (!tables.length) return fillHospitalityFloorDefaults({ ...floor, areas: floor.areas ?? [] });
+    const fallbackId = tables[0]?.areaId || "main-hall";
+    return fillHospitalityFloorDefaults({
+      ...floor,
+      areas: [{ id: fallbackId, name: "Main Hall", sortOrder: 0, isActive: true }],
+    });
+  }
   const areas = areaIds.map((id, index) => {
     const existing = floor.areas?.find((a) => a.id === id);
     return (
@@ -487,11 +495,35 @@ function repairHospitalityFloorAreas(floor: HospitalityFloorState): HospitalityF
   return fillHospitalityFloorDefaults({ ...floor, areas });
 }
 
+function seedEmptyHospitalityFloor(floor: HospitalityFloorState): HospitalityFloorState {
+  const withDefaults = fillHospitalityFloorDefaults({
+    ...floor,
+    areas: floor.areas ?? [],
+    tables: floor.tables ?? [],
+    sessions: floor.sessions ?? [],
+    stations: floor.stations ?? [],
+  });
+  const hasOperationalData =
+    withDefaults.sessions.length > 0 ||
+    withDefaults.stations.length > 0 ||
+    (withDefaults.kitchenTickets?.length ?? 0) > 0 ||
+    (withDefaults.reservations?.length ?? 0) > 0 ||
+    (withDefaults.waitlist?.length ?? 0) > 0;
+  if (!hasOperationalData) return syncTableDisplayStatuses(defaultHospitalityFloor());
+  const areaId = withDefaults.tables[0]?.areaId ?? "main-hall";
+  return syncTableDisplayStatuses(
+    fillHospitalityFloorDefaults({
+      ...withDefaults,
+      areas: [{ id: areaId, name: "Main Hall", sortOrder: 0, isActive: true }],
+    }),
+  );
+}
+
 export function ensureHospitalityFloor(floor: HospitalityFloorState | undefined | null): HospitalityFloorState {
   if (!floor) return defaultHospitalityFloor();
   if (!floor.areas?.length) {
     if (floor.tables?.length) return syncTableDisplayStatuses(repairHospitalityFloorAreas(floor));
-    return defaultHospitalityFloor();
+    return seedEmptyHospitalityFloor(floor);
   }
   return syncTableDisplayStatuses(fillHospitalityFloorDefaults(floor));
 }

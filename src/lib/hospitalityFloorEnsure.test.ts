@@ -34,4 +34,39 @@ describe("ensureHospitalityFloor", () => {
     expect(once.tables).toEqual(base.tables);
     expect(twice).toBe(once);
   });
+
+  it("handles null areas without throwing and stabilizes", () => {
+    const base = defaultHospitalityFloor();
+    const corrupt = { ...base, areas: null as unknown as typeof base.areas };
+    const once = ensureHospitalityFloor(corrupt);
+    const twice = ensureHospitalityFloor(once);
+    expect(once.areas?.length).toBeGreaterThan(0);
+    expect(twice).toBe(once);
+  });
+
+  it("preserves sessions when layout is empty then stabilizes", () => {
+    const session = defaultHospitalityFloor().sessions[0] ?? {
+      id: "sess-1",
+      sessionKind: "table" as const,
+      tableId: "tbl-1",
+      tabLabel: null,
+      saleId: "sale-1",
+      guestCount: 2,
+      status: "open" as const,
+      openedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pendingSync: false,
+    };
+    const empty = {
+      areas: [],
+      tables: [],
+      sessions: [session],
+      stations: [],
+    } as ReturnType<typeof defaultHospitalityFloor>;
+    const once = ensureHospitalityFloor(empty);
+    const twice = ensureHospitalityFloor(once);
+    expect(once.sessions).toHaveLength(1);
+    expect(once.areas.length).toBeGreaterThan(0);
+    expect(twice).toBe(once);
+  });
 });
