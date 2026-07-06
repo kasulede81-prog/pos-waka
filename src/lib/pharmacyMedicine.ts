@@ -58,8 +58,18 @@ export function formatMedicineListSecondary(product: Product): string | null {
 
 /** All searchable text for a medicine. */
 export function medicineSearchHaystack(product: Product): string {
+  const master = product.pharmacyMaster;
   return [
     product.name,
+    master?.brandName,
+    master?.genericName,
+    master?.manufacturer,
+    master?.country,
+    master?.registrationNumber,
+    master?.medicineCategory,
+    master?.supplierSku,
+    master?.storageNotes,
+    ...(master?.barcodes ?? []),
     product.category,
     product.baseUnit,
     product.sku,
@@ -71,4 +81,20 @@ export function medicineSearchHaystack(product: Product): string {
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/** Exact barcode match against SKU and pharmacy master barcodes. */
+export function productMatchesBarcode(product: Product, code: string): boolean {
+  const raw = code.trim();
+  if (!raw) return false;
+  const norm = raw.toLowerCase();
+  if (product.sku?.trim().toLowerCase() === norm) return true;
+  const barcodes = product.pharmacyMaster?.barcodes ?? [];
+  return barcodes.some((b) => b.trim().toLowerCase() === norm);
+}
+
+export function findProductByBarcode(products: Product[], code: string): Product | undefined {
+  const trimmed = code.trim();
+  if (!trimmed) return undefined;
+  return products.find((p) => productMatchesBarcode(p, trimmed));
 }

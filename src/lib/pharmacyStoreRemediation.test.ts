@@ -121,7 +121,7 @@ describe("writeOffExpiredStock", () => {
     expect(usePosStore.getState().products[0]!.stockOnHand).toBe(0);
     const mov = usePosStore.getState().stockMovements.find((m) => m.kind === "adjust_expired_writeoff");
     expect(mov?.deltaBaseUnits).toBe(-4);
-    expect(usePosStore.getState().auditLogs.some((a) => a.action === "expired_stock_writeoff")).toBe(true);
+    expect(usePosStore.getState().auditLogs.some((a) => a.action === "pharmacy_batch_writeoff")).toBe(true);
   });
 
   it("cashier cannot write off", () => {

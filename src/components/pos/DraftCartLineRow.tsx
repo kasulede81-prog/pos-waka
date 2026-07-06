@@ -4,6 +4,7 @@ import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatDraftLineQty, formatDraftLineUnitPrice } from "../../lib/draftCart";
 import { lineDiscountUgx } from "../../lib/saleAdjustments";
+import { PharmacyFefoBatchChip } from "../pharmacy/PharmacyFefoBatchPicker";
 
 type Props = {
   lang: Language;
@@ -14,6 +15,8 @@ type Props = {
   dock?: boolean;
   /** Desktop sidebar — tighter rows so the cart list scroll area is taller. */
   sidebarCompact?: boolean;
+  pharmacyMode?: boolean;
+  onBatchTap?: () => void;
   onIncrement: () => void;
   onDecrement: () => void;
   onQtyTap: () => void;
@@ -28,6 +31,8 @@ export function DraftCartLineRow({
   compact = false,
   dock = false,
   sidebarCompact = false,
+  pharmacyMode = false,
+  onBatchTap,
   onIncrement,
   onDecrement,
   onQtyTap,
@@ -50,6 +55,7 @@ export function DraftCartLineRow({
             {" · "}
             UGX {line.lineTotalUgx.toLocaleString()}
           </p>
+          {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
@@ -90,6 +96,7 @@ export function DraftCartLineRow({
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-bold leading-snug text-stone-900">{line.name}</p>
             {unitHint ? <p className="truncate text-[11px] font-semibold text-stone-500">{unitHint}</p> : null}
+            {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
             {lineDiscountUgx(line) > 0 ? (
               <p className="text-[11px] font-bold text-amber-800">
                 − UGX {lineDiscountUgx(line).toLocaleString()}
@@ -152,6 +159,7 @@ export function DraftCartLineRow({
         <div className="min-w-0 flex-1">
           <p className="font-bold text-stone-900">{line.name}</p>
           {unitHint ? <p className="text-xs font-semibold text-stone-500">{unitHint}</p> : null}
+          {pharmacyMode ? <PharmacyFefoBatchChip lang={lang} line={line} onTap={onBatchTap} /> : null}
           {lineDiscountUgx(line) > 0 ? (
             <p className="text-xs font-bold text-amber-800">
               − UGX {lineDiscountUgx(line).toLocaleString()} {t(lang, "discountBtn").toLowerCase()}

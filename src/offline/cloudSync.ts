@@ -63,6 +63,7 @@ import {
   type ServerProductStockRow,
 } from "../lib/inventoryIntegrity";
 import { normalizePharmacyPackaging } from "../lib/pharmacyPackaging";
+import { normalizePharmacyMaster } from "../lib/pharmacyBatches";
 import { defaultReceiptDisplayOptions } from "../lib/receiptBranding";
 import { mergeDebtPaymentsFromCloudPull, parseDebtPaymentRows } from "../lib/debtPaymentRecovery";
 import { mergeCustomerFromCloudPull } from "../lib/customerDebtReconciliation";
@@ -153,6 +154,7 @@ function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolea
       medicineStrength: p.medicineStrength ?? null,
       medicineForm: p.medicineForm ?? null,
       pharmacyPackaging: p.pharmacyPackaging ?? null,
+      pharmacyMaster: p.pharmacyMaster ?? null,
       exactCostPricePerUnitUgx: p.costPricePerUnitUgx,
       buyingPackCostUgx: p.buyingPackCostUgx ?? null,
       packCostUnitsDepleted: p.packCostUnitsDepleted ?? null,
@@ -206,6 +208,7 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
       strengthRaw != null && String(strengthRaw).trim() ? String(strengthRaw).trim().slice(0, 64) : null,
     medicineForm: formRaw != null && String(formRaw).trim() ? String(formRaw).trim().slice(0, 64) : null,
     pharmacyPackaging: normalizePharmacyPackaging(meta.pharmacyPackaging),
+    pharmacyMaster: normalizePharmacyMaster(meta.pharmacyMaster),
     updatedAt: String(row.updated_at ?? new Date().toISOString()),
     version: Math.max(1, Math.floor(Number(meta.version ?? 1))),
     quickPresetsMoneyUgx: Array.isArray(meta.quickPresetsMoneyUgx)

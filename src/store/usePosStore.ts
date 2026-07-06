@@ -84,6 +84,39 @@ import { inferProductGuess } from "../lib/pharmacyUx";
 import { isProductExpired, normalizeExpiryDate, shouldBlockExpiredSale } from "../lib/pharmacyExpiry";
 import { pharmacyQuickAddRequiresBuyPrice } from "../lib/pharmacyCostIntegrity";
 import { buildPharmacySaleLine, buyingUnitFromPackaging } from "../lib/pharmacyPackaging";
+import { applyBatchReceiveToProduct, applyPharmacyWriteOff, applySaleBatchFefo, shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
+import { createBatchOnReceive, withPharmacyFefoPreview } from "../lib/pharmacyBatches";
+import {
+  buildNewPrescription,
+  createRefillFromPrescription,
+  markPrescriptionDispensed,
+  patchPrescription,
+  pharmacyPrescriptionAuditPayload,
+  prescriptionToDraftLines,
+  transitionPrescription,
+  verifyPrescriptionRecord,
+  type CreatePrescriptionInput,
+} from "../lib/pharmacyPrescriptionOps";
+import { normalizePrescription } from "../lib/pharmacyPrescriptions";
+import { normalizePharmacyDoctor } from "../lib/pharmacyDoctors";
+import {
+  ensurePharmacyPatientProfile,
+  normalizePharmacyPatientProfile,
+} from "../lib/pharmacyPatientProfile";
+import { markChronicDispensed } from "../lib/pharmacyChronicMeds";
+import { registerEntryFromControlledVoid } from "../lib/pharmacyComplianceOps";
+import {
+  resolveControlledReturnBatch,
+  restoreProductFromControlledReturn,
+} from "../lib/pharmacyControlledReturn";
+import { isControlledProduct, validateControlledDispense } from "../lib/pharmacyControlledMedicine";
+import {
+  registerEntriesFromControlledSale,
+  registerEntryFromControlledReturn,
+  registerEntryFromOverride,
+} from "../lib/pharmacyComplianceOps";
+import { normalizeControlledRegisterEntry } from "../lib/pharmacyControlledRegister";
+import { detectComplianceAlerts } from "../lib/pharmacyComplianceAlerts";
 import { applyIndustryReceiptDefaults, buildReceiptBrandingSnapshot } from "../lib/receiptBranding";
 import type { SubscriptionPlanCode } from "../lib/subscriptionEntitlements";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
@@ -121,6 +154,7 @@ import {
   recallKitchenTicket as recallKitchenTicketOnFloor,
   cancelKitchenTicketItem as cancelKitchenTicketItemOnFloor,
 } from "../lib/kitchenProduction";
+import { verifyOwnerPin } from "../lib/sensitiveActionAuth";
 import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
 import {
   addDiningArea,
@@ -465,6 +499,20 @@ export type PosState = {
   draftCartDiscountUgx: number;
   /** When set, draft cart belongs to an open table / pending sale */
   activePendingSaleId: string | null;
+  /** Phase 8.4 — active prescription in dispensing workspace. */
+  activePharmacyPrescriptionId: string | null;
+  /** Phase 8.4 — OTC vs prescription dispensing mode. */
+  pharmacyDispenseMode: "otc" | "prescription" | null;
+  /** Phase 8.4 — commercial prescription records. */
+  pharmacyPrescriptions: import("../types").PharmacyPrescription[];
+  /** Phase 8.5 — doctor directory for pharmacy. */
+  pharmacyDoctors: import("../types").PharmacyDoctor[];
+  /** Phase 8.6 — immutable controlled medicine security register. */
+  pharmacyControlledRegister: import("../types").PharmacyControlledRegisterEntry[];
+  /** Phase 8.6 — active dispense compliance approval (session). */
+  pharmacyDispenseCompliance: import("../types").PharmacyDispenseComplianceApproval | null;
+  /** Phase 8.6 — owner regulatory alerts (computed + persisted). */
+  pharmacyComplianceAlerts: import("../types").PharmacyComplianceAlert[];
   /** Background sales history load — shows trust banner while older sales hydrate. */
   salesHistoryHydration: { active: boolean; loaded: number; total: number } | null;
 
@@ -493,6 +541,10 @@ export type PosState = {
       archivedDayCloses?: DayCloseSummary[];
       archivedVoidRecords?: VoidRecord[];
       archivedReturnRecords?: ReturnRecord[];
+      pharmacyPrescriptions?: import("../types").PharmacyPrescription[];
+      pharmacyDoctors?: import("../types").PharmacyDoctor[];
+      pharmacyControlledRegister?: import("../types").PharmacyControlledRegisterEntry[];
+      pharmacyComplianceAlerts?: import("../types").PharmacyComplianceAlert[];
     },
     opts?: { replaceAudit?: boolean },
   ) => void;
@@ -600,6 +652,11 @@ export type PosState = {
   addDraftLineFromInput: () => { ok: boolean; errorKey?: string };
   removeDraftLine: (productId: string) => void;
   setDraftLineQuantity: (productId: string, quantity: number) => { ok: boolean; errorKey?: string };
+  setDraftLineBatchOverride: (
+    productId: string,
+    batchId: string | null,
+    reason: string | null,
+  ) => { ok: boolean; errorKey?: string };
   adjustDraftLineQuantity: (productId: string, delta: number) => { ok: boolean; errorKey?: string };
   applyDraftLineDiscount: (productId: string, mode: DiscountMode, value: number) => { ok: boolean; errorKey?: string };
   setDraftCartDiscount: (amountUgx: number) => { ok: boolean; errorKey?: string };
@@ -836,6 +893,9 @@ export type PosState = {
     expiryDate?: string | null;
     minimumStockAlert?: number;
     pharmacyPackaging?: import("../types").PharmacyPackaging | null;
+    pharmacyMaster?: import("../types").PharmacyMedicineMaster | null;
+    openingBatch?: import("../types").PharmacyBatchReceiveInput | null;
+    primaryBarcode?: string | null;
   }) => { ok: boolean; errorKey?: string };
   bulkQuickAddProducts: (
     rows: Array<{
@@ -878,6 +938,7 @@ export type PosState = {
         | "medicineStrength"
         | "medicineForm"
         | "pharmacyPackaging"
+        | "pharmacyMaster"
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
         | "hospitality"
@@ -892,7 +953,75 @@ export type PosState = {
     productId: string;
     quantity?: number;
     note?: string;
+    reason?: import("../types").PharmacyWriteOffReason;
+    batchId?: string;
   }) => { ok: boolean; errorKey?: string; lossValueUgx?: number };
+  pharmacySupplierReturn: (input: {
+    productId: string;
+    batchId: string;
+    quantity: number;
+    reason: string;
+  }) => { ok: boolean; errorKey?: string; lossValueUgx?: number };
+  createPharmacyPrescription: (input: CreatePrescriptionInput) => { ok: boolean; errorKey?: string; prescriptionId?: string };
+  updatePharmacyPrescription: (
+    prescriptionId: string,
+    patch: Partial<import("../types").PharmacyPrescription>,
+  ) => { ok: boolean; errorKey?: string };
+  transitionPharmacyPrescription: (
+    prescriptionId: string,
+    status: import("../types").PharmacyPrescriptionStatus,
+  ) => { ok: boolean; errorKey?: string };
+  verifyPharmacyPrescription: (prescriptionId: string) => { ok: boolean; errorKey?: string };
+  cancelPharmacyPrescription: (prescriptionId: string, reason?: string) => { ok: boolean; errorKey?: string };
+  loadPrescriptionToDraft: (prescriptionId: string) => { ok: boolean; errorKey?: string };
+  setPharmacyDispenseMode: (mode: "otc" | "prescription" | null) => void;
+  setActivePharmacyPrescription: (prescriptionId: string | null) => void;
+  createPharmacyRefill: (prescriptionId: string) => { ok: boolean; errorKey?: string; prescriptionId?: string };
+  approveControlledDispense: (prescriptionId: string, reason: string) => { ok: boolean; errorKey?: string };
+  updatePharmacyPatientProfile: (
+    customerId: string,
+    patch: Partial<import("../types").PharmacyPatientProfile>,
+  ) => { ok: boolean; errorKey?: string };
+  addPharmacyDoctor: (input: {
+    name: string;
+    clinic?: string | null;
+    phone?: string | null;
+    registrationNumber?: string | null;
+    notes?: string | null;
+  }) => { ok: boolean; errorKey?: string; doctorId?: string };
+  updatePharmacyDoctor: (
+    doctorId: string,
+    patch: Partial<import("../types").PharmacyDoctor>,
+  ) => { ok: boolean; errorKey?: string };
+  addPharmacyPatientNote: (
+    customerId: string,
+    text: string,
+    pinned?: boolean,
+  ) => { ok: boolean; errorKey?: string };
+  upsertPharmacyChronicMedication: (
+    customerId: string,
+    med: import("../types").PharmacyChronicMedication,
+  ) => { ok: boolean; errorKey?: string };
+  addPharmacyPatientDocumentPlaceholder: (
+    customerId: string,
+    kind: import("../types").PharmacyPatientDocumentKind,
+    label: string,
+  ) => { ok: boolean; errorKey?: string };
+  setPharmacyDispenseCompliance: (
+    approval: import("../types").PharmacyDispenseComplianceApproval | null,
+  ) => void;
+  recordControlledReturn: (input: {
+    disposition: "return" | "destroy";
+    productId: string;
+    quantity: number;
+    reason: string;
+    managerPin: string;
+    batchId?: string | null;
+    patientId?: string | null;
+    saleId?: string | null;
+    forceBatchOverride?: boolean;
+  }) => { ok: boolean; errorKey?: string };
+  recordRegulatoryExport: (reportKind: string) => { ok: boolean };
   addCustomer: (c: Omit<Customer, "id" | "createdAt" | "version" | "debtBalanceUgx">) => Customer;
   assignOrphanDebtSale: (saleId: string, customerId: string) => { ok: boolean; errorKey?: string };
   addDebtPayment: (
@@ -951,6 +1080,8 @@ export type PosState = {
       /** Pharmacy restock by tablet/strip/box — skips buying-unit conversion. */
       baseUnitsIn?: number;
       costPerBaseUnitUgx?: number;
+      /** Pharmacy batch receive metadata — auto-creates batch on stock-in. */
+      batchReceive?: import("../types").PharmacyBatchReceiveInput;
     }>;
     amountPaidUgx: number;
     notes?: string;
@@ -1159,7 +1290,11 @@ function normalizeProduct(p: Product): Product {
 }
 
 function normalizeCustomer(c: Customer): Customer {
-  return { ...c, debtBalanceUgx: typeof c.debtBalanceUgx === "number" ? c.debtBalanceUgx : 0 };
+  const debtBalanceUgx = typeof c.debtBalanceUgx === "number" ? c.debtBalanceUgx : 0;
+  const pharmacyProfile = c.pharmacyProfile
+    ? normalizePharmacyPatientProfile(c.pharmacyProfile, c.id)
+    : null;
+  return { ...c, debtBalanceUgx, pharmacyProfile };
 }
 
 function normalizeSaleLine(line: SaleLine): SaleLine {
@@ -1343,6 +1478,13 @@ export const usePosStore = create<PosState>((set, get) => {
   draftInput: null,
   draftCartDiscountUgx: 0,
   activePendingSaleId: null,
+  activePharmacyPrescriptionId: null,
+  pharmacyDispenseMode: null,
+  pharmacyPrescriptions: [],
+  pharmacyDoctors: [],
+  pharmacyControlledRegister: [],
+  pharmacyDispenseCompliance: null,
+  pharmacyComplianceAlerts: [],
   salesHistoryHydration: null,
 
   hydrate: (data, opts) =>
@@ -1379,6 +1521,29 @@ export const usePosStore = create<PosState>((set, get) => {
       archivedDayCloses: data.archivedDayCloses ?? [],
       archivedVoidRecords: data.archivedVoidRecords ?? [],
       archivedReturnRecords: data.archivedReturnRecords ?? [],
+      pharmacyPrescriptions: (data.pharmacyPrescriptions ?? [])
+        .map(normalizePrescription)
+        .filter((rx): rx is NonNullable<ReturnType<typeof normalizePrescription>> => Boolean(rx)),
+      pharmacyDoctors: (data.pharmacyDoctors ?? [])
+        .map(normalizePharmacyDoctor)
+        .filter((d): d is NonNullable<ReturnType<typeof normalizePharmacyDoctor>> => Boolean(d)),
+      ...(() => {
+        const register = (data.pharmacyControlledRegister ?? [])
+          .map(normalizeControlledRegisterEntry)
+          .filter((e): e is NonNullable<ReturnType<typeof normalizeControlledRegisterEntry>> => Boolean(e));
+        const auditLogs = opts?.replaceAudit
+          ? (data.auditLogs ?? [])
+          : mergeAuditLogs(data.auditLogs ?? [], get().auditLogs);
+        return {
+          pharmacyControlledRegister: register,
+          pharmacyComplianceAlerts: detectComplianceAlerts({
+            register,
+            auditLogs,
+            preferences: data.preferences,
+          }),
+        };
+      })(),
+      pharmacyDispenseCompliance: null,
       _hydrated: true,
       draftLines: [],
       draftInput: null,
@@ -2179,7 +2344,11 @@ export const usePosStore = create<PosState>((set, get) => {
     }
     set((state) => {
       if (existing && shouldMergeDraftSaleLines(existing, built.line!)) {
-        const merged = mergeDraftSaleLine(existing, built.line!, d.product);
+        const merged = withPharmacyFefoPreview(
+          mergeDraftSaleLine(existing, built.line!, d.product),
+          d.product,
+          existing.pharmacyBatchOverrideId,
+        );
         return {
           draftLines: [
             ...state.draftLines.filter((l) => l !== existing),
@@ -2188,7 +2357,10 @@ export const usePosStore = create<PosState>((set, get) => {
           draftInput: null,
         };
       }
-      const line = { ...ensureSaleLineId(built.line!), stockVersionAtAdd: d.product.version ?? 1 };
+      const line = withPharmacyFefoPreview(
+        { ...ensureSaleLineId(built.line!), stockVersionAtAdd: d.product.version ?? 1 },
+        d.product,
+      );
       return {
         draftLines: [...state.draftLines, line],
         draftInput: null,
@@ -2220,10 +2392,28 @@ export const usePosStore = create<PosState>((set, get) => {
     if (draftQuantityExceedsStock(product, quantity)) {
       return { ok: false, errorKey: "noStock" };
     }
-    const next = rebuildDraftLineQuantity(product, quantity, line, resolvePackCostUnitsDepleted(product));
-    if (!next) return { ok: false, errorKey: "invalidQty" };
+    const rebuilt = rebuildDraftLineQuantity(product, quantity, line, resolvePackCostUnitsDepleted(product));
+    if (!rebuilt) return { ok: false, errorKey: "invalidQty" };
+    const next = withPharmacyFefoPreview(rebuilt, product, line.pharmacyBatchOverrideId);
     set((s) => ({
       draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
+    }));
+    scheduleDraftPersist(get);
+    return { ok: true };
+  },
+
+  setDraftLineBatchOverride: (productId, batchId, reason) => {
+    const state = get();
+    const line = state.draftLines.find((l) => l.productId === productId);
+    const product = state.products.find((p) => p.id === productId);
+    if (!line || !product) return { ok: false, errorKey: "noSelection" };
+    const updated = withPharmacyFefoPreview(
+      { ...line, pharmacyBatchOverrideId: batchId, pharmacyFefoOverrideReason: reason },
+      product,
+      batchId,
+    );
+    set((s) => ({
+      draftLines: s.draftLines.map((l) => (l.productId === productId ? updated : l)),
     }));
     scheduleDraftPersist(get);
     return { ok: true };
@@ -3333,9 +3523,28 @@ export const usePosStore = create<PosState>((set, get) => {
       }
     }
 
+    const saleLinesPreview = state.draftLines.map((line) => normalizeSaleLine(line));
+    if (isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled)) {
+      const activeRx = state.activePharmacyPrescriptionId
+        ? state.pharmacyPrescriptions.find((r) => r.id === state.activePharmacyPrescriptionId) ?? null
+        : null;
+      const controlledValidation = validateControlledDispense({
+        lines: saleLinesPreview,
+        products: state.products,
+        preferences: state.preferences,
+        prescription: activeRx,
+        compliance: state.pharmacyDispenseCompliance,
+      });
+      if (controlledValidation.prescriptionRequiredBlocked) {
+        return { ok: false, errorKey: "pharmacyControlledRxRequired" };
+      }
+      if (controlledValidation.controlledLines.length > 0 && controlledValidation.requiresGate) {
+        return { ok: false, errorKey: "pharmacyControlledApprovalRequired" };
+      }
+    }
+
     const isFirstSale = state.sales.length === 0;
 
-    const saleLinesPreview = state.draftLines.map((line) => normalizeSaleLine(line));
     const listSubtotal = saleLinesPreview.reduce((a, l) => a + (l.originalLineTotalUgx ?? l.lineTotalUgx), 0);
     const lineSubtotal = saleLinesPreview.reduce((a, l) => a + l.lineTotalUgx, 0);
     const cartDiscount = Math.min(Math.max(0, Math.floor(state.draftCartDiscountUgx)), lineSubtotal);
@@ -3395,6 +3604,15 @@ export const usePosStore = create<PosState>((set, get) => {
     const products = [...state.products];
     const preCartLines: SaleLine[] = [];
     const finalizeAt = new Date().toISOString();
+    const pendingId = state.activePendingSaleId;
+    const existingPending = pendingId ? state.sales.find((s) => s.id === pendingId && s.status === "pending") : null;
+    const fefoOverrideAudits: Array<{
+      productId: string;
+      productName: string;
+      quantity: number;
+      batchId?: string | null;
+      reason?: string | null;
+    }> = [];
     for (const line of state.draftLines) {
       const idx = products.findIndex((p) => p.id === line.productId);
       if (idx === -1) return { ok: false, errorKey: "missingProduct" };
@@ -3432,6 +3650,28 @@ export const usePosStore = create<PosState>((set, get) => {
         updatedAt: finalizeAt,
         version: deductFinished ? p.version + 1 : p.version,
       };
+      if (
+        deductFinished &&
+        shouldTrackBatchesForProduct(state.preferences.businessType, state.preferences.pharmacyModeEnabled, products[idx]!)
+      ) {
+        const fefo = applySaleBatchFefo(products[idx]!, moneyLine.quantity, {
+          at: finalizeAt,
+          saleId: existingPending?.id ?? "draft",
+          actorUserId: state.sessionActor?.userId,
+          actorName: state.sessionActor?.displayName,
+          overrideBatchId: moneyLine.pharmacyBatchOverrideId,
+        });
+        products[idx] = fefo.product;
+        if (fefo.usedOverride) {
+          fefoOverrideAudits.push({
+            productId: p.id,
+            productName: p.name,
+            quantity: moneyLine.quantity,
+            batchId: moneyLine.pharmacyBatchOverrideId,
+            reason: moneyLine.pharmacyFefoOverrideReason,
+          });
+        }
+      }
     }
 
     const recipeDeduction = applyRecipeStockDeduction(products, ingredientReq);
@@ -3448,8 +3688,6 @@ export const usePosStore = create<PosState>((set, get) => {
     const actor = state.sessionActor;
     const todayKey = dateKeyKampala(new Date());
     const receiptSeq = scanTodaySalesHead(state.sales, todayKey).nextReceiptSeq;
-    const pendingId = state.activePendingSaleId;
-    const existingPending = pendingId ? state.sales.find((s) => s.id === pendingId && s.status === "pending") : null;
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const sessionWaiter = sessionWaiterAttribution(floor, existingPending?.tableSessionId);
     const receiptSnap = buildReceiptBrandingSnapshot(state.preferences, receiptSnapshotPlanTier(state.preferences));
@@ -3490,6 +3728,12 @@ export const usePosStore = create<PosState>((set, get) => {
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
       amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
       changeGivenUgx: Number.isFinite(changeGivenUgx) ? Math.max(0, Math.floor(changeGivenUgx ?? 0)) : 0,
+      prescriptionId: state.activePharmacyPrescriptionId ?? null,
+      dispenseType: state.activePharmacyPrescriptionId
+        ? "prescription"
+        : state.pharmacyDispenseMode === "otc"
+          ? "otc"
+          : null,
     };
 
     if (customerId && debt > 0) {
@@ -3548,6 +3792,19 @@ export const usePosStore = create<PosState>((set, get) => {
         }),
       );
     }
+    for (const o of fefoOverrideAudits) {
+      auditEntries.push(
+        buildAudit("pharmacy_fefo_override", `FEFO override on ${o.productName}`, {
+          saleId: sale.id,
+          productId: o.productId,
+          quantity: o.quantity,
+          batchId: o.batchId ?? null,
+          reason: o.reason ?? null,
+          businessDate: dateKeyKampala(new Date()),
+          online: typeof navigator !== "undefined" ? navigator.onLine : true,
+        }),
+      );
+    }
 
     let nextPreferences = state.preferences;
     const closedSessionId = existingPending?.tableSessionId ?? null;
@@ -3577,6 +3834,154 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
 
+    let nextPharmacyPrescriptions = state.pharmacyPrescriptions;
+    let nextActiveRxId = state.activePharmacyPrescriptionId;
+    let nextDispenseMode = state.pharmacyDispenseMode;
+    if (state.activePharmacyPrescriptionId && actor?.userId) {
+      const rxIdx = nextPharmacyPrescriptions.findIndex((r) => r.id === state.activePharmacyPrescriptionId);
+      if (rxIdx >= 0) {
+        const prevRx = nextPharmacyPrescriptions[rxIdx]!;
+        const updatedLines = prevRx.lines.map((pl) => {
+          const draft = saleLines.find((l) => l.productId === pl.productId);
+          return draft
+            ? {
+                ...pl,
+                quantityDispensed: Math.max(pl.quantityDispensed, Math.floor(draft.quantity)),
+                batchNumber: draft.pharmacyBatchNumber ?? pl.batchNumber,
+                batchExpiry: draft.pharmacyBatchExpiry ?? pl.batchExpiry,
+              }
+            : pl;
+        });
+        const dispensed = markPrescriptionDispensed(
+          prevRx,
+          sale.id,
+          { userId: actor.userId, displayName: actor.displayName },
+          updatedLines,
+        );
+        nextPharmacyPrescriptions = nextPharmacyPrescriptions.map((r, i) => (i === rxIdx ? dispensed : r));
+        auditEntries.push(
+          buildAudit("pharmacy_prescription_dispensed", `Dispensed ${dispensed.prescriptionNumber}`, {
+            ...pharmacyPrescriptionAuditPayload(dispensed, { saleId: sale.id }),
+          }),
+        );
+        if (dispensed.controlledMedicinesApproved) {
+          auditEntries.push(
+            buildAudit("pharmacy_controlled_dispensed", `Controlled dispense ${dispensed.prescriptionNumber}`, {
+              ...pharmacyPrescriptionAuditPayload(dispensed, { saleId: sale.id }),
+              reason: dispensed.controlledApprovalReason,
+            }),
+          );
+        }
+        nextActiveRxId = null;
+        nextDispenseMode = null;
+      }
+    } else if (state.pharmacyDispenseMode === "otc") {
+      nextDispenseMode = null;
+    }
+
+    let chronicPatientId = customerId;
+    if (!chronicPatientId && state.activePharmacyPrescriptionId) {
+      chronicPatientId =
+        nextPharmacyPrescriptions.find((r) => r.id === state.activePharmacyPrescriptionId)?.patientId ?? null;
+    }
+    if (chronicPatientId) {
+      const custIdx = customers.findIndex((c) => c.id === chronicPatientId);
+      if (custIdx >= 0) {
+        const cust = customers[custIdx]!;
+        const profile = ensurePharmacyPatientProfile(cust);
+        let meds = profile.chronicMedications ?? [];
+        for (const line of saleLines) {
+          meds = markChronicDispensed(meds, line.productId, sale.createdAt);
+        }
+        customers = customers.map((c, i) =>
+          i === custIdx
+            ? normalizeCustomer({
+                ...c,
+                pharmacyProfile: { ...profile, chronicMedications: meds },
+                version: c.version + 1,
+              })
+            : c,
+        );
+      }
+    }
+
+    let nextControlledRegister = state.pharmacyControlledRegister;
+    let nextComplianceAlerts = state.pharmacyComplianceAlerts;
+    if (isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled)) {
+      const activeRx = state.activePharmacyPrescriptionId
+        ? nextPharmacyPrescriptions.find((r) => r.id === state.activePharmacyPrescriptionId) ?? null
+        : null;
+      const patient = customerId ? customers.find((c) => c.id === customerId) : null;
+      const deviceId = getOrCreateDeviceId();
+      const dispenseEntries = registerEntriesFromControlledSale({
+        sale,
+        lines: saleLines,
+        products: state.products,
+        deviceId,
+        pharmacistUserId: actor?.userId ?? null,
+        pharmacistName: actor?.displayName ?? null,
+        pharmacistRole: actor?.role ?? null,
+        prescription: activeRx,
+        patientName: patient?.name ?? activeRx?.patientName ?? null,
+        compliance: state.pharmacyDispenseCompliance,
+      });
+      if (dispenseEntries.length > 0) {
+        nextControlledRegister = [...dispenseEntries, ...nextControlledRegister];
+        auditEntries.push(
+          buildAudit("controlled_dispense", `Controlled register ${dispenseEntries.length} line(s)`, {
+            saleId: sale.id,
+            count: dispenseEntries.length,
+            actorUserId: actor?.userId ?? null,
+            actorName: actor?.displayName ?? null,
+            actorRole: actor?.role ?? null,
+            deviceId,
+          }),
+        );
+      }
+      if (state.pharmacyDispenseCompliance?.witnessUserId) {
+        auditEntries.push(
+          buildAudit("witness_signed", `Witness ${state.pharmacyDispenseCompliance.witnessName ?? ""}`, {
+            saleId: sale.id,
+            witnessUserId: state.pharmacyDispenseCompliance.witnessUserId,
+            witnessName: state.pharmacyDispenseCompliance.witnessName ?? null,
+            deviceId,
+          }),
+        );
+      }
+      for (const ov of fefoOverrideAudits) {
+        const entry = registerEntryFromOverride({
+          productId: ov.productId,
+          productName: ov.productName,
+          quantity: ov.quantity,
+          overrideKind: "fefo",
+          reason: ov.reason ?? "FEFO override",
+          deviceId,
+          pharmacistUserId: actor?.userId ?? null,
+          pharmacistName: actor?.displayName ?? null,
+          pharmacistRole: actor?.role ?? null,
+          managerUserId: state.pharmacyDispenseCompliance?.managerUserId ?? actor?.userId ?? null,
+          managerName: state.pharmacyDispenseCompliance?.managerName ?? actor?.displayName ?? null,
+          managerRole: state.pharmacyDispenseCompliance?.managerRole ?? actor?.role ?? null,
+          pinVerified: Boolean(state.pharmacyDispenseCompliance?.pinVerified),
+          saleId: sale.id,
+          batchNumber: ov.batchId ?? null,
+        });
+        nextControlledRegister = [entry, ...nextControlledRegister];
+        auditEntries.push(
+          buildAudit("controlled_override", `FEFO override ${ov.productName}`, {
+            saleId: sale.id,
+            productId: ov.productId,
+            reason: ov.reason,
+          }),
+        );
+      }
+      nextComplianceAlerts = detectComplianceAlerts({
+        register: nextControlledRegister,
+        auditLogs: mergeAuditLogs(state.auditLogs, auditEntries),
+        preferences: state.preferences,
+      });
+    }
+
     set({
       products,
       sales: [sale, ...state.sales.filter((s) => s.id !== sale.id)],
@@ -3584,6 +3989,12 @@ export const usePosStore = create<PosState>((set, get) => {
       draftInput: null,
       draftCartDiscountUgx: 0,
       activePendingSaleId: null,
+      activePharmacyPrescriptionId: nextActiveRxId,
+      pharmacyDispenseMode: nextDispenseMode,
+      pharmacyPrescriptions: nextPharmacyPrescriptions,
+      pharmacyControlledRegister: nextControlledRegister,
+      pharmacyComplianceAlerts: nextComplianceAlerts,
+      pharmacyDispenseCompliance: null,
       customers,
       ...movementMergePatch(state, saleMovements),
       preferences: nextPreferences,
@@ -3714,11 +4125,35 @@ export const usePosStore = create<PosState>((set, get) => {
     sales[saleIdx] = updatedSale;
     const customers = applyCustomerDebtDelta(state.customers, sale.customerId, -debtReduce);
 
+    let nextControlledRegister = state.pharmacyControlledRegister;
+    if (
+      isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled) &&
+      preVoidProduct &&
+      isControlledProduct(preVoidProduct)
+    ) {
+      const deviceId = getOrCreateDeviceId();
+      const voidEntry = registerEntryFromControlledVoid({
+        saleId,
+        productId: line.productId,
+        productName: line.name,
+        quantity: line.quantity,
+        reason: `${reason}${note ? `: ${note}` : ""}`,
+        deviceId,
+        batchNumber: line.pharmacyBatchNumber ?? null,
+        batchExpiry: line.pharmacyBatchExpiry ?? null,
+        pharmacistUserId: actor.userId,
+        pharmacistName: actor.displayName ?? null,
+        pharmacistRole: actor.role,
+      });
+      nextControlledRegister = [voidEntry, ...nextControlledRegister];
+    }
+
     set({
       sales,
       products,
       customers,
       voidRecords: [voidRec, ...state.voidRecords],
+      pharmacyControlledRegister: nextControlledRegister,
       ...movementMergePatch(state, [movement]),
     });
 
@@ -3749,6 +4184,22 @@ export const usePosStore = create<PosState>((set, get) => {
       note: note ?? null,
       actorUserId: actor.userId,
     });
+    if (
+      isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled) &&
+      preVoidProduct &&
+      isControlledProduct(preVoidProduct)
+    ) {
+      pushAudit("controlled_void", `Controlled void ${line.name}`, {
+        saleId,
+        voidId: voidRec.id,
+        productId: line.productId,
+        quantity: line.quantity,
+        deviceId: getOrCreateDeviceId(),
+        actorUserId: actor.userId,
+        actorName: actor.displayName ?? null,
+        actorRole: actor.role,
+      });
+    }
     void queueRemote("pending_stock_updates", {
       productId: line.productId,
       delta: line.quantity,
@@ -4036,6 +4487,33 @@ export const usePosStore = create<PosState>((set, get) => {
       baseUnit === guess.baseUnit &&
       !presetMoney?.length &&
       !presetQty?.length;
+
+    let pharmacyPackaging = input.pharmacyPackaging ?? null;
+    let pharmacyMaster = input.pharmacyMaster ?? null;
+    const sku = input.primaryBarcode?.trim() || `SKU-${Date.now()}`;
+    const now = new Date().toISOString();
+    const actor = get().sessionActor;
+
+    if (input.openingBatch && stock > 0) {
+      const batch = createBatchOnReceive({
+        ...input.openingBatch,
+        quantityBase: stock,
+        unitCostUgx: costExplicit ?? cost,
+        sellingPriceUgx: price,
+        at: now,
+        actorUserId: actor?.userId ?? null,
+        actorName: actor?.displayName ?? null,
+      });
+      const basePkg = pharmacyPackaging ?? {
+        enabled: false,
+        baseUnit,
+        sell: { tablet: true, strip: false, box: false },
+        batches: [],
+      };
+      pharmacyPackaging = { ...basePkg, batches: [batch] };
+      pharmacyMaster = { batchTracked: true, expiryTracked: true, ...pharmacyMaster };
+    }
+
     get().addProduct({
       name: trimmed,
       sellingMode,
@@ -4051,11 +4529,12 @@ export const usePosStore = create<PosState>((set, get) => {
       stockOnHand: stock,
       minimumStockAlert: minAlert,
       category: input.category,
-      sku: `SKU-${Date.now()}`,
+      sku,
       medicineStrength: normalizeMedicineStrength(input.medicineStrength ?? null),
       medicineForm: normalizeMedicineForm(input.medicineForm ?? null),
-      expiryDate: normalizeExpiryDate(input.expiryDate ?? null),
-      pharmacyPackaging: input.pharmacyPackaging ?? null,
+      expiryDate: normalizeExpiryDate(input.expiryDate ?? input.openingBatch?.expiryDate ?? null),
+      pharmacyPackaging,
+      pharmacyMaster,
       quickPresetsMoneyUgx: presetMoney?.length ? presetMoney : sameShape ? guess.quickPresetsMoneyUgx : undefined,
       quickPresetsQty: presetQty?.length ? presetQty : sameShape ? guess.quickPresetsQty : undefined,
     });
@@ -4320,6 +4799,9 @@ export const usePosStore = create<PosState>((set, get) => {
         merged.conversionRate = bu.conversionRate;
       }
     }
+    if (patch.pharmacyMaster !== undefined) {
+      merged.pharmacyMaster = patch.pharmacyMaster;
+    }
 
     const prevStock = prev.stockOnHand;
     const nextStock = merged.stockOnHand;
@@ -4450,7 +4932,7 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
-  writeOffExpiredStock: ({ productId, quantity, note }) => {
+  writeOffExpiredStock: ({ productId, quantity, note, reason, batchId }) => {
     const denied = denyUnlessEffectivePermission("pharmacy.expired_writeoff", "writeOffExpiredStock");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
@@ -4461,18 +4943,38 @@ export const usePosStore = create<PosState>((set, get) => {
 
     const p = state.products.find((x) => x.id === productId);
     if (!p) return { ok: false, errorKey: "missingProduct" };
-    if (!isProductExpired(p)) return { ok: false, errorKey: "pharmacyWriteOffNotExpired" };
 
     const onHand = Math.max(0, Number(p.stockOnHand) || 0);
     if (onHand <= 0) return { ok: false, errorKey: "noStock" };
 
+    const writeReason = reason ?? "expired";
+    if (writeReason === "expired" && !isProductExpired(p) && !batchId) {
+      return { ok: false, errorKey: "pharmacyWriteOffNotExpired" };
+    }
+
     const qty = quantity != null ? Math.min(onHand, Math.max(0, Number(quantity) || 0)) : onHand;
     if (qty <= 0) return { ok: false, errorKey: "invalidQty" };
 
-    const lossValueUgx = lineCostForProductQuantity(p, qty);
     const at = new Date().toISOString();
+    const actor = state.sessionActor;
     const writeOffId = crypto.randomUUID();
     const delta = -qty;
+
+    let updatedProduct = p;
+    let lossValueUgx = lineCostForProductQuantity(p, qty);
+    if (shouldTrackBatchesForProduct(state.preferences.businessType, state.preferences.pharmacyModeEnabled, p)) {
+      const batchResult = applyPharmacyWriteOff(p, qty, writeReason, {
+        at,
+        batchId,
+        actorUserId: actor?.userId,
+        actorName: actor?.displayName,
+        note: note?.trim(),
+      });
+      if (batchResult.writtenOff > 0) {
+        updatedProduct = batchResult.product;
+        lossValueUgx = batchResult.lossValueUgx;
+      }
+    }
 
     const movement: StockMovement = {
       id: crypto.randomUUID(),
@@ -4481,7 +4983,7 @@ export const usePosStore = create<PosState>((set, get) => {
       productName: p.name,
       deltaBaseUnits: delta,
       kind: "adjust_expired_writeoff",
-      summary: `Expired write-off −${qty} ${p.baseUnit}`,
+      summary: `Write-off −${qty} ${p.baseUnit} (${writeReason})`,
       refId: writeOffId,
       supplierId: null,
     };
@@ -4490,7 +4992,7 @@ export const usePosStore = create<PosState>((set, get) => {
       products: s.products.map((row) =>
         row.id === productId
           ? {
-              ...row,
+              ...updatedProduct,
               stockOnHand: Math.max(0, row.stockOnHand + delta),
               packCostUnitsDepleted: hasPackCostAllocation(row)
                 ? advancePackCostUnitsDepleted(row.packCostUnitsDepleted, qty)
@@ -4506,23 +5008,525 @@ export const usePosStore = create<PosState>((set, get) => {
     void queueRemote("pending_stock_updates", {
       productId,
       delta,
-      note: "expired_writeoff",
+      note: `writeoff_${writeReason}`,
       baseUpdatedAt: p.updatedAt,
       baseStockOnHand: p.stockOnHand,
     });
 
-    pushAudit("expired_stock_writeoff", `Expired write-off ${p.name} −${qty} · loss UGX ${lossValueUgx.toLocaleString()}`, {
+    pushAudit("pharmacy_batch_writeoff", `Write-off ${p.name} −${qty} · ${writeReason} · UGX ${lossValueUgx.toLocaleString()}`, {
       writeOffId,
       productId,
       productName: p.name,
       quantity: qty,
       lossValueUgx,
-      costPerUnitUgx: normalizeUnitCostUgx(p.costPricePerUnitUgx),
-      expiryDate: p.expiryDate ?? null,
+      reason: writeReason,
+      batchId: batchId ?? null,
       note: note?.trim() || null,
     });
 
     return { ok: true, lossValueUgx };
+  },
+
+  pharmacySupplierReturn: ({ productId, batchId, quantity, reason }) => {
+    const denied = denyUnlessEffectivePermission("purchases.record", "pharmacySupplierReturn");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    if (!isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled)) {
+      return { ok: false, errorKey: "invalid" };
+    }
+    const p = state.products.find((x) => x.id === productId);
+    if (!p) return { ok: false, errorKey: "missingProduct" };
+    const qty = Math.max(0, Math.floor(quantity));
+    if (qty <= 0) return { ok: false, errorKey: "invalidQty" };
+
+    const at = new Date().toISOString();
+    const actor = state.sessionActor;
+    const returnId = crypto.randomUUID();
+    const { product: updatedProduct, lossValueUgx, writtenOff } = applyPharmacyWriteOff(p, qty, "damaged", {
+      at,
+      batchId,
+      actorUserId: actor?.userId,
+      actorName: actor?.displayName,
+      note: `supplier_return: ${reason}`,
+    });
+    if (writtenOff <= 0) return { ok: false, errorKey: "invalidQty" };
+
+    const delta = -writtenOff;
+    const movement: StockMovement = {
+      id: crypto.randomUUID(),
+      at,
+      productId: p.id,
+      productName: p.name,
+      deltaBaseUnits: delta,
+      kind: "adjust_other",
+      summary: `Supplier return −${writtenOff} ${p.baseUnit}`,
+      refId: returnId,
+      supplierId: null,
+    };
+
+    set((s) => ({
+      products: s.products.map((row) =>
+        row.id === productId
+          ? {
+              ...updatedProduct,
+              stockOnHand: Math.max(0, row.stockOnHand + delta),
+              updatedAt: at,
+              version: row.version + 1,
+            }
+          : row,
+      ),
+      ...movementMergePatch(s, [movement]),
+    }));
+
+    void queueRemote("pending_stock_updates", {
+      productId,
+      delta,
+      note: "supplier_return",
+      baseUpdatedAt: p.updatedAt,
+      baseStockOnHand: p.stockOnHand,
+    });
+
+    pushAudit("pharmacy_batch_return", `Supplier return ${p.name} −${writtenOff}`, {
+      returnId,
+      productId,
+      batchId,
+      quantity: writtenOff,
+      reason,
+      lossValueUgx,
+    });
+
+    return { ok: true, lossValueUgx };
+  },
+
+  createPharmacyPrescription: (input) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "createPharmacyPrescription");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    if (!isPharmacyMode(state.preferences.businessType, state.preferences.pharmacyModeEnabled)) {
+      return { ok: false, errorKey: "invalid" };
+    }
+    const rx = buildNewPrescription(input, state.sessionActor ?? undefined);
+    set({ pharmacyPrescriptions: [rx, ...state.pharmacyPrescriptions] });
+    pushAudit("pharmacy_prescription_created", rx.prescriptionNumber, pharmacyPrescriptionAuditPayload(rx));
+    return { ok: true, prescriptionId: rx.id };
+  },
+
+  updatePharmacyPrescription: (prescriptionId, patch) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "updatePharmacyPrescription");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const idx = state.pharmacyPrescriptions.findIndex((r) => r.id === prescriptionId);
+    if (idx < 0) return { ok: false, errorKey: "missingProduct" };
+    const prev = state.pharmacyPrescriptions[idx]!;
+    const next = patchPrescription(prev, patch);
+    set({
+      pharmacyPrescriptions: state.pharmacyPrescriptions.map((r, i) => (i === idx ? next : r)),
+    });
+    return { ok: true };
+  },
+
+  transitionPharmacyPrescription: (prescriptionId, status) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "transitionPharmacyPrescription");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const idx = state.pharmacyPrescriptions.findIndex((r) => r.id === prescriptionId);
+    if (idx < 0) return { ok: false, errorKey: "missingProduct" };
+    const result = transitionPrescription(state.pharmacyPrescriptions[idx]!, status);
+    if (!result.ok) return result;
+    set({
+      pharmacyPrescriptions: state.pharmacyPrescriptions.map((r, i) => (i === idx ? result.prescription : r)),
+    });
+    return { ok: true };
+  },
+
+  verifyPharmacyPrescription: (prescriptionId) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "verifyPharmacyPrescription");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const actor = get().sessionActor;
+    if (!actor?.userId) return { ok: false, errorKey: "noSelection" };
+    const state = get();
+    const idx = state.pharmacyPrescriptions.findIndex((r) => r.id === prescriptionId);
+    if (idx < 0) return { ok: false, errorKey: "missingProduct" };
+    const verified = verifyPrescriptionRecord(state.pharmacyPrescriptions[idx]!, {
+      userId: actor.userId,
+      displayName: actor.displayName,
+    });
+    set({
+      pharmacyPrescriptions: state.pharmacyPrescriptions.map((r, i) => (i === idx ? verified : r)),
+    });
+    pushAudit(
+      "pharmacy_prescription_verified",
+      verified.prescriptionNumber,
+      pharmacyPrescriptionAuditPayload(verified),
+    );
+    return { ok: true };
+  },
+
+  cancelPharmacyPrescription: (prescriptionId, reason) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "cancelPharmacyPrescription");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const idx = state.pharmacyPrescriptions.findIndex((r) => r.id === prescriptionId);
+    if (idx < 0) return { ok: false, errorKey: "missingProduct" };
+    const cancelled = patchPrescription(state.pharmacyPrescriptions[idx]!, {
+      status: "cancelled",
+      notes: reason ? `${state.pharmacyPrescriptions[idx]!.notes ?? ""}\nCancelled: ${reason}`.trim() : state.pharmacyPrescriptions[idx]!.notes,
+    });
+    set({
+      pharmacyPrescriptions: state.pharmacyPrescriptions.map((r, i) => (i === idx ? cancelled : r)),
+      activePharmacyPrescriptionId:
+        state.activePharmacyPrescriptionId === prescriptionId ? null : state.activePharmacyPrescriptionId,
+    });
+    pushAudit(
+      "pharmacy_prescription_cancelled",
+      cancelled.prescriptionNumber,
+      pharmacyPrescriptionAuditPayload(cancelled, { reason: reason ?? null }),
+    );
+    return { ok: true };
+  },
+
+  loadPrescriptionToDraft: (prescriptionId) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "loadPrescriptionToDraft");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const rx = state.pharmacyPrescriptions.find((r) => r.id === prescriptionId);
+    if (!rx) return { ok: false, errorKey: "missingProduct" };
+    if (!["verified", "ready", "dispensing"].includes(rx.status)) {
+      return { ok: false, errorKey: "pharmacyRxNotReady" };
+    }
+    const lines = prescriptionToDraftLines(rx, state.products);
+    if (lines.length === 0) return { ok: false, errorKey: "noSelection" };
+    const dispensing = patchPrescription(rx, { status: "dispensing" });
+    set({
+      draftLines: lines,
+      draftInput: null,
+      draftCartDiscountUgx: 0,
+      activePharmacyPrescriptionId: prescriptionId,
+      pharmacyDispenseMode: "prescription",
+      pharmacyPrescriptions: state.pharmacyPrescriptions.map((r) =>
+        r.id === prescriptionId ? dispensing : r,
+      ),
+    });
+    scheduleDraftPersist(get);
+    return { ok: true };
+  },
+
+  setPharmacyDispenseMode: (mode) => set({ pharmacyDispenseMode: mode }),
+
+  setActivePharmacyPrescription: (prescriptionId) => set({ activePharmacyPrescriptionId: prescriptionId }),
+
+  createPharmacyRefill: (prescriptionId) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "createPharmacyRefill");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const prev = state.pharmacyPrescriptions.find((r) => r.id === prescriptionId);
+    if (!prev) return { ok: false, errorKey: "missingProduct" };
+    const refill = createRefillFromPrescription(prev);
+    if (!refill) return { ok: false, errorKey: "pharmacyRxNoRefills" };
+    const parentUpdated = patchPrescription(prev, {
+      refillsUsed: prev.refillsUsed + 1,
+      lastRefillAt: new Date().toISOString(),
+    });
+    set({
+      pharmacyPrescriptions: [
+        refill,
+        ...state.pharmacyPrescriptions.map((r) => (r.id === prescriptionId ? parentUpdated : r)),
+      ],
+    });
+    pushAudit(
+      "pharmacy_prescription_refilled",
+      refill.prescriptionNumber,
+      pharmacyPrescriptionAuditPayload(refill, { parentId: prescriptionId }),
+    );
+    return { ok: true, prescriptionId: refill.id };
+  },
+
+  approveControlledDispense: (prescriptionId, reason) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "approveControlledDispense");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const idx = state.pharmacyPrescriptions.findIndex((r) => r.id === prescriptionId);
+    if (idx < 0) return { ok: false, errorKey: "missingProduct" };
+    const approved = patchPrescription(state.pharmacyPrescriptions[idx]!, {
+      controlledMedicinesApproved: true,
+      controlledApprovalReason: reason.trim() || null,
+    });
+    set({
+      pharmacyPrescriptions: state.pharmacyPrescriptions.map((r, i) => (i === idx ? approved : r)),
+    });
+    pushAudit(
+      "pharmacy_manager_approval",
+      `Controlled approval ${approved.prescriptionNumber}`,
+      pharmacyPrescriptionAuditPayload(approved, { reason }),
+    );
+    return { ok: true };
+  },
+
+  updatePharmacyPatientProfile: (customerId, patch) => {
+    const denied = denyUnlessEffectivePermission("customers.view", "updatePharmacyPatientProfile");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const idx = state.customers.findIndex((c) => c.id === customerId);
+    if (idx < 0) return { ok: false, errorKey: "customerNotFound" };
+    const prev = state.customers[idx]!;
+    const base = ensurePharmacyPatientProfile(prev);
+    const merged = normalizePharmacyPatientProfile({ ...base, ...patch }, customerId);
+    if (!merged) return { ok: false, errorKey: "invalid" };
+    const next = normalizeCustomer({ ...prev, pharmacyProfile: merged, version: prev.version + 1 });
+    set({ customers: state.customers.map((c, i) => (i === idx ? next : c)) });
+    void queueRemote("customer", { id: customerId });
+    pushAudit("pharmacy_patient_updated", next.name, { customerId, patientCode: merged.patientCode });
+    return { ok: true };
+  },
+
+  addPharmacyDoctor: (input) => {
+    const denied = denyUnlessEffectivePermission("customers.view", "addPharmacyDoctor");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const name = input.name.trim();
+    if (!name) return { ok: false, errorKey: "invalid" };
+    const now = new Date().toISOString();
+    const doctor: import("../types").PharmacyDoctor = {
+      id: crypto.randomUUID(),
+      name,
+      clinic: input.clinic?.trim() || null,
+      phone: input.phone?.trim() || null,
+      registrationNumber: input.registrationNumber?.trim() || null,
+      notes: input.notes?.trim() || null,
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      pendingSync: true,
+    };
+    set((s) => ({ pharmacyDoctors: [doctor, ...s.pharmacyDoctors] }));
+    return { ok: true, doctorId: doctor.id };
+  },
+
+  updatePharmacyDoctor: (doctorId, patch) => {
+    const denied = denyUnlessEffectivePermission("customers.view", "updatePharmacyDoctor");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const idx = state.pharmacyDoctors.findIndex((d) => d.id === doctorId);
+    if (idx < 0) return { ok: false, errorKey: "missingProduct" };
+    const prev = state.pharmacyDoctors[idx]!;
+    const next: import("../types").PharmacyDoctor = {
+      ...prev,
+      ...patch,
+      updatedAt: new Date().toISOString(),
+      version: prev.version + 1,
+    };
+    set({ pharmacyDoctors: state.pharmacyDoctors.map((d, i) => (i === idx ? next : d)) });
+    return { ok: true };
+  },
+
+  addPharmacyPatientNote: (customerId, text, pinned = false) => {
+    const denied = denyUnlessEffectivePermission("customers.view", "addPharmacyPatientNote");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const trimmed = text.trim();
+    if (!trimmed) return { ok: false, errorKey: "invalid" };
+    const state = get();
+    const customer = state.customers.find((c) => c.id === customerId);
+    if (!customer) return { ok: false, errorKey: "customerNotFound" };
+    const profile = ensurePharmacyPatientProfile(customer);
+    const note: import("../types").PharmacyPatientNote = {
+      id: crypto.randomUUID(),
+      text: trimmed,
+      pinned,
+      createdAt: new Date().toISOString(),
+    };
+    return get().updatePharmacyPatientProfile(customerId, {
+      notes: [note, ...(profile.notes ?? [])],
+    });
+  },
+
+  upsertPharmacyChronicMedication: (customerId, med) => {
+    const denied = denyUnlessEffectivePermission("customers.view", "upsertPharmacyChronicMedication");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const customer = state.customers.find((c) => c.id === customerId);
+    if (!customer) return { ok: false, errorKey: "customerNotFound" };
+    const profile = ensurePharmacyPatientProfile(customer);
+    const meds = profile.chronicMedications ?? [];
+    const idx = meds.findIndex((m) => m.id === med.id);
+    const nextMeds = idx >= 0 ? meds.map((m, i) => (i === idx ? med : m)) : [med, ...meds];
+    return get().updatePharmacyPatientProfile(customerId, { chronicMedications: nextMeds });
+  },
+
+  addPharmacyPatientDocumentPlaceholder: (customerId, kind, label) => {
+    const denied = denyUnlessEffectivePermission("customers.view", "addPharmacyPatientDocumentPlaceholder");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const trimmed = label.trim();
+    if (!trimmed) return { ok: false, errorKey: "invalid" };
+    const state = get();
+    const customer = state.customers.find((c) => c.id === customerId);
+    if (!customer) return { ok: false, errorKey: "customerNotFound" };
+    const profile = ensurePharmacyPatientProfile(customer);
+    const doc: import("../types").PharmacyPatientDocument = {
+      id: crypto.randomUUID(),
+      kind,
+      label: trimmed,
+      placeholder: true,
+      createdAt: new Date().toISOString(),
+    };
+    return get().updatePharmacyPatientProfile(customerId, {
+      documents: [doc, ...(profile.documents ?? [])],
+    });
+  },
+
+  setPharmacyDispenseCompliance: (approval) => {
+    set({ pharmacyDispenseCompliance: approval });
+  },
+
+  recordControlledReturn: (input) => {
+    const denied = denyUnlessEffectivePermission("pos.sell", "recordControlledReturn");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    if (!verifyOwnerPin(input.managerPin, state.preferences)) {
+      pushAudit("sensitive_action_auth_denied", "Controlled return PIN denied", {
+        context: "controlled_return",
+        productId: input.productId,
+      });
+      return { ok: false, errorKey: "pinIncorrect" };
+    }
+    const product = state.products.find((p) => p.id === input.productId);
+    if (!product) return { ok: false, errorKey: "missingProduct" };
+    const qty = Math.max(1, Math.floor(input.quantity));
+    const actor = state.sessionActor;
+    const at = new Date().toISOString();
+    const deviceId = getOrCreateDeviceId();
+    const returnId = crypto.randomUUID();
+    const sale = input.saleId ? state.sales.find((s) => s.id === input.saleId) ?? null : null;
+    const storeDisposition = input.disposition;
+    const restoresStock = storeDisposition === "return";
+
+    let nextProduct = product;
+    let batchNumber: string | null = null;
+    let batchExpiry: string | null = null;
+    const movements: StockMovement[] = [];
+
+    if (restoresStock) {
+      const batchResolution = resolveControlledReturnBatch({
+        product,
+        quantity: qty,
+        batchId: input.batchId ?? null,
+        sale,
+        productId: product.id,
+        forceBatchOverride: input.forceBatchOverride ?? false,
+      });
+      if (!batchResolution.ok) {
+        pushAudit("pharmacy_manager_approval", "Controlled return rejected — batch required", {
+          denied: true,
+          productId: product.id,
+          reason: input.reason,
+        });
+        return { ok: false, errorKey: batchResolution.errorKey ?? "invalid" };
+      }
+      batchNumber = batchResolution.batchNumber ?? null;
+      batchExpiry = batchResolution.batchExpiry ?? null;
+      if (batchResolution.allocations?.length) {
+        nextProduct = restoreProductFromControlledReturn(
+          product,
+          batchResolution.allocations,
+          at,
+          returnId,
+          actor?.userId ?? null,
+          actor?.displayName ?? null,
+        );
+      }
+      movements.push({
+        id: crypto.randomUUID(),
+        at,
+        productId: product.id,
+        productName: product.name,
+        deltaBaseUnits: qty,
+        kind: "adjust_other",
+        summary: `Controlled return +${qty} ${product.baseUnit}`,
+        refId: returnId,
+        supplierId: null,
+      });
+    }
+
+    const entry = registerEntryFromControlledReturn({
+      kind: storeDisposition,
+      productId: product.id,
+      productName: product.name,
+      quantity: qty,
+      reason: input.reason.trim(),
+      deviceId,
+      patientId: input.patientId ?? null,
+      saleId: input.saleId ?? null,
+      returnId,
+      batchNumber,
+      batchExpiry,
+      pharmacistUserId: actor?.userId ?? null,
+      pharmacistName: actor?.displayName ?? null,
+      pharmacistRole: actor?.role ?? null,
+      managerUserId: actor?.userId ?? null,
+      managerName: actor?.displayName ?? null,
+      managerRole: actor?.role ?? null,
+      pinVerified: true,
+      approvalMethod: "owner_pin",
+    });
+    const action = storeDisposition === "destroy" ? "controlled_destroy" : "controlled_return";
+
+    set((s) => ({
+      products: restoresStock
+        ? s.products.map((row) =>
+            row.id === product.id
+              ? {
+                  ...nextProduct,
+                  stockOnHand: row.stockOnHand + qty,
+                  updatedAt: at,
+                  version: row.version + 1,
+                }
+              : row,
+          )
+        : s.products,
+      pharmacyControlledRegister: [entry, ...s.pharmacyControlledRegister],
+      pharmacyComplianceAlerts: detectComplianceAlerts({
+        register: [entry, ...s.pharmacyControlledRegister],
+        auditLogs: s.auditLogs,
+        preferences: s.preferences,
+      }),
+      ...movementMergePatch(s, movements),
+    }));
+
+    if (restoresStock) {
+      void queueRemote("pending_stock_updates", {
+        productId: product.id,
+        delta: qty,
+        note: "controlled_return",
+        baseUpdatedAt: product.updatedAt,
+        baseStockOnHand: product.stockOnHand,
+      });
+    }
+
+    pushAudit(action, `${storeDisposition} ${product.name}`, {
+      productId: product.id,
+      quantity: qty,
+      reason: input.reason,
+      patientId: input.patientId ?? null,
+      returnId,
+      batchNumber,
+      actorUserId: actor?.userId ?? null,
+      actorName: actor?.displayName ?? null,
+      actorRole: actor?.role ?? null,
+      deviceId,
+      pinVerified: true,
+    });
+    pushAudit("pharmacy_manager_approval", `Controlled return approved ${product.name}`, {
+      returnId,
+      productId: product.id,
+      actorUserId: actor?.userId ?? null,
+      actorName: actor?.displayName ?? null,
+    });
+    return { ok: true };
+  },
+
+  recordRegulatoryExport: (reportKind) => {
+    const denied = denyUnlessEffectivePermission("reports.view", "recordRegulatoryExport");
+    if (denied) return { ok: false };
+    pushAudit("regulatory_export", reportKind, { reportKind });
+    return { ok: true };
   },
 
   addCustomer: (c) => {
@@ -4537,13 +5541,19 @@ export const usePosStore = create<PosState>((set, get) => {
       };
     }
 
-    const row: Customer = {
+    const id = crypto.randomUUID();
+    const profile =
+      c.pharmacyProfile != null
+        ? normalizePharmacyPatientProfile(c.pharmacyProfile, id) ?? ensurePharmacyPatientProfile({ ...c, id } as Customer)
+        : null;
+    const row: Customer = normalizeCustomer({
       ...c,
-      id: crypto.randomUUID(),
+      id,
       createdAt: new Date().toISOString(),
       version: 1,
       debtBalanceUgx: 0,
-    };
+      pharmacyProfile: profile,
+    });
     set((s) => ({ customers: [row, ...s.customers] }));
     void queueRemote("customer", { id: row.id });
     pushAudit("customer_add", row.name, { customerId: row.id, name: row.name });
@@ -4925,6 +5935,30 @@ export const usePosStore = create<PosState>((set, get) => {
         updatedAt: createdAt,
         version: p.version + 1,
       };
+      if (
+        lineInput?.batchReceive &&
+        shouldTrackBatchesForProduct(state.preferences.businessType, state.preferences.pharmacyModeEnabled, products[idx]!)
+      ) {
+        products[idx] = applyBatchReceiveToProduct(products[idx]!, lineInput.batchReceive, {
+          supplierId: walkIn ? null : supplierId,
+          supplierName,
+          purchaseId,
+          at: createdAt,
+          actorUserId: state.sessionActor?.userId,
+          actorName: state.sessionActor?.displayName,
+        });
+        pushAudit("pharmacy_batch_received", `Batch ${lineInput.batchReceive.batchNumber} +${baseIn} ${p.baseUnit}`, {
+          productId: p.id,
+          purchaseId,
+          batchNumber: lineInput.batchReceive.batchNumber,
+          quantity: baseIn,
+          oldQuantity: p.stockOnHand,
+          newQuantity: newStock,
+          expiryDate: lineInput.batchReceive.expiryDate,
+          businessDate: dateKeyKampala(new Date(createdAt)),
+          online: typeof navigator !== "undefined" ? navigator.onLine : true,
+        });
+      }
       movements.push({
         id: crypto.randomUUID(),
         at: createdAt,

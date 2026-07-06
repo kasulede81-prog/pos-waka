@@ -9,6 +9,7 @@ import type {
   SaleLine,
 } from "../types";
 import { formatMedicineFullLabel } from "./pharmacyMedicine";
+import { normalizeBatchRecord } from "./pharmacyBatches";
 import type { PosSellPreset } from "./sellingEngine";
 import { costPerBaseUnitUgx, pricePerBaseUnitUgx } from "./sellingEngine";
 import { lineCostForProductQuantity, lineProfitUgx } from "./costPrecision";
@@ -234,7 +235,9 @@ export function normalizePharmacyPackaging(raw: unknown): PharmacyPackaging | nu
     priceStripUgx: r.priceStripUgx != null ? Math.floor(Number(r.priceStripUgx)) : null,
     priceBoxUgx: r.priceBoxUgx != null ? Math.floor(Number(r.priceBoxUgx)) : null,
     lowStockAlertUnit: parseLowStockUnit(r.lowStockAlertUnit),
-    batches: Array.isArray(r.batches) ? (r.batches as PharmacyBatchRecord[]) : [],
+    batches: Array.isArray(r.batches)
+      ? (r.batches.map(normalizeBatchRecord).filter(Boolean) as PharmacyBatchRecord[])
+      : [],
   };
 }
 

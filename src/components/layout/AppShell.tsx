@@ -45,11 +45,22 @@ import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
 import { HospitalityMobileNav } from "../hospitality/HospitalityMobileNav";
+import { PharmacyMobileNav } from "../pharmacy/PharmacyMobileNav";
+import { PharmacyDesktopNav } from "../pharmacy/PharmacyDesktopNav";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { usePosLayoutMode } from "../../hooks/usePosLayoutMode";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
 import { resolveModuleExit } from "../../lib/moduleExit";
 import { isHospitalityOperationalRoute, HOSPITALITY_NAV_CATALOG, hospitalityNavItemActive } from "../../lib/hospitalityNav";
+import {
+  isPharmacyOperationalRoute,
+  PHARMACY_HOME_ROUTE,
+  PHARMACY_DISPENSE_ROUTE,
+  PHARMACY_NAV_CATALOG,
+  pharmacyNavItemActive,
+} from "../../lib/pharmacyNav";
+import { resolveTerminalHomePath } from "../../lib/terminalHome";
+import { isPosSellPath } from "../../lib/posSellExit";
 import { AppThemeToggle } from "../ui/AppThemeToggle";
 
 const BackOfficeMasterSearch = lazy(() =>
@@ -74,6 +85,7 @@ type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permis
 
 function navItemActive(path: string, pathname: string): boolean {
   if (hospitalityNavItemActive(path, pathname)) return true;
+  if (pharmacyNavItemActive(path, pathname)) return true;
   if (path === "/stock") {
     return pathname === "/stock" || pathname.startsWith("/stock/");
   }
@@ -127,9 +139,9 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
 
   const guardedNavigate = useCallback(
     (to: string, options?: NavigateOptions) => {
-      const onPos = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
-      const leavingPos = onPos && to !== location.pathname && !to.startsWith("/pos");
-      if (leavingPos) {
+      const onSell = isPosSellPath(location.pathname);
+      const leavingSell = onSell && to !== location.pathname && !isPosSellPath(to);
+      if (leavingSell) {
         void confirmLeavePosIfNeeded(location.pathname, to).then((ok) => {
           if (ok) navigate(to, options);
         });
@@ -276,7 +288,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const posLayoutMode = usePosLayoutMode();
   const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
   const isLauncherHome = location.pathname === "/";
-  const onSellScreen = location.pathname === "/pos" || location.pathname.startsWith("/pos/");
+  const onSellScreen = isPosSellPath(location.pathname);
   const fullDesktopSell = onSellScreen && posLayoutMode === "full";
   const independentModule = isIndependentModuleRoute(location.pathname);
   /** lg+ terminal layout: full-width chrome outside the classic back-office column. */
@@ -296,14 +308,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
 
   const navDefs = useMemo((): NavDef[] => {
-    const homePath =
-      hospitalityNav && hasPermission(actor.role, "hospitality.floor") ? "/floor" : "/";
-    const homeLabelKey = hospitalityNav && hasPermission(actor.role, "hospitality.floor")
-      ? "restaurantFloorNav"
-      : "posNavMainMenu";
+    const terminalHome = resolveTerminalHomePath(preferences, actor.role);
+    const homePath = terminalHome;
+    const homeLabelKey =
+      hospitalityNav && hasPermission(actor.role, "hospitality.floor")
+        ? "restaurantFloorNav"
+        : pharmacyNav
+          ? "pharmacyNav_dashboard"
+          : "posNavMainMenu";
+    const sellPath = pharmacyNav && !hospitalityNav ? PHARMACY_DISPENSE_ROUTE : "/pos";
+    const stockPath = pharmacyNav && !hospitalityNav ? "/pharmacy/inventory" : "/stock";
     const items: NavDef[] = [{ path: homePath, labelKey: homeLabelKey, Icon: Home }];
     if (hasPermission(actor.role, "pos.sell")) {
-      items.push({ path: "/pos", labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
+      items.push({ path: sellPath, labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
     }
     const hasShop = hasPermission(actor.role, "back_office.access");
     const stockOnly = hasPermission(actor.role, "stock.view") && !hasShop;
@@ -312,7 +329,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
     } else if (stockOnly) {
       items.push({
-        path: "/stock",
+        path: stockPath,
         labelKey:
           pharmacyNav && !hospitalityNav
             ? "pharmacyTerm_medicineStock"
@@ -324,7 +341,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       });
     }
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
+  }, [actor.role, hospitalityNav, pharmacyNav, preferences, sellNavLabelKey, wholesaleNav]);
 
   const hospitalityQuickNav = useMemo((): NavDef[] => {
     if (!hospitalityNav) return [];
@@ -336,11 +353,33 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     }).map((item) => ({ path: item.path, labelKey: item.labelKey, Icon: item.Icon, perm: item.perm }));
   }, [actor.role, hospitalityNav]);
 
+  const pharmacyQuickNav = useMemo((): NavDef[] => {
+    if (!pharmacyNav || hospitalityNav) return [];
+    return PHARMACY_NAV_CATALOG.filter((item) => {
+      if (!item.perm || hasPermission(actor.role, item.perm)) {
+        if (item.path === PHARMACY_HOME_ROUTE) return false;
+        return true;
+      }
+      return false;
+    }).map((item) => ({
+      path: item.path,
+      labelKey: item.labelKey,
+      Icon: Package,
+      perm: item.perm,
+    }));
+  }, [actor.role, pharmacyNav, hospitalityNav]);
+
   const showHospitalityMobileNav =
     hospitalityNav && !isDesktopLayout && isHospitalityOperationalRoute(location.pathname) && !internalAdminRoute;
+  const showPharmacyWorkspaceNav =
+    pharmacyNav && !hospitalityNav && isPharmacyOperationalRoute(location.pathname) && !internalAdminRoute;
+  const showPharmacyMobileNav = showPharmacyWorkspaceNav && !isDesktopLayout;
+  const showPharmacyDesktopNav = showPharmacyWorkspaceNav && isDesktopLayout;
   const showMobileModuleExit =
-    Boolean(resolveModuleExit(location.pathname)) && !internalAdminRoute && !showHospitalityMobileNav;
-  const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout);
+    Boolean(resolveModuleExit(location.pathname)) && !internalAdminRoute && !showHospitalityMobileNav && !showPharmacyMobileNav;
+  const terminalHome = resolveTerminalHomePath(preferences, actor.role);
+  const onTerminalHome = location.pathname === terminalHome;
+  const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout) && !onTerminalHome;
 
   return (
     <SessionHydrationProvider roleReady={roleReady}>
@@ -354,6 +393,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           isLauncherHome && "app-shell--launcher",
           showMobileModuleExit && "app-shell--module-exit",
           showHospitalityMobileNav && "app-shell--hospitality-nav",
+          showPharmacyMobileNav && "app-shell--pharmacy-nav",
         )}
       >
         {pwaUpdate ? (
@@ -554,6 +594,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </div>
         ) : null}
+        <PharmacyDesktopNav lang={lang} role={actor.role} visible={showPharmacyDesktopNav} />
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden",
@@ -586,11 +627,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                     >
                       <item.Icon
                         className={
-                          item.path === "/pos"
+                          item.path === "/pos" || item.path === PHARMACY_DISPENSE_ROUTE
                             ? "h-7 w-7 shrink-0 opacity-95"
                             : "h-5 w-5 shrink-0 opacity-90"
                         }
-                        strokeWidth={item.path === "/pos" ? 2.5 : 2.25}
+                        strokeWidth={item.path === "/pos" || item.path === PHARMACY_DISPENSE_ROUTE ? 2.5 : 2.25}
                         aria-hidden
                       />
                       {t(lang, item.labelKey)}
@@ -625,6 +666,32 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 </ul>
               </>
             ) : null}
+            {pharmacyQuickNav.length > 0 ? (
+              <>
+                <p className="mt-4 px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">
+                  {t(lang, "navGroupPharmacy")}
+                </p>
+                <ul className="space-y-1">
+                  {pharmacyQuickNav.map((item) => {
+                    const active = navItemActive(item.path, location.pathname);
+                    return (
+                      <li key={item.path}>
+                        <button
+                          type="button"
+                          onClick={() => guardedNavigate(item.path, { preventScrollReset: true })}
+                          className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
+                            active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
+                          }`}
+                        >
+                          <item.Icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
+                          {t(lang, item.labelKey)}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : null}
           </nav>
           ) : null}
           <section className={clsx("flex min-h-0 min-w-0 max-w-full flex-1 flex-col", independentModule ? "pb-0" : "md:pb-0")}>
@@ -634,10 +701,10 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 fullDesktopSell
                   ? "overflow-hidden"
                   : "overflow-y-auto",
-                location.pathname === "/pos" || location.pathname.startsWith("/pos/")
+                location.pathname === "/pos" || location.pathname.startsWith("/pos/") || location.pathname === PHARMACY_DISPENSE_ROUTE
                   ? "overflow-x-hidden"
                   : "overflow-x-auto",
-                location.pathname === "/pos" || location.pathname.startsWith("/pos/") ? "scroll-main-chrome--pos" : "",
+                location.pathname === "/pos" || location.pathname.startsWith("/pos/") || location.pathname === PHARMACY_DISPENSE_ROUTE ? "scroll-main-chrome--pos" : "",
               )}
             >
               <BackOfficeRouteGuard lang={lang}>
@@ -651,6 +718,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         </main>
         {showMobileModuleExit ? <MobileModuleExitBar lang={lang} /> : null}
         <HospitalityMobileNav lang={lang} role={actor.role} visible={showHospitalityMobileNav} />
+        <PharmacyMobileNav lang={lang} role={actor.role} visible={showPharmacyMobileNav} />
         {preferences.posLocked ? (
           <AppModalOverlay className="z-[120] flex items-center justify-center bg-stone-950/85 p-4">
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">

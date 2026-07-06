@@ -1,10 +1,12 @@
 import { isInternalAdminAppPath } from "./internalAdminPreview";
+import { PHARMACY_DISPENSE_ROUTE } from "./pharmacyNav";
 
 /** Sticky header Exit → main menu launcher (all viewports). */
 export function shouldShowHeaderExit(pathname: string): boolean {
   if (isInternalAdminAppPath(pathname)) return false;
   if (pathname === "/") return false;
   if (pathname === "/pos" || pathname.startsWith("/pos/")) return false;
+  if (pathname === PHARMACY_DISPENSE_ROUTE) return false;
   return true;
 }
 

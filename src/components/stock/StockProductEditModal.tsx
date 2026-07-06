@@ -24,6 +24,11 @@ import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { PharmacyCostWarningBanner } from "../pharmacy/PharmacyCostWarningBanner";
 import {
+  buildPharmacyMasterFromState,
+  masterStateFromProduct,
+  PharmacyMedicineMasterFields,
+} from "../pharmacy/PharmacyMedicineMasterFields";
+import {
   buildPackagingFromState,
   packagingStateFromProduct,
   PharmacyPackagingFields,
@@ -65,6 +70,7 @@ type Props = {
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
         | "pharmacyPackaging"
+        | "pharmacyMaster"
       >
     >,
     opts?: { auditReason?: string },
@@ -115,6 +121,7 @@ export function StockProductEditModal({
   const [packagingState, setPackagingState] = useState<PharmacyPackagingFieldState>(() =>
     packagingStateFromProduct(null),
   );
+  const [masterState, setMasterState] = useState(() => masterStateFromProduct(null));
   const [auditReason, setAuditReason] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -160,6 +167,7 @@ export function StockProductEditModal({
     ps.sellStrip = product.pharmacyPackaging?.sell.strip ?? ps.sellStrip;
     ps.sellBox = product.pharmacyPackaging?.sell.box ?? ps.sellBox;
     setPackagingState(ps);
+    setMasterState(masterStateFromProduct(product));
     setAuditReason("");
     setSubmitError(null);
   }, [open, product]);
@@ -250,11 +258,23 @@ export function StockProductEditModal({
       stockOnHand: nextStock,
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert.replace(/\D/g, "")) || 0)),
       category: category.trim(),
-      sku: sku.trim() || product.sku,
+      sku:
+        pharmacyMode && masterState.primaryBarcode.trim()
+          ? masterState.primaryBarcode.trim()
+          : sku.trim() || product.sku,
       expiryDate: pharmacyMode ? normalizeExpiryDate(expiryDate || null) : product.expiryDate ?? null,
       medicineStrength: pharmacyMode ? normalizeMedicineStrength(medicineStrength || null) : product.medicineStrength ?? null,
       medicineForm: pharmacyMode ? normalizeMedicineForm(medicineForm || null) : product.medicineForm ?? null,
       pharmacyPackaging: packagingEdit ? pharmacyPackaging : product.pharmacyPackaging ?? null,
+      pharmacyMaster: pharmacyMode
+        ? buildPharmacyMasterFromState({
+            ...masterState,
+            brandName: name.trim(),
+            strength: medicineStrength,
+            medicineForm,
+            medicineCategory: category.trim(),
+          })
+        : product.pharmacyMaster ?? null,
     };
 
     if (canPresets) {
@@ -604,6 +624,21 @@ export function StockProductEditModal({
               ) : null}
             </div>
           </label>
+
+          {pharmacyMode ? (
+            <PharmacyMedicineMasterFields
+              lang={lang}
+              state={{ ...masterState, strength: medicineStrength, medicineForm, brandName: name }}
+              onChange={(patch) => {
+                if (patch.brandName !== undefined) setName(patch.brandName);
+                if (patch.strength !== undefined) setMedicineStrength(patch.strength);
+                if (patch.medicineForm !== undefined) setMedicineForm(patch.medicineForm);
+                setMasterState((prev) => ({ ...prev, ...patch }));
+              }}
+              showStrengthForm={false}
+              compact
+            />
+          ) : null}
 
           <details className="rounded-2xl border border-stone-200 bg-stone-50/50 px-4 open:pb-4">
             <summary className="cursor-pointer py-3 text-sm font-black text-stone-700">{t(lang, "stockEditAdvanced")}</summary>

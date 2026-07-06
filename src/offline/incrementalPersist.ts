@@ -141,6 +141,27 @@ export async function flushIncrementalPersist(prev: PosState, next: PosState): P
     (r) => r.createdAt,
     stats,
   );
+  await persistArrayDelta(
+    "pharmacyPrescription",
+    prev.pharmacyPrescriptions ?? [],
+    next.pharmacyPrescriptions ?? [],
+    (r) => r.updatedAt,
+    stats,
+  );
+  await persistArrayDelta(
+    "pharmacyDoctor",
+    prev.pharmacyDoctors ?? [],
+    next.pharmacyDoctors ?? [],
+    (d) => d.updatedAt,
+    stats,
+  );
+  await persistArrayDelta(
+    "pharmacyControlledRegister",
+    prev.pharmacyControlledRegister ?? [],
+    next.pharmacyControlledRegister ?? [],
+    (e) => e.at,
+    stats,
+  );
 
   if (prev.sales !== next.sales) {
     manifest.salesOrder = salesOrderFromArray(next.sales);
@@ -191,6 +212,9 @@ export async function flushFullSnapshotPersist(state: PosState, opts?: { skipLas
     archivedDayCloses: state.archivedDayCloses,
     archivedVoidRecords: state.archivedVoidRecords,
     archivedReturnRecords: state.archivedReturnRecords,
+    pharmacyPrescriptions: state.pharmacyPrescriptions ?? [],
+    pharmacyDoctors: state.pharmacyDoctors ?? [],
+    pharmacyControlledRegister: state.pharmacyControlledRegister ?? [],
     deletedProductIds: tombstoneFields.deletedProductIds,
     voidedSaleIds: tombstoneFields.voidedSaleIds,
   };

@@ -1,5 +1,6 @@
 import type { Product } from "../types";
 import { dateKeyKampala } from "./datesUg";
+import { effectiveProductExpiry, getProductBatches } from "./pharmacyBatches";
 
 export type ExpiryBucket = "none" | "ok" | "d90" | "d60" | "d30" | "expired";
 
@@ -29,7 +30,7 @@ export function productHasExpiry(product: Product): boolean {
 
 /** Whole days until expiry (negative = expired). Null if no expiry set. */
 export function daysUntilExpiry(product: Product, today: Date = new Date()): number | null {
-  const exp = normalizeExpiryDate(product.expiryDate);
+  const exp = normalizeExpiryDate(effectiveProductExpiry(product) ?? product.expiryDate);
   if (!exp) return null;
   const todayKey = dateKeyKampala(today);
   const todayMs = Date.parse(`${todayKey}T12:00:00.000Z`);
@@ -58,6 +59,16 @@ export function countExpiryBuckets(products: Product[], today: Date = new Date()
   const counts: ExpiryBucketCounts = { none: 0, ok: 0, d90: 0, d60: 0, d30: 0, expired: 0 };
   for (const p of products) {
     if (p.stockOnHand <= 0) continue;
+    const batches = getProductBatches(p).filter((b) => b.quantityRemaining > 0);
+    if (batches.length > 0) {
+      for (const batch of batches) {
+        const pseudo = { ...p, expiryDate: batch.expiryDate };
+        const bucket = expiryBucketForProduct(pseudo, today);
+        if (bucket === "none") counts.none += 1;
+        else counts[bucket] += 1;
+      }
+      continue;
+    }
     const bucket = expiryBucketForProduct(p, today);
     if (bucket === "none") counts.none += 1;
     else counts[bucket] += 1;

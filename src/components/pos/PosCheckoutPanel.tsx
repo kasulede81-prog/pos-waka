@@ -696,6 +696,8 @@ export type PosCheckoutPanelProps = {
   onLineDiscount: (line: SaleLine) => void;
   onRemoveLine: (productId: string) => void;
   onOpenCartDiscount: () => void;
+  pharmacyMode?: boolean;
+  onBatchTap?: (line: SaleLine) => void;
   onPaymentMethod: (method: PaymentMethod) => void;
   onCheckoutAmountField: (field: CheckoutAmountField) => void;
   onAppendCheckoutDigit: (d: string) => void;
@@ -727,6 +729,8 @@ function CartDockBody({
   onLineDiscount,
   onRemoveLine,
   onOpenCartDiscount,
+  pharmacyMode = false,
+  onBatchTap,
 }: {
   lang: Language;
   draftLines: SaleLine[];
@@ -741,6 +745,8 @@ function CartDockBody({
   onLineDiscount: (line: SaleLine) => void;
   onRemoveLine: (productId: string) => void;
   onOpenCartDiscount: () => void;
+  pharmacyMode?: boolean;
+  onBatchTap?: (line: SaleLine) => void;
 }): ReactNode {
   return (
     <>
@@ -775,6 +781,8 @@ function CartDockBody({
             product={productById.get(line.productId)}
             dock
             sidebarCompact={sidebarCompact}
+            pharmacyMode={pharmacyMode}
+            onBatchTap={onBatchTap ? () => onBatchTap(line) : undefined}
             onIncrement={() => onIncrement(line)}
             onDecrement={() => onDecrement(line)}
             onQtyTap={() => onQtyTap(line)}
@@ -824,6 +832,8 @@ export function PosCheckoutPanel({
   onLineDiscount,
   onRemoveLine,
   onOpenCartDiscount,
+  pharmacyMode = false,
+  onBatchTap,
   onPaymentMethod,
   onCheckoutAmountField,
   onAppendCheckoutDigit,
@@ -992,6 +1002,8 @@ export function PosCheckoutPanel({
               onLineDiscount={onLineDiscount}
               onRemoveLine={onRemoveLine}
               onOpenCartDiscount={onOpenCartDiscount}
+              pharmacyMode={pharmacyMode}
+              onBatchTap={onBatchTap}
             />
           </div>
           <div

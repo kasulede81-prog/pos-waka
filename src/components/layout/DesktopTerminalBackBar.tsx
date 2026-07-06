@@ -3,8 +3,10 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { POS_HOME_ROUTE } from "../../lib/posNavigation";
 import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
+import { usePosStore } from "../../store/usePosStore";
+import { useSessionActor } from "../../context/SessionActorContext";
+import { resolveTerminalHomePath } from "../../lib/terminalHome";
 
 type Props = { lang: Language };
 
@@ -16,20 +18,23 @@ export function HeaderExitButton({
 }: Props & { className?: string; variant?: "default" | "sellOrange" }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const preferences = usePosStore((s) => s.preferences);
+  const actor = useSessionActor();
+  const homeRoute = resolveTerminalHomePath(preferences, actor.role);
 
   const handleClick = useCallback(
     (event: MouseEvent) => {
       event.preventDefault();
-      void confirmLeavePosIfNeeded(location.pathname, POS_HOME_ROUTE).then((ok) => {
-        if (ok) navigate(POS_HOME_ROUTE, { state: { from: location.pathname } });
+      void confirmLeavePosIfNeeded(location.pathname, homeRoute).then((ok) => {
+        if (ok) navigate(homeRoute, { state: { from: location.pathname } });
       });
     },
-    [location.pathname, navigate],
+    [location.pathname, navigate, homeRoute],
   );
 
   return (
     <a
-      href={POS_HOME_ROUTE}
+      href={homeRoute}
       onClick={handleClick}
       className={`inline-flex min-h-[38px] shrink-0 touch-manipulation items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-black text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 lg:min-h-[44px] lg:gap-2 lg:px-4 lg:py-2 lg:text-sm ${
         variant === "sellOrange"

@@ -67,6 +67,8 @@ import { ProfitPage } from "./pages/ProfitPage";
 import { PharmacyMarginReportPage } from "./pages/PharmacyMarginReportPage";
 import { InventoryPurchasingPage } from "./pages/InventoryPurchasingPage";
 import { InventoryPurchasingProtectedRoute } from "./components/InventoryPurchasingProtectedRoute";
+import { PharmacyProtectedRoute, PharmacyPosRedirect, PharmacyBusinessRoute } from "./components/pharmacy/PharmacyProtectedRoute";
+import { EnterpriseProtectedRoute } from "./components/enterprise/EnterpriseProtectedRoute";
 import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./components/inventory/LegacyInventoryRedirects";
 import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
 import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
@@ -138,6 +140,62 @@ const ReservationCalendarPage = lazy(() =>
 const ExpoDisplayPage = lazy(() => import("./pages/ExpoDisplayPage").then((m) => ({ default: m.ExpoDisplayPage })));
 const PendingSalesPage = lazy(() => import("./pages/PendingSalesPage").then((m) => ({ default: m.PendingSalesPage })));
 const OpenShiftsPage = lazy(() => import("./pages/OpenShiftsPage").then((m) => ({ default: m.OpenShiftsPage })));
+const PharmacyDashboardPage = lazy(() =>
+  import("./pages/PharmacyDashboardPage").then((m) => ({ default: m.PharmacyDashboardPage })),
+);
+const PharmacyExpiryCenterPage = lazy(() =>
+  import("./pages/PharmacyExpiryCenterPage").then((m) => ({ default: m.PharmacyExpiryCenterPage })),
+);
+const PharmacyInventoryReportsPage = lazy(() =>
+  import("./pages/PharmacyInventoryReportsPage").then((m) => ({ default: m.PharmacyInventoryReportsPage })),
+);
+const PharmacyPrescriptionWorkspacePage = lazy(() =>
+  import("./pages/PharmacyPrescriptionWorkspacePage").then((m) => ({
+    default: m.PharmacyPrescriptionWorkspacePage,
+  })),
+);
+const PharmacyPatientsPage = lazy(() =>
+  import("./pages/PharmacyPatientsPage").then((m) => ({ default: m.PharmacyPatientsPage })),
+);
+const PharmacyPatientProfilePage = lazy(() =>
+  import("./pages/PharmacyPatientProfilePage").then((m) => ({ default: m.PharmacyPatientProfilePage })),
+);
+const PharmacyPatientReportsPage = lazy(() =>
+  import("./pages/PharmacyPatientReportsPage").then((m) => ({ default: m.PharmacyPatientReportsPage })),
+);
+const PharmacyComplianceRegisterPage = lazy(() =>
+  import("./pages/PharmacyComplianceRegisterPage").then((m) => ({ default: m.PharmacyComplianceRegisterPage })),
+);
+const PharmacyComplianceReportsPage = lazy(() =>
+  import("./pages/PharmacyComplianceReportsPage").then((m) => ({ default: m.PharmacyComplianceReportsPage })),
+);
+const PharmacyAccessDeniedPage = lazy(() =>
+  import("./pages/PharmacyAccessDeniedPage").then((m) => ({ default: m.PharmacyAccessDeniedPage })),
+);
+const EnterpriseDashboardPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseDashboardPage").then((m) => ({ default: m.EnterpriseDashboardPage })),
+);
+const EnterpriseBranchCenterPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseBranchCenterPage").then((m) => ({ default: m.EnterpriseBranchCenterPage })),
+);
+const EnterpriseTransfersPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseTransfersPage").then((m) => ({ default: m.EnterpriseTransfersPage })),
+);
+const EnterprisePurchasingPage = lazy(() =>
+  import("./pages/enterprise/EnterprisePurchasingPage").then((m) => ({ default: m.EnterprisePurchasingPage })),
+);
+const EnterpriseReportsPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseReportsPage").then((m) => ({ default: m.EnterpriseReportsPage })),
+);
+const EnterpriseAuditCenterPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseAuditCenterPage").then((m) => ({ default: m.EnterpriseAuditCenterPage })),
+);
+const EnterpriseHealthPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseHealthPage").then((m) => ({ default: m.EnterpriseHealthPage })),
+);
+const EnterpriseBackupPage = lazy(() =>
+  import("./pages/enterprise/EnterpriseBackupPage").then((m) => ({ default: m.EnterpriseBackupPage })),
+);
 
 function LazyWait() {
   return (
@@ -554,9 +612,11 @@ function AppRoutes() {
             <Route
               path="pos"
               element={
-                <Suspense fallback={<LazyWait />}>
-                  <PosPage lang={lang} />
-                </Suspense>
+                <PharmacyPosRedirect>
+                  <Suspense fallback={<LazyWait />}>
+                    <PosPage lang={lang} />
+                  </Suspense>
+                </PharmacyPosRedirect>
               }
             />
             <Route
@@ -587,6 +647,148 @@ function AppRoutes() {
                     <TableOrderPage lang={lang} />
                   </Suspense>
                 </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/access-denied"
+              element={
+                <PharmacyBusinessRoute>
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyAccessDeniedPage lang={lang} />
+                  </Suspense>
+                </PharmacyBusinessRoute>
+              }
+            />
+            <Route
+              path="pharmacy"
+              element={
+                <PharmacyProtectedRoute>
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyDashboardPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/expiry"
+              element={
+                <PharmacyProtectedRoute>
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyExpiryCenterPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/reports/inventory"
+              element={
+                <PharmacyProtectedRoute permission="reports.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyInventoryReportsPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/reports/patients"
+              element={
+                <PharmacyProtectedRoute permission="reports.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyPatientReportsPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/compliance/register"
+              element={
+                <PharmacyProtectedRoute permission="reports.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyComplianceRegisterPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/compliance/reports"
+              element={
+                <PharmacyProtectedRoute permission="reports.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyComplianceReportsPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/prescriptions"
+              element={
+                <PharmacyProtectedRoute permission="pos.sell">
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyPrescriptionWorkspacePage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route path="pharmacy/dispense" element={<Navigate to="/pharmacy/prescriptions" replace />} />
+            <Route
+              path="pharmacy/patients"
+              element={
+                <PharmacyProtectedRoute>
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyPatientsPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/patients/:patientId"
+              element={
+                <PharmacyProtectedRoute>
+                  <Suspense fallback={<LazyWait />}>
+                    <PharmacyPatientProfilePage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/inventory"
+              element={
+                <PharmacyProtectedRoute permission="stock.view">
+                  <InventoryPurchasingProtectedRoute>
+                    <InventoryPurchasingPage lang={lang} />
+                  </InventoryPurchasingProtectedRoute>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route path="pharmacy/purchases" element={<Navigate to="/pharmacy/inventory?tab=purchases" replace />} />
+            <Route
+              path="pharmacy/reports"
+              element={
+                <PharmacyProtectedRoute permission="reports.view">
+                  <SensitiveActionGate lang={lang} kind="access_reports">
+                    <ReportsPage lang={lang} />
+                  </SensitiveActionGate>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/returns"
+              element={
+                <PharmacyProtectedRoute permission="receipts.view">
+                  <Suspense fallback={<LazyWait />}>
+                    <ReceiptsPage lang={lang} />
+                  </Suspense>
+                </PharmacyProtectedRoute>
+              }
+            />
+            <Route
+              path="pharmacy/settings"
+              element={
+                <PharmacyProtectedRoute permission="settings.view">
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsPharmacyPage lang={lang} />
+                  </SettingsChangeGate>
+                </PharmacyProtectedRoute>
               }
             />
             <Route
@@ -679,6 +881,86 @@ function AppRoutes() {
                     <OwnerDashboardPage lang={lang} />
                   </Suspense>
                 </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.dashboard">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseDashboardPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/branches"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.branches">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseBranchCenterPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/transfers"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.transfers">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseTransfersPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/purchasing"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.purchasing">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterprisePurchasingPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/reports"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.reports">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseReportsPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/audit"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.audit">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseAuditCenterPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/health"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.health">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseHealthPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise/backup"
+              element={
+                <EnterpriseProtectedRoute permission="enterprise.backup">
+                  <Suspense fallback={<LazyWait />}>
+                    <EnterpriseBackupPage lang={lang} />
+                  </Suspense>
+                </EnterpriseProtectedRoute>
               }
             />
             <Route

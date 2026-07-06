@@ -1,0 +1,47 @@
+import { Navigate, useLocation } from "react-router-dom";
+import type { Permission } from "../../types";
+import { useSessionActor } from "../../context/SessionActorContext";
+import { useSessionHydration } from "../../context/SessionHydrationContext";
+import { useSubscription } from "../../context/SubscriptionContext";
+import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+import { hasSupabaseConfig } from "../../lib/supabase";
+import { usePosStore } from "../../store/usePosStore";
+
+type Props = {
+  permission?: Permission;
+  children: React.ReactNode;
+};
+
+function SessionLoadingGate() {
+  return (
+    <div className="flex min-h-[28vh] items-center justify-center px-4 text-sm font-semibold text-stone-500">
+      Loading…
+    </div>
+  );
+}
+
+/** Enterprise HQ routes — cloud org required; single-store orgs pass automatically. */
+export function EnterpriseProtectedRoute({ permission = "enterprise.access", children }: Props) {
+  const actor = useSessionActor();
+  const location = useLocation();
+  const { authMode, loading: subscriptionLoading, snapshot } = useSubscription();
+  const { roleReady } = useSessionHydration();
+  const shopHydrated = usePosStore((s) => s._hydrated);
+
+  const waitingForSession =
+    authMode === "supabase" && (subscriptionLoading || !roleReady || !shopHydrated);
+
+  if (waitingForSession) {
+    return <SessionLoadingGate />;
+  }
+
+  if (!hasSupabaseConfig || authMode !== "supabase") {
+    return <Navigate to="/office" replace state={{ from: location.pathname }} />;
+  }
+
+  if (!hasEffectivePermission(actor.role, permission, snapshot, authMode)) {
+    return <Navigate to="/office" replace state={{ from: location.pathname, reason: permission }} />;
+  }
+
+  return <>{children}</>;
+}

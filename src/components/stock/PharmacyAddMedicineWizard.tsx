@@ -7,6 +7,11 @@ import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { shelfIconFor } from "../../lib/productCategories";
 import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { MEDICINE_FORMS } from "../../lib/pharmacyMedicine";
+import {
+  buildPharmacyMasterFromState,
+  masterStateFromProduct,
+  PharmacyMedicineMasterFields,
+} from "../pharmacy/PharmacyMedicineMasterFields";
 import { usePosStore } from "../../store/usePosStore";
 import { defaultPharmacyCategoriesForBusinessType } from "../../lib/pharmacy";
 import { pharmacyCostWarnings } from "../../lib/pharmacyCostIntegrity";
@@ -65,6 +70,9 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
   const [stripPrice, setStripPrice] = useState("");
   const [boxPrice, setBoxPrice] = useState("");
   const [savedFlash, setSavedFlash] = useState(false);
+  const [masterState, setMasterState] = useState(() => masterStateFromProduct(null));
+  const [batchNumber, setBatchNumber] = useState("");
+  const [manufactureDate, setManufactureDate] = useState("");
 
   const categoryOptions = useMemo(() => {
     const presets = defaultPharmacyCategoriesForBusinessType(preferences.businessType);
@@ -100,6 +108,9 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     setStripPrice("");
     setBoxPrice("");
     setSavedFlash(false);
+    setMasterState(masterStateFromProduct(null));
+    setBatchNumber("");
+    setManufactureDate("");
   };
 
   useEffect(() => {
@@ -202,8 +213,16 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     const pkg = draftPackaging;
     const bu = pkg?.enabled ? buyingUnitFromPackaging(pkg) : { buyingUnit: null, conversionRate: null };
 
+    const pharmacyMaster = buildPharmacyMasterFromState({
+      ...masterState,
+      brandName: name.trim() || masterState.brandName,
+      strength: strength.trim(),
+      medicineForm: medicineForm.trim(),
+      medicineCategory: resolvedCategory(),
+    });
+
     const r = quickAddProduct({
-      name: name.trim(),
+      name: (name.trim() || masterState.brandName).trim(),
       priceUgx,
       stockQty,
       category: resolvedCategory(),
@@ -218,6 +237,19 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
       costPricePerUnitUgx: costPerUnit,
       minimumStockAlert: Math.max(0, Math.floor(Number(minAlert) || 10)),
       pharmacyPackaging: pkg,
+      pharmacyMaster,
+      primaryBarcode: masterState.primaryBarcode.trim() || null,
+      openingBatch:
+        stockQty > 0 && batchNumber.trim() && expiryDate.trim()
+          ? {
+              batchNumber: batchNumber.trim(),
+              expiryDate: expiryDate.trim(),
+              quantityBase: stockQty,
+              unitCostUgx: costPerUnit,
+              manufactureDate: manufactureDate.trim() || null,
+              sellingPriceUgx: priceUgx,
+            }
+          : null,
     });
     if (!r.ok) return false;
 
@@ -232,11 +264,11 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
   const stepBlocked = (): boolean => {
     if (step === "details") {
-      return !name.trim() || !strength.trim() || !medicineForm.trim() || !expiryDate.trim();
+      return !name.trim() || !strength.trim() || !medicineForm.trim();
     }
     if (step === "stockCost") {
       const paid = Math.floor(Number(totalAmountPaid.replace(/\D/g, "")) || 0);
-      if (paid <= 0) return true;
+      if (paid <= 0 || !batchNumber.trim() || !expiryDate.trim()) return true;
       if (packagingEnabled) {
         if (level2Enabled) {
           return Math.floor(Number(receivedOuterQty.replace(/\D/g, "")) || 0) <= 0;
@@ -374,10 +406,6 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
               </select>
             </label>
             <label className={labelClass}>
-              {t(lang, "pharmacyExpiryDateLabel")} *
-              <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={clsx(inputClass, "mt-1")} />
-            </label>
-            <label className={labelClass}>
               {t(lang, "pharmacyReorderLevelLabel")}
               <input
                 value={minAlert}
@@ -386,11 +414,44 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                 className={clsx(inputClass, "mt-1")}
               />
             </label>
+
+            <PharmacyMedicineMasterFields
+              lang={lang}
+              state={{ ...masterState, brandName: name, strength, medicineForm }}
+              onChange={(patch) => {
+                if (patch.brandName !== undefined) setName(patch.brandName);
+                if (patch.strength !== undefined) setStrength(patch.strength);
+                if (patch.medicineForm !== undefined) setMedicineForm(patch.medicineForm);
+                setMasterState((prev) => ({ ...prev, ...patch }));
+              }}
+              showStrengthForm={false}
+            />
           </div>
         ) : null}
 
         {step === "stockCost" ? (
           <div className="space-y-4">
+            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyOpeningBatchTitle")}</h3>
+            <label className={labelClass}>
+              {t(lang, "pharmacyOpeningBatchNumber")} *
+              <input
+                value={batchNumber}
+                onChange={(e) => setBatchNumber(e.target.value)}
+                placeholder="LOT-001"
+                className={clsx(inputClass, "mt-1 font-mono")}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className={labelClass}>
+                {t(lang, "pharmacyManufactureDate")}
+                <input type="date" value={manufactureDate} onChange={(e) => setManufactureDate(e.target.value)} className={clsx(inputClass, "mt-1")} />
+              </label>
+              <label className={labelClass}>
+                {t(lang, "pharmacyExpiryDateLabel")} *
+                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={clsx(inputClass, "mt-1")} />
+              </label>
+            </div>
+
             <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepStockTitle")}</h3>
 
             <label className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">

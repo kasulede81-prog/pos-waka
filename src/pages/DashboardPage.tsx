@@ -28,7 +28,6 @@ import {
   resolveVisibleHomeMetrics,
 } from "../lib/homeVisibility";
 import { HospitalityDashboardPage } from "./HospitalityDashboardPage";
-import { PharmacyDashboardPage } from "./PharmacyDashboardPage";
 
 function formatDashboardSaleItems(sale: Sale, maxNames = 4): string {
   const names = sale.lines.map((l) => {
@@ -150,7 +149,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
 
   const pharmacyHome = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   if (pharmacyHome) {
-    return <PharmacyDashboardPage lang={lang} />;
+    return <Navigate to="/pharmacy" replace />;
   }
   const wholesaleHome = isWholesaleMode(preferences.businessType);
 

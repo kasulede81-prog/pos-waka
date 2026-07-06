@@ -52,7 +52,36 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 21;
+const PERM_MATRIX_VERSION = 23;
+
+const ENTERPRISE_OWNER: Permission[] = [
+  "enterprise.access",
+  "enterprise.branches",
+  "enterprise.dashboard",
+  "enterprise.transfers",
+  "enterprise.purchasing",
+  "enterprise.reports",
+  "enterprise.audit",
+  "enterprise.backup",
+  "enterprise.health",
+];
+
+const ENTERPRISE_MANAGER: Permission[] = [
+  "enterprise.access",
+  "enterprise.dashboard",
+  "enterprise.branches",
+  "enterprise.transfers",
+  "enterprise.purchasing",
+  "enterprise.reports",
+  "enterprise.audit",
+];
+
+const ENTERPRISE_SUPERVISOR: Permission[] = [
+  "enterprise.access",
+  "enterprise.dashboard",
+  "enterprise.reports",
+  "enterprise.audit",
+];
 
 const DRAWER_OPEN_PERMS: Permission[] = ["day.open_drawer", "day.verify_opening_float", "shift.start", "shift.close"];
 
@@ -99,11 +128,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.view",
     "purchases.void",
     "pharmacy.expired_writeoff",
+    "pharmacy.access",
     "expenses.record",
     "expenses.edit",
     "expenses.approve",
     "expenses.delete",
     ...HOSPITALITY_OWNER,
+    ...ENTERPRISE_OWNER,
   ],
   manager: [
     "pos.sell",
@@ -133,10 +164,12 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.view",
     "purchases.void",
     "pharmacy.expired_writeoff",
+    "pharmacy.access",
     "expenses.record",
     "expenses.edit",
     "expenses.approve",
     ...HOSPITALITY_OWNER,
+    ...ENTERPRISE_MANAGER,
   ],
   /** Sell-first: can sell, void, receipts, credit/debt, and record drawer expenses. */
   cashier: [
@@ -147,6 +180,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "stock.count",
     "customers.view",
     "customers.debt",
+    "pharmacy.access",
     "expenses.record",
     "shift.start",
     "shift.close",
@@ -158,6 +192,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   ],
   stock_keeper: [
     "receipts.view",
+    "pharmacy.access",
     "stock.view",
     "stock.adjust",
     "stock.count",
@@ -197,10 +232,13 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "purchases.record",
     "purchases.view",
     "purchases.void",
+    "pharmacy.expired_writeoff",
+    "pharmacy.access",
     "expenses.record",
     "expenses.edit",
     "expenses.approve",
     ...HOSPITALITY_OWNER,
+    ...ENTERPRISE_SUPERVISOR,
   ],
   /** Table service — order and settle assigned tables; no back office. */
   waiter: [

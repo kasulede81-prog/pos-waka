@@ -47,6 +47,8 @@ export type Permission =
   | "purchases.record"
   /** Write off expired pharmacy stock (owner/manager) */
   | "pharmacy.expired_writeoff"
+  /** Access pharmacy workspace routes */
+  | "pharmacy.access"
   /** View purchase history in reports and product detail */
   | "purchases.view"
   /** Void a recorded purchase (reverse stock and supplier balance) */
@@ -72,7 +74,17 @@ export type Permission =
   /** Hold cart / open table bill without completing */
   | "pending_sales.manage"
   /** Customize Sell screen shelf layout (owner, manager, stock keeper) */
-  | "shelves.customize";
+  | "shelves.customize"
+  /** Enterprise HQ workspace access (Phase 10) */
+  | "enterprise.access"
+  | "enterprise.branches"
+  | "enterprise.dashboard"
+  | "enterprise.transfers"
+  | "enterprise.purchasing"
+  | "enterprise.reports"
+  | "enterprise.audit"
+  | "enterprise.backup"
+  | "enterprise.health";
 
 export type AuditAction =
   | "sale_completed"
@@ -168,7 +180,28 @@ export type AuditAction =
   | "shift_handoff_verified"
   | "shift_handoff_override"
   | "sensitive_action_auth_granted"
-  | "sensitive_action_auth_denied";
+  | "sensitive_action_auth_denied"
+  | "pharmacy_batch_received"
+  | "pharmacy_batch_dispensed"
+  | "pharmacy_batch_writeoff"
+  | "pharmacy_batch_return"
+  | "pharmacy_fefo_override"
+  | "pharmacy_prescription_created"
+  | "pharmacy_prescription_verified"
+  | "pharmacy_prescription_dispensed"
+  | "pharmacy_prescription_cancelled"
+  | "pharmacy_prescription_reopened"
+  | "pharmacy_prescription_refilled"
+  | "pharmacy_controlled_dispensed"
+  | "pharmacy_manager_approval"
+  | "pharmacy_patient_updated"
+  | "controlled_dispense"
+  | "controlled_override"
+  | "controlled_return"
+  | "controlled_destroy"
+  | "controlled_void"
+  | "witness_signed"
+  | "regulatory_export";
 
 export type AuditLogEntry = {
   id: string;
@@ -1080,15 +1113,394 @@ export type PharmacySellConfig = {
   box: boolean;
 };
 
-/** Reserved for FEFO / batch tracking (not used in this sprint). */
+export type PharmacyMedicineOtcClass = "otc" | "prescription";
+
+export type PharmacyBatchStatus = "active" | "depleted" | "expired" | "quarantine" | "returned" | "written_off";
+
+export type PharmacyWriteOffReason = "expired" | "broken" | "lost" | "damaged" | "recall";
+
+export type PharmacyBatchEventType =
+  | "created"
+  | "received"
+  | "adjusted"
+  | "transferred"
+  | "dispensed"
+  | "returned"
+  | "written_off"
+  | "expired"
+  | "fefo_override";
+
+export type PharmacyBatchEvent = {
+  id: string;
+  type: PharmacyBatchEventType;
+  at: string;
+  quantityDelta?: number;
+  actorUserId?: string | null;
+  actorName?: string | null;
+  note?: string | null;
+  refId?: string | null;
+  deviceId?: string | null;
+  businessDate?: string | null;
+  online?: boolean | null;
+};
+
+/** Commercial batch sub-ledger — quantities in base units; sum(active remaining) should match stockOnHand when batch-tracked. */
 export type PharmacyBatchRecord = {
   id: string;
-  batchNumber?: string | null;
+  batchNumber: string;
   lotNumber?: string | null;
   supplierBatch?: string | null;
-  expiryDate?: string | null;
+  supplierId?: string | null;
+  supplierName?: string | null;
+  purchaseId?: string | null;
+  purchaseInvoice?: string | null;
+  purchaseDate?: string | null;
+  manufactureDate?: string | null;
+  expiryDate: string;
+  quantityReceived: number;
+  quantityRemaining: number;
+  unitCostUgx: number;
+  sellingPriceUgx?: number | null;
+  status: PharmacyBatchStatus;
+  location?: string | null;
+  notes?: string | null;
+  receivedAt: string;
+  timeline: PharmacyBatchEvent[];
+  /** @deprecated Legacy field — migrated to quantityRemaining on read. */
+  quantityBase?: number;
+};
+
+/** Controlled medicine schedule/class for regulatory register. */
+export type PharmacyControlledSchedule =
+  | "none"
+  | "schedule_2"
+  | "schedule_3"
+  | "schedule_4"
+  | "narcotic"
+  | "psychotropic";
+
+/** Pharmacy-specific medicine master data (retail products omit this). */
+export type PharmacyMedicineMaster = {
+  brandName?: string | null;
+  genericName?: string | null;
+  manufacturer?: string | null;
+  country?: string | null;
+  registrationNumber?: string | null;
+  medicineCategory?: string | null;
+  otcOrPrescription?: PharmacyMedicineOtcClass | null;
+  controlledDrug?: boolean;
+  /** Phase 8.6 — regulatory schedule/class. */
+  controlledSchedule?: PharmacyControlledSchedule | null;
+  regulatoryCategory?: string | null;
+  maxQuantityPerDispense?: number | null;
+  managerOverrideRequired?: boolean;
+  witnessRequired?: boolean;
+  refrigerated?: boolean;
+  hazardous?: boolean;
+  batchTracked?: boolean;
+  expiryTracked?: boolean;
+  barcodes?: string[];
+  supplierSku?: string | null;
+  storageNotes?: string | null;
+};
+
+export type PharmacyCompliancePrefs = {
+  witnessWorkflowEnabled?: boolean;
+  largeControlledQuantityThreshold?: number;
+  failedApprovalAlertThreshold?: number;
+  frequentOverrideWindowHours?: number;
+  frequentOverrideThreshold?: number;
+};
+
+export type PharmacyControlledRegisterKind =
+  | "dispense"
+  | "override"
+  | "return"
+  | "destroy"
+  | "void"
+  | "witness";
+
+export type PharmacyControlledOverrideKind =
+  | "controlled"
+  | "quantity"
+  | "fefo"
+  | "batch"
+  | "expired"
+  | "discount"
+  | "price";
+
+/** Immutable security register entry for inspector review. */
+export type PharmacyControlledRegisterEntry = {
+  id: string;
+  kind: PharmacyControlledRegisterKind;
+  at: string;
+  businessDate: string;
+  productId: string;
+  productName: string;
+  controlledSchedule?: string | null;
+  regulatoryCategory?: string | null;
+  patientId?: string | null;
+  patientName?: string | null;
+  prescriptionId?: string | null;
+  prescriptionNumber?: string | null;
+  saleId?: string | null;
+  returnId?: string | null;
+  batchNumber?: string | null;
+  batchExpiry?: string | null;
+  quantity: number;
+  pharmacistUserId?: string | null;
+  pharmacistName?: string | null;
+  managerUserId?: string | null;
+  managerName?: string | null;
+  witnessUserId?: string | null;
+  witnessName?: string | null;
+  overrideReason?: string | null;
+  overrideKind?: PharmacyControlledOverrideKind | null;
+  deviceId?: string | null;
+  pharmacistRole?: string | null;
+  managerRole?: string | null;
+  pinVerified?: boolean;
+  approvalMethod?: string | null;
+  immutable: true;
+  createdAt: string;
+};
+
+export type PharmacyComplianceAlertSeverity = "info" | "warning" | "critical";
+
+export type PharmacyComplianceAlert = {
+  id: string;
+  at: string;
+  severity: PharmacyComplianceAlertSeverity;
+  kind: string;
+  message: string;
+  relatedSaleId?: string | null;
+  relatedUserId?: string | null;
+  relatedProductId?: string | null;
+};
+
+export type PharmacyDispenseComplianceApproval = {
+  patientVerified: boolean;
+  prescriptionVerified: boolean;
+  managerApproved: boolean;
+  managerReason?: string | null;
+  witnessUserId?: string | null;
+  witnessName?: string | null;
+  approvedAt: string;
+  /** Phase 9.1 — real staff identity for inspector register. */
+  managerUserId?: string | null;
+  managerName?: string | null;
+  managerRole?: UserRole | null;
+  pharmacistUserId?: string | null;
+  pharmacistName?: string | null;
+  pharmacistRole?: UserRole | null;
+  pinVerified?: boolean;
+  approvalMethod?: "owner_pin" | null;
+};
+
+/** Phase 8.4 — prescription classification. */
+export type PharmacyPrescriptionType =
+  | "walk_in_otc"
+  | "paper_rx"
+  | "electronic_rx"
+  | "repeat"
+  | "chronic"
+  | "emergency";
+
+export type PharmacyPrescriptionStatus =
+  | "draft"
+  | "waiting_verification"
+  | "verified"
+  | "dispensing"
+  | "ready"
+  | "dispensed"
+  | "cancelled"
+  | "archived";
+
+export type PharmacyPrescriptionPriority = "normal" | "urgent";
+
+export type PharmacyDispenseType = "otc" | "prescription";
+
+export type PharmacyPrescriptionLine = {
+  id: string;
+  productId: string;
+  productName: string;
+  strength?: string | null;
+  form?: string | null;
+  quantityPrescribed: number;
+  quantityDispensed: number;
+  directions?: string | null;
+  batchOverrideId?: string | null;
+  batchNumber?: string | null;
+  batchExpiry?: string | null;
+};
+
+export type PharmacyPrescription = {
+  id: string;
+  prescriptionNumber: string;
+  type: PharmacyPrescriptionType;
+  status: PharmacyPrescriptionStatus;
+  priority: PharmacyPrescriptionPriority;
+  patientId: string | null;
+  patientName?: string | null;
+  patientPhone?: string | null;
+  doctorName?: string | null;
+  doctorId?: string | null;
+  diagnosis?: string | null;
+  notes?: string | null;
+  prescriptionDate: string;
+  refillCount: number;
+  refillsUsed: number;
+  lastRefillAt?: string | null;
+  nextRefillEligibleAt?: string | null;
+  lines: PharmacyPrescriptionLine[];
+  saleId?: string | null;
+  verifiedAt?: string | null;
+  verifiedByUserId?: string | null;
+  verifiedByName?: string | null;
+  dispensedAt?: string | null;
+  dispensedByUserId?: string | null;
+  dispensedByName?: string | null;
+  controlledMedicinesApproved?: boolean;
+  controlledApprovalReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  pendingSync?: boolean;
+};
+
+export type PharmacyPatientGender = "male" | "female" | "other" | "unspecified";
+
+export type PharmacyBloodGroup =
+  | "A+"
+  | "A-"
+  | "B+"
+  | "B-"
+  | "AB+"
+  | "AB-"
+  | "O+"
+  | "O-"
+  | "unknown";
+
+export type PharmacyPatientMedicalFlags = {
+  pregnancy?: boolean;
+  breastfeeding?: boolean;
+  diabetes?: boolean;
+  hypertension?: boolean;
+  asthma?: boolean;
+  kidneyDisease?: boolean;
+  liverDisease?: boolean;
+};
+
+export type PharmacyPatientNote = {
+  id: string;
+  text: string;
+  pinned: boolean;
+  createdAt: string;
+};
+
+export type PharmacyPatientDocumentKind =
+  | "prescription_scan"
+  | "lab_report"
+  | "insurance_card"
+  | "doctor_referral";
+
+/** Architecture placeholder — no cloud storage in Phase 8.5. */
+export type PharmacyPatientDocument = {
+  id: string;
+  kind: PharmacyPatientDocumentKind;
+  label: string;
+  placeholder: true;
+  createdAt: string;
+};
+
+export type PharmacyChronicMedStatus = "active" | "completed" | "missed";
+
+export type PharmacyChronicMedication = {
+  id: string;
+  productId: string;
+  productName: string;
+  directions?: string | null;
+  intervalDays: number;
+  lastDispensedAt?: string | null;
+  nextExpectedAt?: string | null;
+  status: PharmacyChronicMedStatus;
+  prescriptionId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PharmacyPatientProfile = {
+  patientCode: string;
+  dateOfBirth?: string | null;
+  gender?: PharmacyPatientGender | null;
+  email?: string | null;
+  address?: string | null;
+  nationalId?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactPhone?: string | null;
+  preferredLanguage?: string | null;
+  bloodGroup?: PharmacyBloodGroup | null;
+  weightKg?: number | null;
+  heightCm?: number | null;
+  allergies?: string[];
+  allergiesText?: string | null;
+  chronicConditions?: string | null;
+  medicalFlags?: PharmacyPatientMedicalFlags | null;
+  notes?: PharmacyPatientNote[];
+  documents?: PharmacyPatientDocument[];
+  chronicMedications?: PharmacyChronicMedication[];
+  /** @deprecated Migrated to nationalId on read. */
+  idNumber?: string | null;
+};
+
+export type PharmacyDoctor = {
+  id: string;
+  name: string;
+  clinic?: string | null;
+  phone?: string | null;
+  registrationNumber?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  pendingSync?: boolean;
+};
+
+export type PharmacyPatientTimelineEvent = {
+  id: string;
+  at: string;
+  kind:
+    | "prescription_created"
+    | "prescription_dispensed"
+    | "prescription_refill"
+    | "otc_sale"
+    | "controlled_dispensed"
+    | "debt_payment";
+  title: string;
+  detail?: string | null;
+  prescriptionId?: string | null;
+  prescriptionNumber?: string | null;
+  saleId?: string | null;
+  amountUgx?: number | null;
+  doctorName?: string | null;
+  productName?: string | null;
+  batchNumber?: string | null;
+  quantity?: number | null;
+};
+
+export type PharmacyBatchReceiveInput = {
+  batchNumber: string;
+  expiryDate: string;
   quantityBase: number;
-  receivedAt?: string;
+  unitCostUgx: number;
+  lotNumber?: string | null;
+  supplierBatch?: string | null;
+  manufactureDate?: string | null;
+  purchaseDate?: string | null;
+  purchaseInvoice?: string | null;
+  sellingPriceUgx?: number | null;
+  location?: string | null;
+  notes?: string | null;
 };
 
 /** How `minimumStockAlert` is interpreted when pharmacy packaging is enabled. */
@@ -1140,6 +1552,8 @@ export type Product = {
   medicineForm?: string | null;
   /** Optional strip/box hierarchy + sell units (pharmacy packaging mode). */
   pharmacyPackaging?: PharmacyPackaging | null;
+  /** Extended pharmacy master data (brand, generic, regulatory flags, barcodes). */
+  pharmacyMaster?: PharmacyMedicineMaster | null;
   updatedAt: string;
   /** Monotonic for last-write-wins sync hints */
   version: number;
@@ -1164,6 +1578,8 @@ export type Customer = {
   updatedAt?: string;
   /** Running “mpa mpaka” balance in UGX */
   debtBalanceUgx: number;
+  /** Phase 8.4 — optional clinical profile for pharmacy patients. */
+  pharmacyProfile?: PharmacyPatientProfile | null;
 };
 
 /** Who you buy stock from (distributor, market, etc.) */
@@ -1341,6 +1757,14 @@ export type SaleLine = {
   saleUnitType?: PharmacySaleUnitType | null;
   /** Count in `saleUnitType` (e.g. 2 tablets, 1 strip). */
   saleUnitQty?: number | null;
+  /** Pharmacy: pharmacist-selected batch (overrides FEFO). */
+  pharmacyBatchOverrideId?: string | null;
+  /** Pharmacy: reason when FEFO was overridden. */
+  pharmacyFefoOverrideReason?: string | null;
+  /** Pharmacy: FEFO-selected batch number (display snapshot). */
+  pharmacyBatchNumber?: string | null;
+  /** Pharmacy: FEFO-selected batch expiry (display snapshot). */
+  pharmacyBatchExpiry?: string | null;
   /** Set when voided after payment — line stays on receipt for audit */
   voided?: boolean;
   voidedAt?: string | null;
@@ -1392,6 +1816,10 @@ export type Sale = {
   financialRepairRequired?: boolean;
   /** True when sale lines originate from legacy migration without cost data */
   legacyFinancialData?: boolean;
+  /** Phase 8.4 — linked prescription when dispensed from Rx workflow. */
+  prescriptionId?: string | null;
+  /** Phase 8.4 — OTC vs prescription-linked sale. */
+  dispenseType?: PharmacyDispenseType | null;
   createdAt: string;
   pendingSync: boolean;
   lastSyncError?: string | null;
@@ -1879,6 +2307,8 @@ export type ShopPreferences = {
   pharmacyModeEnabled?: boolean;
   /** When selling expired medicine: warn cashier or block sale */
   pharmacyExpiredSaleBehavior?: "warn" | "block";
+  /** Phase 8.6 — regulatory compliance preferences. */
+  pharmacyCompliance?: PharmacyCompliancePrefs;
   /** Owner-only: extra diagnostics, support export, sync logging, pilot banners */
   pilotModeEnabled?: boolean;
   /** Optional discount policy; default unrestricted (backward compatible). */

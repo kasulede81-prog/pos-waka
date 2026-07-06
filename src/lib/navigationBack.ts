@@ -11,6 +11,8 @@ export function getBackFallbackPath(pathname: string, opts?: { desktopTerminal?:
   if (pathname === "/staff-access" || pathname.startsWith("/office/hardware")) return "/settings";
   if (pathname.startsWith("/settings/")) return "/settings";
   if (pathname === "/settings") return "/";
+  if (pathname.startsWith("/pharmacy/")) return "/pharmacy";
+  if (pathname === "/pharmacy") return "/";
 
   if (opts?.desktopTerminal) {
     if (pathname.startsWith("/owner/")) return "/owner";

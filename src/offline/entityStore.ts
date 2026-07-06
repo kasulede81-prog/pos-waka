@@ -7,6 +7,7 @@ import type {
   Customer,
   DayCloseSummary,
   DebtPayment,
+  PharmacyPrescription,
   Product,
   Purchase,
   ReturnRecord,
@@ -52,7 +53,10 @@ export type EntityBucket =
   | "archivedAuditLog"
   | "archivedDayClose"
   | "archivedVoidRecord"
-  | "archivedReturnRecord";
+  | "archivedReturnRecord"
+  | "pharmacyPrescription"
+  | "pharmacyDoctor"
+  | "pharmacyControlledRegister";
 
 export type EntityRow = {
   key: string;
@@ -346,6 +350,18 @@ export async function migrateSnapshotToEntities(snap: PersistedSnapshot): Promis
     "archivedReturnRecord",
     (snap.archivedReturnRecords ?? []).map((r) => ({ id: r.id, data: r, sortKey: r.createdAt })),
   );
+  await putEntitiesBatch(
+    "pharmacyPrescription",
+    (snap.pharmacyPrescriptions ?? []).map((r) => ({ id: r.id, data: r, sortKey: r.updatedAt })),
+  );
+  await putEntitiesBatch(
+    "pharmacyDoctor",
+    (snap.pharmacyDoctors ?? []).map((d) => ({ id: d.id, data: d, sortKey: d.updatedAt })),
+  );
+  await putEntitiesBatch(
+    "pharmacyControlledRegister",
+    (snap.pharmacyControlledRegister ?? []).map((e) => ({ id: e.id, data: e, sortKey: e.at })),
+  );
 }
 
 export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot | null> {
@@ -390,6 +406,11 @@ export async function assembleSnapshotFromEntities(): Promise<PersistedSnapshot 
     archivedDayCloses: await getEntitiesByBucket<DayCloseSummary>("archivedDayClose"),
     archivedVoidRecords: await getEntitiesByBucket<VoidRecord>("archivedVoidRecord"),
     archivedReturnRecords: await getEntitiesByBucket<ReturnRecord>("archivedReturnRecord"),
+    pharmacyPrescriptions: await getEntitiesByBucket<PharmacyPrescription>("pharmacyPrescription"),
+    pharmacyDoctors: await getEntitiesByBucket<import("../types").PharmacyDoctor>("pharmacyDoctor"),
+    pharmacyControlledRegister: await getEntitiesByBucket<import("../types").PharmacyControlledRegisterEntry>(
+      "pharmacyControlledRegister",
+    ),
     ...tombstoneFields,
     updatedAt: manifest.updatedAt,
   };
@@ -418,6 +439,9 @@ const ALL_ENTITY_BUCKETS: EntityBucket[] = [
   "archivedDayClose",
   "archivedVoidRecord",
   "archivedReturnRecord",
+  "pharmacyPrescription",
+  "pharmacyDoctor",
+  "pharmacyControlledRegister",
 ];
 
 export async function estimateEntityStoreBytes(): Promise<number> {

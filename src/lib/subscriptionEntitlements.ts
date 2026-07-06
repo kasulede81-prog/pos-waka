@@ -57,10 +57,20 @@ const BUSINESS_PLUS: ReadonlySet<Permission> = new Set([
   "owner.dashboard",
   "owner.activity",
   "owner.cash_history",
+  "enterprise.access",
+  "enterprise.dashboard",
+  "enterprise.reports",
+  "enterprise.audit",
 ]);
 
 /** Permissions that need Waka Plus (reserved). */
-const WAKA_PLUS_ONLY: ReadonlySet<Permission> = new Set([] as Permission[]);
+const WAKA_PLUS_ONLY: ReadonlySet<Permission> = new Set([
+  "enterprise.branches",
+  "enterprise.transfers",
+  "enterprise.purchasing",
+  "enterprise.backup",
+  "enterprise.health",
+] as Permission[]);
 
 export function normalizePlanCode(raw: string | undefined | null): SubscriptionPlanCode {
   const c = (raw ?? "free").trim().toLowerCase();

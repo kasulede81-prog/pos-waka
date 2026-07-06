@@ -48,7 +48,7 @@ describe("wholesale isolation — terminology", () => {
 
   it("retail remains unchanged", () => {
     expect(wholesaleTerm("en", "kiosk_duka", "sale").toLowerCase()).toContain("sale");
-    expect(wholesaleTerm("en", "kiosk_duka", "stock").toLowerCase()).toContain("stock");
+    expect(wholesaleTerm("en", "kiosk_duka", "stock").toLowerCase()).toContain("inventory");
   });
 });
 

@@ -77,6 +77,10 @@ export type PersistedSnapshot = {
   deletedProductIds?: string[];
   /** Sale IDs voided/tombstoned (deletion durability for backup/restore/sync). */
   voidedSaleIds?: string[];
+  /** Phase 8.4 — pharmacy prescription records. */
+  pharmacyPrescriptions?: import("../types").PharmacyPrescription[];
+  pharmacyDoctors?: import("../types").PharmacyDoctor[];
+  pharmacyControlledRegister?: import("../types").PharmacyControlledRegisterEntry[];
   updatedAt: string;
 };
 

@@ -14,6 +14,7 @@ import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../li
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { ExpiryStatusBadge } from "../pharmacy/ExpiryStatusBadge";
+import { computeMedicineBatchSummary, medicineDisplayBrand, medicineDisplayGeneric } from "../../lib/pharmacyBatches";
 import { StockProductActionSheet } from "./StockProductActionSheet";
 
 type RowAction = "edit" | "sell" | "restock" | "duplicate" | "remove";
@@ -57,6 +58,7 @@ export function StockProductCard({
   const stockText = isPharmacyPackagingActive(p)
     ? formatPharmacyStockPrimary(p)
     : formatStockLabel(p);
+  const batchSummary = pharmacyMode ? computeMedicineBatchSummary(p) : null;
   const lowStockFocus = variant === "lowStock";
 
   return (
@@ -82,8 +84,23 @@ export function StockProductCard({
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-1.5">
-              <p className="line-clamp-1 text-sm font-black text-stone-950">{formatMedicineListPrimary(p)}</p>
+              <p className="line-clamp-1 text-sm font-black text-stone-950">
+                {pharmacyMode ? medicineDisplayBrand(p) : formatMedicineListPrimary(p)}
+              </p>
+              {pharmacyMode && medicineDisplayGeneric(p) ? (
+                <span className="truncate text-[10px] font-semibold text-stone-500">{medicineDisplayGeneric(p)}</span>
+              ) : null}
               {pharmacyMode ? <ExpiryStatusBadge lang={lang} product={p} compact /> : null}
+              {pharmacyMode && p.pharmacyMaster?.controlledDrug ? (
+                <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-violet-900">
+                  {t(lang, "pharmacyControlledBadge")}
+                </span>
+              ) : null}
+              {pharmacyMode && p.pharmacyMaster?.refrigerated ? (
+                <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[8px] font-black uppercase text-sky-900">
+                  {t(lang, "pharmacyColdBadge")}
+                </span>
+              ) : null}
               {locked ? (
                 <span className="rounded-full bg-stone-800 px-1.5 py-0.5 text-[8px] font-black uppercase text-white">
                   {t(lang, "productLockedBadge")}
@@ -106,6 +123,12 @@ export function StockProductCard({
               >
                 {t(lang, "stockLabel")}: {stockText}
               </span>
+              {batchSummary && batchSummary.batchCount > 0 ? (
+                <span className="text-[10px] font-bold text-stone-500">
+                  · {batchSummary.batchCount} {t(lang, "pharmacyBatches").toLowerCase()}
+                  {batchSummary.nearestExpiry ? ` · ${batchSummary.nearestExpiry}` : ""}
+                </span>
+              ) : null}
               <span className="text-xs font-black text-teal-700">{formatProductPriceLabel(p)}</span>
             </div>
           </div>

@@ -1,5 +1,5 @@
 import type { Product } from "../types";
-import { medicineSearchHaystack } from "./pharmacyMedicine";
+import { medicineSearchHaystack, productMatchesBarcode } from "./pharmacyMedicine";
 
 /** Stored in preferences / filters for products with no category text. */
 export const UNCATEGORIZED_SENTINEL = "__waka_uncategorized__";
@@ -70,10 +70,12 @@ function hayContainsAllTokens(hay: string, hayLoose: string, tokens: string[], t
   );
 }
 
-/** Sell search: phrase or word tokens against name, category, unit, SKU, buying hint, or alias expansions. */
+/** Sell search: phrase or word tokens against name, category, unit, SKU, buying hint, alias expansions, or barcodes. */
 export function productMatchesSellSearch(p: Product, query: string, aliasTerms: string[] = []): boolean {
   const raw = query.trim();
   if (!raw) return true;
+
+  if (productMatchesBarcode(p, raw)) return true;
 
   const q = normalizeSpacing(raw);
   const qLoose = looseTokenForm(raw);

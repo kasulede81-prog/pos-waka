@@ -69,6 +69,9 @@ import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
+import { PharmacyBatchDetailSheet, type PharmacyBatchDetailAction } from "../components/pharmacy/PharmacyBatchDetailSheet";
+import { PharmacyReceiveBatchSheet } from "../components/pharmacy/PharmacyReceiveBatchSheet";
+import { findProductByBarcode } from "../lib/pharmacyMedicine";
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
 
@@ -143,7 +146,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [searchParams] = useSearchParams();
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
+  const [receiveProduct, setReceiveProduct] = useState<Product | null>(null);
   const [actionSheetProduct, setActionSheetProduct] = useState<Product | null>(null);
+  const writeOffExpiredStock = usePosStore((s) => s.writeOffExpiredStock);
+  const pharmacySupplierReturn = usePosStore((s) => s.pharmacySupplierReturn);
 
   const navigate = useNavigate();
   const [listQuery, setListQuery] = useState("");
@@ -162,12 +168,16 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       onScan: (code) => {
         setStockTab("products");
         setListQuery(code);
+        if (pharmacyMode) {
+          const hit = findProductByBarcode(products, code);
+          if (hit) setDetailProduct(hit);
+        }
       },
     });
     return () => {
       void stopBarcodeSession();
     };
-  }, []);
+  }, [pharmacyMode, products]);
 
   useEffect(() => {
     if (workspaceEmbed) {
@@ -204,6 +214,16 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       }
     }
   }, [searchParams, workspaceEmbed, canAdd, freeProductLimitReached]);
+
+  useEffect(() => {
+    const productId = searchParams.get("productId");
+    if (!productId || !pharmacyMode) return;
+    const hit = products.find((p) => p.id === productId);
+    if (hit) {
+      setDetailProduct(hit);
+      setStockTab("products");
+    }
+  }, [searchParams, products, pharmacyMode]);
 
   const guessPreview = useMemo(() => {
     const n = qaName.trim();
@@ -523,6 +543,38 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setWizardPrefill(productToWizardPrefill(p, lang));
     setWizardInitialStep("name");
     setBulkOpen(true);
+  };
+
+  const handleBatchDetailAction = (p: Product, action: PharmacyBatchDetailAction) => {
+    switch (action) {
+      case "receive":
+        setReceiveProduct(p);
+        break;
+      case "adjust":
+        setDetailProduct(null);
+        openEditProduct(p);
+        break;
+      case "writeoff": {
+        const batches = p.pharmacyPackaging?.batches ?? [];
+        const batchId = batches[0]?.id;
+        if (batchId) writeOffExpiredStock({ productId: p.id, batchId, quantity: 1, reason: "expired" });
+        break;
+      }
+      case "return": {
+        const batches = p.pharmacyPackaging?.batches ?? [];
+        const batchId = batches[0]?.id;
+        if (batchId) pharmacySupplierReturn({ productId: p.id, batchId, quantity: 1, reason: "near_expiry_return" });
+        break;
+      }
+      case "transfer":
+        window.alert(t(lang, "pharmacyQuickTransferSoon"));
+        break;
+      case "print":
+        window.print();
+        break;
+      default:
+        break;
+    }
   };
 
   const openDuplicateToQuick = (p: Product) => {
@@ -1177,7 +1229,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
       <StockProductDetailSheet
         lang={lang}
-        open={detailProduct !== null}
+        open={!pharmacyMode && detailProduct !== null}
         product={detailProduct}
         preferences={preferences}
         locked={detailProduct ? lockedIds.has(detailProduct.id) : false}
@@ -1193,6 +1245,33 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           }
         }}
       />
+
+      {pharmacyMode && detailProduct ? (
+        <PharmacyBatchDetailSheet
+          lang={lang}
+          product={detailProduct}
+          open
+          onClose={() => setDetailProduct(null)}
+          canReceive={canRestock}
+          canAdjust={canAdd}
+          canWriteOff={canAdjust}
+          canReturn={canRestock}
+          onAction={(action) => handleBatchDetailAction(detailProduct, action)}
+        />
+      ) : null}
+
+      {receiveProduct ? (
+        <PharmacyReceiveBatchSheet
+          lang={lang}
+          product={receiveProduct}
+          open
+          onClose={() => setReceiveProduct(null)}
+          onDone={() => {
+            const fresh = products.find((p) => p.id === receiveProduct.id);
+            if (fresh) setDetailProduct(fresh);
+          }}
+        />
+      ) : null}
 
       <StockProductActionSheet
         lang={lang}

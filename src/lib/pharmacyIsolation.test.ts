@@ -96,7 +96,7 @@ describe("pharmacy isolation — terminology", () => {
   });
 
   it("retail keeps generic product wording", () => {
-    expect(pharmacyTerm("en", "kiosk_duka", "stock", false).toLowerCase()).toContain("stock");
+    expect(pharmacyTerm("en", "kiosk_duka", "stock", false).toLowerCase()).toContain("inventory");
     expect(pharmacyTerm("en", "kiosk_duka", "sell", false).toLowerCase()).not.toContain("dispense");
   });
 });

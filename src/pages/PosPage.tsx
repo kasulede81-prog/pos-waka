@@ -88,6 +88,9 @@ import { canRecordCashExpenses } from "../lib/cashExpenses";
 import { RecordExpenseModal } from "../components/pos/RecordExpenseModal";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { gateExpiredMedicineSale } from "../lib/pharmacySaleGuard";
+import { PharmacyFefoBatchPicker } from "../components/pharmacy/PharmacyFefoBatchPicker";
+import { PharmacyControlledDispenseGate } from "../components/pharmacy/compliance/PharmacyControlledDispenseGate";
+import { usePharmacyControlledCheckout } from "../hooks/usePharmacyControlledCheckout";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -265,10 +268,21 @@ export function PosPage({ lang }: { lang: Language }) {
     })),
   );
   const draftLines = usePosStore((s) => s.draftLines);
+  const activePharmacyPrescriptionId = usePosStore((s) => s.activePharmacyPrescriptionId);
+  const pharmacyPrescriptions = usePosStore((s) => s.pharmacyPrescriptions);
+  const selectedPharmacyRx = useMemo(
+    () =>
+      activePharmacyPrescriptionId
+        ? pharmacyPrescriptions.find((r) => r.id === activePharmacyPrescriptionId) ?? null
+        : null,
+    [activePharmacyPrescriptionId, pharmacyPrescriptions],
+  );
+  const controlledCheckout = usePharmacyControlledCheckout(pharmacyMode ? selectedPharmacyRx : null);
   const setDraftInput = usePosStore((s) => s.setDraftInput);
   const addDraftLineFromInput = usePosStore((s) => s.addDraftLineFromInput);
   const removeDraftLine = usePosStore((s) => s.removeDraftLine);
   const setDraftLineQuantity = usePosStore((s) => s.setDraftLineQuantity);
+  const setDraftLineBatchOverride = usePosStore((s) => s.setDraftLineBatchOverride);
   const adjustDraftLineQuantity = usePosStore((s) => s.adjustDraftLineQuantity);
   const applyDraftLineDiscount = usePosStore((s) => s.applyDraftLineDiscount);
   const draftCartDiscountUgx = usePosStore((s) => s.draftCartDiscountUgx);
@@ -356,6 +370,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const draftPayable = checkoutTotals.payableUgx;
   const draftDiscountTotal = useMemo(() => draftLines.reduce((a, l) => a + lineDiscountUgx(l), 0), [draftLines]);
   const [qtyEditLine, setQtyEditLine] = useState<SaleLine | null>(null);
+  const [batchPickerLine, setBatchPickerLine] = useState<SaleLine | null>(null);
   const [cartSaleDiscountOpen, setCartSaleDiscountOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const catalogRef = useRef<HTMLDivElement>(null);
@@ -426,6 +441,10 @@ export function PosPage({ lang }: { lang: Language }) {
   const [saleCustomerId, setSaleCustomerId] = useState<string>("");
   const [saleCustomerName, setSaleCustomerName] = useState("");
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
+  const selectedPatientForGate = useMemo(() => {
+    if (!saleCustomerId) return saleCustomerName.trim() || null;
+    return customers.find((c) => c.id === saleCustomerId)?.name ?? (saleCustomerName.trim() || null);
+  }, [saleCustomerId, customers, saleCustomerName]);
   const [toast, setToast] = useState<string | null>(null);
   const [checkoutBlockMessage, setCheckoutBlockMessage] = useState<string | null>(null);
   const [checkoutBlockModalOpen, setCheckoutBlockModalOpen] = useState(false);
@@ -1037,6 +1056,61 @@ export function PosPage({ lang }: { lang: Language }) {
     setRecentSearches((prev) => [q, ...prev.filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, MAX_RECENT_SEARCHES));
   }, []);
 
+  const pendingFinalizeOptsRef = useRef<Parameters<typeof finalizeDraftSale>[0] | null>(null);
+
+  const applyFinalizeSuccess = useCallback(
+    (r: ReturnType<typeof finalizeDraftSale>) => {
+      setCheckoutBlockMessage(null);
+      setCheckoutBlockModalOpen(false);
+      if (hapticsOn) void hapticSaleComplete();
+      if (soundOn) playSaleSuccessTone();
+
+      setCashInput("");
+      setMobileMoneyInput("");
+      setSaleCustomerId("");
+      setSaleCustomerName("");
+      setSaleCustomerPhone("");
+      setCheckoutAmountField("cash");
+      setPaymentMethod("cash");
+      if (r.saleId) {
+        if (r.firstSale && !preferences.celebratedFirstSale) {
+          pendingReceiptSaleIdRef.current = r.saleId;
+          setFirstSaleOpen(true);
+        } else {
+          setReceiptSaleId(r.saleId);
+        }
+      }
+      if (r.firstSale && !preferences.celebratedFirstSale) {
+        /* receipt opens after celebration */
+      } else {
+        setSaleSuccessFlash(true);
+        window.setTimeout(() => setSaleSuccessFlash(false), 720);
+        setToast(hospitalityMode ? ht("saleSaved") : t(lang, "saleSaved"));
+        window.setTimeout(() => setToast(null), 1600);
+      }
+    },
+    [hapticsOn, soundOn, preferences.celebratedFirstSale, hospitalityMode, ht, lang],
+  );
+
+  const onControlledGateApproved = useCallback(() => {
+    const opts = pendingFinalizeOptsRef.current;
+    controlledCheckout.setGateOpen(false);
+    if (!opts) return;
+    const r = controlledCheckout.runFinalize(opts);
+    pendingFinalizeOptsRef.current = null;
+    if (!r.ok) {
+      const msg = t(lang, r.errorKey ?? "saleError");
+      if (r.errorKey === "pharmacyExpiredSaleBlocked") {
+        setCheckoutBlockMessage(msg);
+        setCheckoutBlockModalOpen(true);
+      }
+      setToast(msg);
+      window.setTimeout(() => setToast(null), 3200);
+      return;
+    }
+    applyFinalizeSuccess(r);
+  }, [controlledCheckout, lang, applyFinalizeSuccess]);
+
   const finishSale = useCallback(() => {
     void (async () => {
     if (paymentMethod === "cash" && parseDisplayMoney(cashInput) > 0 && parseDisplayMoney(cashInput) < draftPayable) {
@@ -1062,7 +1136,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setToast(t(lang, "staleStockSyncRecommended"));
       window.setTimeout(() => setToast(null), 2800);
     }
-    const r = finalizeDraftSale({
+    const finalizeOpts = {
       debtUgx: debt,
       customerId,
       customerName: customerName || null,
@@ -1070,8 +1144,15 @@ export function PosPage({ lang }: { lang: Language }) {
       paymentMethod,
       amountPaidUgx: totalPaidInput,
       changeGivenUgx: changeDue,
-    });
+    };
+    const r = pharmacyMode
+      ? controlledCheckout.attemptFinalize(finalizeOpts)
+      : finalizeDraftSale(finalizeOpts);
     if (!r.ok) {
+      if (pharmacyMode && r.errorKey === "pharmacyControlledApprovalRequired") {
+        pendingFinalizeOptsRef.current = finalizeOpts;
+        return;
+      }
       const msg = t(lang, r.errorKey ?? "saleError");
       if (r.errorKey === "pharmacyExpiredSaleBlocked") {
         setCheckoutBlockMessage(msg);
@@ -1081,34 +1162,7 @@ export function PosPage({ lang }: { lang: Language }) {
       window.setTimeout(() => setToast(null), 3200);
       return;
     }
-    setCheckoutBlockMessage(null);
-    setCheckoutBlockModalOpen(false);
-    if (hapticsOn) void hapticSaleComplete();
-    if (soundOn) playSaleSuccessTone();
-
-    setCashInput("");
-    setMobileMoneyInput("");
-    setSaleCustomerId("");
-    setSaleCustomerName("");
-    setSaleCustomerPhone("");
-    setCheckoutAmountField("cash");
-    setPaymentMethod("cash");
-    if (r.saleId) {
-      if (r.firstSale && !preferences.celebratedFirstSale) {
-        pendingReceiptSaleIdRef.current = r.saleId;
-        setFirstSaleOpen(true);
-      } else {
-        setReceiptSaleId(r.saleId);
-      }
-    }
-    if (r.firstSale && !preferences.celebratedFirstSale) {
-      /* receipt opens after celebration */
-    } else {
-      setSaleSuccessFlash(true);
-      window.setTimeout(() => setSaleSuccessFlash(false), 720);
-      setToast(hospitalityMode ? ht("saleSaved") : t(lang, "saleSaved"));
-      window.setTimeout(() => setToast(null), 1600);
-    }
+    applyFinalizeSuccess(r);
     })();
   }, [
     paymentMethod,
@@ -1124,11 +1178,9 @@ export function PosPage({ lang }: { lang: Language }) {
     lang,
     shopPreferences,
     draftLines,
-    hapticsOn,
-    soundOn,
-    preferences.celebratedFirstSale,
-    hospitalityMode,
-    ht,
+    pharmacyMode,
+    controlledCheckout,
+    applyFinalizeSuccess,
   ]);
 
   const handleSavePending = useCallback(() => {
@@ -1431,6 +1483,8 @@ export function PosPage({ lang }: { lang: Language }) {
     onLineDiscount: setDiscountLine,
     onRemoveLine: removeDraftLine,
     onOpenCartDiscount: () => setCartSaleDiscountOpen(true),
+    pharmacyMode,
+    onBatchTap: pharmacyMode ? setBatchPickerLine : undefined,
     onPaymentMethod: setPaymentMethod,
     onCheckoutAmountField: setCheckoutAmountField,
     onAppendCheckoutDigit: appendCheckoutDigit,
@@ -2626,6 +2680,25 @@ export function PosPage({ lang }: { lang: Language }) {
         />
       ) : null}
 
+      {batchPickerLine && pharmacyMode ? (
+        (() => {
+          const product = productById.get(batchPickerLine.productId);
+          if (!product) return null;
+          return (
+            <PharmacyFefoBatchPicker
+              lang={lang}
+              product={product}
+              line={batchPickerLine}
+              onClose={() => setBatchPickerLine(null)}
+              onConfirm={(batchId, reason) => {
+                setDraftLineBatchOverride(batchPickerLine.productId, batchId, reason);
+                setBatchPickerLine(null);
+              }}
+            />
+          );
+        })()
+      ) : null}
+
       <ProductLockedModal lang={lang} open={productLockedOpen} onClose={() => setProductLockedOpen(false)} />
 
       {expiryWarnProduct ? (
@@ -2679,6 +2752,18 @@ export function PosPage({ lang }: { lang: Language }) {
             </button>
           </div>
         </AppModalOverlay>
+      ) : null}
+
+      {pharmacyMode && controlledCheckout.hasControlledLines ? (
+        <PharmacyControlledDispenseGate
+          lang={lang}
+          open={controlledCheckout.gateOpen}
+          validation={controlledCheckout.validation}
+          prescription={selectedPharmacyRx}
+          patientName={selectedPatientForGate}
+          onClose={() => controlledCheckout.setGateOpen(false)}
+          onApproved={onControlledGateApproved}
+        />
       ) : null}
 
       {toast && (

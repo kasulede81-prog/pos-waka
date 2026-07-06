@@ -2,6 +2,7 @@ import { useLocation } from "react-router-dom";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { resolveModuleExit } from "../../lib/moduleExit";
 import { isHospitalityOperationalRoute } from "../../lib/hospitalityNav";
+import { isPharmacyOperationalRoute } from "../../lib/pharmacyNav";
 
 /**
  * Real block at the end of the scroll column (not padding on the scroller).
@@ -13,12 +14,13 @@ export function MobileScrollTail() {
   const isInternalAdmin = isInternalAdminAppPath(pathname);
   const moduleExit = resolveModuleExit(pathname);
   const hospitalityNav = isHospitalityOperationalRoute(pathname);
+  const pharmacyNav = isPharmacyOperationalRoute(pathname);
 
   if (isInternalAdmin) {
     return null;
   }
 
-  if (hospitalityNav || moduleExit) {
+  if (hospitalityNav || pharmacyNav || moduleExit) {
     return <div aria-hidden className="h-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] shrink-0 lg:hidden" />;
   }
 

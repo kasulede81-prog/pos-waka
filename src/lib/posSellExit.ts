@@ -1,9 +1,14 @@
 import { activeStaffCanUnlock, canLockPos } from "./lockPos";
 import { usePosStore } from "../store/usePosStore";
 import type { ShopPreferences } from "../types";
+import { PHARMACY_DISPENSE_ROUTE } from "./pharmacyNav";
 
 export function isPosSellPath(pathname: string): boolean {
-  return pathname === "/pos" || pathname.startsWith("/pos/");
+  return (
+    pathname === "/pos" ||
+    pathname.startsWith("/pos/") ||
+    pathname === PHARMACY_DISPENSE_ROUTE
+  );
 }
 
 export function canLockAfterSellExit(preferences: Pick<ShopPreferences, "backOfficePin" | "staffAccounts">): boolean {

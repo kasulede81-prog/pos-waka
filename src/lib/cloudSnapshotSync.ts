@@ -58,6 +58,9 @@ function snapshotFromStore(): PersistedSnapshot | null {
     archivedDayCloses: s.archivedDayCloses,
     archivedVoidRecords: s.archivedVoidRecords,
     archivedReturnRecords: s.archivedReturnRecords,
+    pharmacyPrescriptions: s.pharmacyPrescriptions ?? [],
+    pharmacyDoctors: s.pharmacyDoctors ?? [],
+    pharmacyControlledRegister: s.pharmacyControlledRegister ?? [],
     updatedAt: new Date().toISOString(),
   };
 }
