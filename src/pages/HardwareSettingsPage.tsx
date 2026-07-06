@@ -8,6 +8,7 @@ import { printReceiptWithFallback } from "../lib/receiptPrint";
 import { printElectronWindow } from "../lib/documentPrint";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 import { detectPrinterCapabilities } from "../services/hardware/printerAdapter";
+import { PrinterManagementPanel } from "../components/hardware/PrinterManagementPanel";
 
 const PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
 
@@ -212,7 +213,8 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
             {printerCaps.stateReason}
             <br />
             {t(lang, "printerDiagnostics")}: USB {printerCaps.usbAvailable ? "yes" : "no"} · BT{" "}
-            {printerCaps.bluetoothAvailable ? "yes" : "no"} · {printerCaps.platform}
+            {printerCaps.bluetoothAvailable ? "yes" : "no"} · LAN{" "}
+            {printerCaps.networkAvailable ? "yes" : "no"} · {printerCaps.platform}
           </p>
         ) : null}
         {typeof window !== "undefined" && window.wakaDesktop?.print ? (
@@ -230,6 +232,8 @@ export function HardwareSettingsPage({ lang }: { lang: Language }) {
           </p>
         ) : null}
       </article>
+
+      <PrinterManagementPanel lang={lang} />
 
       <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4 font-mono text-xs text-stone-800">{snap || "—"}</div>
       <p className="text-xs text-stone-500">{t(lang, "hardwareSettingsStubHint")}</p>

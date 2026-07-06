@@ -136,12 +136,13 @@ export function buildReceiptNumberForSale(sale: Sale, allSales: Sale[]): string 
 }
 
 function inferPaymentMethodLabel(
-  sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" },
+  sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher" },
 ): string {
   if (sale.paymentMethod === "atm") return "ATM";
   if (sale.paymentMethod === "mobile_money") return "MOMO PAY";
   if (sale.paymentMethod === "mixed") return "Mixed";
   if (sale.paymentMethod === "credit") return "Pay Later";
+  if (sale.paymentMethod === "voucher") return "Voucher";
   if (sale.paymentMethod === "cash") return "CASH";
   if (sale.debtUgx > 0 && sale.cashPaidUgx > 0) return "Mixed";
   if (sale.debtUgx > 0) return "Pay Later";
@@ -154,7 +155,7 @@ export function buildReceiptDisplayData(params: {
   shopPhone?: string | null;
   cashier: string;
   receiptNumber: string;
-  sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" };
+  sale: Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher" };
   productById?: Map<string, Product>;
   customHeaderLines?: string[] | null;
   headerLines?: string[] | null;
@@ -312,7 +313,7 @@ export function buildSaleReceiptText(params: {
     shopPhone,
     cashier,
     receiptNumber: receiptNumber ?? "001",
-    sale: { ...sale, paymentMethod: (sale as Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" }).paymentMethod },
+    sale: { ...sale, paymentMethod: (sale as Sale & { paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher" }).paymentMethod },
     productById,
     customHeaderLines,
     headerLines,

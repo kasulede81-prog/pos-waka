@@ -20,7 +20,8 @@ import {
 } from "../../../lib/hospitalityDocumentExports";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import type { HospitalityReportSummary } from "../../../lib/hospitalityReports";
-import type { StockMovement } from "../../../types";
+import type { HospitalityFloorState, StockMovement } from "../../../types";
+import { computeKitchenProductionAnalytics } from "../../../lib/kitchenProduction";
 
 type Props = {
   lang: Language;
@@ -37,6 +38,7 @@ type Props = {
   } | null;
   hospitalityReports: HospitalityReportSummary | null;
   hospitalityOpenBills: { count: number; totalUgx: number } | null;
+  hospitalityFloor?: HospitalityFloorState | null;
 };
 
 export function AnalyticsModeReports({
@@ -49,6 +51,7 @@ export function AnalyticsModeReports({
   wholesaleSection,
   hospitalityReports,
   hospitalityOpenBills,
+  hospitalityFloor,
 }: Props) {
   const pharmacySection =
     pharmacyExpiryReport && pharmacyMode && !wholesaleMode ? (
@@ -109,11 +112,17 @@ export function AnalyticsModeReports({
     </section>
   ) : null;
 
+  const kitchenAnalytics = hospitalityFloor ? computeKitchenProductionAnalytics(hospitalityFloor) : null;
+  const reservationCount =
+    hospitalityFloor?.reservations?.filter((r) => r.status !== "cancelled").length ?? 0;
+  const waitlistCount = hospitalityFloor?.waitlist?.filter((w) => w.status !== "cancelled").length ?? 0;
+
   const hospitalityPanel = hospitalityReports ? (
     <section className="space-y-4 rounded-2xl border border-waka-200 bg-waka-50/40 p-4 shadow-sm">
       <h2 className="text-lg font-black text-waka-950">{t(lang, "hospitalityReportsTitle")}</h2>
       <p className="text-sm font-semibold text-stone-700">
-        {hospitalityReports.completedBillCount} bills · UGX {hospitalityReports.totalRevenueUgx.toLocaleString()}
+        {hospitalityReports.completedBillCount} bills · UGX {hospitalityReports.totalRevenueUgx.toLocaleString()} ·{" "}
+        {t(lang, "hospitalityReportsAvgBill")} UGX {hospitalityReports.avgBillUgx.toLocaleString()}
       </p>
       {hospitalityOpenBills && hospitalityOpenBills.count > 0 ? (
         <article className="rounded-2xl border border-amber-200 bg-amber-50/80 p-3">
@@ -122,6 +131,92 @@ export function AnalyticsModeReports({
             {hospitalityOpenBills.count} · UGX {hospitalityOpenBills.totalUgx.toLocaleString()}
           </p>
         </article>
+      ) : null}
+      {kitchenAnalytics ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <article className="rounded-2xl border border-waka-100 bg-white p-3">
+            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsAvgPrep")}</p>
+            <p className="mt-1 text-xl font-black text-waka-950">
+              {kitchenAnalytics.averagePrepMinutes != null ? `${kitchenAnalytics.averagePrepMinutes} min` : "—"}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-waka-100 bg-white p-3">
+            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsStationLoad")}</p>
+            <p className="mt-1 text-sm font-bold text-stone-800">
+              {Object.entries(kitchenAnalytics.stationWorkload)
+                .map(([id, n]) => `${id}: ${n}`)
+                .join(" · ") || "—"}
+            </p>
+          </article>
+          <article className="rounded-2xl border border-waka-100 bg-white p-3">
+            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsReservationUtil")}</p>
+            <p className="mt-1 text-xl font-black text-waka-950">{reservationCount}</p>
+            {waitlistCount > 0 ? (
+              <p className="text-xs font-semibold text-stone-600">Waitlist: {waitlistCount}</p>
+            ) : null}
+          </article>
+          <article className="rounded-2xl border border-waka-100 bg-white p-3">
+            <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsMix")}</p>
+            <p className="mt-1 text-sm font-bold text-stone-800">
+              {hospitalityReports.categoryMix
+                .map((m) => `${m.kind}: UGX ${m.revenueUgx.toLocaleString()}`)
+                .join(" · ") || "—"}
+            </p>
+          </article>
+        </div>
+      ) : null}
+      {hospitalityReports.waiters.length > 0 ? (
+        <div className="rounded-2xl border border-stone-200 bg-white p-3">
+          <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsWaiters")}</p>
+          <ul className="mt-2 space-y-1">
+            {hospitalityReports.waiters.slice(0, 8).map((w) => (
+              <li key={w.waiterId} className="flex justify-between text-sm font-semibold text-stone-800">
+                <span>{w.label}</span>
+                <span>
+                  {w.billCount} · UGX {w.revenueUgx.toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {hospitalityReports.peakHours.length > 0 ? (
+        <div className="rounded-2xl border border-stone-200 bg-white p-3">
+          <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsPeak")}</p>
+          <ul className="mt-2 space-y-1">
+            {hospitalityReports.peakHours
+              .slice()
+              .sort((a, b) => b.revenueUgx - a.revenueUgx)
+              .slice(0, 6)
+              .map((h) => (
+                <li key={h.hour} className="flex justify-between text-sm font-semibold text-stone-800">
+                  <span>{h.label}</span>
+                  <span>
+                    {h.billCount} · UGX {h.revenueUgx.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </div>
+      ) : null}
+      {hospitalityReports.tables.length > 0 ? (
+        <div className="rounded-2xl border border-stone-200 bg-white p-3">
+          <p className="text-xs font-black uppercase text-stone-500">{t(lang, "hospitalityReportsTables")}</p>
+          <ul className="mt-2 space-y-1">
+            {hospitalityReports.tables
+              .slice()
+              .sort((a, b) => b.revenueUgx - a.revenueUgx)
+              .slice(0, 8)
+              .map((row) => (
+                <li key={row.label} className="flex justify-between text-sm font-semibold text-stone-800">
+                  <span>{row.label}</span>
+                  <span>
+                    {row.billCount} · UGX {row.revenueUgx.toLocaleString()}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </div>
       ) : null}
       <div className="flex flex-wrap gap-2">
         <button type="button" className="rounded-xl bg-waka-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadHospitalityWaiterPdf(lang, hospitalityReports)}>

@@ -7,6 +7,12 @@ import type {
   TableSession,
   TableSessionStatus,
 } from "../types";
+import {
+  visibleFloorTables,
+  markTableNeedsCleaning,
+  completeReservation,
+  splitCombinedTables,
+} from "./hospitalityFrontOfHouse";
 import { computeDraftCheckoutTotals, estimatedProfitAfterCartDiscount } from "./draftCart";
 import { ensureSaleLineId } from "./pendingSaleMerge";
 
@@ -21,36 +27,69 @@ export type HospitalityBusinessType = (typeof HOSPITALITY_BUSINESS_TYPES)[number
 
 export const TABLE_STATUS_COLORS: Record<
   import("../types").TableDisplayStatus,
-  { bg: string; border: string; text: string; labelKey: string }
+  { bg: string; border: string; text: string; dot: string; labelKey: string }
 > = {
   available: {
     bg: "bg-emerald-50",
-    border: "border-emerald-400",
-    text: "text-emerald-900",
+    border: "border-emerald-500",
+    text: "text-emerald-950",
+    dot: "bg-emerald-500",
     labelKey: "tableStatusAvailable",
   },
   occupied: {
-    bg: "bg-amber-50",
-    border: "border-amber-400",
-    text: "text-amber-950",
+    bg: "bg-sky-50",
+    border: "border-sky-500",
+    text: "text-sky-950",
+    dot: "bg-sky-500",
     labelKey: "tableStatusOccupied",
   },
   payment_pending: {
-    bg: "bg-red-50",
-    border: "border-red-400",
-    text: "text-red-950",
+    bg: "bg-orange-50",
+    border: "border-orange-500",
+    text: "text-orange-950",
+    dot: "bg-orange-500",
     labelKey: "tableStatusPaymentPending",
   },
   reserved: {
-    bg: "bg-sky-50",
-    border: "border-sky-400",
-    text: "text-sky-950",
+    bg: "bg-violet-50",
+    border: "border-violet-500",
+    text: "text-violet-950",
+    dot: "bg-violet-500",
     labelKey: "tableStatusReserved",
+  },
+  needs_attention: {
+    bg: "bg-red-50",
+    border: "border-red-500",
+    text: "text-red-950",
+    dot: "bg-red-500",
+    labelKey: "tableStatusNeedsAttention",
+  },
+  needs_cleaning: {
+    bg: "bg-yellow-50",
+    border: "border-yellow-500",
+    text: "text-yellow-950",
+    dot: "bg-yellow-500",
+    labelKey: "tableStatusNeedsCleaning",
+  },
+  cleaning: {
+    bg: "bg-cyan-50",
+    border: "border-cyan-500",
+    text: "text-cyan-950",
+    dot: "bg-cyan-500",
+    labelKey: "tableStatusCleaning",
+  },
+  blocked: {
+    bg: "bg-stone-200",
+    border: "border-stone-500",
+    text: "text-stone-700",
+    dot: "bg-stone-600",
+    labelKey: "tableStatusBlocked",
   },
   disabled: {
     bg: "bg-stone-100",
     border: "border-stone-300",
     text: "text-stone-500",
+    dot: "bg-stone-400",
     labelKey: "tableStatusDisabled",
   },
 };
@@ -93,7 +132,17 @@ export function isKitchenEnabledForHospitality(
 }
 
 export function emptyHospitalityFloor(): HospitalityFloorState {
-  return { areas: [], tables: [], sessions: [], stations: [] };
+  return {
+    areas: [],
+    tables: [],
+    sessions: [],
+    stations: [],
+    reservations: [],
+    waitlist: [],
+    waiterSections: [],
+    combinedGroups: [],
+    hospitalityAuditLog: [],
+  };
 }
 
 export function defaultHospitalityFloor(): HospitalityFloorState {
@@ -121,6 +170,11 @@ export function defaultHospitalityFloor(): HospitalityFloorState {
       { id: barId, name: "Bar", stationType: "bar", sortOrder: 1, isActive: true },
     ],
     kitchenTickets: [],
+    reservations: [],
+    waitlist: [],
+    waiterSections: [],
+    combinedGroups: [],
+    hospitalityAuditLog: [],
   };
 }
 
@@ -167,16 +221,87 @@ export function deriveTableDisplayStatus(
   session: TableSession | undefined,
 ): import("../types").TableDisplayStatus {
   if (!table.isActive) return "disabled";
-  if (!session) return "available";
-  if (session.status === "payment_pending") return "payment_pending";
-  return "occupied";
+  if (table.lockReason) return "blocked";
+  if (session) {
+    if (session.needsAttention) return "needs_attention";
+    if (session.status === "payment_pending") return "payment_pending";
+    return "occupied";
+  }
+  if (table.displayStatus === "needs_cleaning") return "needs_cleaning";
+  if (table.displayStatus === "cleaning") return "cleaning";
+  if (table.displayStatus === "reserved") return "reserved";
+  return "available";
+}
+
+/** Elapsed time since session opened — e.g. "45m" or "1h 20m". */
+export function formatSessionElapsed(openedAt: string, nowMs = Date.now()): string {
+  const ms = nowMs - Date.parse(openedAt);
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const mins = Math.floor(ms / 60_000);
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ${mins % 60}m`;
+}
+
+export function activeTableSessions(floor: HospitalityFloorState): TableSession[] {
+  return floor.sessions.filter((s) => isTableSession(s) && isActiveSession(s));
+}
+
+export function billRequestedSessions(floor: HospitalityFloorState): TableSession[] {
+  return activeTableSessions(floor).filter((s) => s.status === "payment_pending");
+}
+
+export function floorStatusCounts(floor: HospitalityFloorState): {
+  available: number;
+  occupied: number;
+  billRequested: number;
+  reserved: number;
+  needsAttention: number;
+  needsCleaning: number;
+  cleaning: number;
+  blocked: number;
+  disabled: number;
+} {
+  const counts = {
+    available: 0,
+    occupied: 0,
+    billRequested: 0,
+    reserved: 0,
+    needsAttention: 0,
+    needsCleaning: 0,
+    cleaning: 0,
+    blocked: 0,
+    disabled: 0,
+  };
+  for (const table of visibleFloorTables(floor)) {
+    if (!table.isActive) {
+      counts.disabled += 1;
+      continue;
+    }
+    const session = activeSessionForTable(floor, table.id);
+    const status = deriveTableDisplayStatus(table, session);
+    if (status === "available") counts.available += 1;
+    else if (status === "occupied") counts.occupied += 1;
+    else if (status === "payment_pending") counts.billRequested += 1;
+    else if (status === "reserved") counts.reserved += 1;
+    else if (status === "needs_attention") counts.needsAttention += 1;
+    else if (status === "needs_cleaning") counts.needsCleaning += 1;
+    else if (status === "cleaning") counts.cleaning += 1;
+    else if (status === "blocked") counts.blocked += 1;
+  }
+  return counts;
 }
 
 export function syncTableDisplayStatuses(floor: HospitalityFloorState): HospitalityFloorState {
+  let changed = false;
   const tables = floor.tables.map((t) => {
     const session = activeSessionForTable(floor, t.id);
-    return { ...t, displayStatus: deriveTableDisplayStatus(t, session) };
+    const displayStatus = deriveTableDisplayStatus(t, session);
+    if (t.displayStatus === displayStatus) return t;
+    changed = true;
+    return { ...t, displayStatus };
   });
+  if (!changed) return floor;
   return { ...floor, tables };
 }
 
@@ -222,6 +347,7 @@ export function buildPendingSaleFromDraft(input: {
     soldByUserId: input.soldByUserId ?? input.existing?.soldByUserId ?? null,
     waiterStaffId: input.waiterStaffId ?? input.existing?.waiterStaffId ?? null,
     waiterName: input.waiterName ?? input.existing?.waiterName ?? null,
+    billDraft: input.existing?.billDraft ?? null,
   };
 }
 
@@ -229,12 +355,26 @@ export function closeTableSession(
   floor: HospitalityFloorState,
   sessionId: string,
   status: TableSessionStatus = "closed",
+  options?: { needsCleaning?: boolean },
 ): HospitalityFloorState {
   const now = new Date().toISOString();
+  const session = floor.sessions.find((s) => s.id === sessionId);
   const sessions = floor.sessions.map((s) =>
     s.id === sessionId ? { ...s, status, closedAt: now, updatedAt: now, pendingSync: true } : s,
   );
-  return syncTableDisplayStatuses({ ...floor, sessions });
+  let next = syncTableDisplayStatuses({ ...floor, sessions });
+  if (options?.needsCleaning && session?.tableId) {
+    next = markTableNeedsCleaning(next, session.tableId);
+    if (session.reservationId) {
+      next = completeReservation(next, session.reservationId);
+    }
+    const table = next.tables.find((t) => t.id === session.tableId);
+    if (table?.combinedGroupId) {
+      const result = splitCombinedTables(next, table.combinedGroupId);
+      if (result.ok) next = result.floor;
+    }
+  }
+  return next;
 }
 
 export function openTableSessionOnFloor(input: {
@@ -243,8 +383,13 @@ export function openTableSessionOnFloor(input: {
   saleId: string;
   sessionId: string;
   guestCount: number;
+  adultCount?: number;
+  childrenCount?: number;
   customerName?: string;
   customerPhone?: string;
+  specialNotes?: string;
+  reservationId?: string | null;
+  waitlistEntryId?: string | null;
   waiterStaffId?: string | null;
   waiterLabel?: string | null;
 }): HospitalityFloorState {
@@ -254,8 +399,13 @@ export function openTableSessionOnFloor(input: {
     tableId: input.tableId,
     saleId: input.saleId,
     guestCount: input.guestCount,
+    adultCount: input.adultCount ?? input.guestCount,
+    childrenCount: input.childrenCount ?? 0,
     customerName: input.customerName ?? null,
     customerPhone: input.customerPhone ?? null,
+    specialNotes: input.specialNotes ?? null,
+    reservationId: input.reservationId ?? null,
+    waitlistEntryId: input.waitlistEntryId ?? null,
     waiterStaffId: input.waiterStaffId ?? null,
     waiterLabel: input.waiterLabel ?? null,
     status: "open",
@@ -299,9 +449,51 @@ export function openNamedTabSessionOnFloor(input: {
   return { ...input.floor, sessions };
 }
 
+function fillHospitalityFloorDefaults(floor: HospitalityFloorState): HospitalityFloorState {
+  const needsDefaults =
+    floor.kitchenTickets === undefined ||
+    floor.reservations === undefined ||
+    floor.waitlist === undefined ||
+    floor.waiterSections === undefined ||
+    floor.combinedGroups === undefined ||
+    floor.hospitalityAuditLog === undefined;
+  if (!needsDefaults) return floor;
+  return {
+    ...floor,
+    kitchenTickets: floor.kitchenTickets ?? [],
+    reservations: floor.reservations ?? [],
+    waitlist: floor.waitlist ?? [],
+    waiterSections: floor.waiterSections ?? [],
+    combinedGroups: floor.combinedGroups ?? [],
+    hospitalityAuditLog: floor.hospitalityAuditLog ?? [],
+  };
+}
+
+/** Rebuild dining areas from table area ids when persisted layout lost its areas array. */
+function repairHospitalityFloorAreas(floor: HospitalityFloorState): HospitalityFloorState {
+  const areaIds = [...new Set(floor.tables.map((t) => t.areaId).filter(Boolean))];
+  if (!areaIds.length) return defaultHospitalityFloor();
+  const areas = areaIds.map((id, index) => {
+    const existing = floor.areas?.find((a) => a.id === id);
+    return (
+      existing ?? {
+        id,
+        name: `Area ${index + 1}`,
+        sortOrder: index,
+        isActive: true,
+      }
+    );
+  });
+  return fillHospitalityFloorDefaults({ ...floor, areas });
+}
+
 export function ensureHospitalityFloor(floor: HospitalityFloorState | undefined | null): HospitalityFloorState {
-  if (!floor?.areas?.length) return defaultHospitalityFloor();
-  return syncTableDisplayStatuses(floor);
+  if (!floor) return defaultHospitalityFloor();
+  if (!floor.areas?.length) {
+    if (floor.tables?.length) return syncTableDisplayStatuses(repairHospitalityFloorAreas(floor));
+    return defaultHospitalityFloor();
+  }
+  return syncTableDisplayStatuses(fillHospitalityFloorDefaults(floor));
 }
 
 export function totalOpenTablesPendingUgx(sales: Sale[], floor: HospitalityFloorState): number {

@@ -132,6 +132,7 @@ body {
     --waka-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
     --waka-bottom-nav-h: 0px;
     --waka-module-exit-h: 4.5rem;
+    --waka-hospitality-nav-h: 4.25rem;
     --waka-pos-checkout-strip-h: 3.25rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
@@ -158,6 +159,9 @@ body {
   @media (max-width: 1023px) {
     .app-shell--module-exit {
       --waka-bottom-nav-h: var(--waka-module-exit-h);
+    }
+    .app-shell--hospitality-nav {
+      --waka-bottom-nav-h: var(--waka-hospitality-nav-h);
     }
   }
 

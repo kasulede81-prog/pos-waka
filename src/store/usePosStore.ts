@@ -46,6 +46,7 @@ import {
 import { validateCanAddStaffAccount } from "../lib/staffPlanEnforcement";
 import { authorizeBackupRestore } from "../lib/backupRestoreAuthorization";
 import { getOrCreateDeviceId } from "../lib/deviceId";
+import { normalizeProductHospitalityRouting } from "../lib/productHospitalityRouting";
 import { createDefaultPreferences, createDefaultProducts } from "../data/defaultSeed";
 import { readCachedOwnerOnboardingComplete } from "../lib/ownerOnboarding";
 import { readPendingRegistrationProfileForUser } from "../lib/registrationProfileCache";
@@ -55,6 +56,11 @@ import { writeSnapshot, readSnapshotWithFallback, claimLegacySnapshotForCurrentA
 import { normalizeInventoryCountSession } from "../lib/inventoryCount";
 import { createInventoryCountStoreActions } from "./inventoryCountMutations";
 import { createDayDrawerOpenStoreActions } from "./dayDrawerOpenMutations";
+import { createRestaurantBillingStoreActions } from "./restaurantBillingMutations";
+import { createHospitalityMenuStoreActions } from "./hospitalityMenuMutations";
+import { createHardwarePrintStoreActions, ensureHardwarePrefsOnBootstrap } from "./hardwarePrintMutations";
+import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
+import { resolveHospitalityHardware } from "../lib/hospitalityHardware";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { isNativeApp } from "../lib/nativeApp";
@@ -82,6 +88,26 @@ import { applyIndustryReceiptDefaults, buildReceiptBrandingSnapshot } from "../l
 import type { SubscriptionPlanCode } from "../lib/subscriptionEntitlements";
 import { normalizeMedicineForm, normalizeMedicineStrength } from "../lib/pharmacyMedicine";
 import {
+  addWaitlistEntry as addWaitlistEntryOp,
+  cancelReservation,
+  cancelWaitlistEntry as cancelWaitlistEntryOp,
+  combineTables as combineTablesOp,
+  createReservation,
+  finishTableCleaning as finishTableCleaningOp,
+  isTableSeatable,
+  lockTable as lockTableOp,
+  markReservationNoShow as markReservationNoShowOp,
+  seatReservationOnFloor,
+  seatWaitlistOnFloor,
+  splitCombinedTables as splitTablesOp,
+  startTableCleaning as startTableCleaningOp,
+  suggestTables,
+  unlockTable as unlockTableOp,
+  updateReservation,
+  upsertWaiterSection as upsertWaiterSectionOp,
+} from "../lib/hospitalityFrontOfHouse";
+import { KITCHEN_FIRE_STATION_TYPES } from "../lib/productHospitalityRouting";
+import {
   fireKitchenTicketsForLines,
   cancelKitchenTicket,
   mergeSaleLines,
@@ -91,12 +117,21 @@ import {
   updateKitchenTicketStatus,
 } from "../lib/hospitalityOps";
 import {
+  advanceKitchenTicket as advanceKitchenTicketOnFloor,
+  recallKitchenTicket as recallKitchenTicketOnFloor,
+  cancelKitchenTicketItem as cancelKitchenTicketItemOnFloor,
+} from "../lib/kitchenProduction";
+import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
+import {
   addDiningArea,
   addDiningTable,
+  addKitchenStation,
   removeDiningArea,
   removeDiningTable,
+  removeKitchenStation,
   renameDiningArea,
   updateDiningTable,
+  updateKitchenStation,
 } from "../lib/hospitalityFloorEditor";
 import { normalizeDataRetentionPolicy } from "../lib/dataRetention";
 import { canEnableBiometricAuth } from "../lib/sensitiveActionAuth";
@@ -179,7 +214,13 @@ import {
 } from "../lib/dayCloseApprovals";
 import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
-import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
+import { normalizeProductMenu } from "../lib/menuModifiers";
+import {
+  applyRecipeStockDeduction,
+  checkIngredientAvailability,
+  requirementsFromSaleLines,
+  shouldDeductFinishedProductStock,
+} from "../lib/recipeEngine";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
@@ -548,8 +589,13 @@ export type PosState = {
   openTable: (input: {
     tableId: string;
     guestCount: number;
+    adultCount?: number;
+    childrenCount?: number;
     customerName?: string;
     customerPhone?: string;
+    specialNotes?: string;
+    reservationId?: string;
+    waitlistEntryId?: string;
   }) => { ok: boolean; errorKey?: string; sessionId?: string };
   openNamedTab: (input: {
     tabLabel: string;
@@ -560,13 +606,120 @@ export type PosState = {
   resumeTableSession: (sessionId: string) => Promise<{ ok: boolean; errorKey?: string }>;
   saveTableBill: () => { ok: boolean; errorKey?: string };
   requestTableBill: (sessionId: string) => void;
+  updateTableBillDraft: (
+    patch: Partial<import("../types").RestaurantBillDraft>,
+  ) => { ok: boolean; errorKey?: string };
+  applyTableBillSplits: (input: {
+    mode: import("../types").RestaurantBillSplitMode;
+    splits: import("../types").BillSplitLine[];
+  }) => { ok: boolean; errorKey?: string };
+  recordTableBillPayment: (input: {
+    method: import("../types").RestaurantPaymentMethod;
+    amountUgx: number;
+    reference?: string | null;
+    voucherCode?: string | null;
+    splitId?: string | null;
+  }) => { ok: boolean; errorKey?: string; remainingBalanceUgx?: number; canFinalize?: boolean };
+  finalizeTableBill: (input?: { changeGivenUgx?: number }) => {
+    ok: boolean;
+    errorKey?: string;
+    firstSale?: boolean;
+    saleId?: string;
+  };
+  approveTableBillDiscount: (input: {
+    kind: "line" | "bill";
+    reason: string;
+    managerPin?: string;
+  }) => { ok: boolean; errorKey?: string };
+  reopenTableBill: (input: {
+    sessionId: string;
+    reason: string;
+    managerPin: string;
+  }) => { ok: boolean; errorKey?: string; sessionId?: string };
+  voidSettledTableBill: (input: {
+    sessionId: string;
+    reason: string;
+    managerPin: string;
+  }) => { ok: boolean; errorKey?: string; saleId?: string };
+  setDraftLineSeat: (lineId: string, seatNumber: number | null) => { ok: boolean };
+  addHospitalityDraftLine: (input: {
+    product: Product;
+    quantity?: number;
+    variantId?: string | null;
+    modifiers?: import("../types").SaleLineModifier[];
+    comboSelections?: import("../types").SaleLineComboSelection[];
+    notes?: string | null;
+    course?: import("../types").HospitalityCourse | null;
+    seatNumber?: number | null;
+    managerOverride?: boolean;
+  }) => { ok: boolean; errorKey?: string; lineId?: string; shortages?: import("../types").IngredientShortage[] };
+  setDraftLineNotesById: (lineId: string, notes: string | null) => { ok: boolean };
+  setDraftLineCourseById: (lineId: string, course: import("../types").HospitalityCourse | null) => { ok: boolean };
+  removeDraftLineById: (lineId: string) => void;
+  adjustDraftLineQuantityById: (lineId: string, delta: number) => { ok: boolean; errorKey?: string };
+  productNeedsOrderConfig: (product: Product) => boolean;
   clearActiveTableOrder: () => void;
   transferTableSession: (sessionId: string, toTableId: string) => { ok: boolean; errorKey?: string };
   mergeTableSessions: (sourceSessionId: string, targetSessionId: string) => { ok: boolean; errorKey?: string };
   updateKitchenTicketStatus: (ticketId: string, status: import("../types").KitchenTicketStatus) => void;
+  advanceKitchenTicket: (ticketId: string) => void;
+  recallKitchenTicket: (ticketId: string, reason: string) => { ok: boolean; errorKey?: string };
   cancelKitchenTicket: (ticketId: string) => void;
+  cancelKitchenTicketItem: (
+    ticketId: string,
+    itemId: string,
+    reason: string,
+  ) => { ok: boolean; errorKey?: string };
   cleanupKitchenTickets: () => void;
   fireTableKitchenTickets: () => { ok: boolean; errorKey?: string };
+  fireTableStationTickets: (stationTypes: import("../types").KitchenStationType[]) => {
+    ok: boolean;
+    errorKey?: string;
+    ticketsFired?: number;
+  };
+  fireTableCourseTickets: (courses: import("../types").HospitalityCourse[]) => {
+    ok: boolean;
+    errorKey?: string;
+    ticketsFired?: number;
+  };
+  enqueueKitchenTicketPrints: (ticketIds: string[], kind?: import("../lib/kitchenChitPrint").KitchenChitPrintKind) => void;
+  reprintKitchenTicket: (ticketId: string) => { ok: boolean; errorKey?: string };
+  upsertPrinter: (input: {
+    id?: string;
+    name: string;
+    connectionType: import("../types").PrinterConnectionType;
+    paperWidth: "58mm" | "80mm";
+    stationRoles: import("../types").PrinterStationRole[];
+    isDefaultReceipt?: boolean;
+    networkHost?: string | null;
+    networkPort?: number | null;
+  }) => { ok: boolean; printerId?: string };
+  removePrinter: (printerId: string) => { ok: boolean };
+  assignStationPrinter: (stationId: string, printerId: string | null) => { ok: boolean; errorKey?: string };
+  testConfiguredPrinter: (printerId: string) => Promise<{ ok: boolean; error?: string }>;
+  setHospitalityHardwarePrefs: (patch: Partial<import("../types").HospitalityHardwarePrefs>) => { ok: boolean };
+  openCashDrawerManual: (reason?: string) => Promise<{ ok: boolean; error?: string }>;
+  printRestaurantReceiptForSale: (
+    saleId: string,
+    context?: {
+      tableLabel?: string | null;
+      waiterLabel?: string | null;
+      guestCount?: number | null;
+      voidReceipt?: boolean;
+      reprint?: boolean;
+      receiptKind?: import("../lib/restaurantReceiptPrint").RestaurantReceiptKind;
+      splitId?: string | null;
+      splitLabel?: string | null;
+      splitIndex?: number | null;
+      orderRound?: number | null;
+    },
+  ) => Promise<{ ok: boolean; mode?: string; error?: string }>;
+  openCashDrawerOnPayment: (saleId: string) => Promise<{ ok: boolean; skipped?: boolean; error?: string }>;
+  syncCustomerDisplay: () => void;
+  processPendingPrintQueue: () => void;
+  bootstrapResumePrintQueue: () => void;
+  cancelQueuedPrintJob: (jobId: string) => { ok: boolean };
+  retryFailedPrintJobs: () => { ok: boolean };
   setHospitalityManualKitchenFire: (enabled: boolean) => void;
   addDiningArea: (name: string) => void;
   renameDiningArea: (areaId: string, name: string) => void;
@@ -577,6 +730,36 @@ export type PosState = {
     patch: Partial<{ label: string; capacity: number; areaId: string; sortOrder: number; isActive: boolean }>,
   ) => void;
   removeDiningTable: (tableId: string) => { ok: boolean; errorKey?: string };
+  addKitchenStation: (input: { name: string; stationType: import("../types").KitchenStationType }) => void;
+  updateKitchenStation: (
+    stationId: string,
+    patch: Partial<{ name: string; stationType: import("../types").KitchenStationType; isActive: boolean }>,
+  ) => void;
+  removeKitchenStation: (stationId: string) => { ok: boolean; errorKey?: string };
+  createTableReservation: (
+    input: Omit<import("../types").TableReservation, "id" | "reservationNumber" | "status" | "createdAt" | "updatedAt" | "pendingSync">,
+  ) => { ok: boolean; errorKey?: string; reservationId?: string };
+  updateTableReservation: (reservationId: string, patch: Partial<import("../types").TableReservation>) => void;
+  cancelTableReservation: (reservationId: string, reason: string) => void;
+  confirmTableReservation: (reservationId: string) => void;
+  markReservationNoShow: (reservationId: string) => void;
+  addWaitlistEntry: (
+    input: Omit<import("../types").WaitlistEntry, "id" | "status" | "createdAt" | "updatedAt" | "pendingSync">,
+  ) => { ok: boolean; entryId?: string };
+  cancelWaitlistEntry: (entryId: string) => void;
+  suggestTablesForGuests: (input: {
+    guestCount: number;
+    areaId?: string | null;
+    preferredTableId?: string | null;
+    isVip?: boolean;
+  }) => import("../lib/hospitalityFrontOfHouse").TableSuggestion[];
+  combineTables: (tableIds: string[]) => { ok: boolean; errorKey?: string };
+  splitCombinedTables: (groupId: string) => { ok: boolean; errorKey?: string };
+  lockTable: (tableId: string, reason: import("../types").TableLockReason, note?: string) => void;
+  unlockTable: (tableId: string) => void;
+  startTableCleaning: (tableId: string) => void;
+  finishTableCleaning: (tableId: string) => void;
+  upsertWaiterSection: (section: Omit<import("../types").WaiterSection, "id"> & { id?: string }) => void;
   savePendingSale: (referenceLabel?: string | null) => { ok: boolean; errorKey?: string; saleId?: string };
   resumePendingSale: (saleId: string) => { ok: boolean; errorKey?: string };
   cancelPendingSale: (saleId: string) => { ok: boolean; errorKey?: string };
@@ -603,10 +786,14 @@ export type PosState = {
     customerId?: string | null;
     customerName?: string | null;
     customerPhone?: string | null;
-    paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit";
+    paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher";
     amountPaidUgx?: number;
     changeGivenUgx?: number;
     splitBreakdown?: import("../types").BillSplitLine[] | null;
+    serviceChargeUgx?: number;
+    tipUgx?: number;
+    taxUgx?: number;
+    billPayments?: import("../types").BillPaymentRecord[] | null;
   }) => { ok: boolean; errorKey?: string; firstSale?: boolean; saleId?: string };
 
   addProduct: (p: Omit<Product, "id" | "updatedAt" | "version"> & Partial<Pick<Product, "quickPresetsMoneyUgx" | "quickPresetsQty">>) => void;
@@ -674,6 +861,8 @@ export type PosState = {
         | "pharmacyPackaging"
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
+        | "hospitality"
+        | "menu"
       >
     >,
     opts?: { auditReason?: string },
@@ -946,6 +1135,7 @@ function normalizeProduct(p: Product): Product {
     quickPresetsMoneyUgx: hasMoney ? p.quickPresetsMoneyUgx : d.quickPresetsMoneyUgx,
     quickPresetsQty: hasQty ? p.quickPresetsQty : d.quickPresetsQty,
     packCostUnitsDepleted: packAlloc ? resolvePackCostUnitsDepleted(p) : p.packCostUnitsDepleted,
+    hospitality: p.hospitality ? normalizeProductHospitalityRouting(p.hospitality, p) : p.hospitality ?? null,
   };
 }
 
@@ -1343,11 +1533,12 @@ export const usePosStore = create<PosState>((set, get) => {
       }
     }
     set((s) => {
-      const merged = { ...s.preferences, ...p };
+      let merged = { ...s.preferences, ...p };
       const role = s.sessionActor?.role ?? "cashier";
       if (!canTogglePosUiMode(role) && merged.posUiMode === "owner_back_office") {
         merged.posUiMode = "cashier";
       }
+      merged = ensureHardwarePrefsOnBootstrap(merged);
       return { preferences: merged };
     });
   },
@@ -2013,7 +2204,11 @@ export const usePosStore = create<PosState>((set, get) => {
       lineDiscountUgx: lineDiscountTotal,
       cartDiscountUgx: state.draftCartDiscountUgx,
     });
-    if (!policy.ok) return { ok: false, errorKey: policy.errorKey };
+    const sale = state.activePendingSaleId
+      ? state.sales.find((s) => s.id === state.activePendingSaleId)
+      : undefined;
+    const discountApproved = Boolean(sale?.billDraft?.discountApproval?.approvedByUserId);
+    if (!discountApproved && !policy.ok) return { ok: false, errorKey: policy.errorKey };
     set((s) => ({
       draftLines: s.draftLines.map((l) => (l.productId === productId ? next : l)),
     }));
@@ -2036,7 +2231,11 @@ export const usePosStore = create<PosState>((set, get) => {
         lineDiscountUgx: lineDiscountTotal,
         cartDiscountUgx: capped,
       });
-      if (!policy.ok) return { ok: false, errorKey: policy.errorKey };
+      const sale = state.activePendingSaleId
+        ? state.sales.find((s) => s.id === state.activePendingSaleId)
+        : undefined;
+      const discountApproved = Boolean(sale?.billDraft?.discountApproval?.approvedByUserId);
+      if (!discountApproved && !policy.ok) return { ok: false, errorKey: policy.errorKey };
     }
     set({ draftCartDiscountUgx: capped });
     scheduleDraftPersist(get);
@@ -2062,13 +2261,14 @@ export const usePosStore = create<PosState>((set, get) => {
     flushPendingPersist();
   },
 
-  openTable: ({ tableId, guestCount, customerName, customerPhone }) => {
+  openTable: ({ tableId, guestCount, adultCount, childrenCount, customerName, customerPhone, specialNotes, reservationId, waitlistEntryId }) => {
     const denied = denyUnlessEffectivePermission("hospitality.floor", "openTable");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
     const table = floor.tables.find((t) => t.id === tableId);
     if (!table || !table.isActive) return { ok: false, errorKey: "invalid" };
+    if (!isTableSeatable(table, floor)) return { ok: false, errorKey: "tableOccupied" };
     if (floor.sessions.some((s) => s.tableId === tableId && (s.status === "open" || s.status === "payment_pending"))) {
       return { ok: false, errorKey: "tableOccupied" };
     }
@@ -2087,17 +2287,34 @@ export const usePosStore = create<PosState>((set, get) => {
       waiterStaffId: actor?.userId ?? null,
       waiterName: actor?.displayName ?? null,
     });
-    const nextFloor = openTableSessionOnFloor({
+    let nextFloor = openTableSessionOnFloor({
       floor,
       tableId,
       saleId,
       sessionId,
       guestCount: Math.max(1, guestCount),
+      adultCount,
+      childrenCount,
       customerName,
       customerPhone,
+      specialNotes,
+      reservationId: reservationId ?? null,
+      waitlistEntryId: waitlistEntryId ?? null,
       waiterStaffId: actor?.userId ?? null,
       waiterLabel: actor?.displayName ?? null,
     });
+    if (reservationId) {
+      nextFloor = seatReservationOnFloor(nextFloor, reservationId, tableId, sessionId, {
+        userId: actor?.userId ?? null,
+        label: actor?.displayName ?? null,
+      });
+    }
+    if (waitlistEntryId) {
+      nextFloor = seatWaitlistOnFloor(nextFloor, waitlistEntryId, sessionId, {
+        userId: actor?.userId ?? null,
+        label: actor?.displayName ?? null,
+      });
+    }
     set({
       sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
       preferences: {
@@ -2271,7 +2488,11 @@ export const usePosStore = create<PosState>((set, get) => {
   },
 
   fireTableKitchenTickets: () => {
-    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "fireTableKitchenTickets");
+    return get().fireTableStationTickets([...KITCHEN_FIRE_STATION_TYPES, "bar"]);
+  },
+
+  fireTableStationTickets: (stationTypes) => {
+    const denied = denyUnlessEffectivePermission("hospitality.order", "fireTableKitchenTickets");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
     const saleId = state.activePendingSaleId;
@@ -2302,6 +2523,7 @@ export const usePosStore = create<PosState>((set, get) => {
       products: state.products,
       tableLabel: sessionDisplayLabel(session, nextFloor),
       areaName: area?.name ?? null,
+      stationTypes,
     });
     const newTicketIds = (nextFloor.kitchenTickets ?? []).filter((t) => !priorTicketIds.has(t.id)).map((t) => t.id);
     set({
@@ -2311,7 +2533,55 @@ export const usePosStore = create<PosState>((set, get) => {
     void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
     queueHospitalityChange({ sessionIds: [sessionId], ticketIds: newTicketIds });
     flushPendingPersist();
-    return { ok: true };
+    get().enqueueKitchenTicketPrints(newTicketIds, "new");
+    return { ok: true, ticketsFired: newTicketIds.length };
+  },
+
+  fireTableCourseTickets: (courses) => {
+    const denied = denyUnlessEffectivePermission("hospitality.order", "fireTableKitchenTickets");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    if (!courses.length) return { ok: false, errorKey: "invalid" };
+    const state = get();
+    const saleId = state.activePendingSaleId;
+    const sessionId = state.preferences.activeTableSessionId;
+    if (!saleId || !sessionId) return { ok: false, errorKey: "invalid" };
+    const existing = state.sales.find((s) => s.id === saleId);
+    const pendingSale = buildPendingSaleFromDraft({
+      saleId,
+      lines: state.draftLines,
+      cartDiscountUgx: state.draftCartDiscountUgx,
+      tableSessionId: sessionId,
+      referenceLabel: existing?.referenceLabel ?? null,
+      soldByUserId: state.sessionActor?.userId ?? existing?.soldByUserId ?? null,
+      existing: existing ?? null,
+    });
+    let nextFloor = state.preferences.hospitalityFloor;
+    if (!nextFloor) return { ok: false, errorKey: "invalid" };
+    const session = nextFloor.sessions.find((s) => s.id === sessionId);
+    if (!session) return { ok: false, errorKey: "invalid" };
+    const priorTicketIds = new Set((nextFloor.kitchenTickets ?? []).map((t) => t.id));
+    const table = session.tableId ? nextFloor.tables.find((t) => t.id === session.tableId) : undefined;
+    const area = table ? nextFloor.areas.find((a) => a.id === table.areaId) : undefined;
+    nextFloor = fireKitchenTicketsForLines({
+      floor: nextFloor,
+      session,
+      previousLines: existing?.lines ?? [],
+      newLines: pendingSale.lines,
+      products: state.products,
+      tableLabel: sessionDisplayLabel(session, nextFloor),
+      areaName: area?.name ?? null,
+      courses,
+    });
+    const newTicketIds = (nextFloor.kitchenTickets ?? []).filter((t) => !priorTicketIds.has(t.id)).map((t) => t.id);
+    set({
+      sales: [pendingSale, ...state.sales.filter((s) => s.id !== saleId)],
+      preferences: { ...state.preferences, hospitalityFloor: nextFloor },
+    });
+    void queueRemote("pending_sales", { saleId, kind: "pending_upsert" });
+    queueHospitalityChange({ sessionIds: [sessionId], ticketIds: newTicketIds });
+    flushPendingPersist();
+    get().enqueueKitchenTicketPrints(newTicketIds, "course");
+    return { ok: true, ticketsFired: newTicketIds.length };
   },
 
   requestTableBill: (sessionId) => {
@@ -2429,6 +2699,46 @@ export const usePosStore = create<PosState>((set, get) => {
     flushPendingPersist();
   },
 
+  advanceKitchenTicket: (ticketId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "advanceKitchenTicket");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: advanceKitchenTicketOnFloor(floor, ticketId, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? actor?.userId ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ ticketIds: [ticketId] });
+    flushPendingPersist();
+  },
+
+  recallKitchenTicket: (ticketId, reason) => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "recallKitchenTicket");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const role = state.sessionActor?.role;
+    const isManager = role === "owner" || role === "manager" || role === "supervisor";
+    if (!isManager) return { ok: false, errorKey: "kitchenRecallNeedsManager" };
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const actor = state.sessionActor;
+    const next = recallKitchenTicketOnFloor(floor, ticketId, reason, {
+      userId: actor?.userId ?? null,
+      label: actor?.displayName ?? actor?.userId ?? null,
+    });
+    set({ preferences: { ...state.preferences, hospitalityFloor: next } });
+    queueHospitalityChange({ ticketIds: [ticketId] });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
   cancelKitchenTicket: (ticketId) => {
     const denied = denyUnlessEffectivePermission("hospitality.kitchen", "cancelKitchenTicket");
     if (denied) return;
@@ -2443,6 +2753,26 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     queueHospitalityChange({ ticketIds: [ticketId] });
     flushPendingPersist();
+  },
+
+  cancelKitchenTicketItem: (ticketId, itemId, reason) => {
+    const denied = denyUnlessEffectivePermission("hospitality.kitchen", "cancelKitchenTicketItem");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const role = state.sessionActor?.role;
+    const isManager = role === "owner" || role === "manager" || role === "supervisor";
+    const actor = state.sessionActor;
+    const result = cancelKitchenTicketItemOnFloor(floor, ticketId, itemId, reason, {
+      userId: actor?.userId ?? null,
+      label: actor?.displayName ?? actor?.userId ?? null,
+    }, isManager);
+    if (!result.ok) return result;
+    set({ preferences: { ...state.preferences, hospitalityFloor: result.floor } });
+    queueHospitalityChange({ ticketIds: [ticketId] });
+    flushPendingPersist();
+    return { ok: true };
   },
 
   cleanupKitchenTickets: () => {
@@ -2543,6 +2873,290 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true };
   },
 
+  addKitchenStation: (input) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "addKitchenStation");
+    if (denied) return;
+    const state = get();
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const next = addKitchenStation(floor, input);
+    set({ preferences: { ...state.preferences, hospitalityFloor: next } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  updateKitchenStation: (stationId, patch) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "updateKitchenStation");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const next = updateKitchenStation(floor, stationId, patch);
+    set({ preferences: { ...state.preferences, hospitalityFloor: next } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  removeKitchenStation: (stationId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "removeKitchenStation");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const next = removeKitchenStation(floor, stationId);
+    if (next.stations.length === floor.stations.length) return { ok: false, errorKey: "kitchenStationBusy" };
+    set({ preferences: { ...state.preferences, hospitalityFloor: next } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  createTableReservation: (input) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "createTableReservation");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const actor = state.sessionActor;
+    const next = createReservation(floor, input, { userId: actor?.userId ?? null, label: actor?.displayName ?? null });
+    const created = (next.reservations ?? []).at(-1);
+    set({ preferences: { ...state.preferences, hospitalityFloor: next } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+    return { ok: true, reservationId: created?.id };
+  },
+
+  updateTableReservation: (reservationId, patch) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "updateTableReservation");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: updateReservation(floor, reservationId, patch, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  cancelTableReservation: (reservationId, reason) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "cancelTableReservation");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: cancelReservation(floor, reservationId, reason, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  confirmTableReservation: (reservationId) => {
+    get().updateTableReservation(reservationId, { status: "confirmed" });
+  },
+
+  markReservationNoShow: (reservationId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "markReservationNoShow");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: markReservationNoShowOp(floor, reservationId, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  addWaitlistEntry: (input) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "addWaitlistEntry");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const actor = state.sessionActor;
+    const next = addWaitlistEntryOp(floor, input, { userId: actor?.userId ?? null, label: actor?.displayName ?? null });
+    const created = (next.waitlist ?? []).at(-1);
+    set({ preferences: { ...state.preferences, hospitalityFloor: next } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+    return { ok: true, entryId: created?.id };
+  },
+
+  cancelWaitlistEntry: (entryId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "cancelWaitlistEntry");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: cancelWaitlistEntryOp(floor, entryId, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  suggestTablesForGuests: (input) => {
+    const floor = get().preferences.hospitalityFloor;
+    if (!floor) return [];
+    return suggestTables({ floor, ...input });
+  },
+
+  combineTables: (tableIds) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "combineTables");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const actor = state.sessionActor;
+    const result = combineTablesOp(floor, tableIds, { userId: actor?.userId ?? null, label: actor?.displayName ?? null });
+    if (!result.ok) return result;
+    set({ preferences: { ...state.preferences, hospitalityFloor: result.floor } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  splitCombinedTables: (groupId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "splitCombinedTables");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return { ok: false, errorKey: "invalid" };
+    const actor = state.sessionActor;
+    const result = splitTablesOp(floor, groupId, { userId: actor?.userId ?? null, label: actor?.displayName ?? null });
+    if (!result.ok) return result;
+    set({ preferences: { ...state.preferences, hospitalityFloor: result.floor } });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+    return { ok: true };
+  },
+
+  lockTable: (tableId, reason, note) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "lockTable");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: lockTableOp(floor, tableId, reason, note, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  unlockTable: (tableId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "unlockTable");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: unlockTableOp(floor, tableId, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  startTableCleaning: (tableId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "startTableCleaning");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: startTableCleaningOp(floor, tableId, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  finishTableCleaning: (tableId) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "finishTableCleaning");
+    if (denied) return;
+    const state = get();
+    const floor = state.preferences.hospitalityFloor;
+    if (!floor) return;
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: finishTableCleaningOp(floor, tableId, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
+  upsertWaiterSection: (section) => {
+    const denied = denyUnlessEffectivePermission("hospitality.floor", "upsertWaiterSection");
+    if (denied) return;
+    const state = get();
+    const floor = ensureHospitalityFloor(state.preferences.hospitalityFloor ?? undefined);
+    const actor = state.sessionActor;
+    set({
+      preferences: {
+        ...state.preferences,
+        hospitalityFloor: upsertWaiterSectionOp(floor, section, {
+          userId: actor?.userId ?? null,
+          label: actor?.displayName ?? null,
+        }),
+      },
+    });
+    queueHospitalityChange({ layout: true });
+    flushPendingPersist();
+  },
+
   savePendingSale: (referenceLabel) => {
     const denied = denyUnlessEffectivePermission("pending_sales.manage", "savePendingSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
@@ -2632,6 +3246,10 @@ export const usePosStore = create<PosState>((set, get) => {
     amountPaidUgx,
     changeGivenUgx,
     splitBreakdown,
+    serviceChargeUgx: inputServiceChargeUgx,
+    tipUgx: inputTipUgx,
+    taxUgx: inputTaxUgx,
+    billPayments,
   }) => {
     const denied = denyUnlessEffectivePermission("pos.sell", "finalizeDraftSale");
     if (denied) return { ok: false, errorKey: denied.errorKey };
@@ -2683,8 +3301,12 @@ export const usePosStore = create<PosState>((set, get) => {
     });
     if (!regGate.ok) return { ok: false, errorKey: regGate.errorKey };
 
-    const total = Math.max(0, lineSubtotal - cartDiscount);
-    const discountTotal = Math.max(0, listSubtotal - total);
+    const baseTotal = Math.max(0, lineSubtotal - cartDiscount);
+    const serviceChargeUgx = Math.max(0, Math.floor(inputServiceChargeUgx ?? 0));
+    const taxUgx = Math.max(0, Math.floor(inputTaxUgx ?? 0));
+    const tipUgx = Math.max(0, Math.floor(inputTipUgx ?? 0));
+    const total = baseTotal + serviceChargeUgx + taxUgx + tipUgx;
+    const discountTotal = Math.max(0, listSubtotal - baseTotal);
     const debt = Math.min(Math.max(0, Math.floor(debtUgx)), total);
     if (debt > 0) {
       const debtDenied = denyUnlessEffectivePermission("customers.debt", "finalizeDraftSale");
@@ -2710,6 +3332,10 @@ export const usePosStore = create<PosState>((set, get) => {
     const stockCheck = validateDraftSaleStockBeforeFinalize(state.draftLines, state.products);
     if (!stockCheck.ok) return { ok: false, errorKey: stockCheck.errorKey };
 
+    const ingredientReq = requirementsFromSaleLines(state.draftLines, state.products);
+    const ingredientShortages = checkIngredientAvailability(ingredientReq, state.products);
+    if (ingredientShortages.length > 0) return { ok: false, errorKey: "ingredientShortage" };
+
     const products = [...state.products];
     const preCartLines: SaleLine[] = [];
     const finalizeAt = new Date().toISOString();
@@ -2726,8 +3352,9 @@ export const usePosStore = create<PosState>((set, get) => {
         minimumStockAlert: p.minimumStockAlert,
       });
       if (conflict) logInventoryConflict(conflict);
-      const next = p.stockOnHand - moneyLine.quantity;
-      if (next < -0.0001) return { ok: false, errorKey: "noStock" };
+      const deductFinished = shouldDeductFinishedProductStock(p);
+      const next = deductFinished ? p.stockOnHand - moneyLine.quantity : p.stockOnHand;
+      if (deductFinished && next < -0.0001) return { ok: false, errorKey: "noStock" };
       const slotStart = resolvePackCostUnitsDepleted(p);
       const slotCosts = applyPackSlotCostsToSaleLine(p, moneyLine, slotStart);
       const cogsUgx = lineCostUgx(slotCosts.unitCostUgx, moneyLine.quantity);
@@ -2742,11 +3369,20 @@ export const usePosStore = create<PosState>((set, get) => {
       );
       products[idx] = {
         ...p,
-        stockOnHand: Math.max(0, next),
-        packCostUnitsDepleted: advancePackCostUnitsDepleted(p.packCostUnitsDepleted, moneyLine.quantity),
+        stockOnHand: deductFinished ? Math.max(0, next) : p.stockOnHand,
+        packCostUnitsDepleted: deductFinished
+          ? advancePackCostUnitsDepleted(p.packCostUnitsDepleted, moneyLine.quantity)
+          : p.packCostUnitsDepleted,
         updatedAt: finalizeAt,
-        version: p.version + 1,
+        version: deductFinished ? p.version + 1 : p.version,
       };
+    }
+
+    const recipeDeduction = applyRecipeStockDeduction(products, ingredientReq);
+    for (let i = 0; i < recipeDeduction.products.length; i++) {
+      const updated = recipeDeduction.products[i]!;
+      const idx = products.findIndex((x) => x.id === updated.id);
+      if (idx >= 0) products[idx] = updated;
     }
 
     const saleLines = applyCartDiscountSnapshot(preCartLines, cartDiscount);
@@ -2791,6 +3427,10 @@ export const usePosStore = create<PosState>((set, get) => {
         existingPending?.waiterStaffId ?? sessionWaiter.waiterStaffId ?? null,
       waiterName: existingPending?.waiterName ?? sessionWaiter.waiterName ?? null,
       splitBreakdown: splitBreakdown ?? null,
+      serviceChargeUgx: serviceChargeUgx > 0 ? serviceChargeUgx : null,
+      tipUgx: tipUgx > 0 ? tipUgx : null,
+      taxUgx: taxUgx > 0 ? taxUgx : null,
+      billPayments: billPayments?.length ? billPayments : null,
       paymentMethod: paymentMethod ?? (debt > 0 ? (cashPaidUgx > 0 ? "mixed" : "credit") : "cash"),
       amountPaidUgx: Number.isFinite(amountPaidUgx) ? Math.max(0, Math.floor(amountPaidUgx ?? 0)) : cashPaidUgx,
       changeGivenUgx: Number.isFinite(changeGivenUgx) ? Math.max(0, Math.floor(changeGivenUgx ?? 0)) : 0,
@@ -2858,7 +3498,9 @@ export const usePosStore = create<PosState>((set, get) => {
     if (closedSessionId && nextPreferences.hospitalityFloor) {
       nextPreferences = {
         ...nextPreferences,
-        hospitalityFloor: closeTableSession(nextPreferences.hospitalityFloor, closedSessionId),
+        hospitalityFloor: closeTableSession(nextPreferences.hospitalityFloor, closedSessionId, "closed", {
+          needsCleaning: true,
+        }),
         activeTableSessionId: null,
       };
     }
@@ -3604,6 +4246,14 @@ export const usePosStore = create<PosState>((set, get) => {
     }
     if (patch.quickPresetsQty !== undefined) {
       merged.quickPresetsQty = patch.quickPresetsQty;
+    }
+    if (patch.hospitality !== undefined) {
+      merged.hospitality = patch.hospitality
+        ? normalizeProductHospitalityRouting(patch.hospitality, merged)
+        : null;
+    }
+    if (patch.menu !== undefined) {
+      merged.menu = patch.menu ? normalizeProductMenu(patch.menu) : null;
     }
     if (patch.pharmacyPackaging !== undefined) {
       merged.pharmacyPackaging = patch.pharmacyPackaging;
@@ -5023,6 +5673,63 @@ export const usePosStore = create<PosState>((set, get) => {
     movementMergePatch,
   }),
 
+  ...createRestaurantBillingStoreActions({
+    get,
+    set,
+    denyUnlessEffectivePermission,
+    denyIfBusinessDateLocked,
+    finalizeDraftSale: (opts) => get().finalizeDraftSale(opts),
+    queueRemote,
+    queueHospitalityChange,
+    flushPendingPersist,
+    onTableBillFinalized: ({ saleId, tableLabel, waiterLabel, guestCount }) => {
+      const state = get();
+      if (resolveHospitalityHardware(state.preferences).autoPrintReceipt) {
+        void get().printRestaurantReceiptForSale(saleId, {
+          tableLabel,
+          waiterLabel,
+          guestCount,
+          receiptKind: "master",
+        });
+      }
+      void get().openCashDrawerOnPayment(saleId);
+      if (resolveHospitalityHardware(state.preferences).customerDisplayEnabled) {
+        publishCustomerDisplay({
+          shopName: state.preferences.shopDisplayName?.trim() || "Waka POS",
+          tableLabel,
+          lines: [],
+          subtotalUgx: 0,
+          totalUgx: 0,
+          state: "thanks",
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    },
+    onBillVoided: ({ saleId, tableLabel, waiterLabel, guestCount }) => {
+      void get().printRestaurantReceiptForSale(saleId, {
+        tableLabel,
+        waiterLabel,
+        guestCount,
+        voidReceipt: true,
+        receiptKind: "void",
+      });
+    },
+  }),
+
+  ...createHospitalityMenuStoreActions({
+    get,
+    set,
+    denyUnlessEffectivePermission,
+    scheduleDraftPersist,
+  }),
+
+  ...createHardwarePrintStoreActions({
+    get,
+    set,
+    pushAudit: (action, detail, meta) => pushAudit(action, detail, meta ?? {}),
+    flushPendingPersist,
+  }),
+
   ...(() => {
     const { closeShiftWithHandoff: _omit, ...dayDrawerActions } = createDayDrawerOpenStoreActions({
       get,
@@ -5692,6 +6399,7 @@ function schedulePostBootstrapTasks(): void {
 
 async function runPostBootstrapTasks(): Promise<void> {
   if (!usePosStore.getState()._hydrated) return;
+  usePosStore.getState().bootstrapResumePrintQueue();
   void restoreDraftSaleFromDisk();
   runWhenIdle(() => {
     const state = usePosStore.getState();

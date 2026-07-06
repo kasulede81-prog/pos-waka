@@ -1,4 +1,4 @@
-import type { DiningArea, DiningTable, HospitalityFloorState } from "../types";
+import type { DiningArea, DiningTable, HospitalityFloorState, KitchenStation, KitchenStationType } from "../types";
 import { syncTableDisplayStatuses } from "./hospitality";
 
 export function addDiningArea(floor: HospitalityFloorState, name: string): HospitalityFloorState {
@@ -70,4 +70,45 @@ export function removeDiningTable(floor: HospitalityFloorState, tableId: string)
   if (hasOpen) return floor;
   const tables = floor.tables.filter((t) => t.id !== tableId);
   return syncTableDisplayStatuses({ ...floor, tables });
+}
+
+export function addKitchenStation(
+  floor: HospitalityFloorState,
+  input: { name: string; stationType: KitchenStationType },
+): HospitalityFloorState {
+  const name = input.name.trim();
+  if (!name) return floor;
+  const station: KitchenStation = {
+    id: crypto.randomUUID(),
+    name,
+    stationType: input.stationType,
+    sortOrder: floor.stations.length,
+    isActive: true,
+  };
+  return { ...floor, stations: [...floor.stations, station] };
+}
+
+export function updateKitchenStation(
+  floor: HospitalityFloorState,
+  stationId: string,
+  patch: Partial<Pick<KitchenStation, "name" | "stationType" | "sortOrder" | "isActive">>,
+): HospitalityFloorState {
+  const stations = floor.stations.map((s) => {
+    if (s.id !== stationId) return s;
+    return {
+      ...s,
+      ...patch,
+      name: patch.name !== undefined ? patch.name.trim() || s.name : s.name,
+    };
+  });
+  return { ...floor, stations };
+}
+
+export function removeKitchenStation(floor: HospitalityFloorState, stationId: string): HospitalityFloorState {
+  const hasActiveTickets = (floor.kitchenTickets ?? []).some(
+    (t) => t.stationId === stationId && t.status !== "completed" && t.status !== "cancelled" && t.status !== "served",
+  );
+  if (hasActiveTickets) return floor;
+  const stations = floor.stations.filter((s) => s.id !== stationId);
+  return { ...floor, stations };
 }

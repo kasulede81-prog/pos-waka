@@ -12,9 +12,14 @@ export function isCompletedSale(s: Sale): boolean {
   return saleStatusOf(s) === "completed";
 }
 
+/** Phase 7.1 — settled hospitality bill voided (sale preserved for audit). */
+export function isVoidedSale(s: Sale): boolean {
+  return Boolean(s.saleVoidedAt?.trim());
+}
+
 /** Alias — revenue metrics must use completed sales only (excludes open/pending bills). */
 export function isRevenueSale(s: Sale): boolean {
-  return isCompletedSale(s);
+  return isCompletedSale(s) && !isVoidedSale(s);
 }
 
 export function isPendingSale(s: Sale): boolean {
@@ -22,7 +27,7 @@ export function isPendingSale(s: Sale): boolean {
 }
 
 export function completedSales(sales: Sale[]): Sale[] {
-  return sales.filter(isCompletedSale);
+  return sales.filter((s) => isCompletedSale(s) && !isVoidedSale(s));
 }
 
 export function pendingSales(sales: Sale[]): Sale[] {

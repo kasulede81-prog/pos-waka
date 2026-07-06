@@ -1,6 +1,7 @@
 import { useLocation } from "react-router-dom";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { resolveModuleExit } from "../../lib/moduleExit";
+import { isHospitalityOperationalRoute } from "../../lib/hospitalityNav";
 
 /**
  * Real block at the end of the scroll column (not padding on the scroller).
@@ -11,12 +12,13 @@ export function MobileScrollTail() {
   const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
   const isInternalAdmin = isInternalAdminAppPath(pathname);
   const moduleExit = resolveModuleExit(pathname);
+  const hospitalityNav = isHospitalityOperationalRoute(pathname);
 
   if (isInternalAdmin) {
     return null;
   }
 
-  if (moduleExit) {
+  if (hospitalityNav || moduleExit) {
     return <div aria-hidden className="h-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] shrink-0 lg:hidden" />;
   }
 

@@ -133,3 +133,6 @@ export function computeHospitalityReports(
     peakHours,
   };
 }
+
+/** Phase 6.3 — live production metrics for future analytics dashboards (Phase 6.7). */
+export { computeKitchenProductionAnalytics, type KitchenProductionAnalytics } from "./kitchenProduction";

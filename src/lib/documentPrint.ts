@@ -8,6 +8,11 @@ declare global {
     wakaDesktop?: {
       platform?: string;
       print?: (opts?: { silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
+      escPosNetwork?: (opts: {
+        host: string;
+        port: number;
+        data: number[];
+      }) => Promise<{ ok: boolean; error?: string }>;
     };
   }
 }

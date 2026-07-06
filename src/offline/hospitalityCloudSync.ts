@@ -5,12 +5,17 @@ import type {
   KitchenStation,
   KitchenTicket,
   KitchenTicketItem,
+  KitchenTicketRecallEvent,
+  KitchenTicketStatusEvent,
+  TableReservation,
   TableSession,
+  WaitlistEntry,
 } from "../types";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { usePosStore } from "../store/usePosStore";
 import { syncTableDisplayStatuses } from "../lib/hospitality";
+import { mergeKitchenTicketMonotonic, normalizeKitchenTicket } from "../lib/kitchenProduction";
 import { resolveShopCtx } from "./cloudSync";
 import { enqueueSync } from "./syncEngine";
 
@@ -64,12 +69,14 @@ function rowToTable(row: Record<string, unknown>): DiningTable {
 }
 
 function rowToStation(row: Record<string, unknown>): KitchenStation {
+  const hooks = row.future_hooks as KitchenStation["futureHooks"] | null | undefined;
   return {
     id: String(row.id),
     name: String(row.name ?? "Station"),
     stationType: (row.station_type as KitchenStation["stationType"]) ?? "kitchen",
     sortOrder: Number(row.sort_order ?? 0),
     isActive: row.is_active !== false,
+    futureHooks: hooks ?? undefined,
   };
 }
 
@@ -93,17 +100,99 @@ function rowToSession(row: Record<string, unknown>): TableSession {
   };
 }
 
+function rowToReservation(row: Record<string, unknown>): TableReservation {
+  return {
+    id: String(row.id),
+    reservationNumber: Number(row.reservation_number ?? 1),
+    guestName: String(row.guest_name ?? ""),
+    phone: String(row.phone ?? ""),
+    email: row.email != null ? String(row.email) : null,
+    guestCount: Number(row.guest_count ?? 2),
+    reservationDate: String(row.reservation_date ?? new Date().toISOString().slice(0, 10)),
+    reservationTime: String(row.reservation_time ?? "19:00").slice(0, 5),
+    areaId: row.area_id != null ? String(row.area_id) : null,
+    preferredTableId: row.preferred_table_id != null ? String(row.preferred_table_id) : null,
+    notes: row.notes != null ? String(row.notes) : null,
+    isVip: row.is_vip === true,
+    status: (row.status as TableReservation["status"]) ?? "pending",
+    seatedSessionId: row.seated_session_id != null ? String(row.seated_session_id) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updated_at ?? row.created_at ?? new Date().toISOString()),
+    pendingSync: false,
+  };
+}
+
+function rowToWaitlist(row: Record<string, unknown>): WaitlistEntry {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    guestCount: Number(row.guest_count ?? 2),
+    phone: row.phone != null ? String(row.phone) : null,
+    arrivalTime: String(row.arrival_time ?? new Date().toISOString()),
+    estimatedWaitMinutes: row.estimated_wait_minutes != null ? Number(row.estimated_wait_minutes) : null,
+    priority: (row.priority as WaitlistEntry["priority"]) ?? "normal",
+    notes: row.notes != null ? String(row.notes) : null,
+    source: (row.source as WaitlistEntry["source"]) ?? "walk_in",
+    status: (row.status as WaitlistEntry["status"]) ?? "waiting",
+    seatedSessionId: row.seated_session_id != null ? String(row.seated_session_id) : null,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    updatedAt: String(row.updated_at ?? row.created_at ?? new Date().toISOString()),
+    pendingSync: false,
+  };
+}
+
 function rowToTicket(row: Record<string, unknown>): KitchenTicket {
   const itemsRaw = (row.items as Record<string, unknown>[] | undefined) ?? [];
-  const items: KitchenTicketItem[] = itemsRaw.map((item) => ({
+  const items: KitchenTicketItem[] = itemsRaw.map((item) => {
+    const itemMeta = (item.metadata as Record<string, unknown> | undefined) ?? {};
+    return {
     id: String(item.id ?? crypto.randomUUID()),
     productId: String(item.product_id ?? ""),
     productName: String(item.product_name ?? "Item"),
     quantity: Number(item.quantity ?? 1),
     notes: item.notes != null ? String(item.notes) : null,
-  }));
+    course:
+      item.course != null
+        ? (String(item.course) as KitchenTicketItem["course"])
+        : itemMeta.course != null
+          ? (String(itemMeta.course) as KitchenTicketItem["course"])
+          : null,
+    prepTimeMinutes:
+      item.prep_time_minutes != null
+        ? Number(item.prep_time_minutes)
+        : itemMeta.prep_time_minutes != null
+          ? Number(itemMeta.prep_time_minutes)
+          : null,
+    itemStatus:
+      item.item_status != null
+        ? (String(item.item_status) as KitchenTicketItem["itemStatus"])
+        : itemMeta.item_status != null
+          ? (String(itemMeta.item_status) as KitchenTicketItem["itemStatus"])
+          : "active",
+    cancelledAt:
+      item.cancelled_at != null
+        ? String(item.cancelled_at)
+        : itemMeta.cancelled_at != null
+          ? String(itemMeta.cancelled_at)
+          : null,
+    cancelledBy:
+      item.cancelled_by != null
+        ? String(item.cancelled_by)
+        : itemMeta.cancelled_by != null
+          ? String(itemMeta.cancelled_by)
+          : null,
+    cancelReason:
+      item.cancel_reason != null
+        ? String(item.cancel_reason)
+        : itemMeta.cancel_reason != null
+          ? String(itemMeta.cancel_reason)
+          : null,
+  };
+  });
   const meta = (row.metadata as Record<string, unknown> | undefined) ?? {};
-  return {
+  const statusHistory = (meta.status_history as KitchenTicketStatusEvent[] | undefined) ?? undefined;
+  const recallHistory = (meta.recall_history as KitchenTicketRecallEvent[] | undefined) ?? undefined;
+  return normalizeKitchenTicket({
     id: String(row.id),
     tableSessionId: String(row.table_session_id),
     saleId: String(row.sale_id),
@@ -115,11 +204,24 @@ function rowToTicket(row: Record<string, unknown>): KitchenTicket {
     tableLabel: String(row.table_label ?? ""),
     areaName: row.area_name != null ? String(row.area_name) : null,
     waiterLabel: row.waiter_label != null ? String(row.waiter_label) : null,
+    guestCount: meta.guest_count != null ? Number(meta.guest_count) : null,
+    orderRound: meta.order_round != null ? Number(meta.order_round) : undefined,
+    priority: meta.priority != null ? (String(meta.priority) as KitchenTicket["priority"]) : undefined,
+    prepTargetMinutes: meta.prep_target_minutes != null ? Number(meta.prep_target_minutes) : null,
     ticketNotes: meta.ticket_notes != null ? String(meta.ticket_notes) : null,
+    acceptedAt: row.accepted_at != null ? String(row.accepted_at) : (meta.accepted_at != null ? String(meta.accepted_at) : null),
+    preparingAt: row.prepared_at != null ? String(row.prepared_at) : (meta.preparing_at != null ? String(meta.preparing_at) : null),
+    cookingAt: meta.cooking_at != null ? String(meta.cooking_at) : null,
+    readyAt: meta.ready_at != null ? String(meta.ready_at) : null,
+    pickedUpAt: meta.picked_up_at != null ? String(meta.picked_up_at) : null,
+    servedAt: row.served_at != null ? String(row.served_at) : (meta.served_at != null ? String(meta.served_at) : null),
+    completedAt: meta.completed_at != null ? String(meta.completed_at) : null,
+    statusHistory,
+    recallHistory,
     items,
     updatedAt: String(row.updated_at ?? row.fired_at ?? new Date().toISOString()),
     pendingSync: false,
-  };
+  });
 }
 
 function mergeById<T extends { id: string }>(
@@ -149,14 +251,51 @@ export function mergeRemoteHospitalityFloor(
     sessions: TableSession[];
     stations: KitchenStation[];
     tickets: KitchenTicket[];
+    reservations?: TableReservation[];
+    waitlist?: WaitlistEntry[];
   },
 ): HospitalityFloorState {
   const areas = mergeById(local.areas, remote.areas, (a, b) => ({ ...a, ...b }), () => null);
   const tables = mergeById(local.tables, remote.tables, (a, b) => ({ ...a, ...b }), () => null);
   const stations = mergeById(local.stations, remote.stations, (a, b) => ({ ...a, ...b }), () => null);
   const sessions = mergeById(local.sessions, remote.sessions, (a, b) => ({ ...a, ...b }), (s) => s.updatedAt);
-  const kitchenTickets = mergeById(local.kitchenTickets ?? [], remote.tickets, (a, b) => ({ ...a, ...b }), (t) => t.updatedAt);
-  return syncTableDisplayStatuses({ ...local, areas, tables, stations, sessions, kitchenTickets });
+  const kitchenTickets = mergeById(
+    local.kitchenTickets ?? [],
+    remote.tickets,
+    mergeKitchenTicketMonotonic,
+    (t) => t.updatedAt,
+  );
+  const reservations = mergeById(
+    local.reservations ?? [],
+    remote.reservations ?? [],
+    (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
+    (r) => r.updatedAt,
+  );
+  const waitlist = mergeById(
+    local.waitlist ?? [],
+    remote.waitlist ?? [],
+    (a, b) => (newerIso(a.updatedAt, b.updatedAt) ? { ...b, ...a } : { ...a, ...b }),
+    (w) => w.updatedAt,
+  );
+  const sameCollections =
+    areas === local.areas &&
+    tables === local.tables &&
+    stations === local.stations &&
+    sessions === local.sessions &&
+    kitchenTickets === (local.kitchenTickets ?? []) &&
+    reservations === (local.reservations ?? []) &&
+    waitlist === (local.waitlist ?? []);
+  if (sameCollections) return syncTableDisplayStatuses(local);
+  return syncTableDisplayStatuses({
+    ...local,
+    areas,
+    tables,
+    stations,
+    sessions,
+    kitchenTickets,
+    reservations,
+    waitlist,
+  });
 }
 
 export async function pullHospitalityStateFromCloud(forceFull = false): Promise<boolean> {
@@ -178,15 +317,19 @@ export async function pullHospitalityStateFromCloud(forceFull = false): Promise<
   const stations = ((result.stations as Record<string, unknown>[]) ?? []).map(rowToStation);
   const sessions = ((result.sessions as Record<string, unknown>[]) ?? []).map(rowToSession);
   const tickets = ((result.tickets as Record<string, unknown>[]) ?? []).map(rowToTicket);
+  const reservations = ((result.reservations as Record<string, unknown>[]) ?? []).map(rowToReservation);
+  const waitlist = ((result.waitlist as Record<string, unknown>[]) ?? []).map(rowToWaitlist);
 
   const state = usePosStore.getState();
   const local = state.preferences.hospitalityFloor;
   if (!local) return false;
 
-  const merged = mergeRemoteHospitalityFloor(local, { areas, tables, sessions, stations, tickets });
-  usePosStore.setState({
-    preferences: { ...state.preferences, hospitalityFloor: merged },
-  });
+  const merged = mergeRemoteHospitalityFloor(local, { areas, tables, sessions, stations, tickets, reservations, waitlist });
+  if (merged !== local) {
+    usePosStore.setState({
+      preferences: { ...state.preferences, hospitalityFloor: merged },
+    });
+  }
 
   writeLastPullAt(String(result.server_at ?? new Date().toISOString()));
 
@@ -226,7 +369,37 @@ export async function pushHospitalityFloorLayoutToCloud(floor: HospitalityFloorS
       station_type: s.stationType,
       sort_order: s.sortOrder,
       is_active: s.isActive,
+      future_hooks: s.futureHooks ?? null,
       updated_at: now,
+    })),
+    reservations: (floor.reservations ?? []).map((r) => ({
+      id: r.id,
+      reservation_number: r.reservationNumber,
+      guest_name: r.guestName,
+      phone: r.phone,
+      email: r.email,
+      guest_count: r.guestCount,
+      reservation_date: r.reservationDate,
+      reservation_time: r.reservationTime,
+      area_id: r.areaId,
+      preferred_table_id: r.preferredTableId,
+      notes: r.notes,
+      is_vip: r.isVip,
+      status: r.status,
+      updated_at: r.updatedAt ?? now,
+    })),
+    waitlist: (floor.waitlist ?? []).map((w) => ({
+      id: w.id,
+      name: w.name,
+      guest_count: w.guestCount,
+      phone: w.phone,
+      arrival_time: w.arrivalTime,
+      estimated_wait_minutes: w.estimatedWaitMinutes,
+      priority: w.priority,
+      notes: w.notes,
+      source: w.source,
+      status: w.status,
+      updated_at: w.updatedAt ?? now,
     })),
   };
 
@@ -289,14 +462,36 @@ export async function pushKitchenTicketToCloud(ticket: KitchenTicket, stationTyp
     waiter_label: ticket.waiterLabel ?? null,
     table_label: ticket.tableLabel,
     area_name: ticket.areaName ?? null,
+    accepted_at: ticket.acceptedAt ?? null,
+    prepared_at: ticket.preparingAt ?? null,
+    served_at: ticket.servedAt ?? null,
     updated_at: ticket.updatedAt ?? ticket.firedAt,
-    metadata: { station_type: stationType, ticket_notes: ticket.ticketNotes ?? null },
+    metadata: {
+      station_type: stationType,
+      ticket_notes: ticket.ticketNotes ?? null,
+      guest_count: ticket.guestCount ?? null,
+      order_round: ticket.orderRound ?? null,
+      priority: ticket.priority ?? null,
+      prep_target_minutes: ticket.prepTargetMinutes ?? null,
+      cooking_at: ticket.cookingAt ?? null,
+      ready_at: ticket.readyAt ?? null,
+      picked_up_at: ticket.pickedUpAt ?? null,
+      completed_at: ticket.completedAt ?? null,
+      status_history: ticket.statusHistory ?? [],
+      recall_history: ticket.recallHistory ?? [],
+    },
     items: ticket.items.map((item) => ({
       id: item.id,
       product_id: item.productId,
       product_name: item.productName,
       quantity: item.quantity,
       notes: item.notes ?? null,
+      course: item.course ?? null,
+      prep_time_minutes: item.prepTimeMinutes ?? null,
+      item_status: item.itemStatus ?? "active",
+      cancelled_at: item.cancelledAt ?? null,
+      cancelled_by: item.cancelledBy ?? null,
+      cancel_reason: item.cancelReason ?? null,
     })),
   };
 

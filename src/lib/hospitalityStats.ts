@@ -1,5 +1,5 @@
 import type { HospitalityFloorState, Sale, TableSession } from "../types";
-import { activeKitchenTickets } from "./hospitalityOps";
+import { activeProductionTickets } from "./kitchenProduction";
 import { pendingSaleTotal, sessionDisplayLabel } from "./hospitality";
 
 export type HospitalityDashboardStats = {
@@ -49,7 +49,7 @@ export function computeHospitalityDashboardStats(
     if (label) waiters.add(label);
   }
 
-  const kitchenQueueCount = activeKitchenTickets(floor).length;
+  const kitchenQueueCount = activeProductionTickets(floor).length;
   const paymentPendingCount = active.filter((s) => s.status === "payment_pending").length;
 
   return {

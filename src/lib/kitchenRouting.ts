@@ -1,25 +1,12 @@
-import type { KitchenStation, KitchenStationType, Product, SaleLine } from "../types";
+import type { SaleLine } from "../types";
 
-const DRINK_KEYWORDS = /beer|wine|spirit|cocktail|soda|soft|water|juice|drink|lager|gin|vodka|whisky|soda/i;
-const FOOD_KEYWORDS = /food|chicken|pork|fish|goat|rice|chips|plate|meat|soup|bread|breakfast|lunch|dinner/i;
-
-export function resolveProductStationType(product: Product): KitchenStationType {
-  const cat = (product.category ?? "").toLowerCase();
-  const name = product.name.toLowerCase();
-  if (DRINK_KEYWORDS.test(cat) || DRINK_KEYWORDS.test(name)) return "bar";
-  if (FOOD_KEYWORDS.test(cat) || FOOD_KEYWORDS.test(name)) return "kitchen";
-  return "kitchen";
-}
-
-export function resolveStationForProduct(
-  product: Product,
-  stations: KitchenStation[],
-): KitchenStation | null {
-  const active = stations.filter((s) => s.isActive);
-  if (!active.length) return null;
-  const preferred = resolveProductStationType(product);
-  return active.find((s) => s.stationType === preferred) ?? active[0] ?? null;
-}
+export {
+  BAR_FIRE_STATION_TYPES,
+  KITCHEN_FIRE_STATION_TYPES,
+  resolveProductProductionStation,
+  resolveProductStationType,
+  resolveStationForProduct,
+} from "./productHospitalityRouting";
 
 export function lineQtyByProduct(lines: SaleLine[]): Map<string, number> {
   const map = new Map<string, number>();
@@ -43,12 +30,31 @@ export function deltaLinesSince(previous: SaleLine[], current: SaleLine[]): Sale
 }
 
 /** Quantities already sent to kitchen for a sale (non-cancelled tickets). */
-export function firedQtyByProductForSale(tickets: import("../types").KitchenTicket[], saleId: string): Map<string, number> {
+export function firedQtyByProductForSale(
+  tickets: import("../types").KitchenTicket[],
+  saleId: string,
+): Map<string, number> {
   const map = new Map<string, number>();
   for (const ticket of tickets) {
     if (ticket.saleId !== saleId || ticket.status === "cancelled") continue;
     for (const item of ticket.items) {
+      if (item.saleLineId) continue;
       map.set(item.productId, (map.get(item.productId) ?? 0) + item.quantity);
+    }
+  }
+  return map;
+}
+
+export function firedQtyByLineIdForSale(
+  tickets: import("../types").KitchenTicket[],
+  saleId: string,
+): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const ticket of tickets) {
+    if (ticket.saleId !== saleId || ticket.status === "cancelled") continue;
+    for (const item of ticket.items) {
+      if (!item.saleLineId) continue;
+      map.set(item.saleLineId, (map.get(item.saleLineId) ?? 0) + item.quantity);
     }
   }
   return map;

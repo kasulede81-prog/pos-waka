@@ -7,6 +7,10 @@ import { unitCostFromPackTotal } from "../lib/costPrecision";
 import { AppModalOverlay } from "./layout/AppModalOverlay";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
+import { isHospitalityMode } from "../lib/hospitality";
+import type { ProductHospitalityRouting } from "../types";
+import { inferProductHospitalityRouting } from "../lib/productHospitalityRouting";
+import { ProductHospitalityRoutingFields } from "./hospitality/ProductHospitalityRoutingFields";
 import { normalizeExpiryDate } from "../lib/pharmacyExpiry";
 import { CostValidationPreview } from "./stock/CostValidationPreview";
 
@@ -46,6 +50,7 @@ type Props = {
         | "expiryDate"
         | "quickPresetsMoneyUgx"
         | "quickPresetsQty"
+        | "hospitality"
       >
     >,
   ) => { ok: boolean; errorKey?: string };
@@ -89,9 +94,13 @@ export function StockProductEditModal({
   const [moneyPresets, setMoneyPresets] = useState("");
   const [qtyPresets, setQtyPresets] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [hospitalityRouting, setHospitalityRouting] = useState<ProductHospitalityRouting | null>(null);
 
   const pharmacyMode = usePosStore((s) =>
     isPharmacyMode(s.preferences.businessType, s.preferences.pharmacyModeEnabled),
+  );
+  const hospitalityMode = usePosStore((s) =>
+    isHospitalityMode(s.preferences.businessType, s.preferences.hospitalityModeEnabled),
   );
 
   useEffect(() => {
@@ -121,6 +130,7 @@ export function StockProductEditModal({
     setMoneyPresets((product.quickPresetsMoneyUgx ?? []).join(","));
     setQtyPresets((product.quickPresetsQty ?? []).join(","));
     setExpiryDate(product.expiryDate ?? "");
+    setHospitalityRouting(product.hospitality ?? null);
   }, [open, product, businessUnitOptions]);
 
   if (!open || !product) return null;
@@ -186,6 +196,10 @@ export function StockProductEditModal({
     if (canPresets) {
       patch.quickPresetsMoneyUgx = money;
       patch.quickPresetsQty = qty;
+    }
+
+    if (hospitalityMode) {
+      patch.hospitality = hospitalityRouting;
     }
 
     const r = updateProduct(product.id, patch);
@@ -358,6 +372,24 @@ export function StockProductEditModal({
               </datalist>
             ) : null}
           </label>
+
+          {hospitalityMode ? (
+            <ProductHospitalityRoutingFields
+              lang={lang}
+              value={hospitalityRouting}
+              onChange={setHospitalityRouting}
+              onSuggestFromCategory={() => {
+                if (!product) return;
+                setHospitalityRouting(
+                  inferProductHospitalityRouting({
+                    ...product,
+                    name: name.trim(),
+                    category: category.trim(),
+                  }),
+                );
+              }}
+            />
+          ) : null}
 
           <label className="block">
             <span className="text-sm font-bold text-stone-800">{t(lang, "productSkuOptional")}</span>

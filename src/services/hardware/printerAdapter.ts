@@ -1,6 +1,10 @@
 /**
- * Thermal / receipt printer adapter (Bluetooth, USB). Web APIs only — no Sunmi SDK yet.
+ * Thermal / receipt printer adapter (Bluetooth, USB, network framework).
+ * Web APIs + optional Electron bridge for LAN printers.
  */
+import type { PrinterProfile } from "../../types";
+import { buildTestEscPos, EscPosBuilder } from "../../lib/escPosBuilder";
+
 export type PrinterPaperWidth = "58mm" | "80mm";
 
 export type PrinterPlatform = "web" | "android" | "ios" | "electron" | "unknown";
@@ -11,6 +15,7 @@ export type PrinterCapabilityState = "SUPPORTED" | "PARTIAL" | "UNAVAILABLE";
 export type PrinterCapabilities = {
   bluetoothAvailable: boolean;
   usbAvailable: boolean;
+  networkAvailable: boolean;
   sunmiBuiltIn: boolean;
   escPosAvailable: boolean;
   platform: PrinterPlatform;
@@ -18,14 +23,22 @@ export type PrinterCapabilities = {
   stateReason: string;
 };
 
-const ESC_POS_INIT = [0x1b, 0x40];
-const ESC_POS_ALIGN_LEFT = [0x1b, 0x61, 0x00];
-const ESC_POS_ALIGN_CENTER = [0x1b, 0x61, 0x01];
-const ESC_POS_CUT_PARTIAL = [0x1d, 0x56, 0x42, 0x03];
-const ESC_POS_FEED_4 = [0x1b, 0x64, 0x04];
-
 const BT_PRINTER_SERVICES = [0xffe0, 0x18f0];
 const BT_PRINTER_CHARS = [0xffe1, 0x2af1];
+
+declare global {
+  interface Window {
+    wakaDesktop?: {
+      platform?: string;
+      print?: (opts?: { silent?: boolean }) => Promise<{ ok: boolean; error?: string }>;
+      escPosNetwork?: (opts: {
+        host: string;
+        port: number;
+        data: number[];
+      }) => Promise<{ ok: boolean; error?: string }>;
+    };
+  }
+}
 
 function resolvePlatform(): PrinterPlatform {
   if (typeof navigator === "undefined") return "unknown";
@@ -61,8 +74,8 @@ function resolveCapabilityState(
   if (platform === "electron") {
     return {
       state: "PARTIAL",
-      stateReason: "Use system print dialog (Receipt Print). USB/BT thermal needs WebUSB/Web Bluetooth in Chromium.",
-      escPosAvailable: false,
+      stateReason: "Use system print or LAN ESC/POS when configured. USB/BT needs WebUSB/Web Bluetooth.",
+      escPosAvailable: true,
     };
   }
   if (platform === "android" || platform === "ios") {
@@ -80,20 +93,95 @@ function resolveCapabilityState(
 }
 
 function toEscPos(payload: { width: PrinterPaperWidth; lines: string[] }): Uint8Array {
-  const encoder = new TextEncoder();
-  const widthLabel = payload.width === "58mm" ? "WAKA POS [58mm]" : "WAKA POS [80mm]";
-  const header = `${widthLabel}\n`;
-  const body = `${payload.lines.join("\n")}\n\n`;
-  const bytes = [
-    ...ESC_POS_INIT,
-    ...ESC_POS_ALIGN_CENTER,
-    ...Array.from(encoder.encode(header)),
-    ...ESC_POS_ALIGN_LEFT,
-    ...Array.from(encoder.encode(body)),
-    ...ESC_POS_FEED_4,
-    ...ESC_POS_CUT_PARTIAL,
-  ];
-  return new Uint8Array(bytes);
+  return buildTestEscPos(payload.width, payload.lines);
+}
+
+async function transferUsb(bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
+  if (typeof navigator === "undefined" || !("usb" in navigator)) {
+    return { ok: false, error: "WebUSB not available." };
+  }
+  try {
+    const usb = navigator.usb as {
+      requestDevice: (opts: { filters: Array<Record<string, unknown>> }) => Promise<{
+        configuration: unknown;
+        open: () => Promise<void>;
+        selectConfiguration: (cfg: number) => Promise<void>;
+        claimInterface: (idx: number) => Promise<void>;
+        transferOut: (endpoint: number, data: Uint8Array) => Promise<void>;
+        close: () => Promise<void>;
+      }>;
+    };
+    const device = await usb.requestDevice({ filters: [] });
+    await device.open();
+    if (device.configuration == null) await device.selectConfiguration(1);
+    await device.claimInterface(0);
+    await device.transferOut(1, bytes);
+    await device.close();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "USB thermal print failed." };
+  }
+}
+
+async function transferBluetooth(bytes: Uint8Array): Promise<{ ok: boolean; error?: string }> {
+  if (typeof navigator === "undefined" || !("bluetooth" in navigator)) {
+    return { ok: false, error: "Web Bluetooth not available." };
+  }
+  try {
+    const bluetooth = navigator.bluetooth as {
+      requestDevice: (opts: {
+        acceptAllDevices: boolean;
+        optionalServices: number[];
+      }) => Promise<{
+        gatt?: {
+          connect: () => Promise<{
+            getPrimaryService: (service: number) => Promise<{
+              getCharacteristic: (char: number) => Promise<{ writeValue: (data: Uint8Array) => Promise<void> }>;
+            }>;
+          }>;
+          disconnect: () => void;
+        };
+      }>;
+    };
+    const device = await bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: BT_PRINTER_SERVICES,
+    });
+    const server = await device.gatt?.connect();
+    if (!server) return { ok: false, error: "Bluetooth printer connection failed." };
+    const service = await server.getPrimaryService(BT_PRINTER_SERVICES[0]);
+    const characteristic = await service.getCharacteristic(BT_PRINTER_CHARS[0]);
+    await characteristic.writeValue(bytes);
+    device.gatt?.disconnect();
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Bluetooth thermal print failed." };
+  }
+}
+
+async function transferNetwork(
+  profile: PrinterProfile,
+  bytes: Uint8Array,
+): Promise<{ ok: boolean; error?: string }> {
+  const host = profile.networkHost?.trim();
+  const port = profile.networkPort ?? 9100;
+  if (!host) return { ok: false, error: "Network printer host not set." };
+  if (typeof window !== "undefined" && window.wakaDesktop?.escPosNetwork) {
+    try {
+      const result = await window.wakaDesktop.escPosNetwork({
+        host,
+        port,
+        data: Array.from(bytes),
+      });
+      return result.ok ? { ok: true } : { ok: false, error: result.error ?? "Network print failed." };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Network print failed." };
+    }
+  }
+  return {
+    ok: false,
+    error: "LAN ESC/POS needs the Waka desktop app or a print server bridge.",
+  };
 }
 
 export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> {
@@ -101,17 +189,43 @@ export async function detectPrinterCapabilities(): Promise<PrinterCapabilities> 
   const bluetoothAvailable = hasNavigator && "bluetooth" in navigator;
   const usbAvailable = hasNavigator && "usb" in navigator;
   const platform = resolvePlatform();
+  const networkAvailable = platform === "electron" || Boolean(typeof window !== "undefined" && window.wakaDesktop?.escPosNetwork);
   const sunmiBuiltIn = false;
   const { state, stateReason, escPosAvailable } = resolveCapabilityState(platform, bluetoothAvailable, usbAvailable);
   return {
     bluetoothAvailable,
     usbAvailable,
+    networkAvailable,
     sunmiBuiltIn,
-    escPosAvailable,
+    escPosAvailable: escPosAvailable || networkAvailable,
     platform,
     state,
     stateReason,
   };
+}
+
+export async function sendEscPosBytes(
+  profile: PrinterProfile,
+  bytes: Uint8Array,
+): Promise<{ ok: boolean; error?: string }> {
+  if (profile.connectionType === "network") {
+    return transferNetwork(profile, bytes);
+  }
+  if (profile.connectionType === "bluetooth") {
+    return transferBluetooth(bytes);
+  }
+  if (profile.connectionType === "usb" || profile.connectionType === "builtin") {
+    return transferUsb(bytes);
+  }
+  const caps = await detectPrinterCapabilities();
+  if (caps.usbAvailable) return transferUsb(bytes);
+  if (caps.bluetoothAvailable) return transferBluetooth(bytes);
+  return { ok: false, error: caps.stateReason };
+}
+
+export async function kickCashDrawer(profile: PrinterProfile): Promise<{ ok: boolean; error?: string }> {
+  const bytes = new EscPosBuilder(profile.paperWidth).kickDrawer().build();
+  return sendEscPosBytes(profile, bytes);
 }
 
 export async function testPrint(_payload: { width: PrinterPaperWidth; lines: string[] }): Promise<{ ok: boolean; error?: string }> {
@@ -122,68 +236,20 @@ export async function testPrint(_payload: { width: PrinterPaperWidth; lines: str
   }
   const bytes = toEscPos(payload);
 
-  if (caps.usbAvailable && typeof navigator !== "undefined" && "usb" in navigator) {
-    try {
-      const usb = navigator.usb as {
-        requestDevice: (opts: { filters: Array<Record<string, unknown>> }) => Promise<{
-          configuration: unknown;
-          open: () => Promise<void>;
-          selectConfiguration: (cfg: number) => Promise<void>;
-          claimInterface: (idx: number) => Promise<void>;
-          transferOut: (endpoint: number, data: Uint8Array) => Promise<void>;
-          close: () => Promise<void>;
-        }>;
-      };
-      const device = await usb.requestDevice({ filters: [] });
-      await device.open();
-      if (device.configuration == null) await device.selectConfiguration(1);
-      await device.claimInterface(0);
-      await device.transferOut(1, bytes);
-      await device.close();
-      return { ok: true };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "USB thermal print failed.",
-      };
-    }
+  if (caps.usbAvailable) {
+    const usb = await transferUsb(bytes);
+    if (usb.ok) return usb;
   }
 
-  if (caps.bluetoothAvailable && typeof navigator !== "undefined" && "bluetooth" in navigator) {
-    try {
-      const bluetooth = navigator.bluetooth as {
-        requestDevice: (opts: {
-          acceptAllDevices: boolean;
-          optionalServices: number[];
-        }) => Promise<{
-          gatt?: {
-            connect: () => Promise<{
-              getPrimaryService: (service: number) => Promise<{
-                getCharacteristic: (char: number) => Promise<{ writeValue: (data: Uint8Array) => Promise<void> }>;
-              }>;
-            }>;
-            disconnect: () => void;
-          };
-        }>;
-      };
-      const device = await bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: BT_PRINTER_SERVICES,
-      });
-      const server = await device.gatt?.connect();
-      if (!server) return { ok: false, error: "Bluetooth printer connection failed." };
-      const service = await server.getPrimaryService(BT_PRINTER_SERVICES[0]);
-      const characteristic = await service.getCharacteristic(BT_PRINTER_CHARS[0]);
-      await characteristic.writeValue(bytes);
-      device.gatt?.disconnect();
-      return { ok: true };
-    } catch (error) {
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : "Bluetooth thermal print failed.",
-      };
-    }
+  if (caps.bluetoothAvailable) {
+    const bt = await transferBluetooth(bytes);
+    if (bt.ok) return bt;
   }
 
   return { ok: false, error: caps.stateReason };
+}
+
+export async function testPrintProfile(profile: PrinterProfile, lines: string[]): Promise<{ ok: boolean; error?: string }> {
+  const bytes = buildTestEscPos(profile.paperWidth, lines);
+  return sendEscPosBytes(profile, bytes);
 }

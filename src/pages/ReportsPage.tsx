@@ -365,6 +365,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
               }
               hospitalityReports={hospitalityReports}
               hospitalityOpenBills={hospitalityOpenBills}
+              hospitalityFloor={preferences.hospitalityFloor}
             />
           ) : null
         }

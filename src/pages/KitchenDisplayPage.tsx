@@ -1,44 +1,93 @@
-import { useMemo } from "react";
-import clsx from "clsx";
+import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import type { KitchenTicketStatus, Language } from "../types";
+import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { activeKitchenTickets } from "../lib/hospitalityOps";
+import {
+  activeProductionTickets,
+  computeProductionAlerts,
+  computeStationProductionDashboard,
+} from "../lib/kitchenProduction";
+import { hospitalityRoutingLabelKey } from "../lib/productHospitalityRouting";
 import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { useHospitalityFloorPoll } from "../hooks/useHospitalityFloorPoll";
-
-const STATUS_FLOW: KitchenTicketStatus[] = ["queued", "preparing", "ready", "served"];
+import { ProductionStationDashboard } from "../components/hospitality/ProductionStationDashboard";
+import {
+  CancelItemDialog,
+  ProductionTicketCard,
+  RecallTicketDialog,
+} from "../components/hospitality/ProductionTicketCard";
 
 export function KitchenDisplayPage({ lang }: { lang: Language }) {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const stationParam = params.get("station");
-  const updateStatus = usePosStore((s) => s.updateKitchenTicketStatus);
+  const advanceTicket = usePosStore((s) => s.advanceKitchenTicket);
   const cancelTicket = usePosStore((s) => s.cancelKitchenTicket);
+  const recallTicket = usePosStore((s) => s.recallKitchenTicket);
+  const cancelItem = usePosStore((s) => s.cancelKitchenTicketItem);
+  const reprintKitchenTicket = usePosStore((s) => s.reprintKitchenTicket);
   const cleanupTickets = usePosStore((s) => s.cleanupKitchenTickets);
   const floor = usePosStore((s) => s.preferences.hospitalityFloor);
+  const actor = usePosStore((s) => s.sessionActor);
+
+  const [recallId, setRecallId] = useState<string | null>(null);
+  const [cancelItemCtx, setCancelItemCtx] = useState<{ ticketId: string; itemId: string } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useHospitalityFloorPoll(true);
 
-  const tickets = useMemo(() => {
-    if (!floor) return [];
-    const stationFilter =
-      stationParam === "bar" ? "bar" : stationParam === "kitchen" ? "kitchen" : undefined;
-    return activeKitchenTickets(floor, stationFilter);
-  }, [floor, stationParam]);
+  const activeStations = useMemo(
+    () => (floor?.stations ?? []).filter((s) => s.isActive).sort((a, b) => a.sortOrder - b.sortOrder),
+    [floor?.stations],
+  );
 
-  const bump = (ticketId: string, current: KitchenTicketStatus) => {
-    const idx = STATUS_FLOW.indexOf(current);
-    const next = STATUS_FLOW[Math.min(idx + 1, STATUS_FLOW.length - 1)]!;
-    updateStatus(ticketId, next);
-  };
+  const selectedStationId = useMemo(() => {
+    if (!stationParam) return activeStations[0]?.id;
+    const byId = activeStations.find((s) => s.id === stationParam);
+    if (byId) return byId.id;
+    const byType = activeStations.find((s) => s.stationType === stationParam);
+    return byType?.id ?? activeStations[0]?.id;
+  }, [activeStations, stationParam]);
+
+  const selectedStation = activeStations.find((s) => s.id === selectedStationId);
+
+  const tickets = useMemo(() => {
+    if (!floor || !selectedStationId) return [];
+    return activeProductionTickets(floor, { stationId: selectedStationId });
+  }, [floor, selectedStationId]);
+
+  const dashboard = useMemo(() => {
+    if (!floor || !selectedStationId) {
+      return {
+        pendingTickets: 0,
+        preparingCount: 0,
+        readyCount: 0,
+        averagePrepMinutes: null,
+        longestWaitMinutes: null,
+        completedToday: 0,
+      };
+    }
+    return computeStationProductionDashboard(floor, selectedStationId);
+  }, [floor, selectedStationId, tickets.length]);
+
+  const alerts = useMemo(() => (floor ? computeProductionAlerts(floor) : []), [floor, tickets.length]);
+  const stationAlerts = alerts.filter((a) => a.stationId === selectedStationId);
+
+  const canRecall =
+    actor?.role === "owner" || actor?.role === "manager" || actor?.role === "supervisor";
+
+  const pageTitle = selectedStation
+    ? selectedStation.name
+    : stationParam === "bar"
+      ? t(lang, "hospitalityStation_bar")
+      : t(lang, "kitchenDisplayTitle");
 
   return (
     <div className="space-y-4 pb-8">
       <PageBackBar lang={lang} fallbackTo="/floor" label={t(lang, "navFloor")} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-black text-stone-950">{t(lang, "kitchenDisplayTitle")}</h1>
+          <h1 className="text-2xl font-black text-stone-950">{pageTitle}</h1>
           <p className="mt-1 text-sm font-medium text-stone-500">
             {tickets.length} {t(lang, "kitchenDisplayWaiting")}
           </p>
@@ -52,6 +101,43 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
         </button>
       </div>
 
+      {activeStations.length > 1 ? (
+        <div className="flex flex-wrap gap-2">
+          {activeStations.map((st) => (
+            <button
+              key={st.id}
+              type="button"
+              onClick={() => setParams({ station: st.id })}
+              className={
+                st.id === selectedStationId
+                  ? "rounded-xl bg-stone-900 px-3 py-2 text-xs font-black text-white"
+                  : "rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs font-black text-stone-700"
+              }
+            >
+              {st.name}
+            </button>
+          ))}
+        </div>
+      ) : selectedStation ? (
+        <p className="text-xs font-bold uppercase text-stone-500">
+          {t(lang, hospitalityRoutingLabelKey(selectedStation.stationType) as "hospitalityStation_kitchen")}
+        </p>
+      ) : null}
+
+      <ProductionStationDashboard lang={lang} dashboard={dashboard} />
+
+      {stationAlerts.length > 0 ? (
+        <ul className="space-y-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2">
+          {stationAlerts.map((a) => (
+            <li key={a.id} className="text-xs font-bold text-amber-950">
+              {t(lang, a.messageKey as "productionAlertOverdue")} — {a.tableLabel}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {err ? <p className="text-sm font-bold text-rose-700">{err}</p> : null}
+
       {tickets.length === 0 ? (
         <p className="rounded-2xl border border-stone-200 bg-white px-4 py-10 text-center text-sm font-bold text-stone-500">
           {t(lang, "kitchenDisplayEmpty")}
@@ -59,55 +145,47 @@ export function KitchenDisplayPage({ lang }: { lang: Language }) {
       ) : (
         <ul className="space-y-3">
           {tickets.map((ticket) => (
-            <li key={ticket.id} className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <p className="text-lg font-black text-stone-950">
-                    {ticket.tableLabel}
-                    {ticket.areaName ? ` · ${ticket.areaName}` : ""}
-                  </p>
-                  <p className="text-xs font-bold uppercase text-stone-600">
-                    #{ticket.ticketNumber} · {ticket.stationType} · {ticket.waiterLabel ?? "—"}
-                  </p>
-                </div>
-                <span className="rounded-lg bg-white px-2 py-1 text-xs font-black uppercase text-amber-900">
-                  {ticket.status}
-                </span>
-              </div>
-              <ul className="mt-3 space-y-1 text-sm font-bold text-stone-800">
-                {ticket.items.map((item) => (
-                  <li key={item.id}>
-                    {item.quantity}× {item.productName}
-                    {item.notes ? <span className="font-medium text-stone-500"> — {item.notes}</span> : null}
-                  </li>
-                ))}
-              </ul>
-              {ticket.ticketNotes ? (
-                <p className="mt-2 text-xs font-semibold text-amber-900">{ticket.ticketNotes}</p>
-              ) : null}
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => cancelTicket(ticket.id)}
-                  className="min-h-12 rounded-xl border border-rose-200 bg-rose-50 text-sm font-black text-rose-900"
-                >
-                  {t(lang, "kitchenCancelTicket")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => bump(ticket.id, ticket.status)}
-                  className={clsx(
-                    "min-h-12 rounded-xl text-sm font-black text-white",
-                    ticket.status === "ready" ? "bg-emerald-600" : "bg-stone-900",
-                  )}
-                >
-                  {ticket.status === "ready" ? t(lang, "kitchenMarkServed") : t(lang, "kitchenMarkNext")}
-                </button>
-              </div>
-            </li>
+            <ProductionTicketCard
+              key={ticket.id}
+              lang={lang}
+              ticket={ticket}
+              stationName={selectedStation?.name}
+              canRecall={canRecall}
+              onAdvance={() => advanceTicket(ticket.id)}
+              onCancel={() => cancelTicket(ticket.id)}
+              onRecall={() => setRecallId(ticket.id)}
+              onCancelItem={(itemId) => setCancelItemCtx({ ticketId: ticket.id, itemId })}
+              onReprint={() => reprintKitchenTicket(ticket.id)}
+            />
           ))}
         </ul>
       )}
+
+      <RecallTicketDialog
+        lang={lang}
+        open={recallId != null}
+        onClose={() => setRecallId(null)}
+        onConfirm={(reason) => {
+          if (!recallId) return;
+          const res = recallTicket(recallId, reason);
+          if (!res.ok && res.errorKey) setErr(t(lang, res.errorKey as "kitchenRecallNeedsManager"));
+          else setErr(null);
+          setRecallId(null);
+        }}
+      />
+
+      <CancelItemDialog
+        lang={lang}
+        open={cancelItemCtx != null}
+        onClose={() => setCancelItemCtx(null)}
+        onConfirm={(reason) => {
+          if (!cancelItemCtx) return;
+          const res = cancelItem(cancelItemCtx.ticketId, cancelItemCtx.itemId, reason);
+          if (!res.ok && res.errorKey) setErr(t(lang, res.errorKey as "kitchenCancelItemNeedsManager"));
+          else setErr(null);
+          setCancelItemCtx(null);
+        }}
+      />
     </div>
   );
 }

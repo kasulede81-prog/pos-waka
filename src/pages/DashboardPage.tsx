@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
-import { Link, useLocation } from "react-router-dom";
+import { Link, Navigate, useLocation } from "react-router-dom";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
 import { dashboardKpiGridClass, KPI_VALUE_CLASS } from "../lib/desktopLayout";
@@ -17,6 +17,7 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { isHospitalityMode } from "../lib/hospitality";
+import { hasPermission } from "../lib/permissions";
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
@@ -140,6 +141,9 @@ export function DashboardPage({ lang }: { lang: Language }) {
         : "lg:grid-cols-2";
 
   const hospitalityHome = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  if (hospitalityHome && hasPermission(actor.role, "hospitality.floor")) {
+    return <Navigate to="/floor" replace />;
+  }
   if (hospitalityHome) {
     return <HospitalityDashboardPage lang={lang} />;
   }

@@ -1,6 +1,25 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { usePosStore } from "../store/usePosStore";
 import { defaultHospitalityFloor } from "./hospitality";
+import type { ShiftRecord } from "../types";
+
+const WAITER_ID = "staff:w";
+
+function openShiftForWaiter(): ShiftRecord {
+  return {
+    id: "shift-waiter-1",
+    actorUserId: WAITER_ID,
+    actorName: "Waiter",
+    role: "waiter",
+    startAt: "2026-06-01T08:00:00.000Z",
+    endAt: null,
+    salesTotalUgx: 0,
+    debtTotalUgx: 0,
+    refundsUgx: 0,
+    estimatedCashUgx: 0,
+    openingFloatUgx: 0,
+  };
+}
 
 describe("usePosStore — hospitality and pending sales authorization", () => {
   beforeEach(() => {
@@ -72,7 +91,11 @@ describe("usePosStore — hospitality and pending sales authorization", () => {
 
   it("waiter with hospitality permissions can save pending sale", () => {
     usePosStore.setState({
-      sessionActor: { userId: "staff:w", role: "waiter", displayName: "Waiter" },
+      sessionActor: { userId: WAITER_ID, role: "waiter", displayName: "Waiter" },
+      preferences: {
+        ...usePosStore.getState().preferences,
+        shifts: [openShiftForWaiter()],
+      },
     });
     const r = usePosStore.getState().savePendingSale("Table 3");
     expect(r.ok).toBe(true);

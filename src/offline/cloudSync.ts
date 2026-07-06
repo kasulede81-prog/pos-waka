@@ -23,6 +23,7 @@ import { hydrateSaleFinancialsFromCloud } from "../lib/saleLineFinancialHydratio
 import { mergePendingSalePair, mergePendingSales, ensureSaleLineId } from "../lib/pendingSaleMerge";
 import { decodeSaleLineFromCloud, type CloudSaleLineRow } from "../lib/saleLineCloudCodec";
 import { mergeSaleFromCloudPull } from "../lib/saleFinancialMerge";
+import { normalizeProductMenu } from "../lib/menuModifiers";
 import { isSupabaseEmailVerified } from "../lib/emailVerification";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import { hasSupabaseConfig, supabase } from "../lib/supabase";
@@ -156,6 +157,8 @@ function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolea
       buyingPackCostUgx: p.buyingPackCostUgx ?? null,
       packCostUnitsDepleted: p.packCostUnitsDepleted ?? null,
       wakaClient: true,
+      hospitality: p.hospitality ?? null,
+      menu: p.menu ?? null,
     },
     updated_at: p.updatedAt || new Date().toISOString(),
   };
@@ -209,7 +212,78 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
       ? (meta.quickPresetsMoneyUgx as number[]).filter((x) => x > 0)
       : undefined,
     quickPresetsQty: Array.isArray(meta.quickPresetsQty) ? (meta.quickPresetsQty as number[]).filter((x) => x > 0) : undefined,
+    hospitality: normalizeHospitalityRoutingFromMeta(meta.hospitality),
+    menu: normalizeProductMenuFromMeta(meta.menu),
   };
+}
+
+function normalizeProductMenuFromMeta(raw: unknown): import("../types").ProductMenuConfig | null {
+  if (!raw || typeof raw !== "object") return null;
+  return normalizeProductMenu(raw as import("../types").ProductMenuConfig);
+}
+
+function normalizeHospitalityRoutingFromMeta(
+  raw: unknown,
+): import("../types").ProductHospitalityRouting | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const station = o.productionStation;
+  const validStations = new Set([
+    "kitchen",
+    "bar",
+    "grill",
+    "coffee",
+    "dessert",
+    "pizza",
+    "fryer",
+    "other",
+  ]);
+  if (typeof station !== "string" || !validStations.has(station)) return null;
+  return {
+    productionStation: station as import("../types").KitchenStationType,
+    prepTimeMinutes:
+      o.prepTimeMinutes != null && Number.isFinite(Number(o.prepTimeMinutes))
+        ? Math.max(1, Math.round(Number(o.prepTimeMinutes)))
+        : null,
+    defaultCourse:
+      typeof o.defaultCourse === "string"
+        ? (o.defaultCourse as import("../types").HospitalityCourse)
+        : null,
+    printableStation:
+      typeof o.printableStation === "string" && validStations.has(o.printableStation)
+        ? (o.printableStation as import("../types").KitchenStationType)
+        : null,
+    modifiersAllowed: o.modifiersAllowed !== false,
+    cookingPreferencesAllowed: o.cookingPreferencesAllowed === true,
+    routingAutoInferred: o.routingAutoInferred === true,
+    productionStationId: typeof o.productionStationId === "string" ? o.productionStationId : null,
+  };
+}
+
+function hospitalitySaleMetadata(sale: Sale): Record<string, unknown> {
+  return {
+    estimatedProfitUgx: sale.estimatedProfitUgx,
+    wakaClient: true,
+    hospitality: true,
+    tableSessionId: sale.tableSessionId ?? null,
+    billDraft: sale.billDraft ?? null,
+    saleVoidedAt: sale.saleVoidedAt ?? null,
+    saleVoidReason: sale.saleVoidReason ?? null,
+    saleVoidedByUserId: sale.saleVoidedByUserId ?? null,
+    saleVoidedByLabel: sale.saleVoidedByLabel ?? null,
+    serviceChargeUgx: sale.serviceChargeUgx ?? null,
+    tipUgx: sale.tipUgx ?? null,
+    taxUgx: sale.taxUgx ?? null,
+    billPayments: sale.billPayments ?? null,
+    splitBreakdown: sale.splitBreakdown ?? null,
+    paymentMethod: sale.paymentMethod ?? null,
+  };
+}
+
+function parseBillDraftFromMeta(meta: Record<string, unknown>): import("../types").RestaurantBillDraft | null {
+  const raw = meta.billDraft;
+  if (!raw || typeof raw !== "object") return null;
+  return raw as import("../types").RestaurantBillDraft;
 }
 
 function rowToCustomer(row: Record<string, unknown>): Customer | null {
@@ -241,6 +315,7 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
   if (dbStatus === "draft") status = "pending";
   else if (dbStatus === "cancelled") status = "cancelled";
   const updatedAt = String(row.updated_at ?? row.completed_at ?? row.created_at ?? new Date().toISOString());
+  const meta = (row.metadata ?? {}) as Record<string, unknown>;
   return {
     id,
     status,
@@ -253,22 +328,27 @@ function rowToSale(row: Record<string, unknown>, lines: SaleLine[]): Sale | null
     cashPaidUgx: status === "completed" ? Math.max(0, Math.floor(Number(row.cash_amount_ugx ?? 0))) : 0,
     debtUgx: status === "completed" ? Math.max(0, Math.floor(Number(row.debt_amount_ugx ?? 0))) : 0,
     discountTotalUgx: Math.max(0, Math.floor(Number(row.discount_ugx ?? 0))),
-    estimatedProfitUgx: Math.max(0, Math.floor(Number((row.metadata as Record<string, unknown>)?.estimatedProfitUgx ?? 0))),
+    estimatedProfitUgx: Math.max(0, Math.floor(Number(meta.estimatedProfitUgx ?? 0))),
     createdAt: String(row.completed_at ?? row.created_at ?? new Date().toISOString()),
     pendingSync: false,
     lastSyncError: null,
     customerId: (row.customer_id as string | null) ?? null,
     soldByUserId: (row.created_by as string | null) ?? null,
-    receiptHeaderSnapshot: parseReceiptHeaderSnapshot((row.metadata as Record<string, unknown>)?.receiptHeaderSnapshot),
-    receiptFooterSnapshot: parseReceiptFooterSnapshot((row.metadata as Record<string, unknown>)?.receiptFooterSnapshot),
-    receiptCustomerName:
-      (row.metadata as Record<string, unknown>)?.receiptCustomerName != null
-        ? String((row.metadata as Record<string, unknown>).receiptCustomerName)
-        : null,
-    receiptCustomerPhone:
-      (row.metadata as Record<string, unknown>)?.receiptCustomerPhone != null
-        ? String((row.metadata as Record<string, unknown>).receiptCustomerPhone)
-        : null,
+    billDraft: parseBillDraftFromMeta(meta),
+    saleVoidedAt: meta.saleVoidedAt != null ? String(meta.saleVoidedAt) : null,
+    saleVoidReason: meta.saleVoidReason != null ? String(meta.saleVoidReason) : null,
+    saleVoidedByUserId: meta.saleVoidedByUserId != null ? String(meta.saleVoidedByUserId) : null,
+    saleVoidedByLabel: meta.saleVoidedByLabel != null ? String(meta.saleVoidedByLabel) : null,
+    serviceChargeUgx: meta.serviceChargeUgx != null ? Math.floor(Number(meta.serviceChargeUgx)) : null,
+    tipUgx: meta.tipUgx != null ? Math.floor(Number(meta.tipUgx)) : null,
+    taxUgx: meta.taxUgx != null ? Math.floor(Number(meta.taxUgx)) : null,
+    billPayments: Array.isArray(meta.billPayments) ? (meta.billPayments as Sale["billPayments"]) : null,
+    splitBreakdown: Array.isArray(meta.splitBreakdown) ? (meta.splitBreakdown as Sale["splitBreakdown"]) : null,
+    paymentMethod: meta.paymentMethod != null ? (meta.paymentMethod as Sale["paymentMethod"]) : undefined,
+    receiptHeaderSnapshot: parseReceiptHeaderSnapshot(meta.receiptHeaderSnapshot),
+    receiptFooterSnapshot: parseReceiptFooterSnapshot(meta.receiptFooterSnapshot),
+    receiptCustomerName: meta.receiptCustomerName != null ? String(meta.receiptCustomerName) : null,
+    receiptCustomerPhone: meta.receiptCustomerPhone != null ? String(meta.receiptCustomerPhone) : null,
   };
 }
 
@@ -628,8 +708,7 @@ function buildSalePushPayload(sale: Sale, ctx: ShopCtx) {
       created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
       completed_at: sale.createdAt,
       metadata: {
-        estimatedProfitUgx: sale.estimatedProfitUgx,
-        wakaClient: true,
+        ...hospitalitySaleMetadata(sale),
         receiptHeaderSnapshot: sale.receiptHeaderSnapshot ?? null,
         receiptFooterSnapshot: sale.receiptFooterSnapshot ?? null,
         receiptCustomerName: sale.receiptCustomerName ?? null,
@@ -694,7 +773,7 @@ function buildPendingSalePushPayload(
       created_by: sale.soldByUserId && isUuid(sale.soldByUserId) ? sale.soldByUserId : ctx.userId,
       created_at: sale.createdAt,
       updated_at: sale.updatedAt ?? sale.createdAt,
-      metadata: { estimatedProfitUgx: sale.estimatedProfitUgx, wakaClient: true, hospitality: true },
+      metadata: hospitalitySaleMetadata(sale),
     },
     lines: activeLines.map((line, idx) => ({
       id: line.id,
@@ -885,7 +964,38 @@ export async function pushSaleRowToCloud(
 ): Promise<boolean> {
   if (isPendingSale(sale)) return pushPendingSaleToCloud(sale, ctx, opts);
   if (saleStatusOf(sale) === "cancelled") return pushCancelPendingSaleToCloud(sale.id, ctx);
+  if (sale.saleVoidedAt && sale.pendingSync) {
+    return pushHospitalitySaleMetadataPatch(sale, ctx);
+  }
   return pushSaleToCloud(sale, ctx);
+}
+
+export async function pushHospitalitySaleMetadataPatch(sale: Sale, ctx: ShopCtx): Promise<boolean> {
+  if (!supabase || !isUuid(sale.id)) {
+    markSaleSyncState(sale.id, false, "invalid_sale_id");
+    return false;
+  }
+  const { data, error } = await supabase.rpc("shop_patch_hospitality_sale_metadata", {
+    p_shop_id: ctx.shopId,
+    p_sale_id: sale.id,
+    p_metadata: hospitalitySaleMetadata(sale),
+  });
+  if (error) {
+    markSaleSyncState(sale.id, false, error.code ?? "sale_metadata_patch_failed");
+    return false;
+  }
+  const result = data as { ok?: boolean; error?: string; updated_at?: string } | null;
+  if (!result?.ok) {
+    markSaleSyncState(sale.id, false, result?.error ?? "sale_metadata_patch_rejected");
+    return false;
+  }
+  const serverUpdatedAt = result.updated_at ? String(result.updated_at) : sale.updatedAt;
+  usePosStore.setState((s) => ({
+    sales: s.sales.map((x) =>
+      x.id === sale.id ? { ...x, updatedAt: serverUpdatedAt, pendingSync: false, lastSyncError: null } : x,
+    ),
+  }));
+  return true;
 }
 
 export async function pushSaleToCloud(sale: Sale, ctx: ShopCtx): Promise<boolean> {

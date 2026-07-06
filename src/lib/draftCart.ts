@@ -1,6 +1,7 @@
 import type { Product, Sale, SaleLine } from "../types";
 import { ensureSaleLineId } from "./pendingSaleMerge";
 import { lineDiscountUgx, listPriceForLine } from "./saleAdjustments";
+import { saleLineMergeKey } from "./menuModifiers";
 import {
   baseUnitsPerBuyingUnit,
   buildSaleLine,
@@ -137,7 +138,7 @@ export function rebuildDraftLineQuantity(
 export function shouldMergeDraftSaleLines(existing: SaleLine | undefined, incoming: SaleLine): boolean {
   if (!existing) return false;
   if (existing.inputMode === "money" || incoming.inputMode === "money") return false;
-  return true;
+  return saleLineMergeKey(existing) === saleLineMergeKey(incoming);
 }
 
 /** Option B: merge two money lines by summing amounts and recalculating once. */

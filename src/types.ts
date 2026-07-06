@@ -116,6 +116,7 @@ export type AuditAction =
   | "cash_expense_approved"
   | "cash_expense_rejected"
   | "cash_drawer_adjustment"
+  | "drawer_open"
   | "auth_forbidden"
   | "archive_purge"
   | "archive_purge_blocked"
@@ -328,13 +329,378 @@ export type BusinessType =
 /** Client sale lifecycle — pending maps to DB draft */
 export type SaleStatus = "completed" | "pending" | "cancelled";
 
-export type TableDisplayStatus = "available" | "occupied" | "payment_pending" | "reserved" | "disabled";
+export type TableDisplayStatus =
+  | "available"
+  | "occupied"
+  | "payment_pending"
+  | "reserved"
+  | "needs_cleaning"
+  | "cleaning"
+  | "needs_attention"
+  | "blocked"
+  | "disabled";
+
+/** Manager lock on a table — prevents seating until cleared. */
+export type TableLockReason = "maintenance" | "private_event" | "blocked" | "manager_reserved";
+
+export type ReservationStatus =
+  | "pending"
+  | "confirmed"
+  | "seated"
+  | "no_show"
+  | "cancelled"
+  | "completed";
+
+export type WaitlistSource = "walk_in" | "phone" | "online";
+
+export type WaitlistEntryStatus = "waiting" | "seated" | "cancelled" | "no_show";
+
+export type WaitlistPriority = "normal" | "high" | "vip";
+
+export type SeatingTimelineEventType =
+  | "reserved"
+  | "seated"
+  | "first_order"
+  | "kitchen_fired"
+  | "ready"
+  | "bill_requested"
+  | "paid"
+  | "cleaning_started"
+  | "cleaning_finished"
+  | "available";
+
+export type HospitalityAuditEventType =
+  | "reservation_created"
+  | "reservation_edited"
+  | "reservation_confirmed"
+  | "reservation_cancelled"
+  | "reservation_seated"
+  | "reservation_completed"
+  | "reservation_no_show"
+  | "reservation_table_changed"
+  | "waitlist_created"
+  | "waitlist_seated"
+  | "waitlist_cancelled"
+  | "table_combined"
+  | "table_split"
+  | "table_locked"
+  | "table_unlocked"
+  | "cleaning_started"
+  | "cleaning_finished"
+  | "manager_override"
+  | "section_assigned"
+  | "bill_split"
+  | "bill_merge"
+  | "bill_payment"
+  | "bill_partial_settlement"
+  | "bill_settled"
+  | "bill_reopened"
+  | "bill_voided"
+  | "bill_refund"
+  | "bill_discount_approved"
+  | "bill_service_charge"
+  | "bill_tip";
+
+export type SeatingTimelineEvent = {
+  type: SeatingTimelineEventType;
+  at: string;
+  sessionId?: string | null;
+  reservationId?: string | null;
+  actorLabel?: string | null;
+};
+
+export type HospitalityAuditEvent = {
+  id: string;
+  type: HospitalityAuditEventType;
+  at: string;
+  entityType: "reservation" | "waitlist" | "table" | "session" | "section";
+  entityId: string;
+  actorUserId?: string | null;
+  actorLabel?: string | null;
+  reason?: string | null;
+  payload?: Record<string, unknown>;
+};
+
+/** Phase 6.4+ — website, SMS, OpenTable, etc. Architecture only. */
+export type ReservationFutureHooks = {
+  websiteBookingId?: string | null;
+  mobileBookingId?: string | null;
+  qrBookingId?: string | null;
+  smsReminderSent?: boolean;
+  whatsappReminderSent?: boolean;
+  externalProvider?: string | null;
+};
+
+export type TableReservation = {
+  id: string;
+  reservationNumber: number;
+  guestName: string;
+  phone: string;
+  email?: string | null;
+  guestCount: number;
+  reservationDate: string;
+  reservationTime: string;
+  areaId?: string | null;
+  preferredTableId?: string | null;
+  assignedTableIds?: string[];
+  notes?: string | null;
+  isVip: boolean;
+  status: ReservationStatus;
+  seatedSessionId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  pendingSync?: boolean;
+  futureHooks?: ReservationFutureHooks | null;
+};
+
+export type WaitlistEntry = {
+  id: string;
+  name: string;
+  guestCount: number;
+  phone?: string | null;
+  arrivalTime: string;
+  estimatedWaitMinutes?: number | null;
+  priority: WaitlistPriority;
+  notes?: string | null;
+  source: WaitlistSource;
+  status: WaitlistEntryStatus;
+  seatedSessionId?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  pendingSync?: boolean;
+};
+
+export type WaiterSection = {
+  id: string;
+  name: string;
+  waiterStaffId?: string | null;
+  waiterLabel: string;
+  tableIds: string[];
+  sortOrder: number;
+  isActive: boolean;
+};
+
+export type CombinedTableGroup = {
+  id: string;
+  primaryTableId: string;
+  tableIds: string[];
+  displayLabel: string;
+  areaId: string;
+  capacity: number;
+  originalLabels: Record<string, string>;
+  originalCapacities: Record<string, number>;
+  createdAt: string;
+  pendingSync?: boolean;
+};
+
+export type HospitalityCustomerProfile = {
+  phone: string;
+  name?: string | null;
+  visitCount: number;
+  averageSpendUgx: number;
+  favouriteTableId?: string | null;
+  lastVisitAt?: string | null;
+  preferredWaiterLabel?: string | null;
+  specialNotes?: string | null;
+  isVip: boolean;
+  /** Phase 6.5 — read-only payment history hooks. */
+  billCount?: number;
+  preferredPaymentMethod?: RestaurantPaymentMethod | null;
+  outstandingBalanceUgx?: number;
+};
+
+export type FloorNotificationKind =
+  | "reservation_arriving"
+  | "reservation_late"
+  | "waitlist_waiting"
+  | "cleaning_overdue"
+  | "bill_waiting"
+  | "kitchen_ready"
+  | "vip_arrival";
+
+export type FloorNotification = {
+  id: string;
+  kind: FloorNotificationKind;
+  messageKey: string;
+  entityId: string;
+  tableLabel?: string | null;
+  at: string;
+};
 
 export type TableSessionStatus = "open" | "payment_pending" | "closed" | "cancelled" | "merged";
 
 export type TableSessionKind = "table" | "named_tab";
 
-export type KitchenStationType = "kitchen" | "bar" | "grill" | "coffee" | "other";
+export type KitchenStationType =
+  | "kitchen"
+  | "bar"
+  | "grill"
+  | "coffee"
+  | "dessert"
+  | "pizza"
+  | "fryer"
+  | "other";
+
+/** Default course for fire-by-course (Phase 6.3). */
+export type HospitalityCourse = "starter" | "main" | "side" | "dessert" | "drink" | "other";
+
+// ─── Phase 6.6 — Menu production model ───────────────────────────────────────
+
+/** Finished menu item vs raw ingredient vs semi-finished prep. */
+export type ProductKind = "retail" | "finished_menu" | "ingredient" | "semi_finished";
+
+export type ModifierSelectionMode = "single" | "multiple";
+
+export type ModifierOption = {
+  id: string;
+  label: string;
+  priceDeltaUgx?: number;
+  /** Ingredient consumed per parent item when this option is chosen. */
+  ingredientProductId?: string | null;
+  ingredientQtyBase?: number | null;
+  isDefault?: boolean;
+  kitchenNote?: string | null;
+  sortOrder?: number;
+  isActive?: boolean;
+};
+
+export type ModifierGroup = {
+  id: string;
+  label: string;
+  required: boolean;
+  selectionMode: ModifierSelectionMode;
+  minSelections?: number;
+  maxSelections?: number;
+  options: ModifierOption[];
+  sortOrder?: number;
+};
+
+export type ProductVariant = {
+  id: string;
+  label: string;
+  sku?: string | null;
+  barcode?: string | null;
+  priceUgx?: number | null;
+  costPriceUgx?: number | null;
+  prepTimeMinutes?: number | null;
+  recipe?: Recipe | null;
+  sortOrder?: number;
+  isDefault?: boolean;
+  isActive?: boolean;
+};
+
+export type RecipeLine = {
+  ingredientProductId: string;
+  quantityBase: number;
+  unitLabel?: string | null;
+  wastePercent?: number | null;
+  prepNotes?: string | null;
+};
+
+export type Recipe = {
+  lines: RecipeLine[];
+  /** Yield quantity per recipe (default 1 sell unit). */
+  yieldQty?: number;
+  prepNotes?: string | null;
+};
+
+export type ComboSlotChoice = {
+  productId: string;
+  priceDeltaUgx?: number;
+  isDefault?: boolean;
+};
+
+export type ComboSlot = {
+  id: string;
+  label: string;
+  required: boolean;
+  minChoices?: number;
+  maxChoices?: number;
+  choices: ComboSlotChoice[];
+  sortOrder?: number;
+};
+
+export type ComboMealConfig = {
+  slots: ComboSlot[];
+  /** Fixed combo price — overrides sum of component prices when set. */
+  comboPriceUgx?: number | null;
+};
+
+export type MenuSectionDef = {
+  id: string;
+  label: string;
+  sortOrder: number;
+  isActive?: boolean;
+};
+
+export type ProductMenuConfig = {
+  productKind?: ProductKind;
+  modifierGroups?: ModifierGroup[];
+  variants?: ProductVariant[];
+  combo?: ComboMealConfig | null;
+  recipe?: Recipe | null;
+  menuSection?: string | null;
+  menuSortOrder?: number;
+  hideFromMenu?: boolean;
+};
+
+export type SaleLineModifier = {
+  groupId: string;
+  groupLabel: string;
+  optionId: string;
+  optionLabel: string;
+  priceDeltaUgx: number;
+  kitchenNote?: string | null;
+};
+
+export type SaleLineComboSelection = {
+  slotId: string;
+  slotLabel: string;
+  productId: string;
+  productName: string;
+  priceDeltaUgx: number;
+};
+
+export type IngredientShortage = {
+  ingredientProductId: string;
+  ingredientName: string;
+  requiredBase: number;
+  availableBase: number;
+  unitLabel: string;
+};
+
+export type IngredientStockPolicy = "warn" | "block" | "manager_override";
+
+/** Phase 7.1 — ingredient shortage handling for hospitality orders. */
+export type HospitalityIngredientPolicyConfig = {
+  policy: IngredientStockPolicy;
+  allowNegativeInventory?: boolean;
+  autoReserveIngredients?: boolean;
+  lowStockThreshold?: number | null;
+  kitchenWarningLevel?: number | null;
+};
+
+export type HospitalityTaxMode = "exclusive" | "inclusive";
+
+/** Product-level kitchen/bar routing — authoritative over keyword heuristics. */
+export type ProductHospitalityRouting = {
+  /** Where this item is prepared (Kitchen, Bar, Grill, …). */
+  productionStation?: KitchenStationType | null;
+  /** Typical prep time in minutes — for KDS timers (Phase 6.3). */
+  prepTimeMinutes?: number | null;
+  /** Default course when firing tickets. */
+  defaultCourse?: HospitalityCourse | null;
+  /** Chit/printer station — defaults to productionStation when unset. */
+  printableStation?: KitchenStationType | null;
+  /** Phase 6.2 — allow menu modifiers on this item. */
+  modifiersAllowed?: boolean;
+  /** Phase 6.2 — allow cooking preferences (rare, medium, well done). */
+  cookingPreferencesAllowed?: boolean;
+  /** True when productionStation was inferred, not manually confirmed. */
+  routingAutoInferred?: boolean;
+  /** Explicit floor station when multiple stations share a type. */
+  productionStationId?: string | null;
+};
 
 export type DiningArea = {
   id: string;
@@ -351,6 +717,122 @@ export type DiningTable = {
   sortOrder: number;
   displayStatus: TableDisplayStatus;
   isActive: boolean;
+  /** Manager lock — table cannot receive guests while set. */
+  lockReason?: TableLockReason | null;
+  lockNote?: string | null;
+  /** When part of a temporary combined group (non-primary tables hidden from floor). */
+  combinedGroupId?: string | null;
+  isAccessible?: boolean;
+  isSmoking?: boolean;
+  /** Commercial seating timeline for analytics. */
+  seatingTimeline?: SeatingTimelineEvent[];
+  cleaningStartedAt?: string | null;
+};
+
+/** Reserved for Phase 6.7+ — printers, TVs, voice alerts, QR pickup. */
+export type KitchenStationFutureHooks = {
+  printerIds?: string[];
+  displayMonitorIds?: string[];
+  kitchenTvIds?: string[];
+  voiceAlertsEnabled?: boolean;
+  qrPickupEnabled?: boolean;
+};
+
+/** Phase 6.7 — printer connection and vendor hints. */
+export type PrinterConnectionType = "usb" | "bluetooth" | "network" | "builtin";
+
+export type PrinterVendorHint = "generic" | "epson" | "xprinter" | "sunmi" | "rongta";
+
+/** Maps to kitchen station types for routing chits. */
+export type PrinterStationRole = "kitchen" | "bar" | "coffee" | "dessert" | "receipt" | "grill" | "pizza" | "fryer" | "other";
+
+export type PrinterProfile = {
+  id: string;
+  name: string;
+  connectionType: PrinterConnectionType;
+  paperWidth: "58mm" | "80mm";
+  stationRoles: PrinterStationRole[];
+  isDefaultReceipt?: boolean;
+  vendorHint?: PrinterVendorHint;
+  networkHost?: string | null;
+  networkPort?: number | null;
+  /** Opaque id from WebUSB / Web Bluetooth pairing session. */
+  pairedDeviceKey?: string | null;
+  isEnabled: boolean;
+  lastSeenAt?: string | null;
+  lastError?: string | null;
+};
+
+export type PrintJobKind =
+  | "kitchen_chit_new"
+  | "kitchen_chit_modified"
+  | "kitchen_chit_void"
+  | "kitchen_chit_course"
+  | "kitchen_chit_reprint"
+  | "receipt"
+  | "drawer_kick"
+  | "test";
+
+export type PrintJobStatus = "queued" | "sending" | "done" | "failed";
+
+export type PrintJobRecord = {
+  id: string;
+  kind: PrintJobKind;
+  printerId: string | null;
+  stationId?: string | null;
+  ticketId?: string | null;
+  saleId?: string | null;
+  tableSessionId?: string | null;
+  tableLabel?: string | null;
+  businessDate?: string | null;
+  status: PrintJobStatus;
+  attempts: number;
+  maxAttempts: number;
+  createdAt: string;
+  updatedAt: string;
+  sentAt?: string | null;
+  lastAttemptAt?: string | null;
+  error?: string | null;
+  payloadSummary: string;
+  /** True when ESC/POS bytes are in IndexedDB. */
+  payloadPersisted?: boolean;
+};
+
+export type ReceiptTemplateKind = "restaurant" | "bar" | "cafe" | "hotel" | "custom";
+
+export type ReceiptTemplateConfig = {
+  kind: ReceiptTemplateKind;
+  showTableNumber: boolean;
+  showWaiter: boolean;
+  showGuests: boolean;
+  showModifiers: boolean;
+  showDiscounts: boolean;
+  showSplitSummary: boolean;
+  showQrPlaceholder: boolean;
+  customLogoUrl?: string | null;
+};
+
+export type CashDrawerAuditEntry = {
+  id: string;
+  at: string;
+  reason: "payment" | "manual" | "no_sale";
+  byUserId?: string | null;
+  byLabel?: string | null;
+  saleId?: string | null;
+  ok: boolean;
+  error?: string | null;
+};
+
+export type HospitalityHardwarePrefs = {
+  printers: PrinterProfile[];
+  printQueue: PrintJobRecord[];
+  printHistory: PrintJobRecord[];
+  receiptTemplate: ReceiptTemplateConfig;
+  autoPrintKitchen: boolean;
+  autoPrintReceipt: boolean;
+  openDrawerOnPayment: boolean;
+  customerDisplayEnabled: boolean;
+  drawerAudit: CashDrawerAuditEntry[];
 };
 
 export type KitchenStation = {
@@ -359,6 +841,43 @@ export type KitchenStation = {
   stationType: KitchenStationType;
   sortOrder: number;
   isActive: boolean;
+  /** Phase 6.7 hardware — printer ids assigned in printer management. */
+  futureHooks?: KitchenStationFutureHooks | null;
+};
+
+export type KitchenTicketPriority = "normal" | "high" | "vip";
+
+export type KitchenTicketItemStatus = "active" | "cancelled";
+
+export type KitchenTicketStatus =
+  | "queued"
+  | "accepted"
+  | "preparing"
+  | "cooking"
+  | "ready"
+  | "picked_up"
+  | "served"
+  | "completed"
+  | "cancelled";
+
+/** Audited status transition on a production ticket. */
+export type KitchenTicketStatusEvent = {
+  fromStatus: KitchenTicketStatus | null;
+  toStatus: KitchenTicketStatus;
+  at: string;
+  byUserId?: string | null;
+  byLabel?: string | null;
+  reason?: string | null;
+};
+
+/** Audited manager recall — e.g. ready → preparing. */
+export type KitchenTicketRecallEvent = {
+  fromStatus: KitchenTicketStatus;
+  toStatus: KitchenTicketStatus;
+  reason: string;
+  at: string;
+  byUserId?: string | null;
+  byLabel?: string | null;
 };
 
 export type TableSession = {
@@ -371,13 +890,22 @@ export type TableSession = {
   tabLabel?: string | null;
   saleId: string;
   guestCount: number;
+  /** Optional split for commercial open-table flow */
+  adultCount?: number | null;
+  childrenCount?: number | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  specialNotes?: string | null;
+  /** Future-ready: reservations, QR, etc. */
+  needsAttention?: boolean;
   waiterStaffId?: string | null;
   waiterLabel?: string | null;
   status: TableSessionStatus;
   openedAt: string;
   closedAt?: string | null;
+  /** Link to reservation when seated from booking. */
+  reservationId?: string | null;
+  waitlistEntryId?: string | null;
   updatedAt?: string;
   pendingSync?: boolean;
 };
@@ -388,16 +916,34 @@ export type HospitalityFloorState = {
   sessions: TableSession[];
   stations: KitchenStation[];
   kitchenTickets?: KitchenTicket[];
+  reservations?: TableReservation[];
+  waitlist?: WaitlistEntry[];
+  waiterSections?: WaiterSection[];
+  combinedGroups?: CombinedTableGroup[];
+  hospitalityAuditLog?: HospitalityAuditEvent[];
+  /** Daily reservation number sequence — max number used today. */
+  lastReservationNumberDate?: string | null;
+  lastReservationNumber?: number;
 };
-
-export type KitchenTicketStatus = "queued" | "preparing" | "ready" | "served" | "cancelled";
 
 export type KitchenTicketItem = {
   id: string;
   productId: string;
   productName: string;
   quantity: number;
+  /** Kitchen notes — extra spicy, no onions, allergy, etc. */
   notes?: string | null;
+  course?: HospitalityCourse | null;
+  prepTimeMinutes?: number | null;
+  itemStatus?: KitchenTicketItemStatus;
+  /** Phase 6.6 — modifier labels for KDS display. */
+  modifierLabels?: string[];
+  variantLabel?: string | null;
+  /** Links ticket item back to sale line for line-id fire tracking. */
+  saleLineId?: string | null;
+  cancelledAt?: string | null;
+  cancelledBy?: string | null;
+  cancelReason?: string | null;
 };
 
 export type KitchenTicket = {
@@ -412,15 +958,105 @@ export type KitchenTicket = {
   tableLabel: string;
   areaName?: string | null;
   waiterLabel?: string | null;
+  guestCount?: number | null;
+  /** 1-based fire round for this table session. */
+  orderRound?: number;
+  priority?: KitchenTicketPriority;
+  /** Target prep minutes — max of item prep times when fired. */
+  prepTargetMinutes?: number | null;
   ticketNotes?: string | null;
   items: KitchenTicketItem[];
+  acceptedAt?: string | null;
+  preparingAt?: string | null;
+  cookingAt?: string | null;
+  readyAt?: string | null;
+  pickedUpAt?: string | null;
+  servedAt?: string | null;
+  completedAt?: string | null;
+  statusHistory?: KitchenTicketStatusEvent[];
+  recallHistory?: KitchenTicketRecallEvent[];
   updatedAt?: string;
   pendingSync?: boolean;
 };
 
+/** Phase 6.5 — restaurant payment methods (offline-first). */
+export type RestaurantPaymentMethod = "cash" | "mobile_money" | "atm" | "card" | "voucher" | "credit";
+
+export type RestaurantBillSplitMode = "none" | "equal" | "by_seat" | "by_item" | "custom";
+
+export type BillSplitStatus = "open" | "partial" | "paid";
+
 export type BillSplitLine = {
+  /** Stable id for payment allocation — generated when missing. */
+  id?: string;
   label: string;
   amountUgx: number;
+  /** Seat number when split by seat. */
+  seatNumber?: number | null;
+  /** Sale line ids when split by item. */
+  lineIds?: string[];
+  paidUgx?: number;
+  status?: BillSplitStatus;
+};
+
+export type BillPaymentRecord = {
+  id: string;
+  method: RestaurantPaymentMethod;
+  amountUgx: number;
+  reference?: string | null;
+  voucherCode?: string | null;
+  /** Which split this payment applies to (optional). */
+  splitId?: string | null;
+  recordedAt: string;
+  recordedByUserId?: string | null;
+  recordedByLabel?: string | null;
+  pendingSync?: boolean;
+};
+
+export type RestaurantTipMode = "none" | "fixed" | "percent" | "custom";
+
+export type RestaurantBillDiscountApproval = {
+  approvedByUserId: string;
+  approvedByLabel: string;
+  reason: string;
+  at: string;
+  kind: "line" | "bill";
+};
+
+export type RestaurantBillDraft = {
+  splitMode: RestaurantBillSplitMode;
+  splits: BillSplitLine[];
+  payments: BillPaymentRecord[];
+  serviceChargePercent?: number | null;
+  tipMode?: RestaurantTipMode;
+  tipUgx?: number;
+  tipPercent?: number | null;
+  /** Framework only — configurable tax % (not enforced by URA). */
+  taxPercent?: number | null;
+  discountApproval?: RestaurantBillDiscountApproval | null;
+  billRequestedAt?: string | null;
+  reopenedAt?: string | null;
+  reopenedByUserId?: string | null;
+  reopenedByLabel?: string | null;
+  reopenedReason?: string | null;
+  previousTotalUgx?: number | null;
+  voidedAt?: string | null;
+  voidedByUserId?: string | null;
+  voidedByLabel?: string | null;
+  voidReason?: string | null;
+};
+
+/** Phase 6.5+ future hooks — architecture only, do not implement. */
+export type RestaurantPaymentFutureHooks = {
+  onlinePaymentId?: string | null;
+  qrPaymentId?: string | null;
+  payAtTableToken?: string | null;
+  digitalWalletId?: string | null;
+  customerInvoiceId?: string | null;
+  fiscalPrinterJobId?: string | null;
+  taxAuthorityRef?: string | null;
+  loyaltyRedemptionId?: string | null;
+  giftCardId?: string | null;
 };
 
 /** How the product is counted and priced at the kiosk */
@@ -511,6 +1147,10 @@ export type Product = {
   quickPresetsMoneyUgx?: number[];
   /** Tap-to-sell amounts in base units (e.g. 1, 2, 5 kg) */
   quickPresetsQty?: number[];
+  /** Restaurant / bar production routing and prep metadata (Phase 6.2+). */
+  hospitality?: ProductHospitalityRouting | null;
+  /** Phase 6.6 — modifiers, variants, recipes, combos. */
+  menu?: ProductMenuConfig | null;
 };
 
 export type Customer = {
@@ -704,6 +1344,23 @@ export type SaleLine = {
   /** Set when voided after payment — line stays on receipt for audit */
   voided?: boolean;
   voidedAt?: string | null;
+  /** Kitchen notes for this line — printed/displayed on production tickets. */
+  notes?: string | null;
+  /** Seat assignment for split-by-seat billing (Phase 6.5). */
+  seatNumber?: number | null;
+  /** Phase 6.6 — selected variant. */
+  variantId?: string | null;
+  variantLabel?: string | null;
+  /** Phase 6.6 — modifier selections snapshotted at order time. */
+  selectedModifiers?: SaleLineModifier[];
+  /** Phase 6.6 — combo slot selections. */
+  comboSelections?: SaleLineComboSelection[];
+  /** Unique config key for merge / kitchen fire (product + variant + modifiers + combo). */
+  configFingerprint?: string;
+  /** Course override for fire-by-course. */
+  course?: HospitalityCourse | null;
+  /** True when line is a combo meal parent. */
+  isComboMeal?: boolean;
   /** Product.version when line entered cart — cross-tab sale guard */
   stockVersionAtAdd?: number;
 };
@@ -747,8 +1404,25 @@ export type Sale = {
   waiterName?: string | null;
   /** Optional split-bill breakdown shown on receipt (hospitality) */
   splitBreakdown?: BillSplitLine[] | null;
+  /** Phase 6.5 — in-progress billing state for open table bills. */
+  billDraft?: RestaurantBillDraft | null;
+  /** Phase 6.5 — service charge snapshotted at settlement. */
+  serviceChargeUgx?: number | null;
+  /** Phase 6.5 — tip snapshotted at settlement. */
+  tipUgx?: number | null;
+  /** Phase 6.5 — tax snapshotted at settlement (framework). */
+  taxUgx?: number | null;
+  /** Phase 6.5 — individual payment lines when multiple methods used. */
+  billPayments?: BillPaymentRecord[] | null;
+  /** Phase 7.1 — whole-sale void (bill voided, sale preserved for audit). */
+  saleVoidedAt?: string | null;
+  saleVoidReason?: string | null;
+  saleVoidedByUserId?: string | null;
+  saleVoidedByLabel?: string | null;
+  /** Phase 6.5 — future payment integrations (architecture only). */
+  paymentFutureHooks?: RestaurantPaymentFutureHooks | null;
   /** Payment mode selected at checkout. */
-  paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit";
+  paymentMethod?: "cash" | "atm" | "mobile_money" | "mixed" | "credit" | "voucher";
   /** What customer actually handed over (when captured at checkout). */
   amountPaidUgx?: number | null;
   /** Change returned to customer at checkout (when captured). */
@@ -1179,6 +1853,20 @@ export type ShopPreferences = {
   activeTableSessionId?: string | null;
   /** When true, kitchen tickets fire only on explicit send (not each item tap) */
   hospitalityManualKitchenFire?: boolean;
+  /** Default service charge % for restaurant bills (0 = off). */
+  hospitalityServiceChargePercent?: number | null;
+  /** Framework tax % on bills (0 = off) — not URA-integrated. */
+  hospitalityTaxPercent?: number | null;
+  /** Phase 7.1 — tax calculation mode on restaurant bills. */
+  hospitalityTaxMode?: HospitalityTaxMode;
+  /** Phase 7.1 — when false, tax % is ignored on bills. */
+  hospitalityTaxEnabled?: boolean;
+  /** Phase 6.6 — menu sections for hospitality menu builder. */
+  hospitalityMenuSections?: MenuSectionDef[];
+  /** Phase 6.6 — ingredient shortage handling before adding orders. */
+  hospitalityIngredientStockPolicy?: IngredientStockPolicy;
+  /** Phase 7.1 — extended ingredient policy settings. */
+  hospitalityIngredientPolicy?: HospitalityIngredientPolicyConfig | null;
   /**
    * Bar-only: hide kitchen nav/widgets when false. Restaurant / restaurant_bar default on.
    * null = use default for business type.
@@ -1201,6 +1889,21 @@ export type ShopPreferences = {
   cashDrawerFormulaVersion?: CashDrawerFormulaVersion;
   /** Owner may supersede/void day open after first sale with PIN + reason (formula v2). */
   ownerDayOpenCorrectionAfterSales?: boolean;
+  /** Phase 6.7 — kitchen printers, receipt templates, print queue. */
+  hospitalityHardware?: HospitalityHardwarePrefs;
+  /** Phase 7.1 UI — floor map table icon size, shape, and grid density. */
+  hospitalityFloorDisplay?: HospitalityFloorDisplayPrefs | null;
+};
+
+/** Restaurant floor map presentation (UI only). */
+export type HospitalityTableShape = "classic" | "round" | "square";
+export type HospitalityTableSize = "sm" | "md" | "lg" | "xl";
+export type HospitalityFloorGridDensity = "compact" | "normal" | "spacious";
+
+export type HospitalityFloorDisplayPrefs = {
+  tableShape?: HospitalityTableShape;
+  tableSize?: HospitalityTableSize;
+  gridDensity?: HospitalityFloorGridDensity;
 };
 
 export type SyncOperationKind =

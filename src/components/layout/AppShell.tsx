@@ -44,10 +44,12 @@ import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
+import { HospitalityMobileNav } from "../hospitality/HospitalityMobileNav";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { usePosLayoutMode } from "../../hooks/usePosLayoutMode";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
 import { resolveModuleExit } from "../../lib/moduleExit";
+import { isHospitalityOperationalRoute, HOSPITALITY_NAV_CATALOG, hospitalityNavItemActive } from "../../lib/hospitalityNav";
 import { AppThemeToggle } from "../ui/AppThemeToggle";
 
 const BackOfficeMasterSearch = lazy(() =>
@@ -71,12 +73,7 @@ type Props = {
 type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
 
 function navItemActive(path: string, pathname: string): boolean {
-  if (path === "/floor") {
-    return pathname === "/floor" || pathname.startsWith("/floor/");
-  }
-  if (path === "/kitchen") {
-    return pathname === "/kitchen" || pathname.startsWith("/kitchen/");
-  }
+  if (hospitalityNavItemActive(path, pathname)) return true;
   if (path === "/stock") {
     return pathname === "/stock" || pathname.startsWith("/stock/");
   }
@@ -287,8 +284,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const fullWidthChrome = desktopTerminalMode || desktopTerminalHome || independentModule;
   const showHeaderExit =
     shouldShowHeaderExit(location.pathname) || (onSellScreen && !isDesktopLayout);
-  const showMobileModuleExit = Boolean(resolveModuleExit(location.pathname)) && !internalAdminRoute;
-  const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout);
   const showBackOfficeSearch =
     isBackOfficePath(location.pathname) &&
     location.pathname !== "/office" &&
@@ -301,7 +296,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
 
   const navDefs = useMemo((): NavDef[] => {
-    const items: NavDef[] = [{ path: "/", labelKey: "posNavMainMenu", Icon: Home }];
+    const homePath =
+      hospitalityNav && hasPermission(actor.role, "hospitality.floor") ? "/floor" : "/";
+    const homeLabelKey = hospitalityNav && hasPermission(actor.role, "hospitality.floor")
+      ? "restaurantFloorNav"
+      : "posNavMainMenu";
+    const items: NavDef[] = [{ path: homePath, labelKey: homeLabelKey, Icon: Home }];
     if (hasPermission(actor.role, "pos.sell")) {
       items.push({ path: "/pos", labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
     }
@@ -326,6 +326,22 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
   }, [actor.role, hospitalityNav, pharmacyNav, sellNavLabelKey, wholesaleNav]);
 
+  const hospitalityQuickNav = useMemo((): NavDef[] => {
+    if (!hospitalityNav) return [];
+    const homeIsFloor = hasPermission(actor.role, "hospitality.floor");
+    return HOSPITALITY_NAV_CATALOG.filter((item) => {
+      if (!hasPermission(actor.role, item.perm)) return false;
+      if (homeIsFloor && item.path === "/floor") return false;
+      return true;
+    }).map((item) => ({ path: item.path, labelKey: item.labelKey, Icon: item.Icon, perm: item.perm }));
+  }, [actor.role, hospitalityNav]);
+
+  const showHospitalityMobileNav =
+    hospitalityNav && !isDesktopLayout && isHospitalityOperationalRoute(location.pathname) && !internalAdminRoute;
+  const showMobileModuleExit =
+    Boolean(resolveModuleExit(location.pathname)) && !internalAdminRoute && !showHospitalityMobileNav;
+  const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout);
+
   return (
     <SessionHydrationProvider roleReady={roleReady}>
     <SessionActorProvider value={actor}>
@@ -337,6 +353,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           fullDesktopSell && "app-shell--pos-enterprise",
           isLauncherHome && "app-shell--launcher",
           showMobileModuleExit && "app-shell--module-exit",
+          showHospitalityMobileNav && "app-shell--hospitality-nav",
         )}
       >
         {pwaUpdate ? (
@@ -582,6 +599,32 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 );
               })}
             </ul>
+            {hospitalityQuickNav.length > 0 ? (
+              <>
+                <p className="mt-4 px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">
+                  {t(lang, "navGroupHospitality")}
+                </p>
+                <ul className="space-y-1">
+                  {hospitalityQuickNav.map((item) => {
+                    const active = navItemActive(item.path, location.pathname);
+                    return (
+                      <li key={item.path}>
+                        <button
+                          type="button"
+                          onClick={() => guardedNavigate(item.path, { preventScrollReset: true })}
+                          className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
+                            active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
+                          }`}
+                        >
+                          <item.Icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
+                          {t(lang, item.labelKey)}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            ) : null}
           </nav>
           ) : null}
           <section className={clsx("flex min-h-0 min-w-0 max-w-full flex-1 flex-col", independentModule ? "pb-0" : "md:pb-0")}>
@@ -607,6 +650,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           </section>
         </main>
         {showMobileModuleExit ? <MobileModuleExitBar lang={lang} /> : null}
+        <HospitalityMobileNav lang={lang} role={actor.role} visible={showHospitalityMobileNav} />
         {preferences.posLocked ? (
           <AppModalOverlay className="z-[120] flex items-center justify-center bg-stone-950/85 p-4">
             <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
