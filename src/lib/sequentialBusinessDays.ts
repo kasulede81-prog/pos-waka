@@ -103,3 +103,27 @@ export function assertSequentialBusinessDay(input: {
   }
   return { ok: true };
 }
+
+/** Oldest unclosed prior day to close first, else preferred/today. */
+export function resolvePrioritizedCloseDateKey(input: {
+  preferredDateKey?: string | null;
+  todayDateKey: string;
+  dayCloses: DayCloseSummary[];
+  sales: Sale[];
+  shifts: ShiftRecord[];
+  dayDrawerOpens: DayDrawerOpen[];
+}): string {
+  const unclosed = findUnclosedPriorBusinessDays({
+    targetDateKey: input.todayDateKey,
+    dayCloses: input.dayCloses,
+    sales: input.sales,
+    shifts: input.shifts,
+    dayDrawerOpens: input.dayDrawerOpens,
+  });
+  if (unclosed.length > 0) {
+    const preferred = input.preferredDateKey?.trim();
+    if (preferred && unclosed.includes(preferred)) return preferred;
+    return unclosed[0]!;
+  }
+  return input.preferredDateKey?.trim() || input.todayDateKey;
+}

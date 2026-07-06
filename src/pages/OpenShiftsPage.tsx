@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { shiftStatusLabel } from "../lib/shiftEnforcement";
+import { dateKeyKampala } from "../lib/datesUg";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
   buildShiftSummaryRows,
@@ -19,8 +20,11 @@ function canViewShiftDashboard(role: string): boolean {
 export function OpenShiftsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const managerForceCloseOpenShift = usePosStore((s) => s.managerForceCloseOpenShift);
+  const todayKey = dateKeyKampala(new Date());
 
   const rows = useMemo(() => buildShiftSummaryRows(shifts), [shifts]);
+  const canForceClose = actor.role === "owner" || actor.role === "manager" || actor.role === "supervisor";
 
   if (!canViewShiftDashboard(actor.role)) {
     return <Navigate to="/office" replace />;
@@ -56,17 +60,21 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
               <th className="px-3 py-3">{t(lang, "openShiftsColSales")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColDebt")}</th>
               <th className="px-3 py-3">{t(lang, "openShiftsColStatus")}</th>
+              {canForceClose ? <th className="px-3 py-3" /> : null}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center font-semibold text-stone-500">
+                <td colSpan={canForceClose ? 8 : 7} className="px-3 py-8 text-center font-semibold text-stone-500">
                   {t(lang, "openShiftsEmpty")}
                 </td>
               </tr>
             ) : (
-              rows.map(({ shift, durationLabel }) => (
+              rows.map(({ shift, durationLabel }) => {
+                const shiftDay = dateKeyKampala(shift.startAt);
+                const staleOpen = !shift.endAt && shiftDay < todayKey;
+                return (
                 <tr key={shift.id} className="border-b border-stone-100 last:border-0">
                   <td className="px-3 py-3 font-bold text-stone-900">{shift.actorName ?? shift.actorUserId}</td>
                   <td className="px-3 py-3 font-semibold text-stone-700">{t(lang, `role_${shift.role}`)}</td>
@@ -84,15 +92,34 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
                     <span
                       className={
                         shiftStatusLabel(shift) === "ACTIVE"
-                          ? "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-900"
+                          ? staleOpen
+                            ? "rounded-full bg-rose-100 px-2 py-0.5 text-xs font-black text-rose-900"
+                            : "rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-black text-emerald-900"
                           : "rounded-full bg-stone-200 px-2 py-0.5 text-xs font-black text-stone-700"
                       }
                     >
                       {shiftStatusLabel(shift)}
                     </span>
                   </td>
+                  {canForceClose ? (
+                    <td className="px-3 py-3">
+                      {!shift.endAt ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!window.confirm(t(lang, "openShiftsForceCloseConfirm"))) return;
+                            managerForceCloseOpenShift(shift.id, "Manager force close");
+                          }}
+                          className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-1 text-xs font-black text-rose-900"
+                        >
+                          {t(lang, "openShiftsForceClose")}
+                        </button>
+                      ) : null}
+                    </td>
+                  ) : null}
                 </tr>
-              ))
+              );
+              })
             )}
           </tbody>
         </table>

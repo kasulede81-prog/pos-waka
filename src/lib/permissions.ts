@@ -52,7 +52,7 @@ export function resolveAuthRole(params: {
 }
 
 /** Bump when the permission matrix changes (clears client cache). */
-const PERM_MATRIX_VERSION = 20;
+const PERM_MATRIX_VERSION = 21;
 
 const DRAWER_OPEN_PERMS: Permission[] = ["day.open_drawer", "day.verify_opening_float", "shift.start", "shift.close"];
 
@@ -206,6 +206,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   waiter: [
     "pos.sell",
     "receipts.view",
+    "shift.start",
+    "shift.close",
     "hospitality.floor",
     "hospitality.order",
     "hospitality.settle",

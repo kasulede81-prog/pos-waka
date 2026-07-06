@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
 import type { Language } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { ModalSheet } from "../layout/ModalSheet";
 import { POS_HOME_ROUTE } from "../../lib/posNavigation";
 import { dateKeyKampala } from "../../lib/datesUg";
+import { findUnclosedPriorBusinessDays } from "../../lib/sequentialBusinessDays";
+import { hasPermission } from "../../lib/permissions";
 import {
   activeDayDrawerOpenForDate,
   floatVerificationWithinTolerance,
@@ -36,16 +38,30 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
   const recordDayDrawerOpen = usePosStore((s) => s.recordDayDrawerOpen);
   const preferences = usePosStore((s) => s.preferences);
   const dayDrawerOpens = usePosStore((s) => s.dayDrawerOpens);
+  const dayCloses = usePosStore((s) => s.dayCloses);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const sales = usePosStore((s) => s.sales);
 
   const [floatInput, setFloatInput] = useState("");
   const [dayOpenAmount, setDayOpenAmount] = useState("");
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [unclosedDays, setUnclosedDays] = useState<string[]>([]);
   const [overrideOpen, setOverrideOpen] = useState(false);
 
   const v2 = isFormulaV2(preferences);
   const todayKey = dateKeyKampala(new Date());
+  const canCloseDay = hasPermission(actor.role, "day.close");
+  const knownUnclosedDays = useMemo(
+    () =>
+      findUnclosedPriorBusinessDays({
+        targetDateKey: todayKey,
+        dayCloses,
+        sales,
+        shifts,
+        dayDrawerOpens,
+      }),
+    [todayKey, dayCloses, sales, shifts, dayDrawerOpens],
+  );
   const dayOpen = useMemo(
     () => activeDayDrawerOpenForDate(dayDrawerOpens, todayKey),
     [dayDrawerOpens, todayKey],
@@ -102,10 +118,15 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
     if (r.ok) {
       setDayOpenAmount("");
       setErrorKey(null);
+      setUnclosedDays([]);
       return;
     }
     setErrorKey(r.errorKey ?? "saleError");
+    setUnclosedDays(r.unclosedDays ?? knownUnclosedDays);
   };
+
+  const blockedDays = unclosedDays.length > 0 ? unclosedDays : knownUnclosedDays;
+  const sequentialBlocked = errorKey === "sequentialDayBlocked" && blockedDays.length > 0;
 
   if (v2 && !dayOpen) {
     return (
@@ -157,6 +178,23 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
               <p className="mt-3 text-sm font-bold text-rose-700">
                 {(t as (l: Language, k: string) => string)(lang, errorKey)}
               </p>
+            ) : null}
+            {sequentialBlocked ? (
+              <div className="mt-3 space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left">
+                <p className="text-sm font-semibold text-amber-950">
+                  {tTemplate(lang, "sequentialDayBlockedDates", { dates: blockedDays.join(", ") })}
+                </p>
+                {canCloseDay ? (
+                  <Link
+                    to={`/close-day?date=${blockedDays[0]}`}
+                    className="inline-flex min-h-[44px] items-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
+                  >
+                    {tTemplate(lang, "sequentialDayBlockedCloseLink", { date: blockedDays[0]! })}
+                  </Link>
+                ) : (
+                  <p className="text-sm font-medium text-amber-900">{t(lang, "sequentialDayBlockedAskManager")}</p>
+                )}
+              </div>
             ) : null}
           </>
         ) : (

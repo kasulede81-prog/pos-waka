@@ -5,7 +5,7 @@ import {
   collectOpenShifts,
 } from "./dayCloseEnforcement";
 import { assertBusinessDateNotLocked } from "./businessDateLock";
-import { findUnclosedPriorBusinessDays } from "./sequentialBusinessDays";
+import { findUnclosedPriorBusinessDays, resolvePrioritizedCloseDateKey } from "./sequentialBusinessDays";
 import type { DayCloseSummary, ShiftRecord } from "../types";
 
 const DAY = "2026-06-10";
@@ -107,5 +107,32 @@ describe("dayCloseEnforcement", () => {
       dayDrawerOpens: [],
     });
     expect(prior).toContain("2026-06-10");
+  });
+
+  it("resolvePrioritizedCloseDateKey picks oldest unclosed prior day", () => {
+    const sales = [
+      {
+        id: "sale1",
+        status: "completed" as const,
+        createdAt: "2026-06-10T10:00:00.000Z",
+        updatedAt: "2026-06-10T10:00:00.000Z",
+        subtotalUgx: 1000,
+        totalUgx: 1000,
+        cashPaidUgx: 1000,
+        debtUgx: 0,
+        lines: [],
+        estimatedProfitUgx: 100,
+        pendingSync: false,
+        lastSyncError: null,
+      },
+    ];
+    const key = resolvePrioritizedCloseDateKey({
+      todayDateKey: "2026-06-12",
+      dayCloses: [],
+      sales,
+      shifts: [],
+      dayDrawerOpens: [],
+    });
+    expect(key).toBe("2026-06-10");
   });
 });

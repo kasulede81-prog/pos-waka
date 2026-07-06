@@ -570,7 +570,7 @@ export type PosState = {
     note?: string;
     witnessUserId?: string | null;
     dateKey?: string;
-  }) => { ok: boolean; errorKey?: string; dayOpenId?: string };
+  }) => { ok: boolean; errorKey?: string; dayOpenId?: string; unclosedDays?: string[] };
   supersedeDayDrawerOpen: (input: {
     previousId: string;
     openingFloatUgx: number;
@@ -584,6 +584,7 @@ export type PosState = {
     ownerOverridePin?: string;
   }) => { ok: boolean; errorKey?: string };
   endActiveShift: (actorUserId?: string) => void;
+  managerForceCloseOpenShift: (shiftId: string, reason?: string) => { ok: boolean; errorKey?: string };
   logAuditAction: (action: AuditAction, summary: string, payload?: Record<string, unknown>) => void;
   completeBusinessOnboarding: (businessType: BusinessType) => void;
   completeShopOnboardingWizard: (input: {
@@ -2022,6 +2023,41 @@ export const usePosStore = create<PosState>((set, get) => {
     }));
     pushAudit("shift_end", `Shift end ${actor?.displayName ?? uid}`, { shiftId: open.id, actorUserId: uid });
     void queueRemote("pending_shifts", { shiftId: open.id });
+  },
+
+  managerForceCloseOpenShift: (shiftId, reason) => {
+    const denied = denyUnlessEffectivePermission("day.close", "managerForceCloseOpenShift");
+    if (denied) return { ok: false, errorKey: denied.errorKey };
+    const state = get();
+    const actor = state.sessionActor;
+    if (!actor) return { ok: false, errorKey: "noSelection" };
+    const open = (state.preferences.shifts ?? []).find((sh) => sh.id === shiftId && !sh.endAt);
+    if (!open) return { ok: false, errorKey: "invalid" };
+    const endAt = new Date().toISOString();
+    set((st) => ({
+      preferences: {
+        ...st.preferences,
+        shifts: (st.preferences.shifts ?? []).map((sh) =>
+          sh.id === open.id
+            ? {
+                ...sh,
+                endAt,
+                pendingSync: true,
+                updatedAt: endAt,
+              }
+            : sh,
+        ),
+      },
+    }));
+    pushAudit("shift_end", `Manager force-closed shift for ${open.actorName ?? open.actorUserId}`, {
+      shiftId: open.id,
+      actorUserId: open.actorUserId,
+      forcedByUserId: actor.userId,
+      forcedByLabel: actor.displayName,
+      reason: (reason ?? "").trim() || null,
+    });
+    void queueRemote("pending_shifts", { shiftId: open.id });
+    return { ok: true };
   },
 
   completeBusinessOnboarding: (businessType) => {

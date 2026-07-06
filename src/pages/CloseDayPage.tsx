@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { FormEvent } from "react";
 
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { AlertTriangle, Banknote, CalendarCheck } from "lucide-react";
 
 import type { Language } from "../types";
 
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 
 import { activeDayCloseForDate } from "../lib/dayCloseIdempotency";
 
@@ -16,7 +16,7 @@ import { ensureAllActiveSalesLoaded, usePosStore } from "../store/usePosStore";
 
 import { dateKeyKampala } from "../lib/datesUg";
 
-import { useDrawerCashForToday } from "../hooks/useDrawerCashForDay";
+import { useDrawerCashForDay } from "../hooks/useDrawerCashForDay";
 
 import { getCompletedFinancials } from "../lib/financialMetrics";
 
@@ -54,9 +54,16 @@ import { dayCloseVarianceIsFlagged } from "../lib/dayCloseApprovals";
 
 import { readSyncQueue } from "../offline/localDb";
 
+import {
+  findUnclosedPriorBusinessDays,
+  resolvePrioritizedCloseDateKey,
+} from "../lib/sequentialBusinessDays";
+
 
 
 export function CloseDayPage({ lang }: { lang: Language }) {
+
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const actor = useSessionActor();
 
@@ -79,6 +86,8 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
   const allSales = usePosStore((s) => s.sales);
 
+  const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+
   const shopName = preferences.shopDisplayName?.trim() || "Waka POS";
 
   const recordDayClose = usePosStore((s) => s.recordDayClose);
@@ -88,6 +97,31 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
   const todayKey = dateKeyKampala(new Date());
+
+  const closeDateKey = useMemo(
+    () =>
+      resolvePrioritizedCloseDateKey({
+        preferredDateKey: searchParams.get("date"),
+        todayDateKey: todayKey,
+        dayCloses,
+        sales: allSales,
+        shifts,
+        dayDrawerOpens,
+      }),
+    [searchParams, todayKey, dayCloses, allSales, shifts, dayDrawerOpens],
+  );
+
+  const unclosedPriorDays = useMemo(
+    () =>
+      findUnclosedPriorBusinessDays({
+        targetDateKey: todayKey,
+        dayCloses,
+        sales: allSales,
+        shifts,
+        dayDrawerOpens,
+      }),
+    [todayKey, dayCloses, allSales, shifts, dayDrawerOpens],
+  );
 
   const [counted, setCounted] = useState("");
 
@@ -126,13 +160,13 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-  const activeCloseToday = activeDayCloseForDate(dayCloses, todayKey);
+  const activeCloseToday = activeDayCloseForDate(dayCloses, closeDateKey);
 
   const dayReopenHistory = preferences.dayReopenHistory ?? [];
 
 
 
-  const drawer = useDrawerCashForToday();
+  const drawer = useDrawerCashForDay(closeDateKey);
 
 
 
@@ -150,7 +184,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       total: drawer.revenueUgx,
 
-      saleCount: getCompletedFinancials(sales, returnRecords, products, { day: todayKey }).transactionCount,
+      saleCount: getCompletedFinancials(sales, returnRecords, products, { day: closeDateKey }).transactionCount,
 
       refundsUgx: drawer.refundsUgx,
 
@@ -166,7 +200,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
     }),
 
-    [drawer, sales, returnRecords, products, todayKey],
+    [drawer, sales, returnRecords, products, closeDateKey],
 
   );
 
@@ -218,7 +252,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
       },
 
-      dateKey: todayKey,
+      dateKey: closeDateKey,
 
       expectedCashUgx: summary.expectedCash,
 
@@ -234,7 +268,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
     setPreflightLoading(false);
 
-  }, [todayKey, summary.expectedCash, counted, countedN, preferences]);
+  }, [closeDateKey, summary.expectedCash, counted, countedN, preferences]);
 
 
 
@@ -272,7 +306,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
     const result = await recordDayClose({
 
-      dateKey: todayKey,
+      dateKey: closeDateKey,
 
       countedCashUgx: countedN,
 
@@ -325,7 +359,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
     const result = await recordDayClose({
 
-      dateKey: todayKey,
+      dateKey: closeDateKey,
 
       countedCashUgx: countedN,
 
@@ -379,7 +413,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-  const last = activeCloseToday ?? dayCloses.find((d) => d.dateKey === todayKey) ?? dayCloses[0];
+  const last = activeCloseToday ?? dayCloses.find((d) => d.dateKey === closeDateKey) ?? dayCloses[0];
 
 
 
@@ -497,9 +531,37 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
         <p className="text-[11px] font-black uppercase text-stone-500">{t(lang, "dayCloseBusinessDate")}</p>
 
-        <p className="text-lg font-black text-stone-950">{todayKey}</p>
+        <p className="text-lg font-black text-stone-950">{closeDateKey}</p>
+
+        {closeDateKey !== todayKey ? (
+          <p className="mt-2 text-sm font-semibold text-amber-900">
+            {tTemplate(lang, "closeDayPriorBanner", { date: closeDateKey, today: todayKey })}
+          </p>
+        ) : null}
 
       </section>
+
+      {unclosedPriorDays.length > 0 ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-[11px] font-black uppercase text-amber-800">{t(lang, "closeDayPriorPicker")}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {unclosedPriorDays.map((dk) => (
+              <button
+                key={dk}
+                type="button"
+                onClick={() => setSearchParams({ date: dk })}
+                className={
+                  dk === closeDateKey
+                    ? "rounded-xl bg-waka-600 px-3 py-2 text-sm font-black text-white"
+                    : "rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm font-bold text-amber-950"
+                }
+              >
+                {dk}
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
 
 
@@ -807,7 +869,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           <p className="text-center text-lg font-bold">{t(lang, "closeSaved")}</p>
 
-          {last && last.dateKey === todayKey ? (
+          {last && last.dateKey === closeDateKey ? (
 
             <DocumentActionsBar
 
@@ -839,7 +901,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-      {last && last.dateKey === todayKey && activeCloseToday ? (
+      {last && last.dateKey === closeDateKey && activeCloseToday ? (
 
         <section className="rounded-3xl border-2 border-stone-200 bg-stone-50 p-5">
 

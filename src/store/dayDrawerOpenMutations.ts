@@ -117,7 +117,7 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
       shifts: state.preferences.shifts ?? [],
       dayDrawerOpens: state.dayDrawerOpens,
     });
-    if (!seq.ok) return { ok: false as const, errorKey: seq.errorKey };
+    if (!seq.ok) return { ok: false as const, errorKey: seq.errorKey, unclosedDays: seq.unclosedDays };
 
     const dayLock = assertBusinessDateNotLocked(state.dayCloses, dateKey);
     if (!dayLock.ok) return { ok: false as const, errorKey: dayLock.errorKey };
