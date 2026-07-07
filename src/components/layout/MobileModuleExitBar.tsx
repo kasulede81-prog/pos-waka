@@ -7,13 +7,13 @@ import { resolveModuleExit } from "../../lib/moduleExit";
 import { historyCanGoBack } from "../../lib/navigationBack";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 
-type Props = { lang: Language };
+type Props = { lang: Language; terminalHome?: string };
 
-export function MobileModuleExitBar({ lang }: Props) {
+export function MobileModuleExitBar({ lang, terminalHome = "/" }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const isDesktop = usePosDesktopLayout();
-  const exit = resolveModuleExit(location.pathname);
+  const exit = resolveModuleExit(location.pathname, terminalHome);
 
   const handleClick = useCallback(() => {
     if (!exit) return;

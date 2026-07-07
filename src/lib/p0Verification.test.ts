@@ -15,6 +15,7 @@ import {
 import { localGetRangeSummary } from "./localReporting";
 import { usePosStore } from "../store/usePosStore";
 import { t } from "./i18n";
+import { openTestShift } from "../test/shiftTestSetup";
 
 const PRODUCT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
@@ -80,6 +81,7 @@ describe("P0-1 Discounted pending sale E2E", () => {
   });
 
   it("hold → resume → payable identical to held total", () => {
+    expect(openTestShift().ok).toBe(true);
     const beforeHold = computeDraftCheckoutTotals(
       usePosStore.getState().draftLines,
       usePosStore.getState().draftCartDiscountUgx,
@@ -115,6 +117,7 @@ describe("P0-2 Hospitality settlement failure (store path)", () => {
   });
 
   it("finalizeDraftSale returns noStock when stock exhausted", () => {
+    expect(openTestShift().ok).toBe(true);
     const res = usePosStore.getState().finalizeDraftSale({
       debtUgx: 0,
       paymentMethod: "cash",
@@ -160,6 +163,7 @@ describe("P0-4 Credit permissions", () => {
   });
 
   it("cashier debt finalize allowed with customer", () => {
+    expect(openTestShift().ok).toBe(true);
     const res = usePosStore.getState().finalizeDraftSale({
       debtUgx: 10_000,
       paymentMethod: "credit",

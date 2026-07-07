@@ -286,8 +286,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
   const isDesktopLayout = usePosDesktopLayout();
   const posLayoutMode = usePosLayoutMode();
-  const desktopTerminalHome = isDesktopLayout && location.pathname === "/";
-  const isLauncherHome = location.pathname === "/";
+  const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
+  const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const wholesaleNav = isWholesaleMode(preferences.businessType);
+  const terminalHome = resolveTerminalHomePath(preferences, actor.role);
+  const onTerminalHome = location.pathname === terminalHome;
+  const isLauncherHome =
+    location.pathname === "/" || (pharmacyNav && !hospitalityNav && location.pathname === PHARMACY_HOME_ROUTE);
+  const desktopTerminalHome = isDesktopLayout && isLauncherHome;
   const onSellScreen = isPosSellPath(location.pathname);
   const fullDesktopSell = onSellScreen && posLayoutMode === "full";
   const independentModule = isIndependentModuleRoute(location.pathname);
@@ -302,9 +308,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     !isSettingsLauncherPath(location.pathname) &&
     !internalAdminRoute;
 
-  const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
-  const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const wholesaleNav = isWholesaleMode(preferences.businessType);
   const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
 
   const navDefs = useMemo((): NavDef[] => {
@@ -374,11 +377,12 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const showPharmacyWorkspaceNav =
     pharmacyNav && !hospitalityNav && isPharmacyOperationalRoute(location.pathname) && !internalAdminRoute;
   const showPharmacyMobileNav = showPharmacyWorkspaceNav && !isDesktopLayout;
-  const showPharmacyDesktopNav = showPharmacyWorkspaceNav && isDesktopLayout;
+  const showPharmacyDesktopNav = showPharmacyWorkspaceNav && isDesktopLayout && !isLauncherHome;
   const showMobileModuleExit =
-    Boolean(resolveModuleExit(location.pathname)) && !internalAdminRoute && !showHospitalityMobileNav && !showPharmacyMobileNav;
-  const terminalHome = resolveTerminalHomePath(preferences, actor.role);
-  const onTerminalHome = location.pathname === terminalHome;
+    Boolean(resolveModuleExit(location.pathname, terminalHome)) &&
+    !internalAdminRoute &&
+    !showHospitalityMobileNav &&
+    !showPharmacyMobileNav;
   const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout) && !onTerminalHome;
 
   return (
@@ -716,7 +720,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </section>
         </main>
-        {showMobileModuleExit ? <MobileModuleExitBar lang={lang} /> : null}
+        {showMobileModuleExit ? <MobileModuleExitBar lang={lang} terminalHome={terminalHome} /> : null}
         <HospitalityMobileNav lang={lang} role={actor.role} visible={showHospitalityMobileNav} />
         <PharmacyMobileNav lang={lang} role={actor.role} visible={showPharmacyMobileNav} />
         {preferences.posLocked ? (

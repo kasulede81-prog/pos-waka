@@ -47,7 +47,7 @@ export function isPharmacyOperationalRoute(pathname: string): boolean {
   if (pathname === "/pharmacy/reports/patients" || pathname.startsWith("/pharmacy/reports/patients/")) return true;
   if (pathname === "/pharmacy/compliance/register" || pathname.startsWith("/pharmacy/compliance/register/")) return true;
   if (pathname === "/pharmacy/compliance/reports" || pathname.startsWith("/pharmacy/compliance/reports/")) return true;
-  if (pathname.startsWith("/pharmacy/patients/")) return true;
+  if (pathname === "/pharmacy/patients" || pathname.startsWith("/pharmacy/patients/")) return true;
   if (pathname === "/pharmacy/inventory" || pathname.startsWith("/pharmacy/inventory/")) return true;
   if (pathname === "/pharmacy/purchases" || pathname.startsWith("/pharmacy/purchases/")) return true;
   if (pathname === "/pharmacy/reports" || pathname.startsWith("/pharmacy/reports/")) return true;

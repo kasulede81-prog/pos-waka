@@ -18,6 +18,7 @@ import {
   buildSubscriptionDiagnostics,
 } from "./subscriptionDiagnostics";
 import { usePosStore } from "../store/usePosStore";
+import { openTestShift } from "../test/shiftTestSetup";
 
 function actor(role: SessionActor["role"]): SessionActor {
   return { userId: "user-1", role, displayName: "Test" };
@@ -161,9 +162,9 @@ describe("product plan enforcement", () => {
 });
 
 describe("staff plan enforcement", () => {
-  it("blocks new staff on free/starter", () => {
+  it("blocks new staff on free tier only", () => {
     expect(validateCanAddStaffAccount(0, "free")).toEqual({ ok: false, errorKey: "planStaffLimit" });
-    expect(validateCanAddStaffAccount(0, "starter")).toEqual({ ok: false, errorKey: "planStaffLimit" });
+    expect(validateCanAddStaffAccount(0, "starter").ok).toBe(true);
   });
 
   it("allows business staff up to cap", () => {
@@ -277,6 +278,7 @@ describe("usePosStore subscription enforcement", () => {
         },
       ],
     });
+    expect(openTestShift().ok).toBe(true);
     const r = usePosStore.getState().finalizeDraftSale({ debtUgx: 0, amountPaidUgx: 1000 });
     expect(r.ok).toBe(false);
     expect(r.errorKey).toBe("planProductLocked");

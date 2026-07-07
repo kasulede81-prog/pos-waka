@@ -7,6 +7,7 @@ import {
   sumOrphanDebtUgx,
 } from "./customerDebtActivity";
 import { usePosStore } from "../store/usePosStore";
+import { openTestShift } from "../test/shiftTestSetup";
 
 const PRODUCT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const CUSTOMER_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -156,6 +157,7 @@ describe("usePosStore finalizeDraftSale — debt identity", () => {
       draftLines: [{ ...draftLine }],
       draftCartDiscountUgx: 0,
     });
+    expect(openTestShift().ok).toBe(true);
   });
 
   it("debt with existing customer succeeds and updates balance", () => {

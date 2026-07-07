@@ -3,6 +3,7 @@ import type { Product, SaleLine } from "../types";
 import { setActiveAccountKey } from "../offline/accountScope";
 import { usePosStore } from "../store/usePosStore";
 import { returnRestocksInventory } from "./returnPolicy";
+import { openTestShift } from "../test/shiftTestSetup";
 import {
   initInventorySyncChannel,
   resetInventorySyncChannelForTests,
@@ -76,6 +77,7 @@ function seedStore(stockOnHand: number, version: number) {
     stockMovements: [],
     voidRecords: [],
   });
+  expect(openTestShift().ok).toBe(true);
 }
 
 describe("crossTabSaleProtection", () => {

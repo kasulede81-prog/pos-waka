@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
@@ -27,6 +28,15 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "node",
       include: ["src/**/*.test.ts"],
+      setupFiles: ["src/test/vitest.setup.ts"],
+      testTimeout: 15_000,
+      hookTimeout: 15_000,
+      pool: "threads",
+      maxWorkers: Math.min(4, os.cpus().length),
+      fileParallelism: true,
+      teardownTimeout: 5_000,
+      restoreMocks: true,
+      clearMocks: true,
     },
     define: {
       "import.meta.env.VITE_APP_VERSION": JSON.stringify(env.VITE_APP_VERSION?.trim() || pkg.version),

@@ -3,6 +3,9 @@ import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
 import { resolveModuleExit } from "../../lib/moduleExit";
 import { isHospitalityOperationalRoute } from "../../lib/hospitalityNav";
 import { isPharmacyOperationalRoute } from "../../lib/pharmacyNav";
+import { usePosStore } from "../../store/usePosStore";
+import { useSessionActor } from "../../context/SessionActorContext";
+import { resolveTerminalHomePath } from "../../lib/terminalHome";
 
 /**
  * Real block at the end of the scroll column (not padding on the scroller).
@@ -10,9 +13,12 @@ import { isPharmacyOperationalRoute } from "../../lib/pharmacyNav";
  */
 export function MobileScrollTail() {
   const { pathname } = useLocation();
+  const preferences = usePosStore((s) => s.preferences);
+  const actor = useSessionActor();
+  const terminalHome = resolveTerminalHomePath(preferences, actor.role);
   const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
   const isInternalAdmin = isInternalAdminAppPath(pathname);
-  const moduleExit = resolveModuleExit(pathname);
+  const moduleExit = resolveModuleExit(pathname, terminalHome);
   const hospitalityNav = isHospitalityOperationalRoute(pathname);
   const pharmacyNav = isPharmacyOperationalRoute(pathname);
 

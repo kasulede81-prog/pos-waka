@@ -65,7 +65,7 @@ describe("retail isolation — terminology map", () => {
   it("retains retail terms across mode mappings", () => {
     expect(pharmacyTerm("en", "kiosk_duka", "product", false).toLowerCase()).toContain("product");
     expect(hospitalityTerm("en", "kiosk_duka", "sale", false).toLowerCase()).toContain("sale");
-    expect(wholesaleTerm("en", "kiosk_duka", "stock").toLowerCase()).toContain("stock");
+    expect(wholesaleTerm("en", "kiosk_duka", "stock").toLowerCase()).toContain("inventory");
   });
 });
 

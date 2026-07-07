@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { usePosStore, applyRestoredSnapshotFromBackup } from "../store/usePosStore";
 import type { Product } from "../types";
 import type { PersistedSnapshot } from "../offline/localDb";
+import { openTestShift } from "../test/shiftTestSetup";
 
 const PRODUCT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const CUSTOMER_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
@@ -67,14 +68,14 @@ describe("usePosStore — cashier mutation regression", () => {
   });
 
   it("cashier addDebtPayment succeeds", () => {
-    usePosStore.getState().beginShift();
+    expect(openTestShift().ok).toBe(true);
     const r = usePosStore.getState().addDebtPayment(CUSTOMER_ID, 1_000);
     expect(r.ok).toBe(true);
     expect(usePosStore.getState().customers[0]!.debtBalanceUgx).toBe(4_000);
   });
 
   it("cashier finalizeDraftSale with credit succeeds", () => {
-    usePosStore.getState().beginShift();
+    expect(openTestShift().ok).toBe(true);
     usePosStore.setState({
       draftLines: [
         {

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import type { Product, Purchase, Sale, StockMovement, Supplier, SupplierPayment } from "../types";
 import {
   buildRestockProductSuggestions,
@@ -52,7 +52,16 @@ const product: Product = {
 };
 
 describe("purchase filtering", () => {
-  it("filters purchases by week bounds", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-15T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("filters purchases by month bounds", () => {
     const bounds = resolvePurchaseFilterBounds({ kind: "preset", preset: "this_month" });
     const purchases = [
       purchase({ id: "p1", createdAt: "2026-06-10T10:00:00.000Z", totalCostUgx: 10_000 }),

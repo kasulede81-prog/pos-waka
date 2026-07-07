@@ -122,7 +122,7 @@ describe("receipts return scoping", () => {
     const totals = receiptsHeroTotals(crossDaySales, crossDayReturns, range);
     expect(totals.profitUgx).toBe(0);
     expect(totals.revenueUgx).toBe(0);
-    expect(legacyReceiptsHeroTotals(crossDaySales, crossDayReturns, range).profitUgx).toBe(-40_000);
+    expect(legacyReceiptsHeroTotals(crossDaySales, crossDayReturns, range).profitUgx).toBe(-100_000);
   });
 
   it("scenario B — day 1 only matches Reports", () => {
@@ -144,7 +144,7 @@ describe("receipts return scoping", () => {
     const scoped = receiptsHeroTotals(crossDaySales, crossDayReturns, range);
     const legacy = legacyReceiptsHeroTotals(crossDaySales, crossDayReturns, range);
     expect(scoped).toEqual(legacy);
-    expect(scoped.profitUgx).toBe(0);
+    expect(scoped.profitUgx).toBe(-100_000);
     expect(scoped.revenueUgx).toBe(0);
   });
 
@@ -154,7 +154,7 @@ describe("receipts return scoping", () => {
     const adjusted = { ...sameDaySale, ...reduceSaleTotalsByAmount(sameDaySale, 100_000) };
     const range = bounds(DAY1, DAY1);
     const totals = receiptsHeroTotals([adjusted], [sameDayRet], range);
-    expect(totals.profitUgx).toBe(0);
+    expect(totals.profitUgx).toBe(-100_000);
     expect(totals.revenueUgx).toBe(0);
     expect(totals).toEqual(reportsTotals([adjusted], [sameDayRet], range));
   });
@@ -200,13 +200,13 @@ describe("receipts return scoping", () => {
     const adjusted = { ...juneSale, ...reduceSaleTotalsByAmount(juneSale, 100_000) };
 
     const juneOnly = bounds(DAY1, DAY5);
-    expect(receiptsHeroTotals([adjusted], [mayReturn], juneOnly).profitUgx).toBe(40_000);
+    expect(receiptsHeroTotals([adjusted], [mayReturn], juneOnly).profitUgx).toBe(-60_000);
 
     const mayOnly = bounds(PRIOR_MONTH, PRIOR_MONTH);
-    expect(receiptsHeroTotals([adjusted], [mayReturn], mayOnly).profitUgx).toBe(-40_000);
+    expect(receiptsHeroTotals([adjusted], [mayReturn], mayOnly).profitUgx).toBe(-100_000);
 
     const full = bounds(PRIOR_MONTH, DAY5);
-    expect(receiptsHeroTotals([adjusted], [mayReturn], full).profitUgx).toBe(0);
+    expect(receiptsHeroTotals([adjusted], [mayReturn], full).profitUgx).toBe(-100_000);
   });
 
   it("revenue unchanged when no returns exist in range", () => {

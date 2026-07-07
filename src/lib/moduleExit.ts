@@ -10,15 +10,16 @@ export type ModuleExitAction = {
   preferHistoryBack: boolean;
 };
 
-export function resolveModuleExit(pathname: string): ModuleExitAction | null {
+export function resolveModuleExit(pathname: string, terminalHome: string = POS_HOME_ROUTE): ModuleExitAction | null {
   if (pathname === POS_HOME_ROUTE) return null;
+  if (pathname === terminalHome && terminalHome !== POS_HOME_ROUTE) return null;
   if (pathname === "/pos" || pathname.startsWith("/pos/")) return null;
   if (isPharmacyOperationalRoute(pathname)) return null;
 
   const fallback = getBackFallbackPath(pathname);
 
   if (pathname === "/office" || pathname === "/settings") {
-    return { labelKey: "posNavExit", fallbackTo: POS_HOME_ROUTE, preferHistoryBack: false };
+    return { labelKey: "posNavExit", fallbackTo: terminalHome, preferHistoryBack: false };
   }
 
   if (pathname === "/owner") {

@@ -11,7 +11,7 @@ describe("desktopLayout", () => {
     expect(dashboardKpiGridClass()).toContain("xl:grid-cols-4");
   });
 
-  it("admin KPI grid uses six columns on 2xl", () => {
-    expect(adminKpiGridClass()).toContain("2xl:grid-cols-6");
+  it("admin KPI grid uses six columns on xl", () => {
+    expect(adminKpiGridClass()).toContain("xl:grid-cols-6");
   });
 });

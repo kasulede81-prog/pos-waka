@@ -29,7 +29,13 @@ vi.mock("../offline/accountScope", () => ({
 
 vi.mock("../store/usePosStore", () => ({
   usePosStore: {
-    getState: () => ({ _hydrated: true, products: [{ id: "p1" }], sales: [], customers: [] }),
+    getState: () => ({
+      _hydrated: true,
+      products: [{ id: "p1" }],
+      sales: [],
+      customers: [],
+      preferences: { shifts: [] },
+    }),
     subscribe: () => () => {},
   },
 }));

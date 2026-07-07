@@ -5,7 +5,7 @@ import { canTransitionTransfer, validateTransferLines } from "./stockTransfer";
 import { canTransitionPurchaseOrder } from "./enterprisePurchasing";
 import { enterprisePermissionsForRole, resolveEnterpriseRoleLabel } from "./enterprisePermissions";
 import { endpointsForDomain, internalApiPath } from "./enterpriseApiFoundation";
-import { shopScopedAccountKey, isLegacySingleShopAccountKey, parseShopIdFromAccountKey } from "./shopScope";
+import { isLegacySingleShopAccountKey, parseShopIdFromAccountKey } from "./shopScope";
 import { computeAccountKey } from "../../offline/accountScope";
 import { ENTERPRISE_PERFORMANCE_BUDGETS } from "../../types/enterprise";
 

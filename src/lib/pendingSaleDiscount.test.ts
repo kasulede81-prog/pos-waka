@@ -4,6 +4,7 @@ import { cartDiscountFromPendingSale, computeDraftCheckoutTotals, estimatedProfi
 import { buildPendingSaleFromDraft } from "./hospitality";
 import { mergePendingSales } from "./pendingSaleMerge";
 import { usePosStore } from "../store/usePosStore";
+import { openTestShift } from "../test/shiftTestSetup";
 
 const PRODUCT_ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
@@ -97,6 +98,7 @@ describe("resumePendingSale — cart discount round-trip", () => {
       activePendingSaleId: null,
       draftInput: null,
     });
+    expect(openTestShift().ok).toBe(true);
   });
 
   it("held sale with discount keeps same payable after resume and re-checkout math", () => {

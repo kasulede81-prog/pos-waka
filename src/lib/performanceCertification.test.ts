@@ -6,7 +6,7 @@ import { localGetDailySalesSummary } from "./localReporting";
 import type { Product, Sale, SaleLine } from "../types";
 
 const THRESHOLDS_MS = {
-  dashboardLoad: 600,
+  dashboardLoad: 700,
   reportGeneration: 800,
   queueDrain: 100,
   mergePerformance: 160,

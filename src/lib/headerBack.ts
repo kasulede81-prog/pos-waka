@@ -1,6 +1,7 @@
 import { isBackOfficePath } from "./backOfficePaths";
 import { getBackFallbackPath, historyCanGoBack } from "./navigationBack";
 import { hasNestedModuleBack, shouldShowHeaderExit } from "./headerExit";
+import { PHARMACY_HOME_ROUTE } from "./pharmacyNav";
 
 export type HeaderBackResolve = {
   show: boolean;
@@ -11,6 +12,7 @@ export type HeaderBackResolve = {
 export function labelKeyForBackFallback(fallback: string, pathname: string): string {
   if (fallback === "/settings" || pathname.startsWith("/settings/")) return "settingsHubTitle";
   if (fallback === "/office" || pathname.startsWith("/office/")) return "officeBackToHub";
+  if (fallback === PHARMACY_HOME_ROUTE || pathname.startsWith("/pharmacy/")) return "pharmacyNavExit";
   return "pageBack";
 }
 

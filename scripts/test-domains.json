@@ -1,0 +1,141 @@
+{
+  "retail": [
+    "src/lib/retailIsolation.test.ts",
+    "src/lib/p0Verification.test.ts",
+    "src/lib/storeMutationAuthorization.test.ts",
+    "src/lib/debtWorkflow.test.ts",
+    "src/lib/pendingSaleDiscount.test.ts",
+    "src/lib/crossTabSaleProtection.test.ts",
+    "src/lib/shiftEnforcement.test.ts",
+    "src/lib/dayDrawerOpenStore.test.ts",
+    "src/lib/dayCloseEnforcement.test.ts",
+    "src/lib/subscriptionEnforcement.test.ts",
+    "src/lib/posNavigation.test.ts",
+    "src/lib/receiptPrint.test.ts",
+    "src/lib/discountBreakdown.test.ts",
+    "src/lib/returnLimits.test.ts",
+    "src/lib/cashReconciliation.test.ts",
+    "src/lib/cashPosition.test.ts"
+  ],
+  "hospitality": [
+    "src/lib/hospitalityAuthorization.test.ts",
+    "src/lib/hospitalityTerminology.test.ts",
+    "src/lib/hospitalityFrontOfHouse.test.ts",
+    "src/lib/hospitalityTrust.test.ts",
+    "src/lib/hospitalityFloorEnsure.test.ts",
+    "src/lib/restaurantBilling.test.ts",
+    "src/lib/restaurantReceiptPrint.test.ts",
+    "src/lib/kitchenChitPrint.test.ts",
+    "src/lib/menuProduction.test.ts",
+    "src/lib/productHospitalityRouting.test.ts"
+  ],
+  "pharmacy": [
+    "src/lib/pharmacyIsolation.test.ts",
+    "src/lib/pharmacyControlledCheckout.test.ts",
+    "src/lib/pharmacyControlledReturn.test.ts",
+    "src/lib/pharmacyP0Stabilization.test.ts",
+    "src/lib/pharmacyControlledMedicine.test.ts",
+    "src/lib/pharmacyPrescriptions.test.ts",
+    "src/lib/pharmacyPatientProfile.test.ts",
+    "src/lib/pharmacyBatches.test.ts",
+    "src/lib/pharmacyCostIntegrity.test.ts",
+    "src/lib/pharmacyRemediation.test.ts",
+    "src/lib/pharmacyStoreRemediation.test.ts",
+    "src/lib/pharmacyPackaging.test.ts"
+  ],
+  "platform": [
+    "src/lib/storeAuthorization.test.ts",
+    "src/lib/settingsAuthorization.test.ts",
+    "src/lib/effectivePermissionAlignment.test.ts",
+    "src/lib/subscriptionEnforcement.test.ts",
+    "src/lib/enterprise/enterpriseFoundation.test.ts",
+    "src/lib/unifiedNav.test.ts",
+    "src/lib/launcherTiles.test.ts",
+    "src/lib/deviceLimitPolicy.test.ts",
+    "src/lib/deviceAuthority.test.ts",
+    "src/lib/staffLoginSecurity.test.ts",
+    "src/lib/singleOwnerProtection.test.ts"
+  ],
+  "sync": [
+    "src/lib/autoSync.test.ts",
+    "src/lib/operationalSync.test.ts",
+    "src/lib/globalSyncMutex.test.ts",
+    "src/lib/syncTiming.test.ts",
+    "src/lib/cloudRecoveryDeviceE2E.test.ts",
+    "src/lib/cloudRecoveryGate.test.ts",
+    "src/lib/recoveryCertification.test.ts",
+    "src/lib/staleResurrectionProtection.test.ts",
+    "src/lib/localQueuePreservation.test.ts",
+    "src/lib/bootstrapDebtRecovery.test.ts",
+    "src/lib/debtSyncIntegrity.test.ts",
+    "src/offline/cashExpenseEntityPersist.test.ts"
+  ],
+  "printing": [
+    "src/lib/printQueue.test.ts",
+    "src/lib/escPosBuilder.test.ts",
+    "src/lib/nativePrintFallback.test.ts",
+    "src/lib/restaurantReceiptPrint.test.ts",
+    "src/services/hardware/printerAdapter.test.ts",
+    "src/services/hardware/hardwareCapabilities.test.ts"
+  ],
+  "inventory": [
+    "src/lib/inventoryIntegrity.test.ts",
+    "src/lib/inventoryCount.test.ts",
+    "src/lib/stockMovementRecovery.test.ts",
+    "src/lib/purchaseCorrections.test.ts",
+    "src/lib/costPrecision.test.ts",
+    "src/lib/inventoryVersionProtection.test.ts"
+  ],
+  "staff": [
+    "src/lib/staffAccountAuthorization.test.ts",
+    "src/lib/staffOfflineAuth.cache.test.ts",
+    "src/lib/staffCacheSync.test.ts",
+    "src/lib/sensitiveActionAuth.test.ts",
+    "src/lib/storeMutationAuthorization.test.ts"
+  ],
+  "reports": [
+    "src/lib/reportExport.test.ts",
+    "src/lib/reportingConsistency.test.ts",
+    "src/lib/auditExport.test.ts",
+    "src/lib/auditSearch.test.ts",
+    "src/lib/investigationSearch.test.ts",
+    "src/lib/backOfficePerformanceOptimization.test.ts"
+  ],
+  "compliance": [
+    "src/lib/financialCertification.test.ts",
+    "src/lib/financialRemediation.test.ts",
+    "src/lib/financialIntegrity.test.ts",
+    "src/lib/certificationClosure.test.ts",
+    "src/lib/productionClosure.test.ts",
+    "src/lib/productionCertification.test.ts",
+    "src/lib/performanceCertification.test.ts",
+    "src/lib/recoveryCertification.test.ts",
+    "src/lib/pharmacyP0Stabilization.test.ts",
+    "src/lib/androidPerformanceSprint.test.ts"
+  ],
+  "kitchen": [
+    "src/lib/kitchenChitPrint.test.ts",
+    "src/lib/menuProduction.test.ts"
+  ],
+  "payments": [
+    "src/lib/debtWorkflow.test.ts",
+    "src/lib/customerDebt.test.ts",
+    "src/lib/customerDebtReconciliation.test.ts",
+    "src/lib/cashReconciliation.test.ts",
+    "src/lib/multiDeviceDebtPayment.test.ts"
+  ],
+  "cloud": [
+    "src/lib/cloudRecoveryDeviceE2E.test.ts",
+    "src/lib/cloudRecoveryCompleteness.test.ts",
+    "src/lib/cloudPullPagination.test.ts",
+    "src/lib/auditCloudSync.test.ts",
+    "src/lib/siteDataRecovery.test.ts"
+  ],
+  "device": [
+    "src/lib/androidPerformanceSprint.test.ts",
+    "src/lib/androidBackStack.test.ts",
+    "src/lib/firstTimeOwnerDevice.test.ts",
+    "src/lib/deviceLifecycle.persistence.test.ts",
+    "src/lib/nativePrintFallback.test.ts"
+  ]
+}

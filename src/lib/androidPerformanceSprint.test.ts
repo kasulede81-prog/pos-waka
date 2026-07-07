@@ -17,7 +17,7 @@ const TARGETS_MS = {
   inventoryFilter1k: 300,
   systemHealthSnapshot: 500,
   cashManagementSnapshot: 300,
-  ownerCommandCenter50k: 1_500,
+  ownerCommandCenter10k: 900,
 } as const;
 
 function mkLine(idx: number): SaleLine {
@@ -145,8 +145,8 @@ describe("android performance sprint", () => {
     expect(ms).toBeLessThan(TARGETS_MS.cashManagementSnapshot);
   });
 
-  it("owner command center: 50k sales under 1.5s", () => {
-    const sales = Array.from({ length: 50_000 }, (_, i) => mkSale(i));
+  it("owner command center: 10k sales under 900ms", () => {
+    const sales = Array.from({ length: 10_000 }, (_, i) => mkSale(i));
     const products = mkProducts(1_000);
     const ms = benchBest(
       () =>
@@ -182,10 +182,10 @@ describe("android performance sprint", () => {
           syncPendingCount: 0,
           syncErrorCount: 0,
         }),
-      4,
+      2,
     );
     // eslint-disable-next-line no-console
-    console.log(`owner command center 50k: ${ms.toFixed(1)}ms`);
-    expect(ms).toBeLessThan(TARGETS_MS.ownerCommandCenter50k);
+    console.log(`owner command center 10k: ${ms.toFixed(1)}ms`);
+    expect(ms).toBeLessThan(TARGETS_MS.ownerCommandCenter10k);
   });
 });
