@@ -3,8 +3,11 @@ import {
   formatUgxDisplay,
   inventoryLineValueAtCostUgx,
   inventoryValueAtCostUgx as inventoryValueAtCostPrecise,
+  markupPercentOnCost,
   normalizeUnitCostUgx,
+  profitPerUnitUgx,
 } from "./costPrecision";
+import { getProductCostWarnings } from "./costValidation";
 import { isPharmacyMode } from "./pharmacy";
 import type { BusinessType } from "../types";
 import { isPharmacyPackagingActive, packagingMarginStock } from "./pharmacyPackaging";
@@ -13,7 +16,9 @@ export type PharmacyCostWarningKind =
   | "zero_cost"
   | "zero_price"
   | "sell_below_cost"
-  | "extreme_margin";
+  | "extreme_margin"
+  | "low_unit_cost"
+  | "high_margin";
 
 export type PharmacyCostWarning = {
   kind: PharmacyCostWarningKind;
@@ -21,36 +26,36 @@ export type PharmacyCostWarning = {
   messageKey: string;
 };
 
-const EXTREME_MARGIN_RATIO = 5;
+const PHARMACY_WARNING_KEYS: Record<string, string> = {
+  zero_cost: "pharmacyWarnZeroCost",
+  zero_price: "pharmacyWarnZeroPrice",
+  sell_below_cost: "pharmacyWarnSellBelowCost",
+  extreme_margin: "pharmacyWarnExtremeMargin",
+  low_unit_cost: "costPreviewWarningTitle",
+  high_margin: "costPreviewWarningTitle",
+};
 
 /** Non-blocking cost/price sanity checks for pharmacy products. */
 export function pharmacyCostWarnings(product: Product): PharmacyCostWarning[] {
   const cost = normalizeUnitCostUgx(product.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
-  const out: PharmacyCostWarning[] = [];
-
-  if (cost <= 0) out.push({ kind: "zero_cost", messageKey: "pharmacyWarnZeroCost" });
-  if (sell <= 0) out.push({ kind: "zero_price", messageKey: "pharmacyWarnZeroPrice" });
-  if (cost > 0 && sell > 0 && sell < cost) {
-    out.push({ kind: "sell_below_cost", messageKey: "pharmacyWarnSellBelowCost" });
-  }
-  if (cost > 0 && sell > cost * EXTREME_MARGIN_RATIO) {
-    out.push({ kind: "extreme_margin", messageKey: "pharmacyWarnExtremeMargin" });
-  }
-  return out;
+  return getProductCostWarnings({ unitCostUgx: cost, sellPriceUgx: sell, pharmacyMode: true }).map((w) => ({
+    kind: w.kind as PharmacyCostWarningKind,
+    messageKey: w.messageKey ?? PHARMACY_WARNING_KEYS[w.kind] ?? "costPreviewWarningTitle",
+  }));
 }
 
 export function pharmacyMarginUgx(product: Product): number {
   const cost = normalizeUnitCostUgx(product.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
-  return sell - cost;
+  return profitPerUnitUgx(sell, cost) ?? 0;
 }
 
+/** Markup on cost — used by pharmacy margin reports (distinct from retail margin-on-sell). */
 export function pharmacyMarginPercent(product: Product): number | null {
   const cost = normalizeUnitCostUgx(product.costPricePerUnitUgx);
   const sell = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
-  if (cost <= 0) return null;
-  return Math.round(((sell - cost) / cost) * 100);
+  return markupPercentOnCost(sell, cost);
 }
 
 export type MedicineMarginRow = {

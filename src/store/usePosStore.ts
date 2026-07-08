@@ -5922,6 +5922,14 @@ export const usePosStore = create<PosState>((set, get) => {
           : buyingUnitsToBaseUnits(p, ln.qtyBuyingUnits);
       if (baseIn <= 0) return { ok: false, errorKey: "invalidQty" };
       const lineInput = input.lines.find((x) => x.productId === ln.productId);
+      const batchTracked = shouldTrackBatchesForProduct(
+        state.preferences.businessType,
+        state.preferences.pharmacyModeEnabled,
+        p,
+      );
+      if (batchTracked && baseIn > 0 && !lineInput?.batchReceive) {
+        return { ok: false, errorKey: "pharmacyBatchReceiveRequired" };
+      }
       const incomingCostPerBase =
         lineInput?.costPerBaseUnitUgx != null && lineInput.costPerBaseUnitUgx >= 0
           ? normalizeUnitCostUgx(lineInput.costPerBaseUnitUgx)

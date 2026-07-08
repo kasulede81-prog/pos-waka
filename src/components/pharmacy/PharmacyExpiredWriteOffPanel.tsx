@@ -4,7 +4,8 @@ import { t, tTemplate } from "../../lib/i18n";
 import { formatMedicineFullLabel } from "../../lib/pharmacyMedicine";
 import { isProductExpired } from "../../lib/pharmacyExpiry";
 import { usePosStore } from "../../store/usePosStore";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
+import { AdjustmentConfirmDialog } from "../inventory/adjustments/AdjustmentConfirmDialog";
+import { AdjustmentMovementPreview } from "../inventory/adjustments/AdjustmentMovementPreview";
 
 type Props = {
   lang: Language;
@@ -70,10 +71,16 @@ export function PharmacyExpiredWriteOffPanel({ lang, products, canWriteOff }: Pr
       </ul>
 
       {confirmProduct ? (
-        <AppModalOverlay className="z-[62] flex items-center justify-center bg-black/55 p-4" role="dialog" aria-modal>
-          <div className="max-w-sm rounded-3xl bg-white p-6 shadow-xl">
-            <p className="text-lg font-black text-stone-950">{t(lang, "pharmacyWriteOffConfirmTitle")}</p>
-            <p className="mt-2 text-sm font-semibold text-stone-700">
+        <AdjustmentConfirmDialog
+          lang={lang}
+          open
+          danger
+          title={t(lang, "pharmacyWriteOffConfirmTitle")}
+          confirmLabelKey="pharmacyWriteOffCta"
+          onCancel={() => setConfirmId(null)}
+          onConfirm={() => runWriteOff(confirmProduct.id)}
+          body={
+            <p>
               {tTemplate(lang, "pharmacyWriteOffConfirmBody", {
                 name: formatMedicineFullLabel(confirmProduct),
                 qty: String(confirmProduct.stockOnHand),
@@ -83,24 +90,17 @@ export function PharmacyExpiredWriteOffPanel({ lang, products, canWriteOff }: Pr
                 ),
               })}
             </p>
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                className="flex-1 rounded-2xl border-2 py-3 font-bold text-stone-800"
-                onClick={() => setConfirmId(null)}
-              >
-                {t(lang, "cancel")}
-              </button>
-              <button
-                type="button"
-                className="flex-1 rounded-2xl bg-red-700 py-3 font-black text-white"
-                onClick={() => runWriteOff(confirmProduct.id)}
-              >
-                {t(lang, "pharmacyWriteOffCta")}
-              </button>
-            </div>
+          }
+        >
+          <div className="mt-4">
+            <AdjustmentMovementPreview
+              lang={lang}
+              currentStock={confirmProduct.stockOnHand}
+              adjustment={-confirmProduct.stockOnHand}
+              unitLabel={confirmProduct.baseUnit}
+            />
           </div>
-        </AppModalOverlay>
+        </AdjustmentConfirmDialog>
       ) : null}
     </section>
   );

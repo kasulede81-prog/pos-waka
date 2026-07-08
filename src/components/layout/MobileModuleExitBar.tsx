@@ -28,7 +28,7 @@ export function MobileModuleExitBar({ lang, terminalHome = "/" }: Props) {
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 border-t border-rose-300/60 bg-rose-50/95 px-3 pt-2 pb-[max(0.625rem,var(--waka-safe-bottom))] shadow-[0_-6px_28px_rgba(220,38,38,0.18)] backdrop-blur lg:hidden"
+      className="fixed bottom-0 left-0 right-0 border-t border-rose-300/60 bg-rose-50/95 px-3 pt-2 pb-[max(0.625rem,var(--waka-safe-bottom))] shadow-[0_-6px_28px_rgba(220,38,38,0.18)] backdrop-blur md:hidden"
       style={{ zIndex: "var(--waka-z-bottom-nav)" }}
     >
       <button

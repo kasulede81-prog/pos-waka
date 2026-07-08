@@ -2,7 +2,7 @@ import { isBackOfficePath, isSettingsLauncherPath } from "./backOfficePaths";
 import { labelKeyForBackFallback } from "./headerBack";
 import { getBackFallbackPath } from "./navigationBack";
 import { POS_HOME_ROUTE } from "./posNavigation";
-import { isPharmacyOperationalRoute, PHARMACY_HOME_ROUTE } from "./pharmacyNav";
+import { isPharmacyOperationalRoute, PHARMACY_DISPENSE_ROUTE } from "./pharmacyNav";
 
 export type ModuleExitAction = {
   labelKey: string;
@@ -14,7 +14,10 @@ export function resolveModuleExit(pathname: string, terminalHome: string = POS_H
   if (pathname === POS_HOME_ROUTE) return null;
   if (pathname === terminalHome && terminalHome !== POS_HOME_ROUTE) return null;
   if (pathname === "/pos" || pathname.startsWith("/pos/")) return null;
-  if (isPharmacyOperationalRoute(pathname)) return null;
+  if (pathname === PHARMACY_DISPENSE_ROUTE) return null;
+  if (isPharmacyOperationalRoute(pathname)) {
+    return { labelKey: "pharmacyNavExit", fallbackTo: POS_HOME_ROUTE, preferHistoryBack: false };
+  }
 
   const fallback = getBackFallbackPath(pathname);
 
@@ -54,10 +57,6 @@ export function resolveModuleExit(pathname: string, terminalHome: string = POS_H
       fallbackTo: fallback,
       preferHistoryBack: true,
     };
-  }
-
-  if (pathname.startsWith("/pharmacy")) {
-    return { labelKey: "pharmacyNavExit", fallbackTo: PHARMACY_HOME_ROUTE, preferHistoryBack: false };
   }
 
   return { labelKey: "posNavExit", fallbackTo: POS_HOME_ROUTE, preferHistoryBack: false };

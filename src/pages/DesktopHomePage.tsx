@@ -32,8 +32,8 @@ export function DesktopHomePage({ lang }: Props) {
 
   return (
     <div className="flex min-h-full flex-col lg:min-h-[calc(100dvh-4.5rem)]">
-      <div className="flex flex-1 flex-col items-center px-4 py-5 sm:px-8 sm:py-8">
-        <header className="mb-5 w-full max-w-lg text-center sm:max-w-3xl sm:text-left lg:max-w-6xl">
+      <div className="flex flex-1 flex-col items-center px-4 py-5 sm:px-8 sm:py-8 lg:px-10 xl:px-14">
+        <header className="mb-5 w-full max-w-none text-center sm:text-left">
           {firstName ? (
             <h1 className="text-xl font-black tracking-tight text-waka-950 sm:text-2xl">
               {t(lang, greetingKey).replace("{name}", firstName)}
@@ -48,8 +48,8 @@ export function DesktopHomePage({ lang }: Props) {
         </header>
         <DesktopHomeTiles lang={lang} />
       </div>
-      <footer className="shrink-0 border-t border-waka-200/80 bg-white/90 px-4 py-4 backdrop-blur-sm sm:px-8">
-        <div className="mx-auto w-full max-w-6xl">
+      <footer className="shrink-0 border-t border-waka-200/80 bg-white/90 px-4 py-4 backdrop-blur-sm sm:px-8 lg:px-10 xl:px-14">
+        <div className="mx-auto w-full max-w-none">
           <DesktopStatusChips lang={lang} />
           <DesktopSubscriptionBanner lang={lang} />
           <DesktopLicenseBar lang={lang} />

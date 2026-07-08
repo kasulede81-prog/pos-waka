@@ -10,6 +10,9 @@ import { useMarketingAgentPortal } from "../../hooks/useMarketingAgentPortal";
 import { usePosStore } from "../../store/usePosStore";
 import { isLowStock } from "../../lib/sellingEngine";
 import { useSubscription } from "../../context/SubscriptionContext";
+import { isPharmacyMode } from "../../lib/pharmacy";
+import { activePrescriptionQueue } from "../../lib/pharmacyPrescriptions";
+import { countExpiryBuckets } from "../../lib/pharmacyExpiry";
 import { lockedProductIds } from "../../lib/productPlanLock";
 import { POS_SHOP_ROUTE } from "../../lib/posNavigation";
 import { prefetchOfficeHub } from "../../lib/prefetchRoutes";
@@ -32,9 +35,12 @@ export function DesktopHomeTiles({ lang }: Props) {
   const actor = useSessionActor();
   const tileRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
+  const preferences = usePosStore((s) => s.preferences);
+  const pharmacyPrescriptions = usePosStore((s) => s.pharmacyPrescriptions);
   const products = usePosStore((s) => s.products);
   const savedOrder = usePosStore((s) => s.preferences.launcherTileOrder) ?? EMPTY_ORDER;
   const layout = usePosStore((s) => s.preferences.launcherTileLayout) ?? EMPTY_LAYOUT;
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const { snapshot, authMode } = useSubscription();
   const { isMarketingAgent } = useMarketingAgentPortal();
 
@@ -61,13 +67,41 @@ export function DesktopHomeTiles({ lang }: Props) {
     [actor.role, snapshot, authMode],
   );
 
+  const rxQueueCount = useMemo(
+    () => (pharmacyMode ? activePrescriptionQueue(pharmacyPrescriptions).length : 0),
+    [pharmacyMode, pharmacyPrescriptions],
+  );
+  const expiringCount = useMemo(() => {
+    if (!pharmacyMode) return 0;
+    const inStock = products.filter((p) => p.stockOnHand > 0);
+    const buckets = countExpiryBuckets(inStock);
+    return buckets.d30 + buckets.d60 + buckets.d90;
+  }, [pharmacyMode, products]);
+
   const badges = useMemo(
     () => ({
-      inventory: lowStockCount > 0 ? lowStockCount : undefined,
+      inventory: pharmacyMode
+        ? expiringCount > 0
+          ? expiringCount
+          : lowStockCount > 0
+            ? lowStockCount
+            : undefined
+        : lowStockCount > 0
+          ? lowStockCount
+          : undefined,
       investigation: riskCount > 0 ? riskCount : undefined,
-      commandCenter: riskCount > 0 ? riskCount : undefined,
+      commandCenter: pharmacyMode
+        ? rxQueueCount > 0
+          ? rxQueueCount
+          : riskCount > 0
+            ? riskCount
+            : undefined
+        : riskCount > 0
+          ? riskCount
+          : undefined,
+      dashboard: rxQueueCount > 0 ? rxQueueCount : undefined,
     }),
-    [lowStockCount, riskCount],
+    [lowStockCount, riskCount, pharmacyMode, expiringCount, rxQueueCount],
   );
 
   const { hero, secondary: baseSecondary } = useMemo(
@@ -77,8 +111,9 @@ export function DesktopHomeTiles({ lang }: Props) {
         layout,
         hasPermission: can,
         badges,
+        pharmacyMode,
       }),
-    [savedOrder, layout, can, badges],
+    [savedOrder, layout, can, badges, pharmacyMode],
   );
 
   const secondary = useMemo((): ResolvedHomeTile[] => {
@@ -152,7 +187,7 @@ export function DesktopHomeTiles({ lang }: Props) {
 
   return (
     <div
-      className="w-full max-w-lg sm:max-w-3xl lg:max-w-6xl"
+      className="w-full max-w-none"
       role="navigation"
       aria-label={t(lang, "desktopHomeNavLabel")}
     >
@@ -160,6 +195,7 @@ export function DesktopHomeTiles({ lang }: Props) {
         lang={lang}
         sellStat={liveStats.sell}
         onSell={hero ? () => openTile(hero.to) : undefined}
+        heroActionLabelKey={pharmacyMode ? "builderHomeTapDispense" : "builderHomeTapSell"}
       />
       <div className="flex flex-col gap-3 sm:gap-4">
         {profitTile ? (
@@ -168,7 +204,7 @@ export function DesktopHomeTiles({ lang }: Props) {
           </div>
         ) : null}
         {sceneTiles.length > 0 ? (
-          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {sceneTiles.map((tile) => renderCard(tile))}
           </div>
         ) : null}

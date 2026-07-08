@@ -5,12 +5,13 @@ import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { useShelfDragReorder } from "../../hooks/useShelfDragReorder";
 import {
-  LAUNCHER_TILE_CATALOG,
+  launcherCatalogForMode,
   launcherMasonryGridClass,
   launcherScaleFromConfig,
   resolveHomeMenuTiles,
   updateLauncherTileLayout,
 } from "../../lib/launcherTiles";
+import { isPharmacyMode } from "../../lib/pharmacy";
 import { PRESET_SHELF_HEX, resolveShelfHex, HOME_HERO_PREVIEW_BG_PRESETS, resolveHomeHeroPreviewBgColor } from "../../lib/shelfColor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
@@ -32,9 +33,11 @@ type Props = {
 export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
+  const preferences = usePosStore((s) => s.preferences);
   const savedOrderRaw = usePosStore((s) => s.preferences.launcherTileOrder);
   const layoutRaw = usePosStore((s) => s.preferences.launcherTileLayout);
   const previewBgStored = usePosStore((s) => s.preferences.homeHeroPreviewBgColor);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const setPreferences = usePosStore((s) => s.setPreferences);
   const savedOrder = savedOrderRaw ?? EMPTY_ORDER;
   const layout = layoutRaw ?? EMPTY_LAYOUT;
@@ -54,8 +57,9 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
         layout,
         hasPermission: can,
         includeHidden: true,
+        pharmacyMode,
       }),
-    [savedOrder, layout, can],
+    [savedOrder, layout, can, pharmacyMode],
   );
 
   const orderKeys = useMemo(() => secondary.map((t) => t.id), [secondary]);
@@ -96,7 +100,9 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
     [shouldIgnoreClick],
   );
 
-  const selectedDef = selectedId ? LAUNCHER_TILE_CATALOG.find((t) => t.id === selectedId) : null;
+  const selectedDef = selectedId
+    ? launcherCatalogForMode(pharmacyMode).find((t) => t.id === selectedId)
+    : null;
   const previewBgHex = resolveHomeHeroPreviewBgColor(previewBgStored);
 
   const content = (

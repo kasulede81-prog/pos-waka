@@ -27,6 +27,8 @@ type Props = {
   todaySalesUgx: number;
   pendingCount: number;
   onCloseShift: () => void;
+  /** Where the back arrow exits to (defaults to POS home). */
+  exitTo?: string;
 };
 
 function MetricCell({ label, value, emphasize }: { label: string; value: string; emphasize?: boolean }) {
@@ -50,6 +52,7 @@ export function PosDesktopCompactHeader({
   todaySalesUgx,
   pendingCount,
   onCloseShift,
+  exitTo = POS_HOME_ROUTE,
 }: Props) {
   const navigate = useNavigate();
   const { setLang } = useUiLanguage();
@@ -87,8 +90,8 @@ export function PosDesktopCompactHeader({
   const fmt = (n: number) => `UGX ${n.toLocaleString()}`;
 
   const handleExit = () => {
-    void confirmLeavePosIfNeeded(window.location.pathname, POS_HOME_ROUTE).then((ok) => {
-      if (ok) navigate(POS_HOME_ROUTE, { preventScrollReset: true });
+    void confirmLeavePosIfNeeded(window.location.pathname, exitTo).then((ok) => {
+      if (ok) navigate(exitTo, { preventScrollReset: true });
     });
   };
 

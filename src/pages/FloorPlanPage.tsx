@@ -316,6 +316,29 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         </ul>
       ) : null}
 
+      <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-stone-300 bg-white px-2 py-2 lg:hidden">
+        {(
+          [
+            { id: "all" as const, labelKey: "floorFilterAll" },
+            { id: "occupied" as const, labelKey: "floorFilterOccupied" },
+            { id: "available" as const, labelKey: "floorFilterAvailable" },
+            { id: "bill" as const, labelKey: "floorFilterBill" },
+          ] as const
+        ).map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => setViewFilter(f.id)}
+            className={clsx(
+              "min-h-[44px] shrink-0 rounded-lg px-3 text-xs font-bold",
+              viewFilter === f.id ? "bg-sky-700 text-white" : "bg-stone-100 text-stone-700",
+            )}
+          >
+            {t(lang, f.labelKey)}
+          </button>
+        ))}
+      </div>
+
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-stone-100 p-3 sm:p-4">
           <div className={clsx("grid gap-2 sm:gap-3", FLOOR_GRID_CLASS[floorDisplayPrefs.gridDensity])}>
@@ -362,8 +385,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         onStats={() => navigate("/owner-dashboard")}
       />
 
-      {/* Quick actions row — takeaway, kitchen, new tab */}
-      <div className="hidden shrink-0 flex-col gap-2 border-t border-stone-300 bg-white px-3 py-2 sm:flex">
+      <div className="flex shrink-0 flex-col gap-2 border-t border-stone-300 bg-white px-3 py-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-black text-stone-950">{t(lang, "floorNamedTabsTitle")}</h2>

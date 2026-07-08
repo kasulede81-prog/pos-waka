@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { PHARMACY_HOME_ROUTE } from "../lib/pharmacyNav";
 
 export function PharmacyAccessDeniedPage({ lang }: { lang: Language }) {
   const location = useLocation();
@@ -17,10 +16,10 @@ export function PharmacyAccessDeniedPage({ lang }: { lang: Language }) {
         </p>
       ) : null}
       <Link
-        to={PHARMACY_HOME_ROUTE}
+        to="/"
         className="mt-6 min-h-[52px] rounded-2xl bg-waka-600 px-6 py-3 text-base font-black text-white touch-manipulation"
       >
-        {t(lang, "pharmacyNav_dashboard")}
+        {t(lang, "posNavMainMenu")}
       </Link>
     </div>
   );

@@ -3,16 +3,13 @@ import clsx from "clsx";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
-import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { StockPage } from "./StockPage";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
-import { purchaseFilterFromDateFilter } from "../lib/purchaseReporting";
-import type { DateFilterValue } from "../lib/dateFilters";
 import { InventoryPurchasingTabs } from "../features/inventory-purchasing/components/InventoryPurchasingTabs";
-import { OverviewTab } from "../features/inventory-purchasing/components/OverviewTab";
+import { InventoryWorkspaceOverview } from "../components/inventory/workspace/InventoryWorkspaceOverview";
 import { PurchasesTab } from "../features/inventory-purchasing/components/PurchasesTab";
 import { SuppliersTab } from "../features/inventory-purchasing/components/SuppliersTab";
 import { PaymentsTab } from "../features/inventory-purchasing/components/PaymentsTab";
@@ -20,14 +17,7 @@ import { NewPurchaseSheet } from "../features/inventory-purchasing/components/Ne
 import { PurchaseDetailSheet } from "../features/inventory-purchasing/components/PurchaseDetailSheet";
 import { SupplierDetailSheet } from "../features/inventory-purchasing/components/SupplierDetailSheet";
 import { useInventoryPurchasingTab } from "../features/inventory-purchasing/hooks/useInventoryPurchasingTab";
-import {
-  computeMonthlyPurchaseTrend,
-  computeOverviewStats,
-  computeTopSupplierSpend,
-} from "../features/inventory-purchasing/lib/overviewStats";
 import type { InventoryPurchasingTab } from "../features/inventory-purchasing/types";
-
-const DEFAULT_FILTER: DateFilterValue = { kind: "preset", preset: "this_month" };
 
 export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   usePageLoadMark("inventory-purchasing");
@@ -36,11 +26,6 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   const canPurchasesView = hasPermission(actor.role, "purchases.view");
   const canPurchasesRecord = hasPermission(actor.role, "purchases.record");
   const canSuppliers = hasPermission(actor.role, "suppliers.view");
-
-  const purchases = usePosStore((s) => s.purchases);
-  const supplierPayments = usePosStore((s) => s.supplierPayments);
-  const suppliers = usePosStore((s) => s.suppliers);
-  const products = usePosStore((s) => s.products);
 
   const {
     tab,
@@ -62,17 +47,6 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
     return tabs;
   }, [canStock, canPurchasesView, canPurchasesRecord, canSuppliers]);
 
-  const listFilter = useMemo(() => purchaseFilterFromDateFilter(DEFAULT_FILTER), []);
-  const overviewStats = useMemo(
-    () => computeOverviewStats(purchases, supplierPayments, suppliers, products, listFilter),
-    [purchases, supplierPayments, suppliers, products, listFilter],
-  );
-  const monthlyTrend = useMemo(() => computeMonthlyPurchaseTrend(purchases), [purchases]);
-  const topSuppliers = useMemo(
-    () => computeTopSupplierSpend(purchases, suppliers, listFilter),
-    [purchases, suppliers, listFilter],
-  );
-
   if (!canStock && !canPurchasesView && !canPurchasesRecord && !canSuppliers) {
     return <Navigate to="/" replace />;
   }
@@ -83,7 +57,7 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="page-content-pad space-y-3 pb-24">
+    <div className="page-content-pad space-y-3">
       <PageHeader
         lang={lang}
         title={t(lang, "ipPageTitle")}
@@ -112,16 +86,10 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
       </div>
 
       {tab === "overview" ? (
-        <OverviewTab
+        <InventoryWorkspaceOverview
           lang={lang}
-          stats={overviewStats}
-          monthlyTrend={monthlyTrend}
-          topSuppliers={topSuppliers}
-          onNewPurchase={openNewPurchaseFlow}
-          onAddSupplier={() => setTab("suppliers")}
+          onSetTab={setTab}
           onReceiveStock={openNewPurchaseFlow}
-          onViewPurchases={() => setTab("purchases")}
-          onViewLowStock={() => setTab("products", { stockView: "low" })}
         />
       ) : null}
 

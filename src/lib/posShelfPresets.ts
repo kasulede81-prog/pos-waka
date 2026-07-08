@@ -37,12 +37,18 @@ const PRESET_DEFS: Record<PosShelfPresetId, { shelves: PresetShelfDef[]; quickMa
   },
   pharmacy: {
     shelves: [
-      { match: /pain|fever|paracetamol/i, config: { displayName: "Pain Relief", icon: "💊", color: "red", size: "medium" } },
-      { match: /antibiot|malaria|cough/i, config: { displayName: "Medicines", icon: "💊", color: "blue", size: "large", featured: true, badge: "fast_moving" } },
+      { match: /antibiot/i, config: { displayName: "Antibiotics", icon: "💊", color: "blue", size: "large", featured: true, badge: "fast_moving" } },
+      { match: /analges|pain relief/i, config: { displayName: "Analgesics", icon: "💊", color: "red", size: "medium" } },
+      { match: /antimalar|malaria/i, config: { displayName: "Antimalarials", icon: "💊", color: "green", size: "medium" } },
+      { match: /hypertension|blood pressure/i, config: { displayName: "Hypertension", icon: "💊", color: "purple", size: "small" } },
+      { match: /diabetes/i, config: { displayName: "Diabetes", icon: "💊", color: "orange", size: "small" } },
+      { match: /\botc\b|over.the.counter/i, config: { displayName: "OTC", icon: "💊", color: "green", size: "medium" } },
+      { match: /controlled/i, config: { displayName: "Controlled Medicines", icon: "💊", color: "red", size: "medium", badge: "promotion" } },
       { match: /vitamin|supplement/i, config: { displayName: "Vitamins", icon: "💊", color: "green", size: "small" } },
+      { match: /cough|cold/i, config: { displayName: "Cough & Cold", icon: "💊", color: "blue", size: "small" } },
       { match: /first aid|bandage/i, config: { displayName: "First Aid", icon: "💊", color: "orange", size: "small" } },
     ],
-    quickMatch: [/paracetamol|panadol|cough/i],
+    quickMatch: [/paracetamol|panadol|amoxicillin|cough/i],
   },
   restaurant: {
     shelves: [

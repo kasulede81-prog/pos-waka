@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, Check, Download } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -9,19 +8,22 @@ import { useSessionActor } from "../context/SessionActorContext";
 import {
   buildInventoryCountVarianceReport,
   canInventoryCount,
-  inventoryCountLineHasStockDrift,
   sessionHasStockDrift,
 } from "../lib/inventoryCount";
-import {
-  downloadInventoryCountCsv,
-  downloadInventoryCountPdf,
-} from "../lib/inventoryCountExport";
+import { countProgressStage, filterInventoryCountLines } from "../lib/countWorkspace";
+import { InventoryCountShell } from "../components/inventory/count/InventoryCountShell";
+import { CountHeader } from "../components/inventory/count/CountHeader";
+import { CountProgress } from "../components/inventory/count/CountProgress";
+import { CountStatusStrip } from "../components/inventory/count/CountStatusStrip";
+import { CountSearchBar } from "../components/inventory/count/CountSearchBar";
+import { CountProductCard } from "../components/inventory/count/CountProductCard";
+import { CountSummaryPanel } from "../components/inventory/count/CountSummaryPanel";
+import { CountApprovalDialog } from "../components/inventory/count/CountApprovalDialog";
+import { CountCompletionScreen } from "../components/inventory/count/CountCompletionScreen";
+import { WIZARD_BTN_FOOTER_BASE } from "../components/inventory/count/countTokens";
+import clsx from "clsx";
 
 type Props = { lang: Language };
-
-function statusLabel(lang: Language, status: string): string {
-  return t(lang, `inventoryCountStatus_${status}`);
-}
 
 export function InventoryCountSessionPage({ lang }: Props) {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -37,24 +39,23 @@ export function InventoryCountSessionPage({ lang }: Props) {
   const approveSession = usePosStore((s) => s.approveInventoryCountSession);
   const applySession = usePosStore((s) => s.applyInventoryCountSession);
   const cancelSession = usePosStore((s) => s.cancelInventoryCountSession);
+  const createSession = usePosStore((s) => s.createInventoryCountSession);
 
   const [query, setQuery] = useState("");
   const [qtyDraft, setQtyDraft] = useState<Record<string, string>>({});
   const [reasonDraft, setReasonDraft] = useState<Record<string, string>>({});
+  const [applyConfirmOpen, setApplyConfirmOpen] = useState(false);
   const autoStartedRef = useRef(false);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
-
   const report = useMemo(() => (session ? buildInventoryCountVarianceReport(session) : null), [session]);
-
   const stockDrift = session ? sessionHasStockDrift(session, products) : false;
+  const progressStage = session ? countProgressStage(session.status) : "choose";
 
   const filteredLines = useMemo(() => {
     if (!session) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return session.lines;
-    return session.lines.filter((l) => (l.productName ?? "").toLowerCase().includes(q));
-  }, [session, query]);
+    return filterInventoryCountLines(session.lines, productById, query);
+  }, [session, productById, query]);
 
   useEffect(() => {
     if (!sessionId || !session || autoStartedRef.current) return;
@@ -82,11 +83,12 @@ export function InventoryCountSessionPage({ lang }: Props) {
     session.status !== "applied" &&
     session.status !== "cancelled" &&
     canInventoryCount(actor.role, "cancel");
-
   const showReview =
     session.status === "submitted" || session.status === "approved" || session.status === "applied";
+  const isComplete = session.status === "applied";
 
   const shopName = preferences.shopDisplayName?.trim() || "Shop";
+  const operatorName = session.appliedByName ?? session.approvedByName ?? session.startedByName ?? actor.displayName ?? actor.userId;
 
   const saveLine = (productId: string) => {
     const raw = qtyDraft[productId] ?? "";
@@ -101,253 +103,195 @@ export function InventoryCountSessionPage({ lang }: Props) {
     if (!r.ok) window.alert(t(lang, r.errorKey ?? "invalid"));
   };
 
+  const onStartNew = () => {
+    const r = createSession();
+    if (!r.ok || !r.sessionId) {
+      window.alert(t(lang, r.errorKey ?? "invalid"));
+      return;
+    }
+    const started = startSession(r.sessionId);
+    if (!started.ok) {
+      navigate(`/stock/count/${r.sessionId}`);
+      return;
+    }
+    navigate(`/stock/count/${r.sessionId}`);
+  };
+
   return (
-    <div className="page-content-pad space-y-5 pb-24">
+    <div className="page-content-pad space-y-4">
       <PageHeader
         lang={lang}
         title={tTemplate(lang, "inventoryCountSessionNumber", { n: String(session.sessionNumber) })}
-        subtitle={statusLabel(lang, session.status)}
+        subtitle={t(lang, `inventoryCountStatus_${session.status}`)}
         backLabel={t(lang, "stockCountNav")}
         backFallback="/stock/count"
       />
 
-      {session.notes ? (
-        <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-semibold text-stone-700">
-          {session.notes}
-        </p>
-      ) : null}
+      <InventoryCountShell
+        lang={lang}
+        variant="page"
+        title={t(lang, "inventoryCountTitle")}
+        warning={showReview && stockDrift ? t(lang, "inventoryCountStockDriftWarning") : null}
+        statusStrip={<CountStatusStrip lang={lang} />}
+      >
+        <CountProgress lang={lang} stage={progressStage} />
+        <CountHeader lang={lang} session={session} />
 
-      {showReview && stockDrift ? (
-        <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-          {t(lang, "inventoryCountStockDriftWarning")}
-        </div>
-      ) : null}
+        {session.notes ? (
+          <p className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-muted-foreground">
+            {session.notes}
+          </p>
+        ) : null}
 
-      {report && showReview ? (
-        <section className="rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
-          <h2 className="text-sm font-black uppercase tracking-wide text-indigo-900">
-            {t(lang, "inventoryCountVarianceSummary")}
-          </h2>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        {isComplete && report ? (
+          <CountCompletionScreen
+            lang={lang}
+            session={session}
+            report={report}
+            shopName={shopName}
+            onStartNew={canInventoryCount(actor.role, "create") ? onStartNew : undefined}
+          />
+        ) : (
+          <>
+            {report && showReview ? (
+              <CountSummaryPanel lang={lang} session={session} report={report} operatorName={operatorName} />
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              {session.status === "draft" && canInventoryCount(actor.role, "count") ? (
+                <button
+                  type="button"
+                  onClick={() => runAction(() => startSession(sessionId))}
+                  className={clsx(WIZARD_BTN_FOOTER_BASE, "bg-primary px-4 text-primary-foreground hover:bg-primary/90")}
+                >
+                  {t(lang, "inventoryCountStart")}
+                </button>
+              ) : null}
+              {canSubmit ? (
+                <button
+                  type="button"
+                  onClick={() => runAction(() => submitSession(sessionId))}
+                  className={clsx(WIZARD_BTN_FOOTER_BASE, "bg-indigo-700 px-4 text-white hover:bg-indigo-800")}
+                >
+                  {t(lang, "inventoryCountSubmit")}
+                </button>
+              ) : null}
+              {canApprove ? (
+                <button
+                  type="button"
+                  onClick={() => runAction(() => approveSession(sessionId))}
+                  className={clsx(WIZARD_BTN_FOOTER_BASE, "bg-emerald-700 px-4 text-white hover:bg-emerald-800")}
+                >
+                  {t(lang, "inventoryCountApprove")}
+                </button>
+              ) : null}
+              {canApply ? (
+                <button
+                  type="button"
+                  onClick={() => setApplyConfirmOpen(true)}
+                  className={clsx(WIZARD_BTN_FOOTER_BASE, "bg-primary px-4 text-primary-foreground hover:bg-primary/90")}
+                >
+                  {t(lang, "inventoryCountApply")}
+                </button>
+              ) : null}
+              {canCancel ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const r = cancelSession(sessionId);
+                    if (!r.ok) {
+                      window.alert(t(lang, r.errorKey ?? "invalid"));
+                      return;
+                    }
+                    navigate("/stock/count");
+                  }}
+                  className={clsx(
+                    WIZARD_BTN_FOOTER_BASE,
+                    "border border-rose-200 bg-rose-50 px-4 text-rose-900 hover:bg-rose-100",
+                  )}
+                >
+                  {t(lang, "inventoryCountCancel")}
+                </button>
+              ) : null}
+            </div>
+
+            {session.status === "draft" ? (
+              <p className="rounded-2xl border border-dashed border-border/60 bg-muted/20 px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
+                {t(lang, "inventoryCountStarting")}
+              </p>
+            ) : null}
+
+            {canCount ? <CountSearchBar lang={lang} value={query} onChange={setQuery} /> : null}
+
+            <ul className="space-y-3">
+              {filteredLines.map((line) => (
+                <CountProductCard
+                  key={line.id}
+                  lang={lang}
+                  line={line}
+                  product={productById.get(line.productId)}
+                  businessType={preferences.businessType}
+                  pharmacyModeEnabled={preferences.pharmacyModeEnabled}
+                  showReview={showReview}
+                  canCount={canCount}
+                  qtyValue={qtyDraft[line.productId] ?? (line.countedQty != null ? String(line.countedQty) : "")}
+                  reasonValue={reasonDraft[line.productId] ?? line.reason}
+                  onQtyChange={(v) => setQtyDraft((d) => ({ ...d, [line.productId]: v }))}
+                  onReasonChange={(v) => setReasonDraft((d) => ({ ...d, [line.productId]: v }))}
+                  onSave={() => saveLine(line.productId)}
+                />
+              ))}
+            </ul>
+          </>
+        )}
+      </InventoryCountShell>
+
+      {applyConfirmOpen && report ? (
+        <CountApprovalDialog
+          lang={lang}
+          open
+          title={t(lang, "cntApprovalTitle")}
+          confirmLabelKey="inventoryCountApply"
+          warning={stockDrift ? t(lang, "inventoryCountStockDriftWarning") : null}
+          onCancel={() => setApplyConfirmOpen(false)}
+          onConfirm={() => {
+            const r = applySession(sessionId);
+            setApplyConfirmOpen(false);
+            if (!r.ok) {
+              window.alert(t(lang, r.errorKey ?? "invalid"));
+            }
+          }}
+          body={
+            <p>
+              {tTemplate(lang, "adjConfirmApplyCountBody", {
+                count: String(report.productsCounted),
+              })}
+            </p>
+          }
+        >
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-xs font-semibold text-muted-foreground">
             <div>
-              <dt className="font-semibold text-indigo-800">{t(lang, "inventoryCountProductsCounted")}</dt>
-              <dd className="text-lg font-black text-indigo-950">{report.productsCounted}</dd>
+              <dt>{t(lang, "inventoryCountProductsCounted")}</dt>
+              <dd className="text-sm font-black text-foreground">{report.productsCounted}</dd>
             </div>
             <div>
-              <dt className="font-semibold text-indigo-800">{t(lang, "inventoryCountTotalVariance")}</dt>
-              <dd className="text-lg font-black text-indigo-950">{report.totalVarianceQty}</dd>
+              <dt>{t(lang, "inventoryCountTotalVariance")}</dt>
+              <dd className="text-sm font-black text-foreground">
+                {report.totalVarianceQty >= 0 ? "+" : ""}
+                {report.totalVarianceQty}
+              </dd>
             </div>
             <div>
-              <dt className="font-semibold text-indigo-800">{t(lang, "inventoryCountCostImpact")}</dt>
-              <dd className="font-black text-indigo-950">UGX {report.varianceCostUgx.toLocaleString()}</dd>
+              <dt>{t(lang, "inventoryCountCostImpact")}</dt>
+              <dd className="text-sm font-black text-foreground">UGX {report.varianceCostUgx.toLocaleString()}</dd>
             </div>
             <div>
-              <dt className="font-semibold text-indigo-800">{t(lang, "inventoryCountRetailImpact")}</dt>
-              <dd className="font-black text-indigo-950">UGX {report.varianceRetailUgx.toLocaleString()}</dd>
+              <dt>{t(lang, "inventoryCountRetailImpact")}</dt>
+              <dd className="text-sm font-black text-foreground">UGX {report.varianceRetailUgx.toLocaleString()}</dd>
             </div>
           </dl>
-          {session.status === "applied" ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-black text-indigo-900"
-                onClick={() =>
-                  downloadInventoryCountCsv(lang, session, `count-${session.sessionNumber}.csv`)
-                }
-              >
-                <Download className="h-4 w-4" aria-hidden />
-                {t(lang, "inventoryCountExportCsv")}
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-black text-indigo-900"
-                onClick={() =>
-                  void downloadInventoryCountPdf(
-                    lang,
-                    session,
-                    shopName,
-                    `count-${session.sessionNumber}.pdf`,
-                  )
-                }
-              >
-                <Download className="h-4 w-4" aria-hidden />
-                {t(lang, "inventoryCountExportPdf")}
-              </button>
-            </div>
-          ) : null}
-        </section>
+        </CountApprovalDialog>
       ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        {session.status === "draft" && canInventoryCount(actor.role, "count") ? (
-          <button
-            type="button"
-            onClick={() => runAction(() => startSession(sessionId))}
-            className="rounded-2xl bg-stone-950 px-4 py-3 text-sm font-black text-white"
-          >
-            {t(lang, "inventoryCountStart")}
-          </button>
-        ) : null}
-        {canSubmit ? (
-          <button
-            type="button"
-            onClick={() => runAction(() => submitSession(sessionId))}
-            className="rounded-2xl bg-indigo-700 px-4 py-3 text-sm font-black text-white"
-          >
-            {t(lang, "inventoryCountSubmit")}
-          </button>
-        ) : null}
-        {canApprove ? (
-          <button
-            type="button"
-            onClick={() => runAction(() => approveSession(sessionId))}
-            className="rounded-2xl bg-emerald-700 px-4 py-3 text-sm font-black text-white"
-          >
-            {t(lang, "inventoryCountApprove")}
-          </button>
-        ) : null}
-        {canApply ? (
-          <button
-            type="button"
-            onClick={() => {
-              const r = applySession(sessionId);
-              if (!r.ok) {
-                window.alert(t(lang, r.errorKey ?? "invalid"));
-                return;
-              }
-              navigate("/stock/count");
-            }}
-            className="rounded-2xl bg-stone-950 px-4 py-3 text-sm font-black text-white"
-          >
-            {t(lang, "inventoryCountApply")}
-          </button>
-        ) : null}
-        {canCancel ? (
-          <button
-            type="button"
-            onClick={() => {
-              const r = cancelSession(sessionId);
-              if (!r.ok) {
-                window.alert(t(lang, r.errorKey ?? "invalid"));
-                return;
-              }
-              navigate("/stock/count");
-            }}
-            className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-900"
-          >
-            {t(lang, "inventoryCountCancel")}
-          </button>
-        ) : null}
-      </div>
-
-      {session.status === "draft" ? (
-        <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm font-semibold text-stone-600">
-          {t(lang, "inventoryCountStarting")}
-        </p>
-      ) : null}
-
-      {canCount ? (
-        <input
-          type="search"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t(lang, "inventoryCountSearchProduct")}
-          className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-base font-semibold"
-        />
-      ) : null}
-
-      <ul className="space-y-3">
-        {filteredLines.map((line) => {
-          const product = productById.get(line.productId);
-          const drift = inventoryCountLineHasStockDrift(line, product);
-          const currentStock = product ? product.stockOnHand : null;
-
-          return (
-            <li key={line.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-base font-black text-stone-950">{line.productName ?? line.productId}</p>
-                {line.countedQty != null ? (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
-                    <Check className="h-4 w-4" aria-hidden />
-                  </span>
-                ) : null}
-              </div>
-
-              <dl className="mt-2 grid grid-cols-2 gap-2 text-xs font-semibold text-stone-600">
-                <div>
-                  <dt>{t(lang, "inventoryCountSnapshotStock")}</dt>
-                  <dd className="text-sm font-black text-stone-900">{line.expectedQtySnapshot}</dd>
-                </div>
-                {showReview && currentStock != null ? (
-                  <div>
-                    <dt>{t(lang, "inventoryCountCurrentStock")}</dt>
-                    <dd className={`text-sm font-black ${drift ? "text-amber-700" : "text-stone-900"}`}>
-                      {currentStock}
-                    </dd>
-                  </div>
-                ) : null}
-                {line.countedQty != null ? (
-                  <>
-                    <div>
-                      <dt>{t(lang, "inventoryCountCounted")}</dt>
-                      <dd className="text-sm font-black text-stone-900">{line.countedQty}</dd>
-                    </div>
-                    <div>
-                      <dt>{t(lang, "inventoryCountVariance")}</dt>
-                      <dd
-                        className={`text-sm font-black ${line.varianceQty < 0 ? "text-rose-700" : line.varianceQty > 0 ? "text-emerald-700" : "text-stone-900"}`}
-                      >
-                        {line.varianceQty >= 0 ? "+" : ""}
-                        {line.varianceQty}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t(lang, "inventoryCountCostImpact")}</dt>
-                      <dd className="text-sm font-black text-stone-900">
-                        UGX {line.varianceCostUgx.toLocaleString()}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{t(lang, "inventoryCountRetailImpact")}</dt>
-                      <dd className="text-sm font-black text-stone-900">
-                        UGX {line.varianceRetailUgx.toLocaleString()}
-                      </dd>
-                    </div>
-                  </>
-                ) : null}
-              </dl>
-
-              {canCount ? (
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    placeholder={t(lang, "inventoryCountCounted")}
-                    value={qtyDraft[line.productId] ?? (line.countedQty != null ? String(line.countedQty) : "")}
-                    onChange={(e) => setQtyDraft((d) => ({ ...d, [line.productId]: e.target.value }))}
-                    className="min-w-0 flex-1 rounded-xl border border-stone-200 px-3 py-3 text-lg font-black tabular-nums"
-                  />
-                  <input
-                    type="text"
-                    placeholder={t(lang, "inventoryCountReason")}
-                    value={reasonDraft[line.productId] ?? line.reason}
-                    onChange={(e) => setReasonDraft((d) => ({ ...d, [line.productId]: e.target.value }))}
-                    className="min-w-0 flex-1 rounded-xl border border-stone-200 px-3 py-2 text-sm font-semibold"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => saveLine(line.productId)}
-                    className="rounded-xl bg-stone-950 px-4 py-3 text-sm font-black text-white"
-                  >
-                    {t(lang, "inventoryCountSaveQty")}
-                  </button>
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
     </div>
   );
 }

@@ -1,11 +1,7 @@
-import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
-import clsx from "clsx";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
-  PACK_TYPE_OPTIONS,
-  SELL_UNIT_OPTIONS,
   packKindLabel,
   parseSellUnitFromBaseUnit,
   resolveSellBaseUnit,
@@ -19,10 +15,9 @@ import { validateAuditReason } from "../../lib/auditReasons";
 import { usePosStore } from "../../store/usePosStore";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { normalizeExpiryDate } from "../../lib/pharmacyExpiry";
-import { MEDICINE_FORMS, normalizeMedicineForm, normalizeMedicineStrength } from "../../lib/pharmacyMedicine";
+import { normalizeMedicineForm, normalizeMedicineStrength } from "../../lib/pharmacyMedicine";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
-import { PharmacyCostWarningBanner } from "../pharmacy/PharmacyCostWarningBanner";
 import {
   buildPharmacyMasterFromState,
   masterStateFromProduct,
@@ -40,6 +35,19 @@ import {
   formatPharmacyStockPrimary,
   isPharmacyPackagingActive,
 } from "../../lib/pharmacyPackaging";
+import { PACK_TYPE_OPTIONS } from "../../lib/simpleProductWizard";
+import { ProductEditorShell } from "./editor/ProductEditorShell";
+import { EditorFooter } from "./editor/EditorFooter";
+import { EditorSection } from "./editor/EditorSection";
+import { EditorIdentitySection } from "./editor/EditorIdentitySection";
+import { EditorPricingSection } from "./editor/EditorPricingSection";
+import { EditorInventorySection } from "./editor/EditorInventorySection";
+import { EditorAdvancedSection } from "./editor/EditorAdvancedSection";
+import { RetailUnitSection } from "./editor/RetailUnitSection";
+import { RetailPackSection } from "./editor/RetailPackSection";
+import { RetailStockEntry } from "./editor/RetailStockEntry";
+import { WIZARD_INPUT_TEXT } from "./wizard/wizardTokens";
+import clsx from "clsx";
 
 type Props = {
   lang: Language;
@@ -77,8 +85,6 @@ type Props = {
   ) => { ok: boolean; errorKey?: string };
 };
 
-const SELL_UNITS: SellUnitKind[] = ["piece", "bottle", "packet", "kg", "litre", "custom"];
-
 function packKindFromBuyingUnit(raw: string | null | undefined): { kind: PackKind; custom: string } {
   if (!raw) return { kind: "crate", custom: "" };
   const label = raw.split("·")[0]?.trim().toLowerCase() ?? "";
@@ -96,7 +102,6 @@ export function StockProductEditModal({
   canPresets,
   updateProduct,
 }: Props) {
-  const categoryListId = useId();
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [sellUnit, setSellUnit] = useState<SellUnitKind>("piece");
@@ -124,10 +129,13 @@ export function StockProductEditModal({
   const [masterState, setMasterState] = useState(() => masterStateFromProduct(null));
   const [auditReason, setAuditReason] = useState("");
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+
+  const markDirty = useCallback(() => setDirty(true), []);
 
   useEffect(() => {
     if (!open || !product) return;
@@ -170,6 +178,7 @@ export function StockProductEditModal({
     setMasterState(masterStateFromProduct(product));
     setAuditReason("");
     setSubmitError(null);
+    setDirty(false);
   }, [open, product]);
 
   const piecesN = Math.max(1, Math.floor(Number(piecesPerPack.replace(/[^\d.]/g, "")) || 0));
@@ -182,30 +191,69 @@ export function StockProductEditModal({
 
   const unitLabel = sellUnitLabel(sellUnit, lang, sellUnitCustom);
   const packLabel = packKindLabel(packKind, packCustom, lang);
-  if (!open || !product) return null;
 
-  const packagingEdit = pharmacyMode && (packagingState.enabled || isPharmacyPackagingActive(product));
+  const packagingEdit =
+    pharmacyMode && product != null && (packagingState.enabled || isPharmacyPackagingActive(product));
+  const priceUgx = Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0));
+  const buyPerUnit = Math.max(0, Math.floor(Number(buyPricePerUnit.replace(/\D/g, "")) || 0));
+  const stripSell = Math.max(0, Math.floor(Number(packagingState.stripPrice.replace(/\D/g, "")) || 0));
+  const boxSell = Math.max(0, Math.floor(Number(packagingState.boxPrice.replace(/\D/g, "")) || 0));
 
   const previewPackaging =
-    packagingEdit && packagingState.enabled
-      ? buildPackagingFromState(packagingState, Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0)), product.pharmacyPackaging)
-      : product.pharmacyPackaging;
+    product && packagingEdit && packagingState.enabled
+      ? buildPackagingFromState(packagingState, priceUgx, product.pharmacyPackaging)
+      : product?.pharmacyPackaging;
   const previewStock = packagingEdit
     ? Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0)
     : totalStock;
-  const previewProduct: Product = {
-    ...product,
-    stockOnHand: previewStock,
-    baseUnit: packagingEdit && previewPackaging?.enabled ? previewPackaging.baseUnit : resolveSellBaseUnit(sellUnit, sellUnitCustom),
-    buyingUnit: hasPack && piecesN > 1 && !packagingEdit ? packLabel.toLowerCase() : product.buyingUnit,
-    conversionRate: hasPack && piecesN > 1 && !packagingEdit ? piecesN : product.conversionRate,
-    pharmacyPackaging: previewPackaging,
-  };
+  const previewProduct: Product | null = product
+    ? {
+        ...product,
+        stockOnHand: previewStock,
+        baseUnit:
+          packagingEdit && previewPackaging?.enabled
+            ? previewPackaging.baseUnit
+            : resolveSellBaseUnit(sellUnit, sellUnitCustom),
+        buyingUnit: hasPack && piecesN > 1 && !packagingEdit ? packLabel.toLowerCase() : product.buyingUnit,
+        conversionRate: hasPack && piecesN > 1 && !packagingEdit ? piecesN : product.conversionRate,
+        pharmacyPackaging: previewPackaging,
+        sellingPricePerUnitUgx: priceUgx,
+        costPricePerUnitUgx: buyPerUnit,
+      }
+    : null;
+
+  const extraUnitPrices = useMemo(() => {
+    if (!packagingEdit || !packagingState.enabled) return [];
+    const rows: { label: string; sellPriceUgx: number }[] = [];
+    if (packagingState.level1Enabled && stripSell > 0) {
+      rows.push({ label: t(lang, "pharmacyPackStripPriceOptional"), sellPriceUgx: stripSell });
+    }
+    if (packagingState.level2Enabled && boxSell > 0) {
+      rows.push({ label: t(lang, "pharmacyPackBoxPriceOptional"), sellPriceUgx: boxSell });
+    }
+    return rows;
+  }, [packagingEdit, packagingState, stripSell, boxSell, lang]);
+
+  const batchCount = product?.pharmacyPackaging?.batches?.length ?? 0;
+  const batchSummary =
+    batchCount > 0
+      ? `${t(lang, "pharmacyBatches")}: ${batchCount}${expiryDate.trim() ? ` · ${t(lang, "pharmacyExpiryDateLabel")}: ${expiryDate}` : ""}`
+      : undefined;
+
+  const nextStock = packagingEdit ? Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) : totalStock;
+  const needsAuditReason =
+    product != null &&
+    (priceUgx !== product.sellingPricePerUnitUgx || Math.abs(nextStock - product.stockOnHand) > 1e-6);
+
+  const lowStockLabel =
+    packagingEdit && packagingState.enabled
+      ? t(lang, "pharmacyPackLowStockLabel")
+      : tTemplate(lang, "stockEditLowStockLabel", { unit: unitLabel });
+
+  if (!open || !product || !previewProduct) return null;
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const priceUgx = Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0));
-    const buyPerUnit = Math.max(0, Math.floor(Number(buyPricePerUnit.replace(/\D/g, "")) || 0));
     if (priceUgx <= 0 || !name.trim()) return;
     if (pharmacyMode && buyPerUnit <= 0) return;
     if (sellUnit === "custom" && !sellUnitCustom.trim()) return;
@@ -238,7 +286,6 @@ export function StockProductEditModal({
       }
     }
 
-    const nextStock = packagingEdit ? Math.max(0, Number(pieceOnlyStock.replace(/[^\d.]/g, "")) || 0) : totalStock;
     const priceChanging = priceUgx !== product.sellingPricePerUnitUgx;
     const stockChanging = Math.abs(nextStock - product.stockOnHand) > 1e-6;
     if ((priceChanging || stockChanging) && !validateAuditReason(auditReason)) {
@@ -296,411 +343,272 @@ export function StockProductEditModal({
     onClose();
   };
 
-  const inputClass =
-    "mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-bold outline-none ring-waka-300 focus:ring";
+  const packagingStockPreview =
+    packagingEdit && packagingState.enabled ? (
+      <div className="rounded-xl border border-border/60 bg-card px-3 py-2 text-sm font-black text-primary">
+        <p>
+          {t(lang, "pharmacyPackStockPrimary")}: {formatPharmacyStockPrimary(previewProduct)}
+        </p>
+        {formatPharmacyStockEquivalent(previewProduct) ? (
+          <p className="mt-1 whitespace-pre-line text-xs font-bold text-muted-foreground">
+            {t(lang, "pharmacyPackStockEquivalent")}:{"\n"}
+            {formatPharmacyStockEquivalent(previewProduct)}
+          </p>
+        ) : null}
+      </div>
+    ) : null;
 
   return (
-    <AppModalOverlay
-      className="z-[58] flex flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top))]"
-      role="dialog"
-      aria-modal
-      aria-labelledby="stock-edit-title"
+    <ProductEditorShell
+      lang={lang}
+      open={open}
+      title={pt("stockEditProduct")}
+      subtitle={t(lang, "productEditorSubtitle")}
+      dirty={dirty}
+      saveError={submitError}
+      onRequestClose={onClose}
+      onSubmit={onSubmit}
+      footer={
+        <EditorFooter
+          lang={lang}
+          showAuditReason={needsAuditReason}
+          auditReason={auditReason}
+          onAuditReasonChange={(v) => {
+            markDirty();
+            setAuditReason(v);
+          }}
+        />
+      }
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
-        <button type="button" className="rounded-xl px-3 py-2 text-sm font-bold text-stone-600" onClick={onClose}>
-          {t(lang, "cancel")}
-        </button>
-        <h2 id="stock-edit-title" className="text-center text-lg font-black text-stone-900">
-          {pt("stockEditProduct")}
-        </h2>
-        <span className="w-16" aria-hidden />
-      </header>
+      <EditorIdentitySection
+        lang={lang}
+        nameLabel={pt("stockEditName")}
+        shelfLabel={pt("stockEditShelf")}
+        name={name}
+        category={category}
+        categoryPlaceholder={uiPlaceholder(
+          lang,
+          preferences.businessType,
+          "simpleAddShelfPlaceholder",
+          preferences.pharmacyModeEnabled,
+        )}
+        categorySuggestions={categorySuggestions}
+        onNameChange={(v) => {
+          markDirty();
+          setName(v);
+        }}
+        onCategoryChange={(v) => {
+          markDirty();
+          setCategory(v);
+        }}
+        pharmacyMode={pharmacyMode}
+        genericName={masterState.genericName}
+        onGenericNameChange={(v) => {
+          markDirty();
+          setMasterState((s) => ({ ...s, genericName: v }));
+        }}
+        strength={medicineStrength}
+        onStrengthChange={(v) => {
+          markDirty();
+          setMedicineStrength(v);
+          setMasterState((s) => ({ ...s, strength: v }));
+        }}
+        medicineForm={medicineForm}
+        onMedicineFormChange={(v) => {
+          markDirty();
+          setMedicineForm(v);
+          setMasterState((s) => ({ ...s, medicineForm: v }));
+        }}
+        strengthLabel={pt("strength")}
+        formLabel={pt("form")}
+      />
 
-      <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-5">
-          <label className="block">
-            <span className="text-sm font-bold text-stone-800">{pt("stockEditName")}</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} className={inputClass} required />
-          </label>
+      {packagingEdit ? (
+        <EditorSection title={t(lang, "productEditorSectionPackaging")}>
+          <PharmacyPackagingFields
+            lang={lang}
+            state={packagingState}
+            onChange={(patch) => {
+              markDirty();
+              setPackagingState((s) => ({ ...s, ...patch }));
+            }}
+            hideTabletPrice
+            showEnableToggle={!isPharmacyPackagingActive(product)}
+            inputClass={clsx(WIZARD_INPUT_TEXT, "mt-2")}
+            labelClass="block text-sm font-bold text-foreground"
+          />
+        </EditorSection>
+      ) : (
+        <EditorSection title={t(lang, "productEditorSectionInventory")}>
+          <RetailUnitSection
+            lang={lang}
+            sellUnit={sellUnit}
+            sellUnitCustom={sellUnitCustom}
+            onSellUnitChange={(u) => {
+              markDirty();
+              setSellUnit(u);
+            }}
+            onSellUnitCustomChange={(v) => {
+              markDirty();
+              setSellUnitCustom(v);
+            }}
+          />
+          <RetailPackSection
+            lang={lang}
+            hasPack={hasPack}
+            packKind={packKind}
+            packCustom={packCustom}
+            piecesPerPack={piecesPerPack}
+            unitLabel={unitLabel}
+            onHasPackChange={(v) => {
+              markDirty();
+              setHasPack(v);
+            }}
+            onPackKindChange={(k) => {
+              markDirty();
+              setPackKind(k);
+            }}
+            onPackCustomChange={(v) => {
+              markDirty();
+              setPackCustom(v);
+            }}
+            onPiecesPerPackChange={(v) => {
+              markDirty();
+              setPiecesPerPack(v);
+            }}
+          />
+          <RetailStockEntry
+            lang={lang}
+            hasPack={hasPack}
+            piecesPerPack={piecesN}
+            packCount={packCount}
+            looseCount={looseCount}
+            pieceOnlyStock={pieceOnlyStock}
+            unitLabel={unitLabel}
+            packLabel={packLabel}
+            stockPreview={formatStockLabel(previewProduct)}
+            onPackCountChange={(v) => {
+              markDirty();
+              setPackCount(v);
+            }}
+            onLooseCountChange={(v) => {
+              markDirty();
+              setLooseCount(v);
+            }}
+            onPieceOnlyStockChange={(v) => {
+              markDirty();
+              setPieceOnlyStock(v);
+            }}
+          />
+        </EditorSection>
+      )}
 
-          <label className="block">
-            <span className="text-sm font-bold text-stone-800">{pt("stockEditShelf")}</span>
+      <EditorPricingSection
+        lang={lang}
+        pharmacyMode={pharmacyMode}
+        unitLabel={previewProduct.baseUnit}
+        buyPrice={buyPricePerUnit}
+        sellPrice={price}
+        onBuyPriceChange={(v) => {
+          markDirty();
+          setBuyPricePerUnit(v);
+        }}
+        onSellPriceChange={(v) => {
+          markDirty();
+          setPrice(v);
+        }}
+        unitCostUgx={pharmacyMode ? buyPerUnit : previewProduct.costPricePerUnitUgx}
+        sellPriceUgx={priceUgx}
+        extraUnitPrices={extraUnitPrices}
+        batchSummary={batchSummary}
+        controlledIndicator={masterState.controlledDrug}
+      />
+
+      <EditorInventorySection
+        lang={lang}
+        pharmacyMode={pharmacyMode}
+        product={previewProduct}
+        minAlert={minAlert}
+        onMinAlertChange={(v) => {
+          markDirty();
+          setMinAlert(v);
+        }}
+        lowStockLabel={lowStockLabel}
+        expiryDate={expiryDate}
+        onExpiryDateChange={(v) => {
+          markDirty();
+          setExpiryDate(v);
+        }}
+        packagingEdit={packagingEdit}
+        packagingState={packagingState}
+        onLowStockUnitChange={(unit) => {
+          markDirty();
+          setPackagingState((s) => ({ ...s, lowStockUnit: unit }));
+        }}
+        stockSummary={packagingStockPreview}
+      >
+        {packagingEdit ? (
+          <label className="block text-sm font-bold text-foreground">
+            {t(lang, "pharmacyPackStockOnHand")}
             <input
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              list={categorySuggestions?.length ? categoryListId : undefined}
-              placeholder={uiPlaceholder(
-                lang,
-                preferences.businessType,
-                "simpleAddShelfPlaceholder",
-                preferences.pharmacyModeEnabled,
-              )}
-              className={inputClass}
-            />
-            {categorySuggestions?.length ? (
-              <datalist id={categoryListId}>
-                {categorySuggestions.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            ) : null}
-          </label>
-
-          {pharmacyMode ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block">
-                <span className="text-sm font-bold text-stone-800">{pt("strength")}</span>
-                <input
-                  value={medicineStrength}
-                  onChange={(e) => setMedicineStrength(e.target.value)}
-                  placeholder="500mg"
-                  className={inputClass}
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-bold text-stone-800">{pt("form")}</span>
-                <select
-                  value={medicineForm || ""}
-                  onChange={(e) => setMedicineForm(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="">{t(lang, "pharmacyFormSelect")}</option>
-                  {MEDICINE_FORMS.map((form) => (
-                    <option key={form} value={form}>
-                      {form}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="block sm:col-span-2">
-                <span className="text-sm font-bold text-stone-800">{t(lang, "pharmacyExpiryDateLabel")}</span>
-                <input
-                  type="date"
-                  value={expiryDate}
-                  onChange={(e) => setExpiryDate(e.target.value)}
-                  className={inputClass}
-                />
-                <p className="mt-1 text-xs font-medium text-stone-500">{t(lang, "pharmacyExpiryDateHint")}</p>
-              </label>
-            </div>
-          ) : null}
-
-          {packagingEdit ? (
-            <>
-              <PharmacyPackagingFields
-                lang={lang}
-                state={packagingState}
-                onChange={(patch) => setPackagingState((s) => ({ ...s, ...patch }))}
-                hideTabletPrice
-                showEnableToggle={!isPharmacyPackagingActive(product)}
-                inputClass={inputClass}
-                labelClass="block text-sm font-bold text-stone-700"
-              />
-              <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
-                <label className="block text-sm font-bold text-stone-800">
-                  {t(lang, "pharmacyPackStockOnHand")}
-                  <input
-                    value={pieceOnlyStock || String(product.stockOnHand)}
-                    onChange={(e) => setPieceOnlyStock(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    inputMode="numeric"
-                    className={inputClass}
-                  />
-                </label>
-                {packagingState.enabled ? (
-                  <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-waka-900">
-                    <p>{t(lang, "pharmacyPackStockPrimary")}: {formatPharmacyStockPrimary({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) })}</p>
-                    {formatPharmacyStockEquivalent({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) }) ? (
-                      <p className="mt-1 whitespace-pre-line text-xs font-bold text-stone-600">
-                        {t(lang, "pharmacyPackStockEquivalent")}:{"\n"}
-                        {formatPharmacyStockEquivalent({ ...previewProduct, stockOnHand: Math.max(0, Number(pieceOnlyStock.replace(/\D/g, "")) || 0) })}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <span className="text-sm font-bold text-stone-800">{t(lang, "stockEditSellUnitLabel")}</span>
-                <div className="mt-2 grid grid-cols-2 gap-2">
-                  {SELL_UNITS.map((u) => (
-                    <button
-                      key={u}
-                      type="button"
-                      onClick={() => setSellUnit(u)}
-                      className={clsx(
-                        "min-h-[48px] rounded-2xl border-2 text-sm font-black",
-                        sellUnit === u ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-900",
-                      )}
-                    >
-                      {t(lang, SELL_UNIT_OPTIONS.find((o) => o.id === u)!.labelKey as "sellUnit_piece")}
-                    </button>
-                  ))}
-                </div>
-                {sellUnit === "custom" ? (
-                  <input
-                    value={sellUnitCustom}
-                    onChange={(e) => setSellUnitCustom(e.target.value)}
-                    placeholder={t(lang, "simpleAddSellUnitCustomPh")}
-                    className={clsx(inputClass, "mt-2")}
-                  />
-                ) : null}
-              </div>
-
-              <div className="rounded-2xl border-2 border-stone-100 bg-stone-50/80 p-4">
-                <label className="flex cursor-pointer items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={hasPack}
-                    onChange={(e) => setHasPack(e.target.checked)}
-                    className="h-5 w-5 accent-waka-600"
-                  />
-                  <span className="text-sm font-black text-stone-900">{t(lang, "simpleAddPackToggle")}</span>
-                </label>
-                {hasPack ? (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-xs font-semibold text-stone-600">{t(lang, "simpleAddPackTypeLabel")}</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {PACK_TYPE_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => setPackKind(opt.id)}
-                          className={clsx(
-                            "min-h-[44px] rounded-xl border-2 text-xs font-black",
-                            packKind === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white",
-                          )}
-                        >
-                          {t(lang, opt.labelKey as "packKind_crate")}
-                        </button>
-                      ))}
-                    </div>
-                    {packKind === "custom" ? (
-                      <input
-                        value={packCustom}
-                        onChange={(e) => setPackCustom(e.target.value)}
-                        placeholder={t(lang, "simpleAddPackCustomPh")}
-                        className={inputClass}
-                      />
-                    ) : null}
-                    <label className="block text-sm font-bold text-stone-800">
-                      {tTemplate(lang, "simpleAddStep5Title", { unit: unitLabel, pack: packLabel })}
-                      <input
-                        value={piecesPerPack}
-                        onChange={(e) => setPiecesPerPack(e.target.value.replace(/[^\d.]/g, "").slice(0, 6))}
-                        inputMode="numeric"
-                        placeholder="24"
-                        className={inputClass}
-                      />
-                    </label>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rounded-2xl border-2 border-waka-100 bg-waka-50/40 p-4">
-                <span className="text-sm font-bold text-stone-800">{t(lang, "stockEditStockLabel")}</span>
-                {hasPack && piecesN > 1 ? (
-                  <div className="mt-2 space-y-3">
-                    <label className="block text-sm font-semibold text-stone-700">
-                      {tTemplate(lang, "simpleAddStep6TitlePack", { pack: packLabel })}
-                      <input
-                        value={packCount}
-                        onChange={(e) => setPackCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                        inputMode="decimal"
-                        className={inputClass}
-                      />
-                    </label>
-                    <label className="block text-sm font-semibold text-stone-700">
-                      {tTemplate(lang, "stockEditLooseLabel", { unit: unitLabel })}
-                      <input
-                        value={looseCount}
-                        onChange={(e) => setLooseCount(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-                        inputMode="decimal"
-                        placeholder="0"
-                        className={inputClass}
-                      />
-                    </label>
-                  </div>
-                ) : (
-                  <input
-                    value={pieceOnlyStock}
-                    onChange={(e) => setPieceOnlyStock(e.target.value.replace(/[^\d.]/g, "").slice(0, 10))}
-                    inputMode="decimal"
-                    className={inputClass}
-                  />
-                )}
-                <p className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-black text-waka-900">
-                  {formatStockLabel(previewProduct)}
-                </p>
-              </div>
-            </>
-          )}
-
-          {pharmacyMode ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block rounded-2xl border-2 border-teal-100 bg-teal-50/50 p-4">
-                <span className="text-sm font-black text-teal-900">{t(lang, "pharmacyEditBuyPriceLabel")}</span>
-                <input
-                  value={buyPricePerUnit}
-                  onChange={(e) => setBuyPricePerUnit(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  inputMode="numeric"
-                  className={`${inputClass} mt-2 text-2xl font-black`}
-                  required
-                />
-                <span className="mt-1 block text-xs font-semibold text-teal-800">
-                  UGX / {previewProduct.baseUnit}
-                </span>
-              </label>
-              <label className="block rounded-2xl border-2 border-waka-100 bg-waka-50/50 p-4">
-                <span className="text-sm font-black text-waka-900">{t(lang, "pharmacyEditSellPriceLabel")}</span>
-                <input
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  inputMode="numeric"
-                  className={`${inputClass} mt-2 text-2xl font-black`}
-                  required
-                />
-                <span className="mt-1 block text-xs font-semibold text-waka-800">
-                  UGX / {previewProduct.baseUnit}
-                </span>
-              </label>
-            </div>
-          ) : (
-            <label className="block">
-              <span className="text-sm font-bold text-stone-800">{t(lang, "stockEditPriceLabel")}</span>
-              <input
-                value={price}
-                onChange={(e) => setPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                inputMode="numeric"
-                placeholder="2000"
-                className={`${inputClass} text-2xl font-black`}
-                required
-              />
-              <span className="mt-1 block text-xs font-semibold text-stone-500">UGX</span>
-            </label>
-          )}
-
-          {pharmacyMode ? (
-            <PharmacyCostWarningBanner
-              lang={lang}
-              product={{
-                ...previewProduct,
-                sellingPricePerUnitUgx: Math.max(0, Math.floor(Number(price.replace(/\D/g, "")) || 0)),
-                costPricePerUnitUgx: Math.max(0, Math.floor(Number(buyPricePerUnit.replace(/\D/g, "")) || 0)),
+              value={pieceOnlyStock || String(product.stockOnHand)}
+              onChange={(e) => {
+                markDirty();
+                setPieceOnlyStock(e.target.value.replace(/\D/g, "").slice(0, 10));
               }}
+              inputMode="numeric"
+              className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
             />
-          ) : null}
-
-          <label className="block">
-            <span className="text-sm font-bold text-stone-800">
-              {packagingEdit && packagingState.enabled
-                ? t(lang, "pharmacyPackLowStockLabel")
-                : tTemplate(lang, "stockEditLowStockLabel", { unit: unitLabel })}
-            </span>
-            <div className={packagingEdit && packagingState.enabled ? "mt-2 flex gap-2" : ""}>
-              <input
-                value={minAlert}
-                onChange={(e) => setMinAlert(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                inputMode="numeric"
-                placeholder="10"
-                className={packagingEdit && packagingState.enabled ? `${inputClass} flex-1` : inputClass}
-              />
-              {packagingEdit && packagingState.enabled ? (
-                <select
-                  value={packagingState.lowStockUnit}
-                  onChange={(e) =>
-                    setPackagingState((s) => ({
-                      ...s,
-                      lowStockUnit: e.target.value as PharmacyPackagingFieldState["lowStockUnit"],
-                    }))
-                  }
-                  className={`${inputClass} w-[8.5rem] shrink-0`}
-                >
-                  <option value="tablet">{packagingState.baseUnit}</option>
-                  {packagingState.level1Enabled ? <option value="strip">{packagingState.level1Unit}</option> : null}
-                  {packagingState.level2Enabled ? <option value="box">{packagingState.level2Unit}</option> : null}
-                </select>
-              ) : null}
-            </div>
           </label>
+        ) : null}
+      </EditorInventorySection>
 
-          {pharmacyMode ? (
-            <PharmacyMedicineMasterFields
-              lang={lang}
-              state={{ ...masterState, strength: medicineStrength, medicineForm, brandName: name }}
-              onChange={(patch) => {
-                if (patch.brandName !== undefined) setName(patch.brandName);
-                if (patch.strength !== undefined) setMedicineStrength(patch.strength);
-                if (patch.medicineForm !== undefined) setMedicineForm(patch.medicineForm);
-                setMasterState((prev) => ({ ...prev, ...patch }));
-              }}
-              showStrengthForm={false}
-              compact
-            />
-          ) : null}
+      {pharmacyMode ? (
+        <EditorSection title={t(lang, "productEditorSectionCompliance")}>
+          <PharmacyMedicineMasterFields
+            lang={lang}
+            state={{ ...masterState, strength: medicineStrength, medicineForm, brandName: name }}
+            onChange={(patch) => {
+              markDirty();
+              if (patch.brandName !== undefined) setName(patch.brandName);
+              if (patch.strength !== undefined) setMedicineStrength(patch.strength);
+              if (patch.medicineForm !== undefined) setMedicineForm(patch.medicineForm);
+              setMasterState((prev) => ({ ...prev, ...patch }));
+            }}
+            showStrengthForm={false}
+            hideBrandName
+            hideGeneric
+            compact
+          />
+        </EditorSection>
+      ) : null}
 
-          <details className="rounded-2xl border border-stone-200 bg-stone-50/50 px-4 open:pb-4">
-            <summary className="cursor-pointer py-3 text-sm font-black text-stone-700">{t(lang, "stockEditAdvanced")}</summary>
-            <div className="space-y-3 pt-1">
-              {hasPack ? (
-                <label className="block text-sm font-bold text-stone-800">
-                  {tTemplate(lang, "simpleAddStep8Title", { pack: packLabel })}
-                  <input
-                    value={buyPackPrice}
-                    onChange={(e) => setBuyPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    inputMode="numeric"
-                    className={inputClass}
-                  />
-                </label>
-              ) : null}
-              <label className="block text-sm font-bold text-stone-800">
-                {t(lang, "productSkuOptional")}
-                <input value={sku} onChange={(e) => setSku(e.target.value)} className={inputClass} />
-              </label>
-              {canPresets ? (
-                <>
-                  <label className="block text-sm font-bold text-stone-700">
-                    {t(lang, "tapPricesNote")}
-                    <input value={moneyPresets} onChange={(e) => setMoneyPresets(e.target.value)} className={inputClass} />
-                  </label>
-                  <label className="block text-sm font-bold text-stone-700">
-                    {t(lang, "tapQtyNote")}
-                    <input value={qtyPresets} onChange={(e) => setQtyPresets(e.target.value)} className={inputClass} />
-                  </label>
-                </>
-              ) : null}
-            </div>
-          </details>
-        </div>
-
-        <div className="shrink-0 border-t border-stone-100 bg-white px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {product &&
-          (Math.floor(Number(price.replace(/\D/g, "")) || 0) !== product.sellingPricePerUnitUgx ||
-            Math.abs(
-              (packagingEdit
-                ? Math.max(0, Number(pieceOnlyStock.replace(/[^\d.]/g, "")) || 0)
-                : totalStock) - product.stockOnHand,
-            ) > 1e-6) ? (
-            <label className="mb-3 block">
-              <span className="text-sm font-bold text-stone-800">{t(lang, "auditReasonLabel")}</span>
-              <textarea
-                value={auditReason}
-                onChange={(e) => setAuditReason(e.target.value)}
-                className="mt-2 min-h-[72px] w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-waka-500"
-                placeholder={t(lang, "auditReasonPlaceholder")}
-              />
-            </label>
-          ) : null}
-          {submitError ? <p className="mb-2 text-sm font-bold text-rose-700">{submitError}</p> : null}
-          <button
-            type="submit"
-            className="min-h-[56px] w-full rounded-2xl bg-waka-600 text-xl font-black text-white shadow-md active:bg-waka-700"
-          >
-            {t(lang, "saveProduct")}
-          </button>
-        </div>
-      </form>
-    </AppModalOverlay>
+      <EditorAdvancedSection
+        lang={lang}
+        sku={sku}
+        onSkuChange={(v) => {
+          markDirty();
+          setSku(v);
+        }}
+        canPresets={canPresets}
+        moneyPresets={moneyPresets}
+        qtyPresets={qtyPresets}
+        onMoneyPresetsChange={(v) => {
+          markDirty();
+          setMoneyPresets(v);
+        }}
+        onQtyPresetsChange={(v) => {
+          markDirty();
+          setQtyPresets(v);
+        }}
+        showBuyPackPrice={hasPack && !packagingEdit}
+        buyPackPrice={buyPackPrice}
+        onBuyPackPriceChange={(v) => {
+          markDirty();
+          setBuyPackPrice(v);
+        }}
+        packLabel={packLabel}
+      />
+    </ProductEditorShell>
   );
 }

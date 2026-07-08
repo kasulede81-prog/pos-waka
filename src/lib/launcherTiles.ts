@@ -13,9 +13,11 @@ import {
   TrendingUp,
   LayoutDashboard,
   Wallet,
+  LayoutGrid,
 } from "lucide-react";
 import type { LauncherTileColor, LauncherTileConfig, Permission } from "../types";
 import { POS_RECEIPTS_ROUTE, POS_SELL_ROUTE, POS_SHOP_ROUTE } from "./posNavigation";
+import { PHARMACY_DISPENSE_ROUTE, PHARMACY_HOME_ROUTE } from "./pharmacyNav";
 import { reorderShelfKeys } from "./posShelfOrder";
 import {
   clampShelfScale,
@@ -150,6 +152,25 @@ export const LAUNCHER_TILE_CATALOG: LauncherTileDef[] = [
   },
 ];
 
+export const PHARMACY_LAUNCHER_TILE: LauncherTileDef = {
+  id: "dashboard",
+  labelKey: "pharmacyNav_dashboard",
+  to: PHARMACY_HOME_ROUTE,
+  Icon: LayoutGrid,
+  group: "operational",
+  hideable: true,
+};
+
+const PHARMACY_LAUNCHER_TILE_OVERRIDES: Partial<
+  Record<LauncherTileDef["id"], Pick<LauncherTileDef, "labelKey" | "to">>
+> = {
+  sell: { labelKey: "desktopHomeTileDispense", to: PHARMACY_DISPENSE_ROUTE },
+  inventory: { labelKey: "desktopHomeTileInventory", to: "/pharmacy/inventory" },
+  reports: { labelKey: "pharmacyNav_reports", to: "/pharmacy/reports" },
+  salesHistory: { labelKey: "pharmacyDispensingHistory", to: "/pharmacy/returns" },
+  investigation: { labelKey: "desktopHomeTileInvestigation", to: "/pharmacy/compliance/register" },
+};
+
 export const DEFAULT_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [
   "inventory",
   "debts",
@@ -164,8 +185,14 @@ export const DEFAULT_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [
   "settings",
 ];
 
+export const PHARMACY_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [
+  "dashboard",
+  ...DEFAULT_LAUNCHER_TILE_ORDER,
+];
+
 /** Branded home menu defaults — merged under saved layout; user edits override per tile. */
 export const DEFAULT_LAUNCHER_TILE_LAYOUT: Record<string, LauncherTileConfig> = {
+  dashboard: { color: "blue", customColor: "#0d9488", scale: 42 },
   inventory: { color: "purple", customColor: "#db2777" },
   debts: { color: "purple" },
   cash: { color: "blue" },
@@ -300,13 +327,24 @@ export {
   shelfTypographyFromScale,
 };
 
-export function effectiveLauncherTileOrder(savedOrder: string[], visibleIds: string[]): string[] {
+export function effectiveLauncherTileOrder(savedOrder: string[], visibleIds: string[], pharmacyMode = false): string[] {
   const migrated = savedOrder.map(migrateLauncherTileId);
   const ordered = migrated.filter((id) => visibleIds.includes(id));
   const rest = visibleIds.filter((id) => !ordered.includes(id));
-  const catalogOrder = DEFAULT_LAUNCHER_TILE_ORDER;
+  const catalogOrder = pharmacyMode ? PHARMACY_LAUNCHER_TILE_ORDER : DEFAULT_LAUNCHER_TILE_ORDER;
   rest.sort((a, b) => catalogOrder.indexOf(a) - catalogOrder.indexOf(b));
   return [...ordered, ...rest];
+}
+
+export function launcherCatalogForMode(pharmacyMode: boolean): LauncherTileDef[] {
+  if (!pharmacyMode) return LAUNCHER_TILE_CATALOG;
+  const withDashboard = [...LAUNCHER_TILE_CATALOG];
+  withDashboard.splice(1, 0, PHARMACY_LAUNCHER_TILE);
+  return withDashboard.map((tile) => {
+    const override = PHARMACY_LAUNCHER_TILE_OVERRIDES[tile.id];
+    if (!override) return tile;
+    return { ...tile, ...override };
+  });
 }
 
 export function resolveHomeMenuTiles(params: {
@@ -316,9 +354,11 @@ export function resolveHomeMenuTiles(params: {
   badges?: Record<string, number | undefined>;
   /** When true, include hidden tiles (settings arrange preview). */
   includeHidden?: boolean;
+  pharmacyMode?: boolean;
 }): { hero: ResolvedHomeTile | null; secondary: ResolvedHomeTile[] } {
   const effectiveLayout = mergeLauncherTileLayout(params.layout);
-  const visible = LAUNCHER_TILE_CATALOG.filter((tile) => !tile.perm || params.hasPermission(tile.perm));
+  const catalog = launcherCatalogForMode(Boolean(params.pharmacyMode));
+  const visible = catalog.filter((tile) => !tile.perm || params.hasPermission(tile.perm));
   const heroDef = visible.find((t) => t.id === "sell") ?? null;
   const secondaryDefs = visible.filter((t) => t.group !== "primary");
 
@@ -327,7 +367,11 @@ export function resolveHomeMenuTiles(params: {
     .map((t) => t.id);
 
   const arrangeIds = secondaryDefs.map((t) => t.id);
-  const order = effectiveLauncherTileOrder(params.savedOrder, params.includeHidden ? arrangeIds : secondaryIds);
+  const order = effectiveLauncherTileOrder(
+    params.savedOrder,
+    params.includeHidden ? arrangeIds : secondaryIds,
+    Boolean(params.pharmacyMode),
+  );
 
   const resolveOne = (def: LauncherTileDef): ResolvedHomeTile => {
     const cfg = launcherTileLayoutEntry(effectiveLayout, def.id);
@@ -357,12 +401,14 @@ export function resolveLauncherTiles(params: {
   layout: Record<string, LauncherTileConfig>;
   hasPermission: (perm?: Permission) => boolean;
   badges?: Record<string, number | undefined>;
+  pharmacyMode?: boolean;
 }): { hero: ResolvedLauncherTile | null; pinned: ResolvedLauncherTile[]; operational: ResolvedLauncherTile[]; management: ResolvedLauncherTile[] } {
   const { hero, secondary } = resolveHomeMenuTiles({
     savedOrder: params.savedOrder,
     layout: params.layout,
     hasPermission: params.hasPermission,
     badges: params.badges,
+    pharmacyMode: params.pharmacyMode,
   });
 
   const resolveLegacy = (tile: ResolvedHomeTile): ResolvedLauncherTile => ({

@@ -3,11 +3,15 @@
 import {
   formatUgxDisplay,
   inventoryLineValueAtCostUgx,
+  marginPercentOnSell,
   normalizeUnitCostUgx,
+  profitPerUnitUgx,
   unitCostFromPackTotal,
 } from "./costPrecision";
 
 export { unitCostFromPackTotal as unitCostFromPack } from "./costPrecision";
+export { unitCostFromInvoiceTotal } from "./costPrecision";
+export { profitPerUnitUgx, marginPercentOnSell, markupPercentOnCost } from "./costPrecision";
 
 export type CostValidationPreview = {
   packCostUgx: number | null;
@@ -20,8 +24,22 @@ export type CostValidationPreview = {
 
 export type CostValidationWarning = "low_unit_cost" | "high_margin";
 
+export type ProductCostWarningKind =
+  | CostValidationWarning
+  | "zero_cost"
+  | "zero_price"
+  | "sell_below_cost"
+  | "extreme_margin";
+
+export type ProductCostWarning = {
+  kind: ProductCostWarningKind;
+  /** i18n key when pharmacy-specific; retail uses costPreviewWarning* keys */
+  messageKey?: string;
+};
+
 const LOW_COST_RATIO = 0.1;
 const HIGH_MARGIN_RATIO = 0.8;
+const EXTREME_MARKUP_RATIO = 5;
 
 export function computeCostValidationPreview(input: {
   packCostUgx?: number;
@@ -41,11 +59,9 @@ export function computeCostValidationPreview(input: {
   }
 
   const profit =
-    sell != null && unitCost != null ? sell - unitCost : null;
+    sell != null && unitCost != null ? profitPerUnitUgx(sell, unitCost) : null;
   const marginPct =
-    sell != null && sell > 0 && unitCost != null
-      ? Math.round(((sell - unitCost) / sell) * 1000) / 10
-      : null;
+    sell != null && unitCost != null ? marginPercentOnSell(sell, unitCost) : null;
 
   return {
     packCostUgx: packCost,
@@ -58,20 +74,58 @@ export function computeCostValidationPreview(input: {
 }
 
 export function getCostValidationWarnings(preview: CostValidationPreview): CostValidationWarning[] {
-  const { unitCostUgx, sellPriceUgx } = preview;
-  if (sellPriceUgx == null || sellPriceUgx <= 0 || unitCostUgx == null || unitCostUgx < 0) {
-    return [];
+  return getProductCostWarnings({
+    unitCostUgx: preview.unitCostUgx ?? 0,
+    sellPriceUgx: preview.sellPriceUgx ?? 0,
+    pharmacyMode: false,
+  })
+    .map((w) => w.kind)
+    .filter((k): k is CostValidationWarning => k === "low_unit_cost" || k === "high_margin");
+}
+
+/** Unified cost/price warnings — retail + optional pharmacy extensions. */
+export function getProductCostWarnings(input: {
+  unitCostUgx: number;
+  sellPriceUgx: number;
+  pharmacyMode?: boolean;
+}): ProductCostWarning[] {
+  const cost = normalizeUnitCostUgx(input.unitCostUgx);
+  const sell = Math.max(0, Math.floor(input.sellPriceUgx));
+  const out: ProductCostWarning[] = [];
+
+  if (input.pharmacyMode) {
+    if (cost <= 0) out.push({ kind: "zero_cost", messageKey: "pharmacyWarnZeroCost" });
+    if (sell <= 0) out.push({ kind: "zero_price", messageKey: "pharmacyWarnZeroPrice" });
+    if (cost > 0 && sell > 0 && sell < cost) {
+      out.push({ kind: "sell_below_cost", messageKey: "pharmacyWarnSellBelowCost" });
+    }
+    if (cost > 0 && sell > cost * EXTREME_MARKUP_RATIO) {
+      out.push({ kind: "extreme_margin", messageKey: "pharmacyWarnExtremeMargin" });
+    }
   }
 
-  const warnings: CostValidationWarning[] = [];
-  if (unitCostUgx < sellPriceUgx * LOW_COST_RATIO) {
-    warnings.push("low_unit_cost");
+  if (sell <= 0 || cost < 0) return out;
+
+  if (cost < sell * LOW_COST_RATIO) {
+    out.push({ kind: "low_unit_cost" });
   }
-  const margin = (sellPriceUgx - unitCostUgx) / sellPriceUgx;
-  if (margin > HIGH_MARGIN_RATIO) {
-    warnings.push("high_margin");
+  const marginOnSell = (sell - cost) / sell;
+  if (marginOnSell > HIGH_MARGIN_RATIO) {
+    out.push({ kind: "high_margin" });
   }
-  return warnings;
+
+  return out;
+}
+
+export function productCostWarningsFromPreview(
+  preview: CostValidationPreview,
+  pharmacyMode = false,
+): ProductCostWarning[] {
+  return getProductCostWarnings({
+    unitCostUgx: preview.unitCostUgx ?? 0,
+    sellPriceUgx: preview.sellPriceUgx ?? 0,
+    pharmacyMode,
+  });
 }
 
 export type FinanceDiagnosticRow = {

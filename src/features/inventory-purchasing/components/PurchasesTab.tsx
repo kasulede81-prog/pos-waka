@@ -156,7 +156,7 @@ export function PurchasesTab({ lang, onOpenPurchase, onNewPurchase }: Props) {
                       {statusLabel(kind)}
                     </span>
                   </div>
-                  <dl className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                  <dl className="mt-2 grid grid-cols-1 gap-2 text-[11px] sm:grid-cols-3">
                     <div>
                       <dt className="font-semibold text-stone-500">{t(lang, "purchasesColTotal")}</dt>
                       <dd className="font-black tabular-nums">{formatShortUgx(row.purchase.totalCostUgx)}</dd>

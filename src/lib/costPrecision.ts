@@ -30,6 +30,38 @@ export function unitCostFromPackTotal(packCostUgx: number, unitsPerPack: number)
   return pack / units;
 }
 
+/** Unit cost from invoice total ÷ base units (pharmacy receive / opening stock). */
+export function unitCostFromInvoiceTotal(totalInvoiceUgx: number, totalBaseUnits: number): number {
+  const total = Math.max(0, Math.floor(totalInvoiceUgx));
+  const units = Math.max(0, Math.floor(totalBaseUnits));
+  if (units <= 0) return 0;
+  return total / units;
+}
+
+/** Profit per sell unit (UGX). */
+export function profitPerUnitUgx(sellPriceUgx: number, unitCostUgx: number): number | null {
+  const sell = Math.max(0, Math.floor(sellPriceUgx));
+  const cost = normalizeUnitCostUgx(unitCostUgx);
+  if (sell <= 0 || cost < 0) return null;
+  return sell - cost;
+}
+
+/** Margin on sell price (retail standard): ((sell − cost) / sell) × 100. */
+export function marginPercentOnSell(sellPriceUgx: number, unitCostUgx: number): number | null {
+  const sell = Math.max(0, Math.floor(sellPriceUgx));
+  const cost = normalizeUnitCostUgx(unitCostUgx);
+  if (sell <= 0) return null;
+  return Math.round(((sell - cost) / sell) * 1000) / 10;
+}
+
+/** Markup on cost (pharmacy reports): ((sell − cost) / cost) × 100. */
+export function markupPercentOnCost(sellPriceUgx: number, unitCostUgx: number): number | null {
+  const sell = Math.max(0, Math.floor(sellPriceUgx));
+  const cost = normalizeUnitCostUgx(unitCostUgx);
+  if (cost <= 0) return null;
+  return Math.round(((sell - cost) / cost) * 100);
+}
+
 /** Round UGX for display, receipts, and export labels only. */
 export function formatUgxDisplay(amount: number): number {
   if (!Number.isFinite(amount)) return 0;

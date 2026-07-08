@@ -2,14 +2,24 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
   isPharmacyPackagingActive,
   pharmacyRestockPreview,
   type PharmacyRestockUnit,
 } from "../../lib/pharmacyPackaging";
 import { packLabelFromProduct, stockBreakdown } from "../../lib/sellingEngine";
-import { isWalkInSupplierId, WALK_IN_SUPPLIER_ID } from "../../lib/walkInSupplier";
+import { WALK_IN_SUPPLIER_ID } from "../../lib/walkInSupplier";
+import { usePosStore } from "../../store/usePosStore";
+import { shouldTrackBatchesForProduct } from "../../lib/pharmacyStoreBatch";
+import { dateKeyKampala } from "../../lib/datesUg";
+import { ReceiveOperationShell } from "../inventory/receive/ReceiveOperationShell";
+import { SupplierSelector } from "../inventory/receive/SupplierSelector";
+import { PurchaseLineEditor } from "../inventory/receive/PurchaseLineEditor";
+import { ReceiveMovementPreview } from "../inventory/receive/ReceiveMovementPreview";
+import { ReceiveSummaryPanel } from "../inventory/receive/ReceiveSummaryPanel";
+import { ReceiveFooter } from "../inventory/receive/ReceiveFooter";
+import { ReceiveStatusStrip } from "../inventory/receive/ReceiveStatusStrip";
+import { wizardChoiceButtonClass } from "../inventory/receive/receiveTokens";
 
 type Props = {
   lang: Language;
@@ -33,6 +43,7 @@ type Props = {
 };
 
 export function SimpleProductRestockModal({ lang, open, product, suppliers, onClose, onSave }: Props) {
+  const preferences = usePosStore((s) => s.preferences);
   const [packQty, setPackQty] = useState("1");
   const [packPrice, setPackPrice] = useState("");
   const [invoiceTotal, setInvoiceTotal] = useState("");
@@ -44,9 +55,7 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
 
   const unitOptions = useMemo((): { id: PharmacyRestockUnit; label: string }[] => {
     if (!pkg?.enabled) return [];
-    const opts: { id: PharmacyRestockUnit; label: string }[] = [
-      { id: "tablet", label: pkg.baseUnit },
-    ];
+    const opts: { id: PharmacyRestockUnit; label: string }[] = [{ id: "tablet", label: pkg.baseUnit }];
     if (pkg.level1) opts.unshift({ id: "strip", label: pkg.level1.unit });
     if (pkg.level2) opts.unshift({ id: "box", label: pkg.level2.unit });
     return opts;
@@ -55,10 +64,7 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
   const b = product ? stockBreakdown(product) : null;
   const packName = product
     ? pharmacyPack
-      ? unitOptions.find((o) => o.id === restockUnit)?.label ??
-        pkg?.level2?.unit ??
-        pkg?.level1?.unit ??
-        product.baseUnit
+      ? unitOptions.find((o) => o.id === restockUnit)?.label ?? pkg?.level2?.unit ?? pkg?.level1?.unit ?? product.baseUnit
       : packLabelFromProduct(product) ?? t(lang, "packKind_pack")
     : "";
 
@@ -76,32 +82,52 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
 
   const qtyN = Math.max(0, Number(packQty.replace(/[^\d.]/g, "")) || 0);
   const invoiceN = Math.floor(Number(invoiceTotal.replace(/\D/g, "")) || 0);
-  const preview = product && pharmacyPack && qtyN > 0 && invoiceN > 0
-    ? pharmacyRestockPreview(product, restockUnit, qtyN, invoiceN)
-    : null;
+  const preview = product && pharmacyPack && qtyN > 0 && invoiceN > 0 ? pharmacyRestockPreview(product, restockUnit, qtyN, invoiceN) : null;
 
   const piecesPerPack = product?.conversionRate && product.conversionRate > 1 ? product.conversionRate : 1;
-  const addsPieces = pharmacyPack && preview
-    ? preview.baseUnitsAdded
-    : b?.hasPackTracking
-      ? qtyN * piecesPerPack
-      : qtyN;
+  const addsPieces =
+    pharmacyPack && preview ? preview.baseUnitsAdded : b?.hasPackTracking ? qtyN * piecesPerPack : qtyN;
 
   if (!open || !product) return null;
+
+  const batchTracked = shouldTrackBatchesForProduct(
+    preferences.businessType,
+    preferences.pharmacyModeEnabled,
+    product,
+  );
+
+  if (batchTracked) {
+    return (
+      <ReceiveOperationShell
+        lang={lang}
+        open={open}
+        title={tTemplate(lang, "stockRestockProductTitle", { name: product.name })}
+        warning={t(lang, "pharmacyBatchReceiveRequired")}
+        onRequestClose={onClose}
+        footer={
+          <ReceiveFooter lang={lang} layout="single" primaryLabelKey="cancel" primaryType="button" onPrimary={onClose} />
+        }
+      >
+        <p className="text-sm text-muted-foreground">{t(lang, "stockRestockProductHint")}</p>
+      </ReceiveOperationShell>
+    );
+  }
+
+  const supplierName =
+    supplierId === WALK_IN_SUPPLIER_ID ? t(lang, "restockTownBuy") : suppliers.find((s) => s.id === supplierId)?.name ?? "";
+  const invoiceTotalUgx = pharmacyPack ? invoiceN : qtyN * (Math.floor(Number(packPrice.replace(/\D/g, "")) || 0));
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     const qty = Math.max(0, Number(packQty.replace(/[^\d.]/g, "")) || 0);
     if (qty <= 0) return;
-    const walkIn = isWalkInSupplierId(supplierId);
-    const supplierName = walkIn ? t(lang, "restockTownBuy") : suppliers.find((s) => s.id === supplierId)?.name ?? "";
 
     if (pharmacyPack && preview && invoiceN > 0) {
       const r = onSave({
         productId: product.id,
         packQty: qty,
         costPerPackUgx: Math.round(invoiceN / qty),
-        supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
+        supplierId: supplierId === WALK_IN_SUPPLIER_ID ? WALK_IN_SUPPLIER_ID : supplierId,
         supplierName,
         pharmacyRestock: {
           unit: restockUnit,
@@ -120,126 +146,110 @@ export function SimpleProductRestockModal({ lang, open, product, suppliers, onCl
       productId: product.id,
       packQty: qty,
       costPerPackUgx: cost,
-      supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
+      supplierId: supplierId === WALK_IN_SUPPLIER_ID ? WALK_IN_SUPPLIER_ID : supplierId,
       supplierName,
     });
     if (r.ok) onClose();
   };
 
-  return (
-    <AppModalOverlay className="z-[60] flex items-end justify-center bg-black/50 sm:items-center" role="dialog" aria-modal onClick={onClose}>
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-md rounded-t-[1.75rem] bg-white p-5 shadow-2xl sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-xl font-black text-stone-900">
-          {tTemplate(lang, "stockRestockProductTitle", { name: product.name })}
-        </h2>
-        <p className="mt-1 text-sm text-stone-600">{t(lang, "stockRestockProductHint")}</p>
+  const unitSelector =
+    pharmacyPack && unitOptions.length > 0 ? (
+      <>
+        <p className="text-sm font-bold text-foreground">{t(lang, "pharmacyRestockByUnit")}</p>
+        <div className="grid grid-cols-3 gap-2">
+          {unitOptions.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setRestockUnit(opt.id)}
+              className={clsx(wizardChoiceButtonClass(restockUnit === opt.id), "capitalize")}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </>
+    ) : null;
 
-        {pharmacyPack && unitOptions.length > 0 ? (
-          <>
-            <p className="mt-4 text-sm font-bold text-stone-700">{t(lang, "pharmacyRestockByUnit")}</p>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {unitOptions.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => setRestockUnit(opt.id)}
-                  className={clsx(
-                    "min-h-[48px] rounded-2xl border-2 text-sm font-black capitalize",
-                    restockUnit === opt.id ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-900",
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        <label className="mt-4 block text-sm font-bold text-stone-800">
-          {tTemplate(lang, pharmacyPack ? "pharmacyRestockQty" : "stockRestockPackQty", { unit: packName, pack: packName })}
-          <input
-            value={packQty}
-            onChange={(e) => setPackQty(e.target.value.replace(/[^\d.]/g, "").slice(0, 8))}
-            inputMode="decimal"
-            className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
-          />
-        </label>
-
-        {pharmacyPack ? (
-          <label className="mt-4 block text-sm font-bold text-stone-800">
-            {t(lang, "pharmacyPackTotalPaid")}
-            <input
-              value={invoiceTotal}
-              onChange={(e) => setInvoiceTotal(e.target.value.replace(/\D/g, "").slice(0, 12))}
-              inputMode="numeric"
-              placeholder="36000"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
-            />
-          </label>
-        ) : (
-          <label className="mt-4 block text-sm font-bold text-stone-800">
-            {tTemplate(lang, "stockRestockPackPrice", { pack: packName })}
-            <input
-              value={packPrice}
-              onChange={(e) => setPackPrice(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              inputMode="numeric"
-              placeholder="36000"
-              className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black"
-            />
-          </label>
-        )}
-
-        {preview && preview.lines.length > 0 ? (
-          <div className="mt-4 rounded-2xl border border-waka-200 bg-waka-50 p-4">
-            <p className="text-sm font-black text-waka-900">{t(lang, "pharmacyPackPreviewTitle")}</p>
-            <ul className="mt-2 space-y-1 text-sm font-bold text-waka-800">
-              {preview.lines.map((line, i) => (
-                <li key={i}>
-                  = {line.count.toLocaleString()} {line.label}
-                </li>
-              ))}
-            </ul>
-            {preview.costPerBaseUnitUgx > 0 ? (
-              <p className="mt-2 text-xs font-bold text-emerald-900">
-                {t(lang, "pharmacyPackCostPreview")}: {preview.costPerBaseUnitUgx.toLocaleString()} UGX / {product.baseUnit}
-              </p>
-            ) : null}
-          </div>
-        ) : addsPieces > 0 && !pharmacyPack ? (
-          <p className="mt-2 text-sm font-bold text-waka-800">
-            {tTemplate(lang, "stockRestockAdds", { count: String(addsPieces), unit: product.baseUnit })}
+  const previewPanel =
+    preview && preview.lines.length > 0 ? (
+      <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+        <p className="text-sm font-black text-primary">{t(lang, "pharmacyPackPreviewTitle")}</p>
+        <ul className="mt-2 space-y-1 text-sm font-bold text-primary/90">
+          {preview.lines.map((line, i) => (
+            <li key={i}>
+              = {line.count.toLocaleString()} {line.label}
+            </li>
+          ))}
+        </ul>
+        {preview.costPerBaseUnitUgx > 0 ? (
+          <p className="mt-2 text-xs font-bold text-emerald-900">
+            {t(lang, "pharmacyPackCostPreview")}: {preview.costPerBaseUnitUgx.toLocaleString()} UGX / {product.baseUnit}
           </p>
         ) : null}
+      </div>
+    ) : addsPieces > 0 && !pharmacyPack ? (
+      <p className="text-sm font-bold text-primary">
+        {tTemplate(lang, "stockRestockAdds", { count: String(addsPieces), unit: product.baseUnit })}
+      </p>
+    ) : null;
 
-        <label className="mt-4 block text-sm font-bold text-stone-800">
-          {t(lang, "restockSupplier")}
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-2 min-h-[48px] w-full rounded-2xl border-2 border-stone-200 bg-white px-3 text-base font-bold"
-          >
-            <option value={WALK_IN_SUPPLIER_ID}>{t(lang, "restockTownBuy")}</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
+  return (
+    <ReceiveOperationShell
+      lang={lang}
+      open={open}
+      title={tTemplate(lang, "stockRestockProductTitle", { name: product.name })}
+      subtitle={t(lang, "stockRestockProductHint")}
+      onSubmit={onSubmit}
+      onRequestClose={onClose}
+      statusStrip={<ReceiveStatusStrip lang={lang} />}
+      footer={<ReceiveFooter lang={lang} onCancel={onClose} primaryLabelKey="stockRestockSave" />}
+    >
+      <PurchaseLineEditor
+        lang={lang}
+        product={product}
+        quantityLabel={tTemplate(lang, pharmacyPack ? "pharmacyRestockQty" : "stockRestockPackQty", {
+          unit: packName,
+          pack: packName,
+        })}
+        quantityValue={packQty}
+        onQuantityChange={setPackQty}
+        costLabel={
+          pharmacyPack ? t(lang, "pharmacyPackTotalPaid") : tTemplate(lang, "stockRestockPackPrice", { pack: packName })
+        }
+        costValue={pharmacyPack ? invoiceTotal : packPrice}
+        onCostChange={pharmacyPack ? setInvoiceTotal : setPackPrice}
+        costPlaceholder="36000"
+        unitSelector={unitSelector}
+        preview={previewPanel}
+      />
 
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button type="button" onClick={onClose} className="min-h-[52px] rounded-2xl border-2 font-bold">
-            {t(lang, "cancel")}
-          </button>
-          <button type="submit" className="min-h-[52px] rounded-2xl bg-waka-600 font-black text-white">
-            {t(lang, "stockRestockSave")}
-          </button>
-        </div>
-      </form>
-    </AppModalOverlay>
+      <SupplierSelector
+        lang={lang}
+        mode="dropdown"
+        suppliers={suppliers}
+        supplierId={supplierId}
+        onSupplierIdChange={setSupplierId}
+        addSupplierHref="/stock?tab=suppliers"
+      />
+
+      <ReceiveMovementPreview
+        lang={lang}
+        currentStock={product.stockOnHand}
+        receiving={addsPieces}
+        unitLabel={product.baseUnit}
+      />
+
+      {invoiceTotalUgx > 0 ? (
+        <ReceiveSummaryPanel
+          lang={lang}
+          invoiceTotalUgx={invoiceTotalUgx}
+          productCount={1}
+          unitsReceived={addsPieces}
+          supplierName={supplierName}
+          businessDate={dateKeyKampala(new Date())}
+        />
+      ) : null}
+    </ReceiveOperationShell>
   );
 }

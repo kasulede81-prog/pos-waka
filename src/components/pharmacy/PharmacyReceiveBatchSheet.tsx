@@ -1,10 +1,20 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { Pill } from "lucide-react";
 import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { usePosStore } from "../../store/usePosStore";
 import { formatMedicineFullLabel } from "../../lib/pharmacyMedicine";
 import { WALK_IN_SUPPLIER_ID } from "../../lib/walkInSupplier";
+import { isControlledProduct } from "../../lib/pharmacyControlledMedicine";
+import { dateKeyKampala } from "../../lib/datesUg";
+import { ReceiveOperationShell } from "../inventory/receive/ReceiveOperationShell";
+import { SupplierSelector } from "../inventory/receive/SupplierSelector";
+import { PurchaseLineEditor } from "../inventory/receive/PurchaseLineEditor";
+import { BatchReceiveExtension } from "../inventory/receive/BatchReceiveExtension";
+import { ReceiveMovementPreview } from "../inventory/receive/ReceiveMovementPreview";
+import { ReceiveSummaryPanel } from "../inventory/receive/ReceiveSummaryPanel";
+import { ReceiveFooter } from "../inventory/receive/ReceiveFooter";
+import { ReceiveStatusStrip } from "../inventory/receive/ReceiveStatusStrip";
 
 type Props = {
   lang: Language;
@@ -28,7 +38,13 @@ export function PharmacyReceiveBatchSheet({ lang, product, open, onClose, onDone
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!open) return null;
+  const qtyN = Math.floor(Number(quantity)) || 0;
+  const costN = Math.round(Number(unitCost)) || 0;
+  const invoiceTotalUgx = qtyN * costN;
+  const supplierName = useMemo(() => {
+    if (supplierId === WALK_IN_SUPPLIER_ID) return t(lang, "restockTownBuy");
+    return suppliers.find((s) => s.id === supplierId)?.name;
+  }, [supplierId, suppliers, lang]);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -79,119 +95,80 @@ export function PharmacyReceiveBatchSheet({ lang, product, open, onClose, onDone
   };
 
   return (
-    <AppModalOverlay className="z-[75] flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4">
-      <form
-        onSubmit={submit}
-        className="flex max-h-[92dvh] w-full max-w-lg flex-col overflow-y-auto rounded-t-3xl bg-white p-4 shadow-2xl sm:rounded-3xl sm:p-6"
-      >
-        <h2 className="text-xl font-black text-stone-950">{t(lang, "pharmacyReceiveTitle")}</h2>
-        <p className="mt-1 text-sm font-semibold text-stone-600">{formatMedicineFullLabel(product)}</p>
+    <ReceiveOperationShell
+      lang={lang}
+      open={open}
+      title={t(lang, "pharmacyReceiveTitle")}
+      subtitle={formatMedicineFullLabel(product)}
+      error={error}
+      onSubmit={submit}
+      onRequestClose={onClose}
+      zClassName="z-[75]"
+      icon={<Pill className="h-5 w-5" strokeWidth={2.25} aria-hidden />}
+      statusStrip={<ReceiveStatusStrip lang={lang} />}
+      footer={
+        <ReceiveFooter
+          lang={lang}
+          onCancel={onClose}
+          primaryLabelKey="pharmacyReceiveCta"
+          primaryBusy={busy}
+          primaryClassName="bg-teal-600 text-white shadow-md hover:bg-teal-700"
+        />
+      }
+    >
+      <SupplierSelector
+        lang={lang}
+        mode="dropdown"
+        suppliers={suppliers}
+        supplierId={supplierId}
+        onSupplierIdChange={setSupplierId}
+        addSupplierHref="/pharmacy/inventory?tab=suppliers"
+      />
 
-        <label className="mt-4 block text-sm font-bold text-stone-700">
-          {t(lang, "suppliersTitle")}
-          <select
-            value={supplierId}
-            onChange={(e) => setSupplierId(e.target.value)}
-            className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base"
-          >
-            <option value={WALK_IN_SUPPLIER_ID}>Town / market</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="mt-3 block text-sm font-bold text-stone-700">
-          {t(lang, "pharmacyPurchaseInvoice")}
-          <input
-            value={invoice}
-            onChange={(e) => setInvoice(e.target.value)}
-            className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base"
+      <PurchaseLineEditor
+        lang={lang}
+        product={product}
+        quantityLabel={`${t(lang, "stockLabel")} *`}
+        quantityValue={quantity}
+        onQuantityChange={setQuantity}
+        quantityInputMode="numeric"
+        costLabel={`${t(lang, "pharmacyEditBuyPriceLabel")} *`}
+        costValue={unitCost}
+        onCostChange={setUnitCost}
+        extension={
+          <BatchReceiveExtension
+            lang={lang}
+            batchNumber={batchNumber}
+            onBatchNumberChange={setBatchNumber}
+            expiryDate={expiryDate}
+            onExpiryDateChange={setExpiryDate}
+            manufactureDate={manufactureDate}
+            onManufactureDateChange={setManufactureDate}
+            purchaseInvoice={invoice}
+            onPurchaseInvoiceChange={setInvoice}
+            location={location}
+            onLocationChange={setLocation}
+            controlledWarning={isControlledProduct(product) ? t(lang, "pharmacyControlled") : null}
           />
-        </label>
+        }
+      />
 
-        <label className="mt-3 block text-sm font-bold text-stone-700">
-          {t(lang, "pharmacyBatchNumber")} *
-          <input
-            required
-            value={batchNumber}
-            onChange={(e) => setBatchNumber(e.target.value)}
-            className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-bold"
-          />
-        </label>
+      <ReceiveMovementPreview
+        lang={lang}
+        currentStock={product.stockOnHand}
+        receiving={qtyN}
+        unitLabel={product.baseUnit}
+      />
 
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <label className="block text-sm font-bold text-stone-700">
-            {t(lang, "pharmacyExpiryDateLabel")} *
-            <input
-              type="date"
-              required
-              value={expiryDate}
-              onChange={(e) => setExpiryDate(e.target.value)}
-              className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-3 py-3 text-base"
-            />
-          </label>
-          <label className="block text-sm font-bold text-stone-700">
-            {t(lang, "pharmacyManufactureDate")}
-            <input
-              type="date"
-              value={manufactureDate}
-              onChange={(e) => setManufactureDate(e.target.value)}
-              className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-3 py-3 text-base"
-            />
-          </label>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <label className="block text-sm font-bold text-stone-700">
-            {t(lang, "stockLabel")} *
-            <input
-              inputMode="numeric"
-              required
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-xl font-black"
-            />
-          </label>
-          <label className="block text-sm font-bold text-stone-700">
-            {t(lang, "pharmacyEditBuyPriceLabel")} *
-            <input
-              inputMode="numeric"
-              required
-              value={unitCost}
-              onChange={(e) => setUnitCost(e.target.value)}
-              className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base font-bold"
-            />
-          </label>
-        </div>
-
-        <label className="mt-3 block text-sm font-bold text-stone-700">
-          {t(lang, "pharmacyBatchLocation")}
-          <input
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            placeholder={t(lang, "pharmacyBatchLocationHint")}
-            className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-base"
-          />
-        </label>
-
-        {error ? <p className="mt-3 text-sm font-bold text-rose-700">{error}</p> : null}
-
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          <button type="button" onClick={onClose} className="min-h-[52px] rounded-2xl border-2 font-bold">
-            {t(lang, "cancel")}
-          </button>
-          <button
-            type="submit"
-            disabled={busy}
-            className="min-h-[52px] rounded-2xl bg-teal-600 text-base font-black text-white disabled:opacity-60"
-          >
-            {t(lang, "pharmacyReceiveCta")}
-          </button>
-        </div>
-      </form>
-    </AppModalOverlay>
+      <ReceiveSummaryPanel
+        lang={lang}
+        invoiceTotalUgx={invoiceTotalUgx}
+        productCount={1}
+        unitsReceived={qtyN}
+        supplierName={supplierName}
+        businessDate={dateKeyKampala(new Date())}
+        purchaseReference={invoice.trim() || undefined}
+      />
+    </ReceiveOperationShell>
   );
 }

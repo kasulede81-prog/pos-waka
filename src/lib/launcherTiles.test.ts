@@ -3,9 +3,11 @@ import {
   DEFAULT_LAUNCHER_TILE_LAYOUT,
   DEFAULT_LAUNCHER_TILE_ORDER,
   mergeLauncherTileLayout,
+  PHARMACY_LAUNCHER_TILE_ORDER,
   resolveHomeMenuTiles,
 } from "./launcherTiles";
 import { DEFAULT_OFFICE_HUB_TILE_LAYOUT, mergeOfficeHubTileLayout, resolveOfficeHubSections } from "./officeHubSections";
+import { PHARMACY_DISPENSE_ROUTE, PHARMACY_HOME_ROUTE } from "./pharmacyNav";
 
 describe("launcher tile defaults", () => {
   it("uses branded default order", () => {
@@ -24,6 +26,10 @@ describe("launcher tile defaults", () => {
     ]);
   });
 
+  it("prepends dashboard for pharmacy order", () => {
+    expect(PHARMACY_LAUNCHER_TILE_ORDER[0]).toBe("dashboard");
+  });
+
   it("merges saved layout over defaults", () => {
     const merged = mergeLauncherTileLayout({ cash: { color: "red" } });
     expect(merged.cash?.color).toBe("red");
@@ -40,6 +46,21 @@ describe("launcher tile defaults", () => {
     expect(reports?.customColor).toBe("#0d9488");
     expect(reports?.scale).toBe(50);
     expect(secondary.find((t) => t.id === "inventory")?.customColor).toBe("#db2777");
+  });
+
+  it("adds pharmacy dashboard tile and dispense hero route", () => {
+    const { hero, secondary } = resolveHomeMenuTiles({
+      savedOrder: [],
+      layout: {},
+      hasPermission: () => true,
+      pharmacyMode: true,
+    });
+    expect(hero?.labelKey).toBe("desktopHomeTileDispense");
+    expect(hero?.to).toBe(PHARMACY_DISPENSE_ROUTE);
+    expect(secondary.find((t) => t.id === "dashboard")?.to).toBe(PHARMACY_HOME_ROUTE);
+    expect(secondary.find((t) => t.id === "inventory")?.to).toBe("/pharmacy/inventory");
+    expect(secondary.find((t) => t.id === "reports")?.to).toBe("/pharmacy/reports");
+    expect(secondary.find((t) => t.id === "salesHistory")?.labelKey).toBe("pharmacyDispensingHistory");
   });
 });
 

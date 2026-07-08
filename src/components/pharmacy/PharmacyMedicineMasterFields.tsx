@@ -106,6 +106,8 @@ type Props = {
   state: PharmacyMedicineMasterFieldState;
   onChange: (patch: Partial<PharmacyMedicineMasterFieldState>) => void;
   showStrengthForm?: boolean;
+  hideBrandName?: boolean;
+  hideGeneric?: boolean;
   compact?: boolean;
 };
 
@@ -114,7 +116,15 @@ const inputClass =
 const labelClass = "block text-sm font-bold text-stone-700";
 const sectionClass = "rounded-2xl border border-stone-200 bg-stone-50/80 p-4 space-y-3";
 
-export function PharmacyMedicineMasterFields({ lang, state, onChange, showStrengthForm = true, compact }: Props) {
+export function PharmacyMedicineMasterFields({
+  lang,
+  state,
+  onChange,
+  showStrengthForm = true,
+  hideBrandName,
+  hideGeneric,
+  compact,
+}: Props) {
   const flagClass = clsx(
     "flex min-h-[48px] items-center gap-3 rounded-2xl border-2 px-4 py-2 touch-manipulation",
     compact ? "text-sm" : "text-base",
@@ -124,6 +134,7 @@ export function PharmacyMedicineMasterFields({ lang, state, onChange, showStreng
     <div className="space-y-4">
       <section className={sectionClass}>
         <h4 className="text-sm font-black uppercase tracking-wide text-stone-500">{t(lang, "pharmacyMasterSectionIdentity")}</h4>
+        {hideBrandName ? null : (
         <label className={labelClass}>
           {t(lang, "pharmacyBrandName")}
           <input
@@ -132,6 +143,8 @@ export function PharmacyMedicineMasterFields({ lang, state, onChange, showStreng
             className={clsx(inputClass, "mt-1")}
           />
         </label>
+        )}
+        {hideGeneric ? null : (
         <label className={labelClass}>
           {t(lang, "pharmacyGenericName")}
           <input
@@ -140,6 +153,7 @@ export function PharmacyMedicineMasterFields({ lang, state, onChange, showStreng
             className={clsx(inputClass, "mt-1")}
           />
         </label>
+        )}
         {showStrengthForm ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <label className={labelClass}>

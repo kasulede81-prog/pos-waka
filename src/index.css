@@ -133,6 +133,8 @@ body {
     --waka-bottom-nav-h: 0px;
     --waka-module-exit-h: 4.5rem;
     --waka-hospitality-nav-h: 4.25rem;
+    --waka-pharmacy-nav-h: 4.25rem;
+    --waka-floor-nav-h: 4.5rem;
     --waka-pos-checkout-strip-h: 3.25rem;
     --waka-scroll-tail-default: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.5rem);
     --waka-scroll-tail-back-office: calc(var(--waka-bottom-nav-h) + var(--waka-safe-bottom) + 0.75rem);
@@ -155,13 +157,19 @@ body {
     }
   }
 
-  /** Back office / settings modules — fixed red exit bar on mobile. */
-  @media (max-width: 1023px) {
+  /** Bottom chrome — tablet and below only (768px cutoff, matches JS layout band). */
+  @media (max-width: 767px) {
     .app-shell--module-exit {
       --waka-bottom-nav-h: var(--waka-module-exit-h);
     }
     .app-shell--hospitality-nav {
       --waka-bottom-nav-h: var(--waka-hospitality-nav-h);
+    }
+    .app-shell--pharmacy-nav {
+      --waka-bottom-nav-h: var(--waka-pharmacy-nav-h);
+    }
+    .app-shell--floor-nav {
+      --waka-bottom-nav-h: var(--waka-floor-nav-h);
     }
   }
 
@@ -237,8 +245,27 @@ body {
     scroll-padding-bottom: var(--waka-scroll-tail-pos-sale);
   }
 
-  /** Extra tail room on long app pages (in addition to MobileScrollTail). */
+  /** Enterprise page container — replaces manual pb-24 / page-content-pad stacking. */
+  .enterprise-page {
+    min-width: 0;
+    max-width: 100%;
+    padding-bottom: calc(0.75rem + var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
+  }
+  .enterprise-page--workspace {
+    padding-bottom: calc(0.5rem + var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
+  }
+  .enterprise-page--viewport {
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+  .enterprise-page--flush {
+    padding-bottom: 0;
+  }
+
+  /** @deprecated Use .enterprise-page — kept for gradual migration. */
   .page-content-pad {
+    min-width: 0;
+    max-width: 100%;
     padding-bottom: calc(0.75rem + var(--waka-bottom-nav-h) + var(--waka-safe-bottom));
   }
 
@@ -266,7 +293,8 @@ body {
       scroll-padding-bottom: 2rem;
     }
     .pb-nav-safe,
-    .page-content-pad {
+    .page-content-pad,
+    .enterprise-page:not(.enterprise-page--viewport):not(.enterprise-page--flush) {
       padding-bottom: 2rem;
     }
   }

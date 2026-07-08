@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { groupExpiryRowsByBucket } from "../lib/pharmacyInventoryReports";
@@ -11,6 +11,8 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
 import { buildExpiryCenterRows } from "../lib/pharmacyBatches";
+import { AdjustmentConfirmDialog } from "../components/inventory/adjustments/AdjustmentConfirmDialog";
+import { AdjustmentMovementPreview } from "../components/inventory/adjustments/AdjustmentMovementPreview";
 
 const BUCKETS = ["expired", "today", "d7", "d30", "d60", "d90"] as const;
 
@@ -36,6 +38,16 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [manufacturerFilter, setManufacturerFilter] = useState("");
   const [controlledOnly, setControlledOnly] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    kind: "writeoff" | "return";
+    productId: string;
+    batchId: string;
+    qty: number;
+    productName: string;
+    batchNumber: string;
+    currentStock: number;
+    unit: string;
+  } | null>(null);
 
   const pharmacy = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const canWriteOff = hasEffectivePermission(actor.role, "pharmacy.expired_writeoff", snapshot, authMode);
@@ -104,14 +116,44 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
 
   const handleWriteOff = (productId: string, batchId: string, qty: number) => {
     const r = writeOffExpiredStock({ productId, quantity: qty, reason: "expired", batchId });
+    setPendingAction(null);
     setToast(r.ok ? t(lang, "pharmacyWriteOffCta") + " ✓" : t(lang, r.errorKey ?? "invalid"));
     window.setTimeout(() => setToast(null), 2500);
   };
 
   const handleReturn = (productId: string, batchId: string, qty: number) => {
     const r = pharmacySupplierReturn({ productId, batchId, quantity: qty, reason: "near_expiry_return" });
+    setPendingAction(null);
     setToast(r.ok ? t(lang, "pharmacyReturnSupplier") + " ✓" : t(lang, r.errorKey ?? "invalid"));
     window.setTimeout(() => setToast(null), 2500);
+  };
+
+  const queueWriteOff = (row: (typeof rows)[number]) => {
+    const p = products.find((x) => x.id === row.productId);
+    setPendingAction({
+      kind: "writeoff",
+      productId: row.productId,
+      batchId: row.batchId,
+      qty: row.quantity,
+      productName: p ? formatMedicineFullLabel(p) : row.productName,
+      batchNumber: row.batchNumber,
+      currentStock: p?.stockOnHand ?? row.quantity,
+      unit: p?.baseUnit ?? "",
+    });
+  };
+
+  const queueReturn = (row: (typeof rows)[number]) => {
+    const p = products.find((x) => x.id === row.productId);
+    setPendingAction({
+      kind: "return",
+      productId: row.productId,
+      batchId: row.batchId,
+      qty: row.quantity,
+      productName: p ? formatMedicineFullLabel(p) : row.productName,
+      batchNumber: row.batchNumber,
+      currentStock: p?.stockOnHand ?? row.quantity,
+      unit: p?.baseUnit ?? "",
+    });
   };
 
   return (
@@ -250,7 +292,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                   {canWriteOff && (activeBucket === "expired" || activeBucket === "today") ? (
                     <button
                       type="button"
-                      onClick={() => handleWriteOff(row.productId, row.batchId, row.quantity)}
+                      onClick={() => queueWriteOff(row)}
                       className="min-h-[48px] rounded-2xl bg-rose-700 px-4 text-sm font-black text-white touch-manipulation"
                     >
                       {t(lang, "pharmacyWriteOffCta")}
@@ -259,7 +301,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
                   {canReturn ? (
                     <button
                       type="button"
-                      onClick={() => handleReturn(row.productId, row.batchId, row.quantity)}
+                      onClick={() => queueReturn(row)}
                       className="min-h-[48px] rounded-2xl border border-stone-300 bg-white px-4 text-sm font-black text-stone-800 touch-manipulation"
                     >
                       {t(lang, "pharmacyReturnSupplier")}
@@ -277,6 +319,50 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
           ))}
         </ul>
       )}
+
+      {pendingAction ? (
+        <AdjustmentConfirmDialog
+          lang={lang}
+          open
+          danger={pendingAction.kind === "writeoff"}
+          title={
+            pendingAction.kind === "writeoff"
+              ? t(lang, "pharmacyWriteOffConfirmTitle")
+              : t(lang, "adjConfirmSupplierReturnTitle")
+          }
+          confirmLabelKey={
+            pendingAction.kind === "writeoff" ? "pharmacyWriteOffCta" : "pharmacyReturnSupplier"
+          }
+          onCancel={() => setPendingAction(null)}
+          onConfirm={() => {
+            if (pendingAction.kind === "writeoff") {
+              handleWriteOff(pendingAction.productId, pendingAction.batchId, pendingAction.qty);
+            } else {
+              handleReturn(pendingAction.productId, pendingAction.batchId, pendingAction.qty);
+            }
+          }}
+          body={
+            <p>
+              {tTemplate(lang, pendingAction.kind === "writeoff" ? "adjConfirmWriteOffBody" : "adjConfirmReturnBody", {
+                name: pendingAction.productName,
+                batch: pendingAction.batchNumber,
+                qty: String(pendingAction.qty),
+                unit: pendingAction.unit,
+              })}
+            </p>
+          }
+        >
+          <div className="mt-4">
+            <AdjustmentMovementPreview
+              lang={lang}
+              mode="return"
+              currentStock={pendingAction.currentStock}
+              adjustment={-pendingAction.qty}
+              unitLabel={pendingAction.unit}
+            />
+          </div>
+        </AdjustmentConfirmDialog>
+      ) : null}
     </div>
   );
 }

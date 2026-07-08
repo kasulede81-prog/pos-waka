@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft } from "lucide-react";
 import clsx from "clsx";
 import type { Language, PharmacyPackaging } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { shelfIconFor } from "../../lib/productCategories";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
 import { MEDICINE_FORMS } from "../../lib/pharmacyMedicine";
 import {
   buildPharmacyMasterFromState,
@@ -14,20 +12,25 @@ import {
 } from "../pharmacy/PharmacyMedicineMasterFields";
 import { usePosStore } from "../../store/usePosStore";
 import { defaultPharmacyCategoriesForBusinessType } from "../../lib/pharmacy";
-import { pharmacyCostWarnings } from "../../lib/pharmacyCostIntegrity";
+import { unitCostFromInvoiceTotal } from "../../lib/costPrecision";
 import {
   PHARMACY_BASE_UNITS,
   PHARMACY_LEVEL1_UNITS,
   PHARMACY_LEVEL2_UNITS,
   buyingUnitFromPackaging,
-  calcCostPerBaseUnitUgx,
   calcTotalBaseUnits,
   packagingStockPreviewLines,
 } from "../../lib/pharmacyPackaging";
+import { ProductWizardShell } from "./wizard/ProductWizardShell";
+import { WizardFooter } from "./wizard/WizardFooter";
+import { WizardStepHeading } from "./wizard/WizardStepHeading";
+import { WizardPricingPanel } from "./wizard/WizardPricingPanel";
+import { WIZARD_INPUT_NUMERIC, WIZARD_INPUT_TEXT, wizardChoiceButtonClass } from "./wizard/wizardTokens";
+import { PHARMACY_PRODUCT_WIZARD_STEPS } from "../../lib/productWizardSteps";
 
-type Step = "details" | "stockCost" | "selling";
+type Step = (typeof PHARMACY_PRODUCT_WIZARD_STEPS)[number];
 
-const STEPS: Step[] = ["details", "stockCost", "selling"];
+const STEPS: Step[] = [...PHARMACY_PRODUCT_WIZARD_STEPS];
 
 type Props = {
   lang: Language;
@@ -175,7 +178,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
   }, [packagingEnabled, draftPackaging, receivedOuterQty, openingStock, totalAmountPaid]);
 
   const costPerUnit = useMemo(
-    () => calcCostPerBaseUnitUgx(Math.floor(Number(totalAmountPaid.replace(/\D/g, "")) || 0), totalBaseUnits),
+    () => unitCostFromInvoiceTotal(Math.floor(Number(totalAmountPaid.replace(/\D/g, "")) || 0), totalBaseUnits),
     [totalAmountPaid, totalBaseUnits],
   );
 
@@ -186,24 +189,25 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     return packagingStockPreviewLines(draftPackaging, outer);
   }, [draftPackaging, receivedOuterQty]);
 
-  const previewWarnings = useMemo(() => {
-    const sell = Math.max(0, Math.floor(Number(tabletPrice.replace(/\D/g, "")) || 0));
-    if (costPerUnit <= 0 && sell <= 0) return [];
-    return pharmacyCostWarnings({
-      id: "preview",
-      name: name.trim() || "—",
-      sellingMode: "unit",
-      baseUnit: packagingEnabled ? baseUnit : "tablet",
-      sellingPricePerUnitUgx: sell,
-      costPricePerUnitUgx: costPerUnit,
-      stockOnHand: 0,
-      minimumStockAlert: 0,
-      category: "",
-      sku: "",
-      updatedAt: "",
-      version: 1,
-    });
-  }, [tabletPrice, costPerUnit, name, packagingEnabled, baseUnit]);
+  const tabletSell = Math.max(0, Math.floor(Number(tabletPrice.replace(/\D/g, "")) || 0));
+  const stripSell = Math.max(0, Math.floor(Number(stripPrice.replace(/\D/g, "")) || 0));
+  const boxSell = Math.max(0, Math.floor(Number(boxPrice.replace(/\D/g, "")) || 0));
+
+  const extraUnitPrices = useMemo(() => {
+    const rows: { label: string; sellPriceUgx: number }[] = [];
+    if (packagingEnabled && level1Enabled && stripSell > 0) {
+      rows.push({ label: t(lang, "pharmacyPackStripPriceOptional"), sellPriceUgx: stripSell });
+    }
+    if (packagingEnabled && level2Enabled && boxSell > 0) {
+      rows.push({ label: t(lang, "pharmacyPackBoxPriceOptional"), sellPriceUgx: boxSell });
+    }
+    return rows;
+  }, [packagingEnabled, level1Enabled, level2Enabled, stripSell, boxSell, lang]);
+
+  const batchSummary =
+    batchNumber.trim() && expiryDate.trim()
+      ? `${t(lang, "pharmacyBatchNumberLabel")}: ${batchNumber.trim()} · ${t(lang, "pharmacyExpiryDateLabel")}: ${expiryDate}`
+      : undefined;
 
   const save = () => {
     const priceUgx = Math.max(0, Math.floor(Number(tabletPrice.replace(/\D/g, "")) || 0));
@@ -306,11 +310,8 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     if (i >= 0) setStep(STEPS[i]!);
   };
 
-  if (!open) return null;
-
-  const inputClass =
-    "min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-lg font-bold outline-none ring-waka-300 focus:ring";
-  const labelClass = "block text-sm font-bold text-stone-700";
+  const labelClass = "block text-sm font-bold text-foreground";
+  const isLastStep = step === "selling";
 
   const outerLabel = level2Enabled
     ? level2Unit
@@ -319,40 +320,37 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
       : baseUnit;
 
   return (
-    <AppModalOverlay
-      className="z-[58] flex flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top))]"
-      role="dialog"
-      aria-modal
-      aria-labelledby="pharmacy-add-medicine-title"
+    <ProductWizardShell
+      lang={lang}
+      open={open}
+      onClose={onClose}
+      title={t(lang, "pharmacyPage_addMedicine")}
+      titleId="pharmacy-add-medicine-title"
+      stepIndex={stepIndex}
+      totalSteps={STEPS.length}
+      savedFlash={savedFlash}
+      savedMessage={t(lang, "pharmacyAddMedicine_saved")}
+      zClassName="z-[58]"
+      footer={
+        !savedFlash ? (
+          <WizardFooter
+            lang={lang}
+            isLastStep={isLastStep}
+            canGoBack={stepIndex > 0}
+            canProceed={!stepBlocked()}
+            disabled={disabled}
+            onBack={back}
+            onPrimary={next}
+            primaryLabelKey={isLastStep ? "pharmacyAddMedicine_save" : undefined}
+            nextLabelKey="simpleAddNext"
+            primaryType="button"
+          />
+        ) : undefined
+      }
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-stone-100 px-4 py-3">
-        {stepIndex > 0 ? (
-          <button type="button" onClick={back} className="rounded-xl p-2 text-stone-600" aria-label={t(lang, "back")}>
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-        ) : (
-          <button type="button" onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-bold text-stone-600">
-            {t(lang, "cancel")}
-          </button>
-        )}
-        <h2 id="pharmacy-add-medicine-title" className="flex-1 text-center text-lg font-black text-stone-900">
-          {t(lang, "pharmacyPage_addMedicine")}
-        </h2>
-        <span className="w-12 text-right text-xs font-bold text-stone-500">
-          {stepIndex + 1}/{STEPS.length}
-        </span>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {savedFlash ? (
-          <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-center text-lg font-black text-emerald-900">
-            {t(lang, "pharmacyAddMedicine_saved")}
-          </p>
-        ) : null}
-
-        {step === "details" ? (
-          <div className="space-y-4">
-            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepDetailsTitle")}</h3>
+      {step === "details" ? (
+          <div className="wizard-step-enter space-y-5">
+            <WizardStepHeading title={t(lang, "pharmacyPackStepDetailsTitle")} />
             <label className={labelClass}>
               {t(lang, "pharmacyPage_medicineName")} *
               <input
@@ -360,12 +358,12 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                 onChange={(e) => setName(e.target.value)}
                 placeholder={uiPlaceholder(lang, preferences.businessType, "simpleAddStep1Example", preferences.pharmacyModeEnabled)}
                 autoFocus
-                className={clsx(inputClass, "mt-1")}
+                className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
               />
             </label>
             <div>
               <p className={labelClass}>{t(lang, "pharmacyTerm_medicineCategory")} *</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
+              <div className="mt-2 grid grid-cols-2 gap-2.5">
                 {categoryOptions.map((c) => (
                   <button
                     key={c}
@@ -375,8 +373,8 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                       setCategory(c);
                     }}
                     className={clsx(
-                      "min-h-[44px] rounded-2xl border-2 px-2 text-sm font-black",
-                      categoryPick === c ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-900",
+                      wizardChoiceButtonClass(categoryPick === c),
+                      "flex items-center justify-center gap-2 px-3",
                     )}
                   >
                     {shelfIconFor(c) ? <span className="mr-1">{shelfIconFor(c)}</span> : null}
@@ -391,12 +389,12 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                 value={strength}
                 onChange={(e) => setStrength(e.target.value)}
                 placeholder={t(lang, "pharmacyPlaceholder_strengthExample")}
-                className={clsx(inputClass, "mt-1")}
+                className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
               />
             </label>
             <label className={labelClass}>
               {t(lang, "pharmacyFormLabel")} *
-              <select value={medicineForm} onChange={(e) => setMedicineForm(e.target.value)} className={clsx(inputClass, "mt-1")}>
+              <select value={medicineForm} onChange={(e) => setMedicineForm(e.target.value)} className={clsx(WIZARD_INPUT_TEXT, "mt-2")}>
                 <option value="">{t(lang, "pharmacyFormSelect")}</option>
                 {MEDICINE_FORMS.map((f) => (
                   <option key={f} value={f}>
@@ -411,7 +409,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                 value={minAlert}
                 onChange={(e) => setMinAlert(e.target.value.replace(/\D/g, "").slice(0, 6))}
                 inputMode="numeric"
-                className={clsx(inputClass, "mt-1")}
+                className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
               />
             </label>
 
@@ -430,29 +428,29 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
         ) : null}
 
         {step === "stockCost" ? (
-          <div className="space-y-4">
-            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyOpeningBatchTitle")}</h3>
+          <div className="wizard-step-enter space-y-5">
+            <WizardStepHeading title={t(lang, "pharmacyOpeningBatchTitle")} />
             <label className={labelClass}>
               {t(lang, "pharmacyOpeningBatchNumber")} *
               <input
                 value={batchNumber}
                 onChange={(e) => setBatchNumber(e.target.value)}
                 placeholder="LOT-001"
-                className={clsx(inputClass, "mt-1 font-mono")}
+                className={clsx(WIZARD_INPUT_TEXT, "mt-2 font-mono")}
               />
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className={labelClass}>
                 {t(lang, "pharmacyManufactureDate")}
-                <input type="date" value={manufactureDate} onChange={(e) => setManufactureDate(e.target.value)} className={clsx(inputClass, "mt-1")} />
+                <input type="date" value={manufactureDate} onChange={(e) => setManufactureDate(e.target.value)} className={clsx(WIZARD_INPUT_TEXT, "mt-2")} />
               </label>
               <label className={labelClass}>
                 {t(lang, "pharmacyExpiryDateLabel")} *
-                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={clsx(inputClass, "mt-1")} />
+                <input type="date" value={expiryDate} onChange={(e) => setExpiryDate(e.target.value)} className={clsx(WIZARD_INPUT_TEXT, "mt-2")} />
               </label>
             </div>
 
-            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepStockTitle")}</h3>
+            <WizardStepHeading title={t(lang, "pharmacyPackStepStockTitle")} />
 
             <label className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
               <input
@@ -472,7 +470,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                     value={openingStock}
                     onChange={(e) => setOpeningStock(e.target.value.replace(/\D/g, "").slice(0, 8))}
                     inputMode="numeric"
-                    className={clsx(inputClass, "mt-1")}
+                    className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
                   />
                 </label>
                 <label className={labelClass}>
@@ -481,7 +479,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                     value={totalAmountPaid}
                     onChange={(e) => setTotalAmountPaid(e.target.value.replace(/\D/g, "").slice(0, 12))}
                     inputMode="numeric"
-                    className={clsx(inputClass, "mt-1")}
+                    className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
                   />
                 </label>
               </>
@@ -489,7 +487,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
               <>
                 <label className={labelClass}>
                   {t(lang, "pharmacyPackBaseUnit")}
-                  <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className={clsx(inputClass, "mt-1")}>
+                  <select value={baseUnit} onChange={(e) => setBaseUnit(e.target.value)} className={clsx(WIZARD_INPUT_TEXT, "mt-2")}>
                     {PHARMACY_BASE_UNITS.map((u) => (
                       <option key={u} value={u}>
                         {u.charAt(0).toUpperCase() + u.slice(1)}
@@ -504,7 +502,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                 </label>
                 {level1Enabled ? (
                   <div className="grid grid-cols-2 gap-2">
-                    <select value={level1Unit} onChange={(e) => setLevel1Unit(e.target.value)} className={inputClass}>
+                    <select value={level1Unit} onChange={(e) => setLevel1Unit(e.target.value)} className={WIZARD_INPUT_TEXT}>
                       {PHARMACY_LEVEL1_UNITS.map((u) => (
                         <option key={u} value={u}>
                           {u}
@@ -516,7 +514,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                       onChange={(e) => setLevel1Qty(e.target.value.replace(/\D/g, "").slice(0, 4))}
                       placeholder={t(lang, "pharmacyPackContainsBase")}
                       inputMode="numeric"
-                      className={inputClass}
+                      className={WIZARD_INPUT_TEXT}
                     />
                   </div>
                 ) : null}
@@ -527,7 +525,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                 </label>
                 {level2Enabled ? (
                   <div className="grid grid-cols-2 gap-2">
-                    <select value={level2Unit} onChange={(e) => setLevel2Unit(e.target.value)} className={inputClass}>
+                    <select value={level2Unit} onChange={(e) => setLevel2Unit(e.target.value)} className={WIZARD_INPUT_TEXT}>
                       {PHARMACY_LEVEL2_UNITS.map((u) => (
                         <option key={u} value={u}>
                           {u}
@@ -539,7 +537,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                       onChange={(e) => setLevel2Qty(e.target.value.replace(/\D/g, "").slice(0, 4))}
                       placeholder={t(lang, "pharmacyPackContainsL1")}
                       inputMode="numeric"
-                      className={inputClass}
+                      className={WIZARD_INPUT_TEXT}
                     />
                   </div>
                 ) : null}
@@ -550,7 +548,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                     value={receivedOuterQty}
                     onChange={(e) => setReceivedOuterQty(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     inputMode="numeric"
-                    className={clsx(inputClass, "mt-1")}
+                    className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
                   />
                 </label>
 
@@ -561,7 +559,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                       value={openingStock}
                       onChange={(e) => setOpeningStock(e.target.value.replace(/\D/g, "").slice(0, 8))}
                       inputMode="numeric"
-                      className={clsx(inputClass, "mt-1")}
+                      className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
                     />
                   </label>
                 ) : null}
@@ -572,7 +570,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                     value={totalAmountPaid}
                     onChange={(e) => setTotalAmountPaid(e.target.value.replace(/\D/g, "").slice(0, 12))}
                     inputMode="numeric"
-                    className={clsx(inputClass, "mt-1")}
+                    className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
                   />
                 </label>
 
@@ -600,58 +598,72 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
         ) : null}
 
         {step === "selling" ? (
-          <div className="space-y-4">
-            <h3 className="text-xl font-black text-stone-900">{t(lang, "pharmacyPackStepSellTitle")}</h3>
+          <div className="wizard-step-enter space-y-5">
+            <WizardStepHeading title={t(lang, "pharmacyPackStepSellTitle")} />
             <label className={labelClass}>
               {tTemplate(lang, "pharmacyPackTabletPrice", { unit: packagingEnabled ? baseUnit : "tablet" })}
-              <input
-                value={tabletPrice}
-                onChange={(e) => setTabletPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                inputMode="numeric"
-                className={clsx(inputClass, "mt-1")}
-              />
+              <div className="relative mt-2">
+                <input
+                  value={tabletPrice}
+                  onChange={(e) => setTabletPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                  inputMode="numeric"
+                  autoFocus
+                  className={clsx(WIZARD_INPUT_NUMERIC, "pr-16")}
+                />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                  UGX
+                </span>
+              </div>
             </label>
             {packagingEnabled && level1Enabled ? (
               <label className={labelClass}>
                 {t(lang, "pharmacyPackStripPriceOptional")}
-                <input
-                  value={stripPrice}
-                  onChange={(e) => setStripPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                  inputMode="numeric"
-                  className={clsx(inputClass, "mt-1")}
-                />
+                <div className="relative mt-2">
+                  <input
+                    value={stripPrice}
+                    onChange={(e) => setStripPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                    inputMode="numeric"
+                    className={clsx(WIZARD_INPUT_NUMERIC, "pr-16")}
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                    UGX
+                  </span>
+                </div>
               </label>
             ) : null}
             {packagingEnabled && level2Enabled ? (
               <label className={labelClass}>
                 {t(lang, "pharmacyPackBoxPriceOptional")}
-                <input
-                  value={boxPrice}
-                  onChange={(e) => setBoxPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                  inputMode="numeric"
-                  className={clsx(inputClass, "mt-1")}
-                />
+                <div className="relative mt-2">
+                  <input
+                    value={boxPrice}
+                    onChange={(e) => setBoxPrice(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                    inputMode="numeric"
+                    className={clsx(WIZARD_INPUT_NUMERIC, "pr-16")}
+                  />
+                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
+                    UGX
+                  </span>
+                </div>
               </label>
             ) : null}
-            {previewWarnings.map((w) => (
-              <p key={w.kind} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-950">
-                {t(lang, w.messageKey)}
-              </p>
-            ))}
+            {costPerUnit > 0 && tabletSell > 0 ? (
+              <WizardPricingPanel
+                lang={lang}
+                pharmacyMode
+                unitCostUgx={costPerUnit}
+                sellPriceUgx={tabletSell}
+                unitLabel={packagingEnabled ? baseUnit : "tablet"}
+                packCostUgx={Math.floor(Number(totalAmountPaid.replace(/\D/g, "")) || 0)}
+                piecesPerPack={totalBaseUnits}
+                packLabel={outerLabel}
+                extraUnitPrices={extraUnitPrices}
+                batchSummary={batchSummary}
+                controlledIndicator={masterState.controlledDrug}
+              />
+            ) : null}
           </div>
         ) : null}
-      </div>
-
-      <footer className="shrink-0 border-t border-stone-100 p-4">
-        <button
-          type="button"
-          disabled={disabled || stepBlocked()}
-          onClick={next}
-          className="min-h-[52px] w-full rounded-2xl bg-waka-600 text-lg font-black text-white disabled:opacity-50"
-        >
-          {step === "selling" ? t(lang, "pharmacyAddMedicine_save") : t(lang, "simpleAddNext")}
-        </button>
-      </footer>
-    </AppModalOverlay>
+    </ProductWizardShell>
   );
 }

@@ -88,6 +88,7 @@ import { canRecordCashExpenses } from "../lib/cashExpenses";
 import { RecordExpenseModal } from "../components/pos/RecordExpenseModal";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { gateExpiredMedicineSale } from "../lib/pharmacySaleGuard";
+import { findProductByBarcode } from "../lib/pharmacyMedicine";
 import { PharmacyFefoBatchPicker } from "../components/pharmacy/PharmacyFefoBatchPicker";
 import { PharmacyControlledDispenseGate } from "../components/pharmacy/compliance/PharmacyControlledDispenseGate";
 import { usePharmacyControlledCheckout } from "../hooks/usePharmacyControlledCheckout";
@@ -842,7 +843,7 @@ export function PosPage({ lang }: { lang: Language }) {
     void startBarcodeSession("hid", {
       onScan: (code) => {
         setSearchQuery(code);
-        const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
+        const exact = findProductByBarcode(products, code);
         if (exact) {
           handleBarcodeProduct(exact);
         } else {
@@ -865,7 +866,7 @@ export function PosPage({ lang }: { lang: Language }) {
       onScan: (code) => {
         setSearchQuery(code);
         setCameraScanStatus(`Scanned: ${code}`);
-        const exact = products.find((p) => p.sku.trim() && p.sku.trim().toLowerCase() === code.trim().toLowerCase());
+        const exact = findProductByBarcode(products, code);
         if (exact) {
           handleBarcodeProduct(exact);
         } else {

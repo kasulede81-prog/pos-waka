@@ -273,7 +273,7 @@ export function ReportsPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="min-w-0 max-w-full space-y-4 pb-24">
+    <div className="min-w-0 max-w-full space-y-4 enterprise-page">
       <PageHeader lang={lang} title={pageTitle} subtitle={t(lang, "baPageSub")} backLabel={t(lang, "officeBackToHub")} />
 
       <AnalyticsPageToolbar

@@ -332,10 +332,10 @@ export const PharmacyOpsDashboard = memo(function PharmacyOpsDashboard({
   ].filter(Boolean) as { to: string; labelKey: string; Icon: LucideIcon }[];
 
   return (
-    <div className="page-content-pad space-y-6 bg-stone-50/40 pb-8">
+    <div className="page-content-pad space-y-6 bg-stone-50/40">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-[2rem] font-black leading-tight tracking-tight text-stone-950 sm:text-[2.35rem]">
+          <h1 className="text-xl font-black leading-tight tracking-tight text-stone-950 sm:text-[2rem] lg:text-[2.35rem]">
             {t(lang, greetingKey).replace("{name}", firstName)} 👋
           </h1>
           <p className="mt-1 max-w-2xl text-base font-medium text-stone-500 sm:text-lg">

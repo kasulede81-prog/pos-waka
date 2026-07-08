@@ -152,7 +152,7 @@ export function RestaurantBillSheet({
       open
       onClose={onClose}
       zIndexClass="z-[60]"
-      clearNav={false}
+      clearNav
       maxHeightClass="max-h-[min(96dvh,900px)]"
       title={
         <div className="flex items-start justify-between gap-3">

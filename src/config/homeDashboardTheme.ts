@@ -132,6 +132,15 @@ const THEME: Record<string, HomeDashboardTheme> = {
     lottieId: "commandCenter",
     artClass: "home-art-commandCenter",
   },
+  dashboard: {
+    layout: "scene",
+    gradient: "from-teal-500 via-cyan-600 to-teal-900",
+    glow: "rgba(45,212,191,0.28)",
+    shadow: "shadow-[0_12px_36px_rgba(13,148,136,0.32)]",
+    subtitleKey: "desktopHomeTileDashboardSub",
+    lottieId: "commandCenter",
+    artClass: "home-art-commandCenter",
+  },
 };
 
 export function homeDashboardTheme(tileId: string): HomeDashboardTheme {

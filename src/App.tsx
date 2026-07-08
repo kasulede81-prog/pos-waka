@@ -72,6 +72,7 @@ import { EnterpriseProtectedRoute } from "./components/enterprise/EnterpriseProt
 import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./components/inventory/LegacyInventoryRedirects";
 import { InventoryCountSessionsPage } from "./pages/InventoryCountSessionsPage";
 import { InventoryCountSessionPage } from "./pages/InventoryCountSessionPage";
+import { InventoryTransferPage } from "./pages/InventoryTransferPage";
 import { CloseDayPage } from "./pages/CloseDayPage";
 import { XReportPage } from "./pages/XReportPage";
 import { CashPositionPage } from "./pages/CashPositionPage";
@@ -602,6 +603,14 @@ function AppRoutes() {
               element={
                 <RoleProtectedRoute permission="stock.count">
                   <InventoryCountSessionPage lang={lang} />
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="stock/transfer"
+              element={
+                <RoleProtectedRoute permission="stock.view">
+                  <InventoryTransferPage lang={lang} />
                 </RoleProtectedRoute>
               }
             />

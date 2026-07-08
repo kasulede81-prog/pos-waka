@@ -12,6 +12,8 @@ import { DISPLAY_SCALE_META } from "../../lib/displayScale/scaleTokens";
 import { useDisplayScale } from "../../context/DisplayScaleProvider";
 import { PosSellProductCard } from "./PosSellProductCard";
 import { PosDesktopProductCard } from "./PosDesktopProductCard";
+import { PharmacySellMedicineCard } from "./PharmacySellMedicineCard";
+import type { Language } from "../../types";
 
 const ROW_ESTIMATE_DEFAULT = 148;
 const ROW_ESTIMATE_SELL_MOBILE = 120;
@@ -27,9 +29,10 @@ type Props = {
   addLabel?: string;
   isLocked?: (p: Product) => boolean;
   lockedBadge?: string;
-  variant?: "default" | "sellMobile" | "sellDesktop";
+  variant?: "default" | "sellMobile" | "sellDesktop" | "pharmacyMedicine";
   favoriteIds?: Set<string>;
   onToggleFavorite?: (productId: string) => void;
+  lang?: Language;
 };
 
 /** Scrolls long product lists smoothly; column count is set by measured catalog width. */
@@ -45,6 +48,7 @@ function VirtualizedProductGridInner({
   variant = "default",
   favoriteIds,
   onToggleFavorite,
+  lang,
 }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const { level: displayScaleLevel, featureEnabled: displayScaleOn } = useDisplayScale();
@@ -53,11 +57,14 @@ function VirtualizedProductGridInner({
   const rowCount = Math.ceil(products.length / cols);
   const sellMobile = variant === "sellMobile";
   const sellDesktop = variant === "sellDesktop";
-  const baseRowEstimate = sellMobile
-    ? ROW_ESTIMATE_SELL_MOBILE
-    : sellDesktop
-      ? ROW_ESTIMATE_SELL_DESKTOP
-      : ROW_ESTIMATE_DEFAULT;
+  const pharmacyMedicine = variant === "pharmacyMedicine";
+  const baseRowEstimate = pharmacyMedicine
+    ? 168
+    : sellMobile
+      ? ROW_ESTIMATE_SELL_MOBILE
+      : sellDesktop
+        ? ROW_ESTIMATE_SELL_DESKTOP
+        : ROW_ESTIMATE_DEFAULT;
   const rowEstimate = Math.round(baseRowEstimate * scaleMultiplier);
 
   const rowVirtualizer = useVirtualizer({
@@ -95,6 +102,18 @@ function VirtualizedProductGridInner({
             >
               {slice.map((p) => {
                 const locked = isLocked?.(p) ?? false;
+                if (pharmacyMedicine && lang) {
+                  return (
+                    <PharmacySellMedicineCard
+                      key={p.id}
+                      lang={lang}
+                      product={p}
+                      locked={locked}
+                      lockedBadge={lockedBadge}
+                      onPick={onPick}
+                    />
+                  );
+                }
                 if (sellMobile) {
                   return (
                     <PosSellProductCard

@@ -1,18 +1,21 @@
-import { POS_COMPACT_DESKTOP_MIN_PX, POS_FULL_DESKTOP_MIN_PX } from "./posLayoutMode";
+import { WAKA_TABLET_MIN_PX } from "./responsiveBreakpoints";
 
-/** Tailwind `md` breakpoint — sidebar nav from 768px+. */
-export const TABLET_SIDEBAR_MIN_PX = 768;
+/** @deprecated Sidebar removed — use WAKA_TABLET_MIN_PX for bottom-chrome cutoff. */
+export const TABLET_SIDEBAR_MIN_PX = WAKA_TABLET_MIN_PX;
 
 /** Non-mobile POS / tablet chrome from 768px+ (compact + full desktop). */
-export const POS_DESKTOP_LAYOUT_MIN_PX = POS_COMPACT_DESKTOP_MIN_PX;
+export const POS_DESKTOP_LAYOUT_MIN_PX = WAKA_TABLET_MIN_PX;
 
-/** POS two-column checkout sidebar from 1024px+. */
-export { POS_FULL_DESKTOP_MIN_PX };
+export {
+  WAKA_DESKTOP_MIN_PX as POS_FULL_DESKTOP_MIN_PX,
+  WAKA_TABLET_MIN_PX,
+} from "./responsiveBreakpoints";
 
+/** @deprecated Sidebar removed. */
 export function usesTabletSidebar(widthPx: number): boolean {
-  return widthPx >= TABLET_SIDEBAR_MIN_PX;
+  return widthPx >= WAKA_TABLET_MIN_PX;
 }
 
 export function usesPosDesktopLayout(widthPx: number): boolean {
-  return widthPx >= POS_DESKTOP_LAYOUT_MIN_PX;
+  return widthPx >= WAKA_TABLET_MIN_PX;
 }

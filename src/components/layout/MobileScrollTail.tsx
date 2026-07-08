@@ -1,11 +1,13 @@
 import { useLocation } from "react-router-dom";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
-import { resolveModuleExit } from "../../lib/moduleExit";
-import { isHospitalityOperationalRoute } from "../../lib/hospitalityNav";
-import { isPharmacyOperationalRoute } from "../../lib/pharmacyNav";
+import { resolveEnterpriseBottomChrome } from "../../lib/enterpriseBottomChrome";
+import { isPosSellPath } from "../../lib/posSellExit";
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { resolveTerminalHomePath } from "../../lib/terminalHome";
+import { isHospitalityMode } from "../../lib/hospitality";
+import { isPharmacyMode } from "../../lib/pharmacy";
+import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 
 /**
  * Real block at the end of the scroll column (not padding on the scroller).
@@ -15,24 +17,41 @@ export function MobileScrollTail() {
   const { pathname } = useLocation();
   const preferences = usePosStore((s) => s.preferences);
   const actor = useSessionActor();
+  const isDesktopLayout = usePosDesktopLayout();
   const terminalHome = resolveTerminalHomePath(preferences, actor.role);
-  const isPos = pathname === "/pos" || pathname.startsWith("/pos/");
+  const isPos = isPosSellPath(pathname);
   const isInternalAdmin = isInternalAdminAppPath(pathname);
-  const moduleExit = resolveModuleExit(pathname, terminalHome);
-  const hospitalityNav = isHospitalityOperationalRoute(pathname);
-  const pharmacyNav = isPharmacyOperationalRoute(pathname);
+
+  const hospitalityBusiness = isHospitalityMode(
+    preferences.businessType,
+    preferences.hospitalityModeEnabled,
+  );
+  const pharmacyBusiness = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
+
+  const chrome = resolveEnterpriseBottomChrome({
+    pathname,
+    terminalHome,
+    isDesktopLayout,
+    pharmacyWorkspace: pharmacyBusiness && !hospitalityBusiness,
+    hospitalityBusiness,
+  });
 
   if (isInternalAdmin) {
     return null;
   }
 
-  if (hospitalityNav || pharmacyNav || moduleExit) {
-    return <div aria-hidden className="h-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] shrink-0 lg:hidden" />;
+  if (chrome.needsScrollTail) {
+    return (
+      <div
+        aria-hidden
+        className="h-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+0.5rem)] shrink-0 md:hidden"
+      />
+    );
   }
 
   if (isPos) {
-    return <div aria-hidden className="h-[var(--waka-scroll-tail-pos-sale)] shrink-0 lg:hidden" />;
+    return <div aria-hidden className="h-[var(--waka-scroll-tail-pos-sale)] shrink-0 md:hidden" />;
   }
 
-  return <div aria-hidden className="h-[calc(var(--waka-safe-bottom)+0.75rem)] shrink-0 lg:hidden" />;
+  return <div aria-hidden className="h-[calc(var(--waka-safe-bottom)+0.75rem)] shrink-0 md:hidden" />;
 }

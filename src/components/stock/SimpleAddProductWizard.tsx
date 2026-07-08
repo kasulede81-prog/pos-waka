@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Package, X } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { shelfIconFor } from "../../lib/productCategories";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { usePosStore } from "../../store/usePosStore";
-import { AppModalOverlay } from "../layout/AppModalOverlay";
 import {
   PACK_TYPE_OPTIONS,
   SELL_UNIT_OPTIONS,
@@ -20,6 +19,16 @@ import {
 import { validateAuditReason } from "../../lib/auditReasons";
 import type { WizardPrefillFromAi } from "../../lib/ai/mapAiSuggestionToWizard";
 import { CostValidationPreview } from "./CostValidationPreview";
+import { ProductWizardShell } from "./wizard/ProductWizardShell";
+import { WizardFooter } from "./wizard/WizardFooter";
+import { WizardStepHeading } from "./wizard/WizardStepHeading";
+import { WizardInfoCard } from "./wizard/WizardInfoCard";
+import {
+  WIZARD_INPUT_NUMERIC,
+  WIZARD_INPUT_TEXT,
+  wizardChoiceButtonClass,
+} from "./wizard/wizardTokens";
+import { RETAIL_PRODUCT_WIZARD_STEPS } from "../../lib/productWizardSteps";
 
 export type SimpleAddWizardStep =
   | "name"
@@ -33,7 +42,7 @@ export type SimpleAddWizardStep =
 
 type Step = SimpleAddWizardStep;
 
-const STEPS: Step[] = ["name", "shelf", "sellUnit", "pack", "piecesPerPack", "stock", "sellPrice", "buyPrice"];
+const STEPS: Step[] = [...RETAIL_PRODUCT_WIZARD_STEPS] as Step[];
 
 export type SimpleAddWizardPrefill = WizardPrefillFromAi;
 
@@ -53,39 +62,6 @@ type Props = {
 /** Fixed wizard flow — every product follows the same steps. */
 const TOTAL_STEPS = STEPS.length;
 
-const INPUT_BASE =
-  "min-h-[58px] w-full rounded-2xl border border-input bg-card px-4 text-foreground shadow-sm outline-none transition-[border-color,box-shadow,transform] duration-200 placeholder:text-muted-foreground/70 focus:border-primary/50 focus:ring-2 focus:ring-ring/25 motion-reduce:transition-none";
-
-const INPUT_TEXT = clsx(INPUT_BASE, "text-xl font-bold tracking-tight");
-const INPUT_NUMERIC = clsx(INPUT_BASE, "text-3xl font-black tabular-nums tracking-tight");
-
-const BTN_FOOTER_BASE =
-  "inline-flex min-h-[52px] items-center justify-center gap-2 rounded-2xl text-base font-black transition-all duration-200 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 motion-reduce:active:scale-100 motion-reduce:transition-none";
-
-function WizardInfoCard({ children, accent }: { children: ReactNode; accent?: "brand" | "neutral" }) {
-  return (
-    <div
-      className={clsx(
-        "rounded-2xl border px-4 py-3 text-sm font-semibold shadow-sm",
-        accent === "brand"
-          ? "border-primary/20 bg-primary/5 text-foreground dark:border-primary/30 dark:bg-primary/10"
-          : "border-border/70 bg-muted/40 text-muted-foreground",
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-function WizardStepHeading({ title, hint }: { title: string; hint?: string }) {
-  return (
-    <div className="space-y-2">
-      <h2 className="text-[1.625rem] font-black leading-tight tracking-tight text-foreground">{title}</h2>
-      {hint ? <p className="text-base leading-relaxed text-muted-foreground">{hint}</p> : null}
-    </div>
-  );
-}
-
 function WizardAutoConfiguredCard({ lang, value }: { lang: Language; value: string }) {
   return (
     <div className="space-y-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 px-4 py-4 shadow-sm">
@@ -98,18 +74,6 @@ function WizardAutoConfiguredCard({ lang, value }: { lang: Language; value: stri
     </div>
   );
 }
-
-function choiceButtonClass(selected: boolean) {
-  return clsx(
-    "min-h-[56px] rounded-2xl border px-3 text-base font-black transition-all duration-200",
-    "active:scale-[0.98] motion-reduce:active:scale-100 motion-reduce:transition-none",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-    selected
-      ? "border-primary bg-primary text-primary-foreground shadow-md shadow-primary/15"
-      : "border-border bg-card text-foreground shadow-sm hover:border-primary/30 hover:bg-muted/30",
-  );
-}
-
 function applyWizardPrefill(
   prefill: SimpleAddWizardPrefill,
   shelves: string[],
@@ -204,8 +168,6 @@ export function SimpleAddProductWizard({
   const totalPieces = hasPack ? stockN * piecesN : stockN;
 
   const activeStepIndex = Math.max(0, STEPS.indexOf(step));
-  const progressPct = ((activeStepIndex + 1) / TOTAL_STEPS) * 100;
-
   const needsAuditReason = useMemo(() => {
     if (!editingProduct) return false;
     const priceChanged = sellPriceN !== Math.floor(editingProduct.sellingPricePerUnitUgx);
@@ -367,93 +329,41 @@ export function SimpleAddProductWizard({
     if (canNext()) goNext();
   };
 
-  if (!open) return null;
-
   const canGoBack = activeStepIndex > 0;
   const titleId = "simple-add-wizard-title";
   const descId = "simple-add-wizard-desc";
 
   return (
-    <AppModalOverlay
-      className="z-[56] flex items-end justify-center bg-black/50 backdrop-blur-[2px] sm:items-center"
-      role="dialog"
-      aria-modal
-      aria-labelledby={titleId}
-      aria-describedby={descId}
-      onClick={onClose}
+    <ProductWizardShell
+      lang={lang}
+      open={open}
+      onClose={onClose}
+      title={t(lang, isEdit ? "simpleAddEditTitle" : "simpleAddTitle")}
+      titleId={titleId}
+      descId={descId}
+      stepIndex={activeStepIndex}
+      totalSteps={TOTAL_STEPS}
+      saveError={saveError}
+      savedFlash={savedFlash}
+      onSubmit={handleFormSubmit}
+      footer={
+        !savedFlash ? (
+          <WizardFooter
+            lang={lang}
+            isLastStep={isLastStep}
+            canGoBack={canGoBack}
+            canProceed={canNext()}
+            disabled={disabled}
+            onBack={goBack}
+            onPrimary={() => undefined}
+            onAddAnother={() => handleSave(true)}
+            isEdit={isEdit}
+            showAddAnother={isLastStep && !isEdit}
+          />
+        ) : undefined
+      }
     >
-      <div
-        className="flex max-h-[94dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[1.75rem] border border-border/60 bg-card shadow-2xl sm:max-h-[90dvh] sm:rounded-3xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <header className="shrink-0 border-b border-border/60 bg-card/95 px-4 pb-4 pt-4 backdrop-blur-md sm:px-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
-              <Package className="h-5 w-5" strokeWidth={2.25} aria-hidden />
-            </span>
-            <div className="min-w-0 flex-1 pt-0.5">
-              <p id={descId} className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                {tTemplate(lang, "simpleAddStepOf", {
-                  n: String(activeStepIndex + 1),
-                  total: String(TOTAL_STEPS),
-                })}
-              </p>
-              <h2 id={titleId} className="truncate text-lg font-black tracking-tight text-foreground">
-                {t(lang, isEdit ? "simpleAddEditTitle" : "simpleAddTitle")}
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={t(lang, "cancel")}
-            >
-              <X className="h-5 w-5" aria-hidden />
-            </button>
-          </div>
-
-          <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
-              style={{ width: `${progressPct}%` }}
-              role="progressbar"
-              aria-valuenow={activeStepIndex + 1}
-              aria-valuemin={1}
-              aria-valuemax={TOTAL_STEPS}
-              aria-label={tTemplate(lang, "simpleAddStepOf", {
-                n: String(activeStepIndex + 1),
-                total: String(TOTAL_STEPS),
-              })}
-            />
-          </div>
-        </header>
-
-        <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleFormSubmit} noValidate>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5">
-            {saveError ? (
-              <div
-                className="mb-4 flex items-start gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive dark:text-red-300"
-                role="alert"
-              >
-                <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-                <p>{saveError}</p>
-              </div>
-            ) : null}
-
-            {savedFlash ? (
-              <div
-                className="wizard-success-enter flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/10 px-6 py-8 text-center"
-                role="status"
-              >
-                <span className="wizard-check-pop flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                  <CheckCircle2 className="h-8 w-8" strokeWidth={2.25} aria-hidden />
-                </span>
-                <p className="text-lg font-black text-emerald-900 dark:text-emerald-100">{t(lang, "simpleAddSaved")}</p>
-              </div>
-            ) : null}
-
-            {!savedFlash && step === "name" ? (
+      {!savedFlash && step === "name" ? (
               <div key="name" className="wizard-step-enter space-y-5">
                 <WizardStepHeading title={t(lang, "simpleAddStep1Title")} />
                 <input
@@ -471,7 +381,7 @@ export function SimpleAddProductWizard({
                   )}
                   autoFocus
                   autoComplete="off"
-                  className={INPUT_TEXT}
+                  className={WIZARD_INPUT_TEXT}
                 />
               </div>
             ) : null}
@@ -496,7 +406,7 @@ export function SimpleAddProductWizard({
                         type="button"
                         onClick={() => setShelfPick(s)}
                         className={clsx(
-                          choiceButtonClass(shelfPick === s),
+                          wizardChoiceButtonClass(shelfPick === s),
                           "flex items-center justify-center gap-2 px-3",
                         )}
                       >
@@ -519,7 +429,7 @@ export function SimpleAddProductWizard({
                     )}
                     autoFocus
                     autoComplete="off"
-                    className={INPUT_TEXT}
+                    className={WIZARD_INPUT_TEXT}
                   />
                 ) : (
                   <button
@@ -545,7 +455,7 @@ export function SimpleAddProductWizard({
                       key={opt.id}
                       type="button"
                       onClick={() => setSellUnit(opt.id)}
-                      className={clsx(choiceButtonClass(sellUnit === opt.id), "flex w-full items-center px-4 text-lg")}
+                      className={clsx(wizardChoiceButtonClass(sellUnit === opt.id), "flex w-full items-center px-4 text-lg")}
                     >
                       {t(lang, opt.labelKey as "sellUnit_piece")}
                     </button>
@@ -556,7 +466,7 @@ export function SimpleAddProductWizard({
                       onChange={(e) => setSellUnitCustom(e.target.value)}
                       placeholder={t(lang, "simpleAddSellUnitCustomPh")}
                       autoFocus
-                      className={clsx(INPUT_BASE, "border-dashed text-lg font-bold")}
+                      className={clsx(WIZARD_INPUT_TEXT, "border-dashed text-lg font-bold")}
                     />
                   ) : null}
                 </div>
@@ -587,7 +497,7 @@ export function SimpleAddProductWizard({
                           key={opt.id}
                           type="button"
                           onClick={() => setPackKind(opt.id)}
-                          className={choiceButtonClass(packKind === opt.id)}
+                          className={wizardChoiceButtonClass(packKind === opt.id)}
                         >
                           {t(lang, opt.labelKey as "packKind_crate")}
                         </button>
@@ -599,7 +509,7 @@ export function SimpleAddProductWizard({
                         onChange={(e) => setPackCustom(e.target.value)}
                         placeholder={t(lang, "simpleAddPackCustomPh")}
                         autoFocus
-                        className={clsx(INPUT_BASE, "border-dashed text-lg font-bold")}
+                        className={clsx(WIZARD_INPUT_TEXT, "border-dashed text-lg font-bold")}
                       />
                     ) : null}
                   </>
@@ -627,7 +537,7 @@ export function SimpleAddProductWizard({
                       inputMode="numeric"
                       placeholder="24"
                       autoFocus
-                      className={INPUT_NUMERIC}
+                      className={WIZARD_INPUT_NUMERIC}
                     />
                   </>
                 ) : (
@@ -638,7 +548,7 @@ export function SimpleAddProductWizard({
                     />
                     <div
                       className={clsx(
-                        INPUT_NUMERIC,
+                        WIZARD_INPUT_NUMERIC,
                         "flex items-center border-emerald-500/25 bg-emerald-500/5 text-foreground",
                       )}
                       aria-readonly
@@ -670,7 +580,7 @@ export function SimpleAddProductWizard({
                   inputMode="decimal"
                   placeholder={hasPack ? "5" : "0"}
                   autoFocus
-                  className={INPUT_NUMERIC}
+                  className={WIZARD_INPUT_NUMERIC}
                 />
                 {hasPack && piecesN > 0 && stockN > 0 ? (
                   <WizardInfoCard accent="brand">
@@ -696,7 +606,7 @@ export function SimpleAddProductWizard({
                     placeholder="1000"
                     autoFocus
                     aria-invalid={sellPriceN <= 0 && sellPrice.length > 0}
-                    className={clsx(INPUT_NUMERIC, "pr-16")}
+                    className={clsx(WIZARD_INPUT_NUMERIC, "pr-16")}
                   />
                   <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
                     UGX
@@ -740,7 +650,7 @@ export function SimpleAddProductWizard({
                     inputMode="numeric"
                     placeholder="36000"
                     autoFocus
-                    className={clsx(INPUT_NUMERIC, "pr-16")}
+                    className={clsx(WIZARD_INPUT_NUMERIC, "pr-16")}
                   />
                   <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">
                     UGX
@@ -778,82 +688,6 @@ export function SimpleAddProductWizard({
                 ) : null}
               </div>
             ) : null}
-          </div>
-
-          {/* Sticky footer */}
-          {!savedFlash ? (
-            <footer className="shrink-0 border-t border-border/60 bg-card/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md sm:px-5">
-              {isLastStep ? (
-                <div className="space-y-2.5">
-                  <div className="flex gap-2.5">
-                    <button
-                      type="button"
-                      onClick={goBack}
-                      disabled={!canGoBack}
-                      className={clsx(
-                        BTN_FOOTER_BASE,
-                        "min-w-[52px] shrink-0 border border-border bg-card px-4 text-foreground shadow-sm hover:bg-muted",
-                      )}
-                      aria-label={t(lang, "simpleAddBack")}
-                    >
-                      <ChevronLeft className="h-5 w-5" aria-hidden />
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={disabled || !canNext()}
-                      className={clsx(
-                        BTN_FOOTER_BASE,
-                        "flex-1 bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90",
-                      )}
-                    >
-                      {t(lang, isEdit ? "simpleAddSaveChanges" : "simpleAddSave")}
-                    </button>
-                  </div>
-                  {!isEdit ? (
-                    <button
-                      type="button"
-                      disabled={disabled || !canNext()}
-                      onClick={() => handleSave(true)}
-                      className={clsx(
-                        BTN_FOOTER_BASE,
-                        "w-full border border-primary/30 bg-primary/5 text-primary hover:bg-primary/10",
-                      )}
-                    >
-                      {t(lang, "simpleAddAddAnother")}
-                    </button>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="flex gap-2.5">
-                  <button
-                    type="button"
-                    onClick={goBack}
-                    disabled={!canGoBack}
-                    className={clsx(
-                      BTN_FOOTER_BASE,
-                      "min-w-[52px] shrink-0 border border-border bg-card px-4 text-foreground shadow-sm hover:bg-muted",
-                    )}
-                    aria-label={t(lang, "simpleAddBack")}
-                  >
-                    <ChevronLeft className="h-5 w-5" aria-hidden />
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!canNext()}
-                    className={clsx(
-                      BTN_FOOTER_BASE,
-                      "flex-1 bg-primary text-primary-foreground shadow-md shadow-primary/20 hover:bg-primary/90",
-                    )}
-                  >
-                    {t(lang, "simpleAddNext")}
-                    <ChevronRight className="h-5 w-5" aria-hidden />
-                  </button>
-                </div>
-              )}
-            </footer>
-          ) : null}
-        </form>
-      </div>
-    </AppModalOverlay>
+    </ProductWizardShell>
   );
 }

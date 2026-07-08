@@ -12,7 +12,7 @@ import { formatMedicineFullLabel } from "./pharmacyMedicine";
 import { normalizeBatchRecord } from "./pharmacyBatches";
 import type { PosSellPreset } from "./sellingEngine";
 import { costPerBaseUnitUgx, pricePerBaseUnitUgx } from "./sellingEngine";
-import { lineCostForProductQuantity, lineProfitUgx } from "./costPrecision";
+import { lineCostForProductQuantity, lineProfitUgx, unitCostFromInvoiceTotal } from "./costPrecision";
 
 export type { PharmacyBatchRecord, PharmacyPackaging, PharmacyPackagingLevel1, PharmacyPackagingLevel2 };
 
@@ -73,10 +73,7 @@ export function calcTotalBaseUnits(input: {
 }
 
 export function calcCostPerBaseUnitUgx(totalInvoiceUgx: number, totalBaseUnits: number): number {
-  const total = Math.max(0, Math.floor(totalInvoiceUgx));
-  const units = Math.max(0, Math.floor(totalBaseUnits));
-  if (units <= 0) return 0;
-  return total / units;
+  return unitCostFromInvoiceTotal(totalInvoiceUgx, totalBaseUnits);
 }
 
 export function baseUnitsPerStrip(pkg: PharmacyPackaging): number {

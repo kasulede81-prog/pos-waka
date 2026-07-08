@@ -64,6 +64,7 @@ import {
 } from "../lib/posShelfLayout";
 import { defaultMenuCategoriesForBusinessType, isHospitalityMode } from "../lib/hospitality";
 import { defaultPharmacyCategoriesForBusinessType, isPharmacyMode } from "../lib/pharmacy";
+import { shouldTrackBatchesForProduct } from "../lib/pharmacyStoreBatch";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useHospitalityTerms } from "../lib/hospitalityTerms";
 import { isWholesaleMode } from "../lib/wholesale";
@@ -71,6 +72,10 @@ import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { detectBarcodeCapabilities, startBarcodeSession, stopBarcodeSession } from "../services/hardware/barcodeAdapter";
 import { PharmacyBatchDetailSheet, type PharmacyBatchDetailAction } from "../components/pharmacy/PharmacyBatchDetailSheet";
 import { PharmacyReceiveBatchSheet } from "../components/pharmacy/PharmacyReceiveBatchSheet";
+import {
+  PharmacyBatchAdjustmentSheet,
+  type PharmacyBatchAdjustmentKind,
+} from "../components/pharmacy/PharmacyBatchAdjustmentSheet";
 import { findProductByBarcode } from "../lib/pharmacyMedicine";
 
 type StarterRowState = StarterLine & { enabled: boolean; priceStr: string; stockStr: string };
@@ -147,9 +152,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const [restockProduct, setRestockProduct] = useState<Product | null>(null);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [receiveProduct, setReceiveProduct] = useState<Product | null>(null);
+  const [batchAdj, setBatchAdj] = useState<{ product: Product; kind: PharmacyBatchAdjustmentKind } | null>(null);
   const [actionSheetProduct, setActionSheetProduct] = useState<Product | null>(null);
-  const writeOffExpiredStock = usePosStore((s) => s.writeOffExpiredStock);
-  const pharmacySupplierReturn = usePosStore((s) => s.pharmacySupplierReturn);
 
   const navigate = useNavigate();
   const [listQuery, setListQuery] = useState("");
@@ -187,6 +191,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       } else {
         setStockTab("products");
       }
+      const q = searchParams.get("q");
+      if (q) setListQuery(q);
       return;
     }
     const tab = searchParams.get("tab");
@@ -554,20 +560,17 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         setDetailProduct(null);
         openEditProduct(p);
         break;
-      case "writeoff": {
-        const batches = p.pharmacyPackaging?.batches ?? [];
-        const batchId = batches[0]?.id;
-        if (batchId) writeOffExpiredStock({ productId: p.id, batchId, quantity: 1, reason: "expired" });
+      case "writeoff":
+        setDetailProduct(null);
+        setBatchAdj({ product: p, kind: "writeoff" });
         break;
-      }
-      case "return": {
-        const batches = p.pharmacyPackaging?.batches ?? [];
-        const batchId = batches[0]?.id;
-        if (batchId) pharmacySupplierReturn({ productId: p.id, batchId, quantity: 1, reason: "near_expiry_return" });
+      case "return":
+        setDetailProduct(null);
+        setBatchAdj({ product: p, kind: "supplier_return" });
         break;
-      }
       case "transfer":
-        window.alert(t(lang, "pharmacyQuickTransferSoon"));
+        setDetailProduct(null);
+        navigate("/stock/transfer");
         break;
       case "print":
         window.print();
@@ -605,6 +608,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setRemoveReason("");
   };
 
+  const openProductRestock = (p: Product) => {
+    if (shouldTrackBatchesForProduct(preferences.businessType, preferences.pharmacyModeEnabled, p)) {
+      setReceiveProduct(p);
+      return;
+    }
+    setRestockProduct(p);
+  };
+
   const handleRowAction = (p: Product, action: string) => {
     if (isProductPlanLocked(p.id, lockedIds)) {
       setProductLockedOpen(true);
@@ -639,7 +650,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         if (canSell) navigate("/pos", { state: { preferProductId: p.id } });
         break;
       case "restock":
-        if (canRestock) setRestockProduct(p);
+        if (canRestock) openProductRestock(p);
         break;
       default:
         break;
@@ -743,7 +754,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   };
 
   return (
-    <div className={clsx(workspaceEmbed ? "space-y-3" : "page-content-pad space-y-3 pb-24")}>
+    <div className={clsx(workspaceEmbed ? "space-y-3" : "page-content-pad space-y-3")}>
       {!workspaceEmbed ? (
         <PageHeader
           lang={lang}
@@ -1268,6 +1279,20 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           onClose={() => setReceiveProduct(null)}
           onDone={() => {
             const fresh = products.find((p) => p.id === receiveProduct.id);
+            if (fresh) setDetailProduct(fresh);
+          }}
+        />
+      ) : null}
+
+      {batchAdj ? (
+        <PharmacyBatchAdjustmentSheet
+          lang={lang}
+          product={batchAdj.product}
+          kind={batchAdj.kind}
+          open
+          onClose={() => setBatchAdj(null)}
+          onDone={() => {
+            const fresh = products.find((p) => p.id === batchAdj.product.id);
             if (fresh) setDetailProduct(fresh);
           }}
         />

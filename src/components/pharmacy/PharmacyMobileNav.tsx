@@ -48,7 +48,7 @@ export function PharmacyMobileNav({ lang, role, visible }: Props) {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 border-t border-teal-200/80 bg-white/98 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] backdrop-blur-md lg:hidden"
+      className="fixed bottom-0 left-0 right-0 border-t border-teal-200/80 bg-white/98 shadow-[0_-4px_24px_rgba(0,0,0,0.08)] backdrop-blur-md md:hidden"
       style={{ zIndex: "var(--waka-z-bottom-nav)" }}
       aria-label={t(lang, "navGroupPharmacy")}
     >

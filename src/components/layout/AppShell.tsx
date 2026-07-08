@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
-import { Outlet, useLocation, useNavigate, type NavigateOptions } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
-import { Home, ShoppingCart, Briefcase, Package, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
-import type { Language, Permission, UserRole } from "../../types";
+import type { Language, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { languageToggleLabel, nextLanguage } from "../../lib/language";
 import { useSubscription } from "../../context/SubscriptionContext";
@@ -26,7 +26,6 @@ import { isHospitalityMode } from "../../lib/hospitality";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { isWholesaleMode } from "../../lib/wholesale";
 import { isInternalAdminAppPath } from "../../lib/internalAdminPreview";
-import { unifiedThirdNavPath } from "../../lib/unifiedNav";
 import { BackOfficeRouteGuard } from "./BackOfficeRouteGuard";
 import { RouteErrorBoundary } from "../RouteErrorBoundary";
 import { PilotModeBanner } from "../pilot/PilotModeBanner";
@@ -38,7 +37,6 @@ import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
 import { PinInput } from "../ui/PinInput";
-import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
@@ -50,15 +48,9 @@ import { PharmacyDesktopNav } from "../pharmacy/PharmacyDesktopNav";
 import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { usePosLayoutMode } from "../../hooks/usePosLayoutMode";
 import { shouldShowHeaderExit, isIndependentModuleRoute } from "../../lib/headerExit";
-import { resolveModuleExit } from "../../lib/moduleExit";
-import { isHospitalityOperationalRoute, HOSPITALITY_NAV_CATALOG, hospitalityNavItemActive } from "../../lib/hospitalityNav";
-import {
-  isPharmacyOperationalRoute,
-  PHARMACY_HOME_ROUTE,
-  PHARMACY_DISPENSE_ROUTE,
-  PHARMACY_NAV_CATALOG,
-  pharmacyNavItemActive,
-} from "../../lib/pharmacyNav";
+import { resolveEnterpriseBottomChrome } from "../../lib/enterpriseBottomChrome";
+import { isViewportLockedRoute } from "../../lib/viewportLock";
+import { isPharmacyOperationalRoute } from "../../lib/pharmacyNav";
 import { resolveTerminalHomePath } from "../../lib/terminalHome";
 import { isPosSellPath } from "../../lib/posSellExit";
 import { AppThemeToggle } from "../ui/AppThemeToggle";
@@ -80,20 +72,6 @@ type Props = {
     role: UserRole;
   } | null;
 };
-
-type NavDef = { path: string; labelKey: string; Icon: typeof Home; perm?: Permission };
-
-function navItemActive(path: string, pathname: string): boolean {
-  if (hospitalityNavItemActive(path, pathname)) return true;
-  if (pharmacyNavItemActive(path, pathname)) return true;
-  if (path === "/stock") {
-    return pathname === "/stock" || pathname.startsWith("/stock/");
-  }
-  if (path === "/office") {
-    return pathname === "/office" || isBackOfficePath(pathname);
-  }
-  return pathname === path || pathname.startsWith(`${path}/`);
-}
 
 export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staffSession = null }: Props) {
   const location = useLocation();
@@ -136,21 +114,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const [shopMemberRole, setShopMemberRole] = useState<UserRole | null>(null);
   const [roleReady, setRoleReady] = useState(() => authMode !== "supabase" || !user?.id);
   const userMenuRef = useRef<HTMLDivElement>(null);
-
-  const guardedNavigate = useCallback(
-    (to: string, options?: NavigateOptions) => {
-      const onSell = isPosSellPath(location.pathname);
-      const leavingSell = onSell && to !== location.pathname && !isPosSellPath(to);
-      if (leavingSell) {
-        void confirmLeavePosIfNeeded(location.pathname, to).then((ok) => {
-          if (ok) navigate(to, options);
-        });
-        return;
-      }
-      navigate(to, options);
-    },
-    [location.pathname, navigate],
-  );
 
   useEffect(() => {
     const onUp = () => setPwaUpdate(true);
@@ -291,8 +254,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const wholesaleNav = isWholesaleMode(preferences.businessType);
   const terminalHome = resolveTerminalHomePath(preferences, actor.role);
   const onTerminalHome = location.pathname === terminalHome;
-  const isLauncherHome =
-    location.pathname === "/" || (pharmacyNav && !hospitalityNav && location.pathname === PHARMACY_HOME_ROUTE);
+  const isLauncherHome = location.pathname === "/";
   const desktopTerminalHome = isDesktopLayout && isLauncherHome;
   const onSellScreen = isPosSellPath(location.pathname);
   const fullDesktopSell = onSellScreen && posLayoutMode === "full";
@@ -310,79 +272,34 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
 
   const sellNavLabelKey = hospitalityNav ? "navSell" : pharmacyNav ? "navDispense" : wholesaleNav ? "navInvoiceDesk" : "navSell";
 
-  const navDefs = useMemo((): NavDef[] => {
-    const terminalHome = resolveTerminalHomePath(preferences, actor.role);
-    const homePath = terminalHome;
-    const homeLabelKey =
-      hospitalityNav && hasPermission(actor.role, "hospitality.floor")
-        ? "restaurantFloorNav"
-        : pharmacyNav
-          ? "pharmacyNav_dashboard"
-          : "posNavMainMenu";
-    const sellPath = pharmacyNav && !hospitalityNav ? PHARMACY_DISPENSE_ROUTE : "/pos";
-    const stockPath = pharmacyNav && !hospitalityNav ? "/pharmacy/inventory" : "/stock";
-    const items: NavDef[] = [{ path: homePath, labelKey: homeLabelKey, Icon: Home }];
-    if (hasPermission(actor.role, "pos.sell")) {
-      items.push({ path: sellPath, labelKey: sellNavLabelKey, Icon: ShoppingCart, perm: "pos.sell" });
-    }
-    const hasShop = hasPermission(actor.role, "back_office.access");
-    const stockOnly = hasPermission(actor.role, "stock.view") && !hasShop;
-    const thirdPath = unifiedThirdNavPath(hasShop, stockOnly);
-    if (thirdPath === "/office") {
-      items.push({ path: "/office", labelKey: "officeHubNav", Icon: Briefcase, perm: "back_office.access" });
-    } else if (stockOnly) {
-      items.push({
-        path: stockPath,
-        labelKey:
-          pharmacyNav && !hospitalityNav
-            ? "pharmacyTerm_medicineStock"
-            : wholesaleNav
-              ? "navWarehouse"
-              : "navStock",
-        Icon: Package,
-        perm: "stock.view",
-      });
-    }
-    return items.filter((item) => !item.perm || hasPermission(actor.role, item.perm));
-  }, [actor.role, hospitalityNav, pharmacyNav, preferences, sellNavLabelKey, wholesaleNav]);
+  const bottomChrome = useMemo(
+    () =>
+      resolveEnterpriseBottomChrome({
+        pathname: location.pathname,
+        terminalHome,
+        isDesktopLayout,
+        pharmacyWorkspace: pharmacyNav && !hospitalityNav,
+        hospitalityBusiness: hospitalityNav,
+      }),
+    [location.pathname, terminalHome, isDesktopLayout, pharmacyNav, hospitalityNav],
+  );
 
-  const hospitalityQuickNav = useMemo((): NavDef[] => {
-    if (!hospitalityNav) return [];
-    const homeIsFloor = hasPermission(actor.role, "hospitality.floor");
-    return HOSPITALITY_NAV_CATALOG.filter((item) => {
-      if (!hasPermission(actor.role, item.perm)) return false;
-      if (homeIsFloor && item.path === "/floor") return false;
-      return true;
-    }).map((item) => ({ path: item.path, labelKey: item.labelKey, Icon: item.Icon, perm: item.perm }));
-  }, [actor.role, hospitalityNav]);
-
-  const pharmacyQuickNav = useMemo((): NavDef[] => {
-    if (!pharmacyNav || hospitalityNav) return [];
-    return PHARMACY_NAV_CATALOG.filter((item) => {
-      if (!item.perm || hasPermission(actor.role, item.perm)) {
-        if (item.path === PHARMACY_HOME_ROUTE) return false;
-        return true;
-      }
-      return false;
-    }).map((item) => ({
-      path: item.path,
-      labelKey: item.labelKey,
-      Icon: Package,
-      perm: item.perm,
-    }));
-  }, [actor.role, pharmacyNav, hospitalityNav]);
+  const viewportLocked = isViewportLockedRoute(location.pathname) || fullDesktopSell;
 
   const showHospitalityMobileNav =
-    hospitalityNav && !isDesktopLayout && isHospitalityOperationalRoute(location.pathname) && !internalAdminRoute;
-  const showPharmacyWorkspaceNav =
-    pharmacyNav && !hospitalityNav && isPharmacyOperationalRoute(location.pathname) && !internalAdminRoute;
-  const showPharmacyMobileNav = showPharmacyWorkspaceNav && !isDesktopLayout;
-  const showPharmacyDesktopNav = showPharmacyWorkspaceNav && isDesktopLayout && !isLauncherHome;
-  const showMobileModuleExit =
-    Boolean(resolveModuleExit(location.pathname, terminalHome)) &&
+    bottomChrome.mode === "hospitality" && bottomChrome.showMobileBar && !internalAdminRoute;
+  const showPharmacyMobileNav =
+    bottomChrome.mode === "pharmacy" && bottomChrome.showMobileBar && !onSellScreen;
+  const showPharmacyDesktopNav =
+    pharmacyNav &&
+    !hospitalityNav &&
+    isPharmacyOperationalRoute(location.pathname) &&
     !internalAdminRoute &&
-    !showHospitalityMobileNav &&
-    !showPharmacyMobileNav;
+    isDesktopLayout &&
+    !isLauncherHome &&
+    !onSellScreen;
+  const showMobileModuleExit =
+    bottomChrome.mode === "module-exit" && bottomChrome.showMobileBar && !internalAdminRoute;
   const showHeaderExitButton = showHeaderExit && (!showMobileModuleExit || isDesktopLayout) && !onTerminalHome;
 
   return (
@@ -396,8 +313,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           fullDesktopSell && "app-shell--pos-enterprise",
           isLauncherHome && "app-shell--launcher",
           showMobileModuleExit && "app-shell--module-exit",
-          showHospitalityMobileNav && "app-shell--hospitality-nav",
-          showPharmacyMobileNav && "app-shell--pharmacy-nav",
+          bottomChrome.shellClass,
         )}
       >
         {pwaUpdate ? (
@@ -430,7 +346,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
               onSellScreen && !isDesktopLayout
                 ? "max-w-none px-2 pb-1 pt-[max(0.25rem,env(safe-area-inset-top,0px))]"
                 : "px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top,0px))] sm:px-4",
-              desktopTerminalMode || desktopTerminalHome || independentModule ? "max-w-none lg:px-8 xl:px-10" : !onSellScreen || isDesktopLayout ? "max-w-6xl" : "",
+              desktopTerminalMode || desktopTerminalHome || independentModule || isLauncherHome ? "max-w-none lg:px-8 xl:px-10" : !onSellScreen || isDesktopLayout ? "max-w-6xl" : "",
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
@@ -588,7 +504,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           <div
             className={clsx(
               "relative z-10 shrink-0 border-b border-stone-200/80 bg-white/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-white/90 sm:px-4",
-              desktopTerminalMode || desktopTerminalHome || independentModule ? "lg:px-8 xl:px-10" : "",
+              desktopTerminalMode || desktopTerminalHome || independentModule || isLauncherHome ? "lg:px-8 xl:px-10" : "",
             )}
           >
             <div className={clsx("mx-auto w-full", fullWidthChrome ? "max-w-none" : "max-w-6xl")}>
@@ -602,113 +518,20 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden",
-            isLauncherHome ? "px-0 py-0" : onSellScreen && !isDesktopLayout ? "px-2 py-1" : "px-3 py-3 sm:px-4 md:px-6",
+            isLauncherHome ? "px-0 py-0" : onSellScreen ? "px-0 py-0 sm:px-1" : "px-3 py-3 sm:px-4 md:px-6",
             fullWidthChrome || isLauncherHome ? "max-w-none" : "max-w-6xl",
             fullWidthChrome && !desktopTerminalHome && !isLauncherHome && (
               onSellScreen ? "lg:px-4 xl:px-6 2xl:px-8" : "lg:px-8 xl:px-10"
             ),
           )}
         >
-          {!independentModule ? (
-          <nav
-            className={clsx(
-              "hidden w-52 shrink-0 rounded-2xl border border-stone-100 bg-white p-3 shadow-waka-sm md:block xl:w-56",
-              onSellScreen && "md:hidden",
-            )}
-          >
-            <p className="px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">{t(lang, "navGroupHome")}</p>
-            <ul className="space-y-1">
-              {navDefs.map((item) => {
-                const active = navItemActive(item.path, location.pathname);
-                return (
-                  <li key={item.path}>
-                    <button
-                      type="button"
-                      onClick={() => guardedNavigate(item.path, { preventScrollReset: true })}
-                      className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
-                        active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
-                      }`}
-                    >
-                      <item.Icon
-                        className={
-                          item.path === "/pos" || item.path === PHARMACY_DISPENSE_ROUTE
-                            ? "h-7 w-7 shrink-0 opacity-95"
-                            : "h-5 w-5 shrink-0 opacity-90"
-                        }
-                        strokeWidth={item.path === "/pos" || item.path === PHARMACY_DISPENSE_ROUTE ? 2.5 : 2.25}
-                        aria-hidden
-                      />
-                      {t(lang, item.labelKey)}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            {hospitalityQuickNav.length > 0 ? (
-              <>
-                <p className="mt-4 px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">
-                  {t(lang, "navGroupHospitality")}
-                </p>
-                <ul className="space-y-1">
-                  {hospitalityQuickNav.map((item) => {
-                    const active = navItemActive(item.path, location.pathname);
-                    return (
-                      <li key={item.path}>
-                        <button
-                          type="button"
-                          onClick={() => guardedNavigate(item.path, { preventScrollReset: true })}
-                          className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
-                            active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
-                          }`}
-                        >
-                          <item.Icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
-                          {t(lang, item.labelKey)}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            ) : null}
-            {pharmacyQuickNav.length > 0 ? (
-              <>
-                <p className="mt-4 px-2 pb-2 text-[10px] font-black uppercase tracking-wider text-stone-400">
-                  {t(lang, "navGroupPharmacy")}
-                </p>
-                <ul className="space-y-1">
-                  {pharmacyQuickNav.map((item) => {
-                    const active = navItemActive(item.path, location.pathname);
-                    return (
-                      <li key={item.path}>
-                        <button
-                          type="button"
-                          onClick={() => guardedNavigate(item.path, { preventScrollReset: true })}
-                          className={`flex w-full min-h-[44px] items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm font-semibold leading-snug transition-waka ${
-                            active ? "bg-waka-600 text-white shadow-waka-sm" : "text-stone-700 hover:bg-waka-50"
-                          }`}
-                        >
-                          <item.Icon className="h-5 w-5 shrink-0 opacity-90" aria-hidden />
-                          {t(lang, item.labelKey)}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            ) : null}
-          </nav>
-          ) : null}
           <section className={clsx("flex min-h-0 min-w-0 max-w-full flex-1 flex-col", independentModule ? "pb-0" : "md:pb-0")}>
             <div
               className={clsx(
                 "scroll-main-chrome min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]",
-                fullDesktopSell
-                  ? "overflow-hidden"
-                  : "overflow-y-auto",
-                location.pathname === "/pos" || location.pathname.startsWith("/pos/") || location.pathname === PHARMACY_DISPENSE_ROUTE
-                  ? "overflow-x-hidden"
-                  : "overflow-x-auto",
-                location.pathname === "/pos" || location.pathname.startsWith("/pos/") || location.pathname === PHARMACY_DISPENSE_ROUTE ? "scroll-main-chrome--pos" : "",
+                viewportLocked ? "overflow-hidden" : "overflow-y-auto",
+                "overflow-x-hidden min-w-0 max-w-full",
+                onSellScreen ? "scroll-main-chrome--pos" : "",
               )}
             >
               <BackOfficeRouteGuard lang={lang}>

@@ -1,11 +1,9 @@
 import { isInternalAdminAppPath } from "./internalAdminPreview";
-import { PHARMACY_DISPENSE_ROUTE, PHARMACY_HOME_ROUTE } from "./pharmacyNav";
+import { PHARMACY_DISPENSE_ROUTE } from "./pharmacyNav";
 
-/** Business-type terminal homes keep the launcher sidebar (not independent-module chrome). */
+/** Business-type terminal homes use the launcher tiles (not independent-module chrome). */
 export function isTerminalLauncherPath(pathname: string): boolean {
-  if (pathname === "/") return true;
-  if (pathname === PHARMACY_HOME_ROUTE) return true;
-  return false;
+  return pathname === "/";
 }
 
 /** Sticky header Exit → main menu launcher (all viewports). */
@@ -17,7 +15,7 @@ export function shouldShowHeaderExit(pathname: string): boolean {
   return true;
 }
 
-/** Opened from the launcher or back office — full width, no primary sidebar/bottom tabs. */
+/** Opened from the launcher or back office — full width, no bottom tabs. */
 export function isIndependentModuleRoute(pathname: string): boolean {
   return shouldShowHeaderExit(pathname);
 }
@@ -28,6 +26,6 @@ export function hasNestedModuleBack(pathname: string): boolean {
     pathname.startsWith("/settings/") ||
     pathname.startsWith("/owner/") ||
     pathname.startsWith("/office/") ||
-    (pathname.startsWith("/pharmacy/") && pathname !== PHARMACY_HOME_ROUTE)
+    pathname.startsWith("/pharmacy/")
   );
 }

@@ -37,7 +37,7 @@ export function FloorPlanRightPanel({
   ];
 
   return (
-    <aside className="flex w-full shrink-0 flex-col border-l border-stone-300 bg-stone-100 lg:w-56 xl:w-64">
+    <aside className="hidden shrink-0 flex-col border-l border-stone-300 bg-stone-100 lg:flex lg:w-56 xl:w-64">
       <div className="border-b border-stone-300 bg-white p-2">
         {filters.map((f, i) => (
           <button

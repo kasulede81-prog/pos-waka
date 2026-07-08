@@ -17,15 +17,17 @@ export function isPharmacyMode(
 /** Default medicine categories for new pharmacy shops. */
 export const PHARMACY_CATEGORY_PRESETS = [
   "Antibiotics",
-  "Pain Relief",
-  "Malaria",
-  "Cough & Cold",
+  "Analgesics",
+  "Antimalarials",
+  "Hypertension",
+  "Diabetes",
+  "OTC",
+  "Controlled Medicines",
   "Vitamins",
+  "Cough & Cold",
   "Family Planning",
   "Baby Care",
   "First Aid",
-  "Diabetes",
-  "Hypertension",
   "Other",
 ] as const;
 

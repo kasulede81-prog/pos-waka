@@ -12,7 +12,8 @@ export type HeaderBackResolve = {
 export function labelKeyForBackFallback(fallback: string, pathname: string): string {
   if (fallback === "/settings" || pathname.startsWith("/settings/")) return "settingsHubTitle";
   if (fallback === "/office" || pathname.startsWith("/office/")) return "officeBackToHub";
-  if (fallback === PHARMACY_HOME_ROUTE || pathname.startsWith("/pharmacy/")) return "pharmacyNavExit";
+  if (fallback === PHARMACY_HOME_ROUTE) return "pageBack";
+  if (pathname.startsWith("/pharmacy/")) return "pageBack";
   return "pageBack";
 }
 

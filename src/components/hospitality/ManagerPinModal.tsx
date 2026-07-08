@@ -23,7 +23,7 @@ export function ManagerPinModal({ lang, open, title, onClose, onConfirm, busy = 
       open
       onClose={onClose}
       zIndexClass="z-[80]"
-      clearNav={false}
+      clearNav
       title={<h2 className="text-lg font-black text-stone-950">{title}</h2>}
       footer={
         <button

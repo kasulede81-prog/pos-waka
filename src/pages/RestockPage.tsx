@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
-import clsx from "clsx";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
-import { t, tTemplate } from "../lib/i18n";
+import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { purchaseLineCostTotalUgx } from "../lib/sellingEngine";
 import { WALK_IN_SUPPLIER_ID } from "../lib/walkInSupplier";
+import { dateKeyKampala } from "../lib/datesUg";
 import { RestockLineCard, type RestockLineRow } from "../components/stock/RestockLineCard";
 import { RestockProductPicker } from "../components/stock/RestockProductPicker";
+import { ReceiveOperationShell } from "../components/inventory/receive/ReceiveOperationShell";
+import { SupplierSelector } from "../components/inventory/receive/SupplierSelector";
+import { ReceiveHeader } from "../components/inventory/receive/ReceiveHeader";
+import { ReceiveTotalsPanel } from "../components/inventory/receive/ReceiveTotalsPanel";
+import { ReceiveSummaryPanel } from "../components/inventory/receive/ReceiveSummaryPanel";
+import { ReceiveFooter } from "../components/inventory/receive/ReceiveFooter";
+import { ReceiveStatusStrip } from "../components/inventory/receive/ReceiveStatusStrip";
+import { WIZARD_INPUT_TEXT } from "../components/inventory/receive/receiveTokens";
+import { RECEIVE_FIELD_LABEL } from "../components/inventory/receive/receiveTokens";
 
 type BuySource = "town" | "supplier";
 
@@ -52,18 +61,20 @@ export function RestockPage({
 
   const totals = useMemo(() => {
     let sum = 0;
+    let units = 0;
     for (const row of lines) {
       const p = productById.get(row.productId);
       if (!p) continue;
       const qty = Number(row.qtyBuyingStr) || 0;
       const cost = Math.floor(Number(row.costPerBuyingStr.replace(/\D/g, "")) || 0);
       sum += purchaseLineCostTotalUgx({ qtyBuyingUnits: qty, costPerBuyingUnitUgx: cost });
+      units += qty;
     }
-    return sum;
+    return { sum, units, count: lines.length };
   }, [lines, productById]);
 
   const paidAmount = Math.floor(Number(paidStr.replace(/\D/g, "")) || 0);
-  const balanceOwed = walkIn ? 0 : Math.max(0, totals - paidAmount);
+  const balanceOwed = walkIn ? 0 : Math.max(0, totals.sum - paidAmount);
 
   useEffect(() => {
     if (walkIn) return;
@@ -84,6 +95,10 @@ export function RestockPage({
   const removeLine = (key: string) => {
     setLines((prev) => prev.filter((r) => r.key !== key));
   };
+
+  const supplierName = walkIn
+    ? townPlace.trim() || t(lang, "restockSourceTown")
+    : suppliers.find((s) => s.id === supplierId)?.name;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -108,11 +123,7 @@ export function RestockPage({
       return;
     }
 
-    const paid = walkIn ? totals : paidAmount;
-    const townLabel = townPlace.trim();
-    const supplierName = walkIn
-      ? townLabel || t(lang, "restockSourceTown")
-      : suppliers.find((s) => s.id === supplierId)?.name;
+    const paid = walkIn ? totals.sum : paidAmount;
 
     const r = recordPurchase({
       supplierId: walkIn ? WALK_IN_SUPPLIER_ID : supplierId,
@@ -138,87 +149,51 @@ export function RestockPage({
     onSaved?.();
   };
 
-  const inputClass =
-    "mt-1 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 text-base font-bold text-stone-900 outline-none focus:border-waka-400 focus:ring-2 focus:ring-waka-200";
-
   return (
     <div className={embedded ? "pb-8" : "pb-28"}>
       {!embedded ? (
         <PageHeader lang={lang} title={t(lang, "restockTitle")} subtitle={t(lang, "restockSub")} backLabel={t(lang, "officeBackToHub")} />
       ) : null}
 
-      {msg ? (
-        <p
-          className={clsx(
-            "mb-4 rounded-2xl px-4 py-3 text-sm font-bold",
-            msgTone === "ok" ? "bg-emerald-50 text-emerald-900" : "bg-rose-50 text-rose-900",
-          )}
-        >
-          {msg}
-        </p>
-      ) : null}
-
-      <form onSubmit={submit} className="space-y-6">
-        <section className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "restockWhereBought")}</h2>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setBuySource("town")}
-              className={clsx(
-                "min-h-[48px] rounded-2xl border-2 px-3 text-sm font-black transition",
-                walkIn ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-800",
-              )}
-            >
-              {t(lang, "restockSourceTown")}
-            </button>
-            <button
-              type="button"
-              onClick={() => setBuySource("supplier")}
-              className={clsx(
-                "min-h-[48px] rounded-2xl border-2 px-3 text-sm font-black transition",
-                !walkIn ? "border-waka-500 bg-waka-600 text-white" : "border-stone-200 bg-white text-stone-800",
-              )}
-            >
-              {t(lang, "restockSourceSupplier")}
-            </button>
-          </div>
-
-          {walkIn ? (
-            <input
-              value={townPlace}
-              onChange={(e) => setTownPlace(e.target.value)}
-              placeholder={t(lang, "restockTownPlacePh")}
-              className={inputClass}
-            />
-          ) : (
-            <select
-              value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
-              className={inputClass}
-            >
-              {suppliers.length === 0 ? (
-                <option value="">{t(lang, "restockNoSuppliersShort")}</option>
-              ) : (
-                suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))
-              )}
-            </select>
-          )}
-
-          {!walkIn && suppliers.length === 0 ? (
-            <p className="text-sm font-semibold text-stone-600">{t(lang, "restockNoSuppliersShort")}</p>
-          ) : null}
-        </section>
+      <ReceiveOperationShell
+        lang={lang}
+        variant="page"
+        open
+        title={embedded ? t(lang, "ipNewPurchaseTitle") : ""}
+        subtitle={embedded ? t(lang, "restockSub") : undefined}
+        error={msgTone === "err" ? msg : null}
+        success={msgTone === "ok" ? msg : null}
+        onSubmit={submit}
+        statusStrip={<ReceiveStatusStrip lang={lang} />}
+        pageClassName="mt-2"
+        footer={
+          <ReceiveFooter
+            lang={lang}
+            layout="single"
+            primaryLabelKey="restockFinish"
+            primaryDisabled={!lines.length}
+            fixed={!embedded}
+          />
+        }
+      >
+        <SupplierSelector
+          lang={lang}
+          mode="town-or-supplier"
+          suppliers={suppliers}
+          supplierId={supplierId}
+          onSupplierIdChange={setSupplierId}
+          buySource={buySource}
+          onBuySourceChange={setBuySource}
+          townPlace={townPlace}
+          onTownPlaceChange={setTownPlace}
+          addSupplierHref="/stock?tab=suppliers"
+        />
 
         <section className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "restockProductsTitle")}</h2>
+          <ReceiveHeader title={t(lang, "restockProductsTitle")} />
 
           {lines.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50/80 px-4 py-6 text-center text-sm font-semibold text-stone-500">
+            <p className="rounded-2xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm font-semibold text-muted-foreground">
               {t(lang, "restockEmptyProducts")}
             </p>
           ) : (
@@ -243,7 +218,7 @@ export function RestockPage({
           <button
             type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-waka-300 bg-waka-50/50 text-base font-black text-waka-900 active:bg-waka-100"
+            className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-primary/40 bg-primary/5 text-base font-black text-primary active:bg-primary/10"
           >
             <Plus className="h-5 w-5" />
             {lines.length === 0 ? t(lang, "restockAddProduct") : t(lang, "restockAddAnother")}
@@ -251,54 +226,37 @@ export function RestockPage({
         </section>
 
         {lines.length > 0 ? (
-          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm font-bold text-stone-600">{t(lang, "restockTotalBuy")}</span>
-              <span className="text-xl font-black text-stone-900">UGX {totals.toLocaleString()}</span>
-            </div>
-
-            {!walkIn ? (
-              <>
-                <label className="mt-4 block">
-                  <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "restockPaidToday")}</span>
-                  <input
-                    value={paidStr}
-                    onChange={(e) => setPaidStr(e.target.value.replace(/\D/g, "").slice(0, 12))}
-                    inputMode="numeric"
-                    placeholder={String(totals)}
-                    className={inputClass}
-                  />
-                </label>
-                {balanceOwed > 0 ? (
-                  <p className="mt-2 text-sm font-bold text-amber-800">
-                    {tTemplate(lang, "restockStillOwe", { amount: balanceOwed.toLocaleString() })}
-                  </p>
-                ) : null}
-              </>
-            ) : null}
-          </section>
+          <>
+            <ReceiveTotalsPanel
+              lang={lang}
+              totalUgx={totals.sum}
+              showPartialPayment={!walkIn}
+              paidStr={paidStr}
+              onPaidChange={setPaidStr}
+              balanceOwedUgx={balanceOwed}
+            />
+            <ReceiveSummaryPanel
+              lang={lang}
+              invoiceTotalUgx={totals.sum}
+              productCount={totals.count}
+              unitsReceived={totals.units}
+              supplierName={supplierName}
+              businessDate={dateKeyKampala(new Date())}
+              purchaseReference={notes.trim() || undefined}
+            />
+          </>
         ) : null}
 
         <label className="block">
-          <span className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "restockNoteOptional")}</span>
+          <span className={RECEIVE_FIELD_LABEL}>{t(lang, "restockNoteOptional")}</span>
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             placeholder={t(lang, "restockNotePh")}
-            className={inputClass}
+            className={`${WIZARD_INPUT_TEXT} mt-2 text-base`}
           />
         </label>
-
-        <div className={embedded ? "mt-4" : "fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-0 right-0 z-30 border-t border-stone-200/90 bg-white/95 px-4 py-3 backdrop-blur sm:static sm:border-0 sm:bg-transparent sm:p-0 sm:backdrop-blur-none"}>
-          <button
-            type="submit"
-            disabled={!lines.length}
-            className="w-full min-h-[56px] rounded-2xl bg-waka-600 text-lg font-black text-white shadow-lg disabled:opacity-40 active:bg-waka-700"
-          >
-            {t(lang, "restockFinish")}
-          </button>
-        </div>
-      </form>
+      </ReceiveOperationShell>
 
       <RestockProductPicker
         lang={lang}

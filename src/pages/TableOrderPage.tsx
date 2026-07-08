@@ -254,7 +254,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
 
   return (
     <ShiftSellGateway lang={lang}>
-      <div className="flex min-h-0 flex-1 flex-col bg-stone-200">
+      <div className="flex h-full min-h-0 flex-1 flex-col bg-stone-200">
         <header className="flex shrink-0 items-center gap-2 border-b border-stone-400 bg-stone-100 px-2 py-2 sm:px-3">
           <button
             type="button"
@@ -282,7 +282,7 @@ export function TableOrderPage({ lang }: { lang: Language }) {
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {!reviewMode ? (
-            <nav className="flex w-24 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-stone-300 bg-stone-100 p-1 sm:w-28">
+            <nav className="hidden w-24 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-stone-300 bg-stone-100 p-1 sm:flex sm:w-28">
               <button
                 type="button"
                 onClick={() => {
@@ -347,6 +347,56 @@ export function TableOrderPage({ lang }: { lang: Language }) {
                       placeholder={t(lang, "restaurantSearchMenu")}
                       className="w-full rounded border border-stone-300 py-2 pl-9 pr-3 text-sm"
                     />
+                  </div>
+                  <div className="mt-2 flex gap-1 overflow-x-auto sm:hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowFavorites((v) => !v);
+                        setCategoryFilter(CATEGORY_FILTER_ALL);
+                      }}
+                      className={clsx(
+                        "min-h-[44px] shrink-0 rounded px-3 text-xs font-black",
+                        showFavorites ? "bg-amber-500 text-white" : "bg-stone-100 text-stone-800",
+                      )}
+                    >
+                      {t(lang, "restaurantFavorites")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowFavorites(false);
+                        setCategoryFilter(CATEGORY_FILTER_ALL);
+                      }}
+                      className={clsx(
+                        "min-h-[44px] shrink-0 rounded px-3 text-xs font-black",
+                        !showFavorites && categoryFilter === CATEGORY_FILTER_ALL
+                          ? "bg-stone-700 text-white"
+                          : "bg-stone-100 text-stone-800",
+                      )}
+                    >
+                      {t(lang, "posCategoryAll")}
+                    </button>
+                    {categories.map((cat, i) => {
+                      const pal = MENU_CATEGORY_PALETTE[categoryColorIndex(cat, i)];
+                      const active = !showFavorites && categoryFilter === cat;
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => {
+                            setShowFavorites(false);
+                            setCategoryFilter(cat);
+                          }}
+                          className={clsx(
+                            "min-h-[44px] shrink-0 rounded px-3 text-xs font-black",
+                            active ? pal.active + " text-white" : pal.bg + " " + pal.text,
+                          )}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-2">

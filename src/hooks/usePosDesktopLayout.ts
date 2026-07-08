@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { POS_DESKTOP_LAYOUT_MIN_PX, usesPosDesktopLayout } from "../lib/tabletLayout";
+import { WAKA_MEDIA, WAKA_TABLET_MIN_PX } from "../lib/responsiveBreakpoints";
+import { usesPosDesktopLayout } from "../lib/tabletLayout";
 
-export { POS_DESKTOP_LAYOUT_MIN_PX, usesPosDesktopLayout };
+export { usesPosDesktopLayout, WAKA_TABLET_MIN_PX as POS_DESKTOP_LAYOUT_MIN_PX };
 
 export function usePosDesktopLayout(): boolean {
   const [desktop, setDesktop] = useState(() =>
@@ -9,7 +10,7 @@ export function usePosDesktopLayout(): boolean {
   );
 
   useEffect(() => {
-    const mq = window.matchMedia(`(min-width: ${POS_DESKTOP_LAYOUT_MIN_PX}px)`);
+    const mq = window.matchMedia(WAKA_MEDIA.posDesktopLayout);
     const sync = () => setDesktop(mq.matches);
     sync();
     mq.addEventListener("change", sync);
