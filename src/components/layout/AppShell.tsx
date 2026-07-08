@@ -214,6 +214,13 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   }, [menuOpen]);
 
   useEffect(() => {
+    if (!preferences.posLocked && !canLockPos(preferences)) return;
+    void import("../../lib/shopRecoverySignals").then(({ ensureShopRecoveryApplied }) => {
+      void ensureShopRecoveryApplied();
+    });
+  }, [preferences.posLocked, preferences.backOfficePin]);
+
+  useEffect(() => {
     if (!preferences.posLocked) return;
     const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
     setLockSecret("");

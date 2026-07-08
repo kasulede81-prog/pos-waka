@@ -33,6 +33,7 @@ import {
   logRescueSupportAction,
 } from "../lib/rescueSupportActions";
 import { sendOwnerPasswordResetEmail } from "../lib/shopRecoverySignals";
+import { filterActiveRescueDevices, isRescueDeviceOnline } from "../lib/rescueDeviceList";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { formatWakaShopNumber } from "../lib/shopNumber";
@@ -44,6 +45,7 @@ import {
   adminShopResetBackOfficePin,
   adminShopResetSync,
   adminShopSendOwnerPasswordReset,
+  adminShopSetPrimaryDevice,
   fetchShopAuditTimeline,
   fetchShopOpsDetail,
   fetchWakaInternalAdminMe,
@@ -86,8 +88,7 @@ const SECTIONS = [
 ] as const;
 
 function deviceOnline(lastSeen: string | null): boolean {
-  if (!lastSeen) return false;
-  return Date.now() - new Date(lastSeen).getTime() < 15 * 60 * 1000;
+  return isRescueDeviceOnline(lastSeen);
 }
 
 function fmtUgx(n: number | null | undefined): string {
@@ -135,6 +136,7 @@ export function ShopRescueConsolePage({ lang }: Props) {
     category: "all",
     severity: "all",
   });
+  const [showAllDevices, setShowAllDevices] = useState(false);
 
   const loadShop = useCallback(async () => {
     if (!shopId) return;
@@ -224,6 +226,13 @@ export function ShopRescueConsolePage({ lang }: Props) {
   }, [auditRows, shellAdmin]);
 
   const filteredAudit = useMemo(() => filterRescueAuditEvents(auditEvents, auditFilters), [auditEvents, auditFilters]);
+
+  const rescueDevices = useMemo(() => {
+    if (!detail) return { active: [] as ShopDeviceRow[], registered: 0 };
+    const registered = detail.devices.length;
+    const active = filterActiveRescueDevices(detail.devices);
+    return { active, registered };
+  }, [detail]);
 
   const pendingFromImport = diagnostics?.pendingQueueTotal ?? null;
   const syncHealth = detail?.sync_health;
@@ -663,31 +672,53 @@ export function ShopRescueConsolePage({ lang }: Props) {
           </RescueSection>
         ) : null}
 
-        <RescueSection id="devices" title="Device Management" summary={`${detail.devices.length} registered devices`}>
-          {detail.devices.length === 0 ? (
+        <RescueSection
+          id="devices"
+          title="Device Management"
+          summary={`${rescueDevices.active.length} logged in · ${rescueDevices.registered} registered`}
+        >
+          {rescueDevices.registered === 0 ? (
             <p className="text-sm font-semibold text-stone-500">No devices registered.</p>
+          ) : rescueDevices.active.length === 0 ? (
+            <p className="text-sm font-semibold text-stone-500">No devices online in the last 15 minutes.</p>
           ) : (
             <ul className="space-y-3">
-              {detail.devices.map((d) => (
+              {(showAllDevices ? detail!.devices : rescueDevices.active).map((d) => (
                 <DeviceCard
                   key={d.id}
                   device={d}
                   busy={busy}
                   canSupport={canSupport}
+                  onSetPrimary={() =>
+                    void runAction("rescue_set_primary_device", () =>
+                      adminShopSetPrimaryDevice(detail!.shop.id, d.id),
+                    )
+                  }
                   onForceLogout={() =>
-                    void runAction("rescue_force_logout", () => adminShopForceLogoutDevices(detail.shop.id))
+                    void runAction("rescue_force_logout", () => adminShopForceLogoutDevices(detail!.shop.id))
                   }
                   onRevokeTrust={() =>
                     void runAction("rescue_revoke_device_trust", () => adminShopDeviceSetTrusted(d.id, false))
                   }
                   onResetSync={() =>
-                    void runAction("rescue_device_reset_sync", () => adminShopResetSync(detail.shop.id))
+                    void runAction("rescue_device_reset_sync", () => adminShopResetSync(detail!.shop.id))
                   }
                   onRefresh={() => void refreshDiagnostics()}
                 />
               ))}
             </ul>
           )}
+          {rescueDevices.registered > rescueDevices.active.length ? (
+            <button
+              type="button"
+              className="mt-3 text-xs font-bold text-waka-700 underline"
+              onClick={() => setShowAllDevices((v) => !v)}
+            >
+              {showAllDevices
+                ? "Show logged-in devices only"
+                : `Show all ${rescueDevices.registered} registered devices`}
+            </button>
+          ) : null}
         </RescueSection>
 
         {financial ? (
@@ -873,7 +904,16 @@ export function ShopRescueConsolePage({ lang }: Props) {
               <RescueActionButton
                 variant="secondary"
                 disabled={busy}
-                onClick={() => void runAction("rescue_pin_reset", () => adminShopResetBackOfficePin(detail.shop.id))}
+                onClick={() =>
+                  void runAction("rescue_pin_reset", async () => {
+                    const r = await adminShopResetBackOfficePin(detail.shop.id);
+                    if (r.ok) {
+                      const signals = await fetchShopRecoverySignals(detail.shop.id);
+                      setRecoverySignals(signals);
+                    }
+                    return r;
+                  })
+                }
               >
                 PIN reset
               </RescueActionButton>
@@ -944,6 +984,7 @@ function DeviceCard({
   device,
   busy,
   canSupport,
+  onSetPrimary,
   onForceLogout,
   onRevokeTrust,
   onResetSync,
@@ -952,24 +993,29 @@ function DeviceCard({
   device: ShopDeviceRow;
   busy: boolean;
   canSupport: boolean;
+  onSetPrimary: () => void;
   onForceLogout: () => void;
   onRevokeTrust: () => void;
   onResetSync: () => void;
   onRefresh: () => void;
 }) {
   const online = deviceOnline(device.last_seen_at);
+  const isPrimary = device.device_authority === "primary";
   return (
     <li className="rounded-xl border border-stone-100 bg-stone-50/80 p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-black text-stone-900">{device.label || device.device_fingerprint.slice(0, 18)}</p>
           <p className="text-[10px] font-semibold text-stone-500">
-            Model: {device.label ?? "—"} · {device.platform ?? "—"} · v{device.app_version ?? "—"}
+            {device.platform ?? "—"} · v{device.app_version ?? "—"}
           </p>
           <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] font-black uppercase">
             <span className={online ? "rounded-md bg-emerald-100 px-1.5 py-0.5 text-emerald-900" : "rounded-md bg-stone-200 px-1.5 py-0.5"}>
               {online ? "Online" : "Offline"}
             </span>
+            {isPrimary ? (
+              <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-violet-900">Primary</span>
+            ) : null}
             <span className="rounded-md bg-stone-200 px-1.5 py-0.5">{device.trusted ? "Trusted" : "Untrusted"}</span>
             {device.suspicious_flag ? (
               <span className="rounded-md bg-rose-100 px-1.5 py-0.5 text-rose-900">Suspicious</span>
@@ -979,6 +1025,11 @@ function DeviceCard({
         </div>
         {canSupport ? (
           <div className="flex flex-wrap gap-1">
+            {!isPrimary ? (
+              <RescueActionButton variant="secondary" disabled={busy} onClick={onSetPrimary}>
+                Set primary
+              </RescueActionButton>
+            ) : null}
             <RescueActionButton variant="secondary" disabled={busy} onClick={onForceLogout}>
               Force logout
             </RescueActionButton>

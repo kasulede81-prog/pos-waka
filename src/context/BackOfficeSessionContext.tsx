@@ -31,6 +31,12 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
 
   useEffect(() => subscribeSecuritySession(() => bump((n) => n + 1)), []);
 
+  useEffect(() => {
+    void import("../lib/shopRecoverySignals").then(({ ensureShopRecoveryApplied }) => {
+      void ensureShopRecoveryApplied();
+    });
+  }, []);
+
   const session = getSecuritySession();
   const isUnlocked =
     session !== null &&

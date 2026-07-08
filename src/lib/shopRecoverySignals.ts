@@ -73,7 +73,14 @@ export async function applyShopRecoverySignalsForCurrentShop(): Promise<boolean>
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
 
-  const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: ctx.shopId });
+  return applyShopRecoverySignalsForShop(ctx.shopId);
+}
+
+/** Fetch and apply recovery signals for a shop — safe to call before cloud pull. */
+export async function applyShopRecoverySignalsForShop(shopId: string): Promise<boolean> {
+  if (!hasSupabaseConfig || !supabase) return false;
+
+  const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: shopId });
   const { data, error } = await Promise.race([
     rpc,
     new Promise<{ data: null; error: { message: string } }>((resolve) => {
@@ -85,7 +92,12 @@ export async function applyShopRecoverySignalsForCurrentShop(): Promise<boolean>
   const clearedAt = String((data as { clear_back_office_pin_at?: string }).clear_back_office_pin_at ?? "").trim();
   if (!clearedAt) return false;
 
-  return applyAdminBackOfficePinClear(ctx.shopId, clearedAt);
+  return applyAdminBackOfficePinClear(shopId, clearedAt);
+}
+
+/** Proactive check on app load / unlock screens — does not require full sync. */
+export async function ensureShopRecoveryApplied(): Promise<boolean> {
+  return applyShopRecoverySignalsForCurrentShop();
 }
 
 /** Send Supabase password recovery email to shop owner (after admin RPC audit). */

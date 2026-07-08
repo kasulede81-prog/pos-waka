@@ -7342,6 +7342,10 @@ export async function applyRestoredSnapshotFromBackup(
       purchases: restored.purchases,
       supplierPayments: restored.supplierPayments,
     });
+
+    void import("../lib/shopRecoverySignals").then(({ applyShopRecoverySignalsForCurrentShop }) => {
+      void applyShopRecoverySignalsForCurrentShop();
+    });
   } finally {
     release();
   }

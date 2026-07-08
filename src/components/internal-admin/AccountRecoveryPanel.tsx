@@ -89,8 +89,16 @@ export function AccountRecoveryPanel({
           className="min-h-[48px] flex-1 rounded-xl bg-rose-600 px-4 text-sm font-black text-white disabled:opacity-40"
           onClick={() =>
             void run(
-              () => adminShopResetBackOfficePin(shopId),
-              "Back office PIN cleared on the server. It applies automatically when the owner opens Waka POS online.",
+              async () => {
+                const r = await adminShopResetBackOfficePin(shopId);
+                if (!r.ok) return r;
+                return {
+                  ok: true,
+                  message:
+                    "Shop Security PIN cleared on server and cloud backup. Owner reopens Waka online — PIN lifts automatically.",
+                };
+              },
+              "Shop Security PIN cleared.",
             )
           }
         >

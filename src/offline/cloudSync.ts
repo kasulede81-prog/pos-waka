@@ -3493,6 +3493,10 @@ async function syncShopWithCloudInner(opts?: {
       return { pulled: false, push: { ok: 0, fail: 0 }, queueFailed: 0 };
     }
   }
+
+  const { applyShopRecoverySignalsForCurrentShop } = await import("../lib/shopRecoverySignals");
+  await applyShopRecoverySignalsForCurrentShop().catch(() => false);
+
   const pullBlocked = shouldPausePosBackgroundPull();
   const doPull = pullBlocked
     ? false

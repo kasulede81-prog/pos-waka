@@ -622,6 +622,8 @@ export type ShopDeviceRow = {
   platform: string | null;
   app_version: string | null;
   last_seen_at: string | null;
+  last_login_at?: string | null;
+  device_authority?: "primary" | "secondary" | null;
   is_active: boolean;
   trusted: boolean;
   suspicious_flag: boolean;
@@ -1154,6 +1156,11 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
           platform: (d.platform as string) ?? null,
           app_version: (d.app_version as string) ?? null,
           last_seen_at: (d.last_seen_at as string) ?? null,
+          last_login_at: (d.last_login_at as string) ?? null,
+          device_authority:
+            d.device_authority === "primary" || d.device_authority === "secondary"
+              ? d.device_authority
+              : null,
           is_active: Boolean(d.is_active),
           trusted: Boolean(d.trusted),
           suspicious_flag: Boolean(d.suspicious_flag),
@@ -1267,7 +1274,9 @@ export async function fetchShopOpsDetail(shopId: string): Promise<ShopOpsDetail 
 
   const { data: devRows } = await supabase
     .from("shop_devices")
-    .select("id,shop_id,device_fingerprint,label,platform,app_version,last_seen_at,is_active,trusted,suspicious_flag,created_at")
+    .select(
+      "id,shop_id,device_fingerprint,label,platform,app_version,last_seen_at,last_login_at,device_authority,is_active,trusted,suspicious_flag,created_at",
+    )
     .eq("shop_id", shopId)
     .order("last_seen_at", { ascending: false })
     .limit(50);
@@ -1577,7 +1586,32 @@ export async function adminShopOpenSupportMessage(
   return { ok: true, id: data as string | undefined };
 }
 
-export async function adminShopResetBackOfficePin(shopId: string): Promise<{ ok: boolean; message?: string }> {
+export async function adminShopSetPrimaryDevice(
+  shopId: string,
+  deviceId: string,
+): Promise<{ ok: boolean; message?: string }> {
+  if (!supabase) return { ok: false, message: "Offline" };
+  const { data, error } = await supabase.rpc("admin_shop_set_primary_device", {
+    p_shop_id: shopId,
+    p_device_id: deviceId,
+  });
+  if (error) {
+    const missingFn = error.message?.includes("Could not find the function") || error.code === "PGRST202";
+    return {
+      ok: false,
+      message: missingFn
+        ? "Missing RPC: admin_shop_set_primary_device. Apply migration 131 and retry."
+        : error.message,
+    };
+  }
+  const j = (data ?? {}) as { ok?: boolean; error?: string };
+  if (j.ok === true) return { ok: true };
+  return { ok: false, message: j.error ?? "Could not set primary device." };
+}
+
+export async function adminShopResetBackOfficePin(
+  shopId: string,
+): Promise<{ ok: boolean; message?: string; clearedAt?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
   const { data, error } = await supabase.rpc("admin_shop_reset_backoffice_pin", { p_shop_id: shopId });
   if (error) {
@@ -1589,8 +1623,10 @@ export async function adminShopResetBackOfficePin(shopId: string): Promise<{ ok:
         : error.message,
     };
   }
-  const j = (data ?? {}) as { ok?: boolean; error?: string };
-  if (j.ok === true) return { ok: true };
+  const j = (data ?? {}) as { ok?: boolean; error?: string; clear_back_office_pin_at?: string };
+  if (j.ok === true) {
+    return { ok: true, clearedAt: j.clear_back_office_pin_at };
+  }
   return { ok: false, message: j.error ?? "Could not reset back office PIN." };
 }
 
