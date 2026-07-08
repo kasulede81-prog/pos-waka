@@ -70,14 +70,43 @@ async function reconcileLocalOnlyStaffToCloud(cloud: StaffAccount[], merged: Sta
   }
 }
 
-/** Pull staff during cloud sync — Phase 3 uses versioned cache on all devices. */
-export async function pullAndMergeStaffDuringCloudSync(): Promise<void> {
-  const { refreshStaffCacheBackground, isSecondaryStaffTerminal } = await import("./staffCacheSync");
-  const updated = await refreshStaffCacheBackground();
-  if (updated) return;
+const STAFF_SYNC_MIN_INTERVAL_MS = 45_000;
+let lastStaffSyncAt = 0;
 
-  const secondary = await isSecondaryStaffTerminal();
-  if (secondary) return;
+/** Pull staff during cloud sync — Phase 3 uses versioned cache on all devices. */
+export async function pullAndMergeStaffDuringCloudSync(opts?: {
+  deviceAuthority?: import("./deviceAuthority").DeviceAuthorityContext | null;
+  force?: boolean;
+}): Promise<void> {
+  const now = Date.now();
+  if (!opts?.force && now - lastStaffSyncAt < STAFF_SYNC_MIN_INTERVAL_MS) return;
+
+  const {
+    refreshStaffCacheBackground,
+    isSecondaryStaffTerminal,
+    isStaffCacheUpToDate,
+  } = await import("./staffCacheSync");
+
+  const updated = await refreshStaffCacheBackground();
+  if (updated) {
+    lastStaffSyncAt = now;
+    return;
+  }
+
+  const secondary = await isSecondaryStaffTerminal(opts?.deviceAuthority);
+  if (secondary) {
+    lastStaffSyncAt = now;
+    return;
+  }
+
+  const { resolveShopCtx } = await import("../offline/cloudSync");
+  const ctx = await resolveShopCtx();
+  if (!ctx) return;
+
+  if (await isStaffCacheUpToDate(ctx.shopId)) {
+    lastStaffSyncAt = now;
+    return;
+  }
 
   let cloud = await pullShopStaffFromCloud();
   if (cloud === null) return;
@@ -87,13 +116,9 @@ export async function pullAndMergeStaffDuringCloudSync(): Promise<void> {
   const local = state.preferences.staffAccounts ?? [];
 
   if (cloud.length === 0 && local.length > 0) {
-    const { resolveShopCtx } = await import("../offline/cloudSync");
-    const ctx = await resolveShopCtx();
-    if (ctx) {
-      await importLocalStaffToCloud(ctx.shopId, local);
-      const repulled = await pullShopStaffFromCloud();
-      if (repulled) cloud = repulled;
-    }
+    await importLocalStaffToCloud(ctx.shopId, local);
+    const repulled = await pullShopStaffFromCloud();
+    if (repulled) cloud = repulled;
   }
 
   const merged = mergeStaffAccountsForCloudSync(local, cloud);
@@ -105,6 +130,7 @@ export async function pullAndMergeStaffDuringCloudSync(): Promise<void> {
 
   await reconcileLocalOnlyStaffToCloud(cloud, merged);
   await refreshStaffCacheBackground({ force: true });
+  lastStaffSyncAt = now;
 }
 
 export async function pullAndMergeStaffAccountsForRecovery(): Promise<number> {

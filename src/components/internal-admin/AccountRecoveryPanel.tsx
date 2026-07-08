@@ -90,7 +90,7 @@ export function AccountRecoveryPanel({
           onClick={() =>
             void run(
               () => adminShopResetBackOfficePin(shopId),
-              "Back office PIN cleared. Owner opens the app online to apply on this device.",
+              "Back office PIN cleared on the server. It applies automatically when the owner opens Waka POS online.",
             )
           }
         >

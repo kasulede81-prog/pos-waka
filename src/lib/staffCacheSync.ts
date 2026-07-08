@@ -17,7 +17,7 @@ import {
 } from "./offlineStaffCache";
 import { logStaffCacheEvent } from "./staffCacheDiagnostics";
 import type { CloudStaffRow } from "./shopStaffCloud";
-import { usePosStore } from "../store/usePosStore";
+import type { DeviceAuthorityContext } from "./deviceAuthority";
 
 export type StaffDownloadResult = {
   unchanged: boolean;
@@ -154,11 +154,24 @@ export function mirrorStaffCacheToPreferences(staff: StaffAccount[]): void {
   });
 }
 
-export async function isSecondaryStaffTerminal(): Promise<boolean> {
-  const { fetchDeviceAuthorityContext } = await import("./deviceAuthority");
-  const ctx = await resolveShopCtx();
-  if (!ctx) return false;
-  const device = await fetchDeviceAuthorityContext(ctx.shopId);
+export async function isStaffCacheUpToDate(shopId: string): Promise<boolean> {
+  const localVersion = await getCachedStaffVersion(shopId);
+  if (localVersion <= 0) return false;
+  const cloudVersion = await fetchCloudStaffVersion(shopId);
+  return cloudVersion != null && localVersion >= cloudVersion;
+}
+
+export async function isSecondaryStaffTerminal(
+  deviceAuthority?: DeviceAuthorityContext | null,
+): Promise<boolean> {
+  const device =
+    deviceAuthority ??
+    (await (async () => {
+      const { fetchDeviceAuthorityContext } = await import("./deviceAuthority");
+      const ctx = await resolveShopCtx();
+      if (!ctx) return null;
+      return fetchDeviceAuthorityContext(ctx.shopId);
+    })());
   if (!device?.primaryDeviceFingerprint) return false;
   return !device.isPrimary;
 }
@@ -211,6 +224,7 @@ export async function refreshStaffCacheBackground(opts?: {
 
   const existing = await readOfflineStaffCache(ctx.shopId);
   const next = applyStaffDeltaToCache(existing, ctx.shopId, delta);
+  const { usePosStore } = await import("../store/usePosStore");
   const businessName = usePosStore.getState().preferences.shopDisplayName?.trim();
   if (businessName) {
     next.businessName = businessName;

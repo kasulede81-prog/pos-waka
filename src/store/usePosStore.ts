@@ -154,8 +154,8 @@ import {
   recallKitchenTicket as recallKitchenTicketOnFloor,
   cancelKitchenTicketItem as cancelKitchenTicketItemOnFloor,
 } from "../lib/kitchenProduction";
-import { verifyManagerApprovalPinSync } from "../lib/enterpriseSecurity/EnterpriseSecurityService";
 import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
+import { verifyManagerApprovalPinSync } from "../lib/enterpriseSecurity/EnterpriseSecurityService";
 import {
   addDiningArea,
   addDiningTable,

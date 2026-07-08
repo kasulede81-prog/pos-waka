@@ -1,7 +1,5 @@
 import { getAuthRecoveryUrl } from "./authConfig";
 import { hasSupabaseConfig, supabase } from "./supabase";
-import { resolvePrimaryOrganizationForUser } from "./fetchShopSubscription";
-import { usePosStore } from "../store/usePosStore";
 
 const APPLIED_PIN_CLEAR_KEY = "waka.recovery.pinClearApplied.v1";
 
@@ -27,33 +25,67 @@ function writeAppliedPinClearAt(shopId: string, at: string): void {
   }
 }
 
+/**
+ * Apply server-side admin PIN reset on this device.
+ * Bypasses setPreferences auth — support recovery must always win over local session role.
+ */
+export async function applyAdminBackOfficePinClear(shopId: string, clearedAt: string): Promise<boolean> {
+  const lastApplied = readAppliedPinClearAt(shopId);
+  if (lastApplied === clearedAt) return false;
+
+  const { clearLegacySensitiveSession, clearSecuritySession } = await import(
+    "./enterpriseSecurity/securitySession"
+  );
+  clearSecuritySession();
+  clearLegacySensitiveSession();
+
+  const { flushPendingPersist, usePosStore } = await import("../store/usePosStore");
+  usePosStore.setState((s) => ({
+    preferences: {
+      ...s.preferences,
+      backOfficePin: null,
+      posLocked: false,
+      biometricAuthEnabled: false,
+    },
+  }));
+
+  usePosStore.getState().logAuditAction(
+    "admin_pin_clear_applied",
+    "Shop Security PIN cleared by support recovery",
+    { shopId, clearedAt },
+  );
+
+  writeAppliedPinClearAt(shopId, clearedAt);
+  flushPendingPersist();
+
+  void import("./cloudSnapshotSync").then(({ uploadShopCloudSnapshot }) => {
+    void uploadShopCloudSnapshot({ force: true });
+  });
+
+  return true;
+}
+
 /** Apply server-side admin PIN reset on this device (after cloud sync / login). */
-export async function applyShopRecoverySignalsForCurrentShop(): Promise<void> {
-  if (!hasSupabaseConfig || !supabase) return;
-  const { data: session } = await supabase.auth.getSession();
-  const userId = session.session?.user?.id;
-  if (!userId) return;
+export async function applyShopRecoverySignalsForCurrentShop(): Promise<boolean> {
+  if (!hasSupabaseConfig || !supabase) return false;
 
-  const primary = await resolvePrimaryOrganizationForUser(userId);
-  if (!primary?.shopId) return;
+  const { resolveShopCtx } = await import("../offline/cloudSync");
+  const ctx = await resolveShopCtx();
+  if (!ctx) return false;
 
-  const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: primary.shopId });
+  const rpc = supabase.rpc("shop_fetch_recovery_signal", { p_shop_id: ctx.shopId });
   const { data, error } = await Promise.race([
     rpc,
     new Promise<{ data: null; error: { message: string } }>((resolve) => {
       setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), 4_000);
     }),
   ]);
-  if (error || !data || typeof data !== "object") return;
+  if (error || !data || typeof data !== "object") return false;
 
   const clearedAt = String((data as { clear_back_office_pin_at?: string }).clear_back_office_pin_at ?? "").trim();
-  if (!clearedAt) return;
+  if (!clearedAt) return false;
 
-  const lastApplied = readAppliedPinClearAt(primary.shopId);
-  if (lastApplied === clearedAt) return;
-
-  usePosStore.getState().setPreferences({ backOfficePin: null, posLocked: false }, { silent: true });
-  writeAppliedPinClearAt(primary.shopId, clearedAt);
+  return applyAdminBackOfficePinClear(ctx.shopId, clearedAt);
 }
 
 /** Send Supabase password recovery email to shop owner (after admin RPC audit). */

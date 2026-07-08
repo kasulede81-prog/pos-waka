@@ -3505,13 +3505,16 @@ async function syncShopWithCloudInner(opts?: {
   const { pullHospitalityStateFromCloud } = await import("./hospitalityCloudSync");
   if (getDeviceOnline() && !pullBlocked) {
     await pullHospitalityStateFromCloud(opts?.forceFull === true);
+    const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
+    const deviceAuthority = await fetchDeviceAuthorityContext();
     const { pullAndMergeStaffDuringCloudSync } = await import("../lib/staffRecovery");
-    await pullAndMergeStaffDuringCloudSync();
+    await pullAndMergeStaffDuringCloudSync({
+      deviceAuthority,
+      force: opts?.forceFull === true,
+    });
     void import("../lib/staffLoginSecurity").then(({ flushPendingStaffSecurityEvents }) => {
       flushPendingStaffSecurityEvents();
     });
-    const { fetchDeviceAuthorityContext } = await import("../lib/deviceAuthority");
-    await fetchDeviceAuthorityContext();
   }
   const { push, queueFailed } = await pushShopPendingToCloudInner();
   if (getDeviceOnline() && push.fail === 0) {

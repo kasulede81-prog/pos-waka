@@ -111,6 +111,7 @@ export type AuditAction =
   | "back_office_unlock"
   | "back_office_unlock_success"
   | "back_office_unlock_failed"
+  | "admin_pin_clear_applied"
   | "shift_start"
   | "shift_end"
   | "product_add"
