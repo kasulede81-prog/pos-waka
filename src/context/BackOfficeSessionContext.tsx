@@ -1,21 +1,23 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { usePosStore } from "../store/usePosStore";
-import { resolveBackOfficeUnlock } from "../lib/backOfficeUnlock";
+import { resolveBackOfficeUnlockAsync } from "../lib/backOfficeUnlock";
 import type { UserRole } from "../types";
 import { getOrCreateDeviceId } from "../lib/deviceId";
-import { grantSensitiveActionSession, clearSensitiveActionSession } from "../lib/sensitiveActionAuth";
-
-const AUTO_LOCK_MS = 3 * 60 * 1000;
-/** Extending session on every tap re-rendered the whole app tree; throttle bumps while unlocked. */
-const TOUCH_BUMP_MIN_MS = 25_000;
-const TOUCH_BUMP_ALWAYS_IF_MS_LEFT = 45_000;
+import {
+  clearSecuritySession,
+  createSecuritySession,
+  getSecuritySession,
+  subscribeSecuritySession,
+  touchSecuritySession,
+} from "../lib/enterpriseSecurity/securitySession";
+import { backOfficeUnlockAuditLogger } from "../lib/enterpriseSecurity/audit";
 
 type Ctx = {
   isUnlocked: boolean;
   unlockedRole: UserRole | null;
   unlockedLabel: string | null;
   /** Returns false if secret wrong */
-  unlockWithPin: (pin: string) => boolean;
+  unlockWithPin: (pin: string) => Promise<boolean>;
   /** OS biometric verified — owner/manager session actors only. */
   unlockWithBiometric: () => boolean;
   lock: () => void;
@@ -25,54 +27,51 @@ type Ctx = {
 const BackOfficeSessionContext = createContext<Ctx | null>(null);
 
 export function BackOfficeSessionProvider({ children }: { children: ReactNode }) {
-  const [unlockedUntil, setUnlockedUntil] = useState<number | null>(null);
-  const [unlockedRole, setUnlockedRole] = useState<UserRole | null>(null);
-  const [unlockedLabel, setUnlockedLabel] = useState<string | null>(null);
-  const lastTouchBumpAtRef = useRef(0);
+  const [, bump] = useState(0);
+
+  useEffect(() => subscribeSecuritySession(() => bump((n) => n + 1)), []);
+
+  const session = getSecuritySession();
+  const isUnlocked =
+    session !== null &&
+    (session.authorizedScopes.has("back_office_shell") || session.authorizedScopes.has("*"));
+  const unlockedRole = isUnlocked ? session!.verifiedUser.role : null;
+  const unlockedLabel = isUnlocked ? session!.verifiedUser.actorLabel : null;
 
   const lock = useCallback(() => {
-    setUnlockedUntil(null);
-    setUnlockedRole(null);
-    setUnlockedLabel(null);
-    clearSensitiveActionSession();
+    clearSecuritySession();
+    bump((n) => n + 1);
   }, []);
 
   const touch = useCallback(() => {
-    const now = Date.now();
-    setUnlockedUntil((cur) => {
-      if (cur === null) return cur;
-      const msLeft = cur - now;
-      if (msLeft < TOUCH_BUMP_ALWAYS_IF_MS_LEFT) {
-        lastTouchBumpAtRef.current = now;
-        return now + AUTO_LOCK_MS;
-      }
-      if (now - lastTouchBumpAtRef.current < TOUCH_BUMP_MIN_MS) {
-        return cur;
-      }
-      lastTouchBumpAtRef.current = now;
-      return now + AUTO_LOCK_MS;
-    });
+    touchSecuritySession();
+    bump((n) => n + 1);
   }, []);
 
-  const unlockWithPin = useCallback((pin: string) => {
+  const unlockWithPin = useCallback(async (pin: string) => {
     const state = usePosStore.getState();
-    const result = resolveBackOfficeUnlock(pin, state.preferences, state.sessionActor);
     const deviceId = getOrCreateDeviceId();
+    const result = await resolveBackOfficeUnlockAsync(pin, state.preferences, state.sessionActor, deviceId);
 
     if (!result.ok) {
-      usePosStore.getState().logAuditAction("back_office_unlock_failed", "Back Office unlock failed", {
-        via: result.via,
-        deviceId,
-      });
+      backOfficeUnlockAuditLogger(false, { via: result.via, deviceId });
       return false;
     }
 
-    setUnlockedUntil(Date.now() + AUTO_LOCK_MS);
-    setUnlockedRole(result.role);
-    setUnlockedLabel(result.actorLabel);
-    grantSensitiveActionSession();
+    createSecuritySession({
+      scopes: ["back_office_shell", "*"],
+      credential: result.via === "staff_pin" ? "staff_pin" : "shop_security_pin",
+      user: {
+        role: result.role,
+        actorUserId: result.actorUserId,
+        actorLabel: result.actorLabel,
+        staffId: result.staffId,
+      },
+      deviceId,
+      auditId: crypto.randomUUID(),
+    });
 
-    usePosStore.getState().logAuditAction("back_office_unlock_success", `Back Office unlocked as ${result.role}`, {
+    backOfficeUnlockAuditLogger(true, {
       via: result.via,
       unlockRole: result.role,
       unlockLabel: result.actorLabel,
@@ -80,6 +79,7 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
       staffId: result.staffId ?? null,
       deviceId,
     });
+    bump((n) => n + 1);
     return true;
   }, []);
 
@@ -91,38 +91,31 @@ export function BackOfficeSessionProvider({ children }: { children: ReactNode })
       return false;
     }
     const deviceId = getOrCreateDeviceId();
-    setUnlockedUntil(Date.now() + AUTO_LOCK_MS);
-    setUnlockedRole(role);
-    setUnlockedLabel(actor?.displayName ?? role);
-    grantSensitiveActionSession();
-    usePosStore.getState().logAuditAction("back_office_unlock_success", `Back Office unlocked as ${role}`, {
+    createSecuritySession({
+      scopes: ["back_office_shell", "*"],
+      credential: "biometric",
+      user: {
+        role,
+        actorUserId: actor?.userId ?? "unknown",
+        actorLabel: actor?.displayName ?? role,
+      },
+      deviceId,
+      auditId: crypto.randomUUID(),
+    });
+    backOfficeUnlockAuditLogger(true, {
       via: "biometric",
       unlockRole: role,
       unlockLabel: actor?.displayName ?? role,
       unlockUserId: actor?.userId ?? "unknown",
       deviceId,
     });
+    bump((n) => n + 1);
     return true;
   }, []);
 
-  const isUnlocked = unlockedUntil !== null && unlockedUntil > Date.now();
-
-  useEffect(() => {
-    if (!unlockedUntil) return;
-    const id = window.setInterval(() => {
-      setUnlockedUntil((cur) => {
-        if (cur && cur > Date.now()) return cur;
-        setUnlockedRole(null);
-        setUnlockedLabel(null);
-        return null;
-      });
-    }, 10000);
-    return () => window.clearInterval(id);
-  }, [unlockedUntil]);
-
   const value = useMemo(
     () => ({
-      isUnlocked,
+      isUnlocked: Boolean(isUnlocked),
       unlockedRole,
       unlockedLabel,
       unlockWithPin,

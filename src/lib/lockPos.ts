@@ -1,10 +1,10 @@
-import type { ShopPreferences } from "../types";
+import { isShopSecurityPinConfigured } from "./enterpriseSecurity/shopPinSecret";
 
 export function isBackOfficePinConfigured(pin: string | null | undefined): boolean {
-  return (pin ?? "").replace(/\D/g, "").length >= 4;
+  return isShopSecurityPinConfigured(pin);
 }
 
-export function activeStaffCanUnlock(accounts: ShopPreferences["staffAccounts"]): boolean {
+export function activeStaffCanUnlock(accounts: import("../types").ShopPreferences["staffAccounts"]): boolean {
   return (accounts ?? []).some(
     (s) =>
       s.active &&
@@ -15,6 +15,6 @@ export function activeStaffCanUnlock(accounts: ShopPreferences["staffAccounts"])
   );
 }
 
-export function canLockPos(preferences: Pick<ShopPreferences, "backOfficePin">): boolean {
+export function canLockPos(preferences: Pick<import("../types").ShopPreferences, "backOfficePin">): boolean {
   return isBackOfficePinConfigured(preferences.backOfficePin);
 }

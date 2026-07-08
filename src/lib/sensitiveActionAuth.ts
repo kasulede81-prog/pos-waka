@@ -1,8 +1,20 @@
 import type { ShopPreferences } from "../types";
-import { isBackOfficePinConfigured } from "./lockPos";
 import { isBackOfficePinRequired } from "./backOfficeUnlock";
+import {
+  clearSecuritySession,
+  createSecuritySession,
+  getSecuritySession,
+  grantLegacySensitiveSession,
+  isLegacySensitiveSessionActive,
+  isSecuritySessionActive,
+  refreshSecuritySession,
+  securitySessionMsRemaining,
+  clearLegacySensitiveSession,
+} from "./enterpriseSecurity/securitySession";
+import { verifyManagerApprovalPinSync } from "./enterpriseSecurity/EnterpriseSecurityService";
+import { isShopPinConfigured } from "./enterpriseSecurity/EnterpriseSecurityService";
 
-/** Actions that may require biometric or Owner PIN when enabled in settings. */
+/** Actions that may require biometric or security PIN when enabled in settings. */
 export type SensitiveActionKind =
   | "refund_sale"
   | "void_sale"
@@ -15,38 +27,45 @@ export type SensitiveActionKind =
 export const SENSITIVE_ACTION_SESSION_MS = 5 * 60 * 1000;
 export const MAX_BIOMETRIC_FAILURES_BEFORE_PIN = 3;
 
-let sessionExpiresAt: number | null = null;
-
 export function isSensitiveActionSessionActive(): boolean {
-  return sessionExpiresAt !== null && sessionExpiresAt > Date.now();
+  return isSecuritySessionActive();
 }
 
 export function grantSensitiveActionSession(): void {
-  sessionExpiresAt = Date.now() + SENSITIVE_ACTION_SESSION_MS;
+  if (getSecuritySession()) {
+    refreshSecuritySession();
+    return;
+  }
+  grantLegacySensitiveSession();
 }
 
 export function clearSensitiveActionSession(): void {
-  sessionExpiresAt = null;
+  clearSecuritySession();
 }
 
 export function sensitiveActionSessionMsRemaining(): number {
-  if (!sessionExpiresAt) return 0;
-  return Math.max(0, sessionExpiresAt - Date.now());
+  return securitySessionMsRemaining();
 }
 
-export function isBiometricAuthFeatureEnabled(preferences: Pick<ShopPreferences, "biometricAuthEnabled">): boolean {
+export function isBiometricAuthFeatureEnabled(
+  preferences: Pick<ShopPreferences, "biometricAuthEnabled">,
+): boolean {
   return preferences.biometricAuthEnabled === true;
 }
 
 export function canEnableBiometricAuth(preferences: Pick<ShopPreferences, "backOfficePin">): boolean {
-  return isBackOfficePinConfigured(preferences.backOfficePin);
+  return isShopPinConfigured(preferences);
 }
 
-/** Owner PIN (Back Office PIN) — permanent backup; never stores biometrics. */
-export function verifyOwnerPin(pin: string, preferences: Pick<ShopPreferences, "backOfficePin">): boolean {
-  const stored = preferences.backOfficePin?.trim() ?? "";
-  if (!stored) return false;
-  return pin.replace(/\D/g, "") === stored.replace(/\D/g, "");
+/**
+ * @deprecated Use verifyManagerApprovalPin / verifyManagerApprovalPinSync from enterpriseSecurity.
+ * Sync verification — staff PIN (legacy) or shop security PIN (legacy plaintext).
+ */
+export function verifyOwnerPin(
+  pin: string,
+  preferences: Pick<ShopPreferences, "backOfficePin" | "staffAccounts">,
+): boolean {
+  return verifyManagerApprovalPinSync(pin, preferences as ShopPreferences);
 }
 
 export function shouldPromptForSensitiveAction(
@@ -56,7 +75,7 @@ export function shouldPromptForSensitiveAction(
   return !isSensitiveActionSessionActive();
 }
 
-/** Back Office PIN unlock covers sensitive routes for the same session — avoids double prompts. */
+/** Enterprise session covers sensitive routes after back-office unlock — avoids double prompts. */
 export function sensitiveAuthSatisfiedByBackOfficeUnlock(
   preferences: {
     backOfficePin?: string | null;
@@ -68,3 +87,21 @@ export function sensitiveAuthSatisfiedByBackOfficeUnlock(
   if (!backOfficeUnlocked) return false;
   return isBackOfficePinRequired(preferences) || isBiometricAuthFeatureEnabled(preferences);
 }
+
+export function grantSecuritySessionForScope(
+  scope: SensitiveActionKind | "back_office_shell" | "all",
+  deviceId: string,
+  user: import("./enterpriseSecurity/types").VerifiedSecurityUser,
+  credential: import("./enterpriseSecurity/types").SecurityCredentialType,
+  auditId: string,
+): void {
+  createSecuritySession({
+    scopes: scope === "all" ? "all" : [scope],
+    credential,
+    user,
+    deviceId,
+    auditId,
+  });
+}
+
+export { isSecuritySessionActive, clearLegacySensitiveSession, isLegacySensitiveSessionActive };

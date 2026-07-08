@@ -1,9 +1,12 @@
 /**
- * Manager / supervisor PIN verification for opening-float overrides.
+ * Manager / supervisor PIN verification — delegates to Enterprise Security Service.
  */
 
 import type { ShopPreferences, UserRole } from "../types";
-import { staffHasBackOfficeUnlockSecret, staffSecretMatches } from "./staffSecret";
+import {
+  verifyFloatVerifyOverrideSync,
+} from "./enterpriseSecurity/EnterpriseSecurityService";
+import type { EnterpriseSecurityResult } from "./enterpriseSecurity/types";
 
 export type FloatVerifyOverrideVia = "staff_pin" | "shop_pin" | "role_session";
 
@@ -28,7 +31,25 @@ export function canVerifyOpeningFloat(role: UserRole): boolean {
   return OVERRIDE_ROLES.has(role);
 }
 
-/** Resolve manager override PIN — owner/manager/supervisor staff PIN or shop PIN. */
+function mapOverrideResult(result: EnterpriseSecurityResult): FloatVerifyOverrideResult {
+  if (!result.ok) return { ok: false };
+  const via: FloatVerifyOverrideVia =
+    result.via === "role_session"
+      ? "role_session"
+      : result.via === "shop_pin"
+        ? "shop_pin"
+        : "staff_pin";
+  return {
+    ok: true,
+    via,
+    role: result.user.role,
+    actorUserId: result.user.actorUserId,
+    actorLabel: result.user.actorLabel,
+    staffId: result.user.staffId,
+  };
+}
+
+/** Resolve manager override PIN — Enterprise Security Service (sync legacy path). */
 export function resolveFloatVerifyOverride(
   pin: string,
   preferences: ShopPreferences,
@@ -36,56 +57,21 @@ export function resolveFloatVerifyOverride(
   sessionUserId: string,
   sessionLabel: string,
 ): FloatVerifyOverrideResult {
-  const normalized = pin.trim();
-  const staff = preferences.staffAccounts ?? [];
-  const matched = staff.find(
-    (s) =>
-      s.active &&
-      OVERRIDE_ROLES.has(s.role) &&
-      staffHasBackOfficeUnlockSecret(s) &&
-      staffSecretMatches(s, normalized),
+  return mapOverrideResult(
+    verifyFloatVerifyOverrideSync(pin, preferences, sessionRole, sessionUserId, sessionLabel),
   );
+}
 
-  if (matched) {
-    return {
-      ok: true,
-      via: "staff_pin",
-      role: matched.role,
-      actorUserId: `staff:${matched.id}`,
-      actorLabel: matched.name,
-      staffId: matched.id,
-    };
-  }
-
-  const stored = preferences.backOfficePin?.trim() ?? "";
-  if (stored && normalized.replace(/\D/g, "") === stored.replace(/\D/g, "")) {
-    if (canVerifyOpeningFloat(sessionRole)) {
-      return {
-        ok: true,
-        via: "shop_pin",
-        role: sessionRole,
-        actorUserId: sessionUserId,
-        actorLabel: sessionLabel,
-      };
-    }
-    return {
-      ok: true,
-      via: "shop_pin",
-      role: "owner",
-      actorUserId: sessionUserId,
-      actorLabel: sessionLabel,
-    };
-  }
-
-  if (!stored && staff.length === 0 && canVerifyOpeningFloat(sessionRole)) {
-    return {
-      ok: true,
-      via: "role_session",
-      role: sessionRole,
-      actorUserId: sessionUserId,
-      actorLabel: sessionLabel,
-    };
-  }
-
-  return { ok: false };
+/** Async override — supports Argon2 staff PINs and hashed shop PIN. */
+export async function resolveFloatVerifyOverrideAsync(
+  pin: string,
+  preferences: ShopPreferences,
+  sessionRole: UserRole,
+  sessionUserId: string,
+  sessionLabel: string,
+): Promise<FloatVerifyOverrideResult> {
+  const { verifyFloatVerifyOverride } = await import("./enterpriseSecurity/EnterpriseSecurityService");
+  return mapOverrideResult(
+    await verifyFloatVerifyOverride(pin, preferences, sessionRole, sessionUserId, sessionLabel),
+  );
 }

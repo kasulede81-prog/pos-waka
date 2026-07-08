@@ -1,13 +1,18 @@
+import type { ShopPreferences } from "../types";
 import type { SessionActor } from "./sessionActor";
-import type { ShopPreferences, StaffAccount, UserRole } from "../types";
-import { staffHasBackOfficeUnlockSecret, staffSecretMatches } from "./staffSecret";
+import { isShopSecurityPinConfigured } from "./enterpriseSecurity/shopPinSecret";
+import { staffHasBackOfficeUnlockSecret } from "./staffSecret";
+import {
+  verifyBackOfficeShellCredential,
+  verifyBackOfficeShellCredentialSync,
+} from "./enterpriseSecurity/EnterpriseSecurityService";
 
 export type BackOfficeUnlockVia = "staff_pin" | "shop_pin" | "open_no_pin";
 
 export type BackOfficeUnlockSuccess = {
   ok: true;
   via: BackOfficeUnlockVia;
-  role: UserRole;
+  role: import("../types").UserRole;
   actorUserId: string;
   actorLabel: string;
   staffId?: string;
@@ -20,66 +25,52 @@ export type BackOfficeUnlockFailure = {
 
 export type BackOfficeUnlockResult = BackOfficeUnlockSuccess | BackOfficeUnlockFailure;
 
-const UNLOCK_STAFF_ROLES = new Set<UserRole>(["owner", "manager"]);
-
-function matchingStaff(staff: StaffAccount[], pin: string): StaffAccount | null {
-  return staff.find((s) => s.active && UNLOCK_STAFF_ROLES.has(s.role) && staffSecretMatches(s, pin)) ?? null;
+function mapShellResult(result: Awaited<ReturnType<typeof verifyBackOfficeShellCredential>>): BackOfficeUnlockResult {
+  if (!result.ok) {
+    return {
+      ok: false,
+      via: result.credentialAttempted === "shop_security_pin" ? "shop_pin" : "staff_pin",
+    };
+  }
+  const via: BackOfficeUnlockVia =
+    result.via === "staff_pin"
+      ? "staff_pin"
+      : result.via === "open_no_pin"
+        ? "open_no_pin"
+        : "shop_pin";
+  return {
+    ok: true,
+    via,
+    role: result.user.role,
+    actorUserId: result.user.actorUserId,
+    actorLabel: result.user.actorLabel,
+    staffId: result.user.staffId,
+  };
 }
 
 /** Whether Back Office requires a PIN modal before access. */
-export function isBackOfficePinRequired(preferences: Pick<ShopPreferences, "backOfficePin" | "staffAccounts">): boolean {
-  const stored = preferences.backOfficePin?.trim() ?? "";
-  if (stored.length > 0) return true;
+export function isBackOfficePinRequired(
+  preferences: Pick<ShopPreferences, "backOfficePin" | "staffAccounts">,
+): boolean {
+  if (isShopSecurityPinConfigured(preferences.backOfficePin)) return true;
   return (preferences.staffAccounts ?? []).some(staffHasBackOfficeUnlockSecret);
 }
 
-/** Resolve Back Office unlock — staff PIN (owner/manager) takes precedence over shop PIN. */
+/** Resolve Back Office unlock — delegates to Enterprise Security Service (sync legacy path). */
 export function resolveBackOfficeUnlock(
   pin: string,
   preferences: ShopPreferences,
   sessionActor: SessionActor | null,
 ): BackOfficeUnlockResult {
-  const stored = preferences.backOfficePin?.trim() ?? "";
-  const staff = preferences.staffAccounts ?? [];
-  const normalized = pin.trim();
-  const digits = normalized.replace(/\D/g, "");
-  const matched = matchingStaff(staff, normalized);
+  return mapShellResult(verifyBackOfficeShellCredentialSync(pin, preferences, sessionActor));
+}
 
-  if (matched) {
-    return {
-      ok: true,
-      via: "staff_pin",
-      role: matched.role,
-      actorUserId: `staff:${matched.id}`,
-      actorLabel: matched.name,
-      staffId: matched.id,
-    };
-  }
-
-  if (!stored) {
-    if (staff.length === 0) {
-      const role = sessionActor?.role ?? "owner";
-      return {
-        ok: true,
-        via: "open_no_pin",
-        role,
-        actorUserId: sessionActor?.userId ?? "unknown",
-        actorLabel: sessionActor?.displayName ?? role,
-      };
-    }
-    return { ok: false, via: "staff_pin" };
-  }
-
-  if (digits === stored.replace(/\D/g, "")) {
-    const role = sessionActor?.role === "manager" ? "manager" : sessionActor?.role === "owner" ? "owner" : "owner";
-    return {
-      ok: true,
-      via: "shop_pin",
-      role,
-      actorUserId: sessionActor?.userId ?? "unknown",
-      actorLabel: sessionActor?.displayName ?? role,
-    };
-  }
-
-  return { ok: false, via: "shop_pin" };
+/** Async unlock — supports Argon2 staff PINs and hashed shop PIN. */
+export async function resolveBackOfficeUnlockAsync(
+  pin: string,
+  preferences: ShopPreferences,
+  sessionActor: SessionActor | null,
+  deviceId: string,
+): Promise<BackOfficeUnlockResult> {
+  return mapShellResult(await verifyBackOfficeShellCredential(pin, preferences, sessionActor, deviceId));
 }

@@ -154,7 +154,7 @@ import {
   recallKitchenTicket as recallKitchenTicketOnFloor,
   cancelKitchenTicketItem as cancelKitchenTicketItemOnFloor,
 } from "../lib/kitchenProduction";
-import { verifyOwnerPin } from "../lib/sensitiveActionAuth";
+import { verifyManagerApprovalPinSync } from "../lib/enterpriseSecurity/EnterpriseSecurityService";
 import { validateCombinedDraftDiscount } from "../lib/discountGovernance";
 import {
   addDiningArea,
@@ -5380,7 +5380,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const denied = denyUnlessEffectivePermission("pos.sell", "recordControlledReturn");
     if (denied) return { ok: false, errorKey: denied.errorKey };
     const state = get();
-    if (!verifyOwnerPin(input.managerPin, state.preferences)) {
+    if (!verifyManagerApprovalPinSync(input.managerPin, state.preferences)) {
       pushAudit("sensitive_action_auth_denied", "Controlled return PIN denied", {
         context: "controlled_return",
         productId: input.productId,
@@ -6945,7 +6945,13 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
         ? (base.backOfficePin ?? null)
         : p.backOfficePin === null || p.backOfficePin === ""
           ? null
-          : String(p.backOfficePin).replace(/\D/g, "").slice(0, 6) || null,
+          : (() => {
+              const raw = String(p.backOfficePin);
+              if (raw.startsWith("argon2id:") || raw.startsWith("bcrypt:") || raw.startsWith("pbkdf2:")) {
+                return raw;
+              }
+              return raw.replace(/\D/g, "").slice(0, 6) || null;
+            })(),
     shopDisplayName:
       p.shopDisplayName === undefined
         ? (base.shopDisplayName ?? null)

@@ -3,6 +3,8 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { PinInput } from "../ui/PinInput";
+import { hashShopSecurityPin } from "../../lib/enterpriseSecurity/shopPinSecret";
+import { isShopSecurityPinConfigured } from "../../lib/enterpriseSecurity/shopPinSecret";
 
 type Props = { lang: Language };
 
@@ -12,10 +14,13 @@ export function BackOfficePinForm({ lang }: Props) {
   const [boPinNew, setBoPinNew] = useState("");
   const [boPinConfirm, setBoPinConfirm] = useState("");
   const [boPinFeedback, setBoPinFeedback] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const pinActive = isShopSecurityPinConfigured(preferences.backOfficePin);
 
   return (
     <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-      {preferences.backOfficePin ? (
+      {pinActive ? (
         <p className="text-sm font-semibold text-emerald-800">{t(lang, "settingsBackOfficePinActiveShort")}</p>
       ) : (
         <p className="text-sm font-semibold text-stone-600">{t(lang, "settingsBackOfficePinNone")}</p>
@@ -47,6 +52,7 @@ export function BackOfficePinForm({ lang }: Props) {
         <button
           type="button"
           className="min-h-[48px] rounded-2xl bg-waka-600 py-3 text-sm font-black text-white"
+          disabled={saving}
           onClick={() => {
             setBoPinFeedback(null);
             const a = boPinNew.replace(/\D/g, "");
@@ -59,10 +65,18 @@ export function BackOfficePinForm({ lang }: Props) {
               setBoPinFeedback(t(lang, "settingsBackOfficePinMismatch"));
               return;
             }
-            setPreferences({ backOfficePin: a });
-            setBoPinNew("");
-            setBoPinConfirm("");
-            setBoPinFeedback(t(lang, "settingsBackOfficePinSaved"));
+            setSaving(true);
+            void hashShopSecurityPin(a).then((hash) => {
+              setSaving(false);
+              if (!hash) {
+                setBoPinFeedback(t(lang, "settingsBackOfficePinLength"));
+                return;
+              }
+              setPreferences({ backOfficePin: hash });
+              setBoPinNew("");
+              setBoPinConfirm("");
+              setBoPinFeedback(t(lang, "settingsBackOfficePinSaved"));
+            });
           }}
         >
           {t(lang, "settingsBackOfficePinSave")}

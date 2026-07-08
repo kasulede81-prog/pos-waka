@@ -32,7 +32,7 @@ import { PilotModeBanner } from "../pilot/PilotModeBanner";
 import { isPilotModeActive } from "../../lib/pilotMode";
 import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
-import { hashStaffSecret, normalizePin } from "../../lib/staffSecret";
+import { normalizePin } from "../../lib/staffSecret";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
@@ -603,52 +603,46 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 type="button"
                 className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
                 onClick={() => {
-                  const selectingOwner = lockStaffId === "__owner__";
-                  const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
-                  const selectedStaff = selectingOwner
-                    ? null
-                    : activeStaff.find((s) => s.id === lockStaffId);
-                  const secret = lockSecret.trim();
-                  const secretPin = normalizePin(secret);
-                  const secretHash = hashStaffSecret(secret);
-                  const secretPinHash = secretPin ? hashStaffSecret(secretPin) : "";
-                  const fallbackStaff =
-                    !selectingOwner && !lockStaffId
-                      ? activeStaff.find(
-                          (s) =>
-                            (s.pin && s.pin === secretPin) ||
-                            (s.password && s.password === secret) ||
-                            (s.pinHash && s.pinHash === secretPinHash) ||
-                            (s.passwordHash && s.passwordHash === secretHash),
-                        )
-                      : null;
-                  const staff = selectedStaff ?? fallbackStaff ?? null;
-                  const validStaff = Boolean(
-                    staff &&
-                      (
-                        (staff.pin && staff.pin === secretPin) ||
-                        (staff.password && staff.password === secret) ||
-                        (staff.pinHash && staff.pinHash === secretPinHash) ||
-                        (staff.passwordHash && staff.passwordHash === secretHash)
-                      ),
-                  );
-                  const validBackOffice = Boolean(
-                    isBackOfficePinConfigured(preferences.backOfficePin) &&
-                      (preferences.backOfficePin ?? "") === secretPin,
-                  );
-                  const canUnlock = validStaff || validBackOffice;
-                  if (!canUnlock) {
-                    setLockError(t(lang, "unlockWrongPin"));
-                    return;
-                  }
-                  const targetStaffId = staff?.id ?? null;
-                  const switchingStaff = (preferences.activeStaffId ?? null) !== targetStaffId;
-                  if (switchingStaff && activeShiftForActor) {
-                    setPendingStaffUnlock({ staffId: targetStaffId, secret });
-                    setStaffSwitchShiftOpen(true);
-                    return;
-                  }
-                  completeStaffUnlock(targetStaffId);
+                  void (async () => {
+                    const selectingOwner = lockStaffId === "__owner__";
+                    const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
+                    const selectedStaff = selectingOwner
+                      ? null
+                      : activeStaff.find((s) => s.id === lockStaffId);
+                    const secret = lockSecret.trim();
+                    const secretPin = normalizePin(secret);
+                    const { staffSecretMatchesAsync } = await import("../../lib/staffSecret");
+                    const { verifyShopSecurityPin } = await import(
+                      "../../lib/enterpriseSecurity/EnterpriseSecurityService"
+                    );
+
+                    let staff = selectedStaff ?? null;
+                    if (!staff && !selectingOwner && !lockStaffId) {
+                      for (const s of activeStaff) {
+                        if (await staffSecretMatchesAsync(s, secret)) {
+                          staff = s;
+                          break;
+                        }
+                      }
+                    }
+                    const validStaff = staff
+                      ? await staffSecretMatchesAsync(staff, secret)
+                      : false;
+                    const validBackOffice = await verifyShopSecurityPin(secretPin, preferences);
+                    const canUnlock = validStaff || validBackOffice;
+                    if (!canUnlock) {
+                      setLockError(t(lang, "enterpriseSecurityWrongPin"));
+                      return;
+                    }
+                    const targetStaffId = staff?.id ?? null;
+                    const switchingStaff = (preferences.activeStaffId ?? null) !== targetStaffId;
+                    if (switchingStaff && activeShiftForActor) {
+                      setPendingStaffUnlock({ staffId: targetStaffId, secret });
+                      setStaffSwitchShiftOpen(true);
+                      return;
+                    }
+                    completeStaffUnlock(targetStaffId);
+                  })();
                 }}
               >
                 {t(lang, "unlockSubmit")}
