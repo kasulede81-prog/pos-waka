@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
@@ -126,7 +126,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
   };
 
   const blockedDays = unclosedDays.length > 0 ? unclosedDays : knownUnclosedDays;
-  const sequentialBlocked = errorKey === "sequentialDayBlocked" && blockedDays.length > 0;
+  const needsPriorDayClose = knownUnclosedDays.length > 0;
 
   if (v2 && !dayOpen) {
     return (
@@ -174,27 +174,28 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
                 className="mt-2 min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-2xl font-black outline-none ring-waka-300 focus:border-waka-400 focus:ring"
               />
             </label>
-            {errorKey ? (
-              <p className="mt-3 text-sm font-bold text-rose-700">
-                {(t as (l: Language, k: string) => string)(lang, errorKey)}
-              </p>
-            ) : null}
-            {sequentialBlocked ? (
+            {needsPriorDayClose ? (
               <div className="mt-3 space-y-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-left">
                 <p className="text-sm font-semibold text-amber-950">
                   {tTemplate(lang, "sequentialDayBlockedDates", { dates: blockedDays.join(", ") })}
                 </p>
                 {canCloseDay ? (
-                  <Link
-                    to={`/close-day?date=${blockedDays[0]}`}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/close-day?date=${blockedDays[0]}`)}
                     className="inline-flex min-h-[44px] items-center rounded-xl bg-waka-600 px-4 text-sm font-black text-white"
                   >
                     {tTemplate(lang, "sequentialDayBlockedCloseLink", { date: blockedDays[0]! })}
-                  </Link>
+                  </button>
                 ) : (
                   <p className="text-sm font-medium text-amber-900">{t(lang, "sequentialDayBlockedAskManager")}</p>
                 )}
               </div>
+            ) : null}
+            {errorKey && errorKey !== "sequentialDayBlocked" ? (
+              <p className="mt-3 text-sm font-bold text-rose-700">
+                {(t as (l: Language, k: string) => string)(lang, errorKey)}
+              </p>
             ) : null}
           </>
         ) : (

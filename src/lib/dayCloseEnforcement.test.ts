@@ -34,7 +34,7 @@ describe("dayCloseEnforcement", () => {
     expect(rows[0]!.actorName).toBe("Cashier");
   });
 
-  it("blocks close when open shift exists", () => {
+  it("blocks close when open shift exists on the same business day", () => {
     const snapshot = buildDayClosePreflightSnapshot({
       state: {
         draftLines: { length: 0 },
@@ -66,6 +66,90 @@ describe("dayCloseEnforcement", () => {
     const gate = assertDayClosePreflightPassed({ ok: false, snapshot, warnings: [], blockReasons: snapshot.blockReasons });
     expect(gate.ok).toBe(false);
     if (!gate.ok) expect(gate.errorKey).toBe("dayCloseBlockedOpenShifts");
+  });
+
+  it("ignores open shifts from later business days when closing a prior day", () => {
+    const snapshot = buildDayClosePreflightSnapshot({
+      state: {
+        draftLines: { length: 0 },
+        activePendingSaleId: null,
+        sales: [
+          {
+            id: "sale1",
+            status: "completed",
+            createdAt: `${DAY}T10:00:00.000Z`,
+            updatedAt: `${DAY}T10:00:00.000Z`,
+            subtotalUgx: 1000,
+            totalUgx: 1000,
+            cashPaidUgx: 1000,
+            debtUgx: 0,
+            lines: [],
+            estimatedProfitUgx: 100,
+            pendingSync: false,
+            lastSyncError: null,
+          },
+        ],
+        preferences: {
+          shifts: [shift({ id: "s-today", actorUserId: "u1", startAt: "2026-06-12T08:14:00.000Z", endAt: null })],
+          cashDrawerFormulaVersion: "v2",
+        },
+        dayCloses: [],
+        dayDrawerOpens: [],
+        products: [],
+        returnRecords: [],
+        cashDrawerAdjustments: [],
+        cashExpenses: [],
+        inventoryCountSessions: [],
+      },
+      dateKey: DAY,
+      expectedCashUgx: 100_000,
+      countedCashUgx: 100_000,
+      queue: [],
+      cloudPullStale: false,
+    });
+    expect(snapshot.openShifts).toHaveLength(0);
+    expect(snapshot.canClose).toBe(true);
+  });
+
+  it("allows retrospective close without day open record when day is in the past", () => {
+    const snapshot = buildDayClosePreflightSnapshot({
+      state: {
+        draftLines: { length: 0 },
+        activePendingSaleId: null,
+        sales: [
+          {
+            id: "sale1",
+            status: "completed",
+            createdAt: `${DAY}T10:00:00.000Z`,
+            updatedAt: `${DAY}T10:00:00.000Z`,
+            subtotalUgx: 1000,
+            totalUgx: 1000,
+            cashPaidUgx: 1000,
+            debtUgx: 0,
+            lines: [],
+            estimatedProfitUgx: 100,
+            pendingSync: false,
+            lastSyncError: null,
+          },
+        ],
+        preferences: { shifts: [], cashDrawerFormulaVersion: "v2" },
+        dayCloses: [],
+        dayDrawerOpens: [],
+        products: [],
+        returnRecords: [],
+        cashDrawerAdjustments: [],
+        cashExpenses: [],
+        inventoryCountSessions: [],
+      },
+      dateKey: DAY,
+      expectedCashUgx: 100_000,
+      countedCashUgx: 100_000,
+      queue: [],
+      cloudPullStale: false,
+    });
+    const dayOpenItem = snapshot.items.find((i) => i.id === "day_open");
+    expect(dayOpenItem?.status).toBe("pass");
+    expect(snapshot.canClose).toBe(true);
   });
 
   it("business date lock after active close", () => {

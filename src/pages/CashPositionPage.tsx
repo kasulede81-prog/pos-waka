@@ -137,7 +137,7 @@ export function CashPositionPage({ lang }: { lang: Language }) {
   const actorLabel = actor.displayName?.trim() || actor.role;
 
   if (!canView) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/office/cash-drawer" replace />;
   }
 
   return (

@@ -494,7 +494,7 @@ function AppRoutes() {
               path="office/cash-position"
               element={
                 <RoleProtectedRoute permission="day.close">
-                  <SensitiveActionGate lang={lang} kind="access_reports">
+                  <SensitiveActionGate lang={lang} kind="access_reports" deniedTo="/office/cash-drawer">
                     <CashPositionPage lang={lang} />
                   </SensitiveActionGate>
                 </RoleProtectedRoute>

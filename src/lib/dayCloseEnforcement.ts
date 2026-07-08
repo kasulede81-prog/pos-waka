@@ -21,6 +21,7 @@ import { readSyncHealthMeta } from "./syncMeta";
 import { findUnclosedPriorBusinessDays } from "./sequentialBusinessDays";
 import { readSyncQueue } from "../offline/localDb";
 import { dayCloseVarianceIsFlagged } from "./dayCloseApprovals";
+import { dateKeyKampala, saleReportingDayKey } from "./datesUg";
 
 export type DayClosePreflightItemId =
   | "day_open"
@@ -112,16 +113,54 @@ export type DayClosePreflightState = {
 
 const STALE_RECONCILIATION_MS = 15 * 60_000;
 
+function dateHasBusinessActivity(
+  dateKey: string,
+  sales: Sale[],
+  shifts: ShiftRecord[],
+  dayDrawerOpens: DayDrawerOpen[],
+): boolean {
+  for (const sale of sales) {
+    if (saleReportingDayKey(sale) === dateKey) return true;
+  }
+  for (const sh of shifts) {
+    if (dateKeyKampala(sh.startAt) === dateKey) return true;
+  }
+  for (const row of dayDrawerOpens) {
+    if (!row.deletedAt && row.status !== "voided" && row.dateKey === dateKey) return true;
+  }
+  return false;
+}
+
+function hasPendingSalesBlockingDayClose(state: DayClosePreflightState, dateKey: string): boolean {
+  const todayKey = dateKeyKampala(new Date());
+  if (dateKey === todayKey) {
+    if (state.draftLines.length > 0) return true;
+    if (state.activePendingSaleId) {
+      const active = state.sales.find(
+        (s) => s.id === state.activePendingSaleId && s.status === "pending",
+      );
+      if (active) return true;
+    }
+  }
+  return state.sales.some((s) => s.status === "pending" && saleReportingDayKey(s) === dateKey);
+}
+
 function countPendingSync(rows: { pendingSync?: boolean }[]): number {
   return rows.filter((r) => r.pendingSync).length;
 }
 
+/** Open shifts that block closing a specific business day (same Kampala date as shift start). */
 export function collectOpenShifts(
   shifts: ShiftRecord[] | undefined,
   deviceLabelsById?: Record<string, string>,
+  closeDateKey?: string,
 ): OpenShiftPreflightRow[] {
   return (shifts ?? [])
-    .filter((sh) => !sh.endAt)
+    .filter((sh) => {
+      if (sh.endAt) return false;
+      if (closeDateKey && dateKeyKampala(sh.startAt) !== closeDateKey) return false;
+      return true;
+    })
     .map((sh) => ({
       shiftId: sh.id,
       actorUserId: sh.actorUserId,
@@ -136,8 +175,10 @@ export function collectOpenShifts(
 export function collectHospitalityBlockers(
   floor: HospitalityFloorState | undefined,
   sales: Sale[],
+  closeDateKey?: string,
 ): HospitalityPreflightRow[] {
   if (!floor) return [];
+  if (closeDateKey && closeDateKey !== dateKeyKampala(new Date())) return [];
   return activeSessions(floor).map((session) => ({
     sessionId: session.id,
     label: sessionDisplayLabel(session, floor),
@@ -236,19 +277,24 @@ export function buildDayClosePreflightSnapshot(input: {
 }): DayClosePreflightSnapshot {
   const { state, dateKey, expectedCashUgx } = input;
   const shifts = state.preferences.shifts ?? [];
-  const openShifts = collectOpenShifts(shifts);
-  const hospitalitySessions = collectHospitalityBlockers(state.preferences.hospitalityFloor, state.sales);
+  const openShifts = collectOpenShifts(shifts, undefined, dateKey);
+  const hospitalitySessions = collectHospitalityBlockers(
+    state.preferences.hospitalityFloor,
+    state.sales,
+    dateKey,
+  );
   const pendingSync = collectPendingSyncBreakdown(state, input.queue ?? []);
 
-  const hasDraft = state.draftLines.length > 0;
-  const activePending = state.activePendingSaleId
-    ? state.sales.find((s) => s.id === state.activePendingSaleId && s.status === "pending")
-    : null;
-  const orphanPending = state.sales.some((s) => s.status === "pending");
-  const hasPendingSales = hasDraft || Boolean(activePending) || orphanPending;
+  const hasPendingSales = hasPendingSalesBlockingDayClose(state, dateKey);
 
   const v2 = isFormulaV2(state.preferences);
   const dayOpen = activeDayDrawerOpenForDate(state.dayDrawerOpens, dateKey);
+  const todayKey = dateKeyKampala(new Date());
+  const closingPastDay = dateKey < todayKey;
+  const dayOpenRequired = v2 && !closingPastDay;
+  const dayOpenSatisfied =
+    Boolean(dayOpen) ||
+    (closingPastDay && dateHasBusinessActivity(dateKey, state.sales, shifts, state.dayDrawerOpens));
   const unclosedPrior = findUnclosedPriorBusinessDays({
     targetDateKey: dateKey,
     dayCloses: state.dayCloses,
@@ -271,15 +317,15 @@ export function buildDayClosePreflightSnapshot(input: {
   const items: DayClosePreflightItem[] = [
     {
       id: "day_open",
-      status: v2 ? (dayOpen ? "pass" : "fail") : "pass",
+      status: dayOpenRequired ? (dayOpenSatisfied ? "pass" : "fail") : "pass",
       labelKey: "dayCloseCheckDayOpen",
-      detailKey: v2 && !dayOpen ? "dayCloseCheckDayOpenFail" : undefined,
+      detailKey: dayOpenRequired && !dayOpenSatisfied ? "dayCloseCheckDayOpenFail" : undefined,
       navigateTo: "/office/day-open",
-      blockClose: v2 && !dayOpen,
+      blockClose: dayOpenRequired && !dayOpenSatisfied,
     },
     {
       id: "drawer_open",
-      status: v2 ? (dayOpen ? "pass" : "fail") : "pass",
+      status: dayOpenRequired ? (dayOpenSatisfied ? "pass" : "fail") : "pass",
       labelKey: "dayCloseCheckDrawerOpen",
       navigateTo: "/office/day-open",
       blockClose: false,
@@ -289,7 +335,7 @@ export function buildDayClosePreflightSnapshot(input: {
       status: unclosedPrior.length === 0 ? "pass" : "fail",
       labelKey: "dayCloseCheckSequential",
       detailKey: unclosedPrior.length > 0 ? "dayCloseCheckSequentialFail" : undefined,
-      navigateTo: "/close-day",
+      navigateTo: unclosedPrior.length > 0 ? `/close-day?date=${unclosedPrior[0]}` : "/close-day",
       blockClose: unclosedPrior.length > 0,
       allowEmergencyOverride: true,
     },
@@ -353,7 +399,7 @@ export function buildDayClosePreflightSnapshot(input: {
   if (hospitalitySessions.length > 0) blockReasons.push("hospitality_sessions");
   if (hasPendingSales) blockReasons.push("pending_sales");
   if (unclosedPrior.length > 0) blockReasons.push("sequential_days");
-  if (v2 && !dayOpen) blockReasons.push("day_not_open");
+  if (dayOpenRequired && !dayOpenSatisfied) blockReasons.push("day_not_open");
   if (queueUnhealthy || cloudStale) blockReasons.push("sync_unhealthy");
   if (!hasCount) blockReasons.push("cash_not_counted");
 
