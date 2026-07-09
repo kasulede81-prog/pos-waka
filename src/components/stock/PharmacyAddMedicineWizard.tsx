@@ -266,7 +266,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
   const stepBlocked = (): boolean => {
     if (step === "details") {
-      return !name.trim() || !resolvedCategory() || !strength.trim() || !medicineForm.trim();
+      return !name.trim() || !category.trim() || !strength.trim() || !medicineForm.trim();
     }
     if (step === "stockCost") {
       const paid = Math.floor(Number(totalAmountPaid.replace(/\D/g, "")) || 0);
@@ -367,6 +367,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   options={categoryOptions}
                   value={category}
                   onChange={setCategory}
+                  requireModeChoice
                   placeholder={uiPlaceholder(lang, preferences.businessType, "simpleAddShelfPlaceholder", preferences.pharmacyModeEnabled)}
                   inputClass={clsx(WIZARD_INPUT_TEXT, "mt-2")}
                 />

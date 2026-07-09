@@ -521,17 +521,19 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             <div
               className={clsx(
                 "scroll-main-chrome min-h-0 flex-1 overscroll-y-contain [-webkit-overflow-scrolling:touch]",
-                viewportLocked ? "overflow-hidden" : "overflow-y-auto",
+                viewportLocked ? "flex flex-col overflow-hidden" : "overflow-y-auto",
                 "overflow-x-hidden min-w-0 max-w-full",
                 onSellScreen ? "scroll-main-chrome--pos" : "",
               )}
             >
-              <BackOfficeRouteGuard lang={lang}>
-                <RouteErrorBoundary scope="page">
-                  <Outlet />
-                </RouteErrorBoundary>
-              </BackOfficeRouteGuard>
-              <MobileScrollTail />
+              <div className={clsx("min-h-0 min-w-0 max-w-full", viewportLocked && "flex min-h-0 flex-1 flex-col")}>
+                <BackOfficeRouteGuard lang={lang}>
+                  <RouteErrorBoundary scope="page">
+                    <Outlet />
+                  </RouteErrorBoundary>
+                </BackOfficeRouteGuard>
+              </div>
+              {!viewportLocked ? <MobileScrollTail /> : null}
             </div>
           </section>
         </main>

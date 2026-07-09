@@ -18,6 +18,8 @@ type Props = {
   customerById: Map<string, { name: string }>;
   showTimelineRail?: boolean;
   isLastInGroup?: boolean;
+  titleOverride?: string | null;
+  subtitleOverride?: string | null;
   onOpen: () => void;
   onMenu: () => void;
 };
@@ -29,13 +31,16 @@ export function ActivityTimelineCard({
   customerById,
   showTimelineRail = true,
   isLastInGroup = false,
+  titleOverride,
+  subtitleOverride,
   onOpen,
   onMenu,
 }: Props) {
   const severity = getActivitySeverity(entry);
   const staff = entry.actorName?.trim() || actorDisplayLabel(entry.actorUserId, lang);
   const when = new Date(entry.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const narrative = formatAuditRowSummary(lang, entry, { productById, customerById });
+  const narrative = subtitleOverride ?? formatAuditRowSummary(lang, entry, { productById, customerById });
+  const title = titleOverride ?? auditActionLabel(lang, entry.action);
 
   return (
     <div className="relative flex gap-3 pl-1">
@@ -52,7 +57,7 @@ export function ActivityTimelineCard({
         <div className="flex items-start gap-2">
           <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left active:opacity-80">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-black text-stone-950">{auditActionLabel(lang, entry.action)}</h3>
+              <h3 className="text-sm font-black text-stone-950">{title}</h3>
               <span
                 className={clsx(
                   "inline-flex rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ring-1 ring-inset",

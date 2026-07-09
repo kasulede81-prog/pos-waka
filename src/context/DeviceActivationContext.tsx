@@ -11,8 +11,8 @@ import {
 import type { User } from "@supabase/supabase-js";
 import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription";
 import {
-  ensureShopDeviceActivation,
   fetchShopDeviceLimitContext,
+  registerShopDeviceOnLogin,
   type DeviceActivationResult,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
@@ -93,9 +93,9 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         return;
       }
       const result = await withTimeout(
-        ensureShopDeviceActivation(sid),
+        registerShopDeviceOnLogin(sid),
         DEVICE_CHECK_TIMEOUT_MS,
-        { ok: true, activated: true },
+        { ok: false, activated: false },
       );
       if (result.activated) {
         setActivated(true);
@@ -124,7 +124,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
       setActivated(false);
       setBlock(null);
     } catch {
-      setActivated(true);
+      setActivated(false);
       setBlock(null);
     } finally {
       inFlightRef.current = null;

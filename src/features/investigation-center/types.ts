@@ -1,6 +1,6 @@
 import type { AuditAction } from "../../types";
 
-export type InvestigationTab = "timeline" | "staff" | "refunds";
+export type InvestigationTab = "timeline" | "staff" | "refunds" | "compliance";
 
 export type InvestigationCategory =
   | "all"
@@ -26,7 +26,19 @@ export type InvestigationCategory =
   | "cloud_sync"
   | "system"
   | "errors"
-  | "warnings";
+  | "warnings"
+  | PharmacyInvestigationCategory;
+
+export type PharmacyInvestigationCategory =
+  | "prescriptions"
+  | "controlled_medicines"
+  | "dispensing"
+  | "batch_operations"
+  | "fefo"
+  | "expiry"
+  | "compliance"
+  | "supplier_returns"
+  | "controlled_returns";
 
 export type InvestigationKpiId =
   | "activities_today"
@@ -36,7 +48,18 @@ export type InvestigationKpiId =
   | "warnings"
   | "errors"
   | "failed_syncs"
-  | "refunds";
+  | "refunds"
+  | PharmacyInvestigationKpiId;
+
+export type PharmacyInvestigationKpiId =
+  | "rx_today"
+  | "medicines_dispensed"
+  | "controlled_events"
+  | "near_expiry"
+  | "expired_medicines"
+  | "batch_writeoffs"
+  | "fefo_overrides"
+  | "compliance_alerts";
 
 export type ActivitySeverity = "completed" | "info" | "warning" | "security" | "error";
 
@@ -53,7 +76,16 @@ export type InvestigationKpiCard = {
   iconTone: "orange" | "green" | "yellow" | "purple" | "red" | "slate";
 };
 
+export type PharmacyInvestigationKpiCard = InvestigationKpiCard & {
+  id: PharmacyInvestigationKpiId;
+};
+
 export const INVESTIGATION_TABS: InvestigationTab[] = ["timeline", "staff", "refunds"];
+
+export const INVESTIGATION_TABS_WITH_COMPLIANCE: InvestigationTab[] = [
+  ...INVESTIGATION_TABS,
+  "compliance",
+];
 
 export const INVESTIGATION_CATEGORIES: InvestigationCategory[] = [
   "all",

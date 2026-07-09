@@ -14,13 +14,14 @@ import {
   buildDeviceUsageSummary,
   currentDeviceFingerprint,
   disconnectOwnerShopDevice,
-  fetchOwnerShopDevices,
+  fetchShopDevicesForManagement,
   parsePlanDeviceLimit,
   partitionShopDevices,
   recordDevicesPageViewed,
   removeOwnerShopDevice,
   type ShopDeviceRow,
 } from "../lib/shopDevices";
+import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
 import {
   formatDeviceDisplayName,
   formatDevicePlatformLabel,
@@ -239,6 +240,7 @@ export function DeviceManagementPage({ lang }: Props) {
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [tab, setTab] = useState<DeviceTab>("active");
+  const [isShopOwner, setIsShopOwner] = useState(true);
 
   const currentFp = useMemo(() => currentDeviceFingerprint(), []);
   const planLimit = useMemo(() => parsePlanDeviceLimit(snapshot, authMode), [snapshot, authMode]);
@@ -255,7 +257,8 @@ export function DeviceManagementPage({ lang }: Props) {
 
   const loadDevices = useCallback(async (sid: string) => {
     setError(null);
-    const rows = await fetchOwnerShopDevices(sid);
+    const { devices: rows, isOwner } = await fetchShopDevicesForManagement(sid);
+    setIsShopOwner(isOwner);
     setDevices(rows);
   }, []);
 
@@ -282,6 +285,7 @@ export function DeviceManagementPage({ lang }: Props) {
           setDevices([]);
           return;
         }
+        await registerShopDeviceOnLogin(sid).catch(() => undefined);
         await recordDevicesPageViewed(sid);
         await loadDevices(sid);
       } catch (e) {
@@ -435,6 +439,18 @@ export function DeviceManagementPage({ lang }: Props) {
       </div>
 
       {!isPrimary ? <ManagedByPrimaryDevice lang={lang} /> : null}
+
+      {!isShopOwner ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950">
+          {t(lang, "deviceMgmtOwnerAccountRequired")}
+        </div>
+      ) : null}
+
+      {isShopOwner && isPrimary && devices.length === 0 && !loading ? (
+        <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-950">
+          {t(lang, "deviceMgmtRegisterPrimaryHint")}
+        </div>
+      ) : null}
 
       <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{t(lang, "deviceLimitPackageLabel")}</p>

@@ -16,8 +16,17 @@ import type {
   InvestigationCategory,
   InvestigationKpiCard,
   InvestigationKpiId,
+  PharmacyInvestigationKpiId,
   TimelineRow,
 } from "../types";
+import {
+  isPharmacyInvestigationCategory,
+  matchesPharmacyCategory,
+} from "../extensions/pharmacy/pharmacyCategoryActions";
+import {
+  applyPharmacyKpiFilter,
+  isPharmacyInvestigationKpiId,
+} from "../extensions/pharmacy/computePharmacyInvestigationKpis";
 
 const SALES: ReadonlySet<AuditAction> = new Set(["sale_completed", "sale_void", "receipt_reprint", "receipt_pdf_export"]);
 const INVENTORY: ReadonlySet<AuditAction> = new Set([
@@ -152,11 +161,13 @@ const CATEGORY_SETS: Partial<Record<InvestigationCategory, ReadonlySet<AuditActi
 
 export function categoryLabelKey(category: InvestigationCategory): string {
   if (category === "all") return "icCategoryAll";
+  if (isPharmacyInvestigationCategory(category)) return `icPharmacyCategory_${category}`;
   return `icCategory_${category}`;
 }
 
 export function matchesCategory(entry: AuditLogEntry, category: InvestigationCategory): boolean {
   if (category === "all") return true;
+  if (isPharmacyInvestigationCategory(category)) return matchesPharmacyCategory(entry, category);
   if (category === "errors") return getActivitySeverity(entry) === "error";
   if (category === "warnings") return getActivitySeverity(entry) === "warning";
   const set = CATEGORY_SETS[category];
@@ -210,6 +221,9 @@ export function applyKpiFilter(
   todayKey: string,
 ): AuditLogEntry[] {
   if (!kpiId) return entries;
+  if (isPharmacyInvestigationKpiId(kpiId)) {
+    return applyPharmacyKpiFilter(entries, kpiId as PharmacyInvestigationKpiId);
+  }
   if (kpiId === "activities_today") {
     return entries.filter((e) => dateKeyKampala(e.at) === todayKey);
   }

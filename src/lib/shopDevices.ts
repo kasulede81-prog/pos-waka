@@ -141,6 +141,25 @@ export async function fetchOwnerShopDevices(shopId: string): Promise<ShopDeviceR
   return parseDeviceRows(data);
 }
 
+export type ShopDevicesManagementLoad = {
+  devices: ShopDeviceRow[];
+  isOwner: boolean;
+};
+
+/** Owner list includes pending devices; staff without owner role cannot manage approvals. */
+export async function fetchShopDevicesForManagement(shopId: string): Promise<ShopDevicesManagementLoad> {
+  try {
+    const devices = await fetchOwnerShopDevices(shopId);
+    return { devices, isOwner: true };
+  } catch (e) {
+    const msg = (e instanceof Error ? e.message : String(e)).toLowerCase();
+    if (msg.includes("forbidden")) {
+      return { devices: [], isOwner: false };
+    }
+    throw e;
+  }
+}
+
 export async function disconnectOwnerShopDevice(deviceId: string, shopId: string): Promise<void> {
   if (!supabase) throw new Error("Cloud not configured");
   const { error } = await supabase.rpc("owner_disconnect_shop_device", { p_device_id: deviceId });

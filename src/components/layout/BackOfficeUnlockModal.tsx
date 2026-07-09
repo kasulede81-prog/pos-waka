@@ -7,13 +7,17 @@ import { useBackOfficeSession } from "../../context/BackOfficeSessionContext";
 import { usePosStore } from "../../store/usePosStore";
 import { checkBiometricCapability, promptNativeBiometric } from "../../lib/biometricAuth";
 import { isBiometricAuthFeatureEnabled } from "../../lib/sensitiveActionAuth";
+import { usePosDesktopLayout } from "../../hooks/usePosDesktopLayout";
 import { AppModalOverlay } from "./AppModalOverlay";
 import { PinInput } from "../ui/PinInput";
+import { EnterprisePinKeypad } from "../auth/EnterprisePinKeypad";
 
 type Props = { lang: Language };
 
 export function BackOfficeUnlockModal({ lang }: Props) {
   const navigate = useNavigate();
+  const isDesktop = usePosDesktopLayout();
+  const useOnScreenKeypad = Capacitor.isNativePlatform() || !isDesktop;
   const preferences = usePosStore((s) => s.preferences);
   const { unlockWithPin, unlockWithBiometric, unlockedRole, unlockedLabel } = useBackOfficeSession();
   const [pin, setPin] = useState("");
@@ -35,8 +39,8 @@ export function BackOfficeUnlockModal({ lang }: Props) {
     };
   }, [biometricEnabled]);
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const submit = (e?: FormEvent) => {
+    e?.preventDefault();
     setErr(false);
     void unlockWithPin(pin).then((ok) => {
       if (!ok) {
@@ -103,13 +107,24 @@ export function BackOfficeUnlockModal({ lang }: Props) {
           </button>
         ) : null}
         <form onSubmit={submit} className="mt-5 space-y-3">
-          <PinInput
-            maxLength={6}
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder={t(lang, "unlockPinPlaceholder")}
-            className="w-full rounded-2xl border-2 border-stone-200 px-4 py-4 text-center text-2xl font-black tracking-[0.3em] text-stone-900"
-          />
+          {useOnScreenKeypad ? (
+            <EnterprisePinKeypad
+              lang={lang}
+              value={pin}
+              maxLength={6}
+              size="mobile"
+              onChange={setPin}
+              onSubmit={() => submit()}
+            />
+          ) : (
+            <PinInput
+              maxLength={6}
+              value={pin}
+              onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder={t(lang, "unlockPinPlaceholder")}
+              className="w-full rounded-2xl border-2 border-stone-200 px-4 py-4 text-center text-2xl font-black tracking-[0.3em] text-stone-900"
+            />
+          )}
           {err ? <p className="text-sm font-bold text-rose-600">{t(lang, "enterpriseSecurityWrongPin")}</p> : null}
           <button
             type="submit"

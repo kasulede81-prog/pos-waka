@@ -168,7 +168,7 @@ const PHARMACY_LAUNCHER_TILE_OVERRIDES: Partial<
   inventory: { labelKey: "desktopHomeTileInventory", to: "/pharmacy/inventory" },
   reports: { labelKey: "pharmacyNav_reports", to: "/pharmacy/reports" },
   salesHistory: { labelKey: "pharmacyDispensingHistory", to: "/pharmacy/returns" },
-  investigation: { labelKey: "desktopHomeTileInvestigation", to: "/pharmacy/compliance/register" },
+  investigation: { labelKey: "desktopHomeTileInvestigation", to: "/office/audit-center" },
 };
 
 export const DEFAULT_LAUNCHER_TILE_ORDER: LauncherTileDef["id"][] = [

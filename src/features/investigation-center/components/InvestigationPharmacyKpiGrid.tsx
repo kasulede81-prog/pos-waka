@@ -1,38 +1,39 @@
 import clsx from "clsx";
 import {
-  Activity,
   AlertTriangle,
-  CloudOff,
+  ClipboardList,
+  FlaskConical,
+  PackageX,
+  Pill,
   RotateCcw,
   Shield,
-  ShoppingCart,
-  Warehouse,
+  Timer,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
-import type { InvestigationKpiCard, InvestigationKpiId } from "../types";
+import type { PharmacyInvestigationKpiCard, PharmacyInvestigationKpiId } from "../types";
 
 type Props = {
   lang: Language;
-  cards: InvestigationKpiCard[];
-  activeKpi: InvestigationKpiId | null;
+  cards: PharmacyInvestigationKpiCard[];
+  activeKpi: PharmacyInvestigationKpiId | null;
   periodLabel: string;
-  onSelect: (id: InvestigationKpiId) => void;
+  onSelect: (id: PharmacyInvestigationKpiId) => void;
 };
 
-const ICONS: Partial<Record<InvestigationKpiId, LucideIcon>> = {
-  activities_today: Activity,
-  sales: ShoppingCart,
-  inventory: Warehouse,
-  security: Shield,
-  warnings: AlertTriangle,
-  errors: AlertTriangle,
-  failed_syncs: CloudOff,
-  refunds: RotateCcw,
+const ICONS: Record<PharmacyInvestigationKpiId, LucideIcon> = {
+  rx_today: ClipboardList,
+  medicines_dispensed: Pill,
+  controlled_events: Shield,
+  near_expiry: Timer,
+  expired_medicines: PackageX,
+  batch_writeoffs: FlaskConical,
+  fefo_overrides: RotateCcw,
+  compliance_alerts: AlertTriangle,
 };
 
-const TONE_CLASS: Record<InvestigationKpiCard["iconTone"], string> = {
+const TONE_CLASS: Record<PharmacyInvestigationKpiCard["iconTone"], string> = {
   orange: "bg-waka-50 text-waka-700 ring-waka-100",
   green: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   yellow: "bg-amber-50 text-amber-700 ring-amber-100",
@@ -41,12 +42,12 @@ const TONE_CLASS: Record<InvestigationKpiCard["iconTone"], string> = {
   slate: "bg-stone-50 text-stone-700 ring-stone-100",
 };
 
-export function InvestigationKpiGrid({ lang, cards, activeKpi, periodLabel, onSelect }: Props) {
+export function InvestigationPharmacyKpiGrid({ lang, cards, activeKpi, periodLabel, onSelect }: Props) {
   return (
     <section>
       <div className="mb-2 flex items-end justify-between gap-2 px-0.5">
         <div>
-          <h2 className="text-sm font-black text-stone-950">{t(lang, "icOverviewTitle")}</h2>
+          <h2 className="text-sm font-black text-stone-950">{t(lang, "icPharmacyOverviewTitle")}</h2>
           <p className="text-[11px] font-semibold text-stone-500">{periodLabel}</p>
         </div>
       </div>
@@ -62,12 +63,12 @@ export function InvestigationKpiGrid({ lang, cards, activeKpi, periodLabel, onSe
               className={clsx(
                 "flex min-w-[132px] shrink-0 flex-col rounded-2xl border p-3 text-left shadow-sm transition-all active:scale-[0.98]",
                 active
-                  ? "border-waka-500 bg-waka-50/80 ring-2 ring-waka-200"
+                  ? "border-violet-500 bg-violet-50/80 ring-2 ring-violet-200"
                   : "border-stone-200/90 bg-white hover:border-stone-300",
               )}
             >
               <div className={clsx("flex h-9 w-9 items-center justify-center rounded-xl ring-1", TONE_CLASS[card.iconTone])}>
-                {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}
+                <Icon className="h-4 w-4" aria-hidden />
               </div>
               <p className="mt-2 text-[10px] font-bold uppercase tracking-wide text-stone-500">{t(lang, card.labelKey)}</p>
               <p className="mt-0.5 text-xl font-black tabular-nums text-stone-950">{card.value.toLocaleString()}</p>

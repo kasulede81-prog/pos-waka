@@ -328,7 +328,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   if (!pharmacy || !canDispense) return null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-stone-100">
+    <div className="flex h-full min-h-0 flex-1 flex-col bg-stone-100">
       <PosOfflineBanner lang={lang} compact />
       {isFullDesktopPos ? (
         <PosDesktopCompactHeader

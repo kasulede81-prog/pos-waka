@@ -55,10 +55,12 @@ export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
   }, [refresh]);
 
   const value = useMemo((): DeviceAuthorityState => {
-    const isPrimary = authMode === "local" || ctx?.isPrimary !== false;
-    const isApproved = authMode === "local" || ctx?.isApproved !== false;
-    const isOperational = authMode === "local" || ctx?.isOperational !== false;
-    const pendingApproval = authMode === "supabase" && ctx?.approvalStatus === "pending";
+    const hasCtx = ctx != null;
+    const isPrimary = authMode === "local" || (hasCtx && ctx.isPrimary);
+    const isApproved = authMode === "local" || (hasCtx && ctx.isApproved);
+    const isOperational = authMode === "local" || (hasCtx && ctx.isOperational);
+    const pendingApproval =
+      authMode === "supabase" && hasCtx && ctx.approvalStatus === "pending";
     return {
       loading,
       ctx,
@@ -69,8 +71,8 @@ export function DeviceAuthorityProvider({ shopId, authMode, children }: Props) {
       refresh,
       canPrimary: (action: PrimaryOnlyAction) => {
         if (authMode === "local") return true;
-        if (!ctx) return true;
-        if (!ctx.primaryDeviceFingerprint) return true;
+        if (!hasCtx) return false;
+        if (!ctx.primaryDeviceFingerprint) return ctx.isPrimary && ctx.isApproved;
         if (action === "device_approve") return ctx.isPrimary && ctx.isApproved;
         return ctx.isPrimary && ctx.isApproved;
       },
@@ -86,12 +88,12 @@ export function useDeviceAuthority(): DeviceAuthorityState {
     return {
       loading: false,
       ctx: null,
-      isPrimary: true,
-      isApproved: true,
-      isOperational: true,
+      isPrimary: false,
+      isApproved: false,
+      isOperational: false,
       pendingApproval: false,
       refresh: async () => {},
-      canPrimary: () => true,
+      canPrimary: () => false,
     };
   }
   return ctx;

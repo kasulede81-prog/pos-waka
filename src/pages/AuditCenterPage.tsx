@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { AuditAction, AuditLogEntry, Language, ReturnRecord } from "../types";
 import { t } from "../lib/i18n";
+import { isPharmacyMode } from "../lib/pharmacy";
 import { useMarkOwnerRisksReviewed } from "../hooks/useMarkOwnerRisksReviewed";
 import { PageHeader } from "../components/layout/PageHeader";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
@@ -36,7 +37,11 @@ import { ActivityDetailSheet } from "../features/investigation-center/components
 import { InvestigationTabs } from "../features/investigation-center/components/InvestigationTabs";
 import { InvestigationStaffSection } from "../features/investigation-center/components/InvestigationStaffSection";
 import { InvestigationRefundsSection } from "../features/investigation-center/components/InvestigationRefundsSection";
-import { useInvestigationCenter } from "../features/investigation-center/hooks/useInvestigationCenter";
+import { InvestigationPharmacyKpiGrid } from "../features/investigation-center/components/InvestigationPharmacyKpiGrid";
+import { InvestigationComplianceSection } from "../features/investigation-center/components/InvestigationComplianceSection";
+import { useInvestigationCenter, splitActiveKpis } from "../features/investigation-center/hooks/useInvestigationCenter";
+import { computePharmacyInvestigationKpis } from "../features/investigation-center/extensions/pharmacy/computePharmacyInvestigationKpis";
+import { isPharmacyInvestigationKpiId } from "../features/investigation-center/extensions/pharmacy/computePharmacyInvestigationKpis";
 import {
   applyKpiFilter,
   buildActivityDetailText,
@@ -47,7 +52,7 @@ import {
   matchesCategory,
   shouldHideFromInvestigationCenter,
 } from "../features/investigation-center/lib/activityPresentation";
-import type { InvestigationKpiId } from "../features/investigation-center/types";
+import type { InvestigationKpiId, PharmacyInvestigationKpiId } from "../features/investigation-center/types";
 
 const PAGE_SIZE = AUDIT_FILTER_RESULT_LIMIT;
 
@@ -63,8 +68,11 @@ function initialAuditDateFilter(searchParams: URLSearchParams): DateFilterValue 
 
 export function AuditCenterPage({ lang }: { lang: Language }) {
   useMarkOwnerRisksReviewed();
+  const preferences = usePosStore((s) => s.preferences);
+  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const [searchParams, setSearchParams] = useSearchParams();
-  const { tab, setTab, category, setCategory, activeKpi, setActiveKpi } = useInvestigationCenter();
+  const { tab, setTab, category, setCategory, activeKpi, setActiveKpi } = useInvestigationCenter(pharmacyMode);
+  const { sharedKpi, pharmacyKpi } = splitActiveKpis(activeKpi);
   const [includeArchived, setIncludeArchived] = useState(false);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const products = usePosStore((s) => s.products);
@@ -72,6 +80,9 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const suppliers = usePosStore((s) => s.suppliers);
   const shopName = usePosStore((s) => s.preferences.shopDisplayName ?? "Shop");
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
+  const sales = useDeferredReportingSales(includeArchived);
+  const prescriptions = usePosStore((s) => s.pharmacyPrescriptions);
+  const pharmacyRegister = usePosStore((s) => s.pharmacyControlledRegister);
 
   const [quickFilter, setQuickFilter] = useState(() => initialAuditDateFilter(searchParams));
   const [dateFrom, setDateFrom] = useState(() => {
@@ -99,7 +110,6 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
   const [exportOpen, setExportOpen] = useState(false);
   const [traceReturn, setTraceReturn] = useState<ReturnRecord | null>(null);
 
-  const sales = useDeferredReportingSales(includeArchived);
   const returnRecords = usePosStore((s) => s.returnRecords);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const allReturns = includeArchived ? [...returnRecords, ...archivedReturnRecords] : returnRecords;
@@ -160,6 +170,34 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
     () => computeInvestigationKpis(auditIndex, dateFrom, dateTo, returnsInRange.length),
     [auditIndex, dateFrom, dateTo, returnsInRange.length],
   );
+
+  const pharmacyKpiCards = useMemo(() => {
+    if (!pharmacyMode) return [];
+    return computePharmacyInvestigationKpis({
+      index: auditIndex,
+      dateFrom,
+      dateTo,
+      products,
+      sales,
+      returns: allReturns,
+      prescriptions,
+      register: pharmacyRegister,
+      preferences,
+      auditLogs,
+    });
+  }, [
+    pharmacyMode,
+    auditIndex,
+    dateFrom,
+    dateTo,
+    products,
+    sales,
+    allReturns,
+    prescriptions,
+    pharmacyRegister,
+    preferences,
+    auditLogs,
+  ]);
 
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, quickFilter), [lang, quickFilter]);
 
@@ -282,7 +320,12 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
     }
     setActiveKpi(id);
     if (id === "refunds") setTab("refunds");
+    else if (isPharmacyInvestigationKpiId(id) && id === "compliance_alerts") setTab("compliance");
     else setTab("timeline");
+  };
+
+  const handlePharmacyKpiSelect = (id: PharmacyInvestigationKpiId) => {
+    handleKpiSelect(id);
   };
 
   return (
@@ -299,14 +342,24 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
       <InvestigationKpiGrid
         lang={lang}
         cards={kpiCards}
-        activeKpi={activeKpi}
+        activeKpi={sharedKpi}
         periodLabel={periodLabel}
         onSelect={handleKpiSelect}
       />
 
+      {pharmacyMode && pharmacyKpiCards.length > 0 ? (
+        <InvestigationPharmacyKpiGrid
+          lang={lang}
+          cards={pharmacyKpiCards}
+          activeKpi={pharmacyKpi}
+          periodLabel={periodLabel}
+          onSelect={handlePharmacyKpiSelect}
+        />
+      ) : null}
+
       <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
 
-      <InvestigationTabs lang={lang} active={tab} onChange={setTab} />
+      <InvestigationTabs lang={lang} active={tab} onChange={setTab} pharmacyMode={pharmacyMode} />
 
       {tab === "timeline" ? (
         <div className="space-y-3">
@@ -321,12 +374,13 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
             onOpenExport={() => setExportOpen(true)}
             resultCount={filtered.length}
           />
-          <InvestigationCategoryChips lang={lang} active={category} onChange={setCategory} />
+          <InvestigationCategoryChips lang={lang} active={category} onChange={setCategory} pharmacyMode={pharmacyMode} />
           <VirtualizedActivityTimeline
             lang={lang}
             entries={filtered}
             productById={productById}
             customerById={customerById}
+            pharmacyMode={pharmacyMode}
             onSelect={setSelected}
             onMenu={setMenuEntry}
           />
@@ -340,6 +394,7 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
           shifts={shiftsInRange}
           productById={productById}
           customerById={customerById}
+          pharmacyMode={pharmacyMode}
           onSelect={setSelected}
           onMenu={setMenuEntry}
         />
@@ -352,6 +407,10 @@ export function AuditCenterPage({ lang }: { lang: Language }) {
           returns={returnsInRange}
           onTraceReturn={setTraceReturn}
         />
+      ) : null}
+
+      {pharmacyMode && tab === "compliance" ? (
+        <InvestigationComplianceSection lang={lang} register={pharmacyRegister} />
       ) : null}
 
       <InvestigationFiltersSheet

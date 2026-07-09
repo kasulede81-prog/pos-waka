@@ -17,6 +17,7 @@ type Props = {
   }>;
   productById: Map<string, { name: string }>;
   customerById: Map<string, { name: string }>;
+  pharmacyMode?: boolean;
   onSelect: (entry: AuditLogEntry) => void;
   onMenu: (entry: AuditLogEntry) => void;
 };
@@ -27,6 +28,7 @@ export function InvestigationStaffSection({
   shifts,
   productById,
   customerById,
+  pharmacyMode = false,
   onSelect,
   onMenu,
 }: Props) {
@@ -73,6 +75,7 @@ export function InvestigationStaffSection({
             entries={group.entries}
             productById={productById}
             customerById={customerById}
+            pharmacyMode={pharmacyMode}
             onSelect={onSelect}
             onMenu={onMenu}
           />

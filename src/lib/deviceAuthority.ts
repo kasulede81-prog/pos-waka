@@ -139,7 +139,7 @@ export async function fetchDeviceAuthorityContext(
   }
 
   if (!supabase) {
-    return readOfflineCache(ctx.shopId) ?? defaultPermissiveContext(ctx.shopId, fp);
+    return readOfflineCache(ctx.shopId);
   }
 
   const { data, error } = await supabase.rpc("shop_device_context", {
@@ -148,42 +148,13 @@ export async function fetchDeviceAuthorityContext(
   });
   if (error) {
     console.warn("[waka-device-authority]", error.message);
-    return readOfflineCache(ctx.shopId) ?? defaultPermissiveContext(ctx.shopId, fp);
+    const cached = readOfflineCache(ctx.shopId);
+    if (cached) return cached;
+    return null;
   }
   const parsed = parseContext(data, ctx.shopId, fp);
   if (parsed) writeOfflineCache(parsed);
   return parsed;
-}
-
-/** Offline grace: approved + primary when cache cold (never block selling). */
-function defaultPermissiveContext(shopId: string, fp: string): DeviceAuthorityContext {
-  const offline = readOfflineCache(shopId);
-  if (offline) return offline;
-  return {
-    shopId,
-    deviceFingerprint: fp,
-    deviceId: null,
-    deviceAuthority: "primary",
-    formFactor: "tablet",
-    approvalStatus: "approved",
-    isPrimary: true,
-    isApproved: true,
-    isOperational: true,
-    primaryDeviceFingerprint: fp,
-    primaryDeviceId: null,
-    status: "active",
-    lastSyncAt: null,
-    lastLoginAt: null,
-    lastSeenAt: null,
-    currentStaffClientId: null,
-    appVersion: null,
-    label: null,
-    platform: null,
-    pendingUploads: 0,
-    pendingDownloads: 0,
-    cloudStatus: null,
-    recoveryStatus: null,
-  };
 }
 
 export function getCachedDeviceAuthoritySync(): DeviceAuthorityContext | null {

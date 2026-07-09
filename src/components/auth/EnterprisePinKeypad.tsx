@@ -15,8 +15,6 @@ type Props = {
   size?: "desktop" | "tablet" | "mobile";
 };
 
-const DOTS = 4;
-
 export function EnterprisePinKeypad({
   lang,
   value,
@@ -48,7 +46,7 @@ export function EnterprisePinKeypad({
   return (
     <div className={clsx("space-y-4", className)}>
       <div className="flex items-center justify-center gap-3" aria-hidden>
-        {Array.from({ length: DOTS }).map((_, i) => (
+        {Array.from({ length: maxLength }).map((_, i) => (
           <span
             key={i}
             className={clsx(

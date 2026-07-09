@@ -1,27 +1,47 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MonitorSmartphone } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useDeviceActivation } from "../context/DeviceActivationContext";
 import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
+import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
 
 type Props = { lang: Language };
 
 /** Read-only waiting screen until Primary Device approves this device. */
 export function DevicePendingApprovalPage({ lang }: Props) {
-  const { retry, shopId } = useDeviceActivation();
-  const { refresh, pendingApproval } = useDeviceAuthority();
+  const navigate = useNavigate();
+  const { retry, shopId, activated } = useDeviceActivation();
+  const { refresh, loading: authorityLoading } = useDeviceAuthority();
   const [checking, setChecking] = useState(false);
 
   const recheck = useCallback(async () => {
     setChecking(true);
     try {
       await refresh();
+      if (shopId) {
+        await registerShopDeviceOnLogin(shopId);
+      }
       await retry();
     } finally {
       setChecking(false);
     }
-  }, [refresh, retry]);
+  }, [refresh, retry, shopId]);
+
+  useEffect(() => {
+    if (activated) {
+      navigate("/", { replace: true });
+    }
+  }, [activated, navigate]);
+
+  useEffect(() => {
+    if (activated || authorityLoading) return;
+    const timer = window.setInterval(() => {
+      void recheck();
+    }, 12_000);
+    return () => window.clearInterval(timer);
+  }, [activated, authorityLoading, recheck]);
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-gradient-to-b from-stone-50 to-stone-100 px-6 py-12">
@@ -45,7 +65,7 @@ export function DevicePendingApprovalPage({ lang }: Props) {
       >
         {checking ? t(lang, "devicePendingApprovalChecking") : t(lang, "devicePendingApprovalRecheck")}
       </button>
-      {!pendingApproval ? (
+      {activated ? (
         <p className="mt-4 text-xs font-semibold text-emerald-700">{t(lang, "devicePendingApprovalApproved")}</p>
       ) : null}
     </div>

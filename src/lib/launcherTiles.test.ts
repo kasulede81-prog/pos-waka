@@ -61,6 +61,7 @@ describe("launcher tile defaults", () => {
     expect(secondary.find((t) => t.id === "inventory")?.to).toBe("/pharmacy/inventory");
     expect(secondary.find((t) => t.id === "reports")?.to).toBe("/pharmacy/reports");
     expect(secondary.find((t) => t.id === "salesHistory")?.labelKey).toBe("pharmacyDispensingHistory");
+    expect(secondary.find((t) => t.id === "investigation")?.to).toBe("/office/audit-center");
   });
 });
 

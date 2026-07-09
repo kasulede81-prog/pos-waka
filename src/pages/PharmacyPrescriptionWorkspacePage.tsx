@@ -1,6 +1,11 @@
 import type { Language } from "../types";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PharmacyDispenseWorkspaceWithGateway } from "../components/pharmacy/dispense/PharmacyDispenseWorkspace";
 
 export function PharmacyPrescriptionWorkspacePage({ lang }: { lang: Language }) {
-  return <PharmacyDispenseWorkspaceWithGateway lang={lang} />;
+  return (
+    <EnterprisePageContainer variant="viewport" className="bg-stone-100">
+      <PharmacyDispenseWorkspaceWithGateway lang={lang} />
+    </EnterprisePageContainer>
+  );
 }
