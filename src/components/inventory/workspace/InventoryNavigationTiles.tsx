@@ -1,19 +1,20 @@
 import { Link } from "react-router-dom";
 import clsx from "clsx";
-import type { Language, UserRole } from "../../../types";
+import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import type { InventoryWorkspaceTile } from "../../../lib/inventoryWorkspaceTiles";
-import { hasPermission } from "../../../lib/permissions";
+import { hasActorPermission } from "../../../lib/permissions";
+import { useSessionActor } from "../../../context/SessionActorContext";
 
 type Props = {
   lang: Language;
-  role: UserRole;
   tiles: InventoryWorkspaceTile[];
   titleKey?: string;
 };
 
-export function InventoryNavigationTiles({ lang, role, tiles, titleKey = "iwSectionNavigation" }: Props) {
-  const visible = tiles.filter((tile) => !tile.perm || hasPermission(role, tile.perm));
+export function InventoryNavigationTiles({ lang, tiles, titleKey = "iwSectionNavigation" }: Props) {
+  const actor = useSessionActor();
+  const visible = tiles.filter((tile) => !tile.perm || hasActorPermission(actor.role, tile.perm, actor.permissions));
   if (visible.length === 0) return null;
 
   return (

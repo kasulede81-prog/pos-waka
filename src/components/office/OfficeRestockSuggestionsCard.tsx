@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import { Package } from "lucide-react";
 import type { Language } from "../../types";
@@ -7,12 +8,12 @@ import { usePosStore } from "../../store/usePosStore";
 import { useDeferredSales } from "../../hooks/useDeferredSales";
 import { buildRestockProductSuggestions } from "../../lib/purchaseReporting";
 import { buildRestockSuggestions } from "../../lib/restockSuggestions";
-import { hasPermission } from "../../lib/permissions";
+
 import { useSessionActor } from "../../context/SessionActorContext";
 
 export function OfficeRestockSuggestionsCard({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const canRestock = hasPermission(actor.role, "purchases.record");
+  const canRestock = actorHasPermission(actor, "purchases.record");
   const products = usePosStore((s) => s.products);
   const purchases = usePosStore((s) => s.purchases);
   const sales = useDeferredSales();

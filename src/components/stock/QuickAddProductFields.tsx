@@ -1,4 +1,3 @@
-import { useId } from "react";
 import type { BusinessType, Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
@@ -6,6 +5,7 @@ import { useWholesaleTerms } from "../../lib/wholesaleTerms";
 import { hospitalityUiActive } from "../../lib/hospitalityUx";
 import { pharmacyUiActive, uiPlaceholder, wholesaleUiActive } from "../../lib/pharmacyUx";
 import { QUICK_ADD_SELL_UNITS } from "../../lib/quickAddProductForm";
+import { CategoryShelfPicker } from "./CategoryShelfPicker";
 
 export type QuickAddProductFieldsState = {
   name: string;
@@ -53,7 +53,6 @@ export function QuickAddProductFields({
   pharmacyModeEnabled,
   hospitalityModeEnabled,
 }: Props) {
-  const categoryListId = useId();
   const pharmacy = pharmacyUiActive(businessType, pharmacyModeEnabled);
   const wholesale = wholesaleUiActive(businessType);
   const hospitality = hospitalityUiActive(businessType, hospitalityModeEnabled);
@@ -94,23 +93,20 @@ export function QuickAddProductFields({
         />
       </label>
 
-      <label className="block">
+      <div className="block">
         <StepLabel n={2} text={pharmacy ? pt("quickAddStep2") : wholesale ? wt("quickAddStep2") : t(lang, "quickAddStep2")} />
-        <input
-          value={values.category}
-          onChange={(e) => onChange({ category: e.target.value })}
-          list={categorySuggestions.length > 0 ? categoryListId : undefined}
-          placeholder={categoryPlaceholder}
-          className={inputClass}
-        />
-        {categorySuggestions.length > 0 ? (
-          <datalist id={categoryListId}>
-            {categorySuggestions.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        ) : null}
-      </label>
+        <div className="mt-2">
+          <CategoryShelfPicker
+            lang={lang}
+            options={categorySuggestions}
+            value={values.category}
+            onChange={(category) => onChange({ category })}
+            placeholder={categoryPlaceholder}
+            inputClass={inputClass}
+            showHint={categorySuggestions.length > 0}
+          />
+        </div>
+      </div>
 
       <label className="block">
         <StepLabel n={3} text={t(lang, "quickAddStep3")} />

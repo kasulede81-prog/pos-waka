@@ -1,10 +1,11 @@
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Share2 } from "lucide-react";
 import type { Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasEffectivePermission, resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
+import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { useOwnerRiskCards } from "../../hooks/useOwnerRiskCards";
 import { useMarketingAgentPortal } from "../../hooks/useMarketingAgentPortal";
 import { usePosStore } from "../../store/usePosStore";
@@ -59,11 +60,11 @@ export function DesktopHomeTiles({ lang }: Props) {
     [unlockedProducts],
   );
 
-  const liveStats = useHomeDashboardMetrics(lang, actor.role, actor.userId, lowStockCount);
+  const liveStats = useHomeDashboardMetrics(lang, actor.role, actor.userId, lowStockCount, actor.permissions);
 
   const can = useCallback(
     (perm?: Permission) =>
-      !perm || hasEffectivePermission(actor.role, perm, snapshot, authMode),
+      !perm || actorHasEffectivePermission(actor, perm, snapshot, authMode),
     [actor.role, snapshot, authMode],
   );
 

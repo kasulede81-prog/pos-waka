@@ -3,7 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import type { Language } from "../../types";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import { hasBackOfficeShellAccess } from "../../lib/backOfficeAccess";
 import { usePosStore } from "../../store/usePosStore";
 import { isBackOfficePath, isStockKeeperPath, stockKeeperPathPermission, debtPathPermission } from "../../lib/backOfficePaths";
@@ -51,12 +51,18 @@ export function BackOfficeRouteGuard({ children, lang }: Props) {
 
   const stockPerm = isStockKeeperPath(location.pathname) ? stockKeeperPathPermission(location.pathname) : null;
   const hasStockKeeperAccess =
-    stockPerm != null && hasEffectivePermission(actor.role, stockPerm, snapshot, authMode);
+    stockPerm != null && actorHasEffectivePermission(actor, stockPerm, snapshot, authMode);
   const debtPerm = debtPathPermission(location.pathname);
-  const hasDebtAccess = debtPerm != null && hasEffectivePermission(actor.role, debtPerm, snapshot, authMode);
-  const hasFullBackOffice = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode);
+  const hasDebtAccess = debtPerm != null && actorHasEffectivePermission(actor, debtPerm, snapshot, authMode);
+  const hasFullBackOffice = actorHasEffectivePermission(actor, "back_office.access", snapshot, authMode);
 
-  if (!hasBackOfficeShellAccess({ pathname: location.pathname, role: actor.role, snapshot, authMode })) {
+  if (!hasBackOfficeShellAccess({
+    pathname: location.pathname,
+    role: actor.role,
+    snapshot,
+    authMode,
+    actorPermissions: actor.permissions,
+  })) {
     return <Navigate to="/" replace state={{ backOfficeDenied: true }} />;
   }
 

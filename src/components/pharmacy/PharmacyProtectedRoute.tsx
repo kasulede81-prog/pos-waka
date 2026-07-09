@@ -1,9 +1,10 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import type { Permission } from "../../types";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { usePosStore } from "../../store/usePosStore";
 import { PHARMACY_DISPENSE_ROUTE } from "../../lib/pharmacyNav";
@@ -41,7 +42,7 @@ export function PharmacyProtectedRoute({ permission, children }: Props) {
     return <Navigate to="/" replace />;
   }
 
-  if (!hasEffectivePermission(actor.role, "pharmacy.access", snapshot, authMode)) {
+  if (!actorHasEffectivePermission(actor, "pharmacy.access", snapshot, authMode)) {
     return (
       <Navigate
         to="/pharmacy/access-denied"
@@ -51,7 +52,7 @@ export function PharmacyProtectedRoute({ permission, children }: Props) {
     );
   }
 
-  if (permission && !hasEffectivePermission(actor.role, permission, snapshot, authMode)) {
+  if (permission && !actorHasEffectivePermission(actor, permission, snapshot, authMode)) {
     return (
       <Navigate
         to="/pharmacy/access-denied"

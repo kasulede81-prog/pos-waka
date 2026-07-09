@@ -58,9 +58,10 @@ export function BackOfficeMasterSearch({ lang, className }: Props) {
       snapshot,
       authMode,
       t: translate,
-      canRecordExpense: canRecordCashExpenses(actor.role, preferences),
+      canRecordExpense: canRecordCashExpenses(actor.role, preferences, actor.permissions),
+      actorPermissions: actor.permissions,
     });
-  }, [lang, actor.role, preferences, snapshot, authMode, translate, open, query]);
+  }, [lang, actor.role, actor.permissions, preferences, snapshot, authMode, translate, open, query]);
 
   const results = useMemo(() => filterBackOfficeSearch(catalog, query), [catalog, query]);
 

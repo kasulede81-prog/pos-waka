@@ -27,6 +27,7 @@ export type DeviceLimitContextDevice = {
   platform: string | null;
   last_seen_at: string | null;
   status: string;
+  approval_status?: string;
 };
 
 export type DeviceLimitContext = {
@@ -166,6 +167,7 @@ export async function fetchShopDeviceLimitContext(shopId: string): Promise<Devic
           platform: d.platform != null ? String(d.platform) : null,
           last_seen_at: d.last_seen_at != null ? String(d.last_seen_at) : null,
           status: String(d.status ?? "active"),
+          approval_status: d.approval_status != null ? String(d.approval_status) : undefined,
         };
       })
     : [];

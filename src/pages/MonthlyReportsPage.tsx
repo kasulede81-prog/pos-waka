@@ -1,8 +1,9 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { PageHeader } from "../components/layout/PageHeader";
 import { MonthlyReportsPanel } from "../components/reports/MonthlyReportsPanel";
 
@@ -10,7 +11,7 @@ type Props = { lang: Language };
 
 export function MonthlyReportsPage({ lang }: Props) {
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "reports.view");
+  const canView = actorHasPermission(actor, "reports.view");
 
   if (!canView) {
     return <Navigate to="/office" replace />;

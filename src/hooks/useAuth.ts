@@ -32,7 +32,6 @@ import { storePendingReferralCode } from "../lib/pendingReferral";
 import { withTimeout } from "../lib/promiseTimeout";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
 import {
-  authenticateOfflineStaff,
   clearRememberedStaffDevice,
   clearStaffAuth,
   listCachedShopsForStaffLogin,
@@ -41,6 +40,7 @@ import {
   type RememberedStaffDevice,
   type StaffLoginInput,
 } from "../lib/staffOfflineAuth";
+import { authenticateStaffLogin, startStaffSessionClock, tryRestorePersistedStaffSession } from "../lib/auth";
 
 type LocalSession = { email: string };
 type StaffSession = {
@@ -394,9 +394,21 @@ export function useAuth() {
             applyAccountSwitchSync(null);
           }
         } else {
-          // Keep startup fast and deterministic: no background staff restore.
-          applyAccountSwitchSync(null);
-          setStaffSession(null);
+          const restored = tryRestorePersistedStaffSession();
+          if (restored) {
+            applyAccountSwitchSync(restored.accountKey);
+            setStaffSession({
+              accountKey: restored.accountKey,
+              businessName: restored.businessName,
+              staffId: restored.staffId,
+              staffName: restored.staffName,
+              role: restored.role,
+            });
+            startStaffSessionClock();
+          } else {
+            applyAccountSwitchSync(null);
+            setStaffSession(null);
+          }
         }
         if (!cancelled) setInitializing(false);
         return;
@@ -839,7 +851,7 @@ export function useAuth() {
   }, [staffSession]);
 
   const signInStaff = useCallback(async (input: StaffLoginInput) => {
-    const auth = await authenticateOfflineStaff(input);
+    const auth = await authenticateStaffLogin(input);
     applyAccountSwitchSync(auth.accountKey);
     setSession(null);
     setLocalEmail(null);

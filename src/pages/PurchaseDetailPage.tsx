@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Link, Navigate, useParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
   findPurchaseAudit,
@@ -29,8 +29,8 @@ export function PurchaseDetailPage({
   const { purchaseId: routePurchaseId } = useParams<{ purchaseId: string }>();
   const purchaseId = purchaseIdProp ?? routePurchaseId;
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "purchases.view");
-  const canVoid = hasPermission(actor.role, "purchases.void");
+  const canView = actorHasPermission(actor, "purchases.view");
+  const canVoid = actorHasPermission(actor, "purchases.void");
 
   const purchases = usePosStore((s) => s.purchases);
   const products = usePosStore((s) => s.products);

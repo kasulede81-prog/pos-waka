@@ -12,9 +12,9 @@ import {
 } from "../lib/homeVisibility";
 import { localGetDailySalesSummary, localGetMonthlySalesSummary } from "../lib/localReporting";
 import { formatShortUgx } from "../lib/commandCenterPageView";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+import { permissionsHasEffective } from "../lib/actorAuthorization";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
-import type { Language, UserRole } from "../types";
+import type { Language, Permission, UserRole } from "../types";
 import { useSubscription } from "../context/SubscriptionContext";
 import { t, tTemplate } from "../lib/i18n";
 
@@ -46,6 +46,7 @@ export function useHomeDashboardMetrics(
   role: UserRole,
   actorUserId: string,
   lowStockCount: number,
+  actorPermissions?: Permission[] | null,
 ): Record<string, HomeTileLiveStat | undefined> {
   const sales = useReportingSales(false);
   const returns = useReportingReturnRecords(false);
@@ -54,7 +55,7 @@ export function useHomeDashboardMetrics(
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const { snapshot, authMode } = useSubscription();
   const homeMetrics = resolveVisibleHomeMetrics(role);
-  const profitVisibility = resolveProfitVisibility({ role, snapshot, authMode });
+  const profitVisibility = resolveProfitVisibility({ role, snapshot, authMode, actorPermissions });
   const { todayKey, monthKey, monthLabel } = useKampalaCalendarTick(lang);
   const drawer = useDrawerCashForDay(todayKey);
 
@@ -72,7 +73,7 @@ export function useHomeDashboardMetrics(
     const today = localGetDailySalesSummary(scopedSales, products, scopedReturns, todayKey);
     const month = localGetMonthlySalesSummary(scopedSales, products, scopedReturns, monthKey, cashExpenses);
     const totalDebtUgx = customers.reduce((sum, c) => sum + Math.max(0, c.debtBalanceUgx ?? 0), 0);
-    const canCash = hasEffectivePermission(role, "day.close", snapshot, authMode);
+    const canCash = permissionsHasEffective(role, "day.close", snapshot, authMode, actorPermissions);
     const canDebt = homeMetrics.showShopWideDebt;
     const canProfit = profitVisibility.canProfit;
     const canReports = homeMetrics.showShopWideRevenue;
@@ -120,7 +121,7 @@ export function useHomeDashboardMetrics(
       };
     }
 
-    if (hasEffectivePermission(role, "owner.dashboard", snapshot, authMode)) {
+    if (permissionsHasEffective(role, "owner.dashboard", snapshot, authMode, actorPermissions)) {
       stats.commandCenter = {
         label: t(lang, "desktopHomeLiveTodaySales"),
         value: formatShortUgx(today.totalRevenueUgx),
@@ -174,5 +175,6 @@ export function useHomeDashboardMetrics(
     role,
     snapshot,
     authMode,
+    actorPermissions,
   ]);
 }

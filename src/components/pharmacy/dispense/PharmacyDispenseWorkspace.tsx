@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { actorHasEffectivePermission } from "../../../lib/actorAuthorization";
 import { useSearchParams } from "react-router-dom";
 import clsx from "clsx";
 import type { Language, PharmacyPrescriptionType, SaleLine } from "../../../types";
@@ -6,7 +7,7 @@ import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
 import { isPharmacyMode } from "../../../lib/pharmacy";
 import { useSessionActor } from "../../../context/SessionActorContext";
-import { hasEffectivePermission } from "../../../lib/subscriptionEntitlements";
+
 import { useSubscription } from "../../../context/SubscriptionContext";
 import {
   activePrescriptionQueue,
@@ -117,7 +118,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const isFullDesktopPos = posLayoutMode === "full";
 
   const pharmacy = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const canDispense = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
+  const canDispense = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
   const todaySalesSummary = useMemo(() => summarizeTodaySales(sales), [sales]);
   const pendingCount = useMemo(() => pendingSales(sales).length, [sales]);
   const activeShift = useMemo(
@@ -143,6 +144,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   const checkout = usePharmacyDispenseCheckout({
     lang,
     actorRole: actor.role,
+    actorPermissions: actor.permissions,
     selectedPatientId,
     selectedRxId,
     onDispenseSuccess: () => {
@@ -326,7 +328,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
   if (!pharmacy || !canDispense) return null;
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col bg-stone-100">
+    <div className="flex min-h-0 flex-1 flex-col bg-stone-100">
       <PosOfflineBanner lang={lang} compact />
       {isFullDesktopPos ? (
         <PosDesktopCompactHeader

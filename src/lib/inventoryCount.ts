@@ -6,10 +6,12 @@ import type {
   InventoryCountLine,
   InventoryCountSession,
   InventoryCountSessionStatus,
+  Permission,
   Product,
   StockMovement,
   UserRole,
 } from "../types";
+import { hasActorPermission } from "./permissions";
 import { lineCostUgx, normalizeUnitCostUgx } from "./costPrecision";
 import { stableInventoryMovementId } from "./inventoryIntegrity";
 
@@ -22,21 +24,30 @@ export type InventoryCountPermission =
   | "cancel"
   | "view";
 
-const COUNT_ROLES_CREATE = new Set<UserRole>(["owner", "manager", "cashier", "supervisor", "stock_keeper"]);
+function countPerm(role: UserRole, actorPermissions: Permission[] | null | undefined, permission: Permission): boolean {
+  return hasActorPermission(role, permission, actorPermissions);
+}
 
-export function canInventoryCount(role: UserRole, perm: InventoryCountPermission): boolean {
+export function canInventoryCount(
+  role: UserRole,
+  perm: InventoryCountPermission,
+  actorPermissions?: Permission[] | null,
+): boolean {
   switch (perm) {
     case "view":
-      return COUNT_ROLES_CREATE.has(role) || role === "waiter";
+      return countPerm(role, actorPermissions, "stock.view") ||
+        countPerm(role, actorPermissions, "stock.count") ||
+        role === "waiter";
     case "create":
     case "count":
-      return COUNT_ROLES_CREATE.has(role);
+      return countPerm(role, actorPermissions, "stock.count");
     case "submit":
     case "approve":
-      return role === "owner" || role === "manager" || role === "supervisor";
+      return countPerm(role, actorPermissions, "stock.adjust") &&
+        countPerm(role, actorPermissions, "back_office.access");
     case "apply":
     case "cancel":
-      return role === "owner";
+      return countPerm(role, actorPermissions, "settings.shop");
     default:
       return false;
   }

@@ -1,9 +1,9 @@
 import { useMemo } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
 import type { Language, ReceiptDisplayOptions, ReceiptHeaderConfig } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
@@ -22,7 +22,7 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
   const setPreferences = usePosStore((s) => s.setPreferences);
   const { snapshot, authMode } = useSubscription();
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
-  const canEditReceipt = hasPermission(actor.role, "settings.receipt");
+  const canEditReceipt = actorHasPermission(actor, "settings.receipt");
 
   const displayOpts = useMemo(
     () => ({ ...defaultReceiptDisplayOptions(), ...preferences.receiptDisplayOptions }),

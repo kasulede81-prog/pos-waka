@@ -10,13 +10,12 @@ import {
   recordDeviceReplacementCompleted,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
-import { disconnectOwnerShopDevice } from "../lib/shopDevices";
+import { currentDeviceFingerprint, disconnectOwnerShopDevice } from "../lib/shopDevices";
 import {
   formatDeviceDisplayName,
   formatDevicePlatformLabel,
   formatLastActiveRelative,
 } from "../lib/devicePresenceFormat";
-import { currentDeviceFingerprint } from "../lib/shopDevices";
 
 type Props = { lang: Language; onSignOut?: () => void };
 
@@ -48,7 +47,8 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
   const { block, retry, shopId } = useDeviceActivation();
   const [ctx, setCtx] = useState<DeviceLimitContext | null>(block?.context ?? null);
   const [loading, setLoading] = useState(!block?.context);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -94,29 +94,44 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
     });
   }, [ctx, lang]);
 
-  const handleDisconnect = async (deviceId: string, fingerprint: string) => {
-    if (!sid || busyId) return;
-    setBusyId(deviceId);
+  const replaceableDevices = useMemo(
+    () =>
+      (ctx?.devices ?? []).filter(
+        (d) => d.status === "active" && d.approval_status === "approved" && d.device_fingerprint !== currentFp,
+      ),
+    [ctx?.devices, currentFp],
+  );
+
+  useEffect(() => {
+    if (selectedId && !replaceableDevices.some((d) => d.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [replaceableDevices, selectedId]);
+
+  const handleReplaceSelected = async () => {
+    if (!sid || !selectedId || busy) return;
+    const device = replaceableDevices.find((d) => d.id === selectedId);
+    if (!device) return;
+
+    setBusy(true);
     setError(null);
     try {
-      await disconnectOwnerShopDevice(deviceId, sid);
+      await disconnectOwnerShopDevice(device.id, sid);
       const result = await ensureShopDeviceActivation(sid);
       if (!result.activated) {
         await loadContext();
         setError(t(lang, "deviceLimitStillFull"));
         return;
       }
-      await recordDeviceReplacementCompleted(sid, fingerprint);
+      await recordDeviceReplacementCompleted(sid, device.device_fingerprint);
       await retry();
       navigate("/", { replace: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : t(lang, "connectedDevicesDisconnectError"));
     } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   };
-
-  const activeDevices = (ctx?.devices ?? []).filter((d) => d.status === "active");
 
   return (
     <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-waka-50 to-stone-50 dark:from-stone-950 dark:to-stone-900">
@@ -127,7 +142,9 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
               <MonitorSmartphone className="h-7 w-7" aria-hidden />
             </div>
             <h1 className="mt-4 text-2xl font-black text-stone-950 dark:text-stone-50">{t(lang, "deviceLimitTitle")}</h1>
-            <p className="mt-2 text-sm font-medium text-stone-600 dark:text-stone-400">{t(lang, "deviceLimitSub")}</p>
+            <p className="mt-2 text-sm font-medium text-stone-600 dark:text-stone-400">
+              {isOwner ? t(lang, "deviceLimitReplacementIntro") : t(lang, "deviceLimitSub")}
+            </p>
           </div>
 
           <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
@@ -149,47 +166,52 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
             </section>
           ) : null}
 
-          <section>
-            <h2 className="text-sm font-black text-stone-800 dark:text-stone-200">{t(lang, "deviceLimitDevicesHeading")}</h2>
-            {loading ? (
-              <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesLoading")}</p>
-            ) : activeDevices.length === 0 ? (
-              <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesEmpty")}</p>
-            ) : (
-              <ul className="mt-3 space-y-3">
-                {activeDevices.map((device) => {
-                  const name = formatDeviceDisplayName(device.label, device.platform);
-                  const isCurrent = device.device_fingerprint === currentFp;
-                  return (
-                    <li
-                      key={device.id}
-                      className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900"
-                    >
-                      <p className="text-base font-black text-stone-950 dark:text-stone-50">{name}</p>
-                      <p className="text-sm font-medium text-stone-600 dark:text-stone-400">
-                        {formatDevicePlatformLabel(device.platform)}
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-stone-500 dark:text-stone-500">
-                        {t(lang, "connectedDevicesLastActivePrefix")}: {lastActiveLabel(lang, device.last_seen_at, nowMs)}
-                      </p>
-                      {isOwner && !isCurrent ? (
-                        <button
-                          type="button"
-                          disabled={busyId === device.id}
-                          onClick={() => void handleDisconnect(device.id, device.device_fingerprint)}
-                          className="mt-3 min-h-[44px] w-full rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300"
+          {isOwner ? (
+            <section>
+              <h2 className="text-sm font-black text-stone-800 dark:text-stone-200">{t(lang, "deviceLimitDevicesHeading")}</h2>
+              {loading ? (
+                <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesLoading")}</p>
+              ) : replaceableDevices.length === 0 ? (
+                <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesEmpty")}</p>
+              ) : (
+                <ul className="mt-3 space-y-3" role="radiogroup" aria-label={t(lang, "deviceLimitDevicesHeading")}>
+                  {replaceableDevices.map((device) => {
+                    const name = formatDeviceDisplayName(device.label, device.platform);
+                    const selected = selectedId === device.id;
+                    return (
+                      <li key={device.id}>
+                        <label
+                          className={`flex cursor-pointer gap-3 rounded-2xl border bg-white p-4 shadow-sm dark:bg-stone-900 ${
+                            selected
+                              ? "border-amber-400 ring-2 ring-amber-200 dark:border-amber-500 dark:ring-amber-500/30"
+                              : "border-stone-200 dark:border-stone-700"
+                          }`}
                         >
-                          {busyId === device.id
-                            ? t(lang, "connectedDevicesDisconnecting")
-                            : tTemplate(lang, "deviceLimitDisconnectNamed", { name })}
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+                          <input
+                            type="radio"
+                            name="replace-device"
+                            className="mt-1 h-4 w-4 shrink-0 accent-amber-600"
+                            checked={selected}
+                            onChange={() => setSelectedId(device.id)}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-base font-black text-stone-950 dark:text-stone-50">{name}</span>
+                            <span className="block text-sm font-medium text-stone-600 dark:text-stone-400">
+                              {formatDevicePlatformLabel(device.platform)}
+                            </span>
+                            <span className="mt-1 block text-sm font-medium text-stone-500 dark:text-stone-500">
+                              {t(lang, "connectedDevicesLastActivePrefix")}:{" "}
+                              {lastActiveLabel(lang, device.last_seen_at, nowMs)}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          ) : null}
 
           {error ? (
             <p
@@ -205,30 +227,46 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
       <footer className="shrink-0 border-t border-stone-200/80 bg-white/95 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-md dark:border-stone-700 dark:bg-stone-900/95">
         <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
           {isOwner ? (
-            <button
-              type="button"
-              onClick={() => void retry().then(() => navigate("/", { replace: true }))}
-              className="min-h-[48px] rounded-xl bg-stone-900 px-4 text-sm font-bold text-white dark:bg-stone-100 dark:text-stone-900"
-            >
-              {t(lang, "deviceLimitRetryActivation")}
-            </button>
-          ) : null}
-          <Link
-            to="/upgrade"
-            className="flex min-h-[48px] items-center justify-center rounded-xl bg-amber-600 px-4 text-sm font-bold text-white"
-          >
-            {t(lang, "connectedDevicesUpgradeCta")}
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              if (onSignOut) onSignOut();
-              else navigate("/login", { replace: true });
-            }}
-            className="min-h-[48px] rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-800 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
-          >
-            {isOwner ? t(lang, "deviceLimitCancel") : t(lang, "deviceLimitClose")}
-          </button>
+            <>
+              <button
+                type="button"
+                disabled={!selectedId || busy || replaceableDevices.length === 0}
+                onClick={() => void handleReplaceSelected()}
+                className="min-h-[48px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+              >
+                {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceLimitDisconnectSelected")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSignOut) onSignOut();
+                  else navigate("/login", { replace: true });
+                }}
+                className="min-h-[48px] rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-800 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+              >
+                {t(lang, "deviceLimitCancel")}
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                to="/upgrade"
+                className="flex min-h-[48px] items-center justify-center rounded-xl bg-amber-600 px-4 text-sm font-bold text-white"
+              >
+                {t(lang, "connectedDevicesUpgradeCta")}
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  if (onSignOut) onSignOut();
+                  else navigate("/login", { replace: true });
+                }}
+                className="min-h-[48px] rounded-xl border border-stone-300 bg-white px-4 text-sm font-bold text-stone-800 dark:border-stone-600 dark:bg-stone-800 dark:text-stone-100"
+              >
+                {t(lang, "deviceLimitClose")}
+              </button>
+            </>
+          )}
         </div>
       </footer>
     </div>

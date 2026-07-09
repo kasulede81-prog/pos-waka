@@ -3,8 +3,8 @@ import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { hasPermission } from "../../lib/permissions";
-import type { UserRole } from "../../types";
+import { hasActorPermission } from "../../lib/permissions";
+import { useSessionActor } from "../../context/SessionActorContext";
 import {
   PHARMACY_MOBILE_NAV_CATALOG,
   pharmacyNavItemActive,
@@ -16,17 +16,17 @@ import { isPosSellPath } from "../../lib/posSellExit";
 
 type Props = {
   lang: Language;
-  role: UserRole;
   visible: boolean;
 };
 
-export function PharmacyMobileNav({ lang, role, visible }: Props) {
+export function PharmacyMobileNav({ lang, visible }: Props) {
+  const actor = useSessionActor();
   const location = useLocation();
   const navigate = useNavigate();
   const isDesktop = usePosDesktopLayout();
 
   const items = PHARMACY_MOBILE_NAV_CATALOG.filter(
-    (item) => !item.perm || hasPermission(role, item.perm),
+    (item) => !item.perm || hasActorPermission(actor.role, item.perm, actor.permissions),
   );
 
   const guardedNavigate = useCallback(

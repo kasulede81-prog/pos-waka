@@ -1,9 +1,10 @@
 import clsx from "clsx";
 import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import type { Language, UserRole } from "../../types";
+import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { hasPermission } from "../../lib/permissions";
+import { hasActorPermission } from "../../lib/permissions";
+import { useSessionActor } from "../../context/SessionActorContext";
 import {
   PHARMACY_HOME_ROUTE,
   PHARMACY_NAV_CATALOG,
@@ -15,17 +16,17 @@ import { isPosSellPath } from "../../lib/posSellExit";
 
 type Props = {
   lang: Language;
-  role: UserRole;
   visible: boolean;
 };
 
-export function PharmacyDesktopNav({ lang, role, visible }: Props) {
+export function PharmacyDesktopNav({ lang, visible }: Props) {
+  const actor = useSessionActor();
   const location = useLocation();
   const navigate = useNavigate();
 
   const items = PHARMACY_NAV_CATALOG.filter((item) => {
     if (item.path === PHARMACY_HOME_ROUTE && location.pathname === PHARMACY_HOME_ROUTE) return false;
-    return !item.perm || hasPermission(role, item.perm);
+    return !item.perm || hasActorPermission(actor.role, item.perm, actor.permissions);
   });
 
   const guardedNavigate = useCallback(

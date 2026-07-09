@@ -1,8 +1,8 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { BackOfficePinForm } from "../components/settings/BackOfficePinForm";
 
@@ -12,7 +12,7 @@ export function SettingsPinPage({ lang }: { lang: Language }) {
   const lockState = location.state as { setupLockPin?: boolean; notice?: string } | null;
   const fromLockSetup = Boolean(lockState?.setupLockPin);
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
 

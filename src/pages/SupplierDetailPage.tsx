@@ -1,11 +1,11 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowDownLeft, ArrowUpRight, Scale } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { PageHeader } from "../components/layout/PageHeader";
 import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 import { HistoryListCard } from "../components/shared/HistoryListCard";
@@ -38,8 +38,8 @@ export function SupplierDetailPage({
   const { supplierId: routeSupplierId } = useParams<{ supplierId: string }>();
   const supplierId = supplierIdProp ?? routeSupplierId;
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "suppliers.view");
-  const canManage = hasPermission(actor.role, "suppliers.manage");
+  const canView = actorHasPermission(actor, "suppliers.view");
+  const canManage = actorHasPermission(actor, "suppliers.manage");
 
   const suppliers = usePosStore((s) => s.suppliers);
   const auditLogs = usePosStore((s) => s.auditLogs);

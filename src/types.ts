@@ -138,6 +138,7 @@ export type AuditAction =
   | "sync_unknown_operation"
   | "device_viewed"
   | "device_disconnected"
+  | "device_removed"
   | "device_reactivated"
   | "device_heartbeat_rejected"
   | "device_limit_hit"
@@ -166,6 +167,16 @@ export type AuditAction =
   | "staff_login_rejected_device"
   | "staff_security_alert"
   | "staff_security_event"
+  | "pos_lock"
+  | "pos_unlock"
+  | "staff_switch_user"
+  | "staff_session_expired"
+  | "custom_role_created"
+  | "custom_role_updated"
+  | "custom_role_deleted"
+  | "custom_role_cloned"
+  | "staff_role_assigned"
+  | "staff_role_removed"
   | "inventory_count_started"
   | "inventory_count_submitted"
   | "inventory_count_approved"
@@ -2020,12 +2031,32 @@ export type CashExpense = {
   deletedAt?: string | null;
 };
 
+export type CustomStaffRoleStatus = "active" | "disabled" | "archived";
+
+export type CustomStaffRole = {
+  id: string;
+  name: string;
+  inheritsFrom: UserRole;
+  permissions: Permission[];
+  status?: CustomStaffRoleStatus;
+  /** Industry template used as the starting point. */
+  sourceTemplateId?: string | null;
+  /** Custom role cloned from another custom role. */
+  clonedFromRoleId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type StaffAccount = {
   id: string;
   name: string;
   /** Unique per shop when set (e.g. cashier01). */
   username?: string | null;
   role: UserRole;
+  /** Industry role template id (display + wizard selection). */
+  roleTemplateId?: string | null;
+  /** Owner-defined custom role id from preferences.customStaffRoles. */
+  customRoleId?: string | null;
   /** Cached effective permissions for offline checks / audits. */
   permissions?: Permission[];
   pin?: string | null;
@@ -2206,10 +2237,24 @@ export type ShopPreferences = {
   requireCashierExpenseApproval?: boolean;
   /** Local multi-user profiles for fast shared-device switch. */
   staffAccounts?: StaffAccount[];
+  /** Owner-defined roles with custom permission sets. */
+  customStaffRoles?: CustomStaffRole[];
   /** Active staff profile on this device; null = auth role session. */
   activeStaffId?: string | null;
   /** Lock screen state for quick shift switches. */
   posLocked?: boolean;
+  /** Auto-lock after idle minutes (0 = never). */
+  staffAutoLockMinutes?: 0 | 2 | 5 | 10 | 15 | 30 | 60;
+  /** When true, idle timeout requires PIN unlock (default on). */
+  staffRequirePinAfterIdle?: boolean;
+  /** Allow switch-user from lock screen (default on). */
+  staffAllowSwitchUser?: boolean;
+  /** Persist staff session across refresh/restart (default on). */
+  staffRememberSession?: boolean;
+  /** Failed PIN attempts before brute-force lock (default 5). */
+  staffMaxFailedAttempts?: number;
+  /** Session lifetime in minutes before PIN required again (default 480). */
+  staffSessionTimeoutMinutes?: number;
   /** When true, sensitive actions require native biometric or Owner PIN (Owner-only setting). */
   biometricAuthEnabled?: boolean;
   /** single = only primary device may sell offline; multi = all devices (default). */

@@ -1,10 +1,11 @@
 import { useMemo } from "react";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import type { Language } from "../types";
 import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { isPharmacyMode } from "../lib/pharmacy";
@@ -50,16 +51,16 @@ export function PharmacyDashboardPage({ lang }: { lang: Language }) {
   const pharmacy = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const todayKey = dateKeyKampala(new Date());
 
-  const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
-  const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
-  const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
-  const canPurchases = hasEffectivePermission(actor.role, "purchases.view", snapshot, authMode);
-  const canPatients = hasEffectivePermission(actor.role, "customers.view", snapshot, authMode);
-  const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
-  const canWriteOff = hasEffectivePermission(actor.role, "pharmacy.expired_writeoff", snapshot, authMode);
-  const showActivityFeed = hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode);
+  const canSell = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
+  const canStock = actorHasEffectivePermission(actor, "stock.view", snapshot, authMode);
+  const canReports = actorHasEffectivePermission(actor, "reports.view", snapshot, authMode);
+  const canPurchases = actorHasEffectivePermission(actor, "purchases.view", snapshot, authMode);
+  const canPatients = actorHasEffectivePermission(actor, "customers.view", snapshot, authMode);
+  const canReceipts = actorHasEffectivePermission(actor, "receipts.view", snapshot, authMode);
+  const canWriteOff = actorHasEffectivePermission(actor, "pharmacy.expired_writeoff", snapshot, authMode);
+  const showActivityFeed = actorHasEffectivePermission(actor, "owner.activity", snapshot, authMode);
   const homeMetrics = resolveVisibleHomeMetrics(actor.role);
-  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
   const showRevenue = homeMetrics.showShopWideRevenue || homeMetrics.showPersonalRevenue;
 
   const scopedSales = useMemo(

@@ -20,6 +20,8 @@ import type {
   ShopPreferences,
   Permission,
   StaffAccount,
+  CustomStaffRole,
+  CustomStaffRoleStatus,
   StockMovement,
   StockMovementKind,
   Supplier,
@@ -281,6 +283,8 @@ import { repairLegacySaleFinancials } from "../lib/legacyFinancialRepair";
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { detectSaleStockConflict, logInventoryConflict } from "../lib/inventoryConflictLog";
 import { canTogglePosUiMode, normalizeUserRole, permissionsForRole } from "../lib/permissions";
+import { resolveStaffPermissions, findRoleTemplate, permissionsFromTemplate } from "../lib/enterpriseRoles";
+import { normalizeCustomStaffRoleStatus } from "../lib/enterpriseRoles/customRoles";
 import { normalizeShopCurrency } from "../lib/shopCurrency";
 import { generateStaffUsername } from "../lib/staffAccountHelpers";
 import { hashStaffSecretAsync, normalizePin } from "../lib/staffSecret";
@@ -352,7 +356,7 @@ function parseStoredUserRole(v: unknown): UserRole | null {
   return normalizeUserRole(v);
 }
 
-function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
+function normalizeStaffAccounts(raw: unknown, customRoles: CustomStaffRole[] = []): StaffAccount[] {
   if (!Array.isArray(raw)) return [];
   const out: StaffAccount[] = [];
   for (const item of raw) {
@@ -361,12 +365,21 @@ function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
     const role = parseStoredUserRole(obj.role);
     const name = typeof obj.name === "string" ? obj.name.trim() : "";
     if (!role || !name) continue;
-    out.push({
+    const roleTemplateId =
+      typeof obj.roleTemplateId === "string" && obj.roleTemplateId.trim() ? obj.roleTemplateId.trim() : null;
+    const customRoleId =
+      typeof obj.customRoleId === "string" && obj.customRoleId.trim() ? obj.customRoleId.trim() : null;
+    const storedPermissions = Array.isArray(obj.permissions)
+      ? (obj.permissions as unknown[]).filter((p): p is Permission => typeof p === "string")
+      : undefined;
+    const draft: StaffAccount = {
       id: typeof obj.id === "string" && obj.id ? obj.id : crypto.randomUUID(),
       name,
       username: typeof obj.username === "string" ? obj.username.trim().toLowerCase() || null : null,
       role,
-      permissions: permissionsForRole(role),
+      roleTemplateId,
+      customRoleId,
+      permissions: storedPermissions,
       pin: typeof obj.pin === "string" ? obj.pin.replace(/\D/g, "").slice(0, 6) || null : null,
       password: typeof obj.password === "string" ? obj.password || null : null,
       pinHash: typeof obj.pinHash === "string" ? obj.pinHash.trim() || null : null,
@@ -383,9 +396,52 @@ function normalizeStaffAccounts(raw: unknown): StaffAccount[] {
       failedPinAttempts: typeof obj.failedPinAttempts === "number" ? obj.failedPinAttempts : 0,
       lockedUntil: typeof obj.lockedUntil === "string" ? obj.lockedUntil : null,
       lastFailedLoginAt: typeof obj.lastFailedLoginAt === "string" ? obj.lastFailedLoginAt : null,
+    };
+    out.push({
+      ...draft,
+      permissions: resolveStaffPermissions(draft, customRoles),
     });
   }
   return out;
+}
+
+function normalizeCustomStaffRoles(raw: unknown): CustomStaffRole[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CustomStaffRole[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    const name = typeof obj.name === "string" ? obj.name.trim() : "";
+    const inheritsFrom = parseStoredUserRole(obj.inheritsFrom);
+    if (!name || !inheritsFrom || inheritsFrom === "owner") continue;
+    const permissions = Array.isArray(obj.permissions)
+      ? (obj.permissions as unknown[]).filter((p): p is Permission => typeof p === "string")
+      : permissionsForRole(inheritsFrom);
+    out.push({
+      id: typeof obj.id === "string" && obj.id ? obj.id : crypto.randomUUID(),
+      name,
+      inheritsFrom,
+      permissions,
+      status: normalizeCustomStaffRoleStatus(obj.status),
+      sourceTemplateId:
+        typeof obj.sourceTemplateId === "string" && obj.sourceTemplateId.trim() ? obj.sourceTemplateId.trim() : null,
+      clonedFromRoleId:
+        typeof obj.clonedFromRoleId === "string" && obj.clonedFromRoleId.trim() ? obj.clonedFromRoleId.trim() : null,
+      createdAt: typeof obj.createdAt === "string" ? obj.createdAt : new Date().toISOString(),
+      updatedAt: typeof obj.updatedAt === "string" ? obj.updatedAt : new Date().toISOString(),
+    });
+  }
+  return out;
+}
+
+function refreshStaffPermissionsForRoles(
+  staffAccounts: StaffAccount[] | undefined,
+  customRoles: CustomStaffRole[] | undefined,
+): StaffAccount[] {
+  return (staffAccounts ?? []).map((staff) => ({
+    ...staff,
+    permissions: resolveStaffPermissions(staff, customRoles),
+  }));
 }
 
 function normalizeShifts(raw: unknown): ShiftRecord[] {
@@ -606,8 +662,42 @@ export type PosState = {
     phone?: string;
     email?: string;
     permissions?: Permission[];
+    roleTemplateId?: string | null;
+    customRoleId?: string | null;
   }) => Promise<{ ok: boolean; errorKey?: string; id?: string; queued?: boolean }>;
-  updateStaffAccount: (id: string, patch: { name?: string; username?: string; role?: UserRole; phone?: string; active?: boolean }) => void;
+  updateStaffAccount: (
+    id: string,
+    patch: {
+      name?: string;
+      username?: string;
+      role?: UserRole;
+      roleTemplateId?: string | null;
+      customRoleId?: string | null;
+      phone?: string;
+      active?: boolean;
+    },
+  ) => void;
+  addCustomStaffRole: (input: {
+    name: string;
+    inheritsFrom: UserRole;
+    permissions: Permission[];
+    sourceTemplateId?: string | null;
+    clonedFromRoleId?: string | null;
+  }) => { ok: boolean; errorKey?: string; id?: string };
+  updateCustomStaffRole: (
+    id: string,
+    patch: {
+      name?: string;
+      inheritsFrom?: UserRole;
+      permissions?: Permission[];
+      status?: CustomStaffRoleStatus;
+    },
+  ) => { ok: boolean; errorKey?: string };
+  removeCustomStaffRole: (id: string) => { ok: boolean; errorKey?: string };
+  cloneCustomStaffRole: (
+    source: { kind: "template" | "custom"; id: string },
+    name: string,
+  ) => { ok: boolean; errorKey?: string; id?: string };
   removeStaffAccount: (id: string) => void;
   resetStaffSecret: (id: string, patch: { pin?: string | null; password?: string | null }) => void;
   unlockStaffAccount: (id: string) => Promise<{ ok: boolean; errorKey?: string }>;
@@ -1774,12 +1864,19 @@ export const usePosStore = create<PosState>((set, get) => {
     const pinHash = pin ? await hashStaffSecretAsync(pin) : null;
     const passwordHash = password ? await hashStaffSecretAsync(password) : null;
 
+    const customRoles = get().preferences.customStaffRoles ?? [];
     const row: StaffAccount = {
       id: crypto.randomUUID(),
       name,
       username,
       role,
-      permissions: input.permissions ?? permissionsForRole(role),
+      roleTemplateId: input.roleTemplateId ?? null,
+      customRoleId: input.customRoleId ?? null,
+      permissions: input.permissions
+        ?? resolveStaffPermissions(
+          { role, customRoleId: input.customRoleId ?? null, permissions: undefined },
+          customRoles,
+        ),
       pin: null,
       password: null,
       pinHash,
@@ -1861,26 +1958,44 @@ export const usePosStore = create<PosState>((set, get) => {
       preferences: {
         ...s.preferences,
         staffAccounts: (s.preferences.staffAccounts ?? []).map((a) => {
+          if (a.id !== id) return a;
           const nextRole = patch.role !== undefined ? normalizeUserRole(patch.role) : a.role;
-          return a.id === id
-            ? {
-                ...a,
-                name: patch.name?.trim() ?? a.name,
-                role: nextRole ?? a.role,
-                username:
-                  patch.username === undefined
-                    ? (a.username ?? null)
-                    : patch.username.trim().toLowerCase() || null,
-                permissions: nextRole ? permissionsForRole(nextRole) : permissionsForRole(a.role),
-                phone: patch.phone === undefined ? a.phone : patch.phone.trim() || null,
-                active: patch.active ?? a.active,
-                updatedAt: new Date().toISOString(),
-              }
-            : a;
+          let nextCustomRoleId = patch.customRoleId !== undefined ? patch.customRoleId : a.customRoleId ?? null;
+          let nextRoleTemplateId =
+            patch.roleTemplateId !== undefined ? patch.roleTemplateId : a.roleTemplateId ?? null;
+          if (patch.customRoleId !== undefined && patch.customRoleId) nextRoleTemplateId = null;
+          if (patch.roleTemplateId !== undefined && patch.roleTemplateId) nextCustomRoleId = null;
+          const next: StaffAccount = {
+            ...a,
+            name: patch.name?.trim() ?? a.name,
+            role: nextRole ?? a.role,
+            roleTemplateId: nextRoleTemplateId,
+            customRoleId: nextCustomRoleId,
+            username:
+              patch.username === undefined
+                ? (a.username ?? null)
+                : patch.username.trim().toLowerCase() || null,
+            phone: patch.phone === undefined ? a.phone : patch.phone.trim() || null,
+            active: patch.active ?? a.active,
+            updatedAt: new Date().toISOString(),
+          };
+          return {
+            ...next,
+            permissions: resolveStaffPermissions(next, s.preferences.customStaffRoles),
+          };
         }),
       },
     }));
     const updated = get().preferences.staffAccounts?.find((a) => a.id === id);
+    if (updated && (patch.customRoleId !== undefined || patch.roleTemplateId !== undefined || patch.role !== undefined)) {
+      pushAudit("staff_role_assigned", `Role updated for ${updated.name}`, {
+        staffId: updated.id,
+        staffName: updated.name,
+        role: updated.role,
+        roleTemplateId: updated.roleTemplateId,
+        customRoleId: updated.customRoleId,
+      });
+    }
     if (updated && patch.active !== undefined) {
       void import("../lib/staffSecurityAudit").then(({ logStaffSecurityAudit }) => {
         logStaffSecurityAudit(patch.active ? "staff_reactivated" : "staff_suspended", {
@@ -1892,6 +2007,189 @@ export const usePosStore = create<PosState>((set, get) => {
     if (updated) {
       void import("../lib/shopStaffCloud").then(({ pushStaffToCloud }) => pushStaffToCloud(updated));
     }
+  },
+
+  addCustomStaffRole: (input) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        return { ok: false, errorKey: e.errorKey };
+      }
+      throw e;
+    }
+    const name = input.name.trim();
+    if (!name) return { ok: false, errorKey: "enterpriseRolesNameRequired" };
+    const inheritsFrom = normalizeUserRole(input.inheritsFrom);
+    if (!inheritsFrom || inheritsFrom === "owner") return { ok: false, errorKey: "enterpriseRolesInvalidBase" };
+    const existing = get().preferences.customStaffRoles ?? [];
+    if (existing.some((r) => r.name.toLowerCase() === name.toLowerCase())) {
+      return { ok: false, errorKey: "enterpriseRolesNameTaken" };
+    }
+    const now = new Date().toISOString();
+    const row: CustomStaffRole = {
+      id: crypto.randomUUID(),
+      name,
+      inheritsFrom,
+      permissions: [...input.permissions],
+      status: "active",
+      sourceTemplateId: input.sourceTemplateId ?? null,
+      clonedFromRoleId: input.clonedFromRoleId ?? null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    set((s) => ({
+      preferences: {
+        ...s.preferences,
+        customStaffRoles: [row, ...(s.preferences.customStaffRoles ?? [])],
+      },
+    }));
+    pushAudit("custom_role_created", `Custom role created: ${row.name}`, {
+      roleId: row.id,
+      roleName: row.name,
+      inheritsFrom: row.inheritsFrom,
+      permissionCount: row.permissions.length,
+    });
+    return { ok: true, id: row.id };
+  },
+
+  updateCustomStaffRole: (id, patch) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        return { ok: false, errorKey: e.errorKey };
+      }
+      throw e;
+    }
+    const roles = get().preferences.customStaffRoles ?? [];
+    const current = roles.find((r) => r.id === id);
+    if (!current) return { ok: false, errorKey: "enterpriseRolesNotFound" };
+    const nextName = patch.name?.trim() ?? current.name;
+    if (!nextName) return { ok: false, errorKey: "enterpriseRolesNameRequired" };
+    if (
+      roles.some((r) => r.id !== id && r.name.toLowerCase() === nextName.toLowerCase())
+    ) {
+      return { ok: false, errorKey: "enterpriseRolesNameTaken" };
+    }
+    const inheritsFrom =
+      patch.inheritsFrom !== undefined ? normalizeUserRole(patch.inheritsFrom) : current.inheritsFrom;
+    if (!inheritsFrom || inheritsFrom === "owner") return { ok: false, errorKey: "enterpriseRolesInvalidBase" };
+    const nextPermissions = patch.permissions ? [...patch.permissions] : current.permissions;
+    const nextStatus = patch.status ?? current.status ?? "active";
+    const updatedRole: CustomStaffRole = {
+      ...current,
+      name: nextName,
+      inheritsFrom,
+      permissions: nextPermissions,
+      status: nextStatus,
+      updatedAt: new Date().toISOString(),
+    };
+    set((s) => {
+      const customStaffRoles = (s.preferences.customStaffRoles ?? []).map((r) =>
+        r.id === id ? updatedRole : r,
+      );
+      return {
+        preferences: {
+          ...s.preferences,
+          customStaffRoles,
+          staffAccounts: refreshStaffPermissionsForRoles(s.preferences.staffAccounts, customStaffRoles),
+        },
+      };
+    });
+    pushAudit("custom_role_updated", `Custom role updated: ${updatedRole.name}`, {
+      roleId: updatedRole.id,
+      roleName: updatedRole.name,
+      status: updatedRole.status,
+      permissionCount: updatedRole.permissions.length,
+    });
+    return { ok: true };
+  },
+
+  removeCustomStaffRole: (id) => {
+    try {
+      assertStaffAccountMutationAllowed(get().sessionActor);
+    } catch (e) {
+      if (e instanceof StaffAccountAuthorizationError) {
+        return { ok: false, errorKey: e.errorKey };
+      }
+      throw e;
+    }
+    const roles = get().preferences.customStaffRoles ?? [];
+    const current = roles.find((r) => r.id === id);
+    if (!current) return { ok: false, errorKey: "enterpriseRolesNotFound" };
+    const assigned = (get().preferences.staffAccounts ?? []).filter((s) => s.customRoleId === id);
+    set((s) => {
+      const customStaffRoles = (s.preferences.customStaffRoles ?? []).filter((r) => r.id !== id);
+      const staffAccounts = refreshStaffPermissionsForRoles(
+        (s.preferences.staffAccounts ?? []).map((staff) =>
+          staff.customRoleId === id
+            ? {
+                ...staff,
+                customRoleId: null,
+                updatedAt: new Date().toISOString(),
+              }
+            : staff,
+        ),
+        customStaffRoles,
+      );
+      return { preferences: { ...s.preferences, customStaffRoles, staffAccounts } };
+    });
+    pushAudit("custom_role_deleted", `Custom role deleted: ${current.name}`, {
+      roleId: current.id,
+      roleName: current.name,
+      unassignedStaffCount: assigned.length,
+    });
+    for (const staff of assigned) {
+      pushAudit("staff_role_removed", `Custom role removed from ${staff.name}`, {
+        staffId: staff.id,
+        staffName: staff.name,
+        roleId: current.id,
+        roleName: current.name,
+      });
+    }
+    return { ok: true };
+  },
+
+  cloneCustomStaffRole: (source, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, errorKey: "enterpriseRolesNameRequired" };
+    if (source.kind === "template") {
+      const tpl = findRoleTemplate(source.id);
+      if (!tpl) return { ok: false, errorKey: "enterpriseRolesNotFound" };
+      const created = get().addCustomStaffRole({
+        name: trimmed,
+        inheritsFrom: tpl.baseRole,
+        permissions: permissionsFromTemplate(tpl),
+        sourceTemplateId: tpl.id,
+      });
+      if (created.ok) {
+        pushAudit("custom_role_cloned", `Cloned template to ${trimmed}`, {
+          sourceTemplateId: tpl.id,
+          roleId: created.id,
+          roleName: trimmed,
+        });
+      }
+      return created;
+    }
+    const roles = get().preferences.customStaffRoles ?? [];
+    const current = roles.find((r) => r.id === source.id);
+    if (!current) return { ok: false, errorKey: "enterpriseRolesNotFound" };
+    const created = get().addCustomStaffRole({
+      name: trimmed,
+      inheritsFrom: current.inheritsFrom,
+      permissions: [...current.permissions],
+      clonedFromRoleId: current.id,
+      sourceTemplateId: current.sourceTemplateId ?? null,
+    });
+    if (created.ok) {
+      pushAudit("custom_role_cloned", `Cloned role ${current.name} to ${trimmed}`, {
+        sourceRoleId: current.id,
+        roleId: created.id,
+        roleName: trimmed,
+      });
+    }
+    return created;
   },
 
   removeStaffAccount: (id) => {
@@ -6162,7 +6460,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const state = get();
     const actor = state.sessionActor;
     if (!actor) return { ok: false, errorKey: "noSelection" };
-    if (!canRecordCashExpenses(actor.role, state.preferences)) {
+    if (!canRecordCashExpenses(actor.role, state.preferences, actor.permissions)) {
       pushAudit("auth_forbidden", "Denied addCashExpense", {
         permission: "expenses.record",
         action: "addCashExpense",
@@ -6971,7 +7269,8 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           ? null
           : String(p.shopAddressLine),
     shopCurrency: normalizeShopCurrency(p.shopCurrency ?? base.shopCurrency),
-    staffAccounts: normalizeStaffAccounts(p.staffAccounts),
+    staffAccounts: normalizeStaffAccounts(p.staffAccounts, normalizeCustomStaffRoles(p.customStaffRoles ?? base.customStaffRoles)),
+    customStaffRoles: normalizeCustomStaffRoles(p.customStaffRoles ?? base.customStaffRoles),
     activeStaffId:
       p.activeStaffId === undefined
         ? (base.activeStaffId ?? null)
@@ -6979,6 +7278,27 @@ function mergePreferencesFromPartial(raw: Partial<{ preferences?: ShopPreference
           ? null
           : String(p.activeStaffId),
     posLocked: typeof p.posLocked === "boolean" ? p.posLocked : base.posLocked ?? false,
+    staffAutoLockMinutes:
+      typeof p.staffAutoLockMinutes === "number" &&
+      [0, 2, 5, 10, 15, 30, 60].includes(p.staffAutoLockMinutes)
+        ? p.staffAutoLockMinutes
+        : (base.staffAutoLockMinutes ?? 0),
+    staffRequirePinAfterIdle:
+      typeof p.staffRequirePinAfterIdle === "boolean"
+        ? p.staffRequirePinAfterIdle
+        : (base.staffRequirePinAfterIdle ?? true),
+    staffAllowSwitchUser:
+      typeof p.staffAllowSwitchUser === "boolean" ? p.staffAllowSwitchUser : (base.staffAllowSwitchUser ?? true),
+    staffRememberSession:
+      typeof p.staffRememberSession === "boolean" ? p.staffRememberSession : (base.staffRememberSession ?? true),
+    staffMaxFailedAttempts:
+      typeof p.staffMaxFailedAttempts === "number" && p.staffMaxFailedAttempts >= 3 && p.staffMaxFailedAttempts <= 10
+        ? Math.floor(p.staffMaxFailedAttempts)
+        : (base.staffMaxFailedAttempts ?? 5),
+    staffSessionTimeoutMinutes:
+      typeof p.staffSessionTimeoutMinutes === "number" && p.staffSessionTimeoutMinutes >= 15
+        ? Math.min(Math.floor(p.staffSessionTimeoutMinutes), 24 * 60)
+        : (base.staffSessionTimeoutMinutes ?? 480),
     biometricAuthEnabled:
       typeof p.biometricAuthEnabled === "boolean" ? p.biometricAuthEnabled : base.biometricAuthEnabled ?? false,
     shifts: normalizeShifts(p.shifts),

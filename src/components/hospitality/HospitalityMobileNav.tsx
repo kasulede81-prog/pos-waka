@@ -3,8 +3,8 @@ import { useCallback } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { hasPermission } from "../../lib/permissions";
-import type { UserRole } from "../../types";
+import { hasActorPermission } from "../../lib/permissions";
+import { useSessionActor } from "../../context/SessionActorContext";
 import {
   HOSPITALITY_NAV_CATALOG,
   hospitalityNavItemActive,
@@ -14,16 +14,18 @@ import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 
 type Props = {
   lang: Language;
-  role: UserRole;
   visible: boolean;
 };
 
-export function HospitalityMobileNav({ lang, role, visible }: Props) {
+export function HospitalityMobileNav({ lang, visible }: Props) {
+  const actor = useSessionActor();
   const location = useLocation();
   const navigate = useNavigate();
   const isDesktop = usePosDesktopLayout();
 
-  const items = HOSPITALITY_NAV_CATALOG.filter((item) => hasPermission(role, item.perm));
+  const items = HOSPITALITY_NAV_CATALOG.filter((item) =>
+    hasActorPermission(actor.role, item.perm, actor.permissions),
+  );
 
   const guardedNavigate = useCallback(
     (to: string) => {

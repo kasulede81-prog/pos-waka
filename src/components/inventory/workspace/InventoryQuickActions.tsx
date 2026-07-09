@@ -1,19 +1,20 @@
 import { Link } from "react-router-dom";
 import clsx from "clsx";
-import type { Language, UserRole } from "../../../types";
+import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import type { InventoryQuickActionDef } from "../../../lib/inventoryWorkspaceTiles";
-import { hasPermission } from "../../../lib/permissions";
+import { hasActorPermission } from "../../../lib/permissions";
+import { useSessionActor } from "../../../context/SessionActorContext";
 
 type Props = {
   lang: Language;
-  role: UserRole;
   actions: InventoryQuickActionDef[];
   onAction: (actionId: string) => void;
 };
 
-export function InventoryQuickActions({ lang, role, actions, onAction }: Props) {
-  const visible = actions.filter((a) => !a.perm || hasPermission(role, a.perm));
+export function InventoryQuickActions({ lang, actions, onAction }: Props) {
+  const actor = useSessionActor();
+  const visible = actions.filter((a) => !a.perm || hasActorPermission(actor.role, a.perm, actor.permissions));
   if (visible.length === 0) return null;
 
   return (

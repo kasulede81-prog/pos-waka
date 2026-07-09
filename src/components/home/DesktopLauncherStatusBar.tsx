@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import { useMemo } from "react";
 import type { Language } from "../../types";
@@ -9,7 +10,7 @@ import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { useSubscription } from "../../context/SubscriptionContext";
 import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
-import { hasPermission } from "../../lib/permissions";
+
 import { useSessionActor } from "../../context/SessionActorContext";
 import { summarizeTodaySales } from "../../lib/todaySalesSummary";
 import { pendingSales } from "../../lib/saleStatus";
@@ -50,7 +51,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
 
   const chips: React.ReactNode[] = [];
 
-  if (hasPermission(actor.role, "receipts.view") && today.count > 0) {
+  if (actorHasPermission(actor, "receipts.view") && today.count > 0) {
     chips.push(
       <Link
         key="sales"
@@ -63,7 +64,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
     );
   }
 
-  if (hasPermission(actor.role, "pending_sales.manage") && pendingSaleCount > 0) {
+  if (actorHasPermission(actor, "pending_sales.manage") && pendingSaleCount > 0) {
     chips.push(
       <Link
         key="pending"
@@ -76,7 +77,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
     );
   }
 
-  if (hasPermission(actor.role, "stock.view") && lowStockCount > 0) {
+  if (actorHasPermission(actor, "stock.view") && lowStockCount > 0) {
     chips.push(
       <Link key="stock" to="/stock" className={`${chip} border-waka-500/40 bg-waka-950/70 text-waka-100`}>
         <span aria-hidden>📦</span>

@@ -279,6 +279,16 @@ export function permissionsForRole(role: UserRole): Permission[] {
   return [...permSet(role)];
 }
 
+/** Session-aware permission check — uses staff permission snapshot when provided. */
+export function hasActorPermission(
+  role: UserRole,
+  permission: Permission,
+  actorPermissions?: Permission[] | null,
+): boolean {
+  if (actorPermissions?.length) return actorPermissions.includes(permission);
+  return hasPermission(role, permission);
+}
+
 export function canUseDevRoleSimulator(authResolvedRole: UserRole): boolean {
   return authResolvedRole === "owner";
 }

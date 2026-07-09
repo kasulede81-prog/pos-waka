@@ -11,7 +11,7 @@ type Props = { lang: Language };
 export function HomePage({ lang }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const actor = useSessionActor();
-  const home = resolveTerminalHomePath(preferences, actor.role);
+  const home = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
   if (home !== "/") {
     return <Navigate to={home} replace />;
   }

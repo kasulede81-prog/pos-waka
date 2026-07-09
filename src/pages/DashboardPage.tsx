@@ -1,3 +1,4 @@
+import { actorHasPermission, actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { Link, Navigate, useLocation } from "react-router-dom";
@@ -14,10 +15,10 @@ import { isLowStock } from "../lib/sellingEngine";
 import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { buildGroupedActivityTimeline } from "../lib/activityNarrative";
 import { isHospitalityMode } from "../lib/hospitality";
-import { hasPermission } from "../lib/permissions";
+
 import { HomeTrustBanner } from "../components/trust/HomeTrustBanner";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { isWholesaleMode } from "../lib/wholesale";
@@ -62,13 +63,13 @@ export function DashboardPage({ lang }: { lang: Language }) {
     );
   }, [authMode, snapshot]);
 
-  const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
-  const canBackOffice = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode);
-  const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
-  const canDayClose = hasEffectivePermission(actor.role, "day.close", snapshot, authMode);
-  const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
-  const canReceipts = hasEffectivePermission(actor.role, "receipts.view", snapshot, authMode);
-  const profitVisibility = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const canStock = actorHasEffectivePermission(actor, "stock.view", snapshot, authMode);
+  const canBackOffice = actorHasEffectivePermission(actor, "back_office.access", snapshot, authMode);
+  const canReports = actorHasEffectivePermission(actor, "reports.view", snapshot, authMode);
+  const canDayClose = actorHasEffectivePermission(actor, "day.close", snapshot, authMode);
+  const canSell = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
+  const canReceipts = actorHasEffectivePermission(actor, "receipts.view", snapshot, authMode);
+  const profitVisibility = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
   const canProfit = profitVisibility.canProfit;
   const homeMetrics = resolveVisibleHomeMetrics(actor.role);
 
@@ -88,7 +89,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const customers = usePosStore((s) => s.customers);
-  const showActivityFeed = hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode);
+  const showActivityFeed = actorHasEffectivePermission(actor, "owner.activity", snapshot, authMode);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
@@ -140,7 +141,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
         : "lg:grid-cols-2";
 
   const hospitalityHome = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
-  if (hospitalityHome && hasPermission(actor.role, "hospitality.floor")) {
+  if (hospitalityHome && actorHasPermission(actor, "hospitality.floor")) {
     return <Navigate to="/floor" replace />;
   }
   if (hospitalityHome) {
@@ -272,7 +273,7 @@ export function DashboardPage({ lang }: { lang: Language }) {
             {t(lang, "activityFeedExpandSummary")}
           </summary>
           <div className="mt-3 flex items-center justify-end">
-            {hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode) ? (
+            {actorHasEffectivePermission(actor, "owner.activity", snapshot, authMode) ? (
               <Link to="/owner/activity" className="text-sm font-bold text-waka-700">
                 {t(lang, "seeAll")}
               </Link>

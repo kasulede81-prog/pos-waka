@@ -25,6 +25,8 @@ import { SettingsHomeMenuPage } from "./pages/SettingsHomeMenuPage";
 import { SettingsOfficeMenuPage } from "./pages/SettingsOfficeMenuPage";
 import { SettingsShelvesPage } from "./pages/SettingsShelvesPage";
 import { SettingsPinPage } from "./pages/SettingsPinPage";
+import { SettingsStaffSecurityPage } from "./pages/SettingsStaffSecurityPage";
+import { SettingsStaffRolesPage } from "./pages/SettingsStaffRolesPage";
 import { SettingsPasswordPage } from "./pages/SettingsPasswordPage";
 import { SettingsNotificationsPage } from "./pages/SettingsNotificationsPage";
 import { SettingsDataRetentionPage } from "./pages/SettingsDataRetentionPage";
@@ -1130,6 +1132,26 @@ function AppRoutes() {
                     <Suspense fallback={<LazyWait />}>
                       <SettingsHospitalityPage lang={lang} />
                     </Suspense>
+                  </SettingsChangeGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/staff-roles"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsStaffRolesPage lang={lang} />
+                  </SettingsChangeGate>
+                </RoleProtectedRoute>
+              }
+            />
+            <Route
+              path="settings/staff-security"
+              element={
+                <RoleProtectedRoute permission="settings.shop">
+                  <SettingsChangeGate lang={lang}>
+                    <SettingsStaffSecurityPage lang={lang} />
                   </SettingsChangeGate>
                 </RoleProtectedRoute>
               }

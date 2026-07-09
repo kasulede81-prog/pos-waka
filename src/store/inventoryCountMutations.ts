@@ -3,6 +3,7 @@
  */
 
 import type { InventoryCountSession, Product, StockMovement } from "../types";
+import type { SessionActor } from "../lib/sessionActor";
 import { getActiveAccountKey } from "../offline/accountScope";
 import {
   buildInventoryCountApplyPlan,
@@ -34,10 +35,8 @@ type Deps = {
   ) => Pick<PosState, "stockMovements" | "archivedStockMovements">;
 };
 
-function actorOrFail(get: StoreGet): { userId: string; displayName: string; role: import("../types").UserRole } | null {
-  const actor = get().sessionActor;
-  if (!actor) return null;
-  return { userId: actor.userId, displayName: actor.displayName ?? actor.userId, role: actor.role };
+function actorOrFail(get: StoreGet): SessionActor | null {
+  return get().sessionActor;
 }
 
 function findSession(get: StoreGet, sessionId: string): InventoryCountSession | undefined {
@@ -61,7 +60,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     createInventoryCountSession: (notes?: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "create")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "create", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const at = new Date().toISOString();
       const session: InventoryCountSession = normalizeInventoryCountSession({
@@ -91,7 +90,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     startInventoryCountSession: (sessionId: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "count")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "count", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const session = findSession(get, sessionId);
       if (!session) return { ok: false as const, errorKey: "invalid" };
@@ -124,7 +123,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     setInventoryCountLine: (sessionId: string, productId: string, countedQty: number, reason?: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "count")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "count", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const session = findSession(get, sessionId);
       if (!session || session.status !== "counting") return { ok: false as const, errorKey: "invalid" };
@@ -147,7 +146,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     submitInventoryCountSession: (sessionId: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "submit")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "submit", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const session = findSession(get, sessionId);
       if (!session) return { ok: false as const, errorKey: "invalid" };
@@ -178,7 +177,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     approveInventoryCountSession: (sessionId: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "approve")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "approve", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const session = findSession(get, sessionId);
       if (!session) return { ok: false as const, errorKey: "invalid" };
@@ -204,7 +203,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     applyInventoryCountSession: (sessionId: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "apply")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "apply", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const state = get();
       const session = findSession(get, sessionId);
@@ -287,7 +286,7 @@ export function createInventoryCountStoreActions(deps: Deps) {
     cancelInventoryCountSession: (sessionId: string) => {
       const actor = actorOrFail(get);
       if (!actor) return { ok: false as const, errorKey: "noSelection" };
-      if (!canInventoryCount(actor.role, "cancel")) return { ok: false as const, errorKey: "auth_forbidden" };
+      if (!canInventoryCount(actor.role, "cancel", actor.permissions)) return { ok: false as const, errorKey: "auth_forbidden" };
 
       const session = findSession(get, sessionId);
       if (!session) return { ok: false as const, errorKey: "invalid" };

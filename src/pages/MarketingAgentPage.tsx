@@ -1,8 +1,9 @@
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { Copy, MapPin, Users } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -24,7 +25,7 @@ const LovableFieldMap = lazy(async () => {
 export function MarketingAgentPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const agentBackTo = hasEffectivePermission(actor.role, "back_office.access", snapshot, authMode) ? "/office" : "/";
+  const agentBackTo = actorHasEffectivePermission(actor, "back_office.access", snapshot, authMode) ? "/office" : "/";
   const [loading, setLoading] = useState(true);
   const [agent, setAgent] = useState<MarketingAgentMe | null>(null);
   const [referrals, setReferrals] = useState<AgentReferralRow[]>([]);

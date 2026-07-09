@@ -18,7 +18,7 @@ export function MobileScrollTail() {
   const preferences = usePosStore((s) => s.preferences);
   const actor = useSessionActor();
   const isDesktopLayout = usePosDesktopLayout();
-  const terminalHome = resolveTerminalHomePath(preferences, actor.role);
+  const terminalHome = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
   const isPos = isPosSellPath(pathname);
   const isInternalAdmin = isInternalAdminAppPath(pathname);
 

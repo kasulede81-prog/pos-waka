@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
 import { ChevronDown, FileDown, UserPlus } from "lucide-react";
 import clsx from "clsx";
@@ -21,7 +22,6 @@ import { isWholesaleMode } from "../lib/wholesale";
 import { useWholesaleTerms } from "../lib/wholesaleTerms";
 import { useDeferredSales } from "../hooks/useDeferredSales";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import {
   documentReceiptNumber,
   downloadDebtPaymentReceiptPdf,
@@ -59,8 +59,8 @@ import { shareText } from "../lib/reportExport";
 
 export function CustomersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "customers.view");
-  const canDebt = hasPermission(actor.role, "customers.debt");
+  const canView = actorHasPermission(actor, "customers.view");
+  const canDebt = actorHasPermission(actor, "customers.debt");
   const customers = usePosStore((s) => s.customers);
   const preferences = usePosStore((s) => s.preferences);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);

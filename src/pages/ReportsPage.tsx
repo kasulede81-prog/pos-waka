@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
@@ -13,7 +14,7 @@ import { MONTH_TO_DATE_FILTER } from "../lib/dateFilters";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { formatDateFilterViewingLabel, isSingleDayFilter, selectedDayKeyForFilter } from "../lib/dateFilterLabels";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { buildDailyReportText, shareText } from "../lib/reportExport";
@@ -86,8 +87,8 @@ export function ReportsPage({ lang }: { lang: Language }) {
   const report = useShopReportBundle(filter, includeArchived);
   const { category, setCategory } = useBusinessAnalyticsCategory();
 
-  const canViewReports = hasPermission(actor.role, "reports.view");
-  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const canViewReports = actorHasPermission(actor, "reports.view");
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
 
   const analytics = useMemo(
     () =>

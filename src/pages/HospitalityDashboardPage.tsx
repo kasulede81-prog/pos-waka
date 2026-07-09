@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -6,7 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import {
   filterReturnsForHomeScope,
   filterSalesForHomeScope,
@@ -45,14 +46,14 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const todayKey = dateKeyKampala(new Date());
 
   const homeMetrics = resolveVisibleHomeMetrics(actor.role);
-  const canFloor = hasEffectivePermission(actor.role, "hospitality.floor", snapshot, authMode);
+  const canFloor = actorHasEffectivePermission(actor, "hospitality.floor", snapshot, authMode);
   const kitchenEnabled = isKitchenEnabledForHospitality(
     preferences.businessType,
     preferences.hospitalityKitchenEnabled,
   );
-  const canKitchen = kitchenEnabled && hasEffectivePermission(actor.role, "hospitality.kitchen", snapshot, authMode);
-  const canSell = hasEffectivePermission(actor.role, "pos.sell", snapshot, authMode);
-  const canStock = hasEffectivePermission(actor.role, "stock.view", snapshot, authMode);
+  const canKitchen = kitchenEnabled && actorHasEffectivePermission(actor, "hospitality.kitchen", snapshot, authMode);
+  const canSell = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
+  const canStock = actorHasEffectivePermission(actor, "stock.view", snapshot, authMode);
 
   const stats = useMemo(
     () => (floor ? computeHospitalityDashboardStats(floor, sales) : null),

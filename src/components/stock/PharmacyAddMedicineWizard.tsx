@@ -3,8 +3,8 @@ import clsx from "clsx";
 import type { Language, PharmacyPackaging } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
-import { shelfIconFor } from "../../lib/productCategories";
-import { MEDICINE_FORMS } from "../../lib/pharmacyMedicine";
+import { CategoryShelfPicker } from "./CategoryShelfPicker";
+import { MedicineFormSelect } from "./MedicineFormSelect";
 import {
   buildPharmacyMasterFromState,
   masterStateFromProduct,
@@ -25,7 +25,7 @@ import { ProductWizardShell } from "./wizard/ProductWizardShell";
 import { WizardFooter } from "./wizard/WizardFooter";
 import { WizardStepHeading } from "./wizard/WizardStepHeading";
 import { WizardPricingPanel } from "./wizard/WizardPricingPanel";
-import { WIZARD_INPUT_NUMERIC, WIZARD_INPUT_TEXT, wizardChoiceButtonClass } from "./wizard/wizardTokens";
+import { WIZARD_INPUT_NUMERIC, WIZARD_INPUT_TEXT } from "./wizard/wizardTokens";
 import { PHARMACY_PRODUCT_WIZARD_STEPS } from "../../lib/productWizardSteps";
 
 type Step = (typeof PHARMACY_PRODUCT_WIZARD_STEPS)[number];
@@ -48,7 +48,6 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
   const [step, setStep] = useState<Step>("details");
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
-  const [categoryPick, setCategoryPick] = useState("");
   const [strength, setStrength] = useState("");
   const [medicineForm, setMedicineForm] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
@@ -88,7 +87,6 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
     setStep("details");
     setName("");
     setCategory("");
-    setCategoryPick("");
     setStrength("");
     setMedicineForm("");
     setExpiryDate("");
@@ -121,7 +119,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
   }, [open]);
 
   const stepIndex = STEPS.indexOf(step);
-  const resolvedCategory = () => (categoryPick || category).trim() || t(lang, "generalCategory");
+  const resolvedCategory = () => category.trim() || t(lang, "generalCategory");
 
   const draftPackaging = useMemo((): PharmacyPackaging | null => {
     if (!packagingEnabled) return null;
@@ -268,7 +266,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
   const stepBlocked = (): boolean => {
     if (step === "details") {
-      return !name.trim() || !strength.trim() || !medicineForm.trim();
+      return !name.trim() || !resolvedCategory() || !strength.trim() || !medicineForm.trim();
     }
     if (step === "stockCost") {
       const paid = Math.floor(Number(totalAmountPaid.replace(/\D/g, "")) || 0);
@@ -363,24 +361,15 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
             </label>
             <div>
               <p className={labelClass}>{t(lang, "pharmacyTerm_medicineCategory")} *</p>
-              <div className="mt-2 grid grid-cols-2 gap-2.5">
-                {categoryOptions.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      setCategoryPick(c);
-                      setCategory(c);
-                    }}
-                    className={clsx(
-                      wizardChoiceButtonClass(categoryPick === c),
-                      "flex items-center justify-center gap-2 px-3",
-                    )}
-                  >
-                    {shelfIconFor(c) ? <span className="mr-1">{shelfIconFor(c)}</span> : null}
-                    {c}
-                  </button>
-                ))}
+              <div className="mt-2">
+                <CategoryShelfPicker
+                  lang={lang}
+                  options={categoryOptions}
+                  value={category}
+                  onChange={setCategory}
+                  placeholder={uiPlaceholder(lang, preferences.businessType, "simpleAddShelfPlaceholder", preferences.pharmacyModeEnabled)}
+                  inputClass={clsx(WIZARD_INPUT_TEXT, "mt-2")}
+                />
               </div>
             </div>
             <label className={labelClass}>
@@ -394,14 +383,7 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
             </label>
             <label className={labelClass}>
               {t(lang, "pharmacyFormLabel")} *
-              <select value={medicineForm} onChange={(e) => setMedicineForm(e.target.value)} className={clsx(WIZARD_INPUT_TEXT, "mt-2")}>
-                <option value="">{t(lang, "pharmacyFormSelect")}</option>
-                {MEDICINE_FORMS.map((f) => (
-                  <option key={f} value={f}>
-                    {f}
-                  </option>
-                ))}
-              </select>
+              <MedicineFormSelect lang={lang} value={medicineForm} onChange={setMedicineForm} />
             </label>
             <label className={labelClass}>
               {t(lang, "pharmacyReorderLevelLabel")}

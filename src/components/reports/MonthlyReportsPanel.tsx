@@ -40,7 +40,7 @@ type Props = { lang: Language };
 export function MonthlyReportsPanel({ lang }: Props) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const { canProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
   const exportOpts = { includeProfit: canProfit };
   const [includeArchived, setIncludeArchived] = useState(true);
   const [monthKey, setMonthKey] = useState(currentMonthKey);

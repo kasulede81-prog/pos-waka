@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
-import { hasPermission } from "../../lib/permissions";
+
 import { useSessionActor } from "../../context/SessionActorContext";
 import { getLastRestoreQueueSafety, readRestoreArchiveStats } from "../../lib/restoreSyncSafety";
 import { buildQueueSyncDiagnosticSnapshot, type QueueSyncDiagnosticSnapshot } from "../../lib/queueSyncDiagnostics";
@@ -89,7 +90,7 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
     getLastCloudRecoveryValidation(),
   );
 
-  const canView = hasPermission(actor.role, "owner.dashboard");
+  const canView = actorHasPermission(actor, "owner.dashboard");
 
   useEffect(() => {
     if (lazy) void ensureShared();
@@ -382,7 +383,7 @@ export function RecoveryReadinessDashboard({ lang, lazy = false }: { lang: Langu
 export function RestoreDiagnosticsCard({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const [archiveTotal, setArchiveTotal] = useState(0);
-  const canView = hasPermission(actor.role, "owner.dashboard");
+  const canView = actorHasPermission(actor, "owner.dashboard");
   const lastRestore = getLastRestoreQueueSafety();
 
   useEffect(() => {
@@ -414,7 +415,7 @@ export function QueueStatusCard({ lang, lazy = false }: { lang: Language; lazy?:
   const actor = useSessionActor();
   const { queue, shared, ensureShared } = useSystemHealthDiagnostics();
   const [queueSnap, setQueueSnap] = useState<QueueSyncDiagnosticSnapshot | null>(null);
-  const canView = hasPermission(actor.role, "owner.dashboard");
+  const canView = actorHasPermission(actor, "owner.dashboard");
 
   useEffect(() => {
     if (lazy) void ensureShared();
@@ -456,7 +457,7 @@ export function SnapshotHealthCard({ lang, lazy = false }: { lang: Language; laz
   const debtPayments = usePosStore((s) => s.debtPayments);
   const archivedSales = usePosStore((s) => s.archivedSales);
   const { shared, ensureShared } = useSystemHealthDiagnostics();
-  const canView = hasPermission(actor.role, "owner.dashboard");
+  const canView = actorHasPermission(actor, "owner.dashboard");
 
   useEffect(() => {
     if (lazy) void ensureShared();

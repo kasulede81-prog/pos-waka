@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { FormEvent } from "react";
@@ -32,7 +33,7 @@ import { HistoryListCard } from "../components/shared/HistoryListCard";
 
 import { useSessionActor } from "../context/SessionActorContext";
 
-import { hasPermission } from "../lib/permissions";
+
 
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 
@@ -467,7 +468,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-  if (!hasPermission(actor.role, "day.close")) {
+  if (!actorHasPermission(actor, "day.close")) {
 
     return (
 
@@ -939,7 +940,7 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
 
 
-      {hasPermission(actor.role, "owner.cash_history") ? (
+      {actorHasPermission(actor, "owner.cash_history") ? (
 
         <section className="space-y-4">
 

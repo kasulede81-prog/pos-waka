@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasPermission } from "../../lib/permissions";
+
 import {
   buildDeletionSafetyDiagnosticSnapshot,
   type DeletionSafetyDiagnosticSnapshot,
@@ -30,7 +31,7 @@ export function DeletionSafetyDiagnosticsCard({ lang }: { lang: Language }) {
     };
   }, []);
 
-  if (!actor || !hasPermission(actor.role, "owner.dashboard")) return null;
+  if (!actor || !actorHasPermission(actor, "owner.dashboard")) return null;
 
   const risks = snap?.resurrectionRisks ?? [];
   const blocked = snap?.organizationBlocked ?? false;

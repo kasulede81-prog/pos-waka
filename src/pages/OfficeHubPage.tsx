@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import { Cloud, Share2 } from "lucide-react";
 import type { Language } from "../types";
@@ -15,7 +16,7 @@ import { resolveOfficeHubSections } from "../lib/officeHubSections";
 import { internalAdminPreviewHref, isInternalAdminPreviewEnabled } from "../lib/internalAdminPreview";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { dateKeyKampala } from "../lib/datesUg";
 import { activeDayDrawerOpenForDate, isFormulaV2 } from "../lib/dayDrawerOpen";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
@@ -71,7 +72,7 @@ export function OfficeHubPage({ lang }: { lang: Language }) {
   const needsDayOpen =
     isFormulaV2(preferences) &&
     !activeDayDrawerOpenForDate(dayDrawerOpens, todayKey) &&
-    hasEffectivePermission(actor.role, "day.open_drawer", snapshot, authMode);
+    actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
 
   useEffect(() => {
     let cancelled = false;

@@ -25,7 +25,7 @@ export function InventoryCountSessionsPage({ lang }: Props) {
   const createSession = usePosStore((s) => s.createInventoryCountSession);
   const startSession = usePosStore((s) => s.startInventoryCountSession);
 
-  const canCreate = canInventoryCount(actor.role, "create");
+  const canCreate = canInventoryCount(actor.role, "create", actor.permissions);
   const sorted = [...sessions].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
 
   const onCreate = () => {

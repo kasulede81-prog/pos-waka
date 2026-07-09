@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Cloud, Lock, ShieldCheck, Zap } from "lucide-react";
@@ -5,7 +6,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxStaffAccountsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { usePosStore } from "../store/usePosStore";
@@ -20,7 +21,7 @@ import type { StaffCreateRole } from "../lib/staffRoleCatalog";
 export function StaffAccessPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const canManage = hasPermission(actor.role, "settings.shop");
+  const canManage = actorHasPermission(actor, "settings.shop");
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
   const maxStaff = maxStaffAccountsForTier(planTier);
   const preferences = usePosStore((s) => s.preferences);
@@ -70,6 +71,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
         <div className="pb-8">
           <StaffCreateWizard
           lang={lang}
+          businessType={preferences.businessType}
           onCancel={() => setCreating(false)}
           onDone={() => setCreating(false)}
           staffCanRecordCashExpenses={preferences.staffCanRecordCashExpenses === true}
@@ -88,6 +90,7 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
             const res = await addStaffAccount({
               name: input.name,
               role: input.role as StaffCreateRole,
+              roleTemplateId: input.roleTemplateId,
               pin: input.pin,
               phone: input.phone,
               password: input.password,
@@ -135,12 +138,19 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
       <StaffTeamList
         lang={lang}
+        businessType={preferences.businessType}
+        customStaffRoles={preferences.customStaffRoles}
         staff={staff}
         maxStaff={maxStaff}
         activeStaffId={activeStaffId}
         onAddStaff={() => setCreating(true)}
         onToggleActive={(id, active) => updateStaffAccount(id, { active })}
-        onUpdateRole={(id, role) => updateStaffAccount(id, { role })}
+        onUpdateRoleTemplate={(id, roleTemplateId, role) => updateStaffAccount(id, { role, roleTemplateId, customRoleId: null })}
+        onAssignCustomRole={(id, customRoleId) => {
+          const custom = (preferences.customStaffRoles ?? []).find((r) => r.id === customRoleId);
+          if (!custom) return;
+          updateStaffAccount(id, { role: custom.inheritsFrom, customRoleId, roleTemplateId: null });
+        }}
         onResetPin={(id) => {
           const nextPin = window.prompt(t(lang, "staffPinResetPrompt")) ?? "";
           if (nextPin.replace(/\D/g, "").length < 4) return;

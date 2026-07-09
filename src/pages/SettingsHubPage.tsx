@@ -1,13 +1,13 @@
+import { actorHasPermission, actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Navigate, useSearchParams } from "react-router-dom";
 import { Capacitor } from "@capacitor/core";
-import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
+import { Activity, Archive, Banknote, Bell, Briefcase, Calculator, Fingerprint, Home, KeyRound, LayoutGrid, LifeBuoy, Lock, MonitorSmartphone, Palette, Pill, Printer, ReceiptText, ShieldCheck, Sliders, Stethoscope, Store, UserCog, UtensilsCrossed } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { isHospitalityMode } from "../lib/hospitality";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { PageBackBar } from "../components/layout/PageBackBar";
 import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { OfficeNavSection } from "../components/office/OfficeNavSection";
@@ -37,18 +37,18 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
     return <Navigate to="/settings/shop?onboard=1" replace />;
   }
 
-  if (!hasPermission(actor.role, "settings.view")) {
+  if (!actorHasPermission(actor, "settings.view")) {
     return <Navigate to="/" replace />;
   }
 
-  const canShop = hasEffectivePermission(actor.role, "settings.shop", snapshot, authMode);
-  const canDrawerSettings = hasPermission(actor.role, "day.open_drawer");
+  const canShop = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
+  const canDrawerSettings = actorHasPermission(actor, "day.open_drawer");
   const canOwnerFinanceDiagnostics =
     canSeeFinanceDiagnostics(actor.role) &&
-    hasEffectivePermission(actor.role, "owner.dashboard", snapshot, authMode);
-  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
-  const canReceipt = hasPermission(actor.role, "settings.receipt");
-  const canDevices = hasPermission(actor.role, "settings.devices");
+    actorHasEffectivePermission(actor, "owner.dashboard", snapshot, authMode);
+  const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
+  const canReceipt = actorHasPermission(actor, "settings.receipt");
+  const canDevices = actorHasPermission(actor, "settings.devices");
   const pilotActive = isPilotModeActive(actor.role, preferences);
   const showFloorSetup = canShop && isHospitalityMode(businessType, hospitalityModeEnabled);
   const showPharmacySettings = canShop && isPharmacyMode(businessType, pharmacyModeEnabled);
@@ -155,6 +155,22 @@ export function SettingsHubPage({ lang }: { lang: Language }) {
             title={t(lang, "settingsHubBiometric")}
             subtitle={t(lang, "settingsHubBiometricSub")}
             Icon={Fingerprint}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/staff-roles"
+            title={t(lang, "enterpriseRolesPageTitle")}
+            subtitle={t(lang, "enterpriseRolesPageSub")}
+            Icon={ShieldCheck}
+          />
+        ) : null}
+        {canShop ? (
+          <OfficeNavCard
+            to="/settings/staff-security"
+            title={t(lang, "settingsStaffSecurityTitle")}
+            subtitle={t(lang, "settingsStaffSecuritySub")}
+            Icon={Lock}
           />
         ) : null}
         {canShop ? (

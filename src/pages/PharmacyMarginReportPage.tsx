@@ -1,3 +1,4 @@
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
@@ -5,7 +6,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { isPharmacyMode } from "../lib/pharmacy";
 import { PageHeader } from "../components/layout/PageHeader";
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
@@ -27,8 +28,8 @@ export function PharmacyMarginReportPage({ lang }: Props) {
   const [sort, setSort] = useState<MedicineMarginSort>("highest_margin");
 
   const pharmacy = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const canReports = hasEffectivePermission(actor.role, "reports.view", snapshot, authMode);
-  const canProfit = hasEffectivePermission(actor.role, "reports.profit", snapshot, authMode);
+  const canReports = actorHasEffectivePermission(actor, "reports.view", snapshot, authMode);
+  const canProfit = actorHasEffectivePermission(actor, "reports.profit", snapshot, authMode);
 
   const rows = useMemo(() => sortMedicineMarginRows(computeMedicineMarginRows(products), sort), [products, sort]);
 

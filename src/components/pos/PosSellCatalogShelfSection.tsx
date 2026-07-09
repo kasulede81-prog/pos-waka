@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import type { PosShelfDisplayCard } from "../../lib/posShelfLayout";
@@ -9,6 +8,7 @@ type Props = {
   lang: Language;
   shelves: PosShelfDisplayCard[];
   onShelfTap: (key: string) => void;
+  /** @deprecated Parent scroll pane handles overflow — kept for call-site compatibility. */
   desktop?: boolean;
 };
 
@@ -17,10 +17,9 @@ export function PosSellCatalogShelfSection({
   lang,
   shelves,
   onShelfTap,
-  desktop = false,
 }: Props) {
   return (
-    <section className={clsx("space-y-2", desktop && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+    <section className="space-y-2">
       <div className="flex items-center justify-between gap-2 px-0.5">
         <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">
           {t(lang, "posSellCategoryHeading")}

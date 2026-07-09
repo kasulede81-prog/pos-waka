@@ -1,5 +1,5 @@
-import type { CashExpense, Language, ShopPreferences, UserRole } from "../types";
-import { hasPermission } from "./permissions";
+import type { CashExpense, Language, Permission, ShopPreferences, UserRole } from "../types";
+import { hasActorPermission } from "./permissions";
 import { t } from "./i18n";
 
 /** Preset drawer expense categories (custom entry allowed). */
@@ -38,22 +38,26 @@ export function cashierExpenseRecordingEnabled(preferences: ShopPreferences): bo
   return preferences.staffCanRecordCashExpenses === true;
 }
 
-export function canRecordCashExpenses(role: UserRole, preferences: ShopPreferences): boolean {
-  if (!hasPermission(role, "expenses.record")) return false;
+export function canRecordCashExpenses(
+  role: UserRole,
+  preferences: ShopPreferences,
+  actorPermissions?: Permission[] | null,
+): boolean {
+  if (!hasActorPermission(role, "expenses.record", actorPermissions)) return false;
   if (role === "cashier" && !cashierExpenseRecordingEnabled(preferences)) return false;
   return true;
 }
 
-export function canEditCashExpenses(role: UserRole): boolean {
-  return hasPermission(role, "expenses.edit");
+export function canEditCashExpenses(role: UserRole, actorPermissions?: Permission[] | null): boolean {
+  return hasActorPermission(role, "expenses.edit", actorPermissions);
 }
 
-export function canApproveCashExpenses(role: UserRole): boolean {
-  return hasPermission(role, "expenses.approve");
+export function canApproveCashExpenses(role: UserRole, actorPermissions?: Permission[] | null): boolean {
+  return hasActorPermission(role, "expenses.approve", actorPermissions);
 }
 
-export function canDeleteCashExpenses(role: UserRole): boolean {
-  return hasPermission(role, "expenses.delete");
+export function canDeleteCashExpenses(role: UserRole, actorPermissions?: Permission[] | null): boolean {
+  return hasActorPermission(role, "expenses.delete", actorPermissions);
 }
 
 /** Whether expense affects drawer / expected cash totals. */
@@ -81,7 +85,8 @@ export function canViewExpenseRow(
   role: UserRole,
   expense: CashExpense,
   actorUserId: string,
+  actorPermissions?: Permission[] | null,
 ): boolean {
-  if (hasPermission(role, "back_office.access")) return true;
+  if (hasActorPermission(role, "back_office.access", actorPermissions)) return true;
   return expense.createdByUserId === actorUserId;
 }

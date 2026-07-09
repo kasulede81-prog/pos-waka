@@ -4,7 +4,8 @@
 
 import type { Permission, UserRole } from "../types";
 import type { SessionActor } from "./sessionActor";
-import { hasPermission } from "./permissions";
+import { hasActorPermission } from "./permissions";
+import { actorHasEffectivePermission, actorHasPermission } from "./actorAuthorization";
 import { hasEffectivePermission, type SubscriptionSnapshot } from "./subscriptionEntitlements";
 
 export type StoreAuthErrorKey =
@@ -23,7 +24,7 @@ export type StoreAuthResult = StoreAuthOk | StoreAuthDenied;
 
 export function checkStorePermission(actor: SessionActor | null, permission: Permission): StoreAuthResult {
   if (!actor) return { ok: false, errorKey: "noSelection" };
-  if (!hasPermission(actor.role, permission)) return { ok: false, errorKey: "forbidden" };
+  if (!actorHasPermission(actor, permission)) return { ok: false, errorKey: "forbidden" };
   return { ok: true };
 }
 
@@ -35,7 +36,7 @@ export function checkStorePermissionEffective(
   authMode: "supabase" | "local",
 ): StoreAuthResult {
   if (!actor) return { ok: false, errorKey: "noSelection" };
-  if (!hasEffectivePermission(actor.role, permission, snapshot, authMode)) {
+  if (!actorHasEffectivePermission(actor, permission, snapshot, authMode)) {
     return { ok: false, errorKey: "forbidden" };
   }
   return { ok: true };
@@ -117,8 +118,12 @@ export function permissionForStoreAction(action: SensitiveStoreAction): Permissi
   return STORE_ACTION_PERMISSIONS[action];
 }
 
-export function roleMayPerformStoreAction(role: UserRole, action: SensitiveStoreAction): boolean {
-  return hasPermission(role, STORE_ACTION_PERMISSIONS[action]);
+export function roleMayPerformStoreAction(
+  role: UserRole,
+  action: SensitiveStoreAction,
+  actorPermissions?: Permission[] | null,
+): boolean {
+  return hasActorPermission(role, STORE_ACTION_PERMISSIONS[action], actorPermissions);
 }
 
 export function roleMayPerformStoreActionEffective(
@@ -126,6 +131,22 @@ export function roleMayPerformStoreActionEffective(
   action: SensitiveStoreAction,
   snapshot: SubscriptionSnapshot,
   authMode: "supabase" | "local",
+  actorPermissions?: Permission[] | null,
 ): boolean {
-  return hasEffectivePermission(role, STORE_ACTION_PERMISSIONS[action], snapshot, authMode);
+  return hasEffectivePermission(role, STORE_ACTION_PERMISSIONS[action], snapshot, authMode, actorPermissions);
+}
+
+export function actorMayPerformStoreAction(actor: SessionActor | null, action: SensitiveStoreAction): boolean {
+  if (!actor) return false;
+  return roleMayPerformStoreAction(actor.role, action, actor.permissions);
+}
+
+export function actorMayPerformStoreActionEffective(
+  actor: SessionActor | null,
+  action: SensitiveStoreAction,
+  snapshot: SubscriptionSnapshot,
+  authMode: "supabase" | "local",
+): boolean {
+  if (!actor) return false;
+  return roleMayPerformStoreActionEffective(actor.role, action, snapshot, authMode, actor.permissions);
 }

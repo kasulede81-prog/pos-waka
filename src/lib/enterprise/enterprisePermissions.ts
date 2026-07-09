@@ -1,6 +1,6 @@
 import type { Permission, UserRole } from "../../types";
 import type { EnterpriseRoleLabel } from "../../types/enterprise";
-import { hasPermission } from "../permissions";
+import { hasActorPermission } from "../permissions";
 
 /** Maps commercial enterprise role labels to existing POS roles (backward compatible). */
 export const ENTERPRISE_ROLE_TO_POS: Record<EnterpriseRoleLabel, UserRole> = {
@@ -36,9 +36,13 @@ export const ENTERPRISE_PERMISSIONS = [
 export type EnterprisePermission = (typeof ENTERPRISE_PERMISSIONS)[number];
 
 /** Permission inheritance: enterprise capabilities extend module permissions without replacing them. */
-export function enterprisePermissionsForRole(role: UserRole): Permission[] {
+export function enterprisePermissionsForRole(
+  role: UserRole,
+  actorPermissions?: Permission[] | null,
+): Permission[] {
   const base: Permission[] = [];
-  if (hasPermission(role, "owner.dashboard") || role === "owner" || role === "manager" || role === "supervisor") {
+  const has = (perm: Permission) => hasActorPermission(role, perm, actorPermissions);
+  if (has("owner.dashboard") || has("enterprise.access")) {
     base.push(
       "enterprise.access",
       "enterprise.dashboard",
@@ -46,17 +50,21 @@ export function enterprisePermissionsForRole(role: UserRole): Permission[] {
       "enterprise.audit",
     );
   }
-  if (role === "owner" || role === "manager" || role === "supervisor") {
+  if (has("enterprise.branches") || has("owner.dashboard") || has("back_office.access")) {
     base.push("enterprise.branches", "enterprise.transfers", "enterprise.purchasing");
   }
-  if (role === "owner") {
+  if (has("enterprise.backup") || has("settings.shop")) {
     base.push("enterprise.backup", "enterprise.health");
   }
   return base;
 }
 
-export function hasEnterprisePermission(role: UserRole, perm: EnterprisePermission): boolean {
-  return enterprisePermissionsForRole(role).includes(perm as Permission);
+export function hasEnterprisePermission(
+  role: UserRole,
+  perm: EnterprisePermission,
+  actorPermissions?: Permission[] | null,
+): boolean {
+  return enterprisePermissionsForRole(role, actorPermissions).includes(perm as Permission);
 }
 
 export function resolveEnterpriseRoleLabel(role: UserRole): EnterpriseRoleLabel {

@@ -1,11 +1,12 @@
 import { useCallback } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import { useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasPermission } from "../../lib/permissions";
+
 import { confirmLeavePosIfNeeded } from "../../lib/posExitGuard";
 import { POS_HOME_ROUTE, POS_SELL_ROUTE } from "../../lib/posNavigation";
 
@@ -19,7 +20,7 @@ export function PosOperationalNav({ lang, sellLabelKey }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const actor = useSessionActor();
-  const canSell = hasPermission(actor.role, "pos.sell");
+  const canSell = actorHasPermission(actor, "pos.sell");
   const onSell = location.pathname === POS_SELL_ROUTE || location.pathname.startsWith(`${POS_SELL_ROUTE}/`);
 
   const guardedNavigate = useCallback(

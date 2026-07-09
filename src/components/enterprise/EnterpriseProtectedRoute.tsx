@@ -1,9 +1,9 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import type { Permission } from "../../types";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
 import { hasSupabaseConfig } from "../../lib/supabase";
 import { usePosStore } from "../../store/usePosStore";
 
@@ -39,7 +39,7 @@ export function EnterpriseProtectedRoute({ permission = "enterprise.access", chi
     return <Navigate to="/office" replace state={{ from: location.pathname }} />;
   }
 
-  if (!hasEffectivePermission(actor.role, permission, snapshot, authMode)) {
+  if (!actorHasEffectivePermission(actor, permission, snapshot, authMode)) {
     return <Navigate to="/office" replace state={{ from: location.pathname, reason: permission }} />;
   }
 

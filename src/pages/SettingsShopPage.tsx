@@ -1,9 +1,9 @@
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import type { User } from "@supabase/supabase-js";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { ShopProfileForm } from "../components/settings/ShopProfileForm";
 import { PrimaryShopSelector } from "../components/settings/PrimaryShopSelector";
@@ -24,7 +24,7 @@ export function SettingsShopPage({ lang, email, shopName, user, authMode }: Prop
   const [searchParams] = useSearchParams();
   const showOnboardGate = searchParams.get("onboard") === "1";
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
 

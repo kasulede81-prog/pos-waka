@@ -1,12 +1,18 @@
 import { hasSupabaseConfig } from "./supabase";
-import type { ShopPreferences, UserRole } from "../types";
+import type { Permission, ShopPreferences, UserRole } from "../types";
 import { canUseDevRoleSimulator, resolveAuthRole } from "./permissions";
+import { resolveStaffPermissions } from "./enterpriseRoles";
 import type { User } from "@supabase/supabase-js";
 
 export type SessionActor = {
   userId: string;
   role: UserRole;
   displayName?: string;
+  /** Effective permissions when acting as staff (custom roles / cached snapshot). */
+  permissions?: Permission[];
+  roleTemplateId?: string | null;
+  customRoleId?: string | null;
+  customRoleName?: string | null;
 };
 
 function devOverrideAllowed(): boolean {
@@ -25,13 +31,23 @@ export function resolveSessionActor(params: {
   /** From `shop_members` — preferred over user metadata for Supabase sessions. */
   shopMemberRole?: UserRole | null;
   /** Offline staff login — never treat as owner while store hydrates. */
-  staffSession?: { staffId: string; staffName: string; role: UserRole } | null;
+  staffSession?: {
+    staffId: string;
+    staffName: string;
+    role: UserRole;
+    permissions?: Permission[];
+    roleTemplateId?: string | null;
+    customRoleId?: string | null;
+  } | null;
 }): SessionActor {
   if (params.staffSession) {
     return {
       userId: `staff:${params.staffSession.staffId}`,
       role: params.staffSession.role,
       displayName: params.staffSession.staffName,
+      permissions: params.staffSession.permissions,
+      roleTemplateId: params.staffSession.roleTemplateId,
+      customRoleId: params.staffSession.customRoleId,
     };
   }
 
@@ -53,6 +69,13 @@ export function resolveSessionActor(params: {
         )
       : undefined;
   const role: UserRole = activeStaff?.role ?? simulatedRole;
+  const customRoleName =
+    activeStaff?.customRoleId != null
+      ? (params.preferences.customStaffRoles ?? []).find((r) => r.id === activeStaff.customRoleId)?.name
+      : undefined;
+  const staffPermissions = activeStaff
+    ? resolveStaffPermissions(activeStaff, params.preferences.customStaffRoles)
+    : undefined;
 
   const baseUserId =
     params.user?.id ?? (params.email ? `local:${params.email.trim().toLowerCase()}` : "local:anonymous");
@@ -65,5 +88,13 @@ export function resolveSessionActor(params: {
     params.email ||
     undefined;
 
-  return { userId, role, displayName };
+  return {
+    userId,
+    role,
+    displayName,
+    permissions: staffPermissions,
+    roleTemplateId: activeStaff?.roleTemplateId,
+    customRoleId: activeStaff?.customRoleId,
+    customRoleName,
+  };
 }

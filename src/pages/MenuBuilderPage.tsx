@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -23,7 +23,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
   if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {

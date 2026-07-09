@@ -1,21 +1,23 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Search, Shield, UserPlus } from "lucide-react";
 import clsx from "clsx";
-import type { Language, StaffAccount, UserRole } from "../../types";
+import type { BusinessType, CustomStaffRole, Language, StaffAccount, UserRole } from "../../types";
 import { t } from "../../lib/i18n";
 import { staffInitials } from "../../lib/staffRoleCatalog";
+import { findRoleTemplate, isCustomRoleAssignable, roleTemplatesForBusinessType } from "../../lib/enterpriseRoles";
 import { isStaffLoginLocked } from "../../lib/staffSecret";
 import { getDeviceOnline } from "../../lib/deviceOnline";
 
-const ROLE_OPTIONS: UserRole[] = ["cashier", "manager", "stock_keeper"];
-
 type Props = {
   lang: Language;
+  businessType: BusinessType;
+  customStaffRoles?: CustomStaffRole[];
   staff: StaffAccount[];
   maxStaff: number;
   onAddStaff: () => void;
   onToggleActive: (id: string, active: boolean) => void;
-  onUpdateRole: (id: string, role: UserRole) => void;
+  onUpdateRoleTemplate: (id: string, roleTemplateId: string, role: UserRole) => void;
+  onAssignCustomRole: (id: string, customRoleId: string) => void;
   onResetPin: (id: string) => void;
   onResetPassword: (id: string) => void;
   onUnlock: (id: string) => void;
@@ -23,6 +25,20 @@ type Props = {
   onDelete: (id: string) => void;
   activeStaffId?: string | null;
 };
+
+function staffRoleDisplayName(
+  lang: Language,
+  staff: StaffAccount,
+  customStaffRoles: CustomStaffRole[] | undefined,
+): string {
+  if (staff.customRoleId && customStaffRoles?.length) {
+    const custom = customStaffRoles.find((r) => r.id === staff.customRoleId);
+    if (custom?.name) return custom.name;
+  }
+  const tpl = findRoleTemplate(staff.roleTemplateId);
+  if (tpl) return t(lang, tpl.labelKey);
+  return t(lang, `role_${staff.role}`);
+}
 
 function formatWhen(iso: string | null | undefined, lang: Language): string {
   if (!iso) return t(lang, "staffSecurityNever");
@@ -41,11 +57,14 @@ function lastSecretChange(staff: StaffAccount): string | null {
 
 export function StaffTeamList({
   lang,
+  businessType,
+  customStaffRoles,
   staff,
   maxStaff,
   onAddStaff,
   onToggleActive,
-  onUpdateRole,
+  onUpdateRoleTemplate,
+  onAssignCustomRole,
   onResetPin,
   onResetPassword,
   onUnlock,
@@ -57,12 +76,23 @@ export function StaffTeamList({
   const [manageId, setManageId] = useState<string | null>(null);
   const online = getDeviceOnline();
 
+  const roleOptions = useMemo(() => roleTemplatesForBusinessType(businessType), [businessType]);
+  const assignableCustomRoles = useMemo(
+    () => (customStaffRoles ?? []).filter((r) => isCustomRoleAssignable(r)),
+    [customStaffRoles],
+  );
+
   const ordered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return [...staff]
-      .filter((s) => !q || s.name.toLowerCase().includes(q) || t(lang, `role_${s.role}`).toLowerCase().includes(q))
+      .filter(
+        (s) =>
+          !q ||
+          s.name.toLowerCase().includes(q) ||
+          staffRoleDisplayName(lang, s, customStaffRoles).toLowerCase().includes(q),
+      )
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-  }, [lang, query, staff]);
+  }, [lang, query, staff, customStaffRoles]);
 
   return (
     <section className="space-y-3">
@@ -99,6 +129,13 @@ export function StaffTeamList({
             const open = manageId === s.id;
             const locked = isStaffLoginLocked(s);
             const isActiveSession = activeStaffId === s.id;
+            const selectedTemplateId =
+              s.customRoleId
+                ? `custom:${s.customRoleId}`
+                : s.roleTemplateId && roleOptions.some((o) => o.id === s.roleTemplateId)
+                  ? s.roleTemplateId
+                  : roleOptions.find((o) => o.baseRole === s.role)?.id ?? roleOptions[0]?.id ?? "";
+
             return (
               <li key={s.id} className="rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
                 <div className="flex items-center gap-3">
@@ -107,7 +144,7 @@ export function StaffTeamList({
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-black text-stone-950">{s.name}</p>
-                    <p className="text-sm font-semibold text-stone-500">{t(lang, `role_${s.role}`)}</p>
+                    <p className="text-sm font-semibold text-stone-500">{staffRoleDisplayName(lang, s, customStaffRoles)}</p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1">
                     <span
@@ -182,15 +219,38 @@ export function StaffTeamList({
                 {open ? (
                   <div className="mt-3 flex flex-wrap gap-2 border-t border-stone-100 pt-3">
                     <select
-                      value={s.role}
-                      onChange={(e) => onUpdateRole(s.id, e.target.value as UserRole)}
+                      value={selectedTemplateId}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value.startsWith("custom:")) {
+                          const customRoleId = value.slice("custom:".length);
+                          const custom = assignableCustomRoles.find((r) => r.id === customRoleId);
+                          if (!custom) return;
+                          onAssignCustomRole(s.id, customRoleId);
+                          return;
+                        }
+                        const tpl = findRoleTemplate(value);
+                        if (!tpl) return;
+                        onUpdateRoleTemplate(s.id, tpl.id, tpl.baseRole);
+                      }}
                       className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-semibold"
                     >
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r} value={r}>
-                          {t(lang, `role_${r}`)}
-                        </option>
-                      ))}
+                      <optgroup label={t(lang, "enterpriseRolesSystemSection")}>
+                        {roleOptions.map((tpl) => (
+                          <option key={tpl.id} value={tpl.id}>
+                            {t(lang, tpl.labelKey)}
+                          </option>
+                        ))}
+                      </optgroup>
+                      {assignableCustomRoles.length > 0 ? (
+                        <optgroup label={t(lang, "enterpriseRolesCustomSection")}>
+                          {assignableCustomRoles.map((role) => (
+                            <option key={role.id} value={`custom:${role.id}`}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ) : null}
                     </select>
                     <button type="button" className="rounded-xl border-2 border-stone-200 px-3 py-2 text-sm font-bold" onClick={() => onResetPin(s.id)}>
                       {t(lang, "staffResetPin")}

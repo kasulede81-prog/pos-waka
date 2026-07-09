@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
-import { hasPermission } from "../../lib/permissions";
+
 import { useSessionActor } from "../../context/SessionActorContext";
 import {
   buildDebtSyncDiagnosticSnapshot,
@@ -44,7 +45,7 @@ export function DebtSyncDiagnosticsCard({ lang, lazy = false }: { lang: Language
     if (lazy) void ensureShared();
   }, [lazy, ensureShared]);
 
-  const canView = hasPermission(actor.role, "owner.dashboard");
+  const canView = actorHasPermission(actor, "owner.dashboard");
 
   const snapshot = useMemo(() => {
     if (shared?.debtSync) return shared.debtSync;

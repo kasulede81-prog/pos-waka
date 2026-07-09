@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import type { Language, SaleLine, UserRole } from "../types";
+import type { Language, Permission, SaleLine, UserRole } from "../types";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyControlledCheckout } from "./usePharmacyControlledCheckout";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep } from "../lib/draftCart";
 import { parseDisplayMoney } from "../lib/posCheckoutMoney";
 import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
-import { hasPermission } from "../lib/permissions";
+import { hasActorPermission } from "../lib/permissions";
 import { t } from "../lib/i18n";
 import type { PosCheckoutPanelProps } from "../components/pos/PosCheckoutPanel";
 
@@ -17,6 +17,7 @@ const POS_CHECKOUT_METHODS: PaymentMethod[] = ["cash", "atm", "mobile_money", "c
 type UsePharmacyDispenseCheckoutOpts = {
   lang: Language;
   actorRole: UserRole;
+  actorPermissions?: Permission[] | null;
   selectedPatientId: string | null;
   selectedRxId: string | null;
   onDispenseSuccess?: () => void;
@@ -26,6 +27,7 @@ type UsePharmacyDispenseCheckoutOpts = {
 export function usePharmacyDispenseCheckout({
   lang,
   actorRole,
+  actorPermissions,
   selectedPatientId,
   selectedRxId,
   onDispenseSuccess,
@@ -50,8 +52,8 @@ export function usePharmacyDispenseCheckout({
   );
   const controlledCheckout = usePharmacyControlledCheckout(selectedRx);
 
-  const canSavePending = hasPermission(actorRole, "pending_sales.manage");
-  const canIssueDebt = hasPermission(actorRole, "customers.debt");
+  const canSavePending = hasActorPermission(actorRole, "pending_sales.manage", actorPermissions);
+  const canIssueDebt = hasActorPermission(actorRole, "customers.debt", actorPermissions);
   const checkoutMethods = useMemo(
     () => POS_CHECKOUT_METHODS.filter((m) => m !== "credit" || canIssueDebt),
     [canIssueDebt],

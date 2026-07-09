@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { verifyCustomerDebtIntegrity } from "../../lib/customerDebtIntegrity";
 import { canSafelyHealCustomerDebt } from "../../lib/debtSyncState";
 import { usePosStore } from "../../store/usePosStore";
-import { hasPermission } from "../../lib/permissions";
+
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSystemHealthDiagnostics } from "./SystemHealthDiagnosticsProvider";
 
@@ -27,7 +28,7 @@ export function DebtIntegrityCard({ lang, lazy = false }: { lang: Language; lazy
   }, [shared, customers, sales, debtPayments]);
 
   const healSafety = canSafelyHealCustomerDebt();
-  const canRepair = hasPermission(actor.role, "owner.dashboard") && healSafety.ok;
+  const canRepair = actorHasPermission(actor, "owner.dashboard") && healSafety.ok;
 
   const runRepair = () => {
     const result = repair();

@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
 import type { CashDrawerFormulaVersion, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { authorizePreferencesPatch } from "../lib/settingsAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
@@ -28,7 +28,7 @@ export function SettingsCashDrawerPage({ lang }: Props) {
   const [saved, setSaved] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
-  if (!hasPermission(actor.role, "day.open_drawer")) {
+  if (!actorHasPermission(actor, "day.open_drawer")) {
     return <Navigate to="/settings" replace />;
   }
 

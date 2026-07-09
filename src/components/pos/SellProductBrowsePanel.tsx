@@ -68,7 +68,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
   const showSearchResults = browse.sellSearchContext.q.length > 0;
 
   return (
-    <div className={clsx("flex min-h-0 flex-1 flex-col", className)} data-pos-catalog-scroll>
+    <div className={clsx("flex min-h-0 flex-1 flex-col", className)}>
       <div className="shrink-0 space-y-1.5">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
@@ -97,13 +97,16 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
         </div>
       </div>
 
-      <div ref={catalogRef} className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+      <div
+        ref={catalogRef}
+        className="pos-catalog-scroll-pane mt-3 min-h-0 flex-1"
+        data-pos-catalog-scroll
+      >
         {showShelf ? (
           <PosSellCatalogShelfSection
             lang={lang}
             shelves={browse.shelfCards}
             onShelfTap={(key) => browse.setSellCategoryFilter(key)}
-            desktop
           />
         ) : null}
 

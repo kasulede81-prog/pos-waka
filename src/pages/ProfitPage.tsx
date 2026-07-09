@@ -65,7 +65,7 @@ export function ProfitPage({ lang, embedded }: Props) {
   const [quickFilter, setQuickFilter] = useState<ProfitQuickFilter>("all");
   const [detailProduct, setDetailProduct] = useState<ProfitProductView | null>(null);
 
-  const { canProfit: canViewProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const { canProfit: canViewProfit } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const generalLabel = t(lang, "uncategorized");

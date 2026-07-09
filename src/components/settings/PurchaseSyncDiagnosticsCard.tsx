@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
-import { hasPermission } from "../../lib/permissions";
+
 import { useSessionActor } from "../../context/SessionActorContext";
 import {
   buildPurchaseSyncDiagnosticSnapshot,
@@ -62,7 +63,7 @@ export function PurchaseSyncDiagnosticsCard({ lang }: { lang: Language }) {
   const stockMovements = usePosStore((s) => s.stockMovements);
   const [filter, setFilter] = useState<PurchaseSyncDiagnosticFilter>("all");
 
-  const canView = hasPermission(actor.role, "owner.dashboard");
+  const canView = actorHasPermission(actor, "owner.dashboard");
 
   const snapshot = useMemo(
     () =>

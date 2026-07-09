@@ -3,7 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
-import { shelfIconFor } from "../../lib/productCategories";
+import { CategoryShelfPicker } from "./CategoryShelfPicker";
 import { uiPlaceholder } from "../../lib/pharmacyUx";
 import { usePosStore } from "../../store/usePosStore";
 import {
@@ -76,12 +76,10 @@ function WizardAutoConfiguredCard({ lang, value }: { lang: Language; value: stri
 }
 function applyWizardPrefill(
   prefill: SimpleAddWizardPrefill,
-  shelves: string[],
+  _shelves: string[],
   setters: {
     setName: (v: string) => void;
-    setShelfPick: (v: string) => void;
-    setShelfNew: (v: string) => void;
-    setCreatingShelf: (v: boolean) => void;
+    setShelf: (v: string) => void;
     setSellUnit: (v: SellUnitKind) => void;
     setSellUnitCustom: (v: string) => void;
     setHasPack: (v: boolean) => void;
@@ -95,23 +93,7 @@ function applyWizardPrefill(
   },
 ) {
   setters.setName(prefill.name ?? "");
-  const shelf = (prefill.shelf ?? "").trim();
-  const shelfMatch = shelf
-    ? shelves.find((s) => s.trim().toLowerCase() === shelf.toLowerCase())
-    : undefined;
-  if (shelfMatch) {
-    setters.setShelfPick(shelfMatch);
-    setters.setShelfNew("");
-    setters.setCreatingShelf(false);
-  } else if (shelf) {
-    setters.setShelfPick("");
-    setters.setShelfNew(shelf);
-    setters.setCreatingShelf(true);
-  } else {
-    setters.setShelfPick("");
-    setters.setShelfNew("");
-    setters.setCreatingShelf(shelves.length === 0);
-  }
+  setters.setShelf((prefill.shelf ?? "").trim());
   setters.setSellUnit(prefill.sellUnit ?? "piece");
   setters.setSellUnitCustom(prefill.sellUnitCustom ?? "");
   setters.setHasPack(prefill.hasPack ?? false);
@@ -139,9 +121,7 @@ export function SimpleAddProductWizard({
   const preferences = usePosStore((s) => s.preferences);
   const [step, setStep] = useState<Step>("name");
   const [name, setName] = useState("");
-  const [shelfPick, setShelfPick] = useState("");
-  const [shelfNew, setShelfNew] = useState("");
-  const [creatingShelf, setCreatingShelf] = useState(false);
+  const [shelf, setShelf] = useState("");
   const [sellUnit, setSellUnit] = useState<SellUnitKind>("piece");
   const [sellUnitCustom, setSellUnitCustom] = useState("");
   const [hasPack, setHasPack] = useState(false);
@@ -178,9 +158,7 @@ export function SimpleAddProductWizard({
   const reset = () => {
     setStep("name");
     setName("");
-    setShelfPick("");
-    setShelfNew("");
-    setCreatingShelf(false);
+    setShelf("");
     setSellUnit("piece");
     setSellUnitCustom("");
     setHasPack(false);
@@ -200,9 +178,7 @@ export function SimpleAddProductWizard({
     if (prefill) {
       applyWizardPrefill(prefill, shelves, {
         setName,
-        setShelfPick,
-        setShelfNew,
-        setCreatingShelf,
+        setShelf,
         setSellUnit,
         setSellUnitCustom,
         setHasPack,
@@ -221,11 +197,7 @@ export function SimpleAddProductWizard({
     reset();
   }, [open, prefill, initialStep, shelves]);
 
-  useEffect(() => {
-    if (step === "shelf" && shelves.length === 0) setCreatingShelf(true);
-  }, [step, shelves.length]);
-
-  const shelfValue = creatingShelf ? shelfNew.trim() : shelfPick.trim() || generalCategoryLabel;
+  const shelfValue = shelf.trim() || generalCategoryLabel;
   const isLastStep = step === "buyPrice";
 
   const canNext = (): boolean => {
@@ -233,7 +205,7 @@ export function SimpleAddProductWizard({
       case "name":
         return name.trim().length > 0;
       case "shelf":
-        return creatingShelf ? shelfNew.trim().length > 0 : shelfPick.trim().length > 0 || shelves.length === 0;
+        return shelf.trim().length > 0 || shelves.length === 0;
       case "sellUnit":
         return sellUnit !== "custom" || sellUnitCustom.trim().length > 0;
       case "pack":
@@ -285,9 +257,7 @@ export function SimpleAddProductWizard({
     if (addAnother) {
       setSavedFlash(true);
       setName("");
-      setShelfPick("");
-      setShelfNew("");
-      setCreatingShelf(shelves.length === 0);
+      setShelf("");
       setSellUnit("piece");
       setSellUnitCustom("");
       setHasPack(false);
@@ -398,51 +368,20 @@ export function SimpleAddProductWizard({
                     preferences.hospitalityModeEnabled,
                   )}
                 />
-                {shelves.length > 0 && !creatingShelf ? (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {shelves.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setShelfPick(s)}
-                        className={clsx(
-                          wizardChoiceButtonClass(shelfPick === s),
-                          "flex items-center justify-center gap-2 px-3",
-                        )}
-                      >
-                        {shelfIconFor(s) ? <span aria-hidden>{shelfIconFor(s)}</span> : null}
-                        <span className="truncate">{s}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                {creatingShelf || shelves.length === 0 ? (
-                  <input
-                    value={shelfNew}
-                    onChange={(e) => setShelfNew(e.target.value)}
-                    placeholder={uiPlaceholder(
-                      lang,
-                      preferences.businessType,
-                      "simpleAddShelfPlaceholder",
-                      preferences.pharmacyModeEnabled,
-                      preferences.hospitalityModeEnabled,
-                    )}
-                    autoFocus
-                    autoComplete="off"
-                    className={WIZARD_INPUT_TEXT}
-                  />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCreatingShelf(true);
-                      setShelfPick("");
-                    }}
-                    className="w-full min-h-[52px] rounded-2xl border-2 border-dashed border-primary/35 bg-primary/5 py-3 text-base font-black text-primary transition-colors hover:border-primary/50 hover:bg-primary/10"
-                  >
-                    {t(lang, "simpleAddNewShelf")}
-                  </button>
-                )}
+                <CategoryShelfPicker
+                  lang={lang}
+                  options={shelves}
+                  value={shelf}
+                  onChange={setShelf}
+                  placeholder={uiPlaceholder(
+                    lang,
+                    preferences.businessType,
+                    "simpleAddShelfPlaceholder",
+                    preferences.pharmacyModeEnabled,
+                    preferences.hospitalityModeEnabled,
+                  )}
+                  inputClass={WIZARD_INPUT_TEXT}
+                />
               </div>
             ) : null}
 

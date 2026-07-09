@@ -16,10 +16,8 @@ export class StaffAccountAuthorizationError extends Error {
   }
 }
 
-/** Owner or settings.shop role may manage staff; plan caps enforced separately in the store. */
+/** settings.shop permission may manage staff; plan caps enforced separately in the store. */
 export function authorizeStaffAccountMutation(actor: SessionActor | null): StoreAuthResult {
-  if (!actor) return { ok: false, errorKey: "noSelection" };
-  if (actor.role === "owner") return { ok: true };
   return checkStorePermission(actor, "settings.shop");
 }
 

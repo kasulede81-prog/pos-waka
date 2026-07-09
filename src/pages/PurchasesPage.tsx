@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Package, Receipt, Truck } from "lucide-react";
@@ -5,7 +6,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { PageHeader } from "../components/layout/PageHeader";
 import { HistoryHeroCard } from "../components/shared/HistoryHeroCard";
 import { HistoryListCard } from "../components/shared/HistoryListCard";
@@ -28,7 +29,7 @@ import type { DateFilterValue } from "../lib/dateFilters";
 
 export function PurchasesPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "purchases.view");
+  const canView = actorHasPermission(actor, "purchases.view");
   const purchases = usePosStore((s) => s.purchases);
   const products = usePosStore((s) => s.products);
   const suppliers = usePosStore((s) => s.suppliers);

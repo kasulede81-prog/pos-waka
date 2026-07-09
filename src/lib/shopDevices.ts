@@ -57,13 +57,40 @@ export function parsePlanDeviceLimit(snapshot: SubscriptionSnapshot, authMode: "
   return planDeviceLimitForTier(tier);
 }
 
+/** Licensed slot: approved and active (consumes subscription device limit). */
+export function isLicensedActiveDevice(device: ShopDeviceRow): boolean {
+  return isActiveDeviceStatus(device.status) && device.approval_status === "approved";
+}
+
+export function isPendingApprovalDevice(device: ShopDeviceRow): boolean {
+  return device.approval_status === "pending";
+}
+
+export function isDeviceHistoryRecord(device: ShopDeviceRow): boolean {
+  return !isLicensedActiveDevice(device) && !isPendingApprovalDevice(device);
+}
+
+export function partitionShopDevices(devices: ShopDeviceRow[]): {
+  activeDevices: ShopDeviceRow[];
+  pendingDevices: ShopDeviceRow[];
+  historyDevices: ShopDeviceRow[];
+} {
+  const activeDevices: ShopDeviceRow[] = [];
+  const pendingDevices: ShopDeviceRow[] = [];
+  const historyDevices: ShopDeviceRow[] = [];
+  for (const device of devices) {
+    if (isLicensedActiveDevice(device)) activeDevices.push(device);
+    else if (isPendingApprovalDevice(device)) pendingDevices.push(device);
+    else historyDevices.push(device);
+  }
+  return { activeDevices, pendingDevices, historyDevices };
+}
+
 export function buildDeviceUsageSummary(
   devices: ShopDeviceRow[],
   planLimit: number | null,
 ): DeviceUsageSummary {
-  const activeCount = devices.filter(
-    (d) => isActiveDeviceStatus(d.status) && d.approval_status === "approved",
-  ).length;
+  const activeCount = devices.filter((d) => isLicensedActiveDevice(d)).length;
   const totalCount = devices.length;
   const atPlanLimit = planLimit != null && planLimit > 0 && activeCount >= planLimit;
   const overPlanLimit = planLimit != null && planLimit > 0 && activeCount > planLimit;
@@ -119,6 +146,21 @@ export async function disconnectOwnerShopDevice(deviceId: string, shopId: string
   const { error } = await supabase.rpc("owner_disconnect_shop_device", { p_device_id: deviceId });
   if (error) throw error;
   appendDeviceAuditEntry("device_disconnected", "Disconnected a shop device", {
+    shopId,
+    deviceId,
+    deviceFingerprint: getOrCreateDeviceId(),
+  });
+}
+
+export async function removeOwnerShopDevice(deviceId: string, shopId: string): Promise<void> {
+  if (!supabase) throw new Error("Cloud not configured");
+  const { data, error } = await supabase.rpc("owner_remove_shop_device", { p_device_id: deviceId });
+  if (error) throw error;
+  const payload = data as { ok?: boolean; error?: string } | null;
+  if (payload?.ok !== true) {
+    throw new Error(payload?.error ?? "remove_failed");
+  }
+  appendDeviceAuditEntry("device_removed", "Removed a shop device", {
     shopId,
     deviceId,
     deviceFingerprint: getOrCreateDeviceId(),

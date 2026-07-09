@@ -1,9 +1,9 @@
 import { useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Link, Navigate } from "react-router-dom";
 import type { DataRetentionPolicy, Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { usePosStore } from "../store/usePosStore";
 import { DATA_RETENTION_OPTIONS, retentionPolicyLabelKey } from "../lib/dataRetention";
@@ -19,7 +19,7 @@ export function SettingsDataRetentionPage({ lang }: { lang: Language }) {
   const [msg, setMsg] = useState<string | null>(null);
   const policy = preferences.dataRetentionPolicy ?? "3m";
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
 

@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import {
@@ -13,7 +14,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { PageHeader } from "../components/layout/PageHeader";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
@@ -70,10 +71,10 @@ export function CashManagementPage({ lang }: Props) {
     return <Navigate to="/office" replace />;
   }
 
-  const canOpen = hasPermission(actor.role, "day.open_drawer");
-  const canClose = hasPermission(actor.role, "day.close");
+  const canOpen = actorHasPermission(actor, "day.open_drawer");
+  const canClose = actorHasPermission(actor, "day.close");
   const canShifts = actor.role === "owner" || actor.role === "manager";
-  const canHistory = hasPermission(actor.role, "owner.cash_history");
+  const canHistory = actorHasPermission(actor, "owner.cash_history");
   const needsDayOpen = isFormulaV2(preferences) && !snapshot.drawerOpen && canOpen;
 
   return (
@@ -179,7 +180,7 @@ export function CashManagementPage({ lang }: Props) {
             Icon={Clock}
           />
         ) : null}
-        {hasPermission(actor.role, "settings.view") ? (
+        {actorHasPermission(actor, "settings.view") ? (
           <OfficeNavCard
             to="/settings/health"
             title={t(lang, "cashManagementSyncStatus")}

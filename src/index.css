@@ -218,6 +218,34 @@ body {
     overscroll-behavior-x: contain;
   }
 
+  /** POS catalog shelf/product browse — visible scrollbar + reliable touch scroll on Android. */
+  .pos-catalog-scroll-pane {
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+    scrollbar-width: thin;
+    scrollbar-color: rgb(120 113 108 / 0.55) rgb(120 113 108 / 0.1);
+    scrollbar-gutter: stable;
+    padding-bottom: var(--waka-scroll-tail-pos);
+  }
+
+  .pos-catalog-scroll-pane::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .pos-catalog-scroll-pane::-webkit-scrollbar-track {
+    margin-block: 0.25rem;
+    border-radius: 9999px;
+    background: rgb(120 113 108 / 0.08);
+  }
+
+  .pos-catalog-scroll-pane::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: rgb(120 113 108 / 0.45);
+  }
+
   /** Applied to AppShell <main> — keeps scroll-end / focus-scroll clear of fixed chrome */
   .scroll-main-chrome {
     scroll-padding-top: max(0.75rem, var(--waka-safe-top));

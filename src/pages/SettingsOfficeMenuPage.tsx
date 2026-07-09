@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { BackOfficePageLayout } from "../components/office/BackOfficePageLayout";
 import { OfficeHubArrangePanel } from "../components/office/OfficeHubArrangePanel";
@@ -10,7 +10,7 @@ import { OfficeHubArrangePanel } from "../components/office/OfficeHubArrangePane
 export function SettingsOfficeMenuPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
 

@@ -1,9 +1,10 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { PageHeader } from "../components/layout/PageHeader";
 import { usePosStore } from "../store/usePosStore";
 
@@ -38,7 +39,7 @@ export function ArchiveDataPage({ lang }: { lang: Language }) {
     ],
   );
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/office" replace />;
   }
 

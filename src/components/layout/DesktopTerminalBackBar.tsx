@@ -20,7 +20,7 @@ export function HeaderExitButton({
   const navigate = useNavigate();
   const preferences = usePosStore((s) => s.preferences);
   const actor = useSessionActor();
-  const homeRoute = resolveTerminalHomePath(preferences, actor.role);
+  const homeRoute = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
 
   const handleClick = useCallback(
     (event: MouseEvent) => {

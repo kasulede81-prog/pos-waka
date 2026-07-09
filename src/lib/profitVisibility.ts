@@ -1,6 +1,8 @@
-import type { UserRole } from "../types";
+import type { Permission, UserRole } from "../types";
 import { canSeeFinanceDiagnostics, canSeeShopWideFinancialSummaries } from "./financeVisibility";
-import { hasEffectivePermission, type SubscriptionSnapshot } from "./subscriptionEntitlements";
+import { permissionsHasEffective } from "./actorAuthorization";
+import type { SubscriptionSnapshot } from "./subscriptionEntitlements";
+import { hasActorPermission } from "./permissions";
 
 export type ProfitVisibility = {
   /** Gross / net profit in reports, receipts, exports, owner widgets. */
@@ -16,11 +18,41 @@ export function resolveProfitVisibility(input: {
   role: UserRole;
   snapshot: SubscriptionSnapshot;
   authMode: "supabase" | "local";
+  actorPermissions?: Permission[] | null;
 }): ProfitVisibility {
-  const canProfit = hasEffectivePermission(input.role, "reports.profit", input.snapshot, input.authMode);
+  const canProfit = permissionsHasEffective(
+    input.role,
+    "reports.profit",
+    input.snapshot,
+    input.authMode,
+    input.actorPermissions,
+  );
   return {
     canProfit,
-    canShopWideFinancials: canSeeShopWideFinancialSummaries(input.role),
-    canFinanceDiagnostics: canSeeFinanceDiagnostics(input.role),
+    canShopWideFinancials: canSeeShopWideFinancialSummaries(input.role, input.actorPermissions),
+    canFinanceDiagnostics: canSeeFinanceDiagnostics(input.role, input.actorPermissions),
   };
+}
+
+/** Session actor wrapper — prefer in UI and hooks. */
+export function resolveActorProfitVisibility(input: {
+  role: UserRole;
+  permissions?: Permission[] | null;
+  snapshot: SubscriptionSnapshot;
+  authMode: "supabase" | "local";
+}): ProfitVisibility {
+  return resolveProfitVisibility({
+    role: input.role,
+    snapshot: input.snapshot,
+    authMode: input.authMode,
+    actorPermissions: input.permissions,
+  });
+}
+
+/** Tier-unaware profit gate from permission snapshot (custom roles). */
+export function actorCanSeeProfit(
+  role: UserRole,
+  actorPermissions?: import("../types").Permission[] | null,
+): boolean {
+  return hasActorPermission(role, "reports.profit", actorPermissions);
 }

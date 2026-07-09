@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Settings, Wrench } from "lucide-react";
@@ -6,7 +7,6 @@ import type { Language, TableReservation, WaitlistEntry } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import {
   TABLE_STATUS_COLORS,
   activeNamedTabs,
@@ -137,8 +137,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   }, [activeAreaId, zoom]);
 
   const pendingTotal = floor ? totalOpenTablesPendingUgx(sales, floor) : 0;
-  const canKitchen = hasPermission(actor.role, "hospitality.kitchen");
-  const canOrder = hasPermission(actor.role, "hospitality.order");
+  const canKitchen = actorHasPermission(actor, "hospitality.kitchen");
+  const canOrder = actorHasPermission(actor, "hospitality.order");
   const namedTabs = floor ? activeNamedTabs(floor) : [];
 
   if (!hospitality) {
@@ -284,7 +284,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
           ))}
         </div>
         <div className="flex shrink-0 gap-1">
-          {hasPermission(actor.role, "settings.shop") ? (
+          {actorHasPermission(actor, "settings.shop") ? (
             <button
               type="button"
               onClick={() => navigate("/settings/floor")}
@@ -294,7 +294,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
               <Settings className="h-4 w-4" />
             </button>
           ) : null}
-          {hasPermission(actor.role, "hospitality.settle") ? (
+          {actorHasPermission(actor, "hospitality.settle") ? (
             <button
               type="button"
               onClick={() => setManagerToolsOpen(true)}

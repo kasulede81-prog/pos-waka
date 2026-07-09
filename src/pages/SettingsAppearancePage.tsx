@@ -1,10 +1,10 @@
 import { Navigate } from "react-router-dom";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import clsx from "clsx";
 import { Monitor, Moon, Sun } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { useAppTheme } from "../context/AppThemeProvider";
 import type { AppThemePreference } from "../lib/appTheme";
@@ -19,7 +19,7 @@ export function SettingsAppearancePage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { preference, resolved, setPreference } = useAppTheme();
 
-  if (!hasPermission(actor.role, "settings.view")) {
+  if (!actorHasPermission(actor, "settings.view")) {
     return <Navigate to="/settings" replace />;
   }
 

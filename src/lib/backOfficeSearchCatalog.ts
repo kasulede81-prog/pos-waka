@@ -1,6 +1,7 @@
 import type { Permission, ShopPreferences, UserRole } from "../types";
 import type { SubscriptionSnapshot } from "./subscriptionEntitlements";
-import { canUseBackupRestore, hasEffectivePermission } from "./subscriptionEntitlements";
+import { canUseBackupRestore } from "./subscriptionEntitlements";
+import { permissionsHasEffective } from "./actorAuthorization";
 import { isHospitalityMode } from "./hospitality";
 import { isPharmacyMode } from "./pharmacy";
 import { isWholesaleMode } from "./wholesale";
@@ -62,6 +63,8 @@ const CATALOG: BackOfficeSearchEntryDef[] = [
   { id: "settings-selling", path: "/settings/selling", titleKey: "settingsHubSelling", subtitleKey: "settingsHubSellingSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["sell", "pos", "quick sell"] },
   { id: "settings-devices", path: "/settings/devices", titleKey: "settingsHubDevices", subtitleKey: "settingsHubDevicesSub", sectionKey: "settingsHubGroupShop", perm: "settings.devices", keywords: ["device", "tablet", "phone"] },
   { id: "settings-pin", path: "/settings/pin", titleKey: "settingsHubPin", subtitleKey: "settingsHubPinSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["pin", "lock", "password"] },
+  { id: "settings-staff-roles", path: "/settings/staff-roles", titleKey: "enterpriseRolesPageTitle", subtitleKey: "enterpriseRolesPageSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["roles", "permissions", "custom role", "staff roles"] },
+  { id: "settings-staff-security", path: "/settings/staff-security", titleKey: "settingsStaffSecurityTitle", subtitleKey: "settingsStaffSecuritySub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["auto-lock", "switch user", "session", "staff security"] },
   { id: "settings-password", path: "/settings/password", titleKey: "settingsHubPassword", subtitleKey: "settingsHubPasswordSub", sectionKey: "settingsHubGroupShop", perm: "settings.shop", keywords: ["password", "login"] },
   { id: "settings-notifications", path: "/settings/notifications", titleKey: "settingsHubNotifications", subtitleKey: "settingsHubNotificationsSub", sectionKey: "settingsHubGroupApp", perm: "settings.view", keywords: ["notification", "alert"] },
   { id: "settings-health", path: "/settings/health", titleKey: "settingsHubSystemHealth", subtitleKey: "settingsHubSystemHealthSub", sectionKey: "settingsHubGroupApp", perm: "settings.shop", keywords: ["health", "diagnostic", "status"] },
@@ -81,6 +84,7 @@ type BuildCtx = {
   authMode: "supabase" | "local";
   t: (key: string) => string;
   canRecordExpense: boolean;
+  actorPermissions?: Permission[] | null;
 };
 
 const EMPTY_SNAPSHOT: SubscriptionSnapshot = { kind: "none" };
@@ -100,7 +104,7 @@ function entryVisible(def: BackOfficeSearchEntryDef, ctx: BuildCtx): boolean {
   if (def.modes?.length && !def.modes.some((m) => modes.has(m))) return false;
   if (def.id === "customers" && retailOnly) return false;
   if (def.id === "debts" && (modes.has("pharmacy") || modes.has("hospitality") || modes.has("wholesale"))) return false;
-  if (def.perm && !hasEffectivePermission(ctx.role, def.perm, ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode)) return false;
+  if (def.perm && !permissionsHasEffective(ctx.role, def.perm, ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode, ctx.actorPermissions)) return false;
   if (def.requiresBackup && !canUseBackupRestore(ctx.snapshot ?? EMPTY_SNAPSHOT, ctx.authMode)) return false;
   if (def.requiresCapacitor && !Capacitor.isNativePlatform()) return false;
   if (def.id === "cash-expenses" && !ctx.canRecordExpense) return false;

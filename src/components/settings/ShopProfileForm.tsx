@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import type { User } from "@supabase/supabase-js";
 import type { Language } from "../../types";
 import { supabase } from "../../lib/supabase";
@@ -6,7 +7,7 @@ import { t } from "../../lib/i18n";
 import { wakaSupportWhatsAppUrl } from "../../config/company";
 import { usePosStore } from "../../store/usePosStore";
 import { useSessionActor } from "../../context/SessionActorContext";
-import { hasPermission } from "../../lib/permissions";
+
 import {
   fetchOwnerOnboardingStatus,
   type OwnerOnboardingStatus,
@@ -231,7 +232,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
   }, [authMode]);
 
   useEffect(() => {
-    if (authMode !== "supabase" || !hasPermission(actor.role, "settings.shop")) return;
+    if (authMode !== "supabase" || !actorHasPermission(actor, "settings.shop")) return;
     let cancelled = false;
     void (async () => {
       const { districts: d } = await fetchDistricts();
@@ -262,7 +263,7 @@ export function ShopProfileForm({ lang, authMode, user, email, shopName, showOnb
     if (metaPhone && !shopPhoneInput.trim()) setShopPhoneInput(metaPhone);
   }, [authMode, user, shopNameInput, shopPhoneInput]);
 
-  if (!hasPermission(actor.role, "settings.shop")) return null;
+  if (!actorHasPermission(actor, "settings.shop")) return null;
 
   return (
     <div className="space-y-3">

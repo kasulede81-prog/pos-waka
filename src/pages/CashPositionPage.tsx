@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
 import type { CashDrawerAdjustmentType, Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { DEFAULT_DATE_FILTER, type DateFilterValue } from "../lib/dateFilters";
 import {
   downloadCashPositionCsv,
@@ -42,7 +42,7 @@ import {
 
 export function CashPositionPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "day.close");
+  const canView = actorHasPermission(actor, "day.close");
   const addCashDrawerAdjustment = usePosStore((s) => s.addCashDrawerAdjustment);
   const setPreferences = usePosStore((s) => s.setPreferences);
 

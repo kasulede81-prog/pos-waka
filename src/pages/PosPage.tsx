@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useShallow } from "zustand/react/shallow";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -59,7 +60,6 @@ import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { hapticSaleComplete, hapticTap, playSaleSuccessTone } from "../lib/nativeFeedback";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
@@ -208,8 +208,8 @@ function parseDisplayQty(s: string): number {
 
 export function PosPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const canSavePending = hasPermission(actor.role, "pending_sales.manage");
-  const canIssueDebt = hasPermission(actor.role, "customers.debt");
+  const canSavePending = actorHasPermission(actor, "pending_sales.manage");
+  const canIssueDebt = actorHasPermission(actor, "customers.debt");
   const checkoutMethods = useMemo(
     () => POS_CHECKOUT_METHODS.filter((m) => m !== "credit" || canIssueDebt),
     [canIssueDebt],
@@ -1511,7 +1511,6 @@ export function PosPage({ lang }: { lang: Language }) {
 
   const catalogShelfCards = shelfCards;
 
-
   const quickProductChips = useMemo(() => {
     if (!mobileSellFocus) return [];
     const seen = new Set<string>();
@@ -1545,7 +1544,7 @@ export function PosPage({ lang }: { lang: Language }) {
           <EmptyShelfPanel
             lang={lang}
             shelfLabel={selectedShelfLabel}
-            canAdd={hasPermission(actor.role, "products.add")}
+            canAdd={actorHasPermission(actor, "products.add")}
             onAddProduct={() =>
               navigate(
                 `/stock?tab=shelves&shelf=${encodeURIComponent(sellCategoryKey)}&add=1`,
@@ -1632,7 +1631,7 @@ export function PosPage({ lang }: { lang: Language }) {
   const sellActionFooter =
     draftLines.length > 0 ||
     canSavePending ||
-    canRecordCashExpenses(actor.role, shopPreferences) ||
+    canRecordCashExpenses(actor.role, shopPreferences, actor.permissions) ||
     activeShift ? (
       mobileSellFocus ? (
         <PosSellActionChips>
@@ -1649,7 +1648,7 @@ export function PosPage({ lang }: { lang: Language }) {
               ) : null}
             </Link>
           ) : null}
-          {canRecordCashExpenses(actor.role, shopPreferences) ? (
+          {canRecordCashExpenses(actor.role, shopPreferences, actor.permissions) ? (
             <PosSellActionChip onClick={() => setExpenseModalOpen(true)}>
               <Banknote className="h-3 w-3 shrink-0" aria-hidden />
               {t(lang, "posRecordExpenseBtn")}
@@ -1683,7 +1682,7 @@ export function PosPage({ lang }: { lang: Language }) {
               ) : null}
             </Link>
           ) : null}
-          {canRecordCashExpenses(actor.role, shopPreferences) ? (
+          {canRecordCashExpenses(actor.role, shopPreferences, actor.permissions) ? (
             <button
               type="button"
               onClick={() => setExpenseModalOpen(true)}
@@ -1706,7 +1705,7 @@ export function PosPage({ lang }: { lang: Language }) {
       )
     ) : undefined;
 
-  if (!hasPermission(actor.role, "pos.sell")) {
+  if (!actorHasPermission(actor, "pos.sell")) {
     return <Navigate to="/" replace />;
   }
 
@@ -1735,7 +1734,7 @@ export function PosPage({ lang }: { lang: Language }) {
           pendingCount={pendingCount}
           onCloseShift={() => setShiftCloseOpen(true)}
           onRecordExpense={() => setExpenseModalOpen(true)}
-          canRecordExpense={canRecordCashExpenses(actor.role, shopPreferences)}
+          canRecordExpense={canRecordCashExpenses(actor.role, shopPreferences, actor.permissions)}
           canSavePending={canSavePending}
         />
       ) : activeShift ? (
@@ -1944,7 +1943,7 @@ export function PosPage({ lang }: { lang: Language }) {
         <section className="rounded-3xl border-2 border-dashed border-stone-200 bg-stone-50 p-8 text-center">
           <p className="text-2xl font-black text-stone-900">{t(lang, "posEmptyTitle")}</p>
           <p className="mt-2 text-lg text-stone-600">{t(lang, "posEmptySub")}</p>
-          {hasPermission(actor.role, "products.add") ? (
+          {actorHasPermission(actor, "products.add") ? (
             <Link
               to="/stock"
               className="mt-6 inline-flex min-h-[56px] items-center justify-center rounded-3xl bg-waka-600 px-8 py-4 text-xl font-black text-white shadow-lg active:bg-waka-700"

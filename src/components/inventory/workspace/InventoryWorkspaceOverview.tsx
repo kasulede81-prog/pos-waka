@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
 import type { Language } from "../../../types";
 import { usePosStore } from "../../../store/usePosStore";
-import { useSessionActor } from "../../../context/SessionActorContext";
 import {
   inventoryWorkspaceMode,
   resolveInventoryOverviewQuickActions,
@@ -25,7 +24,6 @@ type Props = {
 
 export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: Props) {
   const navigate = useNavigate();
-  const actor = useSessionActor();
   const { products, purchases, supplierPayments, suppliers, preferences, pharmacyComplianceAlerts } = usePosStore(
     useShallow((s) => ({
       products: s.products,
@@ -88,7 +86,7 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock }: P
         onBatchIntegrity={() => onSetTab("products")}
         onControlledAlerts={() => navigate("/pharmacy/compliance/register")}
       />
-      <InventoryQuickActions lang={lang} role={actor.role} actions={quickActions} onAction={handleAction} />
+      <InventoryQuickActions lang={lang} actions={quickActions} onAction={handleAction} />
       <InventoryStatusStrip lang={lang} />
       <StockAdjustmentSheet lang={lang} open={adjustOpen} onClose={() => setAdjustOpen(false)} />
     </InventoryWorkspaceShell>

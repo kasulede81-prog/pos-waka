@@ -16,7 +16,8 @@ import {
   shiftVerificationBaselineUgx,
   verifyOwnerDayOpenCorrection,
 } from "../lib/dayDrawerOpen";
-import { hasPermission } from "../lib/permissions";
+import { hasActorPermission } from "../lib/permissions";
+import { resolveStaffPermissions } from "../lib/enterpriseRoles";
 import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { assertBusinessDateNotLocked } from "../lib/businessDateLock";
 import { resolveFloatVerifyOverride } from "../lib/managerFloatVerify";
@@ -333,7 +334,13 @@ export function createDayDrawerOpenStoreActions(deps: Deps) {
         actor.userId,
         actor.displayName ?? actor.userId,
       );
-      if (!override.ok || !hasPermission(override.role, "day.verify_opening_float")) {
+      const overrideStaff = override.ok && override.staffId
+        ? state.preferences.staffAccounts?.find((s) => s.id === override.staffId)
+        : undefined;
+      const overridePerms = overrideStaff
+        ? resolveStaffPermissions(overrideStaff, state.preferences.customStaffRoles)
+        : undefined;
+      if (!override.ok || !hasActorPermission(override.role, "day.verify_opening_float", overridePerms)) {
         return { ok: false as const, errorKey: "auth_forbidden" };
       }
 

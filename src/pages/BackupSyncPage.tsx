@@ -1,9 +1,10 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Link, Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { hasSupabaseConfig } from "../lib/supabase";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { useSubscription } from "../context/SubscriptionContext";
 import { canUseBackupRestore } from "../lib/subscriptionEntitlements";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
@@ -15,8 +16,8 @@ import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 export function BackupSyncPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const { authMode, snapshot } = useSubscription();
-  const canView = hasPermission(actor.role, "settings.view");
-  const canBackupRole = hasPermission(actor.role, "settings.shop");
+  const canView = actorHasPermission(actor, "settings.view");
+  const canBackupRole = actorHasPermission(actor, "settings.shop");
   const canBackupPlan = canUseBackupRestore(snapshot, authMode);
   const canBackup = canBackupRole && canBackupPlan;
   const { isPrimary } = useDeviceAuthority();

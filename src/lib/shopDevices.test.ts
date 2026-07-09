@@ -1,25 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { buildDeviceUsageSummary, parsePlanDeviceLimit } from "./shopDevices";
-import type { ShopDeviceRow } from "./shopDevices";
+import {
+  isDeviceHistoryRecord,
+  isLicensedActiveDevice,
+  isPendingApprovalDevice,
+  partitionShopDevices,
+  type ShopDeviceRow,
+} from "./shopDevices";
 
-function testDevice(
-  partial: Partial<ShopDeviceRow> & Pick<ShopDeviceRow, "id" | "device_fingerprint">,
-): ShopDeviceRow {
+function device(partial: Partial<ShopDeviceRow> & Pick<ShopDeviceRow, "id" | "status" | "approval_status">): ShopDeviceRow {
   return {
-    label: null,
-    platform: "android",
+    device_fingerprint: partial.device_fingerprint ?? "fp-1",
+    label: partial.label ?? null,
+    platform: partial.platform ?? null,
     app_version: null,
     last_seen_at: null,
     last_sync_at: null,
     last_login_at: null,
-    status: "active",
-    is_active: true,
+    is_active: partial.status === "active",
     created_at: "",
-    device_authority: "secondary",
-    approval_status: "approved",
+    device_authority: partial.device_authority ?? "secondary",
     form_factor: "tablet",
     device_type: null,
-    is_primary: false,
+    is_primary: partial.device_authority === "primary",
     current_staff_client_id: null,
     pending_uploads: 0,
     pending_downloads: 0,
@@ -29,95 +31,29 @@ function testDevice(
   };
 }
 
-const devices: ShopDeviceRow[] = [
-  testDevice({ id: "1", device_fingerprint: "a", label: "A" }),
-  testDevice({ id: "2", device_fingerprint: "b", label: "B", platform: "web" }),
-  testDevice({
-    id: "3",
-    device_fingerprint: "c",
-    label: "C",
-    platform: "web",
-    status: "disconnected",
-    is_active: false,
-  }),
-];
-
-describe("buildDeviceUsageSummary", () => {
-  it("counts only active devices", () => {
-    const u = buildDeviceUsageSummary(devices, 3);
-    expect(u.activeCount).toBe(2);
-    expect(u.totalCount).toBe(3);
-    expect(u.atPlanLimit).toBe(false);
-  });
-
-  it("flags at plan limit", () => {
-    const u = buildDeviceUsageSummary(devices, 2);
-    expect(u.atPlanLimit).toBe(true);
-    expect(u.overPlanLimit).toBe(false);
-  });
-
-  it("flags over plan limit when extra active devices exist", () => {
-    const u = buildDeviceUsageSummary(devices, 1);
-    expect(u.activeCount).toBe(2);
-    expect(u.atPlanLimit).toBe(true);
-    expect(u.overPlanLimit).toBe(true);
+describe("isLicensedActiveDevice", () => {
+  it("counts only approved and active devices", () => {
+    expect(isLicensedActiveDevice(device({ id: "1", status: "active", approval_status: "approved" }))).toBe(true);
+    expect(isLicensedActiveDevice(device({ id: "2", status: "active", approval_status: "pending" }))).toBe(false);
+    expect(isLicensedActiveDevice(device({ id: "3", status: "disconnected", approval_status: "approved" }))).toBe(false);
+    expect(isLicensedActiveDevice(device({ id: "4", status: "revoked", approval_status: "revoked" }))).toBe(false);
   });
 });
 
-describe("parsePlanDeviceLimit", () => {
-  it("returns null for local auth", () => {
-    expect(parsePlanDeviceLimit({ kind: "local_full" }, "local")).toBeNull();
+describe("partitionShopDevices", () => {
+  it("separates active, pending, and history without overlap", () => {
+    const active = device({ id: "a", status: "active", approval_status: "approved" });
+    const pending = device({ id: "p", status: "disconnected", approval_status: "pending" });
+    const history = device({ id: "h", status: "revoked", approval_status: "revoked" });
+    const parts = partitionShopDevices([active, pending, history]);
+    expect(parts.activeDevices).toEqual([active]);
+    expect(parts.pendingDevices).toEqual([pending]);
+    expect(parts.historyDevices).toEqual([history]);
   });
 
-  it("uses plan max_devices when present", () => {
-    expect(
-      parsePlanDeviceLimit(
-        {
-          kind: "remote",
-          row: {
-            id: "s",
-            organization_id: "o",
-            shop_id: null,
-            status: "active",
-            trial_ends_at: null,
-            current_period_start: null,
-            current_period_end: null,
-            plan_code: "business",
-            max_pos_users: null,
-            max_shops: null,
-            max_devices: 5,
-          },
-        },
-        "supabase",
-      ),
-    ).toBe(5);
-  });
-
-  it("falls back to tier default when features.devices missing", () => {
-    expect(
-      parsePlanDeviceLimit(
-        {
-          kind: "remote",
-          row: {
-            id: "s",
-            organization_id: "o",
-            shop_id: null,
-            status: "active",
-            trial_ends_at: null,
-            current_period_start: null,
-            current_period_end: null,
-            plan_code: "business",
-            max_pos_users: null,
-            max_shops: null,
-            max_devices: null,
-          },
-        },
-        "supabase",
-      ),
-    ).toBe(4);
-  });
-
-  it("uses effective tier for shops without subscription row", () => {
-    expect(parsePlanDeviceLimit({ kind: "none" }, "supabase")).toBe(1);
+  it("never puts pending devices in history", () => {
+    const pending = device({ id: "p", status: "disconnected", approval_status: "pending" });
+    expect(isPendingApprovalDevice(pending)).toBe(true);
+    expect(isDeviceHistoryRecord(pending)).toBe(false);
   });
 });

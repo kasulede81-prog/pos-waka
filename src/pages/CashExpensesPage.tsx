@@ -43,7 +43,7 @@ export function CashExpensesPage({ lang }: Props) {
   const [err, setErr] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const canRecord = canRecordCashExpenses(actor.role, preferences);
+  const canRecord = canRecordCashExpenses(actor.role, preferences, actor.permissions);
   const canDelete = canDeleteCashExpenses(actor.role);
   const canApprove = canApproveCashExpenses(actor.role);
 

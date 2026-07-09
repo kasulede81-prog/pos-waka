@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -9,7 +10,7 @@ import { formatUgx } from "../lib/formatUgx";
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { buildExpiryCenterRows } from "../lib/pharmacyBatches";
 import { AdjustmentConfirmDialog } from "../components/inventory/adjustments/AdjustmentConfirmDialog";
 import { AdjustmentMovementPreview } from "../components/inventory/adjustments/AdjustmentMovementPreview";
@@ -50,8 +51,8 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
   } | null>(null);
 
   const pharmacy = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
-  const canWriteOff = hasEffectivePermission(actor.role, "pharmacy.expired_writeoff", snapshot, authMode);
-  const canReturn = hasEffectivePermission(actor.role, "purchases.record", snapshot, authMode);
+  const canWriteOff = actorHasEffectivePermission(actor, "pharmacy.expired_writeoff", snapshot, authMode);
+  const canReturn = actorHasEffectivePermission(actor, "purchases.record", snapshot, authMode);
 
   const grouped = useMemo(() => groupExpiryRowsByBucket(products), [products]);
   const allRows = useMemo(() => buildExpiryCenterRows(products), [products]);

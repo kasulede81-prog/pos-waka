@@ -1,5 +1,5 @@
 import type { Permission, UserRole } from "../types";
-import { hasPermission } from "./permissions";
+import { hasActorPermission } from "./permissions";
 
 export type SubscriptionPlanCode = "free" | "starter" | "business" | "waka_plus";
 
@@ -234,8 +234,9 @@ export function hasEffectivePermission(
   permission: Permission,
   snapshot: SubscriptionSnapshot,
   authMode: "supabase" | "local",
+  actorPermissions?: Permission[] | null,
 ): boolean {
-  if (!hasPermission(role, permission)) return false;
+  if (!hasActorPermission(role, permission, actorPermissions)) return false;
   if (authMode === "local") return true;
   const tier = resolveEffectivePlanTier(snapshot);
   return planAllowsPermission(tier, permission);

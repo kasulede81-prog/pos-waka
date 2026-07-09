@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Link } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -8,7 +9,6 @@ import { buildXReportSnapshot } from "../lib/xReport";
 import { downloadXReportCsv, downloadXReportPdf, printXReport, shareXReportPdf } from "../lib/xReportExport";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
-import { hasPermission } from "../lib/permissions";
 import { useSessionActor } from "../context/SessionActorContext";
 
 export function XReportPage({ lang }: { lang: Language }) {
@@ -62,7 +62,7 @@ export function XReportPage({ lang }: { lang: Language }) {
     ],
   );
 
-  if (!hasPermission(actor.role, "reports.view")) {
+  if (!actorHasPermission(actor, "reports.view")) {
     return (
       <div className="space-y-4 pb-8">
         <PageHeader lang={lang} title={t(lang, "xReportTitle")} backFallback="/office/cash-drawer" />

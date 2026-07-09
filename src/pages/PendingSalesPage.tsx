@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useNavigate } from "react-router-dom";
 import type { Language, Sale } from "../types";
 import { t } from "../lib/i18n";
@@ -6,7 +7,6 @@ import { formatUgx } from "../lib/formatUgx";
 import { pendingSales } from "../lib/saleStatus";
 import { usePosStore } from "../store/usePosStore";
 import { PageBackBar } from "../components/layout/PageBackBar";
-import { hasPermission } from "../lib/permissions";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useProtectedAction } from "../hooks/useProtectedAction";
 
@@ -39,7 +39,7 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
     navigate("/pos");
   };
 
-  const canCancel = hasPermission(actor.role, "pending_sales.manage");
+  const canCancel = actorHasPermission(actor, "pending_sales.manage");
 
   return (
     <div className="space-y-4 pb-8">

@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -5,12 +6,12 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { ModalSheet } from "../components/layout/ModalSheet";
 export function SuppliersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const canView = hasPermission(actor.role, "suppliers.view");
-  const canManage = hasPermission(actor.role, "suppliers.manage");
+  const canView = actorHasPermission(actor, "suppliers.view");
+  const canManage = actorHasPermission(actor, "suppliers.manage");
 
   const suppliers = usePosStore((s) => s.suppliers);
   const addSupplier = usePosStore((s) => s.addSupplier);
@@ -55,7 +56,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
   return (
     <div className="space-y-6 pb-12">
       <PageHeader lang={lang} title={t(lang, "suppliersTitle")} backLabel={t(lang, "officeBackToHub")}>
-        {hasPermission(actor.role, "purchases.record") ? (
+        {actorHasPermission(actor, "purchases.record") ? (
           <Link
             to="/restock"
             className="mt-2 inline-flex rounded-2xl bg-waka-600 px-4 py-3 text-sm font-black text-white shadow-sm"

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { useOwnerRiskCards } from "../../hooks/useOwnerRiskCards";
@@ -8,7 +9,7 @@ import { useSyncStatus } from "../../hooks/useSyncStatus";
 import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { useMemo } from "react";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission, resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
+import { resolveEffectivePlanTier, maxProductsForTier } from "../../lib/subscriptionEntitlements";
 import { lockedProductIds } from "../../lib/productPlanLock";
 import { useSessionActor } from "../../context/SessionActorContext";
 
@@ -40,9 +41,9 @@ export function DesktopStatusChips({ lang }: Props) {
   );
 
   const showRisks =
-    hasEffectivePermission(actor.role, "owner.activity", snapshot, authMode) && riskCount > 0;
+    actorHasEffectivePermission(actor, "owner.activity", snapshot, authMode) && riskCount > 0;
   const showLowStock =
-    hasEffectivePermission(actor.role, "stock.view", snapshot, authMode) && lowStockCount > 0;
+    actorHasEffectivePermission(actor, "stock.view", snapshot, authMode) && lowStockCount > 0;
 
   const chipClass =
     "inline-flex min-h-[40px] touch-manipulation items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white";

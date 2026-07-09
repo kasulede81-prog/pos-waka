@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import clsx from "clsx";
 import { ArrowLeft, Search, Star, UtensilsCrossed } from "lucide-react";
@@ -6,7 +7,6 @@ import type { Language, Product, SaleLine } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore, formatProductPriceLabel } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { formatUgx } from "../lib/formatUgx";
 import { computeDraftCheckoutTotals } from "../lib/draftCart";
 import { computeRestaurantBillTotals, billDraftFromSale } from "../lib/restaurantBilling";
@@ -222,10 +222,10 @@ export function TableOrderPage({ lang }: { lang: Language }) {
     return <Navigate to="/floor" replace />;
   }
 
-  const canSettle = hasPermission(actor.role, "hospitality.settle");
-  const canTransfer = hasPermission(actor.role, "hospitality.transfer") && !isNamedTab;
-  const canSendKitchen = hasPermission(actor.role, "hospitality.order") && kitchenEnabled;
-  const canSendBar = hasPermission(actor.role, "hospitality.order");
+  const canSettle = actorHasPermission(actor, "hospitality.settle");
+  const canTransfer = actorHasPermission(actor, "hospitality.transfer") && !isNamedTab;
+  const canSendKitchen = actorHasPermission(actor, "hospitality.order") && kitchenEnabled;
+  const canSendBar = actorHasPermission(actor, "hospitality.order");
   const orderTitle = isNamedTab
     ? sessionDisplayLabel(session, floor!)
     : `${table!.label}${area ? ` · ${area.name}` : ""}`;

@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../../lib/actorAuthorization";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback, lazy, Suspense } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import clsx from "clsx";
@@ -18,7 +19,7 @@ import type { ShopPreferences } from "../../types";
 import { resolveSessionActor } from "../../lib/sessionActor";
 import { SessionActorProvider } from "../../context/SessionActorContext";
 import { SessionHydrationProvider } from "../../context/SessionHydrationContext";
-import { hasPermission } from "../../lib/permissions";
+
 import { fetchWakaInternalAdminMe } from "../../lib/wakaInternalAdmin";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
 import { isBackOfficePath, isSettingsLauncherPath } from "../../lib/backOfficePaths";
@@ -32,13 +33,20 @@ import { PilotModeBanner } from "../pilot/PilotModeBanner";
 import { isPilotModeActive } from "../../lib/pilotMode";
 import { MobileScrollTail } from "./MobileScrollTail";
 import { AppModalOverlay } from "./AppModalOverlay";
-import { normalizePin } from "../../lib/staffSecret";
 import { resolveEffectivePlanTier } from "../../lib/subscriptionEntitlements";
 import { fetchShopMemberRoleForUser } from "../../lib/shopMemberRole";
 import { activeStaffCanUnlock, canLockPos, isBackOfficePinConfigured } from "../../lib/lockPos";
-import { PinInput } from "../ui/PinInput";
 import { ShiftCloseModal } from "../pos/ShiftCloseModal";
 import { DisplayScaleControl } from "../pos/DisplayScaleControl";
+import { EnterpriseStaffLockScreen } from "../auth/EnterpriseStaffLockScreen";
+import {
+  completePosUnlock,
+  emergencyStaffLogout,
+  lockPos,
+  prepareSwitchUserLock,
+  verifyLockScreenPin,
+} from "../../lib/auth";
+import { useStaffAutoLock, useStaffSessionBootstrap } from "../../hooks/useStaffAutoLock";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
 import { MobileModuleExitBar } from "./MobileModuleExitBar";
@@ -78,6 +86,8 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const navigate = useNavigate();
   useAndroidBackButton();
   useShopPresenceHeartbeat();
+  useStaffAutoLock(true);
+  useStaffSessionBootstrap(true);
   const preferences = usePosStore(
     useShallow((s) => ({
       devRoleOverride: s.preferences.devRoleOverride,
@@ -90,19 +100,16 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
       hospitalityKitchenEnabled: s.preferences.hospitalityKitchenEnabled,
       pharmacyModeEnabled: s.preferences.pharmacyModeEnabled,
       pilotModeEnabled: s.preferences.pilotModeEnabled,
+      shopDisplayName: s.preferences.shopDisplayName,
     })),
   );
   const { snapshot } = useSubscription();
   const setPosLocked = usePosStore((s) => s.setPosLocked);
-  const switchStaffAccount = usePosStore((s) => s.switchStaffAccount);
   const closeShiftWithCashCount = usePosStore((s) => s.closeShiftWithCashCount);
   const shifts = usePosStore((s) => s.preferences.shifts);
   const [pwaUpdate, setPwaUpdate] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   useAndroidBackHandler("app-menu-drawer", ANDROID_BACK_PRIORITY.menuDrawer, menuOpen, () => setMenuOpen(false));
-  const [lockStaffId, setLockStaffId] = useState(preferences.activeStaffId ?? "");
-  const [lockSecret, setLockSecret] = useState("");
-  const [lockError, setLockError] = useState<string | null>(null);
   const [lockSetupHint, setLockSetupHint] = useState<string | null>(null);
   const [staffSwitchShiftOpen, setStaffSwitchShiftOpen] = useState(false);
   const [staffSwitchCloseOpen, setStaffSwitchCloseOpen] = useState(false);
@@ -177,20 +184,11 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
     [shifts, actor.userId],
   );
 
-  const completeStaffUnlock = useCallback(
-    (staffId: string | null) => {
-      const r = switchStaffAccount(staffId);
-      if (!r.ok) {
-        setLockError(t(lang, r.errorKey ?? "saleError"));
-        return;
-      }
-      setPosLocked(false);
-      setLockSecret("");
-      setLockError(null);
-      setPendingStaffUnlock(null);
-    },
-    [lang, setPosLocked, switchStaffAccount],
-  );
+  const completeStaffUnlock = useCallback((staffId: string | null) => {
+    const r = completePosUnlock(staffId);
+    if (!r.ok) return;
+    setPendingStaffUnlock(null);
+  }, []);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -222,19 +220,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
 
   useEffect(() => {
     if (!preferences.posLocked) return;
-    const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
-    setLockSecret("");
-    setLockError(null);
-    setLockStaffId((prev) => {
-      if (prev) return prev;
-      if (preferences.activeStaffId) return preferences.activeStaffId;
-      if (canSwitchUser && activeStaff.length > 0) return "__owner__";
-      return "";
-    });
-  }, [preferences.posLocked, preferences.staffAccounts, preferences.activeStaffId, canSwitchUser]);
-
-  useEffect(() => {
-    if (!preferences.posLocked) return;
     if (canLockPos(preferences)) return;
     if (activeStaffCanUnlock(preferences.staffAccounts)) return;
     setPosLocked(false);
@@ -243,14 +228,14 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const requestPosLock = () => {
     setLockSetupHint(null);
     if (!canLockPos(preferences)) {
-      if (hasPermission(actor.role, "settings.shop")) {
+      if (actorHasPermission(actor, "settings.shop")) {
         navigate("/settings/pin", { state: { setupLockPin: true, notice: t(lang, "lockPosNeedPinFirst") } });
       } else {
         setLockSetupHint(t(lang, "lockPosAskOwnerPin"));
       }
       return;
     }
-    setPosLocked(true);
+    lockPos("manual");
   };
 
   const internalAdminRoute = isInternalAdminAppPath(location.pathname);
@@ -259,7 +244,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
   const hospitalityNav = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyNav = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const wholesaleNav = isWholesaleMode(preferences.businessType);
-  const terminalHome = resolveTerminalHomePath(preferences, actor.role);
+  const terminalHome = resolveTerminalHomePath(preferences, actor.role, actor.permissions);
   const onTerminalHome = location.pathname === terminalHome;
   const isLauncherHome = location.pathname === "/";
   const desktopTerminalHome = isDesktopLayout && isLauncherHome;
@@ -521,7 +506,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
             </div>
           </div>
         ) : null}
-        <PharmacyDesktopNav lang={lang} role={actor.role} visible={showPharmacyDesktopNav} />
+        <PharmacyDesktopNav lang={lang} visible={showPharmacyDesktopNav} />
         <main
           className={clsx(
             "mx-auto box-border flex min-h-0 w-full flex-1 gap-4 overflow-hidden",
@@ -551,126 +536,55 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           </section>
         </main>
         {showMobileModuleExit ? <MobileModuleExitBar lang={lang} terminalHome={terminalHome} /> : null}
-        <HospitalityMobileNav lang={lang} role={actor.role} visible={showHospitalityMobileNav} />
-        <PharmacyMobileNav lang={lang} role={actor.role} visible={showPharmacyMobileNav} />
+        <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
+        <PharmacyMobileNav lang={lang} visible={showPharmacyMobileNav} />
         {preferences.posLocked ? (
-          <AppModalOverlay className="z-[120] flex items-center justify-center bg-stone-950/85 p-4">
-            <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
-              <p className="text-2xl font-black text-stone-900">{t(lang, "lockPosTitle")}</p>
-              <p className="mt-1 text-sm text-stone-600">{t(lang, "lockPosSub")}</p>
-              {canSwitchUser && (preferences.staffAccounts ?? []).length > 0 ? (
-                <label className="mt-4 block text-sm font-bold text-stone-700">
-                  {t(lang, "switchUser")}
-                  <select
-                    value={lockStaffId}
-                    onChange={(e) => {
-                      setLockStaffId(e.target.value);
-                      setLockError(null);
-                    }}
-                    className="mt-1 w-full rounded-2xl border-2 border-stone-200 px-4 py-3"
-                  >
-                    <option value="">{t(lang, "staffPickAccount")}</option>
-                    <option value="__owner__">{t(lang, "role_owner")}</option>
-                    {(preferences.staffAccounts ?? [])
-                      .filter((s) => s.active)
-                      .map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({t(lang, `role_${s.role}`)})
-                        </option>
-                      ))}
-                  </select>
-                </label>
-              ) : null}
-              <p className="mt-2 text-xs font-medium text-stone-500">{t(lang, "lockScreenStaffHint")}</p>
-              <PinInput
-                value={lockSecret}
-                onChange={(e) => {
-                  setLockSecret(e.target.value);
-                  setLockError(null);
-                }}
-                maxLength={32}
-                placeholder={t(lang, "unlockPinPlaceholder")}
-                className="mt-3 w-full rounded-2xl border-2 border-stone-200 px-4 py-3 text-center text-lg font-black tracking-[0.15em]"
-              />
-              {lockError ? <p className="mt-2 text-sm font-bold text-rose-700">{lockError}</p> : null}
-              {!isBackOfficePinConfigured(preferences.backOfficePin) &&
-              hasPermission(actor.role, "settings.shop") ? (
-                <button
-                  type="button"
-                  className="mt-3 min-h-[44px] w-full rounded-2xl border-2 border-waka-200 bg-waka-50 py-2.5 text-sm font-black text-waka-900"
-                  onClick={() => {
-                    setPosLocked(false);
-                    navigate("/settings/pin", { state: { setupLockPin: true } });
-                  }}
-                >
-                  {t(lang, "settingsHubPin")}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="mt-4 min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-base font-black text-white"
-                onClick={() => {
-                  void (async () => {
-                    const selectingOwner = lockStaffId === "__owner__";
-                    const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
-                    const selectedStaff = selectingOwner
-                      ? null
-                      : activeStaff.find((s) => s.id === lockStaffId);
-                    const secret = lockSecret.trim();
-                    const secretPin = normalizePin(secret);
-                    const { staffSecretMatchesAsync } = await import("../../lib/staffSecret");
-                    const { verifyShopSecurityPin } = await import(
-                      "../../lib/enterpriseSecurity/EnterpriseSecurityService"
-                    );
-
-                    let staff = selectedStaff ?? null;
-                    if (!staff && !selectingOwner && !lockStaffId) {
-                      for (const s of activeStaff) {
-                        if (await staffSecretMatchesAsync(s, secret)) {
-                          staff = s;
-                          break;
-                        }
-                      }
-                    }
-                    const validStaff = staff
-                      ? await staffSecretMatchesAsync(staff, secret)
-                      : false;
-                    const validBackOffice = await verifyShopSecurityPin(secretPin, preferences);
-                    const canUnlock = validStaff || validBackOffice;
-                    if (!canUnlock) {
-                      setLockError(t(lang, "enterpriseSecurityWrongPin"));
-                      return;
-                    }
-                    const targetStaffId = staff?.id ?? null;
-                    const switchingStaff = (preferences.activeStaffId ?? null) !== targetStaffId;
-                    if (switchingStaff && activeShiftForActor) {
-                      setPendingStaffUnlock({ staffId: targetStaffId, secret });
-                      setStaffSwitchShiftOpen(true);
-                      return;
-                    }
-                    completeStaffUnlock(targetStaffId);
-                  })();
-                }}
-              >
-                {t(lang, "unlockSubmit")}
-              </button>
-              {isInternalAdmin ? (
-                <button
-                  type="button"
-                  className="mt-2 min-h-[42px] w-full rounded-2xl border border-amber-300 bg-amber-50 py-2 text-sm font-black text-amber-900"
-                  onClick={() => {
-                    usePosStore.getState().setPreferences({ backOfficePin: null });
-                    switchStaffAccount(null, { force: true });
-                    setPosLocked(false);
-                    setLockSecret("");
-                    setLockError(null);
-                  }}
-                >
-                  Admin unlock & clear PIN
-                </button>
-              ) : null}
-            </div>
-          </AppModalOverlay>
+          <EnterpriseStaffLockScreen
+            lang={lang}
+            preferences={preferences as ShopPreferences}
+            actorName={actor.displayName ?? t(lang, "role_owner")}
+            actorRole={actor.role}
+            businessName={preferences.shopDisplayName ?? ""}
+            canSwitchUser={canSwitchUser}
+            isInternalAdmin={isInternalAdmin}
+            showSetupPin={
+              !isBackOfficePinConfigured(preferences.backOfficePin) && actorHasPermission(actor, "settings.shop")
+            }
+            onSetupPin={() => {
+              setPosLocked(false);
+              navigate("/settings/pin", { state: { setupLockPin: true } });
+            }}
+            onUnlock={async ({ staffId, selectingOwner, secret }) => {
+              const activeStaff = (preferences.staffAccounts ?? []).filter((s) => s.active);
+              const verify = await verifyLockScreenPin({
+                preferences: preferences as ShopPreferences,
+                secret,
+                targetStaffId: staffId,
+                selectingOwner,
+                activeStaff,
+              });
+              if (!verify.ok) {
+                return { ok: false as const, errorKey: verify.errorKey };
+              }
+              if (verify.switched && activeShiftForActor) {
+                setPendingStaffUnlock({ staffId: verify.staffId, secret });
+                setStaffSwitchShiftOpen(true);
+                return { ok: true as const };
+              }
+              const unlock = completePosUnlock(verify.staffId);
+              if (!unlock.ok) {
+                return { ok: false as const, errorKey: unlock.errorKey };
+              }
+              return { ok: true as const };
+            }}
+            onSwitchUser={() => {
+              prepareSwitchUserLock();
+            }}
+            onEmergencyLogout={() => {
+              emergencyStaffLogout();
+              void onSignOut();
+            }}
+          />
         ) : null}
         {staffSwitchShiftOpen ? (
           <AppModalOverlay className="z-[125] flex items-center justify-center bg-stone-950/85 p-4">
@@ -713,7 +627,6 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
           onConfirm={(counted, handoff) => {
             const r = closeShiftWithCashCount(counted, handoff);
             if (!r.ok) {
-              setLockError(t(lang, r.errorKey ?? "saleError"));
               return { ok: false };
             }
             setStaffSwitchCloseOpen(false);

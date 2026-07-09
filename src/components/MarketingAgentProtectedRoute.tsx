@@ -1,9 +1,10 @@
 import { Navigate, useLocation } from "react-router-dom";
+import { actorHasEffectivePermission } from "../lib/actorAuthorization";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSessionHydration } from "../context/SessionHydrationContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { useMarketingAgentPortal } from "../hooks/useMarketingAgentPortal";
-import { hasEffectivePermission } from "../lib/subscriptionEntitlements";
+
 import { usePosStore } from "../store/usePosStore";
 
 type Props = {
@@ -34,7 +35,7 @@ export function MarketingAgentProtectedRoute({ children }: Props) {
     return <SessionLoadingGate />;
   }
 
-  const hasBackOfficeAccess = hasEffectivePermission(actor.role, "settings.view", snapshot, authMode);
+  const hasBackOfficeAccess = actorHasEffectivePermission(actor, "settings.view", snapshot, authMode);
   if (!isMarketingAgent && !hasBackOfficeAccess) {
     return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }

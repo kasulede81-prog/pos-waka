@@ -1,3 +1,4 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import clsx from "clsx";
@@ -9,7 +10,7 @@ import { inventoryValueAtCostUgx } from "../lib/costPrecision";
 import { starterPackForBusinessType, starterExpiryDateIso, type StarterLine } from "../data/starterPacks";
 import { PharmacyAddMedicineWizard } from "../components/stock/PharmacyAddMedicineWizard";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { useSubscription } from "../context/SubscriptionContext";
 import { maxProductsForTier, resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { StockProductEditModal } from "../components/stock/StockProductEditModal";
@@ -84,13 +85,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   usePageLoadMark("stock");
   const actor = useSessionActor();
   const { snapshot } = useSubscription();
-  const canRemove = hasPermission(actor.role, "products.remove");
-  const canAdjust = hasPermission(actor.role, "stock.adjust");
-  const canAdd = hasPermission(actor.role, "products.add");
-  const canPresets = hasPermission(actor.role, "products.edit_presets");
-  const canSell = hasPermission(actor.role, "pos.sell");
-  const canRestock = hasPermission(actor.role, "purchases.record");
-  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
+  const canRemove = actorHasPermission(actor, "products.remove");
+  const canAdjust = actorHasPermission(actor, "stock.adjust");
+  const canAdd = actorHasPermission(actor, "products.add");
+  const canPresets = actorHasPermission(actor, "products.edit_presets");
+  const canSell = actorHasPermission(actor, "pos.sell");
+  const canRestock = actorHasPermission(actor, "purchases.record");
+  const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
 
   const products = usePosStore((s) => s.products);
   const suppliers = usePosStore((s) => s.suppliers);
@@ -765,7 +766,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         />
       ) : null}
 
-      {!workspaceEmbed && hasPermission(actor.role, "stock.count") ? (
+      {!workspaceEmbed && actorHasPermission(actor, "stock.count") ? (
         <Link
           to="/stock/count"
           className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-950"

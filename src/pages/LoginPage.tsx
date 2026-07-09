@@ -2,10 +2,11 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
 import clsx from "clsx";
-import { ArrowRight, Eye, EyeOff, Headphones, Lock, Mail, UserPlus } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Headphones, Lock, Mail, UserPlus, Users } from "lucide-react";
 import type { Language } from "../types";
 import { AuthLayout } from "../components/AuthLayout";
 import { GoogleSignInButton } from "../components/auth/GoogleSignInButton";
+import { EnterpriseStaffLoginPanel } from "../components/auth/EnterpriseStaffLoginPanel";
 import { WakaSymbolIcon } from "../components/brand/WakaLogo";
 import { t } from "../lib/i18n";
 import { formatAuthError, consumeAuthRedirectError } from "../lib/authConfig";
@@ -37,8 +38,13 @@ export function LoginPage({
   isAuthenticated,
   onLogin,
   onGoogleLogin,
+  onStaffLogin,
+  listStaffShops,
+  rememberedStaffDevice,
+  onClearRememberedStaff,
   mode,
 }: Props) {
+  const [view, setView] = useState<"owner" | "staff">("owner");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -86,6 +92,23 @@ export function LoginPage({
         <div className="flex flex-col items-center gap-3 py-12">
           <div className="h-14 w-14 rounded-full bg-waka-100 waka-skeleton-bar dark:bg-waka-950/40" />
           <p className="text-center text-sm font-medium text-stone-600">{t(lang, "loadingAuth")}</p>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  if (view === "staff") {
+    return (
+      <AuthLayout lang={lang} setLang={setLang}>
+        <div className="rounded-[1.75rem] border border-stone-200/70 bg-white p-6 shadow-[0_8px_40px_rgba(28,25,23,0.07)] sm:p-8 dark:border-stone-800 dark:bg-stone-900 dark:shadow-none">
+          <EnterpriseStaffLoginPanel
+            lang={lang}
+            onSubmit={onStaffLogin}
+            listStaffShops={listStaffShops}
+            rememberedStaffDevice={rememberedStaffDevice}
+            onClearRemembered={onClearRememberedStaff}
+            onBack={() => setView("owner")}
+          />
         </div>
       </AuthLayout>
     );
@@ -218,9 +241,20 @@ export function LoginPage({
             <span className="text-xs font-semibold lowercase text-stone-400">or</span>
             <span className="h-px flex-1 bg-stone-200 dark:bg-stone-700" />
           </div>
+          <button
+            type="button"
+            onClick={() => setView("staff")}
+            className="mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-900 shadow-sm transition active:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+          >
+            <span className="inline-flex items-center gap-2">
+              <Users className="h-4 w-4 text-stone-600 dark:text-stone-400" aria-hidden />
+              {t(lang, "staffLoginTitle")}
+            </span>
+            <ArrowRight className="h-4 w-4 text-stone-500" aria-hidden />
+          </button>
           <Link
             to="/register"
-            className="mt-4 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-900 shadow-sm transition active:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
+            className="mt-3 flex min-h-[48px] w-full items-center justify-between rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm font-bold text-stone-900 shadow-sm transition active:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:text-stone-100"
           >
             <span className="inline-flex items-center gap-2">
               <UserPlus className="h-4 w-4 text-stone-600 dark:text-stone-400" aria-hidden />

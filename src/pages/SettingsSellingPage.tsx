@@ -1,8 +1,8 @@
 import { Link, Navigate } from "react-router-dom";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { getOrCreateDeviceId } from "../lib/deviceId";
@@ -30,9 +30,9 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
-  const canArrangeShelves = hasPermission(actor.role, "shelves.customize");
+  const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
 

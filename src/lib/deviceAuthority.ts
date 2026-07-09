@@ -248,7 +248,7 @@ export async function setDeviceApprovalStatus(
   shopId: string,
   deviceId: string,
   approvalStatus: DeviceApprovalStatus,
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; limitBlocked?: boolean }> {
   if (!supabase) return { ok: false, error: "offline" };
   const { data, error } = await supabase.rpc("shop_device_set_approval", {
     p_shop_id: shopId,
@@ -258,7 +258,12 @@ export async function setDeviceApprovalStatus(
   });
   if (error) return { ok: false, error: error.message };
   clearDeviceAuthorityCache();
-  return { ok: (data as { ok?: boolean })?.ok === true, error: (data as { error?: string })?.error };
+  const payload = data as { ok?: boolean; error?: string; limit_blocked?: boolean } | null;
+  return {
+    ok: payload?.ok === true,
+    error: payload?.error,
+    limitBlocked: payload?.limit_blocked === true,
+  };
 }
 
 export async function setCurrentDeviceAsPrimary(shopId: string): Promise<{ ok: boolean; error?: string }> {

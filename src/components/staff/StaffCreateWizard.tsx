@@ -11,15 +11,15 @@ import {
   X,
 } from "lucide-react";
 import clsx from "clsx";
-import type { Language, UserRole } from "../../types";
+import type { BusinessType, Language, UserRole } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { PinInput } from "../ui/PinInput";
 import {
-  STAFF_CREATE_ROLES,
   WIZARD_STEPS,
   generateStaffPin,
   roleAccentClasses,
   roleIconClasses,
+  staffCreateRolesForBusiness,
   staffInitials,
   staffRoleCard,
   stepIndex,
@@ -27,19 +27,23 @@ import {
   type StaffCreateRole,
   type StaffWizardStep,
 } from "../../lib/staffRoleCatalog";
+import { defaultRoleTemplateForIndustry, resolveRoleIndustry } from "../../lib/enterpriseRoles";
 
 export type CreatedStaffResult = {
   name: string;
   role: UserRole;
+  roleTemplateId: string;
   pin: string;
 };
 
 type Props = {
   lang: Language;
+  businessType: BusinessType;
   onCancel: () => void;
   onCreate: (input: {
     name: string;
     role: StaffCreateRole;
+    roleTemplateId: string;
     pin: string;
     phone?: string;
     password?: string;
@@ -59,6 +63,7 @@ const fieldClass =
 
 export function StaffCreateWizard({
   lang,
+  businessType,
   onCancel,
   onCreate,
   onDone,
@@ -66,9 +71,13 @@ export function StaffCreateWizard({
   requireCashierExpenseApproval,
   onExpensePrefsChange,
 }: Props) {
+  const industry = resolveRoleIndustry(businessType);
+  const roleOptions = useMemo(() => staffCreateRolesForBusiness(businessType), [businessType]);
+  const defaultTemplate = useMemo(() => defaultRoleTemplateForIndustry(industry), [industry]);
+
   const [step, setStep] = useState<StaffWizardStep>("details");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<StaffCreateRole>("cashier");
+  const [roleTemplateId, setRoleTemplateId] = useState(defaultTemplate.id);
   const [pin, setPin] = useState("");
   const [autoPin, setAutoPin] = useState(true);
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -80,7 +89,8 @@ export function StaffCreateWizard({
   const [created, setCreated] = useState<CreatedStaffResult | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const roleDef = useMemo(() => staffRoleCard(role), [role]);
+  const roleDef = useMemo(() => staffRoleCard(roleTemplateId, businessType), [roleTemplateId, businessType]);
+  const role = roleDef.baseRole;
   const displayPin = pin.length === 4 ? pin : autoPin ? "····" : "";
 
   const regenPin = useCallback(() => {
@@ -119,6 +129,7 @@ export function StaffCreateWizard({
     const res = await onCreate({
       name: name.trim(),
       role,
+      roleTemplateId,
       pin: finalPin,
       phone: advancedOpen && advPhone.trim() ? advPhone.trim() : undefined,
       password: advancedOpen && advPassword.trim() ? advPassword.trim() : undefined,
@@ -129,7 +140,7 @@ export function StaffCreateWizard({
       setError(res.error ?? t(lang, "staffCreateFail"));
       return;
     }
-    setCreated({ name: name.trim(), role, pin: finalPin });
+    setCreated({ name: name.trim(), role, roleTemplateId, pin: finalPin });
   };
 
   const copyPin = async () => {
@@ -162,7 +173,7 @@ export function StaffCreateWizard({
             <div>
               <p className="text-lg font-black text-stone-950">{created.name}</p>
               <span className="mt-0.5 inline-block rounded-full bg-waka-100 px-2.5 py-0.5 text-xs font-black uppercase tracking-wide text-waka-800">
-                {t(lang, `role_${created.role}`)}
+                {t(lang, roleDef.labelKey)}
               </span>
             </div>
           </div>
@@ -191,7 +202,7 @@ export function StaffCreateWizard({
             onClick={() => {
               setCreated(null);
               setName("");
-              setRole("cashier");
+              setRoleTemplateId(defaultTemplate.id);
               setPin("");
               setAutoPin(true);
               setStep("details");
@@ -267,14 +278,14 @@ export function StaffCreateWizard({
           <div>
             <span className="text-sm font-bold text-stone-700">{t(lang, "staffRoleLabel")}</span>
             <div className="mt-2 space-y-2">
-              {STAFF_CREATE_ROLES.map((card) => {
-                const selected = role === card.role;
+              {roleOptions.map((card) => {
+                const selected = roleTemplateId === card.id;
                 const Icon = card.Icon;
                 return (
                   <button
-                    key={card.role}
+                    key={card.id}
                     type="button"
-                    onClick={() => setRole(card.role)}
+                    onClick={() => setRoleTemplateId(card.id)}
                     className={clsx(
                       "flex w-full items-start gap-3 rounded-2xl border-2 p-4 text-left transition",
                       roleAccentClasses(card.accent, selected),

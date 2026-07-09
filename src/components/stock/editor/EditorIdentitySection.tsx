@@ -1,10 +1,10 @@
-import { useId } from "react";
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
-import { MEDICINE_FORMS } from "../../../lib/pharmacyMedicine";
 import { WIZARD_INPUT_TEXT } from "../wizard/wizardTokens";
 import { EditorSection } from "./EditorSection";
+import { CategoryShelfPicker } from "../CategoryShelfPicker";
+import { MedicineFormSelect } from "../MedicineFormSelect";
 
 type Props = {
   lang: Language;
@@ -47,7 +47,6 @@ export function EditorIdentitySection({
   strengthLabel,
   formLabel,
 }: Props) {
-  const categoryListId = useId();
   const labelClass = "block text-sm font-bold text-foreground";
 
   return (
@@ -57,23 +56,17 @@ export function EditorIdentitySection({
         <input value={name} onChange={(e) => onNameChange(e.target.value)} className={clsx(WIZARD_INPUT_TEXT, "mt-2")} required />
       </label>
 
-      <label className={labelClass}>
-        {shelfLabel}
-        <input
+      <div>
+        <p className={labelClass}>{shelfLabel}</p>
+        <CategoryShelfPicker
+          lang={lang}
+          options={categorySuggestions ?? []}
           value={category}
-          onChange={(e) => onCategoryChange(e.target.value)}
-          list={categorySuggestions?.length ? categoryListId : undefined}
+          onChange={onCategoryChange}
           placeholder={categoryPlaceholder}
-          className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
+          inputClass={clsx(WIZARD_INPUT_TEXT, "mt-2")}
         />
-        {categorySuggestions?.length ? (
-          <datalist id={categoryListId}>
-            {categorySuggestions.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        ) : null}
-      </label>
+      </div>
 
       {pharmacyMode ? (
         <>
@@ -99,18 +92,11 @@ export function EditorIdentitySection({
             </label>
             <label className={labelClass}>
               {formLabel ?? t(lang, "pharmacyFormLabel")}
-              <select
+              <MedicineFormSelect
+                lang={lang}
                 value={medicineForm ?? ""}
-                onChange={(e) => onMedicineFormChange?.(e.target.value)}
-                className={clsx(WIZARD_INPUT_TEXT, "mt-2")}
-              >
-                <option value="">{t(lang, "pharmacyFormSelect")}</option>
-                {MEDICINE_FORMS.map((form) => (
-                  <option key={form} value={form}>
-                    {form}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => onMedicineFormChange?.(v)}
+              />
             </label>
           </div>
         </>

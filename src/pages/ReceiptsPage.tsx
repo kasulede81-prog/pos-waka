@@ -1,4 +1,5 @@
 import { useDeferredValue, useMemo, useState } from "react";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
 import { Link, Navigate } from "react-router-dom";
@@ -8,7 +9,6 @@ import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { usePharmacyTerms } from "../lib/pharmacyTerms";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { VirtualizedReceiptList } from "../components/receipts/VirtualizedReceiptList";
 import { returnMatchesFilter, saleMatchesFilter } from "../lib/dateFilters";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
@@ -116,8 +116,8 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const hospitalityMode = isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled);
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const term = hospitalityMode ? ht : pharmacyMode ? pt : null;
-  const canVoid = hasPermission(actor.role, "sale_void");
-  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({ role: actor.role, snapshot, authMode });
+  const canVoid = actorHasPermission(actor, "sale_void");
+  const { canProfit, canShopWideFinancials } = resolveProfitVisibility({ role: actor.role, snapshot, authMode, actorPermissions: actor.permissions });
   const showProfit = canProfit;
   const showShopSummaries = canShopWideFinancials;
   const products = usePosStore((s) => s.products);
@@ -259,7 +259,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     [customers],
   );
 
-  const canViewDebts = hasPermission(actor.role, "customers.view");
+  const canViewDebts = actorHasPermission(actor, "customers.view");
   const syncErrorCount = countSalesWithSyncErrors();
 
   const secondaryChips = useMemo(
@@ -312,7 +312,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     stockValueUgx,
   ]);
 
-  if (!hasPermission(actor.role, "receipts.view")) {
+  if (!actorHasPermission(actor, "receipts.view")) {
     return <Navigate to="/" replace />;
   }
 
@@ -329,7 +329,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
 
   const hasAnyInRange = filteredInRange.length > 0;
   const salesHeroLabel = isSingleDay ? t(lang, "salesHistoryTodaySales") : t(lang, "salesHistorySalesInRange");
-  const hasSellAccess = hasPermission(actor.role, "pos.sell");
+  const hasSellAccess = actorHasPermission(actor, "pos.sell");
 
   const renderSaleRow = (sale: Sale) => (
     <SalesHistoryRow

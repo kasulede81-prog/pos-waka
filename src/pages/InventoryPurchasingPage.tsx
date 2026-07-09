@@ -1,10 +1,11 @@
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo } from "react";
 import clsx from "clsx";
 import { Navigate } from "react-router-dom";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
+
 import { PageHeader } from "../components/layout/PageHeader";
 import { StockPage } from "./StockPage";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
@@ -22,10 +23,10 @@ import type { InventoryPurchasingTab } from "../features/inventory-purchasing/ty
 export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   usePageLoadMark("inventory-purchasing");
   const actor = useSessionActor();
-  const canStock = hasPermission(actor.role, "stock.view");
-  const canPurchasesView = hasPermission(actor.role, "purchases.view");
-  const canPurchasesRecord = hasPermission(actor.role, "purchases.record");
-  const canSuppliers = hasPermission(actor.role, "suppliers.view");
+  const canStock = actorHasPermission(actor, "stock.view");
+  const canPurchasesView = actorHasPermission(actor, "purchases.view");
+  const canPurchasesRecord = actorHasPermission(actor, "purchases.record");
+  const canSuppliers = actorHasPermission(actor, "suppliers.view");
 
   const {
     tab,

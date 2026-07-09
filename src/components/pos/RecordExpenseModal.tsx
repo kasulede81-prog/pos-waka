@@ -31,7 +31,7 @@ export function RecordExpenseModal({ lang, open, onClose }: Props) {
   const [saved, setSaved] = useState(false);
 
   const todayKey = dateKeyKampala(new Date());
-  const canRecord = canRecordCashExpenses(actor.role, preferences);
+  const canRecord = canRecordCashExpenses(actor.role, preferences, actor.permissions);
 
   const myTodayExpenses = useMemo(
     () =>

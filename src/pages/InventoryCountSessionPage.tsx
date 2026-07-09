@@ -60,7 +60,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
   useEffect(() => {
     if (!sessionId || !session || autoStartedRef.current) return;
     if (session.status !== "draft") return;
-    if (!canInventoryCount(actor.role, "count")) return;
+    if (!canInventoryCount(actor.role, "count", actor.permissions)) return;
     autoStartedRef.current = true;
     const r = startSession(sessionId);
     if (!r.ok) autoStartedRef.current = false;
@@ -75,14 +75,14 @@ export function InventoryCountSessionPage({ lang }: Props) {
     );
   }
 
-  const canCount = session.status === "counting" && canInventoryCount(actor.role, "count");
-  const canSubmit = session.status === "counting" && canInventoryCount(actor.role, "submit");
-  const canApprove = session.status === "submitted" && canInventoryCount(actor.role, "approve");
-  const canApply = session.status === "approved" && canInventoryCount(actor.role, "apply");
+  const canCount = session.status === "counting" && canInventoryCount(actor.role, "count", actor.permissions);
+  const canSubmit = session.status === "counting" && canInventoryCount(actor.role, "submit", actor.permissions);
+  const canApprove = session.status === "submitted" && canInventoryCount(actor.role, "approve", actor.permissions);
+  const canApply = session.status === "approved" && canInventoryCount(actor.role, "apply", actor.permissions);
   const canCancel =
     session.status !== "applied" &&
     session.status !== "cancelled" &&
-    canInventoryCount(actor.role, "cancel");
+    canInventoryCount(actor.role, "cancel", actor.permissions);
   const showReview =
     session.status === "submitted" || session.status === "approved" || session.status === "applied";
   const isComplete = session.status === "applied";
@@ -149,7 +149,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
             session={session}
             report={report}
             shopName={shopName}
-            onStartNew={canInventoryCount(actor.role, "create") ? onStartNew : undefined}
+            onStartNew={canInventoryCount(actor.role, "create", actor.permissions) ? onStartNew : undefined}
           />
         ) : (
           <>
@@ -158,7 +158,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
             ) : null}
 
             <div className="flex flex-wrap gap-2">
-              {session.status === "draft" && canInventoryCount(actor.role, "count") ? (
+              {session.status === "draft" && canInventoryCount(actor.role, "count", actor.permissions) ? (
                 <button
                   type="button"
                   onClick={() => runAction(() => startSession(sessionId))}

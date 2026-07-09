@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { actorHasPermission, actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import { useNavigate } from "react-router-dom";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+
 import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
@@ -10,7 +11,7 @@ import { ModalSheet } from "../layout/ModalSheet";
 import { POS_HOME_ROUTE } from "../../lib/posNavigation";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { findUnclosedPriorBusinessDays } from "../../lib/sequentialBusinessDays";
-import { hasPermission } from "../../lib/permissions";
+
 import {
   activeDayDrawerOpenForDate,
   floatVerificationWithinTolerance,
@@ -32,7 +33,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
   const navigate = useNavigate();
   const actor = useSessionActor();
   const { snapshot, authMode } = useSubscription();
-  const canOpenDay = hasEffectivePermission(actor.role, "day.open_drawer", snapshot, authMode);
+  const canOpenDay = actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
   const beginShift = usePosStore((s) => s.beginShift);
   const beginShiftV2 = usePosStore((s) => s.beginShiftV2);
   const recordDayDrawerOpen = usePosStore((s) => s.recordDayDrawerOpen);
@@ -50,7 +51,7 @@ export function ShiftOpeningScreen({ lang, onShiftStarted }: Props) {
 
   const v2 = isFormulaV2(preferences);
   const todayKey = dateKeyKampala(new Date());
-  const canCloseDay = hasPermission(actor.role, "day.close");
+  const canCloseDay = actorHasPermission(actor, "day.close");
   const knownUnclosedDays = useMemo(
     () =>
       findUnclosedPriorBusinessDays({

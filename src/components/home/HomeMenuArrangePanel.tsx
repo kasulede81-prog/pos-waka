@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import clsx from "clsx";
 import type { Language, LauncherTileColor, LauncherTileConfig } from "../../types";
 import { t } from "../../lib/i18n";
@@ -15,7 +16,7 @@ import { isPharmacyMode } from "../../lib/pharmacy";
 import { PRESET_SHELF_HEX, resolveShelfHex, HOME_HERO_PREVIEW_BG_PRESETS, resolveHomeHeroPreviewBgColor } from "../../lib/shelfColor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+
 import type { Permission } from "../../types";
 import { HomeLauncherTile } from "./HomeLauncherTile";
 import { ShelfColorWheel } from "../pos/ShelfColorWheel";
@@ -46,7 +47,7 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
 
   const can = useCallback(
     (perm?: Permission) =>
-      !perm || hasEffectivePermission(actor.role, perm, snapshot, authMode),
+      !perm || actorHasEffectivePermission(actor, perm, snapshot, authMode),
     [actor.role, snapshot, authMode],
   );
 

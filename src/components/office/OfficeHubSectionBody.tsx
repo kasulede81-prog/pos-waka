@@ -1,4 +1,5 @@
 import { lazy, Suspense } from "react";
+import { actorHasEffectivePermission } from "../../lib/actorAuthorization";
 import {
   Package,
   Users,
@@ -30,7 +31,7 @@ import { countSalesWithSyncErrors } from "../../offline/cloudSync";
 import { useOfficeHubAccess } from "../../hooks/useOfficeHubAccess";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
-import { hasEffectivePermission } from "../../lib/subscriptionEntitlements";
+
 import { usePosStore } from "../../store/usePosStore";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { activeDayDrawerOpenForDate, isFormulaV2 } from "../../lib/dayDrawerOpen";
@@ -70,7 +71,7 @@ export function OfficeHubSectionBody({ lang, section }: Props) {
   const needsDayOpen =
     isFormulaV2(preferences) &&
     !activeDayDrawerOpenForDate(dayDrawerOpens, todayKey) &&
-    hasEffectivePermission(actor.role, "day.open_drawer", snapshot, authMode);
+    actorHasEffectivePermission(actor, "day.open_drawer", snapshot, authMode);
 
   if (section === "daily" && access.hasDaily) {
     return (

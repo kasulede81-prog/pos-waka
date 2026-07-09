@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
-import { hasPermission } from "../lib/permissions";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { isPharmacyMode } from "../lib/pharmacy";
@@ -14,7 +14,7 @@ export function SettingsPharmacyPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const setPreferences = usePosStore((s) => s.setPreferences);
 
-  if (!hasPermission(actor.role, "settings.shop")) {
+  if (!actorHasPermission(actor, "settings.shop")) {
     return <Navigate to="/settings" replace />;
   }
 

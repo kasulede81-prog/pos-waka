@@ -1,11 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
+import { actorHasPermission } from "../../../lib/actorAuthorization";
 import clsx from "clsx";
 import { Phone, MessageCircle } from "lucide-react";
 import type { Language, Supplier } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { usePosStore } from "../../../store/usePosStore";
 import { useSessionActor } from "../../../context/SessionActorContext";
-import { hasPermission } from "../../../lib/permissions";
+
 import { ModalSheet } from "../../../components/layout/ModalSheet";
 import { isWalkInSupplierId } from "../../../lib/walkInSupplier";
 import { formatShortUgx } from "../lib/overviewStats";
@@ -17,7 +18,7 @@ type Props = {
 
 export function SuppliersTab({ lang, onOpenSupplier }: Props) {
   const actor = useSessionActor();
-  const canManage = hasPermission(actor.role, "suppliers.manage");
+  const canManage = actorHasPermission(actor, "suppliers.manage");
   const suppliers = usePosStore((s) => s.suppliers);
   const purchases = usePosStore((s) => s.purchases);
   const addSupplier = usePosStore((s) => s.addSupplier);
