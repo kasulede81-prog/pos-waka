@@ -3,6 +3,7 @@ import type { Language } from "../../../types";
 import { t, tTemplate } from "../../../lib/i18n";
 import { PACK_TYPE_OPTIONS, packKindLabel, type PackKind } from "../../../lib/simpleProductWizard";
 import { WIZARD_INPUT_TEXT, wizardChoiceButtonClass } from "../wizard/wizardTokens";
+import { WakaSwitch } from "../../../components/enterprise/WakaSwitch";
 
 type Props = {
   lang: Language;
@@ -33,15 +34,11 @@ export function RetailPackSection({
 
   return (
     <div className="rounded-2xl border border-border/70 bg-muted/20 p-4">
-      <label className="flex cursor-pointer items-center gap-3">
-        <input
-          type="checkbox"
-          checked={hasPack}
-          onChange={(e) => onHasPackChange(e.target.checked)}
-          className="h-5 w-5 accent-primary"
-        />
-        <span className="text-sm font-black text-foreground">{t(lang, "simpleAddPackToggle")}</span>
-      </label>
+      <WakaSwitch
+        checked={hasPack}
+        onCheckedChange={onHasPackChange}
+        label={<span className="text-sm font-black text-foreground">{t(lang, "simpleAddPackToggle")}</span>}
+      />
       {hasPack ? (
         <div className="mt-3 space-y-3">
           <p className="text-xs font-semibold text-muted-foreground">{t(lang, "simpleAddPackTypeLabel")}</p>

@@ -5,27 +5,20 @@ import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { usePosStore } from "../store/usePosStore";
-import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
+import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { isHospitalityMode, isKitchenEnabledForHospitality } from "../lib/hospitality";
 import { inferProductHospitalityRouting } from "../lib/productHospitalityRouting";
 import { resolveIngredientPolicyConfig } from "../lib/hospitalityHardware";
 import { computeRestaurantBillTotals } from "../lib/restaurantBilling";
 
-export function SettingsHospitalityPage({ lang }: { lang: Language }) {
-  const actor = useSessionActor();
+function HospitalitySettingsBody({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const products = usePosStore((s) => s.products);
-  const setPreferences = usePosStore((s) => s.setPreferences);
+  const savePreferences = usePreferencesPatch();
   const updateProduct = usePosStore((s) => s.updateProduct);
   const [applyMsg, setApplyMsg] = useState<string | null>(null);
-
-  if (!actorHasPermission(actor, "settings.shop")) {
-    return <Navigate to="/settings" replace />;
-  }
-
-  if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
-    return <Navigate to="/settings" replace />;
-  }
 
   const kitchenOn = isKitchenEnabledForHospitality(
     preferences.businessType,
@@ -50,13 +43,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
   });
 
   return (
-    <div className="space-y-5 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "hospitalitySettingsTitle")}
-        subtitle={t(lang, "hospitalitySettingsSub")}
-      />
-
+    <>
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-base font-black text-stone-950">{t(lang, "menuBuilderTitle")}</p>
         <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "menuBuilderSub")}</p>
@@ -79,7 +66,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
               type="radio"
               name="hospitalityKitchen"
               checked={kitchenOn}
-              onChange={() => setPreferences({ hospitalityKitchenEnabled: true })}
+              onChange={() => savePreferences({ hospitalityKitchenEnabled: true })}
               className="h-5 w-5 accent-waka-600"
             />
             {t(lang, "hospitalitySettingsKitchenOn")}
@@ -89,7 +76,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
               type="radio"
               name="hospitalityKitchen"
               checked={!kitchenOn}
-              onChange={() => setPreferences({ hospitalityKitchenEnabled: false })}
+              onChange={() => savePreferences({ hospitalityKitchenEnabled: false })}
               className="h-5 w-5 accent-waka-600"
             />
             {t(lang, "hospitalitySettingsKitchenOff")}
@@ -126,7 +113,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
             <button
               key={pct}
               type="button"
-              onClick={() => setPreferences({ hospitalityServiceChargePercent: pct })}
+              onClick={() => savePreferences({ hospitalityServiceChargePercent: pct })}
               className={`min-h-11 rounded-xl px-4 text-sm font-black ${
                 (preferences.hospitalityServiceChargePercent ?? 0) === pct
                   ? "bg-waka-600 text-white"
@@ -142,20 +129,18 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-base font-black text-stone-950">{t(lang, "hospitalityTaxTitle")}</p>
         <p className="mt-2 text-sm font-medium text-stone-600">{t(lang, "hospitalityTaxHint")}</p>
-        <label className="mt-3 flex min-h-[44px] items-center gap-2 text-sm font-bold">
-          <input
-            type="checkbox"
-            checked={preferences.hospitalityTaxEnabled !== false}
-            onChange={(e) => setPreferences({ hospitalityTaxEnabled: e.target.checked })}
-          />
-          {t(lang, "hospitalityTaxEnabled")}
-        </label>
+        <WakaSwitch
+          checked={preferences.hospitalityTaxEnabled !== false}
+          onCheckedChange={(checked) => savePreferences({ hospitalityTaxEnabled: checked })}
+          label={t(lang, "hospitalityTaxEnabled")}
+          className="mt-3"
+        />
         <div className="mt-3 flex flex-wrap gap-2">
           {[0, 5, 10, 18].map((pct) => (
             <button
               key={pct}
               type="button"
-              onClick={() => setPreferences({ hospitalityTaxPercent: pct })}
+              onClick={() => savePreferences({ hospitalityTaxPercent: pct })}
               className={`min-h-11 rounded-xl px-4 text-sm font-black ${
                 (preferences.hospitalityTaxPercent ?? 0) === pct ? "bg-waka-600 text-white" : "bg-stone-100 text-stone-800"
               }`}
@@ -169,7 +154,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
             <button
               key={mode}
               type="button"
-              onClick={() => setPreferences({ hospitalityTaxMode: mode })}
+              onClick={() => savePreferences({ hospitalityTaxMode: mode })}
               className={`min-h-11 flex-1 rounded-xl text-sm font-black ${
                 (preferences.hospitalityTaxMode ?? "exclusive") === mode
                   ? "bg-stone-900 text-white"
@@ -200,7 +185,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
                 name="ingPolicy"
                 checked={ingPolicy.policy === policy}
                 onChange={() =>
-                  setPreferences({
+                  savePreferences({
                     hospitalityIngredientStockPolicy: policy,
                     hospitalityIngredientPolicy: { ...ingPolicy, policy },
                   })
@@ -210,30 +195,25 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
             </label>
           ))}
         </div>
-        <label className="mt-3 flex min-h-[44px] items-center gap-2 text-sm font-bold">
-          <input
-            type="checkbox"
-            checked={ingPolicy.allowNegativeInventory ?? false}
-            onChange={(e) =>
-              setPreferences({
-                hospitalityIngredientPolicy: { ...ingPolicy, allowNegativeInventory: e.target.checked },
-              })
-            }
-          />
-          {t(lang, "hospitalityIngredientAllowNegative")}
-        </label>
-        <label className="flex min-h-[44px] items-center gap-2 text-sm font-bold">
-          <input
-            type="checkbox"
-            checked={ingPolicy.autoReserveIngredients ?? false}
-            onChange={(e) =>
-              setPreferences({
-                hospitalityIngredientPolicy: { ...ingPolicy, autoReserveIngredients: e.target.checked },
-              })
-            }
-          />
-          {t(lang, "hospitalityIngredientAutoReserve")}
-        </label>
+        <WakaSwitch
+          checked={ingPolicy.allowNegativeInventory ?? false}
+          onCheckedChange={(checked) =>
+            savePreferences({
+              hospitalityIngredientPolicy: { ...ingPolicy, allowNegativeInventory: checked },
+            })
+          }
+          label={t(lang, "hospitalityIngredientAllowNegative")}
+          className="mt-3"
+        />
+        <WakaSwitch
+          checked={ingPolicy.autoReserveIngredients ?? false}
+          onCheckedChange={(checked) =>
+            savePreferences({
+              hospitalityIngredientPolicy: { ...ingPolicy, autoReserveIngredients: checked },
+            })
+          }
+          label={t(lang, "hospitalityIngredientAutoReserve")}
+        />
         <label className="mt-2 block text-sm font-bold">
           {t(lang, "hospitalityIngredientLowStock")}
           <input
@@ -241,7 +221,7 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
             min={0}
             value={ingPolicy.lowStockThreshold ?? ""}
             onChange={(e) =>
-              setPreferences({
+              savePreferences({
                 hospitalityIngredientPolicy: {
                   ...ingPolicy,
                   lowStockThreshold: e.target.value ? Number(e.target.value) : null,
@@ -252,6 +232,29 @@ export function SettingsHospitalityPage({ lang }: { lang: Language }) {
           />
         </label>
       </article>
-    </div>
+    </>
+  );
+}
+
+export function SettingsHospitalityPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
+  const preferences = usePosStore((s) => s.preferences);
+
+  if (!actorHasPermission(actor, "settings.shop")) {
+    return <Navigate to="/settings" replace />;
+  }
+
+  if (!isHospitalityMode(preferences.businessType, preferences.hospitalityModeEnabled)) {
+    return <Navigate to="/settings" replace />;
+  }
+
+  return (
+    <SettingsAutoSaveShell
+      lang={lang}
+      title={t(lang, "hospitalitySettingsTitle")}
+      subtitle={t(lang, "hospitalitySettingsSub")}
+    >
+      <HospitalitySettingsBody lang={lang} />
+    </SettingsAutoSaveShell>
   );
 }

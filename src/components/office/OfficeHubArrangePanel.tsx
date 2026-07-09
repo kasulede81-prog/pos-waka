@@ -13,6 +13,7 @@ import {
 import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { OfficeHubSectionTile } from "./OfficeHubSectionTile";
 import { ShelfColorWheel } from "../pos/ShelfColorWheel";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 const COLORS: LauncherTileColor[] = ["default", "red", "orange", "blue", "green", "purple"];
 const EMPTY_ORDER: string[] = [];
@@ -118,15 +119,12 @@ export function OfficeHubArrangePanel({ lang, embedded = false }: Props) {
             {t(lang, "officeMenuEditHeading")}: {t(lang, selectedSection.titleKey)}
           </p>
 
-          <label className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-bold text-stone-800">
-            <input
-              type="checkbox"
-              checked={!selectedSection.hidden}
-              onChange={(e) => patchSelected({ hidden: !e.target.checked })}
-              className="h-5 w-5 rounded border-2 border-stone-300 accent-waka-600"
-            />
-            {selectedSection.hidden ? t(lang, "homeMenuShowTile") : t(lang, "homeMenuHideTile")}
-          </label>
+          <WakaSwitch
+            checked={!selectedSection.hidden}
+            onCheckedChange={(checked) => patchSelected({ hidden: !checked })}
+            label={selectedSection.hidden ? t(lang, "homeMenuShowTile") : t(lang, "homeMenuHideTile")}
+            className="text-sm font-bold text-stone-800"
+          />
 
           <div>
             <p className="text-xs font-bold text-stone-600">{t(lang, "homeMenuColorLabel")}</p>

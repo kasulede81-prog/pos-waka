@@ -1,5 +1,5 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Package, Receipt, Truck } from "lucide-react";
 import type { Language } from "../types";
@@ -26,6 +26,12 @@ import { downloadPurchasesCsv, downloadPurchasesPdf, printPurchasesReport } from
 import { receiptPrintActionLabel } from "../lib/printActionLabels";
 import { dateKeyKampala } from "../lib/datesUg";
 import type { DateFilterValue } from "../lib/dateFilters";
+import { EnterpriseListToolbar } from "../components/enterprise/EnterpriseListToolbar";
+import { EnterpriseListFooter } from "../components/enterprise/EnterpriseListFooter";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+
+const PURCHASE_PAGE_SIZE = 25;
 
 export function PurchasesPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -48,6 +54,8 @@ export function PurchasesPage({ lang }: { lang: Language }) {
   const [searchInvoice, setSearchInvoice] = useState("");
   const [exportHint, setExportHint] = useState<string | null>(null);
   const [exportBusy, setExportBusy] = useState(false);
+  const [purchaseVisibleCount, setPurchaseVisibleCount] = useState(PURCHASE_PAGE_SIZE);
+  const [paymentVisibleCount, setPaymentVisibleCount] = useState(PURCHASE_PAGE_SIZE);
 
   const listFilter: PurchaseListFilter = useMemo(() => {
     if (useRange) return { kind: "range", fromKey, toKey };
@@ -113,6 +121,23 @@ export function PurchasesPage({ lang }: { lang: Language }) {
     [rows, paymentsInPeriod],
   );
 
+  const visibleRows = useMemo(() => rows.slice(0, purchaseVisibleCount), [rows, purchaseVisibleCount]);
+  const visiblePayments = useMemo(
+    () => paymentsInPeriod.slice(0, paymentVisibleCount),
+    [paymentsInPeriod, paymentVisibleCount],
+  );
+
+  const periodLabel = useRange
+    ? `${formatHistoryPickerDate(fromKey, lang)} – ${formatHistoryPickerDate(toKey, lang)}`
+    : undefined;
+
+  const hasActiveSearch = Boolean(searchSupplier.trim() || searchProduct.trim() || searchInvoice.trim());
+
+  useEffect(() => {
+    setPurchaseVisibleCount(PURCHASE_PAGE_SIZE);
+    setPaymentVisibleCount(PURCHASE_PAGE_SIZE);
+  }, [listFilter, searchSupplier, searchProduct, searchInvoice]);
+
   if (!canView) {
     return <Navigate to="/" replace />;
   }
@@ -136,10 +161,11 @@ export function PurchasesPage({ lang }: { lang: Language }) {
         }
         datePickerFooter={
           <div className="space-y-3">
-            <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
-              <input type="checkbox" checked={useRange} onChange={(e) => setUseRange(e.target.checked)} />
-              {t(lang, "purchasesFilterRange")}
-            </label>
+            <WakaSwitch
+              checked={useRange}
+              onCheckedChange={setUseRange}
+              label={t(lang, "purchasesFilterRange")}
+            />
             {useRange ? (
               <div className="grid gap-2 sm:grid-cols-2">
                 <label className="block text-xs font-bold text-stone-600">
@@ -183,64 +209,59 @@ export function PurchasesPage({ lang }: { lang: Language }) {
         ]}
       />
 
-      <div className="grid gap-2 sm:grid-cols-3">
-        <input
-          value={searchSupplier}
-          onChange={(e) => setSearchSupplier(e.target.value)}
-          placeholder={t(lang, "purchasesSearchSupplier")}
-          className="rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold"
-        />
-        <input
-          value={searchProduct}
-          onChange={(e) => setSearchProduct(e.target.value)}
-          placeholder={t(lang, "purchasesSearchProduct")}
-          className="rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold"
-        />
-        <input
-          value={searchInvoice}
-          onChange={(e) => setSearchInvoice(e.target.value)}
-          placeholder={t(lang, "purchasesSearchInvoice")}
-          className="rounded-2xl border-2 border-stone-200 px-4 py-3 text-sm font-semibold"
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={exportBusy || rows.length === 0}
-          onClick={() => void runPrint()}
-          className="min-h-[44px] rounded-2xl bg-stone-900 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
-        >
-          {receiptPrintActionLabel(lang)}
-        </button>
-        <button
-          type="button"
-          disabled={exportBusy || rows.length === 0}
-          onClick={() => void runExport("csv")}
-          className="min-h-[44px] rounded-2xl border-2 border-stone-300 bg-white px-4 py-2 text-sm font-black disabled:opacity-50"
-        >
-          {t(lang, "purchasesExportCsv")}
-        </button>
-        <button
-          type="button"
-          disabled={exportBusy || rows.length === 0}
-          onClick={() => void runExport("pdf")}
-          className="min-h-[44px] rounded-2xl bg-waka-600 px-4 py-2 text-sm font-black text-white disabled:opacity-50"
-        >
-          {t(lang, "purchasesExportPdf")}
-        </button>
-        {exportHint ? <p className="self-center text-sm font-bold text-waka-800">{exportHint}</p> : null}
-      </div>
+      <EnterpriseListToolbar
+        lang={lang}
+        searchQuery={searchSupplier}
+        searchPlaceholder={t(lang, "purchasesSearchSupplier")}
+        onSearchChange={setSearchSupplier}
+        periodLabel={periodLabel}
+        onExport={() => void runExport("csv")}
+        exportLabel={t(lang, "purchasesExportCsv")}
+        trailing={
+          <>
+            <input
+              value={searchProduct}
+              onChange={(e) => setSearchProduct(e.target.value)}
+              placeholder={t(lang, "purchasesSearchProduct")}
+              className="min-h-[40px] w-36 shrink-0 rounded-xl border border-stone-200 px-3 text-xs font-semibold sm:w-44"
+            />
+            <input
+              value={searchInvoice}
+              onChange={(e) => setSearchInvoice(e.target.value)}
+              placeholder={t(lang, "purchasesSearchInvoice")}
+              className="min-h-[40px] w-36 shrink-0 rounded-xl border border-stone-200 px-3 text-xs font-semibold sm:w-44"
+            />
+            <button
+              type="button"
+              disabled={exportBusy || rows.length === 0}
+              onClick={() => void runPrint()}
+              className="inline-flex min-h-[40px] shrink-0 items-center rounded-xl border border-stone-200 bg-stone-900 px-3 text-xs font-black text-white disabled:opacity-50"
+            >
+              {receiptPrintActionLabel(lang)}
+            </button>
+            <button
+              type="button"
+              disabled={exportBusy || rows.length === 0}
+              onClick={() => void runExport("pdf")}
+              className="inline-flex min-h-[40px] shrink-0 items-center rounded-xl bg-waka-600 px-3 text-xs font-black text-white disabled:opacity-50"
+            >
+              {t(lang, "purchasesExportPdf")}
+            </button>
+          </>
+        }
+      />
+      {exportHint ? <p className="text-sm font-bold text-waka-800">{exportHint}</p> : null}
 
       {rows.length === 0 ? (
-        <HistoryListCard
-          isEmpty
-          empty={<p className="text-sm font-medium text-stone-600">{t(lang, "purchasesEmpty")}</p>}
+        <EnterpriseEmptyState
+          icon={Package}
+          title={hasActiveSearch ? t(lang, "enterpriseEmptySearchTitle") : t(lang, "purchasesEmpty")}
+          description={hasActiveSearch ? t(lang, "enterpriseEmptySearchDescription") : undefined}
         />
       ) : (
         <HistoryListCard>
           <ul>
-          {rows.map((row) => (
+          {visibleRows.map((row) => (
             <li key={row.purchase.id} className="border-b border-stone-100 last:border-b-0">
               <Link
                 to={`/office/purchases/${row.purchase.id}`}
@@ -271,6 +292,12 @@ export function PurchasesPage({ lang }: { lang: Language }) {
             </li>
           ))}
           </ul>
+          <EnterpriseListFooter
+            lang={lang}
+            hasMore={purchaseVisibleCount < rows.length}
+            onLoadMore={() => setPurchaseVisibleCount((c) => c + PURCHASE_PAGE_SIZE)}
+            endOfList={visibleRows.length > 0 && purchaseVisibleCount >= rows.length}
+          />
         </HistoryListCard>
       )}
 
@@ -280,10 +307,15 @@ export function PurchasesPage({ lang }: { lang: Language }) {
           {t(lang, "purchasesColTotal")}: UGX {sumSupplierPaymentsUgx(paymentsInPeriod).toLocaleString()}
         </p>
         {paymentsInPeriod.length === 0 ? (
-          <p className="mt-3 text-sm font-medium text-stone-500">{t(lang, "supplierPaymentEmpty")}</p>
+          <EnterpriseEmptyState
+            icon={Truck}
+            title={t(lang, "supplierPaymentEmpty")}
+            className="mt-3"
+          />
         ) : (
+          <>
           <ul className="mt-4 space-y-2">
-            {paymentsInPeriod.map((pay) => (
+            {visiblePayments.map((pay) => (
               <li
                 key={pay.id}
                 className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-stone-50 px-4 py-3"
@@ -315,6 +347,13 @@ export function PurchasesPage({ lang }: { lang: Language }) {
               </li>
             ))}
           </ul>
+          <EnterpriseListFooter
+            lang={lang}
+            hasMore={paymentVisibleCount < paymentsInPeriod.length}
+            onLoadMore={() => setPaymentVisibleCount((c) => c + PURCHASE_PAGE_SIZE)}
+            endOfList={visiblePayments.length > 0 && paymentVisibleCount >= paymentsInPeriod.length}
+          />
+          </>
         )}
       </section>
     </div>

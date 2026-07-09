@@ -4,6 +4,9 @@ import { Battery, MonitorSmartphone, Plus, Star, Wifi, WifiOff } from "lucide-re
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { PageBackBar } from "../components/layout/PageBackBar";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { EnterpriseSkeletonList } from "../components/enterprise/EnterpriseSkeleton";
 import { ManagedByPrimaryDevice } from "../components/device/ManagedByPrimaryDevice";
 import { useSubscription } from "../context/SubscriptionContext";
 import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
@@ -30,8 +33,6 @@ import {
 import { setDeviceApprovalStatus, transferPrimaryDevice } from "../lib/deviceAuthority";
 
 type Props = { lang: Language };
-
-type DeviceTab = "active" | "history";
 
 function formatPlanDisplayName(snapshot: SubscriptionSnapshot): string {
   if (snapshot.kind !== "remote") return "—";
@@ -239,16 +240,12 @@ export function DeviceManagementPage({ lang }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [transferTarget, setTransferTarget] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [tab, setTab] = useState<DeviceTab>("active");
   const [isShopOwner, setIsShopOwner] = useState(true);
 
   const currentFp = useMemo(() => currentDeviceFingerprint(), []);
   const planLimit = useMemo(() => parsePlanDeviceLimit(snapshot, authMode), [snapshot, authMode]);
   const usage = useMemo(() => buildDeviceUsageSummary(devices, planLimit), [devices, planLimit]);
-  const { activeDevices, pendingDevices, historyDevices } = useMemo(
-    () => partitionShopDevices(devices),
-    [devices],
-  );
+  const { activeDevices, pendingDevices } = useMemo(() => partitionShopDevices(devices), [devices]);
   const planName = useMemo(() => formatPlanDisplayName(snapshot), [snapshot]);
   const remaining =
     usage.planLimit != null && usage.planLimit > 0
@@ -431,7 +428,7 @@ export function DeviceManagementPage({ lang }: Props) {
   };
 
   return (
-    <div className="space-y-6 pb-8">
+    <EnterprisePageContainer className="space-y-6">
       <PageBackBar lang={lang} fallbackTo="/settings" label={t(lang, "settingsHubTitle")} />
       <div>
         <h1 className="text-2xl font-black text-stone-950">{t(lang, "deviceMgmtEnterpriseTitle")}</h1>
@@ -483,27 +480,6 @@ export function DeviceManagementPage({ lang }: Props) {
         </div>
       </section>
 
-      <div className="flex gap-2 rounded-xl border border-stone-200 bg-stone-100 p-1">
-        <button
-          type="button"
-          onClick={() => setTab("active")}
-          className={`min-h-[44px] flex-1 rounded-lg px-3 text-sm font-bold ${
-            tab === "active" ? "bg-white text-stone-950 shadow-sm" : "text-stone-600"
-          }`}
-        >
-          {t(lang, "deviceMgmtActiveTab")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("history")}
-          className={`min-h-[44px] flex-1 rounded-lg px-3 text-sm font-bold ${
-            tab === "history" ? "bg-white text-stone-950 shadow-sm" : "text-stone-600"
-          }`}
-        >
-          {t(lang, "deviceMgmtHistoryTab")}
-        </button>
-      </div>
-
       {error ? (
         <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800" role="alert">
           {error}
@@ -511,15 +487,24 @@ export function DeviceManagementPage({ lang }: Props) {
       ) : null}
 
       {loading ? (
-        <p className="text-sm font-medium text-stone-500">{t(lang, "connectedDevicesLoading")}</p>
+        <EnterpriseSkeletonList count={3} />
       ) : !shopId ? (
-        <p className="text-sm font-medium text-stone-500">{t(lang, "connectedDevicesNoShop")}</p>
-      ) : tab === "active" ? (
+        <EnterpriseEmptyState
+          icon={MonitorSmartphone}
+          title={t(lang, "connectedDevicesNoShop")}
+          description={t(lang, "deviceMgmtSub")}
+        />
+      ) : (
         <div className="space-y-6">
           <div>
             <h2 className="text-xs font-black uppercase tracking-wider text-stone-500">{t(lang, "deviceMgmtActiveHeading")}</h2>
             {activeDevices.length === 0 ? (
-              <p className="mt-2 text-sm font-medium text-stone-500">{t(lang, "deviceMgmtNoActiveDevices")}</p>
+              <EnterpriseEmptyState
+                icon={MonitorSmartphone}
+                title={t(lang, "deviceMgmtNoActiveDevices")}
+                description={t(lang, "deviceMgmtRegisterHint")}
+                className="mt-3"
+              />
             ) : (
               <ul className="mt-3 space-y-4">
                 {activeDevices.map((device) => (
@@ -554,20 +539,6 @@ export function DeviceManagementPage({ lang }: Props) {
             </div>
           ) : null}
         </div>
-      ) : historyDevices.length === 0 ? (
-        <p className="text-sm font-medium text-stone-500">{t(lang, "deviceMgmtHistoryEmpty")}</p>
-      ) : (
-        <ul className="space-y-4">
-          {historyDevices.map((device) => (
-            <DeviceCard
-              key={device.id}
-              {...cardProps}
-              device={device}
-              busy={busyId === device.id}
-              showLifecycleActions={false}
-            />
-          ))}
-        </ul>
       )}
 
       {usage.atPlanLimit ? (
@@ -578,6 +549,6 @@ export function DeviceManagementPage({ lang }: Props) {
           {t(lang, "connectedDevicesUpgradeCta")}
         </Link>
       ) : null}
-    </div>
+    </EnterprisePageContainer>
   );
 }

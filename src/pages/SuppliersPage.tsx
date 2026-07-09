@@ -1,7 +1,9 @@
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, Navigate } from "react-router-dom";
+import { Truck } from "lucide-react";
 import { PageHeader } from "../components/layout/PageHeader";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
@@ -103,7 +105,7 @@ export function SuppliersPage({ lang }: { lang: Language }) {
 
       <section className="space-y-3">
         {sorted.length === 0 ? (
-          <p className="rounded-2xl border border-stone-200 bg-white p-6 text-stone-600">{t(lang, "suppliersEmpty")}</p>
+          <EnterpriseEmptyState icon={Truck} title={t(lang, "suppliersEmpty")} />
         ) : (
           sorted.map((s) => (
             <article key={s.id} className="rounded-3xl border-2 border-stone-100 bg-white p-5 shadow-sm">

@@ -2,13 +2,12 @@ import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import type { InvestigationTab } from "../types";
-import { INVESTIGATION_TABS, INVESTIGATION_TABS_WITH_COMPLIANCE } from "../types";
 
 type Props = {
   lang: Language;
   active: InvestigationTab;
   onChange: (tab: InvestigationTab) => void;
-  pharmacyMode?: boolean;
+  tabs: InvestigationTab[];
 };
 
 function labelFor(lang: Language, tab: InvestigationTab): string {
@@ -19,9 +18,7 @@ function labelFor(lang: Language, tab: InvestigationTab): string {
   return tab;
 }
 
-export function InvestigationTabs({ lang, active, onChange, pharmacyMode = false }: Props) {
-  const tabs = pharmacyMode ? INVESTIGATION_TABS_WITH_COMPLIANCE : INVESTIGATION_TABS;
-
+export function InvestigationTabs({ lang, active, onChange, tabs }: Props) {
   return (
     <div className="-mx-0.5 flex gap-1 overflow-x-auto rounded-2xl border border-stone-200 bg-stone-50/80 p-1 [-webkit-overflow-scrolling:touch]">
       {tabs.map((tab) => (

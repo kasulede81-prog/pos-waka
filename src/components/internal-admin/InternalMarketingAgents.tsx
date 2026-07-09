@@ -19,6 +19,7 @@ import {
   type InternalMarketingAgentRow,
   type MarketingAgentRole,
 } from "../../lib/referralAgents";
+import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 
 type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
 
@@ -389,26 +390,24 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
                   {MARKETING_AGENT_ROLES.map((role) => {
                     const checked = (roleEdits[a.id] ?? a.roles).includes(role);
                     return (
-                      <label
+                      <div
                         key={role}
                         className={clsx(
-                          "inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-1.5 text-xs font-bold",
+                          "inline-flex min-h-[36px] rounded-xl border px-3 py-1.5 text-xs font-bold",
                           checked ? "border-waka-400 bg-waka-50 text-waka-950" : "border-stone-200 bg-white",
                         )}
                       >
-                        <input
-                          type="checkbox"
+                        <WakaCheckbox
                           checked={checked}
-                          className="h-4 w-4"
-                          onChange={() =>
+                          onCheckedChange={() =>
                             setRoleEdits((prev) => ({
                               ...prev,
                               [a.id]: toggleRole(prev[a.id] ?? a.roles, role),
                             }))
                           }
+                          label={roleLabel(role)}
                         />
-                        {roleLabel(role)}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
@@ -513,21 +512,19 @@ export function InternalMarketingAgents({ lang, lovableUi = false, previewMode =
             {MARKETING_AGENT_ROLES.map((role) => {
               const checked = grantRoles.includes(role);
               return (
-                <label
+                <div
                   key={role}
                   className={clsx(
-                    "inline-flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold",
+                    "inline-flex min-h-[40px] rounded-xl border px-3 py-2 text-xs font-bold",
                     checked ? "border-waka-400 bg-waka-50" : "border-stone-200 bg-white",
                   )}
                 >
-                  <input
-                    type="checkbox"
+                  <WakaCheckbox
                     checked={checked}
-                    className="h-4 w-4"
-                    onChange={() => setGrantRoles((prev) => toggleRole(prev, role))}
+                    onCheckedChange={() => setGrantRoles((prev) => toggleRole(prev, role))}
+                    label={roleLabel(role)}
                   />
-                  {roleLabel(role)}
-                </label>
+                </div>
               );
             })}
           </div>

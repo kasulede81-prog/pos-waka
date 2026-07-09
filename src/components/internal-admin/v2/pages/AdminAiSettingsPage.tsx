@@ -16,6 +16,7 @@ import {
   type AiPlatformMetrics,
 } from "../../../../lib/ai/platformAiAdmin";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
+import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 import { AiStatusCard } from "../AiStatusCard";
 import { runAiHealthCheck, type AiHealthReport } from "../../../../lib/ai/aiHealthCheck";
 
@@ -44,24 +45,24 @@ function FeatureToggle({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex min-h-[44px] items-start justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-stone-800">{label}</span>
-        {description ? <span className="mt-0.5 block text-xs text-stone-500">{description}</span> : null}
-        {deployed === false ? (
-          <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900">
-            Not deployed
-          </span>
-        ) : null}
-      </span>
-      <input
-        type="checkbox"
-        className="mt-1 h-5 w-5 shrink-0 accent-orange-600"
+    <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+      <WakaSwitch
         checked={checked}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
+        onCheckedChange={onChange}
+        label={label}
+        description={
+          <>
+            {description}
+            {deployed === false ? (
+              <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black uppercase text-amber-900">
+                Not deployed
+              </span>
+            ) : null}
+          </>
+        }
       />
-    </label>
+    </div>
   );
 }
 

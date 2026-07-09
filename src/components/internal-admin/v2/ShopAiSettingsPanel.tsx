@@ -7,6 +7,7 @@ import {
 } from "../../../lib/ai/shopAiAdmin";
 import type { ShopAiSettings } from "../../../lib/ai/shopAiSettings";
 import { DEFAULT_SHOP_AI_SETTINGS } from "../../../lib/ai/shopAiSettings";
+import { WakaSwitch } from "../../enterprise/WakaSwitch";
 
 type Props = {
   shopId: string;
@@ -128,32 +129,28 @@ export function ShopAiSettingsPanel({ shopId, canManage, previewMode = false }: 
         </div>
       </div>
 
-      <label className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3">
-        <span className="text-sm font-bold text-stone-800">AI access</span>
-        <input
-          type="checkbox"
-          className="h-5 w-5 accent-orange-600"
+      <div className="rounded-xl border border-stone-200 bg-white px-4 py-3">
+        <WakaSwitch
           checked={draft.ai_enabled}
           disabled={!canManage || previewMode}
-          onChange={(e) => setDraft({ ...draft, ai_enabled: e.target.checked })}
+          onCheckedChange={(checked) => setDraft({ ...draft, ai_enabled: checked })}
+          label="AI access"
         />
-      </label>
+      </div>
 
       <div className="space-y-2">
         {FEATURE_FIELDS.map(({ key, label }) => (
-          <label
+          <div
             key={key}
-            className="flex min-h-[44px] items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3"
+            className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3"
           >
-            <span className="text-sm font-bold text-stone-800">{label}</span>
-            <input
-              type="checkbox"
-              className="h-5 w-5 accent-orange-600"
+            <WakaSwitch
               checked={draft[key] === true}
               disabled={!canManage || previewMode || masterOff}
-              onChange={(e) => setDraft({ ...draft, [key]: e.target.checked })}
+              onCheckedChange={(checked) => setDraft({ ...draft, [key]: checked })}
+              label={label}
             />
-          </label>
+          </div>
         ))}
       </div>
 

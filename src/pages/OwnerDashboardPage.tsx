@@ -1,14 +1,9 @@
 import { useCallback, useMemo, useState } from "react";
-import { FileDown } from "lucide-react";
+import type { Language } from "../types";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 import { useDeferredReportingAuditLogs } from "../hooks/useDeferredReportingAuditLogs";
-import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
-import type { Language } from "../types";
-import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useExpectedDrawerCashForBounds } from "../hooks/useDrawerCashForDay";
-import { isPharmacyMode } from "../lib/pharmacy";
 import { useReportingDateFilter } from "../hooks/useReportingDateFilter";
 import { formatDateFilterViewingLabel } from "../lib/dateFilterLabels";
 import { getCachedOwnerCommandCenterBundle } from "../lib/ownerDashboardCommandCenter";
@@ -16,21 +11,6 @@ import { useSyncStatus } from "../hooks/useSyncStatus";
 import { computeSyncSalesStats } from "../offline/cloudSync";
 import { buildCloudRecoverySnapshotFromStore } from "../lib/cloudAuthorityAudit";
 import { useOwnerDeviceHealth } from "../hooks/useOwnerDeviceHealth";
-import { PageHeader } from "../components/layout/PageHeader";
-import { CommandCenterPageToolbar } from "../components/command-center/CommandCenterPageToolbar";
-import { CommandCenterHealthHero } from "../components/command-center/CommandCenterHealthHero";
-import { CommandCenterKpiGrid } from "../components/command-center/CommandCenterKpiGrid";
-import { CommandCenterAttentionSection } from "../components/command-center/CommandCenterAttentionSection";
-import { CommandCenterCloudCard } from "../components/command-center/CommandCenterCloudCard";
-import { CommandCenterLiveOpsTiles } from "../components/command-center/CommandCenterLiveOpsTiles";
-import { CommandCenterCashCard } from "../components/command-center/CommandCenterCashCard";
-import { CommandCenterStaffCard } from "../components/command-center/CommandCenterStaffCard";
-import { CommandCenterInventoryCard } from "../components/command-center/CommandCenterInventoryCard";
-import { CommandCenterFinancialGrid } from "../components/command-center/CommandCenterFinancialGrid";
-import { CommandCenterIntegrityPanel } from "../components/command-center/CommandCenterIntegrityPanel";
-import { CommandCenterRecommendations } from "../components/command-center/CommandCenterRecommendations";
-import { CommandCenterQuickActions } from "../components/command-center/CommandCenterQuickActions";
-import { CommandCenterExecutiveFooter } from "../components/command-center/CommandCenterExecutiveFooter";
 import {
   buildCommandCenterExportText,
   buildExecutiveSummary,
@@ -43,6 +23,9 @@ import {
   filterAttentionByQuery,
 } from "../lib/commandCenterPageView";
 import { shareText } from "../lib/reportExport";
+import { EnterpriseDashboardShell } from "../components/command-center/EnterpriseDashboardShell";
+import { resolveDashboardMode } from "../components/command-center/registry/dashboardMode";
+import type { DashboardCenterContext } from "../components/command-center/registry/dashboardWidgetTypes";
 
 const RECOMMENDATIONS_SECTION_ID = "cmd-center-recommendations";
 
@@ -77,7 +60,6 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const inventoryCountSessions = usePosStore((s) => s.inventoryCountSessions);
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const acknowledgements = preferences.ownerAlertAcknowledgements ?? [];
-  const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const auditLogs = useDeferredReportingAuditLogs(includeArchived);
   const voidRecords = usePosStore((s) => s.voidRecords);
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
@@ -90,6 +72,8 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const mode = resolveDashboardMode(preferences.businessType, preferences.pharmacyModeEnabled);
+  const pharmacyMode = mode === "pharmacy";
   const periodLabel = useMemo(() => formatDateFilterViewingLabel(lang, filter), [filter, lang]);
   const syncStats = useMemo(() => computeSyncSalesStats(sales), [sales]);
 
@@ -258,108 +242,72 @@ export function OwnerDashboardPage({ lang }: { lang: Language }) {
     void shareText(text, `${shopName} Command Center`);
   }, [shopName, periodLabel, healthScore, overview, heroExpectedCash]);
 
-  return (
-    <div className="space-y-4 pb-10 sm:space-y-5">
-      <PageHeader
-        lang={lang}
-        title={t(lang, "ownerDashboardTitle")}
-        subtitle={t(lang, "cmdCenterSub")}
-        compact
-        showBack
-      >
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={exportDashboard}
-            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3 text-xs font-black text-stone-800 shadow-sm"
-          >
-            <FileDown className="h-3.5 w-3.5" aria-hidden />
-            {t(lang, "cmdCenterExport")}
-          </button>
-        </div>
-      </PageHeader>
+  const ctx = useMemo((): DashboardCenterContext => ({
+    lang,
+    surface: "command-center",
+    mode,
+    businessType: preferences.businessType,
+    can: () => true,
+    filter,
+    setFilter,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+    searchOpen,
+    setSearchOpen,
+    searchQuery,
+    setSearchQuery,
+    shopName,
+    periodLabel,
+    commandCenter,
+    cloudProtection,
+    healthScore,
+    domainStatuses,
+    kpiCards,
+    recommendations,
+    summaryKey,
+    summaryVars,
+    filteredAttention,
+    devicesTotal,
+    devicesOnline: deviceHealth.devicesOnline,
+    heroExpectedCash,
+    revenueSparkline,
+    onAcknowledge,
+    exportDashboard,
+    recommendationsSectionId: RECOMMENDATIONS_SECTION_ID,
+  }), [
+    lang,
+    mode,
+    preferences.businessType,
+    filter,
+    setFilter,
+    includeArchived,
+    setIncludeArchived,
+    archiveNotice,
+    archivedSalesCount,
+    needsArchive,
+    searchOpen,
+    searchQuery,
+    shopName,
+    periodLabel,
+    commandCenter,
+    cloudProtection,
+    healthScore,
+    domainStatuses,
+    kpiCards,
+    recommendations,
+    summaryKey,
+    summaryVars,
+    filteredAttention,
+    devicesTotal,
+    deviceHealth.devicesOnline,
+    heroExpectedCash,
+    revenueSparkline,
+    onAcknowledge,
+    exportDashboard,
+  ]);
 
-      <CommandCenterPageToolbar
-        lang={lang}
-        filter={filter}
-        onFilterChange={setFilter}
-        searchOpen={searchOpen}
-        onSearchToggle={() => setSearchOpen((v) => !v)}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        shopName={shopName}
-      />
-
-      {archiveNotice ? (
-        <DateFilterArchiveNotice
-          lang={lang}
-          archivedCount={archivedSalesCount}
-          onEnableArchived={() => setIncludeArchived(true)}
-        />
-      ) : null}
-      {needsArchive && includeArchived && archivedSalesCount > 0 ? (
-        <p className="text-xs font-semibold text-stone-600">{t(lang, "dateFilterArchiveIncluded")}</p>
-      ) : null}
-
-      <IncludeArchivedFilter lang={lang} checked={includeArchived} onChange={setIncludeArchived} />
-
-      <CommandCenterHealthHero lang={lang} score={healthScore} domains={domainStatuses} />
-
-      <CommandCenterKpiGrid lang={lang} cards={kpiCards} periodLabel={periodLabel} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CommandCenterAttentionSection
-          lang={lang}
-          critical={filteredAttention.critical}
-          warnings={filteredAttention.warnings}
-          information={filteredAttention.information}
-          reviewedCritical={commandCenter.attentionReviewed.critical}
-          reviewedWarnings={commandCenter.attentionReviewed.warnings}
-          periodLabel={periodLabel}
-          onAcknowledge={onAcknowledge}
-        />
-        <CommandCenterCloudCard
-          lang={lang}
-          cloud={cloudProtection}
-          devicesOnline={deviceHealth.devicesOnline}
-          devicesTotal={devicesTotal || 1}
-        />
-      </div>
-
-      <CommandCenterLiveOpsTiles lang={lang} live={commandCenter.liveOps} expectedCashUgx={heroExpectedCash} />
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CommandCenterCashCard lang={lang} cash={commandCenter.cash} />
-        <CommandCenterStaffCard lang={lang} rows={commandCenter.shiftRows} periodLabel={periodLabel} />
-      </div>
-
-      <CommandCenterInventoryCard lang={lang} inventory={commandCenter.inventory} />
-
-      <CommandCenterFinancialGrid
-        lang={lang}
-        financial={commandCenter.financial}
-        periodLabel={periodLabel}
-        revenueSparkline={revenueSparkline}
-      />
-
-      <CommandCenterIntegrityPanel lang={lang} signals={commandCenter.integritySignals} />
-
-      <CommandCenterRecommendations
-        lang={lang}
-        recommendations={recommendations}
-        sectionId={RECOMMENDATIONS_SECTION_ID}
-      />
-
-      <CommandCenterQuickActions lang={lang} />
-
-      <CommandCenterExecutiveFooter
-        lang={lang}
-        score={healthScore}
-        summaryKey={summaryKey}
-        summaryVars={summaryVars}
-        onExport={exportDashboard}
-        onShare={exportDashboard}
-      />
-    </div>
-  );
+  return <EnterpriseDashboardShell ctx={ctx} />;
 }

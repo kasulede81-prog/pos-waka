@@ -6,6 +6,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { StockPage } from "./StockPage";
 import { usePageLoadMark } from "../hooks/usePageLoadMark";
@@ -58,7 +59,7 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="page-content-pad space-y-3">
+    <EnterprisePageContainer className="space-y-3">
       <PageHeader
         lang={lang}
         title={t(lang, "ipPageTitle")}
@@ -132,6 +133,6 @@ export function InventoryPurchasingPage({ lang }: { lang: Language }) {
           }}
         />
       ) : null}
-    </div>
+    </EnterprisePageContainer>
   );
 }

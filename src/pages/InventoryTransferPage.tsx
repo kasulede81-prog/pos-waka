@@ -3,6 +3,7 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { dateKeyKampala } from "../lib/datesUg";
 import {
@@ -173,7 +174,7 @@ export function InventoryTransferPage({ lang }: Props) {
     ) : null;
 
   return (
-    <div className="page-content-pad space-y-4 pb-28">
+    <EnterprisePageContainer>
       <PageHeader
         lang={lang}
         title={t(lang, "xferPageTitle")}
@@ -292,6 +293,6 @@ export function InventoryTransferPage({ lang }: Props) {
           </>
         ) : null}
       </TransferOperationShell>
-    </div>
+    </EnterprisePageContainer>
   );
 }

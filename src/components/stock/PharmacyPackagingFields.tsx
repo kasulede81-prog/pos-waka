@@ -6,6 +6,7 @@ import {
   PHARMACY_LEVEL1_UNITS,
   PHARMACY_LEVEL2_UNITS,
 } from "../../lib/pharmacyPackaging";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 export type PharmacyPackagingFieldState = {
   enabled: boolean;
@@ -100,15 +101,11 @@ export function PharmacyPackagingFields({
   return (
     <div className="space-y-4 rounded-2xl border-2 border-teal-100 bg-teal-50/30 p-4">
       {showEnableToggle ? (
-        <label className="flex items-start gap-3">
-          <input
-            type="checkbox"
-            checked={state.enabled}
-            onChange={(e) => onChange({ enabled: e.target.checked })}
-            className="mt-1 h-5 w-5 accent-teal-600"
-          />
-          <span className="text-sm font-semibold text-stone-800">{t(lang, "pharmacyPackEnableCheckbox")}</span>
-        </label>
+        <WakaSwitch
+          checked={state.enabled}
+          onCheckedChange={(checked) => onChange({ enabled: checked })}
+          label={t(lang, "pharmacyPackEnableCheckbox")}
+        />
       ) : null}
 
       {state.enabled ? (
@@ -128,14 +125,12 @@ export function PharmacyPackagingFields({
             </select>
           </label>
 
-          <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
-            <input
-              type="checkbox"
-              checked={state.level1Enabled}
-              onChange={(e) => onChange({ level1Enabled: e.target.checked })}
-            />
-            {t(lang, "pharmacyPackLevel1Optional")}
-          </label>
+          <WakaSwitch
+            checked={state.level1Enabled}
+            onCheckedChange={(checked) => onChange({ level1Enabled: checked })}
+            label={t(lang, "pharmacyPackLevel1Optional")}
+            className="text-sm font-bold text-stone-800"
+          />
           {state.level1Enabled ? (
             <div className="grid grid-cols-2 gap-2">
               <select
@@ -159,14 +154,12 @@ export function PharmacyPackagingFields({
             </div>
           ) : null}
 
-          <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
-            <input
-              type="checkbox"
-              checked={state.level2Enabled}
-              onChange={(e) => onChange({ level2Enabled: e.target.checked })}
-            />
-            {t(lang, "pharmacyPackLevel2Optional")}
-          </label>
+          <WakaSwitch
+            checked={state.level2Enabled}
+            onCheckedChange={(checked) => onChange({ level2Enabled: checked })}
+            label={t(lang, "pharmacyPackLevel2Optional")}
+            className="text-sm font-bold text-stone-800"
+          />
           {state.level2Enabled ? (
             <div className="grid grid-cols-2 gap-2">
               <select
@@ -211,14 +204,12 @@ export function PharmacyPackagingFields({
                   inputMode="numeric"
                   className={clsx(inputClass, "mt-1")}
                 />
-                <label className="mt-2 flex items-center gap-2 text-xs font-bold text-stone-600">
-                  <input
-                    type="checkbox"
-                    checked={state.sellStrip}
-                    onChange={(e) => onChange({ sellStrip: e.target.checked })}
-                  />
-                  {t(lang, "pharmacyPackSellStrip")}
-                </label>
+                <WakaSwitch
+                  checked={state.sellStrip}
+                  onCheckedChange={(checked) => onChange({ sellStrip: checked })}
+                  label={t(lang, "pharmacyPackSellStrip")}
+                  className="mt-2 text-xs font-bold text-stone-600"
+                />
               </label>
             ) : null}
             {state.level2Enabled ? (
@@ -230,14 +221,12 @@ export function PharmacyPackagingFields({
                   inputMode="numeric"
                   className={clsx(inputClass, "mt-1")}
                 />
-                <label className="mt-2 flex items-center gap-2 text-xs font-bold text-stone-600">
-                  <input
-                    type="checkbox"
-                    checked={state.sellBox}
-                    onChange={(e) => onChange({ sellBox: e.target.checked })}
-                  />
-                  {t(lang, "pharmacyPackSellBox")}
-                </label>
+                <WakaSwitch
+                  checked={state.sellBox}
+                  onCheckedChange={(checked) => onChange({ sellBox: checked })}
+                  label={t(lang, "pharmacyPackSellBox")}
+                  className="mt-2 text-xs font-bold text-stone-600"
+                />
               </label>
             ) : null}
           </div>

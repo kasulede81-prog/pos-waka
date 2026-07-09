@@ -7,6 +7,7 @@ import { staffInitials } from "../../lib/staffRoleCatalog";
 import { findRoleTemplate, isCustomRoleAssignable, roleTemplatesForBusinessType } from "../../lib/enterpriseRoles";
 import { isStaffLoginLocked } from "../../lib/staffSecret";
 import { getDeviceOnline } from "../../lib/deviceOnline";
+import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 
 type Props = {
   lang: Language;
@@ -198,15 +199,12 @@ export function StaffTeamList({
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <label className="inline-flex items-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-700">
-                    <input
-                      type="checkbox"
-                      checked={s.active}
-                      onChange={(e) => onToggleActive(s.id, e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    {s.active ? t(lang, "staffActive") : t(lang, "staffInactive")}
-                  </label>
+                  <WakaCheckbox
+                    checked={s.active}
+                    onCheckedChange={(checked) => onToggleActive(s.id, checked)}
+                    label={s.active ? t(lang, "staffActive") : t(lang, "staffInactive")}
+                    className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-stone-700"
+                  />
                   <button
                     type="button"
                     className="rounded-xl border border-stone-200 px-3 py-2 text-xs font-bold text-waka-700"

@@ -15,6 +15,7 @@ import {
   fetchPlatformBusinessTypeSettings,
 } from "../../../../lib/platformBusinessTypes";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
+import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -60,16 +61,14 @@ function TypeRow({
           ) : null}
         </div>
       </div>
-      <label className="flex shrink-0 cursor-pointer items-center gap-2">
-        <span className="text-xs font-bold text-stone-600">{enabled ? "On" : "Off"}</span>
-        <input
-          type="checkbox"
-          className="h-5 w-5 rounded border-stone-300"
-          checked={enabled}
-          disabled={busy}
-          onChange={(e) => onToggle(e.target.checked)}
-        />
-      </label>
+      <WakaSwitch
+        checked={enabled}
+        disabled={busy}
+        onCheckedChange={onToggle}
+        label={<span className="text-xs font-bold text-stone-600">{enabled ? "On" : "Off"}</span>}
+        row={false}
+        className="flex shrink-0 items-center gap-2"
+      />
     </div>
   );
 }
@@ -170,21 +169,14 @@ export function AdminBusinessTypesPage({ adminRow, previewMode }: Props) {
         <p className="text-sm text-stone-500">Loading business type settings…</p>
       ) : (
         <>
-          <label className="flex items-center justify-between gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
-            <div>
-              <p className="text-sm font-black text-violet-950">Highlight experimental in admin preview</p>
-              <p className="text-xs text-violet-800">
-                Cosmetic only for this page. Registration uses the On/Off toggles below — including hardware and
-                electronics.
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              className="h-5 w-5"
+          <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3">
+            <WakaSwitch
               checked={settings.showExperimental}
-              onChange={(e) => void toggleExperimentalSection(e.target.checked)}
+              onCheckedChange={(checked) => void toggleExperimentalSection(checked)}
+              label="Highlight experimental in admin preview"
+              description="Cosmetic only for this page. Registration uses the On/Off toggles below — including hardware and electronics."
             />
-          </label>
+          </div>
 
           <section className="space-y-2">
             <h2 className="text-sm font-black uppercase tracking-wide text-stone-500">Standard business types</h2>

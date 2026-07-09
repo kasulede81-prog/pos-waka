@@ -27,6 +27,7 @@ import { WizardStepHeading } from "./wizard/WizardStepHeading";
 import { WizardPricingPanel } from "./wizard/WizardPricingPanel";
 import { WIZARD_INPUT_NUMERIC, WIZARD_INPUT_TEXT } from "./wizard/wizardTokens";
 import { PHARMACY_PRODUCT_WIZARD_STEPS } from "../../lib/productWizardSteps";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Step = (typeof PHARMACY_PRODUCT_WIZARD_STEPS)[number];
 
@@ -435,15 +436,13 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
 
             <WizardStepHeading title={t(lang, "pharmacyPackStepStockTitle")} />
 
-            <label className="flex items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
-              <input
-                type="checkbox"
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+              <WakaSwitch
                 checked={packagingEnabled}
-                onChange={(e) => setPackagingEnabled(e.target.checked)}
-                className="mt-1 h-5 w-5"
+                onCheckedChange={setPackagingEnabled}
+                label={t(lang, "pharmacyPackEnableCheckbox")}
               />
-              <span className="text-sm font-semibold text-stone-800">{t(lang, "pharmacyPackEnableCheckbox")}</span>
-            </label>
+            </div>
 
             {!packagingEnabled ? (
               <>
@@ -479,10 +478,12 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   </select>
                 </label>
 
-                <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
-                  <input type="checkbox" checked={level1Enabled} onChange={(e) => setLevel1Enabled(e.target.checked)} />
-                  {t(lang, "pharmacyPackLevel1Optional")}
-                </label>
+                <WakaSwitch
+                  checked={level1Enabled}
+                  onCheckedChange={setLevel1Enabled}
+                  label={t(lang, "pharmacyPackLevel1Optional")}
+                  className="text-sm font-bold text-stone-800"
+                />
                 {level1Enabled ? (
                   <div className="grid grid-cols-2 gap-2">
                     <select value={level1Unit} onChange={(e) => setLevel1Unit(e.target.value)} className={WIZARD_INPUT_TEXT}>
@@ -502,10 +503,12 @@ export function PharmacyAddMedicineWizard({ lang, open, onClose, shelves, disabl
                   </div>
                 ) : null}
 
-                <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
-                  <input type="checkbox" checked={level2Enabled} onChange={(e) => setLevel2Enabled(e.target.checked)} />
-                  {t(lang, "pharmacyPackLevel2Optional")}
-                </label>
+                <WakaSwitch
+                  checked={level2Enabled}
+                  onCheckedChange={setLevel2Enabled}
+                  label={t(lang, "pharmacyPackLevel2Optional")}
+                  className="text-sm font-bold text-stone-800"
+                />
                 {level2Enabled ? (
                   <div className="grid grid-cols-2 gap-2">
                     <select value={level2Unit} onChange={(e) => setLevel2Unit(e.target.value)} className={WIZARD_INPUT_TEXT}>

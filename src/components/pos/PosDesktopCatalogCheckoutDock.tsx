@@ -3,9 +3,8 @@ import type { RefObject } from "react";
 import { ArrowLeft } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
+import type { CheckoutInputField, CheckoutKeypadMode } from "../../lib/posCheckoutKeypad";
 import { CheckoutNumpadDock, CreditCatalogDockPanel } from "./PosCheckoutPanel";
-
-type CheckoutAmountField = "cash" | "mobile";
 
 type Props = {
   lang: Language;
@@ -14,7 +13,8 @@ type Props = {
   onCatalogNumpadOpenChange: (open: boolean) => void;
   cashInput: string;
   mobileMoneyInput: string;
-  checkoutAmountField: CheckoutAmountField;
+  checkoutAmountField: CheckoutInputField;
+  checkoutKeypadMode?: CheckoutKeypadMode;
   changeDue: number;
   computedDebt: number;
   saleCustomerId: string;
@@ -25,7 +25,8 @@ type Props = {
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
   saveSaleLabel: string;
   saveDisabled: boolean;
-  onCheckoutAmountField: (field: CheckoutAmountField) => void;
+  onCheckoutInputField: (field: CheckoutInputField) => void;
+  onCheckoutKeypadModeChange?: (mode: CheckoutKeypadMode) => void;
   onAppendCheckoutDigit: (d: string) => void;
   onClearCheckoutAmount: () => void;
   onSaleCustomerId: (id: string) => void;
@@ -43,6 +44,7 @@ export function PosDesktopCatalogCheckoutDock({
   cashInput,
   mobileMoneyInput,
   checkoutAmountField,
+  checkoutKeypadMode = "numeric",
   changeDue,
   computedDebt,
   saleCustomerId,
@@ -53,7 +55,8 @@ export function PosDesktopCatalogCheckoutDock({
   saveButtonRef,
   saveSaleLabel,
   saveDisabled,
-  onCheckoutAmountField,
+  onCheckoutInputField,
+  onCheckoutKeypadModeChange,
   onAppendCheckoutDigit,
   onClearCheckoutAmount,
   onSaleCustomerId,
@@ -98,10 +101,11 @@ export function PosDesktopCatalogCheckoutDock({
             saleCustomerPhone={saleCustomerPhone}
             customers={customers}
             customerSelectRef={customerSelectRef}
-            onCheckoutAmountField={onCheckoutAmountField}
+            onCheckoutInputField={onCheckoutInputField}
             onSaleCustomerId={onSaleCustomerId}
             onSaleCustomerName={onSaleCustomerName}
             onSaleCustomerPhone={onSaleCustomerPhone}
+            useCustomKeypad
           />
         ) : null}
 
@@ -123,12 +127,19 @@ export function PosDesktopCatalogCheckoutDock({
               </div>
             ) : null}
             <CheckoutNumpadDock
+              lang={lang}
               onDigit={onAppendCheckoutDigit}
               onClear={onClearCheckoutAmount}
               onSave={onFinishSale}
               saveLabel={saveSaleLabel}
               saveDisabled={saveDisabled}
               saveButtonRef={saveButtonRef}
+              keypadMode={checkoutKeypadMode}
+              onKeypadModeChange={(mode) => {
+                onCheckoutKeypadModeChange?.(mode);
+                if (mode === "alpha") onCheckoutInputField("customerName");
+              }}
+              showAlphaToggle={isCredit}
             />
           </div>
         ) : isCredit ? (

@@ -1,10 +1,12 @@
 import { Link, Navigate } from "react-router-dom";
-import { actorHasPermission } from "../lib/actorAuthorization";
 import type { Language, ReceiptPaperSize } from "../types";
 import { t } from "../lib/i18n";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useSessionActor } from "../context/SessionActorContext";
 import { usePosStore } from "../store/usePosStore";
-import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
+import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { isPrimaryRegisterDevice, resolveRegisterMode, type RegisterMode } from "../lib/primaryRegisterMode";
 import { isPrimaryDeviceCachedSync, setCurrentDeviceAsPrimary } from "../lib/deviceAuthority";
@@ -26,29 +28,18 @@ function discountModeLabelKey(mode: DiscountControlMode): string {
   return "settingsDiscountModeUnrestricted";
 }
 
-export function SettingsSellingPage({ lang }: { lang: Language }) {
+function SellingSettingsBody({ lang }: { lang: Language }) {
   const actor = useSessionActor();
   const preferences = usePosStore((s) => s.preferences);
-  const setPreferences = usePosStore((s) => s.setPreferences);
+  const savePreferences = usePreferencesPatch();
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
-
-  if (!actorHasPermission(actor, "settings.shop")) {
-    return <Navigate to="/settings" replace />;
-  }
-
   const discountMode = preferences.discountControlMode ?? "unrestricted";
   const registerMode = resolveRegisterMode(preferences);
   const isPrimary = isPrimaryRegisterDevice(preferences) || isPrimaryDeviceCachedSync();
   const thisDeviceFp = getOrCreateDeviceId();
 
   return (
-    <div className="space-y-5 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "settingsHubSelling")}
-        subtitle={t(lang, "settingsHubSellingSub")}
-      />
-
+    <>
       {canArrangeShelves ? (
         <article id="sell-shelves" className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
           <p className="text-base font-black text-stone-950">{t(lang, "stockShelfArrangeTitle")}</p>
@@ -68,7 +59,7 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
         <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "settingsDiscountModeLabel")}</label>
         <select
           value={discountMode}
-          onChange={(e) => setPreferences({ discountControlMode: e.target.value as DiscountControlMode })}
+          onChange={(e) => savePreferences({ discountControlMode: e.target.value as DiscountControlMode })}
           className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
         >
           {DISCOUNT_MODES.map((mode) => (
@@ -86,7 +77,7 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
               max={100}
               value={preferences.discountMaxPercentThreshold ?? 10}
               onChange={(e) =>
-                setPreferences({
+                savePreferences({
                   discountMaxPercentThreshold: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
                 })
               }
@@ -97,15 +88,11 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
       </article>
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <label className="flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-stone-900">
-          <input
-            type="checkbox"
-            checked={preferences.kioskQuickSell}
-            onChange={(e) => setPreferences({ kioskQuickSell: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-stone-400 accent-waka-600"
-          />
-          {t(lang, "kioskQuickSellLabel")}
-        </label>
+        <WakaSwitch
+          checked={preferences.kioskQuickSell}
+          onCheckedChange={(checked) => savePreferences({ kioskQuickSell: checked })}
+          label={t(lang, "kioskQuickSellLabel")}
+        />
       </article>
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
@@ -114,7 +101,7 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
         <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "registerModeTitle")}</label>
         <select
           value={registerMode}
-          onChange={(e) => setPreferences({ registerMode: e.target.value as RegisterMode })}
+          onChange={(e) => savePreferences({ registerMode: e.target.value as RegisterMode })}
           className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
         >
           <option value="single">{t(lang, "registerModeSingle")}</option>
@@ -130,9 +117,9 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
               <button
                 type="button"
                 onClick={() => {
-                  setPreferences({ primaryDeviceFingerprint: thisDeviceFp });
+                  savePreferences({ primaryDeviceFingerprint: thisDeviceFp });
                   void import("../offline/cloudSync").then(({ resolveShopCtx }) =>
-                    resolveShopCtx().then((ctx) => {
+                    resolveShopCtx().then((ctx: { shopId: string } | null) => {
                       if (ctx) return setCurrentDeviceAsPrimary(ctx.shopId);
                       return undefined;
                     }),
@@ -152,7 +139,7 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
         <label className="mt-4 block text-sm font-bold text-stone-800">{t(lang, "receiptPaperSizeLabel")}</label>
         <select
           value={preferences.receiptPaperSize ?? "80mm"}
-          onChange={(e) => setPreferences({ receiptPaperSize: e.target.value as ReceiptPaperSize })}
+          onChange={(e) => savePreferences({ receiptPaperSize: e.target.value as ReceiptPaperSize })}
           className="mt-2 w-full rounded-2xl border-2 border-stone-200 bg-white px-4 py-3 text-base font-semibold"
         >
           {RECEIPT_PAPER_OPTIONS.map((size) => (
@@ -162,6 +149,18 @@ export function SettingsSellingPage({ lang }: { lang: Language }) {
           ))}
         </select>
       </article>
-    </div>
+    </>
+  );
+}
+
+export function SettingsSellingPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
+  if (!actorHasPermission(actor, "settings.shop")) {
+    return <Navigate to="/settings" replace />;
+  }
+  return (
+    <SettingsAutoSaveShell lang={lang} title={t(lang, "settingsHubSelling")} subtitle={t(lang, "settingsHubSellingSub")}>
+      <SellingSettingsBody lang={lang} />
+    </SettingsAutoSaveShell>
   );
 }

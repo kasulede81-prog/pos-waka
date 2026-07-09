@@ -3,21 +3,22 @@ import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { categoryLabelKey } from "../lib/activityPresentation";
 import type { InvestigationCategory } from "../types";
-import { INVESTIGATION_CATEGORIES } from "../types";
-import { PHARMACY_INVESTIGATION_CATEGORIES } from "../extensions/pharmacy/pharmacyCategoryActions";
 
 type Props = {
   lang: Language;
   active: InvestigationCategory;
   onChange: (category: InvestigationCategory) => void;
-  pharmacyMode?: boolean;
+  categories: InvestigationCategory[];
+  accentCategories?: ReadonlySet<InvestigationCategory>;
 };
 
-export function InvestigationCategoryChips({ lang, active, onChange, pharmacyMode = false }: Props) {
-  const categories: InvestigationCategory[] = pharmacyMode
-    ? [...INVESTIGATION_CATEGORIES, ...PHARMACY_INVESTIGATION_CATEGORIES]
-    : INVESTIGATION_CATEGORIES;
-
+export function InvestigationCategoryChips({
+  lang,
+  active,
+  onChange,
+  categories,
+  accentCategories,
+}: Props) {
   return (
     <div className="space-y-2">
       <div className="-mx-0.5 flex gap-1.5 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
@@ -31,7 +32,7 @@ export function InvestigationCategoryChips({ lang, active, onChange, pharmacyMod
               active === id
                 ? "bg-waka-600 text-white shadow-sm"
                 : "border border-stone-200 bg-white text-stone-700 active:bg-stone-50",
-              pharmacyMode && PHARMACY_INVESTIGATION_CATEGORIES.includes(id as (typeof PHARMACY_INVESTIGATION_CATEGORIES)[number])
+              accentCategories?.has(id)
                 ? active === id
                   ? "bg-violet-700 ring-violet-200"
                   : "border-violet-200/80 text-violet-900"

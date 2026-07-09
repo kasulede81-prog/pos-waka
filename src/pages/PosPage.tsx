@@ -42,6 +42,14 @@ import { ActiveShiftBanner } from "../components/pos/ActiveShiftBanner";
 import { PosShiftSummaryCollapsible } from "../components/pos/PosShiftSummaryCollapsible";
 import { PosQuickProductChips } from "../components/pos/PosQuickProductChips";
 import { PosDesktopCatalogCheckoutDock } from "../components/pos/PosDesktopCatalogCheckoutDock";
+import {
+  applyCheckoutAlphaKey,
+  applyCheckoutNumericKey,
+  applyCheckoutPhoneKey,
+  preferredKeypadModeForField,
+  type CheckoutInputField,
+  type CheckoutKeypadMode,
+} from "../lib/posCheckoutKeypad";
 import { PosDesktopCompactHeader } from "../components/pos/PosDesktopCompactHeader";
 import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
 import { PosDesktopProductCard } from "../components/pos/PosDesktopProductCard";
@@ -139,8 +147,6 @@ const POS_CHECKOUT_METHODS: PaymentMethod[] = ["cash", "atm", "mobile_money", "c
 
 const EMPTY_SHELF_LAYOUT: Record<string, PosShelfLayoutConfig> = {};
 const EMPTY_QUICK_SELL_IDS: string[] = [];
-
-type CheckoutAmountField = "cash" | "mobile";
 
 const Numpad = memo(function Numpad({
   onDigit,
@@ -438,7 +444,8 @@ export function PosPage({ lang }: { lang: Language }) {
   }, [displayScaleOn, displayScaleUp, displayScaleDown]);
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
-  const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutAmountField>("cash");
+  const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutInputField>("cash");
+  const [checkoutKeypadMode, setCheckoutKeypadMode] = useState<CheckoutKeypadMode>("numeric");
   const [saleCustomerId, setSaleCustomerId] = useState<string>("");
   const [saleCustomerName, setSaleCustomerName] = useState("");
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
@@ -1034,21 +1041,50 @@ export function PosPage({ lang }: { lang: Language }) {
     return Math.max(0, draftPayable - totalPaidInput);
   }, [paymentMethod, draftPayable, totalPaidInput]);
 
+  const handleCheckoutInputField = useCallback((field: CheckoutInputField) => {
+    setCheckoutAmountField(field);
+    setCheckoutKeypadMode(preferredKeypadModeForField(field));
+  }, []);
+
   const appendCheckoutDigit = useCallback(
     (d: string) => {
-      const apply = (prev: string) => {
-        if (d === "back") return prev.slice(0, -1);
-        return (prev + d).replace(/\D/g, "").slice(0, 10);
-      };
-      if (checkoutAmountField === "mobile") setMobileMoneyInput(apply);
-      else setCashInput(apply);
+      if (checkoutKeypadMode === "alpha" && checkoutAmountField === "customerName") {
+        setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
+        return;
+      }
+      const applyNumeric = (prev: string) => applyCheckoutNumericKey(prev, d);
+      const applyPhone = (prev: string) => applyCheckoutPhoneKey(prev, d);
+      switch (checkoutAmountField) {
+        case "mobile":
+          setMobileMoneyInput(applyPhone);
+          break;
+        case "customerPhone":
+          setSaleCustomerPhone(applyPhone);
+          break;
+        case "customerName":
+          setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
+          break;
+        default:
+          setCashInput(applyNumeric);
+      }
     },
-    [checkoutAmountField],
+    [checkoutAmountField, checkoutKeypadMode],
   );
 
   const clearCheckoutAmount = useCallback(() => {
-    if (checkoutAmountField === "mobile") setMobileMoneyInput("");
-    else setCashInput("");
+    switch (checkoutAmountField) {
+      case "mobile":
+        setMobileMoneyInput("");
+        break;
+      case "customerPhone":
+        setSaleCustomerPhone("");
+        break;
+      case "customerName":
+        setSaleCustomerName("");
+        break;
+      default:
+        setCashInput("");
+    }
   }, [checkoutAmountField]);
 
   const commitSearch = useCallback((raw: string) => {
@@ -1072,6 +1108,7 @@ export function PosPage({ lang }: { lang: Language }) {
       setSaleCustomerName("");
       setSaleCustomerPhone("");
       setCheckoutAmountField("cash");
+      setCheckoutKeypadMode("numeric");
       setPaymentMethod("cash");
       if (r.saleId) {
         if (r.firstSale && !preferences.celebratedFirstSale) {
@@ -1351,6 +1388,7 @@ export function PosPage({ lang }: { lang: Language }) {
           if (draftLines.length > 0) {
             setPaymentMethod("credit");
             setCheckoutAmountField("cash");
+      setCheckoutKeypadMode("numeric");
             window.requestAnimationFrame(() => customerSelectRef.current?.focus());
           }
           break;
@@ -1466,6 +1504,7 @@ export function PosPage({ lang }: { lang: Language }) {
     cashInput,
     mobileMoneyInput,
     checkoutAmountField,
+    checkoutKeypadMode,
     changeDue,
     computedDebt,
     saleCustomerId,
@@ -1487,7 +1526,8 @@ export function PosPage({ lang }: { lang: Language }) {
     pharmacyMode,
     onBatchTap: pharmacyMode ? setBatchPickerLine : undefined,
     onPaymentMethod: setPaymentMethod,
-    onCheckoutAmountField: setCheckoutAmountField,
+    onCheckoutInputField: handleCheckoutInputField,
+    onCheckoutKeypadModeChange: setCheckoutKeypadMode,
     onAppendCheckoutDigit: appendCheckoutDigit,
     onClearCheckoutAmount: clearCheckoutAmount,
     onSaleCustomerId: setSaleCustomerId,
@@ -1711,7 +1751,7 @@ export function PosPage({ lang }: { lang: Language }) {
 
   return (
     <ShiftSellGateway lang={lang}>
-    <div className={clsx(isFullDesktopPos ? "flex h-full min-h-0 flex-col" : "space-y-2", mobileSellFocus && !isFullDesktopPos && "space-y-1.5")}>
+    <div className={clsx(isFullDesktopPos || mobileSellFocus ? "flex h-full min-h-0 flex-1 flex-col" : "space-y-2", mobileSellFocus && !isFullDesktopPos && "min-h-0")}>
       <PosOfflineBanner lang={lang} compact={mobileSellFocus || isFullDesktopPos} />
       {isFullDesktopPos ? (
         <PosDesktopCompactHeader
@@ -1778,7 +1818,7 @@ export function PosPage({ lang }: { lang: Language }) {
       >
         <div
           ref={catalogRef}
-          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : "min-w-0 space-y-2")}
+          className={clsx(isFullDesktopPos ? "flex min-h-0 min-w-0 flex-col gap-1.5" : mobileSellFocus ? "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" : "min-w-0 space-y-2")}
         >
 
       {products.length > 0 ? (
@@ -1921,6 +1961,7 @@ export function PosPage({ lang }: { lang: Language }) {
           cashInput={cashInput}
           mobileMoneyInput={mobileMoneyInput}
           checkoutAmountField={checkoutAmountField}
+          checkoutKeypadMode={checkoutKeypadMode}
           changeDue={changeDue}
           computedDebt={computedDebt}
           saleCustomerId={saleCustomerId}
@@ -1931,7 +1972,8 @@ export function PosPage({ lang }: { lang: Language }) {
           saveButtonRef={saveButtonRef}
           saveSaleLabel={modeTerm("saveSale")}
           saveDisabled={draftLines.length === 0}
-          onCheckoutAmountField={setCheckoutAmountField}
+          onCheckoutInputField={handleCheckoutInputField}
+          onCheckoutKeypadModeChange={setCheckoutKeypadMode}
           onAppendCheckoutDigit={appendCheckoutDigit}
           onClearCheckoutAmount={clearCheckoutAmount}
           onSaleCustomerId={setSaleCustomerId}
@@ -1959,9 +2001,9 @@ export function PosPage({ lang }: { lang: Language }) {
           <section
             className={clsx(
               "space-y-2",
-              isFullDesktopPos && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
+              catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain",
             )}
-            data-pos-catalog-scroll={isFullDesktopPos ? true : undefined}
+            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
           >
             <div className="sticky top-0 z-10 flex items-center justify-between gap-2 rounded-[1.35rem] border border-waka-200 bg-white/95 px-2.5 py-2 shadow-sm backdrop-blur">
               <button
@@ -1992,7 +2034,7 @@ export function PosPage({ lang }: { lang: Language }) {
           />
         )
       ) : showCatalogSearchResults ? (
-        <section className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
+        <section className={clsx("space-y-2", catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>
           <p className="px-0.5 text-xs font-black text-stone-700">
             {t(lang, "posSearchResults")}
             <span className="font-semibold text-stone-500"> · {t(lang, "posMasterSearchAll")}</span>
@@ -2125,7 +2167,7 @@ export function PosPage({ lang }: { lang: Language }) {
         </section>
       ) : showDesktopProductView ? (
         <section
-          className={clsx("space-y-2", isFullDesktopPos && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}
+          className={clsx("space-y-2", catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}
           data-pos-catalog-scroll={isFullDesktopPos ? true : undefined}
         >
           {!isFullDesktopPos ? (

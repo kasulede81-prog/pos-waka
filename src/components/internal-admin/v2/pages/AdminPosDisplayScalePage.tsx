@@ -7,6 +7,7 @@ import {
 } from "../../../../lib/displayScale/platformDisplayScale";
 import { DISPLAY_SCALE_LEVELS, DISPLAY_SCALE_META } from "../../../../lib/displayScale/scaleTokens";
 import { isSuperAdmin, normalizeAdminRole } from "../adminRoles";
+import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -72,24 +73,20 @@ export function AdminPosDisplayScalePage({ adminRow, previewMode = false }: Prop
           Loading…
         </p>
       ) : (
-        <label className="flex min-h-[52px] items-center justify-between gap-3 rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
-          <span className="min-w-0">
-            <span className="flex items-center gap-2 text-sm font-black text-stone-900">
-              <MonitorSmartphone className="h-4 w-4 text-waka-600" aria-hidden />
-              Enable Display Scale on Sell
-            </span>
-            <span className="mt-0.5 block text-xs font-medium text-stone-500">
-              Shows the floating control on POS Sell for all shops when on.
-            </span>
-          </span>
-          <input
-            type="checkbox"
-            className="h-5 w-5 shrink-0 accent-waka-600"
+        <div className="rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+          <WakaSwitch
             checked={enabled}
             disabled={!canEdit || saving || previewMode}
-            onChange={(e) => void onToggle(e.target.checked)}
+            onCheckedChange={(checked) => void onToggle(checked)}
+            label={
+              <span className="flex items-center gap-2 text-sm font-black text-stone-900">
+                <MonitorSmartphone className="h-4 w-4 text-waka-600" aria-hidden />
+                Enable Display Scale on Sell
+              </span>
+            }
+            description="Shows the floating control on POS Sell for all shops when on."
           />
-        </label>
+        </div>
       )}
 
       {message ? (

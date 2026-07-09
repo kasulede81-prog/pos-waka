@@ -1,14 +1,18 @@
 import { memo, useEffect, useState, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
-import { Check, ChevronDown } from "lucide-react";
+import { Check } from "lucide-react";
 import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats, DraftCheckoutTotals } from "../../lib/draftCart";
+import {
+  CHECKOUT_ALPHA_ROWS,
+  type CheckoutInputField,
+  type CheckoutKeypadMode,
+} from "../../lib/posCheckoutKeypad";
 import { DraftCartLineRow } from "./DraftCartLineRow";
 import { DraftCartSummary } from "./DraftCartSummary";
 
 type PaymentMethod = "cash" | "atm" | "mobile_money" | "mixed" | "credit";
-type CheckoutAmountField = "cash" | "mobile";
 
 const Numpad = memo(function Numpad({
   onDigit,
@@ -80,8 +84,9 @@ const Numpad = memo(function Numpad({
   );
 });
 
-/** Italian-style numpad with clear + confirm on the right — mobile checkout & desktop sidebar. */
+/** Italian-style checkout keypad with clear + confirm on the right — numeric or alpha mode. */
 export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
+  lang,
   onDigit,
   onClear,
   onSave,
@@ -89,7 +94,11 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveDisabled,
   saveButtonRef,
   sidebar = false,
+  keypadMode = "numeric",
+  onKeypadModeChange,
+  showAlphaToggle = false,
 }: {
+  lang: Language;
   onDigit: (d: string) => void;
   onClear: () => void;
   onSave: () => void;
@@ -97,36 +106,92 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
   saveDisabled: boolean;
   saveButtonRef?: RefObject<HTMLButtonElement | null>;
   sidebar?: boolean;
+  keypadMode?: CheckoutKeypadMode;
+  onKeypadModeChange?: (mode: CheckoutKeypadMode) => void;
+  showAlphaToggle?: boolean;
 }) {
   const keyClass = sidebar
     ? "min-h-[44px] rounded-lg bg-stone-100 py-1 text-xl font-bold text-stone-900 active:bg-stone-200"
     : "min-h-[52px] rounded-xl bg-stone-100 py-1.5 text-2xl font-bold text-stone-900 active:bg-stone-200";
+  const alphaKeyClass = sidebar
+    ? "min-h-[36px] rounded-lg bg-stone-100 py-0.5 text-sm font-bold text-stone-900 active:bg-stone-200"
+    : "min-h-[40px] rounded-xl bg-stone-100 py-1 text-base font-bold text-stone-900 active:bg-stone-200";
+  const modeToggleClass = clsx(
+    "rounded-xl font-black active:opacity-90",
+    sidebar ? "min-h-[36px] text-[10px]" : "min-h-[40px] text-xs",
+    keypadMode === "alpha" ? "bg-waka-600 text-white" : "bg-stone-200 text-stone-800",
+  );
+
+  const pressKey = (k: string) => {
+    if (k === "⌫") onDigit("back");
+    else onDigit(k);
+  };
 
   return (
     <div className={clsx("grid gap-2", sidebar ? "grid-cols-[1fr_4.25rem]" : "grid-cols-[1fr_5rem]")}>
-      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-1.5" : "gap-2")}>
-        <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
-          {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
-            <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
-              {k}
-            </button>
-          ))}
-        </div>
-        <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
-          {(["00", "0", "⌫"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => {
-                if (k === "⌫") onDigit("back");
-                else onDigit(k);
-              }}
-              className={keyClass}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
+      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-1" : "gap-1.5")}>
+        {keypadMode === "alpha" ? (
+          <>
+            {CHECKOUT_ALPHA_ROWS.map((row, rowIdx) => (
+              <div key={rowIdx} className={clsx("grid grid-cols-3", sidebar ? "gap-1" : "gap-1.5")}>
+                {row.map((k) => (
+                  <button key={k} type="button" onClick={() => pressKey(k)} className={alphaKeyClass}>
+                    {k}
+                  </button>
+                ))}
+              </div>
+            ))}
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1" : "gap-1.5")}>
+              <button
+                type="button"
+                onClick={() => onKeypadModeChange?.("numeric")}
+                className={modeToggleClass}
+                aria-label={t(lang, "posKeypadNumeric")}
+              >
+                123
+              </button>
+              <button
+                type="button"
+                onClick={() => onDigit("space")}
+                className={clsx(alphaKeyClass, "col-span-2 text-xs font-black uppercase tracking-wide")}
+              >
+                {t(lang, "posKeypadSpace")}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
+              {(["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((k) => (
+                <button key={k} type="button" onClick={() => onDigit(k)} className={keyClass}>
+                  {k}
+                </button>
+              ))}
+            </div>
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1.5" : "gap-2")}>
+              {showAlphaToggle ? (
+                <button
+                  type="button"
+                  onClick={() => onKeypadModeChange?.("alpha")}
+                  className={clsx(keyClass, "text-sm font-black uppercase tracking-wide")}
+                  aria-label={t(lang, "posKeypadAlpha")}
+                >
+                  abcd
+                </button>
+              ) : (
+                <button type="button" onClick={() => onDigit("00")} className={keyClass}>
+                  00
+                </button>
+              )}
+              <button type="button" onClick={() => onDigit("0")} className={keyClass}>
+                0
+              </button>
+              <button type="button" onClick={() => onDigit("back")} className={keyClass}>
+                ⌫
+              </button>
+            </div>
+          </>
+        )}
       </div>
       <div className="flex min-h-0 flex-col gap-2">
         <button
@@ -169,7 +234,7 @@ type PaymentBlockProps = {
   checkoutMethods: PaymentMethod[];
   cashInput: string;
   mobileMoneyInput: string;
-  checkoutAmountField: CheckoutAmountField;
+  checkoutAmountField: CheckoutInputField;
   changeDue: number;
   computedDebt: number;
   saleCustomerId: string;
@@ -178,7 +243,7 @@ type PaymentBlockProps = {
   customers: { id: string; name: string; debtBalanceUgx: number }[];
   customerSelectRef?: RefObject<HTMLSelectElement | null>;
   onPaymentMethod: (method: PaymentMethod) => void;
-  onCheckoutAmountField: (field: CheckoutAmountField) => void;
+  onCheckoutInputField: (field: CheckoutInputField) => void;
   onAppendCheckoutDigit: (d: string) => void;
   onClearCheckoutAmount: () => void;
   onSaleCustomerId: (id: string) => void;
@@ -210,7 +275,7 @@ function PaymentBlock({
   customers,
   customerSelectRef,
   onPaymentMethod,
-  onCheckoutAmountField,
+  onCheckoutInputField,
   onAppendCheckoutDigit,
   onClearCheckoutAmount,
   onSaleCustomerId,
@@ -267,7 +332,7 @@ function PaymentBlock({
               type="button"
               onClick={() => {
                 onPaymentMethod(method);
-                if (method === "cash" || method === "credit") onCheckoutAmountField("cash");
+                if (method === "cash" || method === "credit") onCheckoutInputField("cash");
               }}
               className={clsx(
                 "rounded-lg border font-black leading-snug",
@@ -312,7 +377,7 @@ function PaymentBlock({
           </p>
           <button
             type="button"
-            onClick={() => onCheckoutAmountField("cash")}
+            onClick={() => onCheckoutInputField("cash")}
             className={clsx(
               amountBtnClass,
               sidebarCompact && "mt-1 min-h-[36px] rounded-lg px-2 py-1 text-base",
@@ -334,7 +399,7 @@ function PaymentBlock({
           </p>
           <button
             type="button"
-            onClick={() => onCheckoutAmountField("mobile")}
+            onClick={() => onCheckoutInputField("mobile")}
             className={clsx(
               amountBtnClass,
               checkoutAmountField === "mobile"
@@ -354,7 +419,7 @@ function PaymentBlock({
               <p className="text-[11px] font-semibold leading-tight text-stone-800">{t(lang, "paymentCashLabel")}</p>
               <button
                 type="button"
-                onClick={() => onCheckoutAmountField("cash")}
+                onClick={() => onCheckoutInputField("cash")}
                 className={clsx(
                   "mt-1 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-2 py-1.5 text-base font-black",
                   checkoutAmountField === "cash"
@@ -369,7 +434,7 @@ function PaymentBlock({
               <p className="text-[11px] font-semibold leading-tight text-stone-800">{t(lang, "paymentMobileMoneyLabel")}</p>
               <button
                 type="button"
-                onClick={() => onCheckoutAmountField("mobile")}
+                onClick={() => onCheckoutInputField("mobile")}
                 className={clsx(
                   "mt-1 flex min-h-[44px] w-full items-center justify-end rounded-xl border-2 px-2 py-1.5 text-base font-black",
                   checkoutAmountField === "mobile"
@@ -384,59 +449,62 @@ function PaymentBlock({
           <p className="mt-1.5 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-900">
             {t(lang, "paymentRemainingBalance")}: UGX {computedDebt.toLocaleString()}
           </p>
-          <details className="group mt-1.5 rounded-xl border border-stone-200 bg-white">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm font-bold text-stone-800 [&::-webkit-details-marker]:hidden">
-              <span>{t(lang, "paymentCreditCustomerDetails")}</span>
-              <span className="flex min-w-0 items-center gap-1 text-xs font-semibold text-amber-900">
-                <span className="truncate">
-                  {saleCustomerName.trim() || t(lang, "paymentCreditCustomerDetailsTap")}
-                </span>
-                <ChevronDown className="h-4 w-4 shrink-0 transition group-open:rotate-180" aria-hidden />
-              </span>
-            </summary>
-            <div className="space-y-2 border-t border-stone-100 px-3 py-2">
-              <label className="block text-xs font-semibold text-stone-800">
-                {t(lang, "paymentDebtNameLabel")}
-                <input
-                  value={saleCustomerName}
-                  onChange={(e) => onSaleCustomerName(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
-                  placeholder={t(lang, "paymentDebtNamePlaceholder")}
-                />
-              </label>
-              <label className="block text-xs font-semibold text-stone-800">
-                {t(lang, "paymentDebtPhoneLabel")}
-                <input
-                  value={saleCustomerPhone}
-                  onChange={(e) => onSaleCustomerPhone(e.target.value)}
-                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-semibold"
-                  placeholder={t(lang, "personPhonePh")}
-                  inputMode="tel"
-                />
-              </label>
-              {customers.length > 0 ? (
-                <label className="block text-xs font-semibold text-stone-800">
-                  {t(lang, "paymentPickExistingDebt")}
-                  <select
-                    ref={customerSelectRef}
-                    value={saleCustomerId}
-                    onChange={(e) => onSaleCustomerId(e.target.value)}
-                    className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-medium"
-                  >
-                    <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                        {c.debtBalanceUgx > 0
-                          ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}`
-                          : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+          <div className="mt-2 space-y-2">
+            <div>
+              <p className="text-[11px] font-semibold text-stone-800">{t(lang, "paymentDebtNameLabel")}</p>
+              <button
+                type="button"
+                onClick={() => onCheckoutInputField("customerName")}
+                className={clsx(
+                  "mt-1 flex min-h-[44px] w-full items-center rounded-xl border-2 px-3 py-2 text-left text-sm font-semibold",
+                  checkoutAmountField === "customerName"
+                    ? "border-waka-500 bg-waka-50 text-stone-900"
+                    : "border-stone-200 bg-white text-stone-700",
+                )}
+              >
+                {saleCustomerName.trim() || t(lang, "paymentDebtNamePlaceholder")}
+              </button>
             </div>
-          </details>
+            <div>
+              <p className="text-[11px] font-semibold text-stone-800">{t(lang, "paymentDebtPhoneLabel")}</p>
+              <button
+                type="button"
+                onClick={() => onCheckoutInputField("customerPhone")}
+                className={clsx(
+                  "mt-1 flex min-h-[44px] w-full items-center rounded-xl border-2 px-3 py-2 text-left text-sm font-semibold",
+                  checkoutAmountField === "customerPhone"
+                    ? "border-waka-500 bg-waka-50 text-stone-900"
+                    : "border-stone-200 bg-white text-stone-700",
+                )}
+              >
+                {saleCustomerPhone.trim() || t(lang, "personPhonePh")}
+              </button>
+            </div>
+            {customers.length > 0 ? (
+              <label className="block text-xs font-semibold text-stone-800">
+                {t(lang, "paymentPickExistingDebt")}
+                <select
+                  ref={customerSelectRef}
+                  value={saleCustomerId}
+                  onChange={(e) => onSaleCustomerId(e.target.value)}
+                  className="mt-1 min-h-[44px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-sm font-medium"
+                >
+                  <option value="">{t(lang, "paymentNoNamedCustomer")}</option>
+                  {customers.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.debtBalanceUgx > 0
+                        ? ` — ${t(lang, "debtBalanceShort")} UGX ${c.debtBalanceUgx.toLocaleString()}`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+          {hideNumpad ? (
+            <p className="mt-1.5 text-[10px] font-semibold text-stone-500">{t(lang, "posKeypadAlphaHint")}</p>
+          ) : null}
         </>
       ) : null}
 
@@ -547,15 +615,16 @@ export function CreditCatalogDockPanel({
   saleCustomerPhone,
   customers,
   customerSelectRef,
-  onCheckoutAmountField,
+  onCheckoutInputField,
   onSaleCustomerId,
   onSaleCustomerName,
   onSaleCustomerPhone,
+  useCustomKeypad = false,
 }: {
   lang: Language;
   cashInput: string;
   mobileMoneyInput: string;
-  checkoutAmountField: CheckoutAmountField;
+  checkoutAmountField: CheckoutInputField;
   changeDue: number;
   computedDebt: number;
   saleCustomerId: string;
@@ -563,10 +632,11 @@ export function CreditCatalogDockPanel({
   saleCustomerPhone: string;
   customers: { id: string; name: string; debtBalanceUgx: number }[];
   customerSelectRef?: RefObject<HTMLSelectElement | null>;
-  onCheckoutAmountField: (field: CheckoutAmountField) => void;
+  onCheckoutInputField: (field: CheckoutInputField) => void;
   onSaleCustomerId: (id: string) => void;
   onSaleCustomerName: (name: string) => void;
   onSaleCustomerPhone: (phone: string) => void;
+  useCustomKeypad?: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -575,7 +645,7 @@ export function CreditCatalogDockPanel({
           <p className="text-sm font-semibold text-stone-800">{t(lang, "paymentCashLabel")}</p>
           <button
             type="button"
-            onClick={() => onCheckoutAmountField("cash")}
+            onClick={() => onCheckoutInputField("cash")}
             className={clsx(
               "mt-1.5 flex min-h-[52px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-xl font-black",
               checkoutAmountField === "cash"
@@ -590,7 +660,7 @@ export function CreditCatalogDockPanel({
           <p className="text-sm font-semibold text-stone-800">{t(lang, "paymentMobileMoneyLabel")}</p>
           <button
             type="button"
-            onClick={() => onCheckoutAmountField("mobile")}
+            onClick={() => onCheckoutInputField("mobile")}
             className={clsx(
               "mt-1.5 flex min-h-[52px] w-full items-center justify-end rounded-xl border-2 px-3 py-2 text-xl font-black",
               checkoutAmountField === "mobile"
@@ -613,25 +683,55 @@ export function CreditCatalogDockPanel({
       <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
         <p className="text-sm font-black text-stone-900">{t(lang, "paymentCreditCustomerDetails")}</p>
         <div className="mt-3 space-y-3">
-          <label className="block text-sm font-semibold text-stone-800">
-            {t(lang, "paymentDebtNameLabel")}
-            <input
-              value={saleCustomerName}
-              onChange={(e) => onSaleCustomerName(e.target.value)}
-              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-semibold"
-              placeholder={t(lang, "paymentDebtNamePlaceholder")}
-            />
-          </label>
-          <label className="block text-sm font-semibold text-stone-800">
-            {t(lang, "paymentDebtPhoneLabel")}
-            <input
-              value={saleCustomerPhone}
-              onChange={(e) => onSaleCustomerPhone(e.target.value)}
-              className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-semibold"
-              placeholder={t(lang, "personPhonePh")}
-              inputMode="tel"
-            />
-          </label>
+          <div>
+            <p className="text-sm font-semibold text-stone-800">{t(lang, "paymentDebtNameLabel")}</p>
+            {useCustomKeypad ? (
+              <button
+                type="button"
+                onClick={() => onCheckoutInputField("customerName")}
+                className={clsx(
+                  "mt-1.5 flex min-h-[48px] w-full items-center rounded-xl border-2 px-3 py-2 text-left text-base font-semibold",
+                  checkoutAmountField === "customerName"
+                    ? "border-waka-500 bg-waka-50 text-stone-900"
+                    : "border-stone-200 bg-white text-stone-700",
+                )}
+              >
+                {saleCustomerName.trim() || t(lang, "paymentDebtNamePlaceholder")}
+              </button>
+            ) : (
+              <input
+                value={saleCustomerName}
+                onChange={(e) => onSaleCustomerName(e.target.value)}
+                className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-semibold"
+                placeholder={t(lang, "paymentDebtNamePlaceholder")}
+              />
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-stone-800">{t(lang, "paymentDebtPhoneLabel")}</p>
+            {useCustomKeypad ? (
+              <button
+                type="button"
+                onClick={() => onCheckoutInputField("customerPhone")}
+                className={clsx(
+                  "mt-1.5 flex min-h-[48px] w-full items-center rounded-xl border-2 px-3 py-2 text-left text-base font-semibold",
+                  checkoutAmountField === "customerPhone"
+                    ? "border-waka-500 bg-waka-50 text-stone-900"
+                    : "border-stone-200 bg-white text-stone-700",
+                )}
+              >
+                {saleCustomerPhone.trim() || t(lang, "personPhonePh")}
+              </button>
+            ) : (
+              <input
+                value={saleCustomerPhone}
+                onChange={(e) => onSaleCustomerPhone(e.target.value)}
+                className="mt-1.5 min-h-[48px] w-full rounded-xl border-2 border-stone-200 bg-white px-3 py-2 text-base font-semibold"
+                placeholder={t(lang, "personPhonePh")}
+                inputMode="tel"
+              />
+            )}
+          </div>
           {customers.length > 0 ? (
             <label className="block text-sm font-semibold text-stone-800">
               {t(lang, "paymentPickExistingDebt")}
@@ -659,6 +759,8 @@ export function CreditCatalogDockPanel({
   );
 }
 
+export type { CheckoutInputField, CheckoutKeypadMode } from "../../lib/posCheckoutKeypad";
+
 export type PosCheckoutPanelProps = {
   lang: Language;
   variant: "overlay" | "sidebar";
@@ -676,7 +778,8 @@ export type PosCheckoutPanelProps = {
   checkoutMethods: PaymentMethod[];
   cashInput: string;
   mobileMoneyInput: string;
-  checkoutAmountField: CheckoutAmountField;
+  checkoutAmountField: CheckoutInputField;
+  checkoutKeypadMode?: CheckoutKeypadMode;
   changeDue: number;
   computedDebt: number;
   saleCustomerId: string;
@@ -699,7 +802,8 @@ export type PosCheckoutPanelProps = {
   pharmacyMode?: boolean;
   onBatchTap?: (line: SaleLine) => void;
   onPaymentMethod: (method: PaymentMethod) => void;
-  onCheckoutAmountField: (field: CheckoutAmountField) => void;
+  onCheckoutInputField: (field: CheckoutInputField) => void;
+  onCheckoutKeypadModeChange?: (mode: CheckoutKeypadMode) => void;
   onAppendCheckoutDigit: (d: string) => void;
   onClearCheckoutAmount: () => void;
   onSaleCustomerId: (id: string) => void;
@@ -813,6 +917,7 @@ export function PosCheckoutPanel({
   cashInput,
   mobileMoneyInput,
   checkoutAmountField,
+  checkoutKeypadMode = "numeric",
   changeDue,
   computedDebt,
   saleCustomerId,
@@ -835,7 +940,8 @@ export function PosCheckoutPanel({
   pharmacyMode = false,
   onBatchTap,
   onPaymentMethod,
-  onCheckoutAmountField,
+  onCheckoutInputField,
+  onCheckoutKeypadModeChange,
   onAppendCheckoutDigit,
   onClearCheckoutAmount,
   onSaleCustomerId,
@@ -860,6 +966,23 @@ export function PosCheckoutPanel({
     if (!needsAmountKeypad) setSidebarNumpadOpen(false);
   }, [needsAmountKeypad]);
 
+  const showAlphaToggle = paymentMethod === "credit";
+  const numpadDockProps = {
+    lang,
+    onDigit: onAppendCheckoutDigit,
+    onClear: onClearCheckoutAmount,
+    onSave: onFinishSale,
+    saveLabel: saveSaleLabel,
+    saveDisabled: emptyCart,
+    saveButtonRef,
+    keypadMode: checkoutKeypadMode,
+    onKeypadModeChange: (mode: CheckoutKeypadMode) => {
+      onCheckoutKeypadModeChange?.(mode);
+      if (mode === "alpha") onCheckoutInputField("customerName");
+    },
+    showAlphaToggle,
+  };
+
   const paymentProps: PaymentBlockProps = {
     lang,
     compact: true,
@@ -883,7 +1006,7 @@ export function PosCheckoutPanel({
     customers,
     customerSelectRef,
     onPaymentMethod,
-    onCheckoutAmountField,
+    onCheckoutInputField,
     onAppendCheckoutDigit,
     onClearCheckoutAmount,
     onSaleCustomerId,
@@ -1058,15 +1181,7 @@ export function PosCheckoutPanel({
                   </button>
                 </div>
               ) : sidebarNumpadOpen && needsAmountKeypad ? (
-                <CheckoutNumpadDock
-                  sidebar
-                  onDigit={onAppendCheckoutDigit}
-                  onClear={onClearCheckoutAmount}
-                  onSave={onFinishSale}
-                  saveLabel={saveSaleLabel}
-                  saveDisabled={emptyCart}
-                  saveButtonRef={saveButtonRef}
-                />
+                <CheckoutNumpadDock sidebar {...numpadDockProps} />
               ) : (
                 <div className="flex gap-2">
                   {needsAmountKeypad ? (
@@ -1092,14 +1207,7 @@ export function PosCheckoutPanel({
                 </div>
               )
             ) : needsAmountKeypad ? (
-              <CheckoutNumpadDock
-                onDigit={onAppendCheckoutDigit}
-                onClear={onClearCheckoutAmount}
-                onSave={onFinishSale}
-                saveLabel={saveSaleLabel}
-                saveDisabled={emptyCart}
-                saveButtonRef={saveButtonRef}
-              />
+              <CheckoutNumpadDock {...numpadDockProps} />
             ) : (
               <button
                 ref={saveButtonRef}

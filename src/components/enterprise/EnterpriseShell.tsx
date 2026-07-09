@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { EnterprisePageContainer } from "../layout/EnterprisePageContainer";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -28,7 +29,7 @@ export function EnterpriseShell({
   const location = useLocation();
 
   return (
-    <div className="page-content-pad flex min-h-0 flex-1 flex-col gap-4">
+    <EnterprisePageContainer className="flex min-h-0 flex-1 flex-col gap-4">
       <header>
         <p className="text-xs font-black uppercase tracking-wide text-waka-700">{t(lang, "enterpriseHubTitle")}</p>
         <h1 className="text-3xl font-black text-stone-950">{title}</h1>
@@ -57,6 +58,6 @@ export function EnterpriseShell({
       </nav>
 
       {children}
-    </div>
+    </EnterprisePageContainer>
   );
 }

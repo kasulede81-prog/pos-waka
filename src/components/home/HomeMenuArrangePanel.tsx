@@ -16,6 +16,7 @@ import { isPharmacyMode } from "../../lib/pharmacy";
 import { PRESET_SHELF_HEX, resolveShelfHex, HOME_HERO_PREVIEW_BG_PRESETS, resolveHomeHeroPreviewBgColor } from "../../lib/shelfColor";
 import { useSessionActor } from "../../context/SessionActorContext";
 import { useSubscription } from "../../context/SubscriptionContext";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 import type { Permission } from "../../types";
 import { HomeLauncherTile } from "./HomeLauncherTile";
@@ -170,15 +171,12 @@ export function HomeMenuArrangePanel({ lang, embedded = false }: Props) {
             {t(lang, "homeMenuEditHeading")}: {t(lang, selectedTile.labelKey)}
           </p>
 
-          <label className="flex min-h-[44px] cursor-pointer items-center gap-3 text-sm font-bold text-stone-800">
-            <input
-              type="checkbox"
-              checked={!selectedTile.hidden}
-              onChange={(e) => patchSelected({ hidden: !e.target.checked })}
-              className="h-5 w-5 rounded border-2 border-stone-300 accent-waka-600"
-            />
-            {selectedTile.hidden ? t(lang, "homeMenuShowTile") : t(lang, "homeMenuHideTile")}
-          </label>
+          <WakaSwitch
+            checked={!selectedTile.hidden}
+            onCheckedChange={(checked) => patchSelected({ hidden: !checked })}
+            label={selectedTile.hidden ? t(lang, "homeMenuShowTile") : t(lang, "homeMenuHideTile")}
+            className="text-sm font-bold text-stone-800"
+          />
 
           <div>
             <p className="text-xs font-bold text-stone-600">{t(lang, "homeMenuColorLabel")}</p>

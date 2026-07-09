@@ -7,6 +7,7 @@ import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { groupExpiryRowsByBucket } from "../lib/pharmacyInventoryReports";
 import { formatUgx } from "../lib/formatUgx";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
 import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
@@ -14,6 +15,9 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { buildExpiryCenterRows } from "../lib/pharmacyBatches";
 import { AdjustmentConfirmDialog } from "../components/inventory/adjustments/AdjustmentConfirmDialog";
 import { AdjustmentMovementPreview } from "../components/inventory/adjustments/AdjustmentMovementPreview";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
+import { Pill } from "lucide-react";
 
 const BUCKETS = ["expired", "today", "d7", "d30", "d60", "d90"] as const;
 
@@ -158,7 +162,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="page-content-pad space-y-4">
+    <EnterprisePageContainer>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-stone-950">{t(lang, "pharmacyExpiryCenterTitle")}</h1>
@@ -211,10 +215,13 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
           onChange={setManufacturerFilter}
           options={filterOptions.manufacturers}
         />
-        <label className="flex min-h-[48px] items-center gap-3 rounded-2xl border border-stone-200 px-4 touch-manipulation">
-          <input type="checkbox" checked={controlledOnly} onChange={(e) => setControlledOnly(e.target.checked)} className="h-5 w-5" />
-          <span className="text-sm font-bold text-stone-800">{t(lang, "pharmacyExpiryFilterControlled")}</span>
-        </label>
+        <div className="rounded-2xl border border-stone-200 px-4 touch-manipulation">
+          <WakaSwitch
+            checked={controlledOnly}
+            onCheckedChange={setControlledOnly}
+            label={t(lang, "pharmacyExpiryFilterControlled")}
+          />
+        </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -252,9 +259,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-semibold text-stone-500">
-          {t(lang, "pharmacyExpiryEmpty")}
-        </p>
+        <EnterpriseEmptyState icon={Pill} title={t(lang, "pharmacyExpiryEmpty")} />
       ) : (
         <ul className="space-y-3">
           {rows.map((row) => (
@@ -364,7 +369,7 @@ export function PharmacyExpiryCenterPage({ lang }: { lang: Language }) {
           </div>
         </AdjustmentConfirmDialog>
       ) : null}
-    </div>
+    </EnterprisePageContainer>
   );
 }
 

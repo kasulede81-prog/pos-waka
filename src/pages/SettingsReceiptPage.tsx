@@ -13,32 +13,28 @@ import {
   padReceiptFooterSlots,
   resolveReceiptHeaderConfig,
 } from "../lib/receiptBranding";
-import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
+import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
 import { ReceiptLivePreview } from "../components/settings/ReceiptLivePreview";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 
-export function SettingsReceiptPage({ lang }: { lang: Language }) {
-  const actor = useSessionActor();
+function ReceiptSettingsBody({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
-  const setPreferences = usePosStore((s) => s.setPreferences);
+  const savePreferences = usePreferencesPatch();
   const { snapshot, authMode } = useSubscription();
   const planTier = authMode === "local" ? "waka_plus" : resolveEffectivePlanTier(snapshot);
-  const canEditReceipt = actorHasPermission(actor, "settings.receipt");
 
   const displayOpts = useMemo(
     () => ({ ...defaultReceiptDisplayOptions(), ...preferences.receiptDisplayOptions }),
     [preferences.receiptDisplayOptions],
   );
 
-  if (!canEditReceipt) {
-    return <Navigate to="/settings" replace />;
-  }
-
   const header = resolveReceiptHeaderConfig(preferences);
   const footerLines = padReceiptFooterSlots(preferences.receiptFooterLines);
   const canHidePowered = canHideWakaReceiptBranding(planTier);
 
   const patchHeader = (patch: Partial<ReceiptHeaderConfig>) => {
-    setPreferences({
+    savePreferences({
       receiptHeader: { ...header, ...patch },
     });
   };
@@ -46,11 +42,11 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
   const patchFooterLine = (index: number, value: string) => {
     const next = [...footerLines];
     next[index] = value;
-    setPreferences({ receiptFooterLines: next });
+    savePreferences({ receiptFooterLines: next });
   };
 
   const patchDisplay = (patch: Partial<ReceiptDisplayOptions>) => {
-    setPreferences({
+    savePreferences({
       receiptDisplayOptions: { ...displayOpts, ...patch },
     });
   };
@@ -70,13 +66,7 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
   ];
 
   return (
-    <div className="space-y-5 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "settingsReceiptBrandingTitle")}
-        subtitle={t(lang, "settingsReceiptBrandingSub")}
-      />
-
+    <>
       <ReceiptLivePreview lang={lang} preferences={preferences} planTier={planTier} />
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
@@ -154,39 +144,45 @@ export function SettingsReceiptPage({ lang }: { lang: Language }) {
         <ul className="mt-3 space-y-2">
           {displayToggles.map((opt) => (
             <li key={opt.key}>
-              <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl border border-stone-100 px-3">
-                <input
-                  type="checkbox"
-                  checked={displayOpts[opt.key]}
-                  onChange={(e) => patchDisplay({ [opt.key]: e.target.checked })}
-                  className="h-5 w-5 accent-waka-600"
-                />
-                <span className="text-sm font-semibold text-stone-800">{t(lang, opt.labelKey)}</span>
-              </label>
+              <WakaSwitch
+                checked={displayOpts[opt.key]}
+                onCheckedChange={(checked) => patchDisplay({ [opt.key]: checked })}
+                label={t(lang, opt.labelKey)}
+                className="rounded-xl border border-stone-100 px-3 py-2"
+              />
             </li>
           ))}
         </ul>
       </article>
 
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <label className="flex min-h-[48px] cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            checked={canHidePowered ? preferences.receiptShowPoweredByWaka !== false : true}
-            disabled={!canHidePowered}
-            onChange={(e) => setPreferences({ receiptShowPoweredByWaka: e.target.checked })}
-            className="mt-1 h-5 w-5 accent-waka-600"
-          />
-          <span>
-            <span className="text-sm font-black text-stone-900">{t(lang, "settingsReceiptShowPowered")}</span>
-            {!canHidePowered ? (
-              <span className="mt-1 block text-xs font-medium text-stone-500">
-                {t(lang, "settingsReceiptPoweredLocked")}
-              </span>
-            ) : null}
-          </span>
-        </label>
+        <WakaSwitch
+          checked={canHidePowered ? preferences.receiptShowPoweredByWaka !== false : true}
+          disabled={!canHidePowered}
+          onCheckedChange={(checked) => savePreferences({ receiptShowPoweredByWaka: checked })}
+          label={t(lang, "settingsReceiptShowPowered")}
+          description={!canHidePowered ? t(lang, "settingsReceiptPoweredLocked") : undefined}
+        />
       </article>
-    </div>
+    </>
+  );
+}
+
+export function SettingsReceiptPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
+  const canEditReceipt = actorHasPermission(actor, "settings.receipt");
+
+  if (!canEditReceipt) {
+    return <Navigate to="/settings" replace />;
+  }
+
+  return (
+    <SettingsAutoSaveShell
+      lang={lang}
+      title={t(lang, "settingsReceiptBrandingTitle")}
+      subtitle={t(lang, "settingsReceiptBrandingSub")}
+    >
+      <ReceiptSettingsBody lang={lang} />
+    </SettingsAutoSaveShell>
   );
 }

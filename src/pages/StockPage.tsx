@@ -34,6 +34,7 @@ import { StockPinnedSearch } from "../components/stock/StockPinnedSearch";
 import { StockShelfGrid } from "../components/stock/StockShelfGrid";
 import { StockFab } from "../components/stock/StockFab";
 import { EmptyShelfPanel } from "../components/stock/EmptyShelfPanel";
+import { WakaCheckbox } from "../components/enterprise/WakaCheckbox";
 import { InventoryStatGrid } from "../components/stock/InventoryStatGrid";
 import { StockProductDetailSheet } from "../components/stock/StockProductDetailSheet";
 import { StockProductActionSheet } from "../components/stock/StockProductActionSheet";
@@ -43,6 +44,7 @@ import {
   type BuiltWizardProduct,
 } from "../lib/simpleProductWizard";
 import { AppModalOverlay } from "../components/layout/AppModalOverlay";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
   costPerUnitFromPackAndStock,
@@ -755,7 +757,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   };
 
   return (
-    <div className={clsx(workspaceEmbed ? "space-y-3" : "page-content-pad space-y-3")}>
+    <EnterprisePageContainer className="space-y-3" variant={workspaceEmbed ? "flush" : "default"}>
       {!workspaceEmbed ? (
         <PageHeader
           lang={lang}
@@ -1076,17 +1078,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             <ul className="mt-4 space-y-3">
               {starterRows.map((row, i) => (
                 <li key={`${row.nameKey}-${i}`} className="rounded-2xl border-2 border-stone-100 p-3">
-                  <label className="flex items-center gap-3 font-bold text-stone-900">
-                    <input
-                      type="checkbox"
-                      checked={row.enabled}
-                      onChange={() =>
-                        setStarterRows((rows) => rows.map((r, j) => (j === i ? { ...r, enabled: !r.enabled } : r)))
-                      }
-                      className="h-6 w-6 accent-waka-600"
-                    />
-                    <span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>
-                  </label>
+                  <WakaCheckbox
+                    checked={row.enabled}
+                    onCheckedChange={(checked) =>
+                      setStarterRows((rows) => rows.map((r, j) => (j === i ? { ...r, enabled: checked } : r)))
+                    }
+                    label={<span className="flex-1 text-lg">{t(lang, row.nameKey)}</span>}
+                  />
                   <div className="mt-2 grid grid-cols-2 gap-2 pl-9">
                     <label className="text-xs font-bold text-stone-600">
                       {t(lang, "quickAddPrice")}
@@ -1312,6 +1310,6 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           setActionSheetProduct(null);
         }}
       />
-    </div>
+    </EnterprisePageContainer>
   );
 }

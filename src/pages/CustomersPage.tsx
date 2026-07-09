@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate } from "react-router-dom";
-import { ChevronDown, FileDown, UserPlus } from "lucide-react";
+import { ChevronDown, FileDown, UserPlus, Users } from "lucide-react";
 import clsx from "clsx";
 import type { Customer, Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -34,6 +34,7 @@ import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { DocumentActionsBar } from "../components/documents/DocumentActionsBar";
 import { ModalSheet } from "../components/layout/ModalSheet";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { VirtualizedCustomerDebtList } from "../components/debts/VirtualizedCustomerDebtList";
 import { DebtsStatGrid } from "../components/debts/DebtsStatGrid";
@@ -56,6 +57,7 @@ import {
   type DebtsQuickFilter,
 } from "../lib/debtsPageView";
 import { shareText } from "../lib/reportExport";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 
 export function CustomersPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -214,14 +216,15 @@ export function CustomersPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-3 pb-24">
+    <EnterprisePageContainer className="space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <PageHeader
             lang={lang}
             title={modeTerm("debts")}
             subtitle={t(lang, "debtsPageSub")}
-            showBack={false}
+            backFallback="/office"
+            backLabel={t(lang, "officeBackToHub")}
             compact
           />
         </div>
@@ -337,17 +340,12 @@ export function CustomersPage({ lang }: { lang: Language }) {
       ) : null}
 
       {customers.length === 0 ? (
-        <section className="rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
-          <p className="text-base font-black text-stone-800">{modeTerm("customersEmptyTitle")}</p>
-          <p className="mt-1 text-sm font-medium text-stone-500">{modeTerm("customersEmptySub")}</p>
-          <button
-            type="button"
-            onClick={() => setAddOpen(true)}
-            className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white active:bg-waka-700"
-          >
-            {modeTerm("addCustomer")}
-          </button>
-        </section>
+        <EnterpriseEmptyState
+          icon={Users}
+          title={modeTerm("customersEmptyTitle")}
+          description={modeTerm("customersEmptySub")}
+          primaryAction={{ label: modeTerm("addCustomer"), onClick: () => setAddOpen(true) }}
+        />
       ) : null}
 
       {filteredCustomers.length > 0 ? (
@@ -449,6 +447,6 @@ export function CustomersPage({ lang }: { lang: Language }) {
           </div>
         </ModalSheet>
       ) : null}
-    </div>
+    </EnterprisePageContainer>
   );
 }

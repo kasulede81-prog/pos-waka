@@ -24,6 +24,7 @@ import {
   userSupportsOAuthReauth,
 } from "../lib/ownerDeleteReauth";
 import { buildSelfDeleteHealthSnapshot } from "../lib/selfDeleteHealth";
+import { WakaCheckbox } from "../components/enterprise/WakaCheckbox";
 
 type Props = {
   lang: Language;
@@ -271,15 +272,12 @@ export function AccountDeletionPage({ lang, userId, email, user, onSignOut }: Pr
         <p className="mt-3 text-xs font-semibold text-rose-800">{t(lang, "accountDeletionReuseHint")}</p>
       </article>
 
-      <label className="flex items-start gap-2 text-sm font-semibold text-stone-800">
-        <input
-          type="checkbox"
-          checked={ack}
-          onChange={(e) => setAck(e.target.checked)}
-          className="mt-1 h-4 w-4"
-        />
-        {t(lang, "accountDeletionAck")}
-      </label>
+      <WakaCheckbox
+        checked={ack}
+        onCheckedChange={setAck}
+        label={t(lang, "accountDeletionAck")}
+        className="text-sm font-semibold text-stone-800"
+      />
 
       <label className="block text-sm font-bold text-stone-900">
         {t(lang, "accountDeletionTypeLabel")}

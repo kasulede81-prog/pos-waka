@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import {
@@ -68,10 +69,10 @@ export function InventoryCountSessionPage({ lang }: Props) {
 
   if (!sessionId || !session) {
     return (
-      <div className="page-content-pad">
+      <EnterprisePageContainer>
         <PageHeader lang={lang} title={t(lang, "inventoryCountTitle")} backLabel={t(lang, "stockCountNav")} backFallback="/stock/count" />
         <p className="text-sm font-semibold text-stone-500">{t(lang, "invalid")}</p>
-      </div>
+      </EnterprisePageContainer>
     );
   }
 
@@ -118,7 +119,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
   };
 
   return (
-    <div className="page-content-pad space-y-4">
+    <EnterprisePageContainer>
       <PageHeader
         lang={lang}
         title={tTemplate(lang, "inventoryCountSessionNumber", { n: String(session.sessionNumber) })}
@@ -292,6 +293,6 @@ export function InventoryCountSessionPage({ lang }: Props) {
           </dl>
         </CountApprovalDialog>
       ) : null}
-    </div>
+    </EnterprisePageContainer>
   );
 }

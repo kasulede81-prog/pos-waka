@@ -19,6 +19,7 @@ import {
   saveGrowthReferralCode,
   type GrowthReferralCodeWithUsage,
 } from "../../../../lib/growthCampaignsAdmin";
+import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -388,15 +389,12 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
             />
           </div>
           <div className="flex items-end">
-            <label className="flex min-h-[44px] items-center gap-2 text-sm font-black text-stone-800">
-              <input
-                type="checkbox"
-                className="h-5 w-5 accent-orange-600"
-                checked={draft.enabled}
-                onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-              />
-              Enable Growth Campaign
-            </label>
+            <WakaSwitch
+              checked={draft.enabled}
+              onCheckedChange={(checked) => setDraft({ ...draft, enabled: checked })}
+              label="Enable Growth Campaign"
+              className="text-sm font-black text-stone-800"
+            />
           </div>
           <div>
             <label className={labelCls}>Campaign start date</label>
@@ -535,15 +533,12 @@ export function AdminGrowthCampaignPage({ previewMode = false }: Props) {
             />
           </div>
           <div className="flex items-end">
-            <label className="flex min-h-[44px] items-center gap-2 text-sm font-black text-stone-800">
-              <input
-                type="checkbox"
-                className="h-5 w-5 accent-orange-600"
-                checked={codeDraft.enabled}
-                onChange={(e) => setCodeDraft({ ...codeDraft, enabled: e.target.checked })}
-              />
-              Enabled
-            </label>
+            <WakaSwitch
+              checked={codeDraft.enabled}
+              onCheckedChange={(checked) => setCodeDraft({ ...codeDraft, enabled: checked })}
+              label="Enabled"
+              className="text-sm font-black text-stone-800"
+            />
           </div>
           <div className="flex items-end gap-2">
             <button

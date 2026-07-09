@@ -18,6 +18,7 @@ import { ensureAllActiveSalesLoaded, usePosStore } from "../store/usePosStore";
 import { dateKeyKampala } from "../lib/datesUg";
 
 import { useDrawerCashForDay } from "../hooks/useDrawerCashForDay";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 
 import { getCompletedFinancials } from "../lib/financialMetrics";
 
@@ -670,13 +671,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           {preflight?.requiresSyncOverride ? (
 
-            <label className="mt-3 flex items-center gap-2 text-sm font-semibold text-amber-900">
-
-              <input type="checkbox" checked={syncOverride} onChange={(e) => setSyncOverride(e.target.checked)} />
-
-              {t(lang, "dayCloseCheckCloudSyncFail")}
-
-            </label>
+            <WakaSwitch
+              className="mt-3 text-sm font-semibold text-amber-900"
+              checked={syncOverride}
+              onCheckedChange={setSyncOverride}
+              label={t(lang, "dayCloseCheckCloudSyncFail")}
+            />
 
           ) : null}
 
@@ -772,13 +772,12 @@ export function CloseDayPage({ lang }: { lang: Language }) {
 
           <p className="mt-1 text-xs font-semibold text-rose-900">{t(lang, "dayCloseEmergencyWarning")}</p>
 
-          <label className="mt-3 flex items-center gap-2 text-sm font-bold text-rose-950">
-
-            <input type="checkbox" checked={emergencyMode} onChange={(e) => setEmergencyMode(e.target.checked)} />
-
-            {t(lang, "dayCloseEmergencyConfirm")}
-
-          </label>
+          <WakaSwitch
+            className="mt-3 text-sm font-bold text-rose-950"
+            checked={emergencyMode}
+            onCheckedChange={setEmergencyMode}
+            label={t(lang, "dayCloseEmergencyConfirm")}
+          />
 
           {emergencyMode ? (
 

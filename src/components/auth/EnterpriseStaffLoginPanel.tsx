@@ -7,6 +7,7 @@ import { t } from "../../lib/i18n";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../../lib/staffOfflineAuth";
 import { EnterprisePinKeypad } from "./EnterprisePinKeypad";
 import { WakaSymbolIcon } from "../brand/WakaLogo";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Props = {
   lang: Language;
@@ -141,15 +142,12 @@ export function EnterpriseStaffLoginPanel({
           />
         </div>
 
-        <label className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
-          <input
-            type="checkbox"
-            checked={rememberDevice}
-            onChange={(e) => setRememberDevice(e.target.checked)}
-            className="h-4 w-4 rounded border-stone-300 text-waka-600"
-          />
-          {t(lang, "staffLoginRememberDevice")}
-        </label>
+        <WakaSwitch
+          checked={rememberDevice}
+          onCheckedChange={setRememberDevice}
+          label={t(lang, "staffLoginRememberDevice")}
+          className="text-sm font-semibold text-stone-700 dark:text-stone-300"
+        />
 
         {rememberedStaffDevice ? (
           <button

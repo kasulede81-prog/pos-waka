@@ -6,6 +6,7 @@ import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 import { shiftStatusLabel } from "../lib/shiftEnforcement";
 import { dateKeyKampala } from "../lib/datesUg";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import {
   buildShiftSummaryRows,
@@ -31,8 +32,8 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
   }
 
   return (
-    <div className="space-y-4 pb-24">
-      <PageHeader lang={lang} title={t(lang, "openShiftsTitle")} subtitle={t(lang, "openShiftsSub")} />
+    <EnterprisePageContainer>
+      <PageHeader lang={lang} title={t(lang, "openShiftsTitle")} subtitle={t(lang, "openShiftsSub")} backFallback="/office" backLabel={t(lang, "officeBackToHub")} />
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -124,7 +125,7 @@ export function OpenShiftsPage({ lang }: { lang: Language }) {
           </tbody>
         </table>
       </div>
-    </div>
+    </EnterprisePageContainer>
   );
 }
 

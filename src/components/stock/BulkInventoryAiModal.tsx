@@ -9,6 +9,7 @@ import {
   mapBulkRowsToQuickAdd,
   type BulkInventoryPreviewRow,
 } from "../../lib/ai/bulkInventoryAi";
+import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 
 type Props = {
   lang: Language;
@@ -172,11 +173,10 @@ export function BulkInventoryAiModal({
                     {rows.map((row, i) => (
                       <tr key={`${row.name}-${i}`} className="border-t border-stone-100">
                         <td className="px-2 py-2">
-                          <input
-                            type="checkbox"
+                          <WakaCheckbox
                             checked={row.enabled}
-                            onChange={(e) => updateRow(i, { enabled: e.target.checked })}
-                            className="h-4 w-4 accent-waka-600"
+                            onCheckedChange={(checked) => updateRow(i, { enabled: checked })}
+                            row={false}
                           />
                         </td>
                         <td className="px-2 py-2">

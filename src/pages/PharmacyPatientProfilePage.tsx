@@ -22,6 +22,7 @@ import {
 } from "../lib/pharmacyPatientPrint";
 import { PHARMACY_PRESCRIPTIONS_ROUTE } from "../lib/pharmacyNav";
 import { formatUgx } from "../lib/formatUgx";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PharmacyAllergyWarningBanner } from "../components/pharmacy/patient/PharmacyAllergyWarningBanner";
 
 const DOC_KINDS: PharmacyPatientDocumentKind[] = [
@@ -86,12 +87,12 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
   if (!pharmacy) return null;
   if (!patient || !profile) {
     return (
-      <div className="page-content-pad">
+      <EnterprisePageContainer>
         <p className="font-bold text-stone-600">{t(lang, "pharmacyPatientNotFound")}</p>
         <Link to="/pharmacy/patients" className="mt-2 inline-block font-black text-teal-700">
           {t(lang, "pharmacyNavExit")}
         </Link>
-      </div>
+      </EnterprisePageContainer>
     );
   }
 
@@ -124,7 +125,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
   );
 
   return (
-    <div className="page-content-pad space-y-4">
+    <EnterprisePageContainer>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Link to="/pharmacy/patients" className="text-sm font-bold text-teal-700">
@@ -348,7 +349,7 @@ export function PharmacyPatientProfilePage({ lang }: { lang: Language }) {
           ))}
         </ul>
       </section>
-    </div>
+    </EnterprisePageContainer>
   );
 }
 

@@ -1,6 +1,7 @@
 import type { Language } from "../types";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { usePosStore } from "../store/usePosStore";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PharmacyComplianceRegisterPanel } from "../components/pharmacy/compliance/PharmacyComplianceRegisterPanel";
 
 export function PharmacyComplianceRegisterPage({ lang }: { lang: Language }) {
@@ -11,8 +12,8 @@ export function PharmacyComplianceRegisterPage({ lang }: { lang: Language }) {
   if (!pharmacy) return null;
 
   return (
-    <div className="page-content-pad">
+    <EnterprisePageContainer>
       <PharmacyComplianceRegisterPanel lang={lang} register={register} />
-    </div>
+    </EnterprisePageContainer>
   );
 }

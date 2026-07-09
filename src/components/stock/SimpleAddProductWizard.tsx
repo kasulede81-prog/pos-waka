@@ -22,6 +22,7 @@ import { CostValidationPreview } from "./CostValidationPreview";
 import { ProductWizardShell } from "./wizard/ProductWizardShell";
 import { WizardFooter } from "./wizard/WizardFooter";
 import { WizardStepHeading } from "./wizard/WizardStepHeading";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 import { WizardInfoCard } from "./wizard/WizardInfoCard";
 import {
   WIZARD_INPUT_NUMERIC,
@@ -418,15 +419,13 @@ export function SimpleAddProductWizard({
                   title={hasPack ? t(lang, "simpleAddStep4Title") : t(lang, "simpleAddPackTypeScreenTitle")}
                   hint={!hasPack ? t(lang, "simpleAddSoldIndividuallyDesc") : undefined}
                 />
-                <label className="flex min-h-[58px] cursor-pointer items-center gap-3.5 rounded-2xl border border-border bg-muted/30 px-4 shadow-sm transition-colors has-[:checked]:border-primary/40 has-[:checked]:bg-primary/5">
-                  <input
-                    type="checkbox"
+                <div className="rounded-2xl border border-border bg-muted/30 px-4 shadow-sm transition-colors has-[[aria-checked=true]]:border-primary/40 has-[[aria-checked=true]]:bg-primary/5">
+                  <WakaSwitch
                     checked={hasPack}
-                    onChange={(e) => setHasPack(e.target.checked)}
-                    className="h-5 w-5 shrink-0 rounded-md accent-primary"
+                    onCheckedChange={setHasPack}
+                    label={<span className="text-base font-black text-foreground">{t(lang, "simpleAddPackToggle")}</span>}
                   />
-                  <span className="text-base font-black text-foreground">{t(lang, "simpleAddPackToggle")}</span>
-                </label>
+                </div>
                 {hasPack ? (
                   <>
                     <p className="text-sm font-bold text-muted-foreground">{t(lang, "simpleAddPackTypeLabel")}</p>

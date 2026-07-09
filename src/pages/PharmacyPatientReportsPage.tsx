@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { computePharmacyPatientReports } from "../lib/pharmacyPatientReports";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { useDeferredReportingSales } from "../hooks/useDeferredReportingSales";
 
 export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
@@ -23,7 +24,7 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
   if (!pharmacy) return null;
 
   return (
-    <div className="page-content-pad space-y-4">
+    <EnterprisePageContainer>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyPatientReportsTitle")}</h1>
@@ -66,7 +67,7 @@ export function PharmacyPatientReportsPage({ lang }: { lang: Language }) {
           ))}
         </ReportSection>
       </div>
-    </div>
+    </EnterprisePageContainer>
   );
 }
 

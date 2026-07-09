@@ -1,5 +1,6 @@
 import type { HospitalityCourse, KitchenStationType, Language, ProductHospitalityRouting } from "../../types";
 import { t } from "../../lib/i18n";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 import {
   HOSPITALITY_COURSES,
   KITCHEN_STATION_TYPES,
@@ -133,24 +134,20 @@ export function ProductHospitalityRoutingFields({ lang, value, onChange, onSugge
       </label>
 
       <div className="flex flex-col gap-2">
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-3">
-          <input
-            type="checkbox"
+        <div className="rounded-xl border border-stone-200 bg-white px-3 py-3">
+          <WakaSwitch
             checked={routing.modifiersAllowed !== false}
-            onChange={(e) => patch({ modifiersAllowed: e.target.checked })}
-            className="h-5 w-5 rounded border-stone-300"
+            onCheckedChange={(checked) => patch({ modifiersAllowed: checked })}
+            label={t(lang, "productHospitalityModifiersAllowed")}
           />
-          <span className="text-sm font-bold text-stone-800">{t(lang, "productHospitalityModifiersAllowed")}</span>
-        </label>
-        <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-3">
-          <input
-            type="checkbox"
+        </div>
+        <div className="rounded-xl border border-stone-200 bg-white px-3 py-3">
+          <WakaSwitch
             checked={routing.cookingPreferencesAllowed === true}
-            onChange={(e) => patch({ cookingPreferencesAllowed: e.target.checked })}
-            className="h-5 w-5 rounded border-stone-300"
+            onCheckedChange={(checked) => patch({ cookingPreferencesAllowed: checked })}
+            label={t(lang, "productHospitalityCookingPrefs")}
           />
-          <span className="text-sm font-bold text-stone-800">{t(lang, "productHospitalityCookingPrefs")}</span>
-        </label>
+        </div>
       </div>
     </section>
   );

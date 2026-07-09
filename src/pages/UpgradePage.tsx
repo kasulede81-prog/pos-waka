@@ -1,4 +1,6 @@
 import { Link } from "react-router-dom";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { PageBackBar } from "../components/layout/PageBackBar";
 import { useEffect, useState } from "react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -84,7 +86,8 @@ export function UpgradePage({ lang }: { lang: Language }) {
   ];
 
   return (
-    <div className="space-y-6 pb-10">
+    <EnterprisePageContainer className="space-y-6">
+      <PageBackBar lang={lang} fallbackTo="/settings/account" label={t(lang, "accountSettingsTitle")} />
       <div className="rounded-[2rem] bg-gradient-to-br from-waka-600 to-waka-500 px-5 py-7 text-white shadow-sm sm:px-7">
         <p className="text-xs font-black uppercase tracking-[0.28em] text-waka-100">{t(lang, "wakaSlogan")}</p>
         <h1 className="mt-3 text-3xl font-black tracking-tight">{t(lang, "upgradeTitle")}</h1>
@@ -267,6 +270,6 @@ export function UpgradePage({ lang }: { lang: Language }) {
       <Link to="/" className="inline-flex min-h-[48px] items-center font-bold text-waka-800 underline">
         ← {t(lang, "upgradeBack")}
       </Link>
-    </div>
+    </EnterprisePageContainer>
   );
 }

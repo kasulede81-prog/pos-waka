@@ -8,6 +8,7 @@ import type { ControlledDispenseValidation, ControlledLineInfo } from "../../../
 import { compliancePrefs } from "../../../lib/pharmacyControlledMedicine";
 import { buildControlledComplianceApproval } from "../../../lib/pharmacyControlledCheckout";
 import { useSessionActor } from "../../../context/SessionActorContext";
+import { WakaCheckbox } from "../../enterprise/WakaCheckbox";
 
 type Props = {
   lang: Language;
@@ -164,26 +165,22 @@ export function PharmacyControlledDispenseGate({
           </p>
         ) : null}
 
-        <label className="mt-4 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-2xl border-2 border-stone-200 px-4 touch-manipulation">
-          <input
-            type="checkbox"
+        <div className="mt-4 rounded-2xl border-2 border-stone-200 px-4 touch-manipulation">
+          <WakaCheckbox
             checked={patientVerified}
-            onChange={(e) => setPatientVerified(e.target.checked)}
-            className="h-6 w-6"
+            onCheckedChange={setPatientVerified}
+            label={t(lang, "pharmacyCompliancePatientVerified")}
           />
-          <span className="text-base font-black text-stone-900">{t(lang, "pharmacyCompliancePatientVerified")}</span>
-        </label>
+        </div>
 
         {needsRxVerify ? (
-          <label className="mt-2 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-2xl border-2 border-stone-200 px-4 touch-manipulation">
-            <input
-              type="checkbox"
+          <div className="mt-2 rounded-2xl border-2 border-stone-200 px-4 touch-manipulation">
+            <WakaCheckbox
               checked={prescriptionVerified}
-              onChange={(e) => setPrescriptionVerified(e.target.checked)}
-              className="h-6 w-6"
+              onCheckedChange={setPrescriptionVerified}
+              label={t(lang, "pharmacyComplianceRxVerified")}
             />
-            <span className="text-base font-black text-stone-900">{t(lang, "pharmacyComplianceRxVerified")}</span>
-          </label>
+          </div>
         ) : null}
 
         {needsWitness ? (

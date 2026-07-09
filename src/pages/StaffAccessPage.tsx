@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { Cloud, Lock, ShieldCheck, Zap } from "lucide-react";
 import { PageHeader } from "../components/layout/PageHeader";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
@@ -181,31 +182,21 @@ export function StaffAccessPage({ lang }: { lang: Language }) {
 
       <section className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4 shadow-sm">
         <h2 className="text-sm font-black uppercase tracking-wide text-stone-600">{t(lang, "staffPermissionsTitle")}</h2>
-        <label className="flex items-start gap-3 rounded-2xl bg-stone-50 px-4 py-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-5 w-5"
-            checked={preferences.staffCanRecordCashExpenses === true}
-            onChange={(e) => setPreferences({ staffCanRecordCashExpenses: e.target.checked })}
-          />
-          <span>
-            <span className="block text-sm font-black text-stone-900">{t(lang, "staffAllowCashierExpenses")}</span>
-            <span className="mt-0.5 block text-xs font-medium text-stone-600">{t(lang, "staffAllowCashierExpensesSub")}</span>
-          </span>
-        </label>
-        <label className="flex items-start gap-3 rounded-2xl bg-stone-50 px-4 py-3">
-          <input
-            type="checkbox"
-            className="mt-1 h-5 w-5"
-            checked={preferences.requireCashierExpenseApproval === true}
-            disabled={preferences.staffCanRecordCashExpenses !== true}
-            onChange={(e) => setPreferences({ requireCashierExpenseApproval: e.target.checked })}
-          />
-          <span>
-            <span className="block text-sm font-black text-stone-900">{t(lang, "staffRequireExpenseApproval")}</span>
-            <span className="mt-0.5 block text-xs font-medium text-stone-600">{t(lang, "staffRequireExpenseApprovalSub")}</span>
-          </span>
-        </label>
+        <WakaSwitch
+          checked={preferences.staffCanRecordCashExpenses === true}
+          onCheckedChange={(checked) => setPreferences({ staffCanRecordCashExpenses: checked })}
+          label={t(lang, "staffAllowCashierExpenses")}
+          description={t(lang, "staffAllowCashierExpensesSub")}
+          className="rounded-2xl bg-stone-50 px-4 py-3"
+        />
+        <WakaSwitch
+          checked={preferences.requireCashierExpenseApproval === true}
+          disabled={preferences.staffCanRecordCashExpenses !== true}
+          onCheckedChange={(checked) => setPreferences({ requireCashierExpenseApproval: checked })}
+          label={t(lang, "staffRequireExpenseApproval")}
+          description={t(lang, "staffRequireExpenseApprovalSub")}
+          className="rounded-2xl bg-stone-50 px-4 py-3"
+        />
       </section>
 
       <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">

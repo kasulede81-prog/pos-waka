@@ -3,6 +3,7 @@ import clsx from "clsx";
 import type { KitchenStationType, Language } from "../types";
 import { t } from "../lib/i18n";
 import { PageBackBar } from "../components/layout/PageBackBar";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { usePosStore } from "../store/usePosStore";
 import { useShallow } from "zustand/react/shallow";
 import { isHospitalityMode } from "../lib/hospitality";
@@ -155,15 +156,12 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
         </div>
       </article>
 
-      <label className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-white p-4">
-        <input
-          type="checkbox"
-          checked={manualKitchenFire}
-          onChange={(e) => setHospitalityManualKitchenFire(e.target.checked)}
-          className="h-5 w-5"
-        />
-        <span className="text-sm font-bold text-stone-800">{t(lang, "floorManualKitchenFire")}</span>
-      </label>
+      <WakaSwitch
+        checked={manualKitchenFire}
+        onCheckedChange={setHospitalityManualKitchenFire}
+        label={t(lang, "floorManualKitchenFire")}
+        className="rounded-2xl border border-stone-200 bg-white p-4"
+      />
 
       <div className="rounded-2xl border border-stone-200 bg-white p-4">
         <h2 className="text-lg font-black text-stone-950">{t(lang, "floorEditorAreas")}</h2>
@@ -335,14 +333,13 @@ export function SettingsFloorPage({ lang }: { lang: Language }) {
                   </option>
                 ))}
               </select>
-              <label className="flex items-center gap-1 text-xs font-bold text-stone-600">
-                <input
-                  type="checkbox"
-                  defaultChecked={st.isActive}
-                  onChange={(e) => updateKitchenStation(st.id, { isActive: e.target.checked })}
-                />
-                {t(lang, "staffActive")}
-              </label>
+              <WakaSwitch
+                checked={st.isActive}
+                onCheckedChange={(checked) => updateKitchenStation(st.id, { isActive: checked })}
+                label={t(lang, "staffActive")}
+                row={false}
+                className="gap-1"
+              />
               <button
                 type="button"
                 className="text-xs font-bold text-rose-700"

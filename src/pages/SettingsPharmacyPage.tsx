@@ -4,39 +4,26 @@ import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { usePosStore } from "../store/usePosStore";
-import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
+import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { isPharmacyMode } from "../lib/pharmacy";
 import type { PharmacyExpiredSaleBehavior } from "../lib/pharmacyExpiry";
 import { defaultCompliancePrefs } from "../lib/pharmacyControlledMedicine";
 
-export function SettingsPharmacyPage({ lang }: { lang: Language }) {
-  const actor = useSessionActor();
+function PharmacySettingsBody({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
-  const setPreferences = usePosStore((s) => s.setPreferences);
-
-  if (!actorHasPermission(actor, "settings.shop")) {
-    return <Navigate to="/settings" replace />;
-  }
-
-  if (!isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled)) {
-    return <Navigate to="/settings" replace />;
-  }
+  const savePreferences = usePreferencesPatch();
 
   const behavior = preferences.pharmacyExpiredSaleBehavior ?? "warn";
   const compliance = { ...defaultCompliancePrefs(), ...preferences.pharmacyCompliance };
 
   const patchCompliance = (patch: Partial<typeof compliance>) => {
-    setPreferences({ pharmacyCompliance: { ...compliance, ...patch } });
+    savePreferences({ pharmacyCompliance: { ...compliance, ...patch } });
   };
 
   return (
-    <div className="page-content-pad space-y-5">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "pharmacySettingsTitle")}
-        subtitle={t(lang, "pharmacySettingsSub")}
-      />
-
+    <>
       <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <p className="text-base font-black text-stone-950">{t(lang, "pharmacyExpiredSaleBehavior")}</p>
         <div className="mt-4 space-y-3">
@@ -49,7 +36,7 @@ export function SettingsPharmacyPage({ lang }: { lang: Language }) {
                 type="radio"
                 name="pharmacyExpiredSaleBehavior"
                 checked={behavior === value}
-                onChange={() => setPreferences({ pharmacyExpiredSaleBehavior: value })}
+                onChange={() => savePreferences({ pharmacyExpiredSaleBehavior: value })}
                 className="h-5 w-5 accent-waka-600"
               />
               {t(lang, value === "warn" ? "pharmacyExpiredSaleWarn" : "pharmacyExpiredSaleBlock")}
@@ -62,15 +49,12 @@ export function SettingsPharmacyPage({ lang }: { lang: Language }) {
         <p className="text-base font-black text-violet-950">{t(lang, "pharmacyComplianceSettingsTitle")}</p>
         <p className="mt-1 text-sm font-semibold text-stone-600">{t(lang, "pharmacyComplianceSettingsSub")}</p>
 
-        <label className="mt-4 flex min-h-[52px] cursor-pointer items-center gap-3 rounded-xl border border-violet-100 bg-white px-3 py-2 text-base font-bold text-stone-900">
-          <input
-            type="checkbox"
-            checked={Boolean(compliance.witnessWorkflowEnabled)}
-            onChange={(e) => patchCompliance({ witnessWorkflowEnabled: e.target.checked })}
-            className="h-5 w-5 accent-violet-600"
-          />
-          {t(lang, "pharmacyComplianceWitnessWorkflow")}
-        </label>
+        <WakaSwitch
+          checked={Boolean(compliance.witnessWorkflowEnabled)}
+          onCheckedChange={(checked) => patchCompliance({ witnessWorkflowEnabled: checked })}
+          label={t(lang, "pharmacyComplianceWitnessWorkflow")}
+          className="mt-4 rounded-xl border border-violet-100 bg-white px-3 py-2"
+        />
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="block text-sm font-bold text-stone-800">
@@ -123,6 +107,29 @@ export function SettingsPharmacyPage({ lang }: { lang: Language }) {
           </label>
         </div>
       </article>
-    </div>
+    </>
+  );
+}
+
+export function SettingsPharmacyPage({ lang }: { lang: Language }) {
+  const actor = useSessionActor();
+  const preferences = usePosStore((s) => s.preferences);
+
+  if (!actorHasPermission(actor, "settings.shop")) {
+    return <Navigate to="/settings" replace />;
+  }
+
+  if (!isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled)) {
+    return <Navigate to="/settings" replace />;
+  }
+
+  return (
+    <SettingsAutoSaveShell
+      lang={lang}
+      title={t(lang, "pharmacySettingsTitle")}
+      subtitle={t(lang, "pharmacySettingsSub")}
+    >
+      <PharmacySettingsBody lang={lang} />
+    </SettingsAutoSaveShell>
   );
 }

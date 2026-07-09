@@ -4,13 +4,21 @@ import { usePosStore } from "../store/usePosStore";
 import { usePharmacyControlledCheckout } from "./usePharmacyControlledCheckout";
 import { computeDraftCartStats, computeDraftCheckoutTotals, draftLineQuantityStep } from "../lib/draftCart";
 import { parseDisplayMoney } from "../lib/posCheckoutMoney";
+import {
+  applyCheckoutAlphaKey,
+  applyCheckoutNumericKey,
+  applyCheckoutPhoneKey,
+  preferredKeypadModeForField,
+  type CheckoutInputField,
+  type CheckoutKeypadMode,
+} from "../lib/posCheckoutKeypad";
 import { gateDraftSaleStockBeforeFinalize } from "../lib/preFinalizeStockGate";
 import { hasActorPermission } from "../lib/permissions";
 import { t } from "../lib/i18n";
 import type { PosCheckoutPanelProps } from "../components/pos/PosCheckoutPanel";
 
 type PaymentMethod = PosCheckoutPanelProps["paymentMethod"];
-type CheckoutAmountField = PosCheckoutPanelProps["checkoutAmountField"];
+type CheckoutAmountField = CheckoutInputField;
 
 const POS_CHECKOUT_METHODS: PaymentMethod[] = ["cash", "atm", "mobile_money", "credit"];
 
@@ -63,6 +71,7 @@ export function usePharmacyDispenseCheckout({
   const [cashInput, setCashInput] = useState("");
   const [mobileMoneyInput, setMobileMoneyInput] = useState("");
   const [checkoutAmountField, setCheckoutAmountField] = useState<CheckoutAmountField>("cash");
+  const [checkoutKeypadMode, setCheckoutKeypadMode] = useState<CheckoutKeypadMode>("numeric");
   const [saleCustomerId, setSaleCustomerId] = useState("");
   const [saleCustomerName, setSaleCustomerName] = useState("");
   const [saleCustomerPhone, setSaleCustomerPhone] = useState("");
@@ -115,21 +124,50 @@ export function usePharmacyDispenseCheckout({
     return Math.max(0, draftPayable - totalPaidInput);
   }, [paymentMethod, draftPayable, totalPaidInput]);
 
+  const handleCheckoutInputField = useCallback((field: CheckoutInputField) => {
+    setCheckoutAmountField(field);
+    setCheckoutKeypadMode(preferredKeypadModeForField(field));
+  }, []);
+
   const appendCheckoutDigit = useCallback(
     (d: string) => {
-      const apply = (prev: string) => {
-        if (d === "back") return prev.slice(0, -1);
-        return (prev + d).replace(/\D/g, "").slice(0, 10);
-      };
-      if (checkoutAmountField === "mobile") setMobileMoneyInput(apply);
-      else setCashInput(apply);
+      if (checkoutKeypadMode === "alpha" && checkoutAmountField === "customerName") {
+        setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
+        return;
+      }
+      const applyNumeric = (prev: string) => applyCheckoutNumericKey(prev, d);
+      const applyPhone = (prev: string) => applyCheckoutPhoneKey(prev, d);
+      switch (checkoutAmountField) {
+        case "mobile":
+          setMobileMoneyInput(applyPhone);
+          break;
+        case "customerPhone":
+          setSaleCustomerPhone(applyPhone);
+          break;
+        case "customerName":
+          setSaleCustomerName((prev) => applyCheckoutAlphaKey(prev, d));
+          break;
+        default:
+          setCashInput(applyNumeric);
+      }
     },
-    [checkoutAmountField],
+    [checkoutAmountField, checkoutKeypadMode],
   );
 
   const clearCheckoutAmount = useCallback(() => {
-    if (checkoutAmountField === "mobile") setMobileMoneyInput("");
-    else setCashInput("");
+    switch (checkoutAmountField) {
+      case "mobile":
+        setMobileMoneyInput("");
+        break;
+      case "customerPhone":
+        setSaleCustomerPhone("");
+        break;
+      case "customerName":
+        setSaleCustomerName("");
+        break;
+      default:
+        setCashInput("");
+    }
   }, [checkoutAmountField]);
 
   const toast = useCallback(
@@ -143,6 +181,7 @@ export function usePharmacyDispenseCheckout({
     setCashInput("");
     setMobileMoneyInput("");
     setCheckoutAmountField("cash");
+    setCheckoutKeypadMode("numeric");
     setPaymentMethod("cash");
     setCheckoutBlockMessage(null);
   }, []);
@@ -295,6 +334,7 @@ export function usePharmacyDispenseCheckout({
       cashInput,
       mobileMoneyInput,
       checkoutAmountField,
+      checkoutKeypadMode,
       changeDue,
       computedDebt,
       saleCustomerId,
@@ -316,7 +356,8 @@ export function usePharmacyDispenseCheckout({
       pharmacyMode: true,
       onBatchTap: extras.onBatchTap,
       onPaymentMethod: setPaymentMethod,
-      onCheckoutAmountField: setCheckoutAmountField,
+      onCheckoutInputField: handleCheckoutInputField,
+      onCheckoutKeypadModeChange: setCheckoutKeypadMode,
       onAppendCheckoutDigit: appendCheckoutDigit,
       onClearCheckoutAmount: clearCheckoutAmount,
       onSaleCustomerId: setSaleCustomerId,
@@ -344,6 +385,7 @@ export function usePharmacyDispenseCheckout({
       cashInput,
       mobileMoneyInput,
       checkoutAmountField,
+      checkoutKeypadMode,
       changeDue,
       computedDebt,
       saleCustomerId,
@@ -354,6 +396,7 @@ export function usePharmacyDispenseCheckout({
       clearDraft,
       handleDraftQtyStep,
       removeDraftLine,
+      handleCheckoutInputField,
       appendCheckoutDigit,
       clearCheckoutAmount,
       handleSavePending,

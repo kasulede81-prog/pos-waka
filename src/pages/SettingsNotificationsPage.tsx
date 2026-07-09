@@ -1,48 +1,46 @@
 import { Navigate } from "react-router-dom";
-import { actorHasPermission } from "../lib/actorAuthorization";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import { useSessionActor } from "../context/SessionActorContext";
 import { usePosStore } from "../store/usePosStore";
-import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
+import { SettingsAutoSaveShell } from "../components/enterprise/SettingsAutoSaveShell";
+import { usePreferencesPatch } from "../components/enterprise/preferencesAutoSaveContext";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+
+function NotificationsSettingsBody({ lang }: { lang: Language }) {
+  const preferences = usePosStore((s) => s.preferences);
+  const savePreferences = usePreferencesPatch();
+
+  return (
+    <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <WakaSwitch
+        checked={preferences.hapticsOn !== false}
+        onCheckedChange={(checked) => savePreferences({ hapticsOn: checked })}
+        label={t(lang, "hapticsSetting")}
+      />
+      <WakaSwitch
+        checked={preferences.saleSoundOn !== false}
+        onCheckedChange={(checked) => savePreferences({ saleSoundOn: checked })}
+        label={t(lang, "saleSoundSetting")}
+        className="mt-4 border-t border-stone-100 pt-4"
+      />
+    </article>
+  );
+}
 
 export function SettingsNotificationsPage({ lang }: { lang: Language }) {
   const actor = useSessionActor();
-  const preferences = usePosStore((s) => s.preferences);
-  const setPreferences = usePosStore((s) => s.setPreferences);
-
   if (!actorHasPermission(actor, "settings.view")) {
     return <Navigate to="/settings" replace />;
   }
-
   return (
-    <div className="space-y-5 pb-8">
-      <SettingsPageHeader
-        lang={lang}
-        title={t(lang, "settingsHubNotifications")}
-        subtitle={t(lang, "settingsHubNotificationsSub")}
-      />
-
-      <article className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-        <label className="flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-stone-900">
-          <input
-            type="checkbox"
-            checked={preferences.hapticsOn !== false}
-            onChange={(e) => setPreferences({ hapticsOn: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-stone-400 accent-waka-600"
-          />
-          {t(lang, "hapticsSetting")}
-        </label>
-        <label className="mt-4 flex min-h-[52px] cursor-pointer items-center gap-3 text-base font-bold text-stone-900">
-          <input
-            type="checkbox"
-            checked={preferences.saleSoundOn !== false}
-            onChange={(e) => setPreferences({ saleSoundOn: e.target.checked })}
-            className="h-6 w-6 rounded border-2 border-stone-400 accent-waka-600"
-          />
-          {t(lang, "saleSoundSetting")}
-        </label>
-      </article>
-    </div>
+    <SettingsAutoSaveShell
+      lang={lang}
+      title={t(lang, "settingsHubNotifications")}
+      subtitle={t(lang, "settingsHubNotificationsSub")}
+    >
+      <NotificationsSettingsBody lang={lang} />
+    </SettingsAutoSaveShell>
   );
 }

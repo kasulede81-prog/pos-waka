@@ -1,6 +1,7 @@
 import type { AuditLogEntry, Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { groupAuditByStaff } from "../../../lib/auditSearch";
+import type { TimelinePresentation } from "../registry/investigationWidgetTypes";
 import { VirtualizedActivityTimeline } from "./VirtualizedActivityTimeline";
 
 type Props = {
@@ -17,7 +18,7 @@ type Props = {
   }>;
   productById: Map<string, { name: string }>;
   customerById: Map<string, { name: string }>;
-  pharmacyMode?: boolean;
+  getTimelinePresentation?: (entry: AuditLogEntry) => TimelinePresentation | null;
   onSelect: (entry: AuditLogEntry) => void;
   onMenu: (entry: AuditLogEntry) => void;
 };
@@ -28,7 +29,7 @@ export function InvestigationStaffSection({
   shifts,
   productById,
   customerById,
-  pharmacyMode = false,
+  getTimelinePresentation,
   onSelect,
   onMenu,
 }: Props) {
@@ -75,7 +76,7 @@ export function InvestigationStaffSection({
             entries={group.entries}
             productById={productById}
             customerById={customerById}
-            pharmacyMode={pharmacyMode}
+            getTimelinePresentation={getTimelinePresentation}
             onSelect={onSelect}
             onMenu={onMenu}
           />

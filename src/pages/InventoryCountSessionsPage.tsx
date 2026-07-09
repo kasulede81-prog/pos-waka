@@ -4,6 +4,7 @@ import clsx from "clsx";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { flushPendingPersist, usePosStore } from "../store/usePosStore";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { useSessionActor } from "../context/SessionActorContext";
 import { canInventoryCount } from "../lib/inventoryCount";
@@ -48,7 +49,7 @@ export function InventoryCountSessionsPage({ lang }: Props) {
   };
 
   return (
-    <div className="page-content-pad space-y-4">
+    <EnterprisePageContainer>
       <PageHeader
         lang={lang}
         title={t(lang, "inventoryCountTitle")}
@@ -117,6 +118,6 @@ export function InventoryCountSessionsPage({ lang }: Props) {
           </ul>
         )}
       </InventoryCountShell>
-    </div>
+    </EnterprisePageContainer>
   );
 }

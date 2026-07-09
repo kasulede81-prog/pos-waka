@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { BusinessType, Language, Permission } from "../../types";
 import { t } from "../../lib/i18n";
 import { permissionCategoriesForBusiness, permissionLabel, summarizePermissionsByCategory } from "../../lib/enterpriseRoles";
+import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 
 type Props = {
   lang: Language;
@@ -35,24 +36,23 @@ export function CustomRolePermissionEditor({ lang, businessType, selected, onCha
               const checked = selectedSet.has(perm);
               return (
                 <li key={perm}>
-                  <label
+                  <div
                     className={clsx(
-                      "flex min-h-[44px] cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm font-semibold transition",
+                      "rounded-xl border px-3 py-2.5 transition",
                       checked
                         ? "border-waka-300 bg-waka-50 text-waka-950 dark:border-waka-700 dark:bg-waka-950/30 dark:text-waka-100"
                         : "border-stone-200 bg-white text-stone-700 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-200",
                       disabled && "cursor-not-allowed opacity-60",
                     )}
                   >
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 shrink-0"
+                    <WakaCheckbox
                       checked={checked}
                       disabled={disabled}
-                      onChange={() => toggle(perm)}
+                      onCheckedChange={() => toggle(perm)}
+                      label={permissionLabel(lang, perm)}
+                      className="text-sm font-semibold"
                     />
-                    <span>{permissionLabel(lang, perm)}</span>
-                  </label>
+                  </div>
                 </li>
               );
             })}

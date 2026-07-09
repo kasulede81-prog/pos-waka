@@ -24,6 +24,7 @@ import {
   type PricingCampaignPlanDiscount,
 } from "../../../../lib/pricingCampaignsAdmin";
 import { adminPermissions } from "../adminRoles";
+import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 
 type Props = {
   adminRow: WakaInternalAdminRow | null;
@@ -376,15 +377,13 @@ export function AdminPricingCampaignsPage({ adminRow, previewMode = false }: Pro
                   disabled={!canEdit}
                 />
               </div>
-              <label className="flex items-center gap-2 text-sm font-bold text-stone-800">
-                <input
-                  type="checkbox"
-                  checked={draft.enabled}
-                  onChange={(e) => setDraft((d) => ({ ...d, enabled: e.target.checked }))}
-                  disabled={!canEdit}
-                />
-                Enable campaign
-              </label>
+              <WakaSwitch
+                checked={draft.enabled}
+                disabled={!canEdit}
+                onCheckedChange={(checked) => setDraft((d) => ({ ...d, enabled: checked }))}
+                label="Enable campaign"
+                className="text-sm font-bold text-stone-800"
+              />
             </div>
             {canEdit ? (
               <button

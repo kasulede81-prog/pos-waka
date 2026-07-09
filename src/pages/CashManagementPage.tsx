@@ -15,6 +15,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { useSessionActor } from "../context/SessionActorContext";
 
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OfficeNavCard } from "../components/office/OfficeNavCard";
 import { DayDrawerOpenAlert } from "../components/office/DayDrawerOpenAlert";
@@ -78,7 +79,7 @@ export function CashManagementPage({ lang }: Props) {
   const needsDayOpen = isFormulaV2(preferences) && !snapshot.drawerOpen && canOpen;
 
   return (
-    <div className="page-content-pad space-y-5 pb-24">
+    <EnterprisePageContainer className="space-y-5">
       <PageHeader
         lang={lang}
         title={t(lang, "cashManagementTitle")}
@@ -266,6 +267,6 @@ export function CashManagementPage({ lang }: Props) {
         </section>
       ) : null}
 
-    </div>
+    </EnterprisePageContainer>
   );
 }

@@ -3,6 +3,7 @@ import type { HospitalityFloorState, Language, TableReservation } from "../../ty
 import { t } from "../../lib/i18n";
 import { lookupCustomerProfile } from "../../lib/hospitalityFrontOfHouse";
 import type { Sale } from "../../types";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Props = {
   lang: Language;
@@ -238,10 +239,12 @@ export function ReservationFormDialog({
               ))}
             </select>
           </label>
-          <label className="sm:col-span-2 flex items-center gap-2">
-            <input type="checkbox" checked={isVip} onChange={(e) => setIsVip(e.target.checked)} />
-            <span className="text-sm font-bold">VIP</span>
-          </label>
+          <WakaSwitch
+            checked={isVip}
+            onCheckedChange={setIsVip}
+            label={<span className="text-sm font-bold">VIP</span>}
+            className="sm:col-span-2"
+          />
           <label className="sm:col-span-2">
             <span className="text-xs font-bold text-stone-600">{t(lang, "reservationNotes")}</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 min-h-16 w-full rounded-xl border border-stone-200 px-3 py-2 text-sm" />

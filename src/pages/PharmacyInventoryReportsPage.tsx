@@ -5,6 +5,7 @@ import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { computePharmacyInventoryReports } from "../lib/pharmacyInventoryReports";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { formatUgx } from "../lib/formatUgx";
 
 export function PharmacyInventoryReportsPage({ lang }: { lang: Language }) {
@@ -26,7 +27,7 @@ export function PharmacyInventoryReportsPage({ lang }: { lang: Language }) {
   ];
 
   return (
-    <div className="page-content-pad space-y-4">
+    <EnterprisePageContainer>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-black tracking-tight text-stone-950">{t(lang, "pharmacyInventoryReports")}</h1>
@@ -73,6 +74,6 @@ export function PharmacyInventoryReportsPage({ lang }: { lang: Language }) {
           </ul>
         </div>
       </section>
-    </div>
+    </EnterprisePageContainer>
   );
 }

@@ -1,14 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { UserPlus } from "lucide-react";
+import { UserPlus, Users } from "lucide-react";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
 import { searchPharmacyPatients } from "../lib/pharmacyPatientSearch";
 import { generatePatientCode } from "../lib/pharmacyPatientProfile";
-import { computePatientAge, patientDisplayId } from "../lib/pharmacyPatientProfile";
-import { ensurePharmacyPatientProfile } from "../lib/pharmacyPatientProfile";
+import { computePatientAge, patientDisplayId, ensurePharmacyPatientProfile } from "../lib/pharmacyPatientProfile";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { EnterpriseListToolbar } from "../components/enterprise/EnterpriseListToolbar";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 
 export function PharmacyPatientsPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
@@ -51,7 +53,7 @@ export function PharmacyPatientsPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="page-content-pad flex min-h-0 flex-1 flex-col gap-4">
+    <EnterprisePageContainer className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyTerm_patients")}</h1>
@@ -67,11 +69,12 @@ export function PharmacyPatientsPage({ lang }: { lang: Language }) {
         </button>
       </div>
 
-      <input
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder={t(lang, "pharmacyPatientSearchPh")}
-        className="min-h-[52px] w-full rounded-2xl border-2 border-stone-200 px-4 text-base font-semibold"
+      <EnterpriseListToolbar
+        lang={lang}
+        sticky={false}
+        searchQuery={search}
+        searchPlaceholder={t(lang, "pharmacyPatientSearchPh")}
+        onSearchChange={setSearch}
       />
 
       {showAdd ? (
@@ -102,46 +105,52 @@ export function PharmacyPatientsPage({ lang }: { lang: Language }) {
         </div>
       ) : null}
 
-      <ul className="grid min-h-0 flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {rows.map((c) => {
-          const profile = ensurePharmacyPatientProfile(c);
-          const age = computePatientAge(profile.dateOfBirth);
-          return (
-            <li key={c.id}>
-              <Link
-                to={`/pharmacy/patients/${c.id}`}
-                className="flex min-h-[120px] flex-col justify-between rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-waka hover:border-teal-300 touch-manipulation"
-              >
-                <div>
-                  <p className="text-lg font-black text-stone-950">{c.name}</p>
-                  <p className="text-xs font-bold text-stone-500">
-                    {patientDisplayId(c)}
-                    {c.phone ? ` · ${c.phone}` : ""}
-                  </p>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-xs font-black">
-                  {age != null ? (
-                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-700">{age} yrs</span>
-                  ) : null}
-                  {(c.rxCount ?? 0) > 0 ? (
-                    <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-900">
-                      {c.rxCount} Rx
-                    </span>
-                  ) : null}
-                  {(profile.allergies ?? []).length > 0 ? (
-                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-900">
-                      {t(lang, "pharmacyPatientAllergies")}
-                    </span>
-                  ) : null}
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
       {rows.length === 0 ? (
-        <p className="text-center text-sm font-semibold text-stone-500">{t(lang, "pharmacyPatientEmpty")}</p>
-      ) : null}
-    </div>
+        <EnterpriseEmptyState
+          icon={Users}
+          title={search.trim() ? t(lang, "enterpriseEmptySearchTitle") : t(lang, "pharmacyPatientEmpty")}
+          description={search.trim() ? t(lang, "enterpriseEmptySearchDescription") : undefined}
+          primaryAction={
+            !search.trim() ? { label: t(lang, "pharmacyPatientAdd"), onClick: () => setShowAdd(true) } : undefined
+          }
+        />
+      ) : (
+        <ul className="grid min-h-0 flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {rows.map((c) => {
+            const profile = ensurePharmacyPatientProfile(c);
+            const age = computePatientAge(profile.dateOfBirth);
+            return (
+              <li key={c.id}>
+                <Link
+                  to={`/pharmacy/patients/${c.id}`}
+                  className="flex min-h-[120px] flex-col justify-between rounded-3xl border border-stone-200 bg-white p-4 shadow-waka-sm transition-waka hover:border-teal-300 touch-manipulation"
+                >
+                  <div>
+                    <p className="text-lg font-black text-stone-950">{c.name}</p>
+                    <p className="text-xs font-bold text-stone-500">
+                      {patientDisplayId(c)}
+                      {c.phone ? ` · ${c.phone}` : ""}
+                    </p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs font-black">
+                    {age != null ? (
+                      <span className="rounded-full bg-stone-100 px-2 py-0.5 text-stone-700">{age} yrs</span>
+                    ) : null}
+                    {(c.rxCount ?? 0) > 0 ? (
+                      <span className="rounded-full bg-teal-50 px-2 py-0.5 text-teal-900">{c.rxCount} Rx</span>
+                    ) : null}
+                    {(profile.allergies ?? []).length > 0 ? (
+                      <span className="rounded-full bg-rose-100 px-2 py-0.5 text-rose-900">
+                        {t(lang, "pharmacyPatientAllergies")}
+                      </span>
+                    ) : null}
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </EnterprisePageContainer>
   );
 }

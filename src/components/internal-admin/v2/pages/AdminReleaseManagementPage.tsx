@@ -27,6 +27,7 @@ import {
   type AppReleaseSummary,
 } from "../../../../lib/releaseManagementAdmin";
 import { adminPermissions } from "../adminRoles";
+import { WakaSwitch } from "../../../enterprise/WakaSwitch";
 import { AdminRichTextEditor } from "../AdminRichTextEditor";
 
 type Props = {
@@ -355,16 +356,14 @@ export function AdminReleaseManagementPage({ adminRow, previewMode = false }: Pr
                   ["forceBelowMinimum", "Force update below minimum version"],
                   ["showWhatsNew", "Show What's New after update"],
                 ].map(([key, label]) => (
-                  <label key={key} className="flex items-center justify-between gap-3 text-sm font-semibold">
-                    <span>{label}</span>
-                    <input
-                      type="checkbox"
-                      checked={draft[key as keyof AppReleaseDraft] as boolean}
-                      onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.checked }))}
-                      disabled={previewMode}
-                      className="h-5 w-5 rounded border-stone-300"
-                    />
-                  </label>
+                  <WakaSwitch
+                    key={key}
+                    checked={draft[key as keyof AppReleaseDraft] as boolean}
+                    disabled={previewMode}
+                    onCheckedChange={(checked) => setDraft((d) => ({ ...d, [key]: checked }))}
+                    label={label}
+                    className="text-sm font-semibold"
+                  />
                 ))}
               </fieldset>
             </div>

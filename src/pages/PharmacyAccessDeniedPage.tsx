@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import type { Language } from "../types";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { t } from "../lib/i18n";
 
 export function PharmacyAccessDeniedPage({ lang }: { lang: Language }) {
@@ -7,7 +8,7 @@ export function PharmacyAccessDeniedPage({ lang }: { lang: Language }) {
   const from = (location.state as { from?: string } | null)?.from;
 
   return (
-    <div className="page-content-pad flex min-h-[50vh] flex-col items-center justify-center text-center">
+    <EnterprisePageContainer className="flex min-h-[50vh] flex-col items-center justify-center text-center">
       <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyAccessDeniedTitle")}</h1>
       <p className="mt-2 max-w-md text-base font-semibold text-stone-600">{t(lang, "pharmacyAccessDeniedSub")}</p>
       {from ? (
@@ -21,6 +22,6 @@ export function PharmacyAccessDeniedPage({ lang }: { lang: Language }) {
       >
         {t(lang, "posNavMainMenu")}
       </Link>
-    </div>
+    </EnterprisePageContainer>
   );
 }

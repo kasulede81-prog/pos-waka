@@ -13,6 +13,7 @@ import { formatAuthError, consumeAuthRedirectError } from "../lib/authConfig";
 import { isGoogleAuthUiAvailable } from "../lib/authFeatureFlags";
 import { hasSupabaseConfig } from "../lib/supabase";
 import type { CachedShop, RememberedStaffDevice, StaffLoginInput } from "../lib/staffOfflineAuth";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 
 type Props = {
   lang: Language;
@@ -202,15 +203,12 @@ export function LoginPage({
           </label>
 
           <div className="flex items-center justify-between gap-3 pt-0.5">
-            <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-stone-700 dark:text-stone-300">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 rounded border-stone-300 text-waka-600 focus:ring-waka-500"
-              />
-              {t(lang, "loginRememberMe")}
-            </label>
+            <WakaSwitch
+              checked={rememberMe}
+              onCheckedChange={setRememberMe}
+              label={t(lang, "loginRememberMe")}
+              className="text-sm font-semibold text-stone-700 dark:text-stone-300"
+            />
             <span className="text-xs font-medium text-stone-500 dark:text-stone-400">{t(lang, "loginKeepSignedIn")}</span>
           </div>
 

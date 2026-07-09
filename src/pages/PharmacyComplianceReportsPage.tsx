@@ -4,6 +4,7 @@ import type { Language, PharmacyControlledRegisterEntry } from "../types";
 import { t } from "../lib/i18n";
 import { usePosStore } from "../store/usePosStore";
 import { isPharmacyMode } from "../lib/pharmacy";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { computeComplianceReports } from "../lib/pharmacyComplianceReports";
 
 function ReportBlock({
@@ -54,7 +55,7 @@ export function PharmacyComplianceReportsPage({ lang }: { lang: Language }) {
   };
 
   return (
-    <div className="page-content-pad space-y-4 print:space-y-6">
+    <EnterprisePageContainer className="print:space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-3xl font-black text-stone-950">{t(lang, "pharmacyComplianceReportsTitle")}</h1>
@@ -109,6 +110,6 @@ export function PharmacyComplianceReportsPage({ lang }: { lang: Language }) {
           )}
         </ul>
       </section>
-    </div>
+    </EnterprisePageContainer>
   );
 }

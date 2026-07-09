@@ -23,65 +23,58 @@ import type { HospitalityReportSummary } from "../../../lib/hospitalityReports";
 import type { HospitalityFloorState, StockMovement } from "../../../types";
 import { computeKitchenProductionAnalytics } from "../../../lib/kitchenProduction";
 
-type Props = {
+export function PharmacyReportsSection({
+  lang,
+  products,
+  stockMovements,
+  pharmacyExpiryReport,
+}: {
   lang: Language;
   products: Product[];
   stockMovements: StockMovement[];
-  pharmacyMode: boolean;
-  wholesaleMode: boolean;
-  pharmacyExpiryReport: PharmacyExpiryReport | null;
+  pharmacyExpiryReport: PharmacyExpiryReport;
+}) {
+  return (
+    <section className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
+      <h2 className="text-lg font-black text-emerald-950">{t(lang, "pharmacyReportsTitle")}</h2>
+      <p className="text-sm font-semibold text-stone-700">{t(lang, "pharmacyReportsPrimaryHint")}</p>
+      <div className="rounded-2xl border border-stone-200 bg-white p-3">
+        <StockMovementsPanel lang={lang} movements={stockMovements} pharmacyMode />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadPharmacyExpiryPdf(lang, products)}>
+          {t(lang, "pharmacyExportPdf")}
+        </button>
+        <button type="button" className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black text-emerald-900" onClick={() => void downloadPharmacyExpiryCsv(products)}>
+          {t(lang, "pharmacyExportCsv")}
+        </button>
+      </div>
+      {pharmacyExpiryReport.expiring.slice(0, 5).map((row) => {
+        const product = products.find((p) => p.id === row.productId);
+        return (
+          <p key={row.productId} className="flex justify-between text-sm font-medium">
+            <span>{product ? formatMedicineFullLabel(product) : row.name}</span>
+            {product ? <ExpiryStatusBadge lang={lang} product={product} compact /> : null}
+          </p>
+        );
+      })}
+    </section>
+  );
+}
+
+export function WholesaleReportsSection({
+  lang,
+  wholesaleSection,
+}: {
+  lang: Language;
   wholesaleSection: {
     debtOutstanding: number;
     count: number;
     stockValueAtCost: number;
     customers: Customer[];
-  } | null;
-  hospitalityReports: HospitalityReportSummary | null;
-  hospitalityOpenBills: { count: number; totalUgx: number } | null;
-  hospitalityFloor?: HospitalityFloorState | null;
-};
-
-export function AnalyticsModeReports({
-  lang,
-  products,
-  stockMovements,
-  pharmacyMode,
-  wholesaleMode,
-  pharmacyExpiryReport,
-  wholesaleSection,
-  hospitalityReports,
-  hospitalityOpenBills,
-  hospitalityFloor,
-}: Props) {
-  const pharmacySection =
-    pharmacyExpiryReport && pharmacyMode && !wholesaleMode ? (
-      <section className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
-        <h2 className="text-lg font-black text-emerald-950">{t(lang, "pharmacyReportsTitle")}</h2>
-        <p className="text-sm font-semibold text-stone-700">{t(lang, "pharmacyReportsPrimaryHint")}</p>
-        <div className="rounded-2xl border border-stone-200 bg-white p-3">
-          <StockMovementsPanel lang={lang} movements={stockMovements} pharmacyMode />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadPharmacyExpiryPdf(lang, products)}>
-            {t(lang, "pharmacyExportPdf")}
-          </button>
-          <button type="button" className="rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-black text-emerald-900" onClick={() => void downloadPharmacyExpiryCsv(products)}>
-            {t(lang, "pharmacyExportCsv")}
-          </button>
-        </div>
-        {pharmacyExpiryReport.expiring.slice(0, 5).map((row) => {
-          const product = products.find((p) => p.id === row.productId);
-          return (
-            <p key={row.productId} className="flex justify-between text-sm font-medium">
-              <span>{product ? formatMedicineFullLabel(product) : row.name}</span>
-              {product ? <ExpiryStatusBadge lang={lang} product={product} compact /> : null}
-            </p>
-          );
-        })}
-      </section>
-    ) : null;
-
-  const wholesalePanel = wholesaleSection && wholesaleMode ? (
+  };
+}) {
+  return (
     <section className="space-y-4 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4 shadow-sm">
       <h2 className="text-lg font-black text-indigo-950">{t(lang, "wholesaleReportsHubTitle")}</h2>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -110,14 +103,26 @@ export function AnalyticsModeReports({
         </button>
       </div>
     </section>
-  ) : null;
+  );
+}
 
+export function HospitalityReportsSection({
+  lang,
+  hospitalityReports,
+  hospitalityOpenBills,
+  hospitalityFloor,
+}: {
+  lang: Language;
+  hospitalityReports: HospitalityReportSummary;
+  hospitalityOpenBills: { count: number; totalUgx: number } | null;
+  hospitalityFloor?: HospitalityFloorState | null;
+}) {
   const kitchenAnalytics = hospitalityFloor ? computeKitchenProductionAnalytics(hospitalityFloor) : null;
   const reservationCount =
     hospitalityFloor?.reservations?.filter((r) => r.status !== "cancelled").length ?? 0;
   const waitlistCount = hospitalityFloor?.waitlist?.filter((w) => w.status !== "cancelled").length ?? 0;
 
-  const hospitalityPanel = hospitalityReports ? (
+  return (
     <section className="space-y-4 rounded-2xl border border-waka-200 bg-waka-50/40 p-4 shadow-sm">
       <h2 className="text-lg font-black text-waka-950">{t(lang, "hospitalityReportsTitle")}</h2>
       <p className="text-sm font-semibold text-stone-700">
@@ -230,6 +235,56 @@ export function AnalyticsModeReports({
         </button>
       </div>
     </section>
+  );
+}
+
+type Props = {
+  lang: Language;
+  products: Product[];
+  stockMovements: StockMovement[];
+  pharmacyMode: boolean;
+  wholesaleMode: boolean;
+  pharmacyExpiryReport: PharmacyExpiryReport | null;
+  wholesaleSection: {
+    debtOutstanding: number;
+    count: number;
+    stockValueAtCost: number;
+    customers: Customer[];
+  } | null;
+  hospitalityReports: HospitalityReportSummary | null;
+  hospitalityOpenBills: { count: number; totalUgx: number } | null;
+  hospitalityFloor?: HospitalityFloorState | null;
+};
+
+/** @deprecated Prefer registry widgets — kept for composition tests. */
+export function AnalyticsModeReports({
+  lang,
+  products,
+  stockMovements,
+  pharmacyMode,
+  wholesaleMode,
+  pharmacyExpiryReport,
+  wholesaleSection,
+  hospitalityReports,
+  hospitalityOpenBills,
+  hospitalityFloor,
+}: Props) {
+  const pharmacySection =
+    pharmacyExpiryReport && pharmacyMode && !wholesaleMode ? (
+      <PharmacyReportsSection lang={lang} products={products} stockMovements={stockMovements} pharmacyExpiryReport={pharmacyExpiryReport} />
+    ) : null;
+
+  const wholesalePanel = wholesaleSection && wholesaleMode ? (
+    <WholesaleReportsSection lang={lang} wholesaleSection={wholesaleSection} />
+  ) : null;
+
+  const hospitalityPanel = hospitalityReports ? (
+    <HospitalityReportsSection
+      lang={lang}
+      hospitalityReports={hospitalityReports}
+      hospitalityOpenBills={hospitalityOpenBills}
+      hospitalityFloor={hospitalityFloor}
+    />
   ) : null;
 
   if (!pharmacySection && !wholesalePanel && !hospitalityPanel) return null;

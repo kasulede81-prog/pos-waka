@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ShopOpsDetail } from "../../lib/wakaInternalAdmin";
 import { adminPermanentlyDeleteShopAccount } from "../../lib/wakaInternalAdmin";
 import { formatWakaShopNumber } from "../../lib/shopNumber";
+import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 
 type Props = {
   detail: ShopOpsDetail;
@@ -76,15 +77,12 @@ export function AdminPermanentDeletePanel({ detail, busy, previewMode, onBusy, o
         Shop no. {formatWakaShopNumber(detail.shop.shop_number) ?? "—"} · ID {detail.shop.id}
       </p>
 
-      <label className="mt-3 flex items-start gap-2 text-xs font-semibold text-rose-950">
-        <input
-          type="checkbox"
-          checked={ack}
-          onChange={(e) => setAck(e.target.checked)}
-          className="mt-0.5 h-4 w-4"
-        />
-        I understand this permanently deletes all business data and the owner login.
-      </label>
+      <WakaCheckbox
+        checked={ack}
+        onCheckedChange={setAck}
+        label="I understand this permanently deletes all business data and the owner login."
+        className="mt-3 text-xs font-semibold text-rose-950"
+      />
 
       <label className="mt-2 block text-xs font-bold text-rose-950">
         Type <span className="font-mono">DELETE PERMANENTLY</span> or the exact shop name

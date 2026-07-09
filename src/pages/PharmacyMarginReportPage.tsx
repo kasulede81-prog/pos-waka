@@ -8,6 +8,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 
 import { isPharmacyMode } from "../lib/pharmacy";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { formatMedicineFullLabel } from "../lib/pharmacyMedicine";
 import {
@@ -43,7 +44,7 @@ export function PharmacyMarginReportPage({ lang }: Props) {
   ];
 
   return (
-    <div className="page-content-pad space-y-5">
+    <EnterprisePageContainer className="space-y-5">
       <PageHeader
         lang={lang}
         title={t(lang, "pharmacyMarginReportTitle")}
@@ -154,6 +155,6 @@ export function PharmacyMarginReportPage({ lang }: Props) {
           })}
         </ul>
       )}
-    </div>
+    </EnterprisePageContainer>
   );
 }

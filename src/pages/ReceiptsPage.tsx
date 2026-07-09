@@ -2,7 +2,9 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { useReportingSales } from "../hooks/useReportingSales";
 import { IncludeArchivedFilter } from "../components/office/IncludeArchivedFilter";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { PageHeader } from "../components/layout/PageHeader";
 import { BarChart3, FileDown, Receipt } from "lucide-react";
 import type { Language, Sale, SaleLine } from "../types";
 import { t, tTemplate } from "../lib/i18n";
@@ -42,6 +44,7 @@ import { SalesHistoryDateFilterChips } from "../components/receipts/SalesHistory
 import { SalesHistorySearchBar } from "../components/receipts/SalesHistorySearchBar";
 import { SalesHistoryAnalyticsPanel } from "../components/receipts/SalesHistoryAnalyticsPanel";
 import { SalesHistorySkeletonList } from "../components/receipts/SalesHistorySkeletonList";
+import { EnterpriseEmptyState } from "../components/enterprise/EnterpriseEmptyState";
 import { buildReceiptNumberForSale } from "../lib/receiptPrint";
 import { buildSoldByNameByUserId, resolveSoldByUserId } from "../lib/soldByLabels";
 
@@ -88,6 +91,7 @@ function paymentMethodsSummary(lang: Language, sales: Sale[]): string {
 }
 
 export function ReceiptsPage({ lang }: { lang: Language }) {
+  const navigate = useNavigate();
   const actor = useSessionActor();
   const { runProtected } = useProtectedAction();
   const {
@@ -352,15 +356,17 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   );
 
   return (
-    <div className="space-y-3 pb-8 md:pb-4">
+    <EnterprisePageContainer className="space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <h2 className="text-xl font-black tracking-tight text-stone-950 sm:text-2xl">
-            {term ? term("receipts") : t(lang, "receipts")}
-          </h2>
-          <p className="mt-0.5 text-xs font-medium text-stone-500 sm:text-sm">
-            {term ? term("receiptsHint") : t(lang, "receiptsHint")}
-          </p>
+          <PageHeader
+            lang={lang}
+            title={term ? term("receipts") : t(lang, "receipts")}
+            subtitle={term ? term("receiptsHint") : t(lang, "receiptsHint")}
+            backFallback="/office"
+            backLabel={t(lang, "officeBackToHub")}
+            compact
+          />
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           {partitioned.completed.length > 0 ? (
@@ -441,19 +447,16 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
       ) : null}
 
       {sales.length === 0 && !salesRefreshing ? (
-        <div className="rounded-2xl border border-dashed border-stone-200 bg-white px-6 py-12 text-center">
-          <Receipt className="mx-auto h-8 w-8 text-stone-300" aria-hidden />
-          <p className="mt-3 text-base font-black text-stone-800">{t(lang, "salesHistoryEmptyTitle")}</p>
-          <p className="mt-1 text-sm font-medium text-stone-500">{t(lang, "salesHistoryEmptyHint")}</p>
-          {hasSellAccess ? (
-            <Link
-              to="/pos"
-              className="mt-4 inline-flex min-h-[44px] items-center justify-center rounded-xl bg-waka-600 px-5 text-sm font-black text-white shadow-sm active:bg-waka-700"
-            >
-              {t(lang, "salesHistoryStartSelling")}
-            </Link>
-          ) : null}
-        </div>
+        <EnterpriseEmptyState
+          icon={Receipt}
+          title={t(lang, "salesHistoryEmptyTitle")}
+          description={t(lang, "salesHistoryEmptyHint")}
+          primaryAction={
+            hasSellAccess
+              ? { label: t(lang, "salesHistoryStartSelling"), onClick: () => navigate("/pos") }
+              : undefined
+          }
+        />
       ) : null}
 
       {salesRefreshing ? (
@@ -540,6 +543,6 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
         ctx={returnReceiptCtx}
         onClose={() => setReturnReceiptCtx(null)}
       />
-    </div>
+    </EnterprisePageContainer>
   );
 }

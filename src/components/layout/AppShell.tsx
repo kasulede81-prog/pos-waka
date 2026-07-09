@@ -46,6 +46,7 @@ import {
   prepareSwitchUserLock,
   verifyLockScreenPin,
 } from "../../lib/auth";
+import { getUnlockLockoutStatus, unlockLimiterScope } from "../../lib/auth/staffLoginLimiter";
 import { useStaffAutoLock, useStaffSessionBootstrap } from "../../hooks/useStaffAutoLock";
 import { HeaderExitButton } from "./DesktopTerminalBackBar";
 import { HeaderBackButton } from "./HeaderBackButton";
@@ -62,6 +63,7 @@ import { isPharmacyOperationalRoute } from "../../lib/pharmacyNav";
 import { resolveTerminalHomePath } from "../../lib/terminalHome";
 import { isPosSellPath } from "../../lib/posSellExit";
 import { AppThemeToggle } from "../ui/AppThemeToggle";
+import { EnterpriseScrollControls } from "../enterprise/EnterpriseScrollControls";
 
 const BackOfficeMasterSearch = lazy(() =>
   import("../office/BackOfficeMasterSearch").then((m) => ({ default: m.BackOfficeMasterSearch })),
@@ -540,6 +542,7 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
         {showMobileModuleExit ? <MobileModuleExitBar lang={lang} terminalHome={terminalHome} /> : null}
         <HospitalityMobileNav lang={lang} visible={showHospitalityMobileNav} />
         <PharmacyMobileNav lang={lang} visible={showPharmacyMobileNav} />
+        <EnterpriseScrollControls enabled={!viewportLocked} />
         {preferences.posLocked ? (
           <EnterpriseStaffLockScreen
             lang={lang}
@@ -574,6 +577,18 @@ export function AppShell({ lang, setLang, onSignOut, user, email, authMode, staf
                 return { ok: true as const };
               }
               const unlock = completePosUnlock(verify.staffId);
+              if (!unlock.ok) {
+                return { ok: false as const, errorKey: unlock.errorKey };
+              }
+              return { ok: true as const };
+            }}
+            onBiometricUnlock={async () => {
+              const scopeKey = unlockLimiterScope(preferences.activeStaffId);
+              const lockout = getUnlockLockoutStatus(scopeKey);
+              if (lockout.locked) {
+                return { ok: false as const, errorKey: "staffUnlockBruteForceLock" };
+              }
+              const unlock = completePosUnlock(preferences.activeStaffId ?? null);
               if (!unlock.ok) {
                 return { ok: false as const, errorKey: unlock.errorKey };
               }

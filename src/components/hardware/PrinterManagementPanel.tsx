@@ -5,6 +5,7 @@ import { t } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { resolveHospitalityHardware } from "../../lib/hospitalityHardware";
 import { stationLabel } from "../../lib/printerRegistry";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 const ROLE_OPTIONS: PrinterStationRole[] = [
   "kitchen",
@@ -143,10 +144,12 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
           ))}
         </div>
 
-        <label className="mt-3 flex items-center gap-2 text-sm font-bold text-stone-800">
-          <input type="checkbox" checked={isDefaultReceipt} onChange={(e) => setIsDefaultReceipt(e.target.checked)} />
-          {t(lang, "hardwarePrinterDefaultReceipt")}
-        </label>
+        <WakaSwitch
+          checked={isDefaultReceipt}
+          onCheckedChange={setIsDefaultReceipt}
+          label={t(lang, "hardwarePrinterDefaultReceipt")}
+          className="mt-3 text-sm font-bold text-stone-800"
+        />
 
         <button
           type="button"
@@ -229,38 +232,26 @@ export function PrinterManagementPanel({ lang }: { lang: Language }) {
       <article className="rounded-3xl border-2 border-stone-200 bg-white p-5">
         <p className="text-lg font-black text-stone-900">{t(lang, "hardwarePrintBehaviorTitle")}</p>
         <div className="mt-3 space-y-2 text-sm font-bold text-stone-800">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={hw.autoPrintKitchen}
-              onChange={(e) => setHospitalityHardwarePrefs({ autoPrintKitchen: e.target.checked })}
-            />
-            {t(lang, "hardwareAutoKitchen")}
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={hw.autoPrintReceipt}
-              onChange={(e) => setHospitalityHardwarePrefs({ autoPrintReceipt: e.target.checked })}
-            />
-            {t(lang, "hardwareAutoReceipt")}
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={hw.openDrawerOnPayment}
-              onChange={(e) => setHospitalityHardwarePrefs({ openDrawerOnPayment: e.target.checked })}
-            />
-            {t(lang, "hardwareDrawerOnPayment")}
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={hw.customerDisplayEnabled}
-              onChange={(e) => setHospitalityHardwarePrefs({ customerDisplayEnabled: e.target.checked })}
-            />
-            {t(lang, "hardwareCustomerDisplay")}
-          </label>
+          <WakaSwitch
+            checked={hw.autoPrintKitchen}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintKitchen: checked })}
+            label={t(lang, "hardwareAutoKitchen")}
+          />
+          <WakaSwitch
+            checked={hw.autoPrintReceipt}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ autoPrintReceipt: checked })}
+            label={t(lang, "hardwareAutoReceipt")}
+          />
+          <WakaSwitch
+            checked={hw.openDrawerOnPayment}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ openDrawerOnPayment: checked })}
+            label={t(lang, "hardwareDrawerOnPayment")}
+          />
+          <WakaSwitch
+            checked={hw.customerDisplayEnabled}
+            onCheckedChange={(checked) => setHospitalityHardwarePrefs({ customerDisplayEnabled: checked })}
+            label={t(lang, "hardwareCustomerDisplay")}
+          />
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           <button

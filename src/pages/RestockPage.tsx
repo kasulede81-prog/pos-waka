@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import type { Language } from "../types";
 import { t } from "../lib/i18n";
@@ -150,7 +151,7 @@ export function RestockPage({
   };
 
   return (
-    <div className={embedded ? "pb-8" : "pb-28"}>
+    <EnterprisePageContainer variant={embedded ? "flush" : "default"} className={embedded ? "pb-8" : undefined}>
       {!embedded ? (
         <PageHeader lang={lang} title={t(lang, "restockTitle")} subtitle={t(lang, "restockSub")} backLabel={t(lang, "officeBackToHub")} />
       ) : null}
@@ -267,6 +268,6 @@ export function RestockPage({
         onPick={addProductLine}
         onClose={() => setPickerOpen(false)}
       />
-    </div>
+    </EnterprisePageContainer>
   );
 }

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import clsx from "clsx";
 import { ChevronRight, RefreshCw, X } from "lucide-react";
+import { WakaCheckbox } from "../../enterprise/WakaCheckbox";
 
 export function RoleGate({ show, children }: { show: boolean; children: ReactNode }) {
   if (!show) return null;
@@ -262,11 +263,10 @@ export function ShopCard({
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           {onToggleSelect ? (
-            <input
-              type="checkbox"
-              checked={selected}
-              onChange={onToggleSelect}
-              className="mt-1 h-5 w-5 shrink-0 rounded border-stone-300"
+            <WakaCheckbox
+              checked={Boolean(selected)}
+              onCheckedChange={() => onToggleSelect()}
+              row={false}
               onClick={(e) => e.stopPropagation()}
             />
           ) : null}

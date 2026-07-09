@@ -56,6 +56,7 @@ import {
 import { adminSetShopPilotCohort } from "../lib/internalOpsHardening";
 import { supabase } from "../lib/supabase";
 import { AdminDiagnosticsImportPanel } from "../components/internal-admin/ops/AdminDiagnosticsImportPanel";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { AdminSyncInvestigationPanel } from "../components/internal-admin/ops/AdminSyncInvestigationPanel";
 
 type Props = {
@@ -518,25 +519,20 @@ export function InternalShopOpsPage({ lang }: Props) {
           </div>
 
           {perms.canShopSupport && !previewMode ? (
-            <label className="flex items-center justify-between gap-3 rounded-2xl border border-teal-200 bg-teal-50/60 px-4 py-3">
-              <div>
-                <p className="text-sm font-black text-stone-900">Pilot cohort</p>
-                <p className="text-xs text-stone-600">Include in pilot dashboard and operational alerts.</p>
-              </div>
-              <input
-                type="checkbox"
+            <div className="rounded-2xl border border-teal-200 bg-teal-50/60 px-4 py-3">
+              <WakaSwitch
                 checked={pilotCohort}
                 disabled={busy}
-                onChange={(e) => {
-                  const next = e.target.checked;
+                onCheckedChange={(next) => {
                   void adminSetShopPilotCohort(detail.shop.id, next).then((r) => {
                     if (r.ok) setPilotCohort(next);
                     else setToast({ kind: "err", text: r.message ?? "Could not update pilot cohort." });
                   });
                 }}
-                className="h-5 w-5"
+                label="Pilot cohort"
+                description="Include in pilot dashboard and operational alerts."
               />
-            </label>
+            </div>
           ) : null}
 
           {canSupport ? (

@@ -3,10 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AuditLogEntry, Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import { buildTimelineRows } from "../lib/activityPresentation";
-import {
-  pharmacyInvestigationTimelineSubtitle,
-  pharmacyInvestigationTimelineTitle,
-} from "../extensions/pharmacy/pharmacyTimelinePresentation";
+import type { TimelinePresentation } from "../registry/investigationWidgetTypes";
 import { ActivityTimelineCard } from "./ActivityTimelineCard";
 
 const VIRTUALIZE_THRESHOLD = 24;
@@ -18,7 +15,7 @@ type Props = {
   entries: AuditLogEntry[];
   productById: Map<string, { name: string }>;
   customerById: Map<string, { name: string }>;
-  pharmacyMode?: boolean;
+  getTimelinePresentation?: (entry: AuditLogEntry) => TimelinePresentation | null;
   onSelect: (entry: AuditLogEntry) => void;
   onMenu: (entry: AuditLogEntry) => void;
 };
@@ -32,7 +29,7 @@ export function VirtualizedActivityTimeline({
   entries,
   productById,
   customerById,
-  pharmacyMode = false,
+  getTimelinePresentation,
   onSelect,
   onMenu,
 }: Props) {
@@ -71,16 +68,15 @@ export function VirtualizedActivityTimeline({
     if (!entry) return null;
     const next = rows[index + 1];
     const isLastInGroup = !next || next.kind === "header";
-    const titleOverride = pharmacyMode ? pharmacyInvestigationTimelineTitle(lang, entry) : null;
-    const subtitleOverride = pharmacyMode ? pharmacyInvestigationTimelineSubtitle(lang, entry, productById) : null;
+    const presentation = getTimelinePresentation?.(entry);
     return (
       <ActivityTimelineCard
         lang={lang}
         entry={entry}
         productById={productById}
         customerById={customerById}
-        titleOverride={titleOverride}
-        subtitleOverride={subtitleOverride}
+        titleOverride={presentation?.titleOverride}
+        subtitleOverride={presentation?.subtitleOverride}
         isLastInGroup={isLastInGroup}
         onOpen={() => onSelect(entry)}
         onMenu={() => onMenu(entry)}

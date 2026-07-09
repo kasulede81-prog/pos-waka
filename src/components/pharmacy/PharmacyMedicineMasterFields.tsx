@@ -2,6 +2,7 @@ import clsx from "clsx";
 import type { Language, PharmacyControlledSchedule, PharmacyMedicineMaster, PharmacyMedicineOtcClass, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { MEDICINE_FORMS } from "../../lib/pharmacyMedicine";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 const CONTROLLED_SCHEDULES: PharmacyControlledSchedule[] = [
   "none",
@@ -242,37 +243,47 @@ export function PharmacyMedicineMasterFields({
           </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
-          <label className={clsx(flagClass, state.controlledDrug ? "border-violet-400 bg-violet-50" : "border-stone-200 bg-white")}>
-            <input
-              type="checkbox"
+          <div className={clsx(flagClass, state.controlledDrug ? "border-violet-400 bg-violet-50" : "border-stone-200 bg-white")}>
+            <WakaSwitch
               checked={state.controlledDrug}
-              onChange={(e) =>
+              onCheckedChange={(checked) =>
                 onChange({
-                  controlledDrug: e.target.checked,
-                  controlledSchedule: e.target.checked && state.controlledSchedule === "none" ? "schedule_3" : state.controlledSchedule,
-                  managerOverrideRequired: e.target.checked ? true : state.managerOverrideRequired,
+                  controlledDrug: checked,
+                  controlledSchedule: checked && state.controlledSchedule === "none" ? "schedule_3" : state.controlledSchedule,
+                  managerOverrideRequired: checked ? true : state.managerOverrideRequired,
                 })
               }
-              className="h-5 w-5"
+              label={t(lang, "pharmacyControlled")}
             />
-            <span className="font-bold text-stone-800">{t(lang, "pharmacyControlled")}</span>
-          </label>
-          <label className={clsx(flagClass, state.refrigerated ? "border-sky-400 bg-sky-50" : "border-stone-200 bg-white")}>
-            <input type="checkbox" checked={state.refrigerated} onChange={(e) => onChange({ refrigerated: e.target.checked })} className="h-5 w-5" />
-            <span className="font-bold text-stone-800">{t(lang, "pharmacyRefrigerated")}</span>
-          </label>
-          <label className={clsx(flagClass, state.hazardous ? "border-amber-400 bg-amber-50" : "border-stone-200 bg-white")}>
-            <input type="checkbox" checked={state.hazardous} onChange={(e) => onChange({ hazardous: e.target.checked })} className="h-5 w-5" />
-            <span className="font-bold text-stone-800">{t(lang, "pharmacyHazardous")}</span>
-          </label>
-          <label className={clsx(flagClass, state.batchTracked ? "border-teal-400 bg-teal-50" : "border-stone-200 bg-white")}>
-            <input type="checkbox" checked={state.batchTracked} onChange={(e) => onChange({ batchTracked: e.target.checked })} className="h-5 w-5" />
-            <span className="font-bold text-stone-800">{t(lang, "pharmacyBatchTracked")}</span>
-          </label>
-          <label className={clsx(flagClass, state.expiryTracked ? "border-teal-400 bg-teal-50" : "border-stone-200 bg-white")}>
-            <input type="checkbox" checked={state.expiryTracked} onChange={(e) => onChange({ expiryTracked: e.target.checked })} className="h-5 w-5" />
-            <span className="font-bold text-stone-800">{t(lang, "pharmacyExpiryTracked")}</span>
-          </label>
+          </div>
+          <div className={clsx(flagClass, state.refrigerated ? "border-sky-400 bg-sky-50" : "border-stone-200 bg-white")}>
+            <WakaSwitch
+              checked={state.refrigerated}
+              onCheckedChange={(checked) => onChange({ refrigerated: checked })}
+              label={t(lang, "pharmacyRefrigerated")}
+            />
+          </div>
+          <div className={clsx(flagClass, state.hazardous ? "border-amber-400 bg-amber-50" : "border-stone-200 bg-white")}>
+            <WakaSwitch
+              checked={state.hazardous}
+              onCheckedChange={(checked) => onChange({ hazardous: checked })}
+              label={t(lang, "pharmacyHazardous")}
+            />
+          </div>
+          <div className={clsx(flagClass, state.batchTracked ? "border-teal-400 bg-teal-50" : "border-stone-200 bg-white")}>
+            <WakaSwitch
+              checked={state.batchTracked}
+              onCheckedChange={(checked) => onChange({ batchTracked: checked })}
+              label={t(lang, "pharmacyBatchTracked")}
+            />
+          </div>
+          <div className={clsx(flagClass, state.expiryTracked ? "border-teal-400 bg-teal-50" : "border-stone-200 bg-white")}>
+            <WakaSwitch
+              checked={state.expiryTracked}
+              onCheckedChange={(checked) => onChange({ expiryTracked: checked })}
+              label={t(lang, "pharmacyExpiryTracked")}
+            />
+          </div>
         </div>
         {state.controlledDrug ? (
           <div className="mt-3 space-y-3 rounded-2xl border-2 border-violet-200 bg-violet-50/60 p-4">
@@ -311,24 +322,20 @@ export function PharmacyMedicineMasterFields({
               />
             </label>
             <div className="grid gap-2 sm:grid-cols-2">
-              <label className={clsx(flagClass, state.managerOverrideRequired ? "border-violet-400 bg-white" : "border-stone-200 bg-white")}>
-                <input
-                  type="checkbox"
+              <div className={clsx(flagClass, state.managerOverrideRequired ? "border-violet-400 bg-white" : "border-stone-200 bg-white")}>
+                <WakaSwitch
                   checked={state.managerOverrideRequired}
-                  onChange={(e) => onChange({ managerOverrideRequired: e.target.checked })}
-                  className="h-5 w-5"
+                  onCheckedChange={(checked) => onChange({ managerOverrideRequired: checked })}
+                  label={t(lang, "pharmacyComplianceManagerOverride")}
                 />
-                <span className="font-bold text-stone-800">{t(lang, "pharmacyComplianceManagerOverride")}</span>
-              </label>
-              <label className={clsx(flagClass, state.witnessRequired ? "border-violet-400 bg-white" : "border-stone-200 bg-white")}>
-                <input
-                  type="checkbox"
+              </div>
+              <div className={clsx(flagClass, state.witnessRequired ? "border-violet-400 bg-white" : "border-stone-200 bg-white")}>
+                <WakaSwitch
                   checked={state.witnessRequired}
-                  onChange={(e) => onChange({ witnessRequired: e.target.checked })}
-                  className="h-5 w-5"
+                  onCheckedChange={(checked) => onChange({ witnessRequired: checked })}
+                  label={t(lang, "pharmacyComplianceWitnessMedicine")}
                 />
-                <span className="font-bold text-stone-800">{t(lang, "pharmacyComplianceWitnessMedicine")}</span>
-              </label>
+              </div>
             </div>
           </div>
         ) : null}

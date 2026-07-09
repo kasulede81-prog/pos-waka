@@ -21,6 +21,8 @@ import { PRESET_SHELF_HEX, resolveShelfHex } from "../../lib/shelfColor";
 import { PosShelfTile } from "./PosShelfTile";
 import { ShelfColorWheel } from "./ShelfColorWheel";
 import { ShelfScaleSlider } from "./ShelfScaleSlider";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
+import { WakaCheckbox } from "../enterprise/WakaCheckbox";
 
 const PRESET_LABEL_KEY: Record<
   PosShelfPresetId,
@@ -300,15 +302,12 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
             onChange={(scale) => patchSelected({ scale })}
           />
 
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={Boolean(selectedConfig.featured)}
-              onChange={(e) => patchSelected({ featured: e.target.checked })}
-              className="h-4 w-4 rounded border-stone-300"
-            />
-            <span className="text-sm font-bold text-stone-800">{t(lang, "posShelfEditFeatured")}</span>
-          </label>
+          <WakaSwitch
+            checked={Boolean(selectedConfig.featured)}
+            onCheckedChange={(checked) => patchSelected({ featured: checked })}
+            label={t(lang, "posShelfEditFeatured")}
+            className="text-sm font-bold text-stone-800"
+          />
 
           <div>
             <p className="text-xs font-bold text-stone-600">{t(lang, "posShelfEditBadge")}</p>
@@ -352,15 +351,12 @@ export function PosShelfArrangePanel({ lang, products, embedded = false }: Props
                 <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-stone-200 p-2">
                   {products.slice(0, 80).map((p) => (
                     <li key={p.id}>
-                      <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-stone-50">
-                        <input
-                          type="checkbox"
-                          checked={quickSellIds.includes(p.id)}
-                          onChange={() => toggleQuickProduct(p.id)}
-                          className="h-4 w-4"
-                        />
-                        <span className="truncate text-sm font-semibold text-stone-800">{p.name}</span>
-                      </label>
+                      <WakaCheckbox
+                        checked={quickSellIds.includes(p.id)}
+                        onCheckedChange={() => toggleQuickProduct(p.id)}
+                        label={<span className="truncate text-sm font-semibold text-stone-800">{p.name}</span>}
+                        className="rounded-lg px-2 py-1.5 hover:bg-stone-50"
+                      />
                     </li>
                   ))}
                 </ul>

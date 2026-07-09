@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { actorHasPermission } from "../lib/actorAuthorization";
+import { useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
 import type { CashDrawerFormulaVersion, Language } from "../types";
 import { t } from "../lib/i18n";
@@ -9,6 +8,11 @@ import { authorizePreferencesPatch } from "../lib/settingsAuthorization";
 import { getStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
+import { actorHasPermission } from "../lib/actorAuthorization";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
+import { EnterpriseSaveIndicator } from "../components/enterprise/EnterpriseSaveIndicator";
+import { WakaSwitch } from "../components/enterprise/WakaSwitch";
+import { useUnsavedChangesGuard } from "../components/enterprise/useUnsavedChangesGuard";
 
 type Props = { lang: Language };
 
@@ -26,7 +30,21 @@ export function SettingsCashDrawerPage({ lang }: Props) {
     preferences.ownerDayOpenCorrectionAfterSales === true,
   );
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+
+  const dirty = useMemo(() => {
+    const pctN = Math.max(0, Math.min(100, Number(pct) || 0));
+    const fixedN = Math.max(0, Math.floor(Number(fixed.replace(/\D/g, "")) || 0));
+    return (
+      pctN !== (preferences.cashVarianceThresholdPct ?? 5) ||
+      fixedN !== (preferences.cashVarianceThresholdUgxFixed ?? 10_000) ||
+      formula !== resolveCashDrawerFormulaVersion(preferences) ||
+      ownerCorrection !== (preferences.ownerDayOpenCorrectionAfterSales === true)
+    );
+  }, [pct, fixed, formula, ownerCorrection, preferences]);
+
+  useUnsavedChangesGuard(lang, dirty);
 
   if (!actorHasPermission(actor, "day.open_drawer")) {
     return <Navigate to="/settings" replace />;
@@ -52,19 +70,26 @@ export function SettingsCashDrawerPage({ lang }: Props) {
       setSaved(false);
       return;
     }
+    setSaving(true);
     setPreferences(patch);
     setErrorKey(null);
     setSaved(true);
+    setSaving(false);
     window.setTimeout(() => setSaved(false), 2500);
   };
 
+  const saveStatus = saving ? "saving" : saved ? "saved" : dirty ? "dirty" : "idle";
+
   return (
-    <div className="space-y-5 pb-8">
+    <EnterprisePageContainer className="space-y-5">
       <SettingsPageHeader
         lang={lang}
         title={t(lang, "cashManageDrawerSettings")}
         subtitle={t(lang, "cashManageDrawerSettingsSub")}
       />
+      <div className="flex justify-end">
+        <EnterpriseSaveIndicator lang={lang} mode="explicit" status={saveStatus} />
+      </div>
 
       <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
         <label className="block text-sm font-bold text-stone-800">
@@ -102,36 +127,28 @@ export function SettingsCashDrawerPage({ lang }: Props) {
             ))}
           </div>
         </fieldset>
-        <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
-          <input
-            type="checkbox"
+        <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <WakaSwitch
             checked={ownerCorrection}
-            onChange={(e) => setOwnerCorrection(e.target.checked)}
-            className="mt-1 h-5 w-5 shrink-0 rounded border-stone-300"
+            onCheckedChange={setOwnerCorrection}
+            label={t(lang, "cashSettingsOwnerDayOpenCorrection")}
+            description={t(lang, "cashSettingsOwnerDayOpenCorrectionHint")}
           />
-          <span>
-            <span className="block text-sm font-black text-stone-900">{t(lang, "cashSettingsOwnerDayOpenCorrection")}</span>
-            <span className="mt-1 block text-xs font-semibold text-stone-600">
-              {t(lang, "cashSettingsOwnerDayOpenCorrectionHint")}
-            </span>
-          </span>
-        </label>
+        </div>
         <button
           type="button"
           onClick={save}
-          className="mt-5 min-h-[48px] w-full rounded-2xl bg-waka-600 text-sm font-black text-white"
+          disabled={!dirty || saving}
+          className="mt-5 min-h-[48px] w-full rounded-2xl bg-waka-600 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {t(lang, "cashDrawerSettingsSaveBtn")}
         </button>
-        {saved ? (
-          <p className="mt-2 text-center text-sm font-bold text-emerald-700">{t(lang, "cashDrawerSettingsSaved")}</p>
-        ) : null}
         {errorKey ? (
           <p className="mt-2 text-center text-sm font-bold text-rose-700">
             {(t as (l: Language, k: string) => string)(lang, errorKey)}
           </p>
         ) : null}
       </section>
-    </div>
+    </EnterprisePageContainer>
   );
 }

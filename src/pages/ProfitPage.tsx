@@ -12,6 +12,7 @@ import { useSessionActor } from "../context/SessionActorContext";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveProfitVisibility } from "../lib/profitVisibility";
 import { computeProfitGroupedByCategory } from "../lib/homeProfit";
+import { EnterprisePageContainer } from "../components/layout/EnterprisePageContainer";
 import { PageHeader } from "../components/layout/PageHeader";
 import { DateFilterArchiveNotice } from "../components/shared/DateFilterArchiveNotice";
 import { MONTH_TO_DATE_FILTER } from "../lib/dateFilters";
@@ -197,7 +198,7 @@ export function ProfitPage({ lang, embedded }: Props) {
   const hasData = filteredSales.length > 0 || groups.length > 0;
 
   return (
-    <div className={embedded ? "space-y-3" : "space-y-3 pb-12"}>
+    <EnterprisePageContainer className={embedded ? "space-y-3" : undefined} variant={embedded ? "flush" : "default"}>
       {!embedded ? (
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -335,6 +336,6 @@ export function ProfitPage({ lang, embedded }: Props) {
         lastSoldAt={detailLastSold}
         onClose={() => setDetailProduct(null)}
       />
-    </div>
+    </EnterprisePageContainer>
   );
 }

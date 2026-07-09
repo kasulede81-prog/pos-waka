@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Language, ModifierGroup, ModifierOption, Product, ProductMenuConfig, ProductVariant, RecipeLine, ComboSlot } from "../../types";
 import { t } from "../../lib/i18n";
 import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
+import { WakaSwitch } from "../enterprise/WakaSwitch";
 
 type Props = {
   lang: Language;
@@ -92,18 +93,16 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
               }}
               className="mb-2 min-h-[40px] w-full rounded-lg border border-stone-200 px-2 text-sm font-bold"
             />
-            <label className="mr-3 text-xs font-bold">
-              <input
-                type="checkbox"
-                checked={group.required}
-                onChange={(e) => {
-                  const groups = [...(menu.modifierGroups ?? [])];
-                  groups[gi] = { ...group, required: e.target.checked };
-                  setMenu({ ...menu, modifierGroups: groups });
-                }}
-              />{" "}
-              {t(lang, "menuRequired")}
-            </label>
+            <WakaSwitch
+              checked={group.required}
+              onCheckedChange={(checked) => {
+                const groups = [...(menu.modifierGroups ?? [])];
+                groups[gi] = { ...group, required: checked };
+                setMenu({ ...menu, modifierGroups: groups });
+              }}
+              label={t(lang, "menuRequired")}
+              className="mr-3 text-xs font-bold"
+            />
             {group.options.map((opt, oi) => (
               <div key={opt.id} className="mt-2 grid grid-cols-[1fr_100px] gap-2">
                 <input
