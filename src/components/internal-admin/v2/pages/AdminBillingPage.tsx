@@ -88,7 +88,7 @@ export function AdminBillingPage({ lang, adminRow, previewMode }: Props) {
         activePanel={sheet === "annual" ? "annual" : null}
         closePanel={() => setSheet(null)}
         opsLoading={data.opsLoading}
-        pendingTrials={[]}
+        pendingTrials={data.pendingTrials}
         pendingAnnualTickets={data.pendingAnnualTickets}
         tickets={data.tickets}
         visits={[]}

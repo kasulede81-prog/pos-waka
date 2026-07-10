@@ -5,6 +5,9 @@ import {
   notifyOwnerNewDeviceActivation,
   reportDeviceFingerprintChangeIfNeeded,
 } from "./deviceFingerprintTrust";
+import { setDeviceApprovalStatus } from "./deviceAuthority";
+import { isPendingApprovalExpired } from "./devicePendingApproval";
+import { fetchShopDevicesForManagement, type ShopDeviceRow } from "./shopDevices";
 import { supabase } from "./supabase";
 
 function presencePlatform(): string {
@@ -48,6 +51,9 @@ export type DeviceActivationResult = {
   limit_blocked?: boolean;
   pending_approval?: boolean;
   approval_status?: string;
+  approval_requested_at?: string;
+  approval_expires_at?: string;
+  approval_expired?: boolean;
   device_authority?: string;
   revoked?: boolean;
   existing_device?: boolean;
@@ -70,6 +76,10 @@ function parseActivationResult(data: unknown): DeviceActivationResult {
     limit_blocked: r.limit_blocked === true,
     pending_approval: r.pending_approval === true,
     approval_status: r.approval_status != null ? String(r.approval_status) : undefined,
+    approval_requested_at:
+      r.approval_requested_at != null ? String(r.approval_requested_at) : undefined,
+    approval_expires_at: r.approval_expires_at != null ? String(r.approval_expires_at) : undefined,
+    approval_expired: r.approval_expired === true,
     device_authority: r.device_authority != null ? String(r.device_authority) : undefined,
     revoked: r.revoked === true,
     existing_device: r.existing_device === true,
@@ -145,9 +155,51 @@ export async function registerShopDeviceOnLogin(shopId: string): Promise<DeviceA
   if (error) throw error;
   const parsed = parseActivationResult(data);
   applyActivationSideEffects(shopId, parsed);
-  const { fetchDeviceAuthorityContext } = await import("./deviceAuthority");
-  await fetchDeviceAuthorityContext(shopId);
+  void import("./deviceAuthority").then(({ fetchDeviceAuthorityContext }) => {
+    void fetchDeviceAuthorityContext(shopId);
+  });
   return parsed;
+}
+
+export function resolveActivationBlockKind(opts: {
+  result: DeviceActivationResult;
+  context: DeviceLimitContext | null;
+  currentDevice: ShopDeviceRow | null;
+}): "limit" | "pending" | "retry" {
+  if (opts.result.approval_expired) return "retry";
+  if (opts.result.limit_blocked || opts.context?.at_limit) return "limit";
+  if (opts.result.pending_approval || opts.currentDevice?.approval_status === "pending") {
+    if (isPendingApprovalExpired(opts.currentDevice?.approval_requested_at)) return "retry";
+    return "pending";
+  }
+  return "retry";
+}
+
+/** Owner approves this browser/device when no operational primary is available. */
+export async function tryOwnerApproveCurrentDevice(shopId: string): Promise<boolean> {
+  const ctx = await fetchShopDeviceLimitContext(shopId);
+  if (!ctx?.is_owner) return false;
+  const fp = getOrCreateDeviceId();
+  const { devices } = await fetchShopDevicesForManagement(shopId);
+  const mine = devices.find((d) => d.device_fingerprint === fp);
+  if (!mine || mine.approval_status !== "pending") return false;
+  const approval = await setDeviceApprovalStatus(shopId, mine.id, "approved");
+  if (!approval.ok) return false;
+  const activation = await ensureShopDeviceActivation(shopId);
+  return activation.activated === true;
+}
+
+/** Activate this device and continue login when the plan still has room. */
+export async function tryActivateCurrentDevice(shopId: string): Promise<DeviceActivationResult> {
+  let result = await ensureShopDeviceActivation(shopId);
+  if (result.activated) return result;
+  if (result.pending_approval || result.approval_status === "pending") {
+    const approved = await tryOwnerApproveCurrentDevice(shopId);
+    if (approved) {
+      result = await ensureShopDeviceActivation(shopId);
+    }
+  }
+  return result;
 }
 
 export async function fetchShopDeviceLimitContext(shopId: string): Promise<DeviceLimitContext | null> {

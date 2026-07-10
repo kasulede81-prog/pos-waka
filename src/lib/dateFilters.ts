@@ -2,7 +2,7 @@
  * Unified Kampala date filtering for receipts, profit, and reports.
  */
 
-import type { CashExpense, ReturnRecord, Sale } from "../types";
+import type { CashExpense, ReturnRecord, Sale, StockMovement } from "../types";
 import { ACTIVE_SALES_MEMORY_DAYS } from "./activeSalesWindow";
 import { dateKeyKampala, monthKeyKampala, saleReportingDayKey, weekStartKeyKampala } from "./datesUg";
 import { isRevenueSale } from "./financialMetrics";
@@ -80,6 +80,16 @@ export function returnMatchesFilter(ret: Pick<ReturnRecord, "createdAt">, bounds
 
 export function expenseMatchesFilter(expense: Pick<CashExpense, "paidOn">, bounds: DateFilterBounds): boolean {
   return dateMatchesFilter(expense.paidOn, bounds);
+}
+
+export function stockMovementMatchesFilter(mv: Pick<StockMovement, "at">, bounds: DateFilterBounds): boolean {
+  return dateMatchesFilter(dateKeyKampala(mv.at), bounds);
+}
+
+export function stockMovementsInBounds(movements: StockMovement[], bounds: DateFilterBounds): StockMovement[] {
+  return movements
+    .filter((mv) => stockMovementMatchesFilter(mv, bounds))
+    .sort((a, b) => b.at.localeCompare(a.at));
 }
 
 export function revenueSalesInBounds(sales: Sale[], bounds: DateFilterBounds): Sale[] {

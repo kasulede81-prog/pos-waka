@@ -6,6 +6,7 @@ type Props = {
   movements: StockMovement[];
   pharmacyMode?: boolean;
   wholesaleMode?: boolean;
+  emptyLabelKey?: "noStockMovementsYet" | "noStockMovementsInPeriod";
 };
 
 function friendlyMovement(lang: Language, mv: StockMovement, pharmacyMode?: boolean, wholesaleMode?: boolean): string {
@@ -27,13 +28,13 @@ function friendlyMovement(lang: Language, mv: StockMovement, pharmacyMode?: bool
   return `${sign}${qty} ${mv.productName}`;
 }
 
-export function StockMovementsPanel({ lang, movements, pharmacyMode, wholesaleMode }: Props) {
+export function StockMovementsPanel({ lang, movements, pharmacyMode, wholesaleMode, emptyLabelKey }: Props) {
   const recent = movements.slice(0, 40);
 
   if (!recent.length) {
     return (
       <p className="rounded-2xl border border-dashed border-stone-200 bg-stone-50 px-4 py-10 text-center text-sm font-semibold text-stone-500">
-        {t(lang, "noStockMovementsYet")}
+        {t(lang, emptyLabelKey ?? "noStockMovementsYet")}
       </p>
     );
   }

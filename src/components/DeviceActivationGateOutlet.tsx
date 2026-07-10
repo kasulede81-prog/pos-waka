@@ -40,5 +40,11 @@ export function DeviceActivationGateOutlet() {
     return <Navigate to="/device-pending" replace state={{ from: location.pathname, revoked: true }} />;
   }
 
-  return <Navigate to="/device-limit" replace state={{ from: location.pathname }} />;
+  if (block?.kind === "retry") {
+    return <Navigate to="/device-limit" replace state={{ from: location.pathname, autoActivate: true }} />;
+  }
+
+  return (
+    <Navigate to="/device-limit" replace state={{ from: location.pathname, autoActivate: true }} />
+  );
 }

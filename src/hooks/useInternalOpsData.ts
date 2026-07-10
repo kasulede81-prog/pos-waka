@@ -464,6 +464,17 @@ export function useInternalOpsData(
 
   useEffect(() => {
     if (previewMode || !adminRow) return;
+    const onOpsChanged = () => void loadAll({ silent: true });
+    window.addEventListener("waka:internal-ops-changed", onOpsChanged);
+    window.addEventListener("waka:subscription-updated", onOpsChanged);
+    return () => {
+      window.removeEventListener("waka:internal-ops-changed", onOpsChanged);
+      window.removeEventListener("waka:subscription-updated", onOpsChanged);
+    };
+  }, [adminRow?.id, previewMode, loadAll]);
+
+  useEffect(() => {
+    if (previewMode || !adminRow) return;
     const pollMs =
       loadScope === "shops" || loadScope === "devices" || loadScope === "support" ? 60_000 : 45_000;
     const tick = () => {

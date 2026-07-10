@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Upload } from "lucide-react";
 import { parsePilotDiagnosticsJson, type ParsedPilotDiagnostics } from "../../../lib/pilotDiagnosticsParse";
-import { internalAdminShopRescueHref } from "../../../lib/internalAdminPreview";
+import { internalAdminShopTabHref } from "../../../lib/internalAdminPreview";
 import { Link } from "react-router-dom";
 
 type Props = {
@@ -124,7 +124,7 @@ export function AdminDiagnosticsImportPanel({
           ) : null}
           {shopId ? (
             <Link
-              to={internalAdminShopRescueHref(shopId, previewMode)}
+              to={internalAdminShopTabHref(shopId, "developer", previewMode)}
               className="mt-2 inline-flex min-h-[40px] items-center rounded-xl bg-teal-700 px-4 text-xs font-black text-white"
             >
               Open rescue console →

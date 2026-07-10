@@ -1,11 +1,13 @@
 import { useState } from "react";
 import type { ShopOpsDetail } from "../../lib/wakaInternalAdmin";
 import {
+  adminShopLogPasswordResetEmail,
   adminShopResetBackOfficePin,
   adminShopSendOwnerPasswordReset,
   adminShopSetOwnerPasswordDirect,
 } from "../../lib/wakaInternalAdmin";
 import { sendOwnerPasswordResetEmail } from "../../lib/shopRecoverySignals";
+import { executeInternalAdminAction } from "../../lib/internalAdminActionRunner";
 
 type Props = {
   shopId: string;
@@ -33,21 +35,27 @@ export function AccountRecoveryPanel({
   const [directPassword, setDirectPassword] = useState("");
   const [directConfirm, setDirectConfirm] = useState("");
 
-  const run = async (fn: () => Promise<{ ok: boolean; message?: string }>, okText: string) => {
-    if (previewMode) {
-      onToast({ kind: "err", text: "Preview mode — action blocked." });
-      return;
-    }
-    if (!window.confirm("Continue with this recovery action?")) return;
-    onBusy(true);
-    const r = await fn();
-    onBusy(false);
-    if (r.ok) {
-      onToast({ kind: "ok", text: okText });
-      onDone?.();
-    } else {
-      onToast({ kind: "err", text: r.message ?? "Action failed." });
-    }
+  const run = async (
+    action: string,
+    fn: () => Promise<{ ok: boolean; message?: string }>,
+    okText: string,
+    confirm = "Continue with this recovery action?",
+  ) => {
+    await executeInternalAdminAction(
+      {
+        previewMode,
+        previewBlockedMessage: "Preview mode — action blocked.",
+        confirmMessage: confirm,
+        setBusy: onBusy,
+        onSuccess: () => {
+          onToast({ kind: "ok", text: okText });
+          onDone?.();
+        },
+        onError: (msg) => onToast({ kind: "err", text: msg }),
+        audit: { action, shopId },
+      },
+      fn,
+    );
   };
 
   return (
@@ -70,15 +78,24 @@ export function AccountRecoveryPanel({
           disabled={busy || !ownerEmail}
           className="min-h-[48px] flex-1 rounded-xl border-2 border-stone-300 bg-white px-4 text-sm font-black text-stone-900 disabled:opacity-40"
           onClick={() =>
-            void run(async () => {
-              const audit = await adminShopSendOwnerPasswordReset(shopId);
-              if (!audit.ok) return audit;
-              const target = audit.ownerEmail ?? ownerEmail;
-              if (!target) return { ok: false, message: "No owner email on file." };
-              const sent = await sendOwnerPasswordResetEmail(target);
-              if (!sent.ok) return sent;
-              return { ok: true, message: `Password reset email sent to ${target}.` };
-            }, `Password reset email sent to ${ownerEmail}.`)
+            void run(
+              "admin_password_reset_email",
+              async () => {
+                const audit = await adminShopSendOwnerPasswordReset(shopId);
+                if (!audit.ok) return audit;
+                const target = audit.ownerEmail ?? ownerEmail;
+                if (!target) return { ok: false, message: "No owner email on file." };
+                const sent = await sendOwnerPasswordResetEmail(target);
+                await adminShopLogPasswordResetEmail(
+                  shopId,
+                  sent.ok,
+                  sent.ok ? `Email sent to ${target}` : sent.message ?? "send_failed",
+                );
+                if (!sent.ok) return sent;
+                return { ok: true, message: `Password reset email sent to ${target}.` };
+              },
+              `Password reset email sent to ${ownerEmail}.`,
+            )
           }
         >
           Send login password reset
@@ -89,6 +106,7 @@ export function AccountRecoveryPanel({
           className="min-h-[48px] flex-1 rounded-xl bg-rose-600 px-4 text-sm font-black text-white disabled:opacity-40"
           onClick={() =>
             void run(
+              "admin_reset_backoffice_pin",
               async () => {
                 const r = await adminShopResetBackOfficePin(shopId);
                 if (!r.ok) return r;
@@ -131,16 +149,21 @@ export function AccountRecoveryPanel({
           disabled={busy || !detail?.shop.id}
           className="mt-2 min-h-[44px] w-full rounded-xl bg-violet-700 px-4 text-sm font-black text-white disabled:opacity-40"
           onClick={() =>
-            void run(async () => {
-              if (directPassword.length < 8) return { ok: false, message: "Password must be at least 8 characters." };
-              if (directPassword !== directConfirm) return { ok: false, message: "Passwords do not match." };
-              const r = await adminShopSetOwnerPasswordDirect(detail!.shop.id, directPassword);
-              if (r.ok) {
-                setDirectPassword("");
-                setDirectConfirm("");
-              }
-              return r;
-            }, "Owner login password updated.")
+            void run(
+              "admin_set_owner_password_direct",
+              async () => {
+                if (directPassword.length < 8) return { ok: false, message: "Password must be at least 8 characters." };
+                if (directPassword !== directConfirm) return { ok: false, message: "Passwords do not match." };
+                const r = await adminShopSetOwnerPasswordDirect(detail!.shop.id, directPassword);
+                if (r.ok) {
+                  setDirectPassword("");
+                  setDirectConfirm("");
+                }
+                return r;
+              },
+              "Owner login password updated.",
+              "Set owner login password directly? Share it securely with the shop owner.",
+            )
           }
         >
           Set login password now

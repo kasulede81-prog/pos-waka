@@ -4,8 +4,8 @@ import type { Language } from "../types";
 import { fetchWakaInternalAdminMe, type WakaInternalAdminRow } from "../lib/wakaInternalAdmin";
 import {
   INTERNAL_ADMIN_PREVIEW_ROW,
-  isInternalAdminPreviewActive,
 } from "../lib/internalAdminPreview";
+import { resolveInternalAdminPreviewMode } from "../lib/internalAdminPreviewPolicy";
 import { AdminShell, type AdminSectionId } from "../components/internal-admin/v2/AdminShell";
 import { AdminOverviewPage } from "../components/internal-admin/v2/pages/AdminOverviewPage";
 import { AdminShopsPage } from "../components/internal-admin/v2/pages/AdminShopsPage";
@@ -53,7 +53,6 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
   const [loading, setLoading] = useState(true);
   const [adminRow, setAdminRow] = useState<WakaInternalAdminRow | null>(null);
   const location = useLocation();
-  const previewRequested = isInternalAdminPreviewActive(location.search);
   const section = sectionFromPath(location.pathname);
 
   useEffect(() => {
@@ -72,7 +71,7 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
 
   // If a real internal admin session exists, always prefer live data even if
   // `?preview=1` is in the URL from an old/shared link.
-  const previewMode = previewRequested && !adminRow;
+  const previewMode = resolveInternalAdminPreviewMode(location.search, adminRow, loading);
   const shellAdmin = useMemo(
     () => (previewMode ? INTERNAL_ADMIN_PREVIEW_ROW : adminRow),
     [adminRow, previewMode],

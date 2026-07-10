@@ -23,6 +23,7 @@ export type ShopDeviceRow = {
   created_at: string;
   device_authority: "primary" | "secondary";
   approval_status: "pending" | "approved" | "suspended" | "revoked" | "disabled";
+  approval_requested_at: string | null;
   form_factor: "tablet" | "phone" | "windows" | "kitchen" | "bar";
   device_type: string | null;
   is_primary: boolean;
@@ -120,6 +121,7 @@ function parseDeviceRows(data: unknown): ShopDeviceRow[] {
         created_at: String(r.created_at ?? ""),
         device_authority: r.device_authority === "primary" ? "primary" : "secondary",
         approval_status: normalizeApprovalStatus(r.approval_status),
+        approval_requested_at: r.approval_requested_at != null ? String(r.approval_requested_at) : null,
         form_factor: normalizeFormFactor(r.form_factor),
         device_type: r.device_type != null ? String(r.device_type) : null,
         is_primary: r.is_primary === true || r.device_authority === "primary",
@@ -165,6 +167,21 @@ export async function disconnectOwnerShopDevice(deviceId: string, shopId: string
   const { error } = await supabase.rpc("owner_disconnect_shop_device", { p_device_id: deviceId });
   if (error) throw error;
   appendDeviceAuditEntry("device_disconnected", "Disconnected a shop device", {
+    shopId,
+    deviceId,
+    deviceFingerprint: getOrCreateDeviceId(),
+  });
+}
+
+export async function dismissPendingOwnerShopDevice(deviceId: string, shopId: string): Promise<void> {
+  if (!supabase) throw new Error("Cloud not configured");
+  const { data, error } = await supabase.rpc("owner_dismiss_pending_shop_device", { p_device_id: deviceId });
+  if (error) throw error;
+  const payload = data as { ok?: boolean; error?: string } | null;
+  if (payload?.ok !== true) {
+    throw new Error(payload?.error ?? "dismiss_failed");
+  }
+  appendDeviceAuditEntry("device_pending_dismissed", "Dismissed pending device request", {
     shopId,
     deviceId,
     deviceFingerprint: getOrCreateDeviceId(),

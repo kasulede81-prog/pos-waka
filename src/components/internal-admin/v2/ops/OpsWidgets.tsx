@@ -3,9 +3,22 @@ import { motion } from "framer-motion";
 import { Link, useNavigate } from "react-router-dom";
 import clsx from "clsx";
 import { Search, ShieldAlert } from "lucide-react";
-import type { FleetDeviceRow, RecentShopRow, SupportTicketRow } from "../../../../lib/wakaInternalAdmin";
+import type { OpsActivationRow } from "../../../../lib/businessActivation";
+import type { AppReleaseSummary } from "../../../../lib/releaseManagementAdmin";
+import type { PricingCampaign } from "../../../../lib/pricingCampaignsAdmin";
+import type { GrowthCampaign } from "../../../../lib/growthCampaigns";
+import type {
+  AiProviderSearchRow,
+  FeatureFlagSearchRow,
+} from "../../../../hooks/useAdminGlobalSearchData";
+import type {
+  FleetDeviceRow,
+  InternalAdminRow,
+  RecentShopRow,
+  SupportTicketRow,
+} from "../../../../lib/wakaInternalAdmin";
 import { formatDisplayEmail, formatOwnerDisplayLabel } from "../../../../lib/wakaInternalAdmin";
-import { internalAdminShopHref } from "../../../../lib/internalAdminPreview";
+import { internalAdminShopHref, internalAdminShopTabHref } from "../../../../lib/internalAdminPreview";
 import {
   CURRENT_APP_VERSION,
   deviceOnline,
@@ -22,6 +35,9 @@ import {
   type OpsAnnouncement,
 } from "../../../../lib/internalOpsLocal";
 import { addShopInternalNote, fetchShopInternalNotes, type SharedInternalNote } from "../../../../lib/internalOpsHardening";
+import { executeInternalAdminAction } from "../../../../lib/internalAdminActionRunner";
+import { t } from "../../../../lib/i18n";
+import type { Language } from "../../../../types";
 import { BottomSheet } from "../primitives";
 
 const STATUS_STYLES = {
@@ -149,19 +165,53 @@ export function SupportTagsRow({ tags }: { tags: SupportTag[] }) {
 export function GlobalSearchBar({
   shops,
   tickets,
+  devices = [],
+  admins = [],
+  agents = [],
+  releases = [],
+  activations = [],
+  pricingCampaigns = [],
+  growthCampaigns = [],
+  aiProviders = [],
+  featureFlags = [],
   previewMode,
+  compact = false,
 }: {
   shops: RecentShopRow[];
   tickets: SupportTicketRow[];
+  devices?: FleetDeviceRow[];
+  admins?: InternalAdminRow[];
+  agents?: { id: string; full_name: string | null; email: string | null; phone_e164: string | null }[];
+  releases?: AppReleaseSummary[];
+  activations?: OpsActivationRow[];
+  pricingCampaigns?: PricingCampaign[];
+  growthCampaigns?: GrowthCampaign[];
+  aiProviders?: AiProviderSearchRow[];
+  featureFlags?: FeatureFlagSearchRow[];
   previewMode: boolean;
+  compact?: boolean;
 }) {
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
 
-  const results = useMemo(() => {
+  type Hit =
+    | { type: "shop"; id: string; label: string; sub: string }
+    | { type: "ticket"; id: string; label: string; sub: string; shopId?: string | null }
+    | { type: "device"; id: string; label: string; sub: string; shopId: string }
+    | { type: "admin"; id: string; label: string; sub: string }
+    | { type: "agent"; id: string; label: string; sub: string }
+    | { type: "release"; id: string; label: string; sub: string }
+    | { type: "activation"; id: string; label: string; sub: string }
+    | { type: "pricing_campaign"; id: string; label: string; sub: string }
+    | { type: "growth_campaign"; id: string; label: string; sub: string }
+    | { type: "ai_provider"; id: string; label: string; sub: string }
+    | { type: "feature_flag"; id: string; label: string; sub: string; path: string };
+
+  const results = useMemo((): Hit[] => {
     const needle = q.trim().toLowerCase();
     if (needle.length < 2) return [];
+
     const shopHits = shops
       .filter((s) => {
         const owner =
@@ -176,13 +226,15 @@ export function GlobalSearchBar({
           (s.phone_e164 ?? "").includes(needle)
         );
       })
-      .slice(0, 6)
-      .map((s) => ({
-        type: "shop" as const,
-        id: s.id,
-        label: s.shop_number ? `${s.shop_number} · ${s.name}` : s.name,
-        sub: s.district ?? "",
-      }));
+      .slice(0, 5)
+      .map(
+        (s): Hit => ({
+          type: "shop",
+          id: s.id,
+          label: s.shop_number ? `${s.shop_number} · ${s.name}` : s.name,
+          sub: s.district ?? "Shop",
+        }),
+      );
 
     const ticketHits = tickets
       .filter(
@@ -192,20 +244,217 @@ export function GlobalSearchBar({
           (t.owner_email ?? "").toLowerCase().includes(needle),
       )
       .slice(0, 4)
-      .map((t) => ({
-        type: "ticket" as const,
-        id: t.id,
-        label: t.shop_name ?? t.subject ?? "Ticket",
-        sub: t.issue_type ?? t.status,
-      }));
+      .map(
+        (t): Hit => ({
+          type: "ticket",
+          id: t.id,
+          shopId: t.shop_id,
+          label: t.shop_name ?? t.subject ?? "Ticket",
+          sub: t.issue_type ?? t.status,
+        }),
+      );
 
-    return [...shopHits, ...ticketHits];
-  }, [q, shops, tickets]);
+    const deviceHits = devices
+      .filter(
+        (d) =>
+          (d.label ?? "").toLowerCase().includes(needle) ||
+          d.device_fingerprint.toLowerCase().includes(needle) ||
+          (d.shop_name ?? "").toLowerCase().includes(needle),
+      )
+      .slice(0, 4)
+      .map(
+        (d): Hit => ({
+          type: "device",
+          id: d.id,
+          shopId: d.shop_id,
+          label: d.label || d.device_fingerprint.slice(0, 16),
+          sub: d.shop_name ?? "Device",
+        }),
+      );
+
+    const adminHits = admins
+      .filter(
+        (a) =>
+          (a.email ?? "").toLowerCase().includes(needle) ||
+          (a.full_name ?? "").toLowerCase().includes(needle),
+      )
+      .slice(0, 3)
+      .map(
+        (a): Hit => ({
+          type: "admin",
+          id: a.id,
+          label: a.full_name || a.email || "Admin",
+          sub: a.role.replace(/_/g, " "),
+        }),
+      );
+
+    const agentHits = agents
+      .filter(
+        (a) =>
+          (a.email ?? "").toLowerCase().includes(needle) ||
+          (a.full_name ?? "").toLowerCase().includes(needle) ||
+          (a.phone_e164 ?? "").includes(needle),
+      )
+      .slice(0, 3)
+      .map(
+        (a): Hit => ({
+          type: "agent",
+          id: a.id,
+          label: a.full_name || a.email || "Agent",
+          sub: a.phone_e164 ?? "Marketing agent",
+        }),
+      );
+
+    const releaseHits = releases
+      .filter(
+        (r) =>
+          (r.versionNumber ?? "").toLowerCase().includes(needle) ||
+          (r.releaseName ?? "").toLowerCase().includes(needle),
+      )
+      .slice(0, 3)
+      .map(
+        (r): Hit => ({
+          type: "release",
+          id: r.id,
+          label: `v${r.versionNumber} · ${r.releaseName}`,
+          sub: r.status,
+        }),
+      );
+
+    const activationHits = activations
+      .filter(
+        (a) =>
+          (a.public_reference_code ?? "").toLowerCase().includes(needle) ||
+          (a.business_display_name ?? "").toLowerCase().includes(needle),
+      )
+      .slice(0, 3)
+      .map(
+        (a): Hit => ({
+          type: "activation",
+          id: a.id,
+          label: a.business_display_name || a.public_reference_code || "Activation",
+          sub: a.public_reference_code ?? a.status,
+        }),
+      );
+
+    const pricingHits = pricingCampaigns
+      .filter((c) => c.name.toLowerCase().includes(needle) || (c.description ?? "").toLowerCase().includes(needle))
+      .slice(0, 3)
+      .map(
+        (c): Hit => ({
+          type: "pricing_campaign",
+          id: c.id,
+          label: c.name,
+          sub: c.enabled ? "Active pricing campaign" : "Pricing campaign",
+        }),
+      );
+
+    const growthHits = growthCampaigns
+      .filter((c) => c.name.toLowerCase().includes(needle) || (c.description ?? "").toLowerCase().includes(needle))
+      .slice(0, 3)
+      .map(
+        (c): Hit => ({
+          type: "growth_campaign",
+          id: c.id,
+          label: c.name,
+          sub: c.enabled ? "Growth campaign" : "Campaign (disabled)",
+        }),
+      );
+
+    const aiHits = aiProviders
+      .filter((p) => p.label.toLowerCase().includes(needle) || p.id.toLowerCase().includes(needle))
+      .slice(0, 3)
+      .map(
+        (p): Hit => ({
+          type: "ai_provider",
+          id: p.id,
+          label: p.label,
+          sub: "AI provider",
+        }),
+      );
+
+    const flagHits = featureFlags
+      .filter((f) => f.label.toLowerCase().includes(needle) || f.id.toLowerCase().includes(needle))
+      .slice(0, 3)
+      .map(
+        (f): Hit => ({
+          type: "feature_flag",
+          id: f.id,
+          label: f.label,
+          sub: "Feature flag",
+          path: f.path,
+        }),
+      );
+
+    return [
+      ...shopHits,
+      ...ticketHits,
+      ...deviceHits,
+      ...adminHits,
+      ...agentHits,
+      ...releaseHits,
+      ...activationHits,
+      ...pricingHits,
+      ...growthHits,
+      ...aiHits,
+      ...flagHits,
+    ];
+  }, [q, shops, tickets, devices, admins, agents, releases, activations, pricingCampaigns, growthCampaigns, aiProviders, featureFlags]);
+
+  const go = (r: Hit) => {
+    setOpen(false);
+    setQ("");
+    switch (r.type) {
+      case "shop":
+        navigate(internalAdminShopHref(r.id, previewMode));
+        break;
+      case "ticket":
+        if (r.shopId) navigate(internalAdminShopTabHref(r.shopId, "support", previewMode));
+        else navigate(previewMode ? "/internal/waka/support?preview=1" : "/internal/waka/support");
+        break;
+      case "device":
+        navigate(internalAdminShopTabHref(r.shopId, "devices", previewMode));
+        break;
+      case "admin":
+        navigate(previewMode ? "/internal/waka/admins?preview=1" : "/internal/waka/admins");
+        break;
+      case "agent":
+        navigate(previewMode ? "/internal/waka/agents?preview=1" : "/internal/waka/agents");
+        break;
+      case "release":
+        navigate(previewMode ? "/internal/waka/releases?preview=1" : "/internal/waka/releases");
+        break;
+      case "activation":
+        navigate(previewMode ? "/internal/waka/activations?preview=1" : "/internal/waka/activations");
+        break;
+      case "pricing_campaign":
+        navigate(
+          previewMode
+            ? "/internal/waka/billing/pricing-campaigns?preview=1"
+            : "/internal/waka/billing/pricing-campaigns",
+        );
+        break;
+      case "growth_campaign":
+        navigate(previewMode ? "/internal/waka/growth-campaign?preview=1" : "/internal/waka/growth-campaign");
+        break;
+      case "ai_provider":
+        navigate(previewMode ? "/internal/waka/ai-settings?preview=1" : "/internal/waka/ai-settings");
+        break;
+      case "feature_flag":
+        navigate(previewMode ? `${r.path}?preview=1` : r.path);
+        break;
+    }
+  };
 
   return (
     <div className="relative">
-      <div className="flex items-center gap-2 rounded-2xl border border-stone-200 bg-white px-3 shadow-sm">
-        <Search className="h-4 w-4 text-stone-400" />
+      <div
+        className={clsx(
+          "flex items-center gap-2 rounded-2xl border px-3 shadow-sm",
+          compact ? "border-white/25 bg-white/10" : "border-stone-200 bg-white",
+        )}
+      >
+        <Search className={clsx("h-4 w-4 shrink-0", compact ? "text-white/70" : "text-stone-400")} />
         <input
           value={q}
           onChange={(e) => {
@@ -213,12 +462,16 @@ export function GlobalSearchBar({
             setOpen(true);
           }}
           onFocus={() => setOpen(true)}
-          placeholder="Search shops, owners, phones, tickets…"
-          className="min-h-[48px] flex-1 bg-transparent text-base font-semibold outline-none"
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          placeholder="Search shops, campaigns, devices, tickets…"
+          className={clsx(
+            "min-h-[40px] flex-1 bg-transparent text-sm font-semibold outline-none",
+            compact ? "text-white placeholder:text-white/60" : "text-stone-900",
+          )}
         />
       </div>
       {open && q.length >= 2 ? (
-        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-64 overflow-y-auto rounded-2xl border border-stone-200 bg-white py-1 shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-72 overflow-y-auto rounded-2xl border border-stone-200 bg-white py-1 shadow-xl">
           {results.length === 0 ? (
             <p className="px-4 py-3 text-sm text-stone-500">No matches.</p>
           ) : (
@@ -227,12 +480,7 @@ export function GlobalSearchBar({
                 key={`${r.type}-${r.id}`}
                 type="button"
                 className="flex w-full flex-col px-4 py-2.5 text-left hover:bg-waka-50"
-                onClick={() => {
-                  setOpen(false);
-                  setQ("");
-                  if (r.type === "shop") navigate(internalAdminShopHref(r.id, previewMode));
-                  else navigate(previewMode ? "/internal/waka/support?preview=1" : "/internal/waka/support");
-                }}
+                onClick={() => go(r)}
               >
                 <span className="text-sm font-black text-stone-900">{r.label}</span>
                 <span className="text-[11px] font-medium text-stone-500">
@@ -398,7 +646,7 @@ export function AnnouncementSheet({
   };
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Announcement center" subtitle="In-app ready · push/WhatsApp later">
+    <BottomSheet open={open} onClose={onClose} title="Announcement center" subtitle="Development only — saved in browser storage">
       <div className="space-y-3">
         <select
           value={kind}
@@ -485,7 +733,19 @@ export function ShopTimelinePanel({ events }: { events: OpsFeedEvent[] }) {
   );
 }
 
-export function InternalNotesPanel({ shopId }: { shopId: string; author?: string }) {
+export function InternalNotesPanel({
+  shopId,
+  author,
+  previewMode = false,
+  lang = "en" as Language,
+  onToast,
+}: {
+  shopId: string;
+  author?: string;
+  previewMode?: boolean;
+  lang?: Language;
+  onToast?: (toast: { kind: "ok" | "err"; text: string }) => void;
+}) {
   const [notes, setNotes] = useState<SharedInternalNote[]>([]);
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -496,14 +756,21 @@ export function InternalNotesPanel({ shopId }: { shopId: string; author?: string
 
   const add = () => {
     if (!body.trim() || busy) return;
-    setBusy(true);
-    void addShopInternalNote(shopId, body).then((r) => {
-      setBusy(false);
-      if (r.ok) {
-        setBody("");
-        void fetchShopInternalNotes(shopId).then(setNotes);
-      }
-    });
+    void executeInternalAdminAction(
+      {
+        previewMode,
+        previewBlockedMessage: t(lang, "internalAdminPreviewActionBlocked"),
+        setBusy,
+        onSuccess: () => {
+          setBody("");
+          void fetchShopInternalNotes(shopId).then(setNotes);
+          onToast?.({ kind: "ok", text: "Note saved." });
+        },
+        onError: (msg) => onToast?.({ kind: "err", text: msg }),
+        audit: { action: "admin_internal_note_add", shopId, metadata: { author } },
+      },
+      () => addShopInternalNote(shopId, body),
+    );
   };
 
   return (

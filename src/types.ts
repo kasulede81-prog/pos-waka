@@ -145,6 +145,7 @@ export type AuditAction =
   | "device_login_blocked"
   | "device_replacement_completed"
   | "device_new_activation"
+  | "device_pending_dismissed"
   | "device_suspicious_fingerprint"
   | "receipt_reprint"
   | "receipt_pdf_export"

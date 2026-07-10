@@ -27,6 +27,7 @@ function device(partial: Partial<ShopDeviceRow> & Pick<ShopDeviceRow, "id" | "st
     pending_downloads: 0,
     cloud_status: null,
     recovery_status: null,
+    approval_requested_at: null,
     ...partial,
   };
 }

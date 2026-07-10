@@ -1,18 +1,14 @@
 export type CheckoutInputField = "cash" | "mobile" | "customerName" | "customerPhone";
 export type CheckoutKeypadMode = "numeric" | "alpha";
 
-/** Letter rows for the compact POS alpha keyboard (3 columns). */
+/** Compact QWERTY rows — same footprint as the numeric keypad (3 letter rows + bottom controls). */
 export const CHECKOUT_ALPHA_ROWS = [
-  ["A", "B", "C"],
-  ["D", "E", "F"],
-  ["G", "H", "I"],
-  ["J", "K", "L"],
-  ["M", "N", "O"],
-  ["P", "Q", "R"],
-  ["S", "T", "U"],
-  ["V", "W", "X"],
-  ["Y", "Z", "⌫"],
+  ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+  ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+  ["Z", "X", "C", "V", "B", "N", "M", "⌫"],
 ] as const;
+
+export const CHECKOUT_ALPHA_ROW_COLS = [10, 9, 8] as const;
 
 export function isTextCheckoutField(field: CheckoutInputField): boolean {
   return field === "customerName" || field === "customerPhone";

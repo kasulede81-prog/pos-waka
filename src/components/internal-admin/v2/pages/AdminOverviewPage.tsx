@@ -7,12 +7,7 @@ import { internalAdminPreviewHref } from "../../../../lib/internalAdminPreview";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { greetingKey, kampalaNowParts, useInternalOpsData, type OpsSheetId } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
-import {
-  ActivityFeedPanel,
-  AnnouncementSheet,
-  GlobalSearchBar,
-  SystemStatusCenter,
-} from "../ops/OpsWidgets";
+import { ActivityFeedPanel, AnnouncementSheet, SystemStatusCenter } from "../ops/OpsWidgets";
 import { adminKpiGridClass } from "../../../../lib/desktopLayout";
 import { AdminHeroV2, BottomSheet, EmptyState, KpiPulseCard } from "../primitives";
 import { InternalOpsQueuePanels } from "../../InternalOpsQueuePanels";
@@ -51,6 +46,13 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
 
   const go = (path: string) => navigate(previewMode ? internalAdminPreviewHref(path) : path);
 
+  const attentionCount =
+    data.pendingTrials.length +
+    data.pendingAnnualTickets.length +
+    data.statGrid.support +
+    data.systemHealth.failedSyncs +
+    data.systemHealth.offlineShops;
+
   return (
     <div className="space-y-5">
       <AdminHeroV2
@@ -64,30 +66,7 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         previewBadge={previewMode}
       />
 
-      <GlobalSearchBar shops={data.shopOpenings} tickets={data.tickets} previewMode={previewMode} />
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SystemStatusCenter health={data.systemHealth} />
-        <ActivityFeedPanel events={data.activityFeed} previewMode={previewMode} />
-      </div>
-
-      <div className="flex gap-2 sm:max-w-xl xl:max-w-none">
-        <button
-          type="button"
-          onClick={() => setAnnounceOpen(true)}
-          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-sm font-black text-stone-800 shadow-sm"
-        >
-          <Megaphone className="h-4 w-4 text-waka-600" />
-          Broadcast
-        </button>
-        <button
-          type="button"
-          onClick={() => go("/internal/waka/analytics")}
-          className="min-h-[44px] flex-1 rounded-2xl bg-waka-600 text-sm font-black text-white shadow-sm"
-        >
-          Analytics
-        </button>
-      </div>
+      <SystemStatusCenter health={data.systemHealth} />
 
       {previewMode ? (
         <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold text-amber-950">
@@ -107,32 +86,51 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
       ) : null}
 
       <section>
+        <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">
+          What needs attention ({attentionCount})
+        </h2>
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <button type="button" onClick={() => setActiveSheet("trials")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+            Trial requests <span className="font-mono text-waka-600">{data.pendingTrials.length}</span>
+          </button>
+          <button type="button" onClick={() => setActiveSheet("annual")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+            Annual subscriptions <span className="font-mono text-waka-600">{data.pendingAnnualTickets.length}</span>
+          </button>
+          <button type="button" onClick={() => go("/internal/waka/support")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+            Open support <span className="font-mono text-waka-600">{data.statGrid.support}</span>
+          </button>
+          <button type="button" onClick={() => go("/internal/waka/devices")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+            Unhealthy devices <span className="font-mono text-amber-700">{data.systemHealth.offlineShops}</span>
+          </button>
+          <button type="button" onClick={() => go("/internal/waka/shops")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+            Sync failures <span className="font-mono text-rose-700">{data.systemHealth.failedSyncs}</span>
+          </button>
+          <button type="button" onClick={() => setActiveSheet("visits")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
+            Field visits <span className="font-mono text-waka-600">{data.visits.length}</span>
+          </button>
+        </div>
+      </section>
+
+      <ActivityFeedPanel events={data.activityFeed} previewMode={previewMode} />
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setAnnounceOpen(true)}
+          className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-2xl border border-stone-200 bg-white text-sm font-black text-stone-800 shadow-sm"
+        >
+          <Megaphone className="h-4 w-4 text-waka-600" />
+          Broadcast <span className="text-[10px] font-bold uppercase text-amber-700">(dev only)</span>
+        </button>
+      </div>
+
+      <section>
         <h2 className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Quick pulse</h2>
         <div className={adminKpiGridClass()}>
           <KpiPulseCard label={t(lang, "internalStat_totalShops")} value={data.statGrid.total} onOpen={() => go("/internal/waka/shops")} />
           <KpiPulseCard label={t(lang, "internalStat_activeToday")} value={data.statGrid.active} onOpen={() => go("/internal/waka/shops")} />
           <KpiPulseCard label={t(lang, "internalStat_paidSubs")} value={data.statGrid.paid} onOpen={() => go("/internal/waka/billing")} />
-          <KpiPulseCard label="Devices" value={data.statGrid.devices} onOpen={() => go("/internal/waka/devices")} />
-          <KpiPulseCard label={t(lang, "internalStat_supportOpen")} value={data.statGrid.support} onOpen={() => go("/internal/waka/support")} />
-          <KpiPulseCard label={t(lang, "internalStat_pendingAnnual")} value={data.statGrid.pendingAnnual} onOpen={() => setActiveSheet("annual")} />
-        </div>
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-xs font-black uppercase tracking-wide text-stone-500">Work queues</h2>
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <button type="button" onClick={() => setActiveSheet("trials")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Trials <span className="font-mono text-waka-600">{data.pendingTrials.length}</span>
-          </button>
-          <button type="button" onClick={() => setActiveSheet("annual")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Annual <span className="font-mono text-waka-600">{data.pendingAnnualTickets.length}</span>
-          </button>
-          <button type="button" onClick={() => go("/internal/waka/support")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Support inbox
-          </button>
-          <button type="button" onClick={() => setActiveSheet("visits")} className="min-h-[44px] rounded-2xl border border-stone-200 bg-white px-4 py-3 text-left text-sm font-bold shadow-sm">
-            Field visits <span className="font-mono text-waka-600">{data.visits.length}</span>
-          </button>
+          <KpiPulseCard label="Devices online" value={data.statGrid.devices} onOpen={() => go("/internal/waka/devices")} />
         </div>
       </section>
 
@@ -171,7 +169,10 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
         loadAll={data.loadAll}
       />
 
-      <BottomSheet open={activeSheet === "map"} onClose={() => setActiveSheet(null)} title="Field map" wide>
+      <BottomSheet open={activeSheet === "map"} onClose={() => setActiveSheet(null)} title="Field map — Coming soon" wide>
+        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-950">
+          Interactive field map is coming soon. Pin counts below are read-only until Mapbox integration ships.
+        </p>
         {data.mapPins.length === 0 ? (
           <EmptyState>No GPS pins yet.</EmptyState>
         ) : (

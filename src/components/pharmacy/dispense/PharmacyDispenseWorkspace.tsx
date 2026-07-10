@@ -54,8 +54,9 @@ import { PharmacyCheckoutMetaStrip } from "./PharmacyCheckoutMetaStrip";
 import { PharmacyRxActionBar } from "./PharmacyRxActionBar";
 import type { PharmacyCustomerContextMode } from "./pharmacyDispenseTypes";
 import { buildSaleReceiptContext } from "../../../lib/receiptContextHelpers";
-import { downloadSaleReceiptPdf, printSaleReceipt, shareSaleReceiptPdf } from "../../../lib/receiptDocuments";
+import { downloadSaleReceiptPdf, printSaleReceipt, saleReceiptHtml, shareSaleReceiptPdf } from "../../../lib/receiptDocuments";
 import { DocumentActionsBar } from "../../documents/DocumentActionsBar";
+import { isNativePrintPlatform } from "../../../lib/nativeReceiptPrint";
 import { formatDraftLineQty, computeDraftCheckoutTotals } from "../../../lib/draftCart";
 import { logReceiptPdfExportAudit, logReceiptReprintAudit } from "../../../lib/auditReceiptLog";
 
@@ -172,6 +173,11 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
       customerBalanceUgx: cust?.debtBalanceUgx ?? null,
     });
   }, [receiptSale, customers, lang, sales, preferences, products, actor]);
+
+  const receiptHtmlPreview = useMemo(
+    () => (receiptCtx ? saleReceiptHtml(receiptCtx) : ""),
+    [receiptCtx],
+  );
 
   const checkoutTotalsForDiscount = useMemo(
     () => computeDraftCheckoutTotals(draftLines, draftCartDiscountUgx),
@@ -398,7 +404,7 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
 
       <div
         className={clsx(
-          "min-h-0 flex-1",
+          "flex min-h-0 flex-1 flex-col",
           mountDesktopCheckoutSidebar && isFullDesktopPos && "grid items-stretch gap-1.5",
         )}
         style={posSplitColumns ? { gridTemplateColumns: posSplitColumns } : undefined}
@@ -621,36 +627,67 @@ export function PharmacyDispenseWorkspace({ lang }: Props) {
         }}
       />
 
-      {receiptSale && receiptCtx ? (
+      {receiptSale && receiptCtx && receiptHtmlPreview ? (
         <PosScreenPortal>
-          <div className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-white pt-[env(safe-area-inset-top,0px)]">
+          <div
+            className="waka-overlay-full fixed inset-0 z-[var(--waka-z-pos-overlay)] flex min-h-0 flex-col bg-white pt-[max(0.5rem,env(safe-area-inset-top,0px))]"
+            role="dialog"
+            aria-modal
+            aria-labelledby="pharmacy-receipt-title"
+          >
             <header className="flex shrink-0 items-center justify-between gap-3 border-b border-stone-100 px-4 py-3">
-              <h2 className="text-xl font-black text-stone-900">{t(lang, "receiptTitle")}</h2>
+              <h2 id="pharmacy-receipt-title" className="text-xl font-black text-stone-900">
+                {t(lang, "receiptTitle")}
+              </h2>
               <button
                 type="button"
                 onClick={() => checkout.setReceiptSaleId(null)}
-                className="min-h-[44px] rounded-xl border-2 border-stone-200 px-4 py-2 text-sm font-bold"
+                className="min-h-[44px] rounded-xl border-2 border-stone-200 px-4 py-2 text-sm font-bold text-stone-700 active:bg-stone-50"
               >
                 {t(lang, "receiptClose")}
               </button>
             </header>
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-4 py-8">
-              <p className="text-center text-sm font-semibold text-stone-600">{t(lang, "pharmacyRxDispensed")}</p>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain bg-[#f8fafc] px-4 py-4 pb-6 [-webkit-overflow-scrolling:touch]">
+              <p className="mb-3 text-center text-sm font-semibold text-emerald-700">{t(lang, "pharmacyRxDispensed")}</p>
+              <div
+                className="mx-auto w-full max-w-md rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+                dangerouslySetInnerHTML={{ __html: receiptHtmlPreview }}
+              />
+            </div>
+            <footer className="shrink-0 space-y-2 border-t border-stone-100 bg-white px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom,0px))]">
               <DocumentActionsBar
                 lang={lang}
+                compact
                 onPrint={() => {
                   void printSaleReceipt(receiptCtx).then((r) => {
-                    if (r.ok) logReceiptReprintAudit(receiptSale, receiptCtx.receiptNumber);
+                    if (r.ok) {
+                      logReceiptReprintAudit(receiptSale, receiptCtx.receiptNumber);
+                      if (isNativePrintPlatform()) flash(t(lang, "receiptPrintNativeOpened"));
+                    } else {
+                      flash(t(lang, "receiptPrintBlocked"));
+                    }
                   });
                 }}
                 onDownloadPdf={() => {
                   void downloadSaleReceiptPdf(receiptCtx).then((ok) => {
                     if (ok) logReceiptPdfExportAudit(receiptSale, receiptCtx.receiptNumber);
+                    else flash(t(lang, "receiptPdfFailed"));
                   });
                 }}
-                onSharePdf={() => void shareSaleReceiptPdf(receiptCtx)}
+                onSharePdf={() => {
+                  void shareSaleReceiptPdf(receiptCtx).then((ok) => {
+                    if (!ok) flash(t(lang, "receiptPdfFailed"));
+                  });
+                }}
               />
-            </div>
+              <button
+                type="button"
+                className="min-h-[48px] w-full rounded-2xl bg-waka-600 py-3 text-sm font-black text-white active:bg-waka-700"
+                onClick={() => checkout.setReceiptSaleId(null)}
+              >
+                {t(lang, "receiptClose")}
+              </button>
+            </footer>
           </div>
         </PosScreenPortal>
       ) : null}

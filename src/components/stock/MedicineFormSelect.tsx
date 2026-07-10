@@ -1,7 +1,8 @@
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
-import { MEDICINE_FORMS } from "../../lib/pharmacyMedicine";
+import { MEDICINE_FORMS, type MedicineFormPreset } from "../../lib/pharmacyMedicine";
 import { WIZARD_INPUT_TEXT } from "./wizard/wizardTokens";
 
 const OTHER_SENTINEL = "Other";
@@ -13,9 +14,19 @@ type Props = {
   className?: string;
 };
 
+function isPresetForm(value: string): value is MedicineFormPreset {
+  return MEDICINE_FORMS.includes(value as MedicineFormPreset);
+}
+
 export function MedicineFormSelect({ lang, value, onChange, className }: Props) {
-  const preset = MEDICINE_FORMS.includes(value as (typeof MEDICINE_FORMS)[number]) ? value : value ? OTHER_SENTINEL : "";
-  const showCustom = preset === OTHER_SENTINEL;
+  const [customActive, setCustomActive] = useState(() => Boolean(value && !isPresetForm(value)));
+
+  useEffect(() => {
+    if (value && !isPresetForm(value)) setCustomActive(true);
+    else if (isPresetForm(value)) setCustomActive(false);
+  }, [value]);
+
+  const preset = customActive ? OTHER_SENTINEL : isPresetForm(value) ? value : "";
 
   return (
     <div className="space-y-2">
@@ -24,9 +35,11 @@ export function MedicineFormSelect({ lang, value, onChange, className }: Props) 
         onChange={(e) => {
           const next = e.target.value;
           if (next === OTHER_SENTINEL) {
-            onChange(value && !MEDICINE_FORMS.includes(value as (typeof MEDICINE_FORMS)[number]) ? value : "");
+            setCustomActive(true);
+            if (!value || isPresetForm(value)) onChange("");
             return;
           }
+          setCustomActive(false);
           onChange(next);
         }}
         className={className ?? clsx(WIZARD_INPUT_TEXT, "mt-2")}
@@ -38,9 +51,9 @@ export function MedicineFormSelect({ lang, value, onChange, className }: Props) 
           </option>
         ))}
       </select>
-      {showCustom ? (
+      {customActive ? (
         <input
-          value={value === OTHER_SENTINEL ? "" : value}
+          value={isPresetForm(value) ? "" : value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t(lang, "pharmacyFormOtherPlaceholder")}
           autoFocus

@@ -5,6 +5,7 @@ import type { Language, Product, SaleLine } from "../../types";
 import { t } from "../../lib/i18n";
 import type { DraftCartStats, DraftCheckoutTotals } from "../../lib/draftCart";
 import {
+  CHECKOUT_ALPHA_ROW_COLS,
   CHECKOUT_ALPHA_ROWS,
   type CheckoutInputField,
   type CheckoutKeypadMode,
@@ -114,11 +115,11 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
     ? "min-h-[44px] rounded-lg bg-stone-100 py-1 text-xl font-bold text-stone-900 active:bg-stone-200"
     : "min-h-[52px] rounded-xl bg-stone-100 py-1.5 text-2xl font-bold text-stone-900 active:bg-stone-200";
   const alphaKeyClass = sidebar
-    ? "min-h-[36px] rounded-lg bg-stone-100 py-0.5 text-sm font-bold text-stone-900 active:bg-stone-200"
-    : "min-h-[40px] rounded-xl bg-stone-100 py-1 text-base font-bold text-stone-900 active:bg-stone-200";
+    ? "min-h-[28px] rounded-md bg-stone-100 py-0 text-[10px] font-bold leading-none text-stone-900 active:bg-stone-200"
+    : "min-h-[32px] rounded-lg bg-stone-100 py-0 text-[11px] font-bold leading-none text-stone-900 active:bg-stone-200 sm:min-h-[34px] sm:text-xs";
   const modeToggleClass = clsx(
-    "rounded-xl font-black active:opacity-90",
-    sidebar ? "min-h-[36px] text-[10px]" : "min-h-[40px] text-xs",
+    "rounded-lg font-black active:opacity-90",
+    sidebar ? "min-h-[28px] text-[10px]" : "min-h-[32px] text-[10px] sm:min-h-[34px] sm:text-xs",
     keypadMode === "alpha" ? "bg-waka-600 text-white" : "bg-stone-200 text-stone-800",
   );
 
@@ -129,11 +130,15 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
 
   return (
     <div className={clsx("grid gap-2", sidebar ? "grid-cols-[1fr_4.25rem]" : "grid-cols-[1fr_5rem]")}>
-      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-1" : "gap-1.5")}>
+      <div className={clsx("flex min-h-0 flex-col", sidebar ? "gap-0.5" : "gap-1")}>
         {keypadMode === "alpha" ? (
           <>
             {CHECKOUT_ALPHA_ROWS.map((row, rowIdx) => (
-              <div key={rowIdx} className={clsx("grid grid-cols-3", sidebar ? "gap-1" : "gap-1.5")}>
+              <div
+                key={rowIdx}
+                className={clsx("grid", sidebar ? "gap-0.5" : "gap-1")}
+                style={{ gridTemplateColumns: `repeat(${CHECKOUT_ALPHA_ROW_COLS[rowIdx]}, minmax(0, 1fr))` }}
+              >
                 {row.map((k) => (
                   <button key={k} type="button" onClick={() => pressKey(k)} className={alphaKeyClass}>
                     {k}
@@ -141,7 +146,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
                 ))}
               </div>
             ))}
-            <div className={clsx("grid grid-cols-3", sidebar ? "gap-1" : "gap-1.5")}>
+            <div className={clsx("grid grid-cols-3", sidebar ? "gap-0.5" : "gap-1")}>
               <button
                 type="button"
                 onClick={() => onKeypadModeChange?.("numeric")}
@@ -153,7 +158,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
               <button
                 type="button"
                 onClick={() => onDigit("space")}
-                className={clsx(alphaKeyClass, "col-span-2 text-xs font-black uppercase tracking-wide")}
+                className={clsx(alphaKeyClass, "col-span-2 text-[10px] font-black uppercase tracking-wide sm:text-xs")}
               >
                 {t(lang, "posKeypadSpace")}
               </button>
@@ -193,7 +198,7 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           </>
         )}
       </div>
-      <div className="flex min-h-0 flex-col gap-2">
+      <div className="flex min-h-0 flex-col gap-2 self-start">
         <button
           type="button"
           onClick={onClear}
@@ -210,8 +215,8 @@ export const CheckoutNumpadDock = memo(function CheckoutNumpadDock({
           onClick={onSave}
           disabled={saveDisabled}
           className={clsx(
-            "flex min-h-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-1 py-2 font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40",
-            sidebar ? "text-xs" : "text-sm",
+            "flex flex-col items-center justify-center gap-1 rounded-xl bg-emerald-600 px-1 py-2 font-black leading-tight text-white shadow-md active:bg-emerald-700 disabled:opacity-40",
+            sidebar ? "min-h-[7.5rem] text-xs" : keypadMode === "alpha" ? "min-h-[8.5rem] text-sm" : "min-h-0 flex-1",
           )}
         >
           <Check className={clsx("stroke-[3]", sidebar ? "h-6 w-6" : "h-7 w-7")} aria-hidden />

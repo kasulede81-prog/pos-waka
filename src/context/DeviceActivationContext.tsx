@@ -13,15 +13,19 @@ import { resolvePrimaryOrganizationForUser } from "../lib/fetchShopSubscription"
 import {
   fetchShopDeviceLimitContext,
   registerShopDeviceOnLogin,
+  resolveActivationBlockKind,
   type DeviceActivationResult,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
+import { fetchShopDevicesForManagement } from "../lib/shopDevices";
+import { getOrCreateDeviceId } from "../lib/deviceId";
+import { isPendingApprovalExpired } from "../lib/devicePendingApproval";
 
 export type DeviceActivationBlock = {
   shopId: string;
   result: DeviceActivationResult;
   context: DeviceLimitContext | null;
-  kind: "limit" | "pending" | "revoked";
+  kind: "limit" | "pending" | "revoked" | "retry";
 };
 
 type DeviceActivationState = {
@@ -34,7 +38,7 @@ type DeviceActivationState = {
 
 const DeviceActivationCtx = createContext<DeviceActivationState | null>(null);
 
-const DEVICE_CHECK_TIMEOUT_MS = 8_000;
+const DEVICE_CHECK_TIMEOUT_MS = 20_000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise((resolve) => {
@@ -79,8 +83,8 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
   const [shopId, setShopId] = useState<string | null>(null);
   const inFlightRef = useRef<string | null>(null);
 
-  const runCheck = useCallback(async (uid: string) => {
-    if (inFlightRef.current === uid) return;
+  const runCheck = useCallback(async (uid: string, force = false) => {
+    if (!force && inFlightRef.current === uid) return;
     inFlightRef.current = uid;
     setLoading(true);
     try {
@@ -106,6 +110,33 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         return;
       }
       if (result.pending_approval || result.approval_status === "pending") {
+        if (result.approval_expired || isPendingApprovalExpired(result.approval_requested_at)) {
+          const refreshed = await withTimeout(
+            registerShopDeviceOnLogin(sid),
+            DEVICE_CHECK_TIMEOUT_MS,
+            { ok: false, activated: false },
+          );
+          if (refreshed.activated) {
+            setActivated(true);
+            setBlock(null);
+            return;
+          }
+          if (refreshed.pending_approval || refreshed.approval_status === "pending") {
+            setActivated(false);
+            setBlock({ shopId: sid, result: refreshed, context: null, kind: "pending" });
+            return;
+          }
+          const fp = getOrCreateDeviceId();
+          const [{ devices }, context] = await Promise.all([
+            withTimeout(fetchShopDevicesForManagement(sid), DEVICE_CHECK_TIMEOUT_MS, { devices: [], isOwner: false }),
+            withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null),
+          ]);
+          const mine = devices.find((d) => d.device_fingerprint === fp);
+          const kind = resolveActivationBlockKind({ result: refreshed, context, currentDevice: mine ?? null });
+          setActivated(false);
+          setBlock({ shopId: sid, result: refreshed, context, kind });
+          return;
+        }
         setActivated(false);
         setBlock({ shopId: sid, result, context: null, kind: "pending" });
         return;
@@ -121,8 +152,15 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         setBlock({ shopId: sid, result, context, kind: "limit" });
         return;
       }
+      const fp = getOrCreateDeviceId();
+      const [{ devices }, context] = await Promise.all([
+        withTimeout(fetchShopDevicesForManagement(sid), DEVICE_CHECK_TIMEOUT_MS, { devices: [], isOwner: false }),
+        withTimeout(fetchShopDeviceLimitContext(sid), DEVICE_CHECK_TIMEOUT_MS, null),
+      ]);
+      const mine = devices.find((d) => d.device_fingerprint === fp);
+      const kind = resolveActivationBlockKind({ result, context, currentDevice: mine ?? null });
       setActivated(false);
-      setBlock(null);
+      setBlock({ shopId: sid, result, context, kind });
     } catch {
       setActivated(false);
       setBlock(null);
@@ -145,7 +183,7 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
 
   const retry = useCallback(async () => {
     if (!user?.id) return;
-    await runCheck(user.id);
+    await runCheck(user.id, true);
   }, [runCheck, user?.id]);
 
   const value = useMemo(

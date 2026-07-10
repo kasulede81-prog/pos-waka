@@ -3,30 +3,59 @@ import { jsPDF } from "jspdf";
 import type { ReceiptPaperSize } from "../types";
 import { dateKeyKampala } from "./datesUg";
 import { saveExportedFile } from "./fileDownload";
-import { createPdfLayout, pdfLine, sanitizePdfStem } from "./pdfLayout";
+import { sanitizePdfStem } from "./pdfLayout";
 
 export function isNativePrintPlatform(): boolean {
   return typeof Capacitor !== "undefined" && Capacitor.isNativePlatform();
 }
 
-function thermalPdfFormat(paper: ReceiptPaperSize): string | [number, number] {
-  if (paper === "a4") return "a4";
-  const w = paper === "58mm" ? 58 : 80;
-  return [w, 200];
+function thermalWidthMm(paper: ReceiptPaperSize): number {
+  if (paper === "58mm") return 58;
+  if (paper === "a4") return 210;
+  return 80;
 }
 
-/** Plain-text receipt as a narrow PDF for Android/iOS share → Print. */
+const THERMAL_FONT_MM = 2.6;
+const THERMAL_LINE_MM = 3.35;
+const THERMAL_BLANK_MM = 1.1;
+
+function estimatePlainReceiptHeightMm(lineCount: number, paper: ReceiptPaperSize): number {
+  const margin = paper === "a4" ? 12 : 3;
+  const body = lineCount * THERMAL_LINE_MM;
+  return Math.max(paper === "a4" ? 297 : 48, margin * 2 + body);
+}
+
+/** Plain-text receipt as a narrow thermal PDF for Android/iOS share → Print. */
 export function buildPlainReceiptPdfBlob(receiptPlain: string, paper: ReceiptPaperSize = "80mm"): Blob {
+  const widthMm = thermalWidthMm(paper);
+  const marginMm = paper === "a4" ? 12 : 3;
+  const lines = receiptPlain.split("\n");
+  const pageHeightMm = estimatePlainReceiptHeightMm(lines.length, paper);
+  const pageFormat: string | [number, number] = paper === "a4" ? "a4" : [widthMm, pageHeightMm];
+
   const doc = new jsPDF({
     unit: "mm",
-    format: thermalPdfFormat(paper),
+    format: pageFormat,
     orientation: "portrait",
   });
-  const layout = createPdfLayout(doc, paper === "a4" ? 40 : 4);
-  const size = paper === "a4" ? 10 : 8;
-  for (const line of receiptPlain.split("\n")) {
-    pdfLine(layout, doc, line.length ? line : " ", { size });
+  doc.setFont("courier", "normal");
+  doc.setFontSize(THERMAL_FONT_MM);
+
+  let y = marginMm;
+  const maxTextW = widthMm - marginMm * 2;
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      y += THERMAL_BLANK_MM;
+      continue;
+    }
+    const wrapped = doc.splitTextToSize(line, maxTextW) as string[];
+    for (const ln of wrapped) {
+      doc.text(ln, marginMm, y);
+      y += THERMAL_LINE_MM;
+    }
   }
+
   return doc.output("blob");
 }
 

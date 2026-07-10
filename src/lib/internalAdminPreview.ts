@@ -12,6 +12,7 @@ import type {
 } from "./wakaInternalAdmin";
 import type { OpsActivationRow } from "./businessActivation";
 import type { InternalAdminRow } from "./wakaInternalAdmin";
+import { RESCUE_HASH_TO_TAB, shopConsoleTabHref, type ShopConsoleTab } from "./shopConsoleState";
 
 /** Demo shop id for preview shop profile (`/internal/waka/shop/preview-shop-demo?preview=1`). */
 export const PREVIEW_SHOP_ID = "preview-shop-demo";
@@ -58,9 +59,13 @@ export function internalAdminShopHref(shopId: string, previewMode: boolean): str
   return previewMode ? internalAdminPreviewHref(path) : path;
 }
 
-export function internalAdminShopRescueHref(shopId: string, previewMode: boolean): string {
-  const path = `/internal/waka/shop/${shopId}/rescue`;
-  return previewMode ? internalAdminPreviewHref(path) : path;
+export function internalAdminShopRescueHref(shopId: string, previewMode: boolean, section?: string): string {
+  const tab: ShopConsoleTab = section && RESCUE_HASH_TO_TAB[section] ? RESCUE_HASH_TO_TAB[section] : "overview";
+  return shopConsoleTabHref(shopId, tab, previewMode);
+}
+
+export function internalAdminShopTabHref(shopId: string, tab: ShopConsoleTab, previewMode: boolean): string {
+  return shopConsoleTabHref(shopId, tab, previewMode);
 }
 
 const now = new Date();

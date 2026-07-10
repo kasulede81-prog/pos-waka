@@ -1,13 +1,20 @@
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { WakaSymbolIcon } from "../../brand/WakaLogo";
 import clsx from "clsx";
 import type { Language } from "../../../types";
 import { t } from "../../../lib/i18n";
 import type { WakaInternalAdminRow } from "../../../lib/wakaInternalAdmin";
 import { internalAdminPreviewHref } from "../../../lib/internalAdminPreview";
+import { useAdminGlobalSearchData } from "../../../hooks/useAdminGlobalSearchData";
+import { GlobalSearchBar } from "./ops/OpsWidgets";
+import {
+  persistAdminNavGroupExpanded,
+  readAdminNavGroupsExpanded,
+  type AdminNavGroupId,
+} from "../../../lib/adminNavState";
 
 function useLockUnderlyingAppScroll(active: boolean) {
   useEffect(() => {
@@ -51,23 +58,59 @@ type TabDef = {
   superOnly?: boolean;
 };
 
-const TABS: TabDef[] = [
-  { id: "overview", path: "/internal/waka", label: "Ops" },
-  { id: "shops", path: "/internal/waka/shops", label: "Shops" },
-  { id: "devices", path: "/internal/waka/devices", label: "Devices" },
-  { id: "support", path: "/internal/waka/support", label: "Support" },
-  { id: "pilot", path: "/internal/waka/pilot", label: "Pilot" },
-  { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
-  { id: "display_scale", path: "/internal/waka/display-scale", label: "Display" },
-  { id: "billing", path: "/internal/waka/billing", label: "Billing" },
-  { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing" },
-  { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
-  { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
-  { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI Center", superOnly: true },
-  { id: "agents", path: "/internal/waka/agents", label: "Agents" },
-  { id: "activations", path: "/internal/waka/activations", label: "Keys" },
-  { id: "admins", path: "/internal/waka/admins", label: "Admins", superOnly: true },
-  { id: "business_types", path: "/internal/waka/business-types", label: "Biz types", superOnly: true },
+type NavGroup = {
+  id: AdminNavGroupId;
+  label: string;
+  tabs: TabDef[];
+};
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "operations",
+    label: "Operations",
+    tabs: [
+      { id: "overview", path: "/internal/waka", label: "Dashboard" },
+      { id: "shops", path: "/internal/waka/shops", label: "Shops" },
+      { id: "support", path: "/internal/waka/support", label: "Support" },
+      { id: "devices", path: "/internal/waka/devices", label: "Devices" },
+    ],
+  },
+  {
+    id: "revenue",
+    label: "Revenue",
+    tabs: [
+      { id: "billing", path: "/internal/waka/billing", label: "Billing" },
+      { id: "pricing_campaigns", path: "/internal/waka/billing/pricing-campaigns", label: "Pricing" },
+      { id: "analytics", path: "/internal/waka/analytics", label: "Growth" },
+      { id: "growth_campaign", path: "/internal/waka/growth-campaign", label: "Campaigns" },
+    ],
+  },
+  {
+    id: "platform",
+    label: "Platform",
+    tabs: [
+      { id: "ai_settings", path: "/internal/waka/ai-settings", label: "AI", superOnly: true },
+      { id: "releases", path: "/internal/waka/releases", label: "Releases", superOnly: true },
+      { id: "business_types", path: "/internal/waka/business-types", label: "Business Types", superOnly: true },
+      { id: "display_scale", path: "/internal/waka/display-scale", label: "Display" },
+    ],
+  },
+  {
+    id: "people",
+    label: "People",
+    tabs: [
+      { id: "admins", path: "/internal/waka/admins", label: "Internal Admins", superOnly: true },
+      { id: "agents", path: "/internal/waka/agents", label: "Marketing Agents" },
+    ],
+  },
+  {
+    id: "system",
+    label: "System",
+    tabs: [
+      { id: "activations", path: "/internal/waka/activations", label: "Activations" },
+      { id: "pilot", path: "/internal/waka/pilot", label: "Pilot" },
+    ],
+  },
 ];
 
 type Props = {
@@ -79,15 +122,47 @@ type Props = {
   children: ReactNode;
 };
 
+function filterTabs(tabs: TabDef[], isSuper: boolean): TabDef[] {
+  return tabs.filter((tab) => !tab.superOnly || isSuper);
+}
+
 export function AdminShell({ lang, adminRow, loading, active, previewMode = false, children }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   useLockUnderlyingAppScroll(true);
+  const searchData = useAdminGlobalSearchData(previewMode);
 
   const isSuper = adminRow?.role === "super_admin";
   const tabTo = (path: string) => (previewMode ? internalAdminPreviewHref(path) : path);
 
-  const visibleTabs = useMemo(() => TABS.filter((tab) => !tab.superOnly || isSuper), [isSuper]);
+  const visibleGroups = useMemo(
+    () =>
+      NAV_GROUPS.map((g) => ({ ...g, tabs: filterTabs(g.tabs, isSuper) })).filter((g) => g.tabs.length > 0),
+    [isSuper],
+  );
+
+  const [expandedGroups, setExpandedGroups] = useState(readAdminNavGroupsExpanded);
+
+  const toggleGroup = (groupId: AdminNavGroupId) => {
+    setExpandedGroups((prev) => {
+      const next = { ...prev, [groupId]: !prev[groupId] };
+      persistAdminNavGroupExpanded(groupId, next[groupId]!);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    for (const group of visibleGroups) {
+      if (group.tabs.some((tab) => tab.id === active)) {
+        setExpandedGroups((prev) => {
+          if (prev[group.id]) return prev;
+          const next = { ...prev, [group.id]: true };
+          persistAdminNavGroupExpanded(group.id, true);
+          return next;
+        });
+      }
+    }
+  }, [active, visibleGroups]);
 
   if (loading) {
     return createPortal(
@@ -104,16 +179,44 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   }
 
   const row = adminRow!;
-  const navActive = active;
   const roleLabel = (row.role ?? "admin").replace(/_/g, " ");
   const showNav = active !== "shop";
   const showBack = active === "shop";
-
   const currentPath = location.pathname + location.search;
+
+  const flatMobileTabs = visibleGroups.flatMap((g) => g.tabs);
+
+  const renderNavButton = (tab: TabDef, compact?: boolean) => {
+    const href = tabTo(tab.path);
+    const isActive = active === tab.id;
+    return (
+      <button
+        key={tab.id}
+        type="button"
+        onClick={() => {
+          if (href !== currentPath) navigate(href);
+        }}
+        className={clsx(
+          compact
+            ? "shrink-0 rounded-xl px-3 py-2.5 text-xs font-black transition min-h-[44px]"
+            : "rounded-xl px-3 py-2 text-left text-sm font-bold transition min-h-[40px] w-full",
+          isActive
+            ? compact
+              ? "bg-waka-600 text-white shadow-sm"
+              : "bg-waka-50 text-waka-800 ring-1 ring-waka-200"
+            : compact
+              ? "bg-stone-100 text-stone-700"
+              : "text-stone-600 hover:bg-stone-50",
+        )}
+      >
+        {tab.label}
+      </button>
+    );
+  };
 
   return createPortal(
     <div className="waka-internal-admin-root fixed inset-0 flex h-[100dvh] w-screen max-w-full flex-col overflow-hidden bg-stone-100 font-admin text-stone-900">
-      <header className="shrink-0 bg-gradient-to-r from-waka-600 to-waka-500 text-white shadow-md">
+      <header className="shrink-0 bg-gradient-to-r from-waka-600 to-waka-500 text-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-2.5 sm:px-4">
           {showBack ? (
             <button
@@ -147,55 +250,55 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
             {t(lang, "internalAdminExitOffice")}
           </Link>
         </div>
+        {showNav ? (
+          <div className="border-t border-white/15 px-3 pb-3 pt-2 sm:px-4">
+            <GlobalSearchBar
+              shops={searchData.shops}
+              tickets={searchData.tickets}
+              devices={searchData.devices}
+              admins={searchData.admins}
+              agents={searchData.agents}
+              releases={searchData.releases}
+              activations={searchData.activations}
+              pricingCampaigns={searchData.pricingCampaigns}
+              growthCampaigns={searchData.growthCampaigns}
+              aiProviders={searchData.aiProviders}
+              featureFlags={searchData.featureFlags}
+              previewMode={previewMode}
+              compact
+            />
+          </div>
+        ) : null}
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {showNav ? (
           <nav className="shrink-0 border-b border-stone-200 bg-white px-2 py-2 md:hidden">
             <div className="flex gap-1 overflow-x-auto pb-0.5 [-webkit-overflow-scrolling:touch]">
-              {visibleTabs.map((tab) => {
-                const href = tabTo(tab.path);
-                const isActive = navActive === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => {
-                      if (href !== currentPath) navigate(href);
-                    }}
-                    className={clsx(
-                      "shrink-0 rounded-xl px-3 py-2.5 text-xs font-black transition min-h-[44px]",
-                      isActive ? "bg-waka-600 text-white shadow-sm" : "bg-stone-100 text-stone-700",
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                );
-              })}
+              {flatMobileTabs.map((tab) => renderNavButton(tab, true))}
             </div>
           </nav>
         ) : null}
 
         {showNav ? (
           <aside className="hidden min-h-0 w-52 shrink-0 overflow-y-auto overscroll-y-contain border-r border-stone-200 bg-white md:block xl:w-56">
-            <nav className="flex flex-col gap-0.5 p-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              {visibleTabs.map((tab) => {
-                const href = tabTo(tab.path);
-                const isActive = navActive === tab.id;
+            <nav className="flex flex-col gap-1 p-2.5 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              {visibleGroups.map((group) => {
+                const expanded = expandedGroups[group.id];
                 return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => {
-                      if (href !== currentPath) navigate(href);
-                    }}
-                    className={clsx(
-                      "rounded-xl px-3 py-2 text-left text-sm font-bold transition min-h-[40px]",
-                      isActive ? "bg-waka-50 text-waka-800 ring-1 ring-waka-200" : "text-stone-600 hover:bg-stone-50",
-                    )}
-                  >
-                    {tab.label}
-                  </button>
+                  <div key={group.id} className="mb-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.id)}
+                      className="flex min-h-[36px] w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-[10px] font-black uppercase tracking-widest text-stone-500 hover:bg-stone-50"
+                    >
+                      {group.label}
+                      {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                    </button>
+                    {expanded ? (
+                      <div className="mt-0.5 flex flex-col gap-0.5 pl-1">{group.tabs.map((tab) => renderNavButton(tab))}</div>
+                    ) : null}
+                  </div>
                 );
               })}
             </nav>

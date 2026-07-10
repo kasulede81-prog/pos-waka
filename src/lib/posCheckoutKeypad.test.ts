@@ -3,6 +3,7 @@ import {
   applyCheckoutAlphaKey,
   applyCheckoutNumericKey,
   applyCheckoutPhoneKey,
+  CHECKOUT_ALPHA_ROWS,
   preferredKeypadModeForField,
 } from "./posCheckoutKeypad";
 
@@ -27,5 +28,11 @@ describe("posCheckoutKeypad", () => {
   it("prefers alpha mode for customer name field", () => {
     expect(preferredKeypadModeForField("customerName")).toBe("alpha");
     expect(preferredKeypadModeForField("cash")).toBe("numeric");
+  });
+
+  it("alpha rows include every letter once", () => {
+    const letters = CHECKOUT_ALPHA_ROWS.flat().filter((k) => k !== "⌫");
+    expect(letters).toHaveLength(26);
+    expect(new Set(letters).size).toBe(26);
   });
 });

@@ -1,14 +1,18 @@
 import { PharmacyReportsSection } from "../components/AnalyticsModeReports";
+import { resolveDateFilterBounds, stockMovementsInBounds } from "../../../lib/dateFilters";
 import type { ReportWidgetDef, ReportWidgetProps } from "./reportWidgetTypes";
 
 function PharmacyOperationsWidget({ ctx }: ReportWidgetProps) {
   if (!ctx.pharmacyExpiryReport) return null;
+  const bounds = resolveDateFilterBounds(ctx.filter);
+  const movements = stockMovementsInBounds(ctx.stockMovements, bounds);
   return (
     <PharmacyReportsSection
       lang={ctx.lang}
       products={ctx.products}
-      stockMovements={ctx.stockMovements}
+      stockMovements={movements}
       pharmacyExpiryReport={ctx.pharmacyExpiryReport}
+      periodLabel={ctx.periodLabel}
     />
   );
 }

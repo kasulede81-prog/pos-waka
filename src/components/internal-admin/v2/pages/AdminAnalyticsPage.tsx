@@ -1,7 +1,7 @@
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminKpiGridClass } from "../../../../lib/desktopLayout";
-import { AppVersionPanel, PlatformAnalyticsPanel, SystemStatusCenter } from "../ops/OpsWidgets";
+import { AppVersionPanel, PlatformAnalyticsPanel } from "../ops/OpsWidgets";
 import { KpiPulseCard } from "../primitives";
 
 type Props = {
@@ -21,10 +21,8 @@ export function AdminAnalyticsPage({ adminRow, previewMode }: Props) {
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-black text-stone-900">Platform analytics</h1>
-        <p className="text-sm text-stone-500">Growth & health trends</p>
+        <p className="text-sm text-stone-500">Growth & health trends · see Dashboard for live ops status</p>
       </div>
-
-      <SystemStatusCenter health={data.systemHealth} />
 
       <div className={adminKpiGridClass()}>
         <KpiPulseCard label="Paid subs" value={data.statGrid.paid} />

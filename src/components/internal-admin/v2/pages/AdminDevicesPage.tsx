@@ -7,6 +7,7 @@ import {
   adminShopResetSync,
 } from "../../../../lib/wakaInternalAdmin";
 import { internalAdminShopHref } from "../../../../lib/internalAdminPreview";
+import { executeInternalAdminAction } from "../../../../lib/internalAdminActionRunner";
 import { useInternalOpsData } from "../../../../hooks/useInternalOpsData";
 import { adminPermissions } from "../adminRoles";
 import { AppVersionPanel, DeviceFleetCard } from "../ops/OpsWidgets";
@@ -23,6 +24,7 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
   const perms = adminPermissions(adminRow);
   const data = useInternalOpsData(adminRow, previewMode, "devices");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [filter, setFilter] = useState<"all" | "offline" | "risk">("all");
 
   const list = data.fleetDevices.filter((d) => {
@@ -32,13 +34,35 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
   });
 
   const runDeviceAction = async (deviceId: string, shopId: string, action: string) => {
-    if (previewMode) return;
+    if (action !== "trust" && action !== "deactivate" && action !== "reset_sync") return;
+    const actionName =
+      action === "trust"
+        ? "admin_device_trust"
+        : action === "deactivate"
+          ? "admin_device_deactivate"
+          : "admin_force_sync";
+    const fn = () => {
+      if (action === "trust") return adminShopDeviceSetTrusted(deviceId, true);
+      if (action === "deactivate") return adminShopDeviceSetActive(deviceId, false);
+      return adminShopResetSync(shopId);
+    };
+
     setBusyId(deviceId);
-    if (action === "trust") await adminShopDeviceSetTrusted(deviceId, true);
-    if (action === "deactivate") await adminShopDeviceSetActive(deviceId, false);
-    if (action === "reset_sync") await adminShopResetSync(shopId);
+    await executeInternalAdminAction(
+      {
+        previewMode,
+        previewBlockedMessage: "Preview mode — action blocked.",
+        permitted: perms.canShopSupport,
+        permissionDeniedMessage: "You do not have permission for device actions.",
+        setBusy: () => {},
+        onSuccess: () => setToast({ kind: "ok", text: "Device updated." }),
+        onError: (msg) => setToast({ kind: "err", text: msg }),
+        refresh: () => data.loadAll({ silent: true }),
+        audit: { action: actionName, shopId, metadata: { deviceId } },
+      },
+      fn,
+    );
     setBusyId(null);
-    void data.loadAll();
   };
 
   return (
@@ -47,6 +71,16 @@ export function AdminDevicesPage({ adminRow, previewMode }: Props) {
         <h1 className="text-xl font-black text-stone-900">Devices</h1>
         <p className="text-sm text-stone-500">{list.length} devices · fleet diagnostics</p>
       </div>
+
+      {toast ? (
+        <p
+          className={`rounded-xl px-3 py-2 text-sm font-bold ${
+            toast.kind === "ok" ? "bg-emerald-100 text-emerald-900" : "bg-rose-100 text-rose-900"
+          }`}
+        >
+          {toast.text}
+        </p>
+      ) : null}
 
       <AdminDeviceForensicsPanel previewMode={previewMode} />
 

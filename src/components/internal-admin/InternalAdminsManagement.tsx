@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Shield, X } from "lucide-react";
+import { Plus, Shield } from "lucide-react";
 import clsx from "clsx";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
@@ -13,6 +13,7 @@ import {
 } from "../../lib/wakaInternalAdmin";
 import { PREVIEW_INTERNAL_ADMINS } from "../../lib/internalAdminPreview";
 import { AdminCollapsible } from "./adminUi";
+import { AdminRightDrawer } from "./v2/AdminRightDrawer";
 
 type Props = { lang: Language; lovableUi?: boolean; previewMode?: boolean };
 
@@ -49,33 +50,6 @@ function Chip({ children, tone }: { children: React.ReactNode; tone: "orange" | 
     <span className={clsx("inline-flex items-center rounded-full px-3 py-1 text-[11px] font-black uppercase ring-1", cls)}>
       {children}
     </span>
-  );
-}
-
-function Modal({
-  title,
-  open,
-  onClose,
-  children,
-}: {
-  title: string;
-  open: boolean;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-stone-950/55 p-3 sm:items-center">
-      <div className="w-full max-w-md rounded-3xl border border-stone-200 bg-white p-5 shadow-waka">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-lg font-black text-stone-900">{title}</p>
-          <button type="button" className="rounded-xl p-2 text-stone-600 hover:bg-stone-50" onClick={onClose} aria-label="Close">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="mt-4">{children}</div>
-      </div>
-    </div>
   );
 }
 
@@ -491,7 +465,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
         </div>
       </section>
 
-      <Modal
+      <AdminRightDrawer
         title={t(lang, "internalAdminsEditModalTitle")}
         open={editOpen}
         onClose={closeEdit}
@@ -576,7 +550,7 @@ export function InternalAdminsManagement({ lang, lovableUi = false, previewMode 
             </button>
           </div>
         ) : null}
-      </Modal>
+      </AdminRightDrawer>
     </div>
   );
 }

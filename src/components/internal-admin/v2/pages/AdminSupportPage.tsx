@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Language } from "../../../../types";
 import { t } from "../../../../lib/i18n";
-import { internalAdminShopRescueHref } from "../../../../lib/internalAdminPreview";
+import { internalAdminShopTabHref } from "../../../../lib/internalAdminPreview";
 import { formatDisplayEmail } from "../../../../lib/wakaInternalAdmin";
 import type { WakaInternalAdminRow } from "../../../../lib/wakaInternalAdmin";
 import {
@@ -125,7 +125,7 @@ export function AdminSupportPage({ lang, adminRow, previewMode }: Props) {
                   }
                   onOpenShop={
                     tk.shop_id
-                      ? () => navigate(internalAdminShopRescueHref(tk.shop_id!, previewMode))
+                      ? () => navigate(internalAdminShopTabHref(tk.shop_id!, "support", previewMode))
                       : undefined
                   }
                   onDelete={

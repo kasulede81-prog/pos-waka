@@ -2026,12 +2026,17 @@ export function PosPage({ lang }: { lang: Language }) {
             {renderCatalogProductGrid()}
           </section>
         ) : (
-          <PosSellCatalogShelfSection
-            lang={lang}
-            shelves={catalogShelfCards}
-            onShelfTap={handleCatalogShelfTap}
-            desktop={isFullDesktopPos}
-          />
+          <div
+            className={clsx(catalogSellMode && "pos-catalog-scroll-pane min-h-0 flex-1")}
+            data-pos-catalog-scroll={catalogSellMode ? true : undefined}
+          >
+            <PosSellCatalogShelfSection
+              lang={lang}
+              shelves={catalogShelfCards}
+              onShelfTap={handleCatalogShelfTap}
+              desktop={isFullDesktopPos}
+            />
+          </div>
         )
       ) : showCatalogSearchResults ? (
         <section className={clsx("space-y-2", catalogSellMode && "min-h-0 flex-1 overflow-y-auto overscroll-y-contain")}>

@@ -1,13 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { MonitorSmartphone } from "lucide-react";
 import type { Language } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useDeviceActivation } from "../context/DeviceActivationContext";
 import {
-  ensureShopDeviceActivation,
   fetchShopDeviceLimitContext,
   recordDeviceReplacementCompleted,
+  tryActivateCurrentDevice,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
 import { currentDeviceFingerprint, disconnectOwnerShopDevice } from "../lib/shopDevices";
@@ -18,6 +18,8 @@ import {
 } from "../lib/devicePresenceFormat";
 
 type Props = { lang: Language; onSignOut?: () => void };
+
+type LocationState = { autoActivate?: boolean };
 
 function lastActiveLabel(lang: Language, iso: string | null, nowMs: number): string {
   const rel = formatLastActiveRelative(iso, nowMs);
@@ -44,17 +46,23 @@ function planDisplayName(ctx: DeviceLimitContext | null, fallback?: string): str
 
 export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
   const navigate = useNavigate();
-  const { block, retry, shopId } = useDeviceActivation();
+  const location = useLocation();
+  const locationState = (location.state ?? {}) as LocationState;
+  const { block, retry, shopId, activated } = useDeviceActivation();
   const [ctx, setCtx] = useState<DeviceLimitContext | null>(block?.context ?? null);
   const [loading, setLoading] = useState(!block?.context);
   const [busy, setBusy] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const autoTriedRef = useRef(false);
 
   const sid = block?.shopId ?? shopId ?? ctx?.shop_id ?? null;
   const isOwner = ctx?.is_owner ?? false;
   const currentFp = useMemo(() => currentDeviceFingerprint(), []);
+  const atLimit = ctx?.at_limit ?? block?.kind === "limit";
+  const slotAvailable = Boolean(ctx?.device_limit && (ctx?.active_count ?? 0) < ctx.device_limit);
+  const showRetryPrimary = isOwner && !atLimit;
 
   const loadContext = useCallback(async () => {
     if (!sid) return;
@@ -70,10 +78,51 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
     }
   }, [sid, lang]);
 
+  const finishActivation = useCallback(async () => {
+    await retry();
+    navigate("/", { replace: true });
+  }, [navigate, retry]);
+
+  const tryActivate = useCallback(async () => {
+    if (!sid || busy) return false;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await tryActivateCurrentDevice(sid);
+      if (result.activated) {
+        await finishActivation();
+        return true;
+      }
+      if (result.pending_approval || result.approval_status === "pending") {
+        navigate("/device-pending", { replace: true });
+        return false;
+      }
+      if (result.limit_blocked) {
+        await loadContext();
+        setError(t(lang, "deviceLimitStillFull"));
+        return false;
+      }
+      await loadContext();
+      setError(t(lang, "deviceLimitActivationFailed"));
+      return false;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t(lang, "deviceLimitLoadError"));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }, [sid, busy, finishActivation, lang, loadContext, navigate]);
+
   useEffect(() => {
     const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    if (activated) {
+      navigate("/", { replace: true });
+    }
+  }, [activated, navigate]);
 
   useEffect(() => {
     if (block?.context) {
@@ -83,6 +132,22 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
     }
     void loadContext();
   }, [block?.context, loadContext]);
+
+  useEffect(() => {
+    if (!sid || autoTriedRef.current) return;
+    if (!locationState.autoActivate && block?.kind !== "retry") return;
+    if (loading || atLimit) return;
+    autoTriedRef.current = true;
+    void tryActivate();
+  }, [atLimit, block?.kind, loading, locationState.autoActivate, sid, tryActivate]);
+
+  useEffect(() => {
+    if (!sid || atLimit || busy) return;
+    const timer = window.setInterval(() => {
+      void tryActivate();
+    }, 12_000);
+    return () => window.clearInterval(timer);
+  }, [atLimit, busy, sid, tryActivate]);
 
   const usageLine = useMemo(() => {
     if (!ctx?.device_limit) {
@@ -117,21 +182,37 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
     setError(null);
     try {
       await disconnectOwnerShopDevice(device.id, sid);
-      const result = await ensureShopDeviceActivation(sid);
+      const result = await tryActivateCurrentDevice(sid);
       if (!result.activated) {
+        if (result.pending_approval || result.approval_status === "pending") {
+          await recordDeviceReplacementCompleted(sid, device.device_fingerprint);
+          navigate("/device-pending", { replace: true });
+          return;
+        }
+        if (result.limit_blocked) {
+          await loadContext();
+          setError(t(lang, "deviceLimitStillFull"));
+          return;
+        }
         await loadContext();
-        setError(t(lang, "deviceLimitStillFull"));
+        setError(t(lang, "deviceLimitActivationFailed"));
         return;
       }
       await recordDeviceReplacementCompleted(sid, device.device_fingerprint);
-      await retry();
-      navigate("/", { replace: true });
+      await finishActivation();
     } catch (e) {
       setError(e instanceof Error ? e.message : t(lang, "connectedDevicesDisconnectError"));
     } finally {
       setBusy(false);
     }
   };
+
+  const title = showRetryPrimary ? t(lang, "deviceLimitSlotAvailableTitle") : t(lang, "deviceLimitTitle");
+  const intro = showRetryPrimary
+    ? t(lang, "deviceLimitSlotAvailableIntro")
+    : isOwner
+      ? t(lang, "deviceLimitReplacementIntro")
+      : t(lang, "deviceLimitSub");
 
   return (
     <div className="auth-scroll-root flex h-dvh max-h-[100dvh] flex-col overflow-hidden bg-gradient-to-b from-waka-50 to-stone-50 dark:from-stone-950 dark:to-stone-900">
@@ -141,10 +222,8 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300">
               <MonitorSmartphone className="h-7 w-7" aria-hidden />
             </div>
-            <h1 className="mt-4 text-2xl font-black text-stone-950 dark:text-stone-50">{t(lang, "deviceLimitTitle")}</h1>
-            <p className="mt-2 text-sm font-medium text-stone-600 dark:text-stone-400">
-              {isOwner ? t(lang, "deviceLimitReplacementIntro") : t(lang, "deviceLimitSub")}
-            </p>
+            <h1 className="mt-4 text-2xl font-black text-stone-950 dark:text-stone-50">{title}</h1>
+            <p className="mt-2 text-sm font-medium text-stone-600 dark:text-stone-400">{intro}</p>
           </div>
 
           <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-700 dark:bg-stone-900">
@@ -155,6 +234,11 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
               {planDisplayName(ctx, block?.result.plan_name)}
             </p>
             <p className="mt-2 text-sm font-bold text-stone-800 dark:text-stone-200">{usageLine}</p>
+            {slotAvailable ? (
+              <p className="mt-2 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                {t(lang, "deviceLimitSlotAvailableHint")}
+              </p>
+            ) : null}
           </section>
 
           {!isOwner ? (
@@ -166,9 +250,14 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
             </section>
           ) : null}
 
-          {isOwner ? (
+          {isOwner && (atLimit || (slotAvailable && replaceableDevices.length > 0)) ? (
             <section>
               <h2 className="text-sm font-black text-stone-800 dark:text-stone-200">{t(lang, "deviceLimitDevicesHeading")}</h2>
+              {!atLimit && replaceableDevices.length > 0 ? (
+                <p className="mt-1 text-xs font-semibold text-stone-500 dark:text-stone-400">
+                  {t(lang, "deviceLimitStaleDevicesHint")}
+                </p>
+              ) : null}
               {loading ? (
                 <p className="mt-2 text-sm text-stone-500 dark:text-stone-400">{t(lang, "connectedDevicesLoading")}</p>
               ) : replaceableDevices.length === 0 ? (
@@ -228,14 +317,45 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
         <div className="mx-auto flex w-full max-w-lg flex-col gap-3">
           {isOwner ? (
             <>
-              <button
-                type="button"
-                disabled={!selectedId || busy || replaceableDevices.length === 0}
-                onClick={() => void handleReplaceSelected()}
-                className="min-h-[48px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
-              >
-                {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceLimitDisconnectSelected")}
-              </button>
+              {showRetryPrimary ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void tryActivate()}
+                  className="min-h-[48px] rounded-xl bg-waka-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {busy ? t(lang, "deviceLimitActivating") : t(lang, "deviceLimitRetryActivation")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!selectedId || busy || replaceableDevices.length === 0}
+                  onClick={() => void handleReplaceSelected()}
+                  className="min-h-[48px] rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+                >
+                  {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceLimitDisconnectSelected")}
+                </button>
+              )}
+              {showRetryPrimary && replaceableDevices.length > 0 ? (
+                <button
+                  type="button"
+                  disabled={!selectedId || busy}
+                  onClick={() => void handleReplaceSelected()}
+                  className="min-h-[48px] rounded-xl border border-red-300 bg-red-50 px-4 text-sm font-bold text-red-900 disabled:opacity-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-200"
+                >
+                  {busy ? t(lang, "deviceMgmtDisconnecting") : t(lang, "deviceLimitDisconnectAndContinue")}
+                </button>
+              ) : null}
+              {!showRetryPrimary ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void tryActivate()}
+                  className="min-h-[48px] rounded-xl border border-waka-300 bg-waka-50 px-4 text-sm font-bold text-waka-900 disabled:opacity-50 dark:border-waka-700 dark:bg-waka-950/40 dark:text-waka-200"
+                >
+                  {busy ? t(lang, "deviceLimitActivating") : t(lang, "deviceLimitRetryActivation")}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={() => {

@@ -7,6 +7,7 @@ import {
   returnsInBounds,
   saleMatchesFilter,
   saleMatchesReceiptRange,
+  stockMovementsInBounds,
 } from "./dateFilters";
 import { getCompletedFinancials, getCompletedRevenue } from "./financialMetrics";
 import { computeProfitGroupedByCategory } from "./homeProfit";
@@ -185,6 +186,22 @@ describe("today and month filters", () => {
     const inBounds = revenueSalesInBounds(sales, bounds);
     expect(inBounds).toHaveLength(1);
     expect(getCompletedFinancials(inBounds, [], PRODUCTS).revenueUgx).toBe(40_000);
+  });
+});
+
+describe("stockMovementsInBounds", () => {
+  it("keeps only movements inside the selected reporting range", () => {
+    const bounds = resolveDateFilterBounds({ kind: "range", fromKey: "2026-07-01", toKey: "2026-07-31" });
+    const filtered = stockMovementsInBounds(
+      [
+        { id: "1", at: "2026-06-30T13:55:00.000Z", deltaBaseUnits: -6, productName: "lindazi", kind: "sale_out", summary: "sale" },
+        { id: "2", at: "2026-07-09T13:02:00.000Z", deltaBaseUnits: -1, productName: "hima", kind: "sale_out", summary: "sale" },
+        { id: "3", at: "2026-08-01T10:00:00.000Z", deltaBaseUnits: -1, productName: "late", kind: "sale_out", summary: "sale" },
+      ] as import("../types").StockMovement[],
+      bounds,
+    );
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.productName).toBe("hima");
   });
 });
 

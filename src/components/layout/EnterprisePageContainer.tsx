@@ -14,7 +14,7 @@ type Props = {
 const VARIANT_CLASS: Record<Variant, string> = {
   default: "enterprise-page space-y-4",
   workspace: "enterprise-page enterprise-page--workspace space-y-3",
-  viewport: "enterprise-page enterprise-page--viewport min-h-0 flex-1 flex-col overflow-hidden",
+  viewport: "enterprise-page enterprise-page--viewport flex h-full min-h-0 flex-1 flex-col overflow-hidden",
   flush: "enterprise-page enterprise-page--flush min-w-0 max-w-full",
 };
 

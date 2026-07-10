@@ -17,15 +17,19 @@ export type RescueSupportAction =
   | "rescue_copy_contact";
 
 export type LogRescueActionInput = {
-  shopId: string;
+  shopId?: string | null;
   action: RescueSupportAction | string;
   result: "ok" | "failed" | "skipped";
   reason?: string | null;
   metadata?: Record<string, unknown>;
 };
 
-/** Log a rescue console support action to internal_ops_admin_audit. */
 export async function logRescueSupportAction(input: LogRescueActionInput): Promise<{ ok: boolean; message?: string }> {
+  return logInternalAdminAudit(input);
+}
+
+/** Unified internal admin audit writer (shop console, fleet, billing, etc.). */
+export async function logInternalAdminAudit(input: LogRescueActionInput): Promise<{ ok: boolean; message?: string }> {
   if (!supabase) return { ok: false, message: "Offline" };
 
   const { data: userData } = await supabase.auth.getUser();
@@ -35,16 +39,18 @@ export async function logRescueSupportAction(input: LogRescueActionInput): Promi
     result: input.result,
     reason: input.reason ?? null,
     at: new Date().toISOString(),
-    console: "shop_rescue",
+    console: "internal_admin",
     ...(input.metadata ?? {}),
   };
 
-  const { error } = await supabase.from("internal_ops_admin_audit").insert({
+  const row: Record<string, unknown> = {
     actor,
     action: input.action,
-    target_shop_id: input.shopId,
     payload,
-  });
+  };
+  if (input.shopId) row.target_shop_id = input.shopId;
+
+  const { error } = await supabase.from("internal_ops_admin_audit").insert(row);
 
   if (error) return { ok: false, message: error.message };
   return { ok: true };

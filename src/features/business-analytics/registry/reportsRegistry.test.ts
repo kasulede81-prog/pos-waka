@@ -154,6 +154,24 @@ describe("enterprise reports registry", () => {
     ).toBe(true);
   });
 
+  it("injects date-filtered stock activity for retail and wholesale overview", () => {
+    expect(
+      resolveReportWidgets("operations", minimalCtx("retail")).some((w) => w.id === "retail-stock-activity"),
+    ).toBe(true);
+    expect(
+      resolveReportWidgets("operations", minimalCtx("retail", { category: "sales" })).some((w) => w.id === "retail-stock-activity"),
+    ).toBe(false);
+    expect(
+      resolveReportWidgets("operations", minimalCtx("pharmacy")).some((w) => w.id === "retail-stock-activity"),
+    ).toBe(false);
+    expect(
+      resolveReportWidgets("operations", minimalCtx("wholesale")).some((w) => w.id === "wholesale-stock-activity"),
+    ).toBe(true);
+    expect(
+      resolveReportWidgets("operations", minimalCtx("hospitality")).some((w) => w.id === "wholesale-stock-activity"),
+    ).toBe(false);
+  });
+
   it("orders widgets by priority within a slot", () => {
     const widgets = resolveReportWidgets("status", minimalCtx("retail"));
     const priorities = widgets.map((w) => w.priority);

@@ -190,7 +190,8 @@ describe("rescueConsoleIntel", () => {
 describe("rescue console routing", () => {
   it("rescue href includes shop id path", async () => {
     const { internalAdminShopRescueHref } = await import("./internalAdminPreview");
-    expect(internalAdminShopRescueHref("abc-123", false)).toBe("/internal/waka/shop/abc-123/rescue");
+    expect(internalAdminShopRescueHref("abc-123", false)).toBe("/internal/waka/shop/abc-123?tab=overview");
+    expect(internalAdminShopRescueHref("abc-123", false, "audit")).toBe("/internal/waka/shop/abc-123?tab=audit");
     expect(internalAdminShopRescueHref("abc-123", true)).toContain("preview=1");
   });
 });

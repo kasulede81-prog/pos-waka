@@ -23,23 +23,62 @@ import type { HospitalityReportSummary } from "../../../lib/hospitalityReports";
 import type { HospitalityFloorState, StockMovement } from "../../../types";
 import { computeKitchenProductionAnalytics } from "../../../lib/kitchenProduction";
 
+export function StockActivityReportsSection({
+  lang,
+  movements,
+  periodLabel,
+  titleKey,
+  pharmacyMode,
+  wholesaleMode,
+  emptyInPeriod,
+}: {
+  lang: Language;
+  movements: StockMovement[];
+  periodLabel?: string;
+  titleKey: "stockMovementTitle" | "wholesaleReportsMovementTitle" | "pharmacyReportsMovementTitle";
+  pharmacyMode?: boolean;
+  wholesaleMode?: boolean;
+  emptyInPeriod?: boolean;
+}) {
+  return (
+    <section className="space-y-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+      <h3 className="text-base font-black text-stone-950">{t(lang, titleKey)}</h3>
+      {periodLabel ? (
+        <p className="text-xs font-bold uppercase tracking-wide text-stone-500">{periodLabel}</p>
+      ) : null}
+      <StockMovementsPanel
+        lang={lang}
+        movements={movements}
+        pharmacyMode={pharmacyMode}
+        wholesaleMode={wholesaleMode}
+        emptyLabelKey={emptyInPeriod ? "noStockMovementsInPeriod" : undefined}
+      />
+    </section>
+  );
+}
+
 export function PharmacyReportsSection({
   lang,
   products,
   stockMovements,
   pharmacyExpiryReport,
+  periodLabel,
 }: {
   lang: Language;
   products: Product[];
   stockMovements: StockMovement[];
   pharmacyExpiryReport: PharmacyExpiryReport;
+  periodLabel?: string;
 }) {
   return (
     <section className="space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4 shadow-sm">
       <h2 className="text-lg font-black text-emerald-950">{t(lang, "pharmacyReportsTitle")}</h2>
       <p className="text-sm font-semibold text-stone-700">{t(lang, "pharmacyReportsPrimaryHint")}</p>
+      {periodLabel ? (
+        <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">{periodLabel}</p>
+      ) : null}
       <div className="rounded-2xl border border-stone-200 bg-white p-3">
-        <StockMovementsPanel lang={lang} movements={stockMovements} pharmacyMode />
+        <StockMovementsPanel lang={lang} movements={stockMovements} pharmacyMode emptyLabelKey="noStockMovementsInPeriod" />
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="rounded-xl bg-emerald-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadPharmacyExpiryPdf(lang, products)}>

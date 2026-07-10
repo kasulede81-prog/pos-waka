@@ -225,10 +225,15 @@ body {
     overscroll-behavior-y: contain;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-y;
+    min-height: 0;
     scrollbar-width: thin;
     scrollbar-color: rgb(120 113 108 / 0.55) rgb(120 113 108 / 0.1);
     scrollbar-gutter: stable;
     padding-bottom: var(--waka-scroll-tail-pos);
+  }
+
+  .pos-catalog-scroll-pane--browse {
+    padding-bottom: var(--waka-scroll-tail-pos-sale);
   }
 
   .pos-catalog-scroll-pane::-webkit-scrollbar {

@@ -8,12 +8,14 @@ import { RETAIL_REPORT_WIDGETS } from "./retailReportWidgets";
 import { PHARMACY_REPORT_WIDGETS } from "./pharmacyReportWidgets";
 import { HOSPITALITY_REPORT_WIDGETS } from "./hospitalityReportWidgets";
 import { WHOLESALE_REPORT_WIDGETS } from "./wholesaleReportWidgets";
+import { STOCK_ACTIVITY_REPORT_WIDGETS } from "./stockActivityReportWidgets";
 
 const ALL_REPORT_WIDGETS: ReportWidgetDef[] = [
   ...RETAIL_REPORT_WIDGETS,
   ...PHARMACY_REPORT_WIDGETS,
   ...HOSPITALITY_REPORT_WIDGETS,
   ...WHOLESALE_REPORT_WIDGETS,
+  ...STOCK_ACTIVITY_REPORT_WIDGETS,
 ];
 
 function widgetAllowed(widget: ReportWidgetDef, ctx: ReportsCenterContext): boolean {

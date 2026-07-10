@@ -16,6 +16,7 @@ import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
 import {
   buildDeviceUsageSummary,
   currentDeviceFingerprint,
+  dismissPendingOwnerShopDevice,
   disconnectOwnerShopDevice,
   fetchShopDevicesForManagement,
   parsePlanDeviceLimit,
@@ -25,6 +26,11 @@ import {
   type ShopDeviceRow,
 } from "../lib/shopDevices";
 import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
+import {
+  formatPendingApprovalCountdown,
+  isPendingApprovalExpired,
+  pendingApprovalRemainingMs,
+} from "../lib/devicePendingApproval";
 import {
   formatDeviceDisplayName,
   formatDevicePlatformLabel,
@@ -66,10 +72,12 @@ type DeviceCardProps = {
   currentFp: string;
   nowMs: number;
   isPrimary: boolean;
+  isShopOwner: boolean;
   busy: boolean;
   transferTarget: string | null;
   onApprove: (device: ShopDeviceRow) => void;
   onReject: (device: ShopDeviceRow) => void;
+  onDismiss: (device: ShopDeviceRow) => void;
   onTransferPrimary: (device: ShopDeviceRow) => void;
   onDisconnect: (device: ShopDeviceRow) => void;
   onRemove: (device: ShopDeviceRow) => void;
@@ -82,10 +90,12 @@ function DeviceCard({
   currentFp,
   nowMs,
   isPrimary,
+  isShopOwner,
   busy,
   transferTarget,
   onApprove,
   onReject,
+  onDismiss,
   onTransferPrimary,
   onDisconnect,
   onRemove,
@@ -95,6 +105,12 @@ function DeviceCard({
   const name = formatDeviceDisplayName(device.label, device.platform);
   const platform = formatDevicePlatformLabel(device.platform);
   const online = device.status === "active" && device.approval_status === "approved";
+  const pendingRemainingMs =
+    device.approval_status === "pending"
+      ? pendingApprovalRemainingMs(device.approval_requested_at, nowMs)
+      : 0;
+  const pendingExpired =
+    device.approval_status === "pending" && isPendingApprovalExpired(device.approval_requested_at, nowMs);
 
   return (
     <li
@@ -125,12 +141,23 @@ function DeviceCard({
                 device.approval_status === "approved"
                   ? "bg-emerald-100 text-emerald-800"
                   : device.approval_status === "pending"
-                    ? "bg-amber-100 text-amber-900"
+                    ? pendingExpired
+                      ? "bg-stone-200 text-stone-700"
+                      : "bg-amber-100 text-amber-900"
                     : "bg-red-100 text-red-800"
               }`}
             >
-              {approvalBadge(lang, device.approval_status)}
+              {device.approval_status === "pending" && pendingExpired
+                ? t(lang, "deviceMgmtStatusExpired")
+                : approvalBadge(lang, device.approval_status)}
             </span>
+            {device.approval_status === "pending" && !pendingExpired ? (
+              <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-900">
+                {tTemplate(lang, "deviceMgmtPendingCountdown", {
+                  time: formatPendingApprovalCountdown(pendingRemainingMs),
+                })}
+              </span>
+            ) : null}
             {isCurrent ? (
               <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-bold text-sky-800">
                 {t(lang, "connectedDevicesCurrentBadge")}
@@ -168,11 +195,32 @@ function DeviceCard({
         </div>
       </div>
 
-      {isPrimary && device.approval_status === "pending" ? (
+      {isShopOwner && device.approval_status === "pending" ? (
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
+            disabled={busy || pendingExpired}
+            onClick={() => onApprove(device)}
+            className="min-h-[44px] flex-1 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50"
+          >
+            {busy ? t(lang, "deviceMgmtApproving") : t(lang, "deviceMgmtApprove")}
+          </button>
+          <button
+            type="button"
             disabled={busy}
+            onClick={() => onDismiss(device)}
+            className="min-h-[44px] flex-1 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-800 disabled:opacity-50"
+          >
+            {busy ? t(lang, "deviceMgmtDeleting") : t(lang, "deviceMgmtDeletePending")}
+          </button>
+        </div>
+      ) : null}
+
+      {isPrimary && device.approval_status === "pending" && !isShopOwner ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy || pendingExpired}
             onClick={() => onApprove(device)}
             className="min-h-[44px] flex-1 rounded-xl bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-50"
           >
@@ -260,9 +308,19 @@ export function DeviceManagementPage({ lang }: Props) {
   }, []);
 
   useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    const intervalMs = pendingDevices.length > 0 ? 1_000 : 60_000;
+    const id = window.setInterval(() => setNowMs(Date.now()), intervalMs);
     return () => window.clearInterval(id);
-  }, []);
+  }, [pendingDevices.length]);
+
+  useEffect(() => {
+    if (!shopId || pendingDevices.length === 0) return;
+    const expired = pendingDevices.some((device) =>
+      isPendingApprovalExpired(device.approval_requested_at, nowMs),
+    );
+    if (!expired) return;
+    void loadDevices(shopId);
+  }, [shopId, pendingDevices, nowMs, loadDevices]);
 
   useEffect(() => {
     if (!userId || authMode === "local") {
@@ -299,7 +357,7 @@ export function DeviceManagementPage({ lang }: Props) {
   }, [userId, authMode, lang, loadDevices]);
 
   const handleApprove = async (device: ShopDeviceRow) => {
-    if (!shopId || !canPrimary("device_approve")) return;
+    if (!shopId || !isShopOwner) return;
     const ok = await ensureAuthorized("manage_users");
     if (!ok) return;
     setBusyId(device.id);
@@ -307,6 +365,11 @@ export function DeviceManagementPage({ lang }: Props) {
       const result = await setDeviceApprovalStatus(shopId, device.id, "approved");
       if (result.limitBlocked) {
         setError(t(lang, "deviceMgmtLimitBlockedApprove"));
+        return;
+      }
+      if (result.error === "approval_expired") {
+        setError(t(lang, "deviceMgmtApprovalExpired"));
+        await loadDevices(shopId);
         return;
       }
       if (!result.ok) {
@@ -322,8 +385,25 @@ export function DeviceManagementPage({ lang }: Props) {
     }
   };
 
+  const handleDismiss = async (device: ShopDeviceRow) => {
+    if (!shopId || !isShopOwner) return;
+    const ok = await ensureAuthorized("manage_users");
+    if (!ok) return;
+    const name = formatDeviceDisplayName(device.label, device.platform);
+    if (!window.confirm(tTemplate(lang, "deviceMgmtDeletePendingConfirm", { name }))) return;
+    setBusyId(device.id);
+    try {
+      await dismissPendingOwnerShopDevice(device.id, shopId);
+      await loadDevices(shopId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t(lang, "deviceMgmtDeletePendingError"));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const handleReject = async (device: ShopDeviceRow) => {
-    if (!shopId || !canPrimary("device_approve")) return;
+    if (!shopId) return;
     const ok = await ensureAuthorized("manage_users");
     if (!ok) return;
     if (
@@ -335,7 +415,11 @@ export function DeviceManagementPage({ lang }: Props) {
     }
     setBusyId(device.id);
     try {
-      await setDeviceApprovalStatus(shopId, device.id, "revoked");
+      if (device.approval_status === "pending") {
+        await dismissPendingOwnerShopDevice(device.id, shopId);
+      } else {
+        await setDeviceApprovalStatus(shopId, device.id, "revoked");
+      }
       await loadDevices(shopId);
     } catch (e) {
       setError(e instanceof Error ? e.message : t(lang, "deviceMgmtRejectError"));
@@ -419,9 +503,11 @@ export function DeviceManagementPage({ lang }: Props) {
     currentFp,
     nowMs,
     isPrimary,
+    isShopOwner,
     transferTarget,
     onApprove: (d: ShopDeviceRow) => void handleApprove(d),
     onReject: (d: ShopDeviceRow) => void handleReject(d),
+    onDismiss: (d: ShopDeviceRow) => void handleDismiss(d),
     onTransferPrimary: (d: ShopDeviceRow) => void handleTransferPrimary(d),
     onDisconnect: (d: ShopDeviceRow) => void handleDisconnect(d),
     onRemove: (d: ShopDeviceRow) => void handleRemove(d),

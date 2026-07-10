@@ -99,7 +99,7 @@ export const SellProductBrowsePanel = memo(function SellProductBrowsePanel({
 
       <div
         ref={catalogRef}
-        className="pos-catalog-scroll-pane mt-3 h-0 min-h-0 flex-1"
+        className="pos-catalog-scroll-pane pos-catalog-scroll-pane--browse mt-3 h-0 min-h-0 flex-1"
         data-pos-catalog-scroll
       >
         {showShelf ? (
