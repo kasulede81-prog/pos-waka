@@ -7,6 +7,7 @@
 import { getOrCreateDeviceId } from "./deviceId";
 import { resolveShopCtx } from "../offline/cloudSync";
 import { supabase } from "./supabase";
+import { ENFORCE_PRIMARY_DEVICE } from "./deviceAuthorityPolicy";
 
 export type DeviceAuthority = "primary" | "secondary";
 export type DeviceFormFactor = "tablet" | "phone" | "windows" | "kitchen" | "bar";
@@ -172,6 +173,7 @@ export function getCachedDeviceAuthoritySync(): DeviceAuthorityContext | null {
 }
 
 export function isPrimaryDeviceCachedSync(): boolean {
+  if (!ENFORCE_PRIMARY_DEVICE) return true;
   const ctx = getCachedDeviceAuthoritySync();
   if (!ctx) return true;
   if (!ctx.primaryDeviceFingerprint) return true;
@@ -193,6 +195,11 @@ export async function canPerformPrimaryAction(
   shopId?: string,
 ): Promise<boolean> {
   void action;
+  if (!ENFORCE_PRIMARY_DEVICE) {
+    const ctx = await fetchDeviceAuthorityContext(shopId);
+    if (!ctx) return true;
+    return ctx.isApproved && ctx.approvalStatus !== "pending";
+  }
   const ctx = await fetchDeviceAuthorityContext(shopId);
   if (!ctx) return true;
   if (!ctx.primaryDeviceFingerprint) return true;

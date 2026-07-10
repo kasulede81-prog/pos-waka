@@ -7,7 +7,6 @@ import {
   adminShopDeviceSetTrusted,
   adminShopForceLogoutDevices,
   adminShopResetSync,
-  adminShopSetPrimaryDevice,
   type ShopDeviceRow,
 } from "../../../../../lib/wakaInternalAdmin";
 import { filterActiveRescueDevices, isRescueDeviceOnline } from "../../../../../lib/rescueDeviceList";
@@ -83,15 +82,6 @@ export function ShopConsoleDevicesTab({ ctx }: Props) {
                   if (r.ok) void refreshAfterDeviceAction();
                 })
               }
-              onSetPrimary={() =>
-                void executeAction(
-                  "admin_set_primary_device",
-                  () => adminShopSetPrimaryDevice(detail.shop.id, d.id),
-                  { permitted: canSupport, skipRefresh: true },
-                ).then((r) => {
-                  if (r.ok) void refreshAfterDeviceAction();
-                })
-              }
               onForceLogout={() =>
                 void executeAction(
                   "admin_force_logout",
@@ -150,7 +140,6 @@ function DeviceRow({
   lang,
   onActivate,
   onTrust,
-  onSetPrimary,
   onForceLogout,
   onRevokeTrust,
   onResetSync,
@@ -162,14 +151,12 @@ function DeviceRow({
   lang: ShopConsoleState["lang"];
   onActivate: () => void;
   onTrust: () => void;
-  onSetPrimary: () => void;
   onForceLogout: () => void;
   onRevokeTrust: () => void;
   onResetSync: () => void;
   onRefresh: () => void;
 }) {
   const online = isRescueDeviceOnline(device.last_seen_at);
-  const isPrimary = device.device_authority === "primary";
 
   return (
     <li className="rounded-xl border border-stone-100 bg-stone-50/80 p-3">
@@ -191,9 +178,6 @@ function DeviceRow({
             >
               {online ? t(lang, "internalShopProfileDeviceOnline") : t(lang, "internalShopProfileDeviceOffline")}
             </span>
-            {isPrimary ? (
-              <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-violet-900">Primary</span>
-            ) : null}
             {device.trusted ? (
               <span className="rounded-md bg-waka-100 px-1.5 py-0.5 text-waka-900">
                 {t(lang, "internalShopProfileDeviceTrusted")}
@@ -227,11 +211,6 @@ function DeviceRow({
             >
               {device.trusted ? t(lang, "internalShopProfileDeviceUntrust") : t(lang, "internalShopProfileDeviceTrust")}
             </button>
-            {!isPrimary ? (
-              <RescueActionButton variant="secondary" disabled={busy} onClick={onSetPrimary}>
-                Set primary
-              </RescueActionButton>
-            ) : null}
             <RescueActionButton variant="secondary" disabled={busy} onClick={onForceLogout}>
               Force logout
             </RescueActionButton>

@@ -7,6 +7,7 @@ import {
   seedDeviceAuthorityCacheForTests,
   type DeviceAuthorityContext,
 } from "./deviceAuthority";
+import { ENFORCE_PRIMARY_DEVICE } from "./deviceAuthorityPolicy";
 
 beforeEach(() => {
   clearDeviceAuthorityCache();
@@ -24,6 +25,36 @@ describe("deviceAuthority cache", () => {
   });
 
   it("secondary device cannot perform primary actions when cached", () => {
+    if (!ENFORCE_PRIMARY_DEVICE) {
+      seedCache({
+        shopId: "shop-1",
+        deviceFingerprint: "fp-secondary",
+        deviceId: "dev-2",
+        deviceAuthority: "secondary",
+        formFactor: "tablet",
+        approvalStatus: "approved",
+        isPrimary: false,
+        isApproved: true,
+        isOperational: true,
+        primaryDeviceFingerprint: "fp-primary",
+        primaryDeviceId: "dev-1",
+        status: "active",
+        lastSyncAt: null,
+        lastLoginAt: null,
+        lastSeenAt: null,
+        currentStaffClientId: null,
+        appVersion: null,
+        label: null,
+        platform: null,
+        pendingUploads: 0,
+        pendingDownloads: 0,
+        cloudStatus: null,
+        recoveryStatus: null,
+      });
+      expect(isPrimaryDeviceCachedSync()).toBe(true);
+      expect(canPerformPrimaryActionSync("staff_manage")).toBe(true);
+      return;
+    }
     seedCache({
       shopId: "shop-1",
       deviceFingerprint: "fp-secondary",
@@ -120,7 +151,7 @@ describe("authorizeBackupRestore primary gate", () => {
       authMode: "supabase",
       purpose: "user_import",
     });
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.errorKey).toBe("notPrimaryDevice");
+    expect(r.ok).toBe(ENFORCE_PRIMARY_DEVICE ? false : true);
+    if (!r.ok && ENFORCE_PRIMARY_DEVICE) expect(r.errorKey).toBe("notPrimaryDevice");
   });
 });

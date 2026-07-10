@@ -26,6 +26,7 @@ import {
   type ShopDeviceRow,
 } from "../lib/shopDevices";
 import { registerShopDeviceOnLogin } from "../lib/deviceActivation";
+import { ENFORCE_PRIMARY_DEVICE } from "../lib/deviceAuthorityPolicy";
 import {
   formatPendingApprovalCountdown,
   isPendingApprovalExpired,
@@ -48,6 +49,7 @@ function formatPlanDisplayName(snapshot: SubscriptionSnapshot): string {
 }
 
 function authorityLabel(lang: Language, device: ShopDeviceRow): string {
+  if (!ENFORCE_PRIMARY_DEVICE) return formatDevicePlatformLabel(device.platform) || "Device";
   if (device.device_authority === "primary") return t(lang, "deviceMgmtPrimaryBadge");
   return t(lang, "deviceMgmtSecondaryBadge");
 }
@@ -115,16 +117,20 @@ function DeviceCard({
   return (
     <li
       className={`rounded-2xl border bg-white p-4 shadow-sm ${
-        device.device_authority === "primary" ? "border-amber-300 ring-1 ring-amber-100" : "border-stone-200"
+        ENFORCE_PRIMARY_DEVICE && device.device_authority === "primary"
+          ? "border-amber-300 ring-1 ring-amber-100"
+          : "border-stone-200"
       }`}
     >
       <div className="flex items-start gap-3">
         <div
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${
-            device.device_authority === "primary" ? "bg-amber-100 text-amber-800" : "bg-stone-100 text-stone-700"
+            ENFORCE_PRIMARY_DEVICE && device.device_authority === "primary"
+              ? "bg-amber-100 text-amber-800"
+              : "bg-stone-100 text-stone-700"
           }`}
         >
-          {device.device_authority === "primary" ? (
+          {ENFORCE_PRIMARY_DEVICE && device.device_authority === "primary" ? (
             <Star className="h-5 w-5" aria-hidden />
           ) : (
             <MonitorSmartphone className="h-5 w-5" aria-hidden />
@@ -237,9 +243,11 @@ function DeviceCard({
         </div>
       ) : null}
 
-      {showLifecycleActions && isPrimary && device.approval_status === "approved" ? (
+      {showLifecycleActions &&
+      (ENFORCE_PRIMARY_DEVICE ? isPrimary : isShopOwner) &&
+      device.approval_status === "approved" ? (
         <div className="mt-4 flex flex-col gap-2">
-          {device.device_authority !== "primary" && !isCurrent ? (
+          {ENFORCE_PRIMARY_DEVICE && device.device_authority !== "primary" && !isCurrent ? (
             <button
               type="button"
               disabled={busy}
@@ -251,7 +259,7 @@ function DeviceCard({
                 : t(lang, "deviceMgmtMakePrimary")}
             </button>
           ) : null}
-          {!isCurrent && device.device_authority !== "primary" ? (
+          {!isCurrent && (ENFORCE_PRIMARY_DEVICE ? device.device_authority !== "primary" : true) ? (
             <>
               <button
                 type="button"
@@ -529,7 +537,7 @@ export function DeviceManagementPage({ lang }: Props) {
         </div>
       ) : null}
 
-      {isShopOwner && isPrimary && devices.length === 0 && !loading ? (
+      {isShopOwner && (!ENFORCE_PRIMARY_DEVICE || isPrimary) && devices.length === 0 && !loading ? (
         <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-medium text-sky-950">
           {t(lang, "deviceMgmtRegisterPrimaryHint")}
         </div>

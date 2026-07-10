@@ -10,6 +10,7 @@ import { WakaSwitch } from "../components/enterprise/WakaSwitch";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { isPrimaryRegisterDevice, resolveRegisterMode, type RegisterMode } from "../lib/primaryRegisterMode";
 import { isPrimaryDeviceCachedSync, setCurrentDeviceAsPrimary } from "../lib/deviceAuthority";
+import { ENFORCE_PRIMARY_DEVICE } from "../lib/deviceAuthorityPolicy";
 import type { DiscountControlMode } from "../lib/discountGovernance";
 
 const RECEIPT_PAPER_OPTIONS: ReceiptPaperSize[] = ["58mm", "80mm", "a4"];
@@ -107,7 +108,7 @@ function SellingSettingsBody({ lang }: { lang: Language }) {
           <option value="single">{t(lang, "registerModeSingle")}</option>
           <option value="multi">{t(lang, "registerModeMulti")}</option>
         </select>
-        {registerMode === "single" ? (
+        {registerMode === "single" && ENFORCE_PRIMARY_DEVICE ? (
           <div className="mt-4 space-y-2">
             <p className="text-sm font-bold text-stone-800">{t(lang, "registerModePrimaryDevice")}</p>
             <p className="text-xs font-medium text-stone-500">

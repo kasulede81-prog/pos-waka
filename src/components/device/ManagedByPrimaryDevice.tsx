@@ -2,6 +2,7 @@ import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { ShieldAlert } from "lucide-react";
 import { useDeviceAuthority } from "../../context/DeviceAuthorityContext";
+import { ENFORCE_PRIMARY_DEVICE } from "../../lib/deviceAuthorityPolicy";
 
 type Props = {
   lang: Language;
@@ -11,7 +12,7 @@ type Props = {
 /** Shown on secondary devices when a primary-only action is unavailable. */
 export function ManagedByPrimaryDevice({ lang, className }: Props) {
   const { isPrimary } = useDeviceAuthority();
-  if (isPrimary) return null;
+  if (!ENFORCE_PRIMARY_DEVICE || isPrimary) return null;
 
   return (
     <div
@@ -37,6 +38,7 @@ type GateProps = {
 /** Blocks or soft-wraps primary-only content on secondary devices. */
 export function PrimaryDeviceGate({ lang, children, soft = false }: GateProps) {
   const { isPrimary, loading, pendingApproval } = useDeviceAuthority();
+  if (!ENFORCE_PRIMARY_DEVICE) return <>{children}</>;
 
   if (loading) return null;
   if (pendingApproval) {

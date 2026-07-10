@@ -164,6 +164,8 @@ export async function isStaffCacheUpToDate(shopId: string): Promise<boolean> {
 export async function isSecondaryStaffTerminal(
   deviceAuthority?: DeviceAuthorityContext | null,
 ): Promise<boolean> {
+  const { ENFORCE_PRIMARY_DEVICE } = await import("./deviceAuthorityPolicy");
+  if (!ENFORCE_PRIMARY_DEVICE) return false;
   const device =
     deviceAuthority ??
     (await (async () => {

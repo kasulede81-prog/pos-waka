@@ -62,8 +62,7 @@ export function AdminSyncInvestigationPanel({ detail, diagnosticsPending }: Prop
                 {(d as { label?: string; device_authority?: string; approval_status?: string }).label ||
                   d.device_fingerprint.slice(0, 12)}{" "}
                 ·{" "}
-                {(d as { device_authority?: string }).device_authority === "primary" ? "⭐ Primary" : "Secondary"} ·{" "}
-                {(d as { approval_status?: string }).approval_status ?? "approved"} · {d.app_version ?? "—"} ·{" "}
+                · {(d as { approval_status?: string }).approval_status ?? "approved"} · {d.app_version ?? "—"} ·{" "}
                 {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString("en-GB") : "never"}
               </li>
             ))}

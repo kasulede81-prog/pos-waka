@@ -5,6 +5,7 @@
 
 import type { SessionActor } from "./sessionActor";
 import { checkStorePermission, type StoreAuthResult } from "./storeAuthorization";
+import { ENFORCE_PRIMARY_DEVICE } from "./deviceAuthorityPolicy";
 
 export class StaffAccountAuthorizationError extends Error {
   readonly errorKey: import("./storeAuthorization").StoreAuthErrorKey;
@@ -27,7 +28,7 @@ export async function authorizeStaffAccountMutationWithDevice(
 ): Promise<StoreAuthResult> {
   const roleAuth = authorizeStaffAccountMutation(actor);
   if (!roleAuth.ok) return roleAuth;
-  if (opts?.skipDeviceCheck || opts?.authMode === "local") return { ok: true };
+  if (opts?.skipDeviceCheck || opts?.authMode === "local" || !ENFORCE_PRIMARY_DEVICE) return { ok: true };
   const { isCurrentDevicePrimaryForStaffManagement } = await import("./primaryDevice");
   const isPrimary = await isCurrentDevicePrimaryForStaffManagement();
   if (!isPrimary) return { ok: false, errorKey: "notPrimaryDevice" };

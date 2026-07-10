@@ -14,12 +14,14 @@ import {
   fetchShopDeviceLimitContext,
   registerShopDeviceOnLogin,
   resolveActivationBlockKind,
+  tryOwnerApproveCurrentDevice,
   type DeviceActivationResult,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
 import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import { isPendingApprovalExpired } from "../lib/devicePendingApproval";
+import { AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN } from "../lib/deviceAuthorityPolicy";
 
 export type DeviceActivationBlock = {
   shopId: string;
@@ -110,6 +112,14 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         return;
       }
       if (result.pending_approval || result.approval_status === "pending") {
+        if (AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN) {
+          const approved = await withTimeout(tryOwnerApproveCurrentDevice(sid), DEVICE_CHECK_TIMEOUT_MS, false);
+          if (approved) {
+            setActivated(true);
+            setBlock(null);
+            return;
+          }
+        }
         if (result.approval_expired || isPendingApprovalExpired(result.approval_requested_at)) {
           const refreshed = await withTimeout(
             registerShopDeviceOnLogin(sid),

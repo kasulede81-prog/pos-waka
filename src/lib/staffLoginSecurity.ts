@@ -161,11 +161,15 @@ export function applyLocalSuccessfulLogin(
 
 export async function assertStaffLoginDeviceApproved(shopId: string): Promise<{ ok: true } | { ok: false; error: string }> {
   const { fetchDeviceAuthorityContext } = await import("./deviceAuthority");
+  const { ALLOW_STAFF_LOGIN_WHILE_DEVICE_PENDING } = await import("./deviceAuthorityPolicy");
   const ctx = await fetchDeviceAuthorityContext(shopId);
   if (!ctx) return { ok: true };
   if (ctx.isApproved && ctx.isOperational) return { ok: true };
+  if (ALLOW_STAFF_LOGIN_WHILE_DEVICE_PENDING && ctx.approvalStatus === "pending") {
+    return { ok: true };
+  }
   if (ctx.approvalStatus === "pending") {
-    return { ok: false, error: "This device is pending approval. Ask the owner to approve it on the Primary Device." };
+    return { ok: false, error: "This device is pending approval. Ask the shop owner to approve it in Settings → Devices." };
   }
   if (!ctx.isApproved || ctx.approvalStatus === "revoked" || ctx.approvalStatus === "suspended") {
     return { ok: false, error: "This device is not approved for staff login." };
