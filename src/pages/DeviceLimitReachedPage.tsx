@@ -7,6 +7,7 @@ import { useDeviceActivation } from "../context/DeviceActivationContext";
 import {
   fetchShopDeviceLimitContext,
   recordDeviceReplacementCompleted,
+  resolveLoginDeviceActivation,
   tryActivateCurrentDevice,
   type DeviceLimitContext,
 } from "../lib/deviceActivation";
@@ -88,11 +89,16 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const result = await tryActivateCurrentDevice(sid);
-      if (result.activated) {
+      const outcome = await resolveLoginDeviceActivation(sid);
+      if (outcome.activated) {
+        if (outcome.ownerBypass) {
+          await finishActivation();
+          return true;
+        }
         await finishActivation();
         return true;
       }
+      const result = outcome.result;
       if (result.pending_approval || result.approval_status === "pending") {
         navigate("/device-pending", { replace: true });
         return false;
@@ -140,14 +146,6 @@ export function DeviceLimitReachedPage({ lang, onSignOut }: Props) {
     autoTriedRef.current = true;
     void tryActivate();
   }, [atLimit, block?.kind, loading, locationState.autoActivate, sid, tryActivate]);
-
-  useEffect(() => {
-    if (!sid || atLimit || busy) return;
-    const timer = window.setInterval(() => {
-      void tryActivate();
-    }, 12_000);
-    return () => window.clearInterval(timer);
-  }, [atLimit, busy, sid, tryActivate]);
 
   const usageLine = useMemo(() => {
     if (!ctx?.device_limit) {

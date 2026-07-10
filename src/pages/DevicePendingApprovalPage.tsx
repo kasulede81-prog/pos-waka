@@ -8,8 +8,10 @@ import { useDeviceAuthority } from "../context/DeviceAuthorityContext";
 import {
   fetchShopDeviceLimitContext,
   registerShopDeviceOnLogin,
+  resolveLoginDeviceActivation,
   tryOwnerApproveCurrentDevice,
 } from "../lib/deviceActivation";
+import { OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN } from "../lib/deviceAuthorityPolicy";
 import { fetchShopDevicesForManagement } from "../lib/shopDevices";
 import { getOrCreateDeviceId } from "../lib/deviceId";
 import {
@@ -46,6 +48,11 @@ export function DevicePendingApprovalPage({ lang }: Props) {
     if (!shopId) return;
     void fetchShopDeviceLimitContext(shopId).then((ctx) => {
       setIsOwner(Boolean(ctx?.is_owner));
+      if (ctx?.is_owner && OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN && !ctx.at_limit) {
+        void tryOwnerApproveCurrentDevice(shopId).then((ok) => {
+          if (ok) void retry().then(() => navigate("/", { replace: true }));
+        });
+      }
     });
     const fp = getOrCreateDeviceId();
     void fetchShopDevicesForManagement(shopId).then(({ devices }) => {
@@ -98,8 +105,8 @@ export function DevicePendingApprovalPage({ lang }: Props) {
     if (!shopId || ownerBusy) return;
     setOwnerBusy(true);
     try {
-      const ok = await tryOwnerApproveCurrentDevice(shopId);
-      if (ok) {
+      const outcome = await resolveLoginDeviceActivation(shopId);
+      if (outcome.activated) {
         await retry();
         navigate("/", { replace: true });
         return;

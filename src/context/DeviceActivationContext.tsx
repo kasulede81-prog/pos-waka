@@ -14,6 +14,7 @@ import {
   fetchShopDeviceLimitContext,
   registerShopDeviceOnLogin,
   resolveActivationBlockKind,
+  resolveLoginDeviceActivation,
   tryOwnerApproveCurrentDevice,
   type DeviceActivationResult,
   type DeviceLimitContext,
@@ -98,12 +99,13 @@ export function DeviceActivationProvider({ authMode, user, children }: ProviderP
         setBlock(null);
         return;
       }
-      const result = await withTimeout(
-        registerShopDeviceOnLogin(sid),
+      const loginActivation = await withTimeout(
+        resolveLoginDeviceActivation(sid),
         DEVICE_CHECK_TIMEOUT_MS,
-        { ok: false, activated: false },
+        { activated: false, result: { ok: false, activated: false } },
       );
-      if (result.activated) {
+      const result = loginActivation.result;
+      if (loginActivation.activated) {
         setActivated(true);
         setBlock(null);
         void import("../lib/staffCacheSync").then(({ scheduleStaffCacheProvisioning }) => {

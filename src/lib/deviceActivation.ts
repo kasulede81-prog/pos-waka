@@ -7,6 +7,10 @@ import {
 } from "./deviceFingerprintTrust";
 import { setDeviceApprovalStatus } from "./deviceAuthority";
 import { isPendingApprovalExpired } from "./devicePendingApproval";
+import {
+  AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN,
+  OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN,
+} from "./deviceAuthorityPolicy";
 import { fetchShopDevicesForManagement, type ShopDeviceRow } from "./shopDevices";
 import { supabase } from "./supabase";
 
@@ -175,31 +179,116 @@ export function resolveActivationBlockKind(opts: {
   return "retry";
 }
 
-/** Owner approves this browser/device when no operational primary is available. */
+/** Owner approves this browser/device — no primary device required (owner-only RPC). */
 export async function tryOwnerApproveCurrentDevice(shopId: string): Promise<boolean> {
-  const ctx = await fetchShopDeviceLimitContext(shopId);
+  let ctx: DeviceLimitContext | null = null;
+  try {
+    ctx = await fetchShopDeviceLimitContext(shopId);
+  } catch {
+    return false;
+  }
   if (!ctx?.is_owner) return false;
+
   const fp = getOrCreateDeviceId();
-  const { devices } = await fetchShopDevicesForManagement(shopId);
-  const mine = devices.find((d) => d.device_fingerprint === fp);
-  if (!mine || mine.approval_status !== "pending") return false;
-  const approval = await setDeviceApprovalStatus(shopId, mine.id, "approved");
+  const findMine = async (): Promise<ShopDeviceRow | undefined> => {
+    const { devices } = await fetchShopDevicesForManagement(shopId);
+    return devices.find((d) => d.device_fingerprint === fp);
+  };
+
+  let mine = await findMine();
+  if (!mine || (mine.approval_status !== "pending" && mine.approval_status !== "approved")) {
+    await registerShopDeviceOnLogin(shopId);
+    mine = await findMine();
+  }
+
+  if (!mine) return false;
+
+  if (mine.approval_status === "approved") {
+    try {
+      const activation = await ensureShopDeviceActivation(shopId);
+      return activation.activated === true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (mine.approval_status !== "pending") return false;
+
+  let approval = await setDeviceApprovalStatus(shopId, mine.id, "approved");
+  if (!approval.ok) {
+    await registerShopDeviceOnLogin(shopId);
+    mine = await findMine();
+    if (mine?.approval_status === "pending") {
+      approval = await setDeviceApprovalStatus(shopId, mine.id, "approved");
+    }
+  }
   if (!approval.ok) return false;
-  const activation = await ensureShopDeviceActivation(shopId);
-  return activation.activated === true;
+
+  try {
+    const activation = await ensureShopDeviceActivation(shopId);
+    return activation.activated === true;
+  } catch {
+    return false;
+  }
+}
+
+export type LoginDeviceActivationOutcome = {
+  activated: boolean;
+  result: DeviceActivationResult;
+  /** Client allowed owner through even though cloud activation is still catching up. */
+  ownerBypass?: boolean;
+};
+
+/** Full login activation: register → owner auto-approve → optional owner bypass when a slot is free. */
+export async function resolveLoginDeviceActivation(shopId: string): Promise<LoginDeviceActivationOutcome> {
+  let result: DeviceActivationResult;
+  try {
+    result = await registerShopDeviceOnLogin(shopId);
+  } catch {
+    result = { ok: false, activated: false };
+  }
+
+  if (result.activated) return { activated: true, result };
+
+  if (AUTO_APPROVE_DEVICE_ON_OWNER_LOGIN) {
+    const approved = await tryOwnerApproveCurrentDevice(shopId);
+    if (approved) {
+      try {
+        result = await ensureShopDeviceActivation(shopId);
+      } catch {
+        result = { ok: false, activated: false };
+      }
+      if (result.activated) return { activated: true, result };
+    }
+  }
+
+  if (OWNER_BYPASS_DEVICE_PENDING_ON_LOGIN) {
+    let context: DeviceLimitContext | null = null;
+    try {
+      context = await fetchShopDeviceLimitContext(shopId);
+    } catch {
+      context = null;
+    }
+    const slotFree = Boolean(context?.is_owner && !context.at_limit);
+    const pending =
+      result.pending_approval ||
+      result.approval_status === "pending" ||
+      (!result.activated && !result.limit_blocked && !result.revoked);
+    if (slotFree && pending) {
+      return { activated: true, result, ownerBypass: true };
+    }
+  }
+
+  return { activated: false, result };
 }
 
 /** Activate this device and continue login when the plan still has room. */
 export async function tryActivateCurrentDevice(shopId: string): Promise<DeviceActivationResult> {
-  let result = await ensureShopDeviceActivation(shopId);
-  if (result.activated) return result;
-  if (result.pending_approval || result.approval_status === "pending") {
-    const approved = await tryOwnerApproveCurrentDevice(shopId);
-    if (approved) {
-      result = await ensureShopDeviceActivation(shopId);
-    }
+  const outcome = await resolveLoginDeviceActivation(shopId);
+  if (outcome.ownerBypass) {
+    return { ok: true, activated: true, accepted: true, approval_status: "approved" };
   }
-  return result;
+  return outcome.result;
 }
 
 export async function fetchShopDeviceLimitContext(shopId: string): Promise<DeviceLimitContext | null> {
